@@ -1,0 +1,9 @@
+{
+  "appId": "com.marketflow.emporium",
+  "appName": "Market Flow Emporium",
+  "webDir": "dist",
+  "server": {
+    "androidScheme": "https",
+    "cleartext": true
+  }
+}

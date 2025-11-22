@@ -1,0 +1,130 @@
+import express, { Request, Response } from 'express';
+import * as admin from 'firebase-admin';
+import * as functions from 'firebase-functions';
+import cors from 'cors';
+
+try {
+  if (!admin.apps.length) admin.initializeApp();
+} catch (e) {
+  // ignore if already initialized
+}
+const db = admin.firestore();
+
+const app = express();
+app.use(cors({ origin: true }));
+app.use(express.json());
+
+// helper to provide a server-timestamp fallback if FieldValue is not available in runtime
+function getServerTimestamp(): Date | admin.firestore.FieldValue {
+  try {
+    const anyAdmin = admin as unknown as {
+      firestore: {
+        FieldValue: { serverTimestamp: () => admin.firestore.FieldValue };
+        Timestamp: { now: () => Date };
+      };
+    };
+    return (
+      anyAdmin.firestore.FieldValue.serverTimestamp?.() ||
+      anyAdmin.firestore.Timestamp.now?.() ||
+      new Date()
+    );
+  } catch (e) {
+    return new Date();
+  }
+}
+
+interface CheckoutItem {
+  productId: string;
+  storeId: string;
+  quantity?: number;
+}
+
+interface StoreProfile {
+  usdToLbpRate?: number;
+  [key: string]: unknown;
+}
+
+app.post('/checkout', async (req: Request, res: Response) => {
+  try {
+    const rawAuth = req.get('authorization');
+    const authHeader = String(rawAuth || '');
+    const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
+    if (!token) return res.status(401).json({ error: 'Missing auth token' });
+    const decoded = await admin.auth().verifyIdToken(token);
+    const userId = decoded.uid;
+
+    const body = req.body as { items?: unknown[] } | undefined;
+    const { items } = body || {};
+    if (!Array.isArray(items) || items.length === 0) return res.status(400).json({ error: 'No items' });
+
+    const checkoutItems = items.map((i) => i as CheckoutItem);
+    const itemsByStore: Record<string, CheckoutItem[]> = {};
+    for (const it of checkoutItems) {
+      if (!it.storeId) continue;
+      itemsByStore[it.storeId] = itemsByStore[it.storeId] || [];
+      itemsByStore[it.storeId].push(it);
+    }
+
+    let ordersCreated = 0;
+
+    await db.runTransaction(async (tx) => {
+      const userRef = db.doc(`users/${userId}`);
+
+      for (const storeId of Object.keys(itemsByStore)) {
+        const itemsForStore = itemsByStore[storeId];
+        let storeSubtotal = 0;
+        const orderItems: Array<{ productId: string; price: number; quantity: number }> = [];
+
+        for (const it of itemsForStore) {
+          if (!it.productId) throw new Error('Invalid item');
+          const productRef = db.doc(`products/${it.productId}`);
+          const productSnap = await tx.get(productRef);
+          if (!productSnap.exists) throw new Error(`Product not found: ${it.productId}`);
+          const pData = productSnap.data() as Record<string, unknown>;
+          if (pData.inStock === false) throw new Error(`Product out of stock: ${it.productId}`);
+          const serverPrice = typeof pData.price === 'number' ? pData.price : 0;
+          const qty = it.quantity && it.quantity > 0 ? it.quantity : 1;
+          if (typeof pData.stock === 'number' && pData.stock < qty) throw new Error(`Insufficient stock for product: ${it.productId}`);
+          orderItems.push({ productId: it.productId, price: serverPrice, quantity: qty });
+          storeSubtotal += serverPrice * qty;
+        }
+
+        const profileRef = db.doc(`storeProfiles/${storeId}`);
+        const profileSnap = await tx.get(profileRef);
+        const storeProfile = profileSnap.exists ? (profileSnap.data() as StoreProfile) : undefined;
+
+        const totalAfterDiscount = storeSubtotal;
+
+        const orderRef = db.collection('orders').doc();
+        tx.set(orderRef, {
+          storeId,
+          customerId: userId,
+          items: orderItems,
+          subtotal: storeSubtotal,
+          discount: 0,
+          total: totalAfterDiscount,
+          createdAt: getServerTimestamp(),
+        });
+        ordersCreated++;
+
+        for (const it of itemsForStore) {
+          const productRef = db.doc(`products/${it.productId}`);
+          const prodSnap = await tx.get(productRef);
+          const pData = prodSnap.exists ? (prodSnap.data() as Record<string, unknown>) : {};
+          const qty = it.quantity && it.quantity > 0 ? it.quantity : 1;
+          if (typeof pData.stock === 'number') {
+            const newStock = (pData.stock as number) - qty;
+            tx.update(productRef, { stock: newStock });
+          }
+        }
+      }
+    });
+
+    return res.json({ ok: true, ordersCreated });
+  } catch (err) {
+    console.error('Checkout failed', err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Checkout failed' });
+  }
+});
+
+export const api = functions.https.onRequest(app);

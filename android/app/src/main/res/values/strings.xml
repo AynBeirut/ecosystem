@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Market Flow Emporium</string>
+    <string name="title_activity_main">Market Flow Emporium</string>
+    <string name="package_name">com.marketflow.emporium</string>
+    <string name="custom_url_scheme">com.marketflow.emporium</string>
+</resources>

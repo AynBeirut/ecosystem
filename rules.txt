@@ -1,0 +1,42 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Sellers: allow users to read/write their own seller document
+    match /sellers/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Allow aggregation (count) queries on the sellers collection
+    match /sellers/{document=**} {
+      allow get, list: if true;
+    }
+    // Stores: allow users to read/write their own store document
+    match /stores/{storeId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+    }
+    // StoreProfiles: allow public read, but only owner can write
+    match /storeProfiles/{userId} {
+      allow read: if true;
+      allow write: if request.auth != null && request.auth.uid == userId;
+    }
+    // Products: allow authenticated users to create products
+    match /products/{productId} {
+      allow read: if true;
+      allow create: if request.auth != null;
+      allow update, delete: if request.auth != null && (
+        // Allow update/delete if user owns the store (storeProfiles)
+        request.auth.uid == get(/databases/$(database)/documents/storeProfiles/$(resource.data.storeId)).data.ownerId
+      );
+    }
+    // Orders: allow authenticated users to create orders,
+    // allow buyers to read/update their own orders,
+    // allow sellers to read/update orders for their store
+    match /orders/{orderId} {
+      allow create: if request.auth != null;
+      allow read, update: if request.auth != null &&
+        (
+          request.auth.uid == resource.data.customerId || // Buyer
+          request.auth.uid == get(/databases/$(database)/documents/storeProfiles/$(resource.data.storeId)).data.ownerId // Seller
+        );
+    }
+  }
+}

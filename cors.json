@@ -1,0 +1,16 @@
+[
+  {
+    "origin": ["http://localhost:8080", "https://emoove.site"],
+    "method": ["GET", "POST", "PUT", "DELETE"],
+    "maxAgeSeconds": 3600,
+    "responseHeader": [
+      "Content-Type",
+      "Authorization",
+      "X-Goog-Upload-Protocol",
+      "X-Goog-Upload-Header-Content-Length",
+      "X-Goog-Upload-Command",
+      "X-Goog-Upload-File-Name",
+      "X-Goog-Upload-Offset"
+    ]
+  }
+]

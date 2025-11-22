@@ -1,0 +1,16 @@
+:root {
+  --sidebar-width: 16rem;
+  --sidebar-width-icon: 3rem;
+}
+
+.sidebar-root {
+  --sidebar-width: var(--sidebar-width);
+  --sidebar-width-icon: var(--sidebar-width-icon);
+}
+
+/* Mobile override */
+@media (max-width: 767px) {
+  .sidebar-root {
+    --sidebar-width: 18rem;
+  }
+}

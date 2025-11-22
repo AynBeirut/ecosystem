@@ -1,0 +1,567 @@
+
+import React, { useState, useEffect } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/context/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+// tabs import removed (unused)
+import { 
+  Store as StoreIcon, 
+  Package, 
+  CreditCard, 
+  Clock, 
+  User, 
+  Palette, 
+  Megaphone,
+  BarChart 
+} from 'lucide-react';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
+import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
+import MobileHeader from '@/components/MobileHeader';
+import { useIsMobile } from '@/hooks/use-mobile';
+
+type RecentEvent = {
+  type: 'product' | 'order' | 'announcement';
+  name?: string;
+  total?: number;
+  title?: string;
+  createdAt?: Date | number | string;
+};
+
+const AdminDashboard: React.FC = () => {
+  // Defensive: calling `useAuth` normally; ensure consumer handles undefined user safely.
+  // If the auth hook throws or returns unexpectedly during HMR, this component will
+  // still render a guest-safe UI because we guard accesses to `user` below.
+  type MinimalAuth = { user: { id?: string; name?: string; email?: string } | null } | null;
+  const auth = (() => {
+    try {
+      // NOTE: This is a defensive wrapper. The hook is still called as a React hook
+      // but in very rare HMR failure modes it may throw; we catch and return a
+      // minimal null-shaped object so the page remains usable.
+      // eslint-disable-next-line react-hooks/rules-of-hooks
+      return useAuth() as MinimalAuth;
+    } catch (e) {
+      console.warn('useAuth unavailable in AdminDashboard fallback', e);
+      return { user: null } as MinimalAuth;
+    }
+  })();
+  const { user } = (auth as MinimalAuth) || { user: null };
+  const navigate = useNavigate();
+  const [store, setStore] = useState<Record<string, unknown> | null>(null);
+  const [productCount, setProductCount] = useState(0);
+  const [orderCount, setOrderCount] = useState(0);
+  const [revenue, setRevenue] = useState(0);
+  const [usdToLbpRate, setUsdToLbpRate] = useState<number | null>(null);
+  const [rateFetchedAt, setRateFetchedAt] = useState<number | null>(null);
+  const [editingRate, setEditingRate] = useState(false);
+  const [editRateValue, setEditRateValue] = useState<string>('');
+  const [savingRate, setSavingRate] = useState(false);
+  // Credits feature removed
+  const [customerCount, setCustomerCount] = useState(0);
+  const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
+
+  // Access control is handled by ProtectedRoute; avoid imperative redirects here.
+  // Use `useIsMobile` unconditionally so mobile-specific UI (header/quick-actions)
+  // appears based on viewport size even while auth is resolving.
+  const isMobile = useIsMobile();
+
+  // Mount/unmount instrumentation removed after verification.
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      if (!user?.id) {
+        // No authenticated store user yet; clear stats and exit early.
+        setStore(null);
+        setProductCount(0);
+        setOrderCount(0);
+        setRevenue(0);
+        setCustomerCount(0);
+        setRecentEvents([]);
+        return;
+      }
+      try {
+        const db = getFirestore();
+        // Store profile
+        const profileRef = doc(db, 'storeProfiles', user.id);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const profileData = profileSnap.data() as Record<string, unknown>;
+          setStore(profileData);
+          // If the store has a custom rate, prefer it.
+          if (profileData?.usdToLbpRate && typeof profileData.usdToLbpRate === 'number') {
+            const rateVal = profileData.usdToLbpRate as number;
+            setUsdToLbpRate(rateVal);
+            // DocumentSnapshot doesn't expose updateTime on the client SDK types; use now.
+            setRateFetchedAt(Date.now());
+            setEditRateValue(String(rateVal));
+          }
+        } else {
+          setStore(null);
+        }
+        // Products count
+        const productsRef = collection(db, 'products');
+        const productsQuery = query(productsRef, where('storeId', '==', user.id));
+        const productsSnap = await getDocs(productsQuery);
+        setProductCount(productsSnap.size);
+        // Orders
+        const ordersRef = collection(db, 'orders');
+        const ordersQuery = query(ordersRef, where('storeId', '==', user.id));
+        const ordersSnap = await getDocs(ordersQuery);
+        setOrderCount(ordersSnap.size);
+        // Revenue and customers
+        let totalRevenue = 0;
+        const customerSet = new Set();
+        ordersSnap.forEach(doc => {
+          const data = doc.data();
+          totalRevenue += data.total || 0;
+          if (data.customerId) customerSet.add(data.customerId);
+        });
+        setRevenue(totalRevenue);
+        // Fetch USD->LBP rate in background (non-blocking)
+        // Only fetch global rate if store doesn't provide its own rate
+        if (!profileSnap.exists() || !profileSnap.data()?.usdToLbpRate) {
+          getUsdToLbpRate().then(r => {
+            setUsdToLbpRate(r.rate);
+            setRateFetchedAt(r.fetchedAt);
+          }).catch(() => {
+            // ignore
+          });
+        }
+        setCustomerCount(customerSet.size);
+        // Recent Activity: fetch last 5 events (products, orders, announcements)
+  const events: RecentEvent[] = [];
+        // Recent products
+        const recentProductsQuery = query(productsRef, where('storeId', '==', user.id), orderBy('createdAt', 'desc'), limit(2));
+        const recentProductsSnap = await getDocs(recentProductsQuery);
+        recentProductsSnap.forEach(doc => {
+          events.push({
+            type: 'product',
+            name: doc.data().name,
+            createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+          });
+        });
+        // Recent orders
+        const recentOrdersQuery = query(ordersRef, where('storeId', '==', user.id), orderBy('createdAt', 'desc'), limit(2));
+        const recentOrdersSnap = await getDocs(recentOrdersQuery);
+        recentOrdersSnap.forEach(doc => {
+          events.push({
+            type: 'order',
+            total: doc.data().total,
+            createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+          });
+        });
+        // Recent announcements
+        const announcementsRef = collection(db, 'announcements');
+        const recentAnnouncementsQuery = query(announcementsRef, where('storeId', '==', user.id), orderBy('createdAt', 'desc'), limit(1));
+        const recentAnnouncementsSnap = await getDocs(recentAnnouncementsQuery);
+        recentAnnouncementsSnap.forEach(doc => {
+          events.push({
+            type: 'announcement',
+            title: doc.data().title,
+            createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
+          });
+        });
+        // Sort all events by createdAt desc
+        events.sort((a, b) => {
+          const ta = a.createdAt ? +new Date(String(a.createdAt)) : 0;
+          const tb = b.createdAt ? +new Date(String(b.createdAt)) : 0;
+          return tb - ta;
+        });
+        setRecentEvents(events.slice(0, 5));
+      } catch (err) {
+        // If any of the Firestore calls fail, surface a console warning and keep UI usable.
+        console.warn('Failed to fetch admin stats', err);
+      }
+    };
+    fetchStats();
+  }, [user?.id]);
+
+  // credits toggle removed
+
+  // Derive a safe store name string for rendering
+  const storeName: string = (() => {
+    try {
+      const s = store as Record<string, unknown> | null;
+      if (s && typeof s.name === 'string') return s.name as string;
+    } catch (e) {
+      // ignore
+    }
+    return 'AYN BEIRUT';
+  })();
+
+  // Toggle store online/offline
+  const handleStatusToggle = async () => {
+    if (!user?.id || !store) return;
+    try {
+      const db = getFirestore();
+      const profileRef = doc(db, 'storeProfiles', user.id);
+      const newStatus = store.status === 'online' ? 'offline' : 'online';
+      await updateDoc(profileRef, { status: newStatus });
+      setStore({ ...store, status: newStatus });
+    } catch (err) {
+      console.warn('Failed to toggle store status', err);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+    {isMobile && <MobileHeader title="Admin Dashboard" showBackButton={false} showHomeButton={true} />}
+    <div className="md:hidden px-4 pt-3 pb-2 bg-white border-b">
+      <div className="flex items-center gap-3 overflow-x-auto">
+        <Link to="/admin/products" className="relative flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-market-primary">
+            <Package className="h-4 w-4" />
+          </div>
+          {productCount > 0 && <span className="absolute -top-1 -right-1 bg-market-primary text-white text-[10px] px-1 rounded-full">{productCount}</span>}
+          <span className="text-xs text-gray-700 mt-1">Products</span>
+        </Link>
+
+        <Link to="/admin/orders" className="relative flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-market-accent">
+            <Clock className="h-4 w-4" />
+          </div>
+          {orderCount > 0 && <span className="absolute -top-1 -right-1 bg-market-primary text-white text-[10px] px-1 rounded-full">{orderCount}</span>}
+          <span className="text-xs text-gray-700 mt-1">Orders</span>
+        </Link>
+
+        <Link to="/admin/announcements" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+            <Megaphone className="h-4 w-4" />
+          </div>
+          <span className="text-xs text-gray-700 mt-1">Announcements</span>
+        </Link>
+
+        <Link to="/admin/payments" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+            <CreditCard className="h-4 w-4" />
+          </div>
+          <span className="text-xs text-gray-700 mt-1">Payments</span>
+        </Link>
+
+        <Link to="/admin/delivery" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+            <Package className="h-4 w-4" />
+          </div>
+          <span className="text-xs text-gray-700 mt-1">Delivery</span>
+        </Link>
+
+        <Link to="/admin/analytics" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+            <BarChart className="h-4 w-4" />
+          </div>
+          <span className="text-xs text-gray-700 mt-1">Analytics</span>
+        </Link>
+
+        <button onClick={handleStatusToggle} className="flex flex-col items-center shrink-0 px-3 py-2 rounded-md hover:bg-gray-100">
+          <div className={`h-5 w-5 rounded-full ${store?.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`} />
+          <span className="text-xs text-gray-600 mt-1">{store?.status === 'online' ? 'Online' : 'Offline'}</span>
+        </button>
+
+        <Link to="/admin/profile" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-md hover:bg-gray-100">
+          <User className="h-5 w-5 text-gray-700" />
+          <span className="text-xs text-gray-600 mt-1">Profile</span>
+        </Link>
+      </div>
+    </div>
+  <div className="flex">
+  <aside className="hidden lg:block w-64 bg-white shadow-sm h-screen sticky top-0">
+        <div className="p-6">
+          <Link to="/" className="text-2xl font-bold text-market-primary">Market Flow</Link>
+          <p className="text-gray-500 text-sm mt-1">Admin Dashboard</p>
+        </div>
+        <nav className="mt-6">
+          <ul className="space-y-2 px-4">
+            <li>
+              <Link to="/admin" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <StoreIcon className="h-5 w-5 mr-3 text-market-primary" />
+                <span className="font-medium">Dashboard</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/products" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <Package className="h-5 w-5 mr-3" />
+                <span>Products</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/orders" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <Package className="h-5 w-5 mr-3" />
+                <span>Orders</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/payments" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <CreditCard className="h-5 w-5 mr-3" />
+                <span>Payments</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/delivery" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <Clock className="h-5 w-5 mr-3" />
+                <span>Delivery</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/profile" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <User className="h-5 w-5 mr-3" />
+                <span>Store Profile</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/templates" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <Palette className="h-5 w-5 mr-3" />
+                <span>Templates</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/announcements" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <Megaphone className="h-5 w-5 mr-3" />
+                <span>Announcements</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/analytics" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <BarChart className="h-5 w-5 mr-3" />
+                <span>Analytics</span>
+              </Link>
+            </li>
+          </ul>
+        </nav>
+          <div className="px-6 py-4 absolute bottom-0 w-full border-t">
+          <div className="flex items-center">
+            <div className="h-10 w-10 rounded-full bg-market-primary flex items-center justify-center text-white">
+              {user?.name ? String(user.name).charAt(0) : 'G'}
+            </div>
+            <div className="ml-3">
+              <p className="text-sm font-medium">{user?.name || 'Guest'}</p>
+              <p className="text-xs text-gray-500">{user?.email || ''}</p>
+            </div>
+          </div>
+          <Button variant="outline" className="w-full mt-4" onClick={() => navigate('/')}>View Marketplace</Button>
+        </div>
+      </aside>
+      <div className="flex-1 p-6">
+        {/* Main content: centered container at ~80% width on large screens */}
+  <div className="mx-auto w-full lg:w-[65%] max-w-screen-xl">
+          <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-extrabold text-gray-900">Admin Dashboard</h1>
+              <p className="text-sm text-gray-600 mt-1">Welcome back, {user?.name || 'Store Owner'}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-sm text-gray-500">Overview</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <Card className="p-4">
+              <CardContent className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-md bg-market-primary text-white flex items-center justify-center">
+                  <Package className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Products</div>
+                  <div className="text-2xl font-semibold text-gray-900">{productCount}</div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="p-4">
+              <CardContent className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-md bg-market-accent text-white flex items-center justify-center">
+                  <Clock className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Orders</div>
+                  <div className="text-2xl font-semibold text-gray-900">{orderCount}</div>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="p-4">
+              <CardContent className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-md bg-green-500 text-white flex items-center justify-center">
+                  <CreditCard className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Revenue</div>
+                  <div className="text-2xl font-semibold text-gray-900">${revenue.toFixed(2)}</div>
+                  {usdToLbpRate ? (
+                    <div className="text-xs text-gray-500">≈ {formatLbp(revenue, usdToLbpRate)} <span className="ml-2">{rateFetchedAt ? `(rate updated ${new Date(rateFetchedAt).toLocaleTimeString()})` : ''}</span></div>
+                  ) : (
+                    <div className="text-xs text-gray-500">LBP estimate unavailable</div>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card className="p-4">
+              <CardContent className="flex items-center gap-4">
+                <div className="h-12 w-12 rounded-md bg-indigo-500 text-white flex items-center justify-center">
+                  <User className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm text-gray-500">Customers</div>
+                  <div className="text-2xl font-semibold text-gray-900">{customerCount}</div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            <div className="lg:col-span-2">
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-lg font-semibold">Recent Activity</h3>
+                <Link to="/admin/announcements" className="text-sm text-market-primary">View all</Link>
+              </div>
+              {recentEvents.length === 0 ? (
+                <div className="text-sm text-gray-500">No recent activity.</div>
+              ) : (
+                <ul className="space-y-2">
+                  {recentEvents.map((ev, idx) => (
+                    <li key={idx} className="p-3 bg-white rounded-lg shadow-sm border">
+                      <div className="flex items-center gap-3">
+                        <div className="flex-1">
+                          <div className="text-sm font-medium text-gray-800">
+                            {ev.type === 'product' && `New product: ${ev.name}`}
+                            {ev.type === 'order' && `Order placed — $${ev.total}`}
+                            {ev.type === 'announcement' && `Announcement: ${ev.title}`}
+                          </div>
+                          <div className="text-xs text-gray-500 mt-1">{(ev.createdAt && new Date(String(ev.createdAt)).toLocaleString()) || '—'}</div>
+                        </div>
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Store Summary</CardTitle>
+                <CardDescription>Your store at a glance</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                    <div><strong>Store Name</strong>: {storeName}</div>
+                  <div><strong>Location</strong>: Lebanon</div>
+                  <div><strong>Active Template</strong>: Vibrant</div>
+                    <div><strong>Active Announcements</strong>: 1</div>
+                    <div><strong>Seller Subscription</strong>: You are seller #4 — 12 months free remaining.</div>
+                    <div>
+                      <strong>Exchange rate (USD → LBP)</strong>:
+                      <div className="mt-1">
+                        {editingRate ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              value={editRateValue}
+                              onChange={e => setEditRateValue(e.target.value)}
+                              className="border px-2 py-1 rounded w-32 text-sm"
+                              placeholder="e.g. 15000"
+                            />
+                            <button
+                              onClick={async () => {
+                                const parsed = Number(editRateValue);
+                                if (!parsed || parsed <= 0) {
+                                  // basic validation
+                                  alert('Please enter a valid positive number for the rate.');
+                                  return;
+                                }
+                                if (!user?.id) return;
+                                setSavingRate(true);
+                                try {
+                                  const db = getFirestore();
+                                  const profileRef = doc(db, 'storeProfiles', user.id);
+                                  await updateDoc(profileRef, { usdToLbpRate: parsed });
+                                  // update local state
+                                  setUsdToLbpRate(parsed);
+                                  setRateFetchedAt(Date.now());
+                                  setStore(prev => ({ ...(prev as Record<string, unknown>), usdToLbpRate: parsed }));
+                                  setEditingRate(false);
+                                } catch (err) {
+                                  console.warn('Failed to save rate', err);
+                                  alert('Failed to save rate. See console for details.');
+                                } finally {
+                                  setSavingRate(false);
+                                }
+                              }}
+                              className="px-3 py-1 bg-market-primary text-white rounded text-sm"
+                              disabled={savingRate}
+                            >
+                              Save
+                            </button>
+                            <button onClick={() => setEditingRate(false)} className="px-2 py-1 rounded text-sm border">Cancel</button>
+                          </div>
+                        ) : (
+                          <div className="flex items-center gap-3">
+                            <div className="text-sm text-gray-700">{usdToLbpRate ? `${usdToLbpRate} LBP per USD` : 'Not set'}</div>
+                            <button onClick={() => setEditingRate(true)} className="text-sm text-market-primary">Edit</button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    {/* Credits feature removed */}
+                </div>
+              </CardContent>
+              <CardFooter>
+                <Button variant="ghost" onClick={() => navigate('/admin/profile')}>Edit Store Profile</Button>
+              </CardFooter>
+            </Card>
+          </div>
+
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Quick Actions</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                <Link to="/admin/products" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-market-primary/20 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-market-primary/10 flex items-center justify-center text-market-primary">
+                    <Package className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium">Products</span>
+                </Link>
+
+                <Link to="/admin/orders" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-market-accent/10 flex items-center justify-center text-market-accent">
+                    <Clock className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium">Orders</span>
+                </Link>
+
+                <Link to="/admin/payments" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+                    <CreditCard className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium">Payments</span>
+                </Link>
+
+                <Link to="/admin/delivery" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+                    <Package className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium">Delivery</span>
+                </Link>
+
+                <Link to="/admin/announcements" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+                    <Megaphone className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium">Announcements</span>
+                </Link>
+
+                <Link to="/admin/analytics" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+                    <BarChart className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium">Analytics</span>
+                </Link>
+              </div>
+          </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  );
+}
+
+export default AdminDashboard;
