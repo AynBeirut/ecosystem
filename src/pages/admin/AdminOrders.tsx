@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc } from 'firebase/firestore';
+import { Product } from '@/types/product';
 import { useAuth } from '@/context/useAuth';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -13,19 +14,35 @@ const AdminOrders: React.FC = () => {
   const { user } = useAuth();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [productMap, setProductMap] = useState<Record<string, Product>>({});
+
 
   useEffect(() => {
-    const fetchOrders = async () => {
+    const fetchOrdersAndProducts = async () => {
       if (!user?.storeId) return;
       setLoading(true);
       const db = getFirestore();
       const ordersRef = collection(db, 'orders');
       const q = query(ordersRef, where('storeId', '==', user.storeId));
       const snapshot = await getDocs(q);
-  setOrders(snapshot.docs.map(d => ({ id: d.id, ...(d.data() as Partial<Order>) })) as Order[]);
+      const fetchedOrders = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as Partial<Order>) })) as Order[];
+
+      // Collect all unique productIds from all orders
+      const allProductIds = Array.from(new Set(fetchedOrders.flatMap(order => order.items?.map(i => i.productId) || [])));
+      // Fetch all products in one go
+      const products: Record<string, Product> = {};
+      for (const productId of allProductIds) {
+        const productRef = doc(db, 'products', productId);
+        const productSnap = await getDoc(productRef);
+        if (productSnap.exists()) {
+          products[productId] = { id: productId, ...productSnap.data() } as Product;
+        }
+      }
+      setProductMap(products);
+      setOrders(fetchedOrders);
       setLoading(false);
     };
-    fetchOrders();
+    fetchOrdersAndProducts();
   }, [user?.storeId]);
 
 
@@ -80,6 +97,18 @@ const AdminOrders: React.FC = () => {
                     <div className="text-sm text-gray-500">Customer: {order.customerName || order.customerId}</div>
                     {order.customerPhone && (
                       <div className="text-sm text-gray-500">Phone: {order.customerPhone}</div>
+                    )}
+                    {order.items && order.items.length > 0 && (
+                      <div className="mt-2">
+                        <div className="font-medium">Items:</div>
+                        <ul className="ml-4 list-disc">
+                          {order.items.map(item => (
+                            <li key={item.productId} className="text-sm">
+                              {productMap[item.productId]?.name || 'Product'} x{item.quantity}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
