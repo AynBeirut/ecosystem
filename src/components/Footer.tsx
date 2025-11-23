@@ -6,6 +6,7 @@ const Footer: React.FC = () => {
   const location = useLocation();
   const year = new Date().getFullYear();
   const isHome = location.pathname === '/';
+  const isLogin = location.pathname === '/login';
 
   return (
     <footer className="w-full bg-gray-100 border-t py-4 mt-8 flex flex-col items-center gap-2">
@@ -15,7 +16,7 @@ const Footer: React.FC = () => {
           AYN BEIRUT
         </a>
       </div>
-      {!isHome && (
+      {!isHome && !isLogin && (
         <button
           onClick={() => navigate('/')}
           className="px-4 py-2 rounded bg-market-primary text-white hover:bg-market-primary/90 text-xs font-medium"

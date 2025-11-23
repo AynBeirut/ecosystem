@@ -4,8 +4,8 @@ import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA0jzU0136sQM4QpBz6J0TYEsPn2JDTn1U",
-  // Use localhost for local dev, production domain otherwise
-  authDomain: "market-flow-7b074.firebaseapp.com",
+  // Use environment variable for authDomain so it matches the deployed domain in production
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "market-flow-7b074.firebaseapp.com",
   projectId: "market-flow-7b074",
   storageBucket: "market-flow-7b074.appspot.com",
   messagingSenderId: "997465465802",
