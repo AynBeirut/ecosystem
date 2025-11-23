@@ -128,16 +128,16 @@ const Marketplace: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {!isMobile ? <Header /> : <MobileHeader title="Marketplace" showBackButton={false} />}
-      <main className="container mx-auto px-4 py-4 md:py-6">
+    <div className="min-h-screen bg-gray-50 flex flex-col min-h-screen">
+      {!isMobile ? <Header /> : <MobileHeader title="Market Space" showBackButton={false} />}
+      <main className="container mx-auto px-4 py-4 md:py-6 flex-1">
         <div className="flex flex-col md:flex-row justify-between items-start gap-3 md:gap-4 mb-4 md:mb-6">
-          {!isMobile && <h1 className="text-2xl font-bold">Marketplace</h1>}
+          {!isMobile && <h1 className="text-2xl font-bold whitespace-nowrap">Market Space</h1>}
           <div className="flex items-center w-full gap-2">
             <form onSubmit={handleSearch} className="relative flex-grow">
               <Input
                 type="search"
-                placeholder="Search marketplace..."
+                placeholder="Search Market Space..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="pl-10 pr-4 h-10"

@@ -98,6 +98,7 @@ const Signup = () => {
                 value={formData.fullName}
                 onChange={(e) => setFormData(prev => ({ ...prev, fullName: e.target.value }))}
                 required
+                autoComplete="name"
               />
             </div>
             
@@ -110,6 +111,7 @@ const Signup = () => {
                 value={formData.email}
                 onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                 required
+                autoComplete="email"
               />
             </div>
             
@@ -122,6 +124,7 @@ const Signup = () => {
                 value={formData.password}
                 onChange={(e) => setFormData(prev => ({ ...prev, password: e.target.value }))}
                 required
+                autoComplete="new-password"
               />
             </div>
             
@@ -134,6 +137,7 @@ const Signup = () => {
                 value={formData.confirmPassword}
                 onChange={(e) => setFormData(prev => ({ ...prev, confirmPassword: e.target.value }))}
                 required
+                autoComplete="new-password"
               />
             </div>
             

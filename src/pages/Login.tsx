@@ -74,8 +74,8 @@ const Login: React.FC = () => {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
         <div className="w-full max-w-4xl space-y-8">
           <div className="text-center">
-            <h1 className="text-4xl font-bold text-market-primary">Market Flow</h1>
-            <p className="mt-2 text-gray-600">Your one-stop marketplace - by AYN BEIRUT</p>
+            <h1 className="text-4xl font-bold text-market-primary">Market Space</h1>
+            <p className="mt-2 text-gray-600">Your one-stop market space - by AYN BEIRUT</p>
           </div>
           
           <Card>
@@ -95,8 +95,8 @@ const Login: React.FC = () => {
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
       <div className="w-full max-w-md space-y-8">
         <div className="text-center">
-          <h1 className="text-4xl font-bold text-market-primary">Market Flow</h1>
-          <p className="mt-2 text-gray-600">Your one-stop marketplace - by AYN BEIRUT</p>
+          <h1 className="text-4xl font-bold text-market-primary">Market Space</h1>
+          <p className="mt-2 text-gray-600">Your one-stop market space - by AYN BEIRUT</p>
         </div>
 
         <Card>
@@ -146,6 +146,7 @@ const Login: React.FC = () => {
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
                         required
+                        autoComplete="email"
                       />
                     </div>
                     <div className="space-y-2">
@@ -162,6 +163,7 @@ const Login: React.FC = () => {
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
                         required
+                        autoComplete="current-password"
                       />
                     </div>
                     <Button type="submit" className="w-full" disabled={isSubmitting}>
@@ -197,15 +199,15 @@ const Login: React.FC = () => {
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Full Name</Label>
-                      <Input id="name" name="name" placeholder="John Doe" required />
+                      <Input id="name" name="name" placeholder="John Doe" required autoComplete="name" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email-signup">Email</Label>
-                      <Input id="email-signup" name="email" type="email" placeholder="email@example.com" required />
+                      <Input id="email-signup" name="email" type="email" placeholder="email@example.com" required autoComplete="email" />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="password-signup">Password</Label>
-                      <Input id="password-signup" name="password" type="password" required />
+                      <Input id="password-signup" name="password" type="password" required autoComplete="new-password" />
                     </div>
                     <Button type="submit" className="w-full">
                       Create Account

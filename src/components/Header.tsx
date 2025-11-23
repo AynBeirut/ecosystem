@@ -33,26 +33,23 @@ const Header: React.FC = () => {
   };
 
   return (
-    <header className="bg-white shadow-sm sticky top-0 z-50">
+    <header className="bg-market-primary shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
           <Link to="/" className="flex items-center">
-            <span className="text-xl font-bold text-market-primary">Market Flow</span>
+            <span className="text-xl font-bold text-white">Home</span>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            <Link to="/" className="text-gray-600 hover:text-market-primary">
-              Home
-            </Link>
             {user && user.role === 'admin' && (
-              <Link to="/admin" className="text-gray-600 hover:text-market-primary">
+              <Link to="/admin" className="text-white hover:text-market-primary/80">
                 Dashboard
               </Link>
             )}
             {user && user.role === 'user' && (
-              <Link to="/upgrade" className="text-market-primary hover:text-market-primary/80">
+              <Link to="/upgrade" className="text-white hover:text-market-primary/80">
                 Become a Seller
               </Link>
             )}

@@ -175,6 +175,8 @@ const Cart: React.FC = () => {
                                 <Button 
                                   variant="outline" 
                                   size="icon" 
+                                  aria-label="Decrease quantity"
+                                  title="Decrease quantity"
                                   onClick={() => handleQuantityChange(item.product.id, item.quantity - 1)}
                                   disabled={item.quantity <= 1}
                                 >
@@ -184,12 +186,16 @@ const Cart: React.FC = () => {
                                   type="number"
                                   min="1"
                                   value={item.quantity}
+                                  aria-label="Quantity"
+                                  placeholder="Qty"
                                   onChange={(e) => handleQuantityChange(item.product.id, parseInt(e.target.value) || 1)}
                                   className="text-center mx-2 w-16"
                                 />
                                 <Button 
                                   variant="outline" 
                                   size="icon" 
+                                  aria-label="Increase quantity"
+                                  title="Increase quantity"
                                   onClick={() => handleQuantityChange(item.product.id, item.quantity + 1)}
                                 >
                                   <Plus size={14} />
@@ -198,6 +204,8 @@ const Cart: React.FC = () => {
                               <Button 
                                 variant="ghost" 
                                 size="icon" 
+                                aria-label="Remove item"
+                                title="Remove item"
                                 onClick={() => handleRemoveItem(item.product.id)}
                                 className="text-gray-500 hover:text-red-500"
                               >

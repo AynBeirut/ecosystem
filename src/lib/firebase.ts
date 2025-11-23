@@ -4,9 +4,7 @@ import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA0jzU0136sQM4QpBz6J0TYEsPn2JDTn1U",
-  // Use the default firebaseapp / appspot domains for auth/storage so the
-  // builtin Firebase auth handler paths (e.g. /__/auth/handler) resolve
-  // correctly when the SDK constructs popup/redirect URLs.
+  // Use localhost for local dev, production domain otherwise
   authDomain: "market-flow-7b074.firebaseapp.com",
   projectId: "market-flow-7b074",
   storageBucket: "market-flow-7b074.appspot.com",

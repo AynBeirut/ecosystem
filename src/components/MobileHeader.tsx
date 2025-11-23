@@ -21,7 +21,7 @@ interface MobileHeaderProps {
 }
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({
-  title = 'Market Flow',
+  title = 'Market Space',
   showBackButton = true,
   showHomeButton = false,
 }) => {

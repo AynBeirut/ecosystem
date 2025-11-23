@@ -25,6 +25,7 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminOrders from "./pages/admin/AdminOrders";
 import OrderTracking from "./pages/OrderTracking";
 import DebugConsole from './components/DebugConsole';
+import Footer from './components/Footer';
 import OrderConfirmation from "./pages/OrderConfirmation";
 
 
@@ -63,6 +64,7 @@ import OrderConfirmation from "./pages/OrderConfirmation";
                         {/* 404 catch-all route */}
                         <Route path="*" element={<NotFound />} />
                       </Routes>
+                      <Footer />
                       <Toaster />
                       <DebugConsole />
                     </BrowserRouter>
