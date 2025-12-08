@@ -1,0 +1,371 @@
+mainpage/admin/admin dashboard/kitchen
+faild to create new food items as see in the following text 
+Ps:add items food 
+and don't need to have quantiy when it add just to show in the menu not to define the quantity (to make it avalible on the list of items 
+food name should be a drop down list form the created items and the holle perpess of this field is to set the sall price  
+Back
+Logo
+LOLLA
+🍳 Kitchen
+✗ Failed to add food item
+➕ Add Food Item (Quick)
+Add an existing food item to the menu with manual pricing
+Pissa
+20
+20
+
+Piece
+Add to Menu
+🔨 Create Food Item (Recipe-Based)
+Create a new food item with ingredient recipe and auto-calculated pricing
+Food Name *
+
+Sandwich
+📋 Recipe (per 1 item):
+
+➕ Add Ingredient
+Qty
+
+kg
+Add
+No ingredients yet
+Create Food Item
+📊 Cost List (Recipe-Based)
+Name	Price	Actions
+Burger	
+$5
+Remove
+Recipe: undefined (0.15kg), undefined (1piece)
+Sandwich	
+$4
+Remove
+Recipe: undefined (0.1kg), undefined (0.05kg), undefined (0.05kg)
+Pizza	
+$8
+Remove
+Recipe: undefined (0.2kg), undefined (0.15kg), undefined (0.1kg), undefined (0.02liter)
+
+the technical 
+need to have a botton to select if the app is subb or master(main)
+because one bransh can have more them one app so the master make the local data saving and sysnc with the cloud the sub app just need to cominucat and send the sgnale to the master 
+and need to be defin where is located like bar or waiter or casheir or admin app 
+so some time the cashier is the master and save the local data if the businise is small ,if the buisenesse is big the master app well be the master app 
+so we need to have option to select the role of the app if is master , bransh , sub in the bransh 
+master only save the local data 
+the rest comunicate and all is sync with the cloud and with the auther apps 
+(
+Back
+Logo
+LOLLA
+⚙️ Technical Settings
+📱 Device Identity
+Branch ID
+e.g., Beirut-Main, Saida-Store
+Device ID
+e.g., Cashier-1, POS-2
+Used to identify this device in logs, backups, and sync operations.
+💾 Local Backup Configuration
+
+Enable Automatic Backups
+Backup Folder Path *
+C:\\POS-Backups or /home/user/pos-backups
+Test
+Backup Interval (seconds)
+
+30 minutes
+Keep Last N Backups
+10
+Note: Backups are exported as dated folders containing all data files. Older backups are automatically deleted when limit is reached.
+☁️ Cloud Sync (Phase 2 - Coming Soon)
+Cloud synchronization with CouchDB will be available in the next update.
+
+▶
+Advanced Options
+💾 Save Settings
+Reset to Defaults
+💡 Important: After saving settings, restart the application to apply backup configuration changes.)
+and choosing  the local path should be more user freindly browsing and select the folder not wright the path
+
+stock mangment to faild to add itemes 
+(
+Back
+Logo
+LOLLA
+Stock Management
+⚠️ Low Stock Alert
+Lettuce (8 left)
+✗ Failed to add item
+peinting 
+
+Service
+20
+10
+
+Piece
++ Add Item
+Name	Type	Price	Stock	Actions
+Playground Ticket	service	
+$10
+N/A	EditRemove
+Juice	drink	
+$2
+−
+100 piece
++
+EditRemove
+Toy Car	item	
+$8
+−
+20 piece
++
+EditRemove
+Sugar	Raw Material	
+$100
+−
+50 kg
++
+EditRemove
+Flour	Raw Material	
+$80
+−
+200 kg
++
+EditRemove
+Tomatoes	Raw Material	
+$80
+−
+25 kg
++
+EditRemove
+Cheese	Raw Material	
+$150
+−
+15 kg
++
+EditRemove
+Olive Oil	Raw Material	
+$200
+−
+30 liter
++
+EditRemove
+Lettuce	Raw Material	
+$50
+−
+8 kg
++
+EditRemove
+Chicken Breast	Raw Material	
+$180
+−
+20 kg
++
+EditRemove
+Beef	Raw Material	
+$250
+−
+18 kg
++
+EditRemove
+Buns	Raw Material	
+$30
+−
+100 piece
++
+EditRemove
+Ice Cream	dessert	
+$3
+−
+50 piece
++
+EditRemove
+Cake Slice	dessert	
+$4
+−
+30 piece
++
+EditRemove
+Chocolate Mousse	dessert	
+$5
+−
+25 piece
++
+EditRemove
+Fruit Salad	dessert	
+$4
+−
+20 piece
++
+EditRemove
+Total Items: 16
+Items with Stock: 15
+Total Stock Value: $43585.00)
+
+admin user field to add user too
+need autenticator remove this 
+(
+Back
+Logo
+LOLLA
+👥 User Management
+Authentication required.
+Users
+Attendance
+Salary Reports
+➕ Add New User
+samir
+
+Cashier
+••••
+
+Morning
+1000
+Add User
+All Users (7)
+ID	Name	Role	PIN	Shift	Salary	Status	Actions
+1	Admin User	ADMIN		All Day	$5000.00/mo	Salaried	
+Edit
+Delete
+2	Youssif	CASHIER		Morning	$3000.00/hr	
+Not Here
+Check In
+Edit
+Delete
+3	Sara	KITCHEN		Evening	$2800.00/mo	Salaried	
+Edit
+Delete
+4	Ahmad	SUPERVISOR		Afternoon	$4000.00/mo	Salaried	
+Edit
+Delete
+5	Stock Manager	STOCK		Morning	$3500.00/hr	
+Not Here
+Check In
+Edit
+Delete
+6	Accountant	ACCOUNTANT		All Day	$4000.00/mo	Salaried	
+Edit
+Delete
+7	Rania	WAITER		Evening	$2500.00/hr	
+Not Here
+Check In
+Edit
+Delete)
+ now go back to the first page 
+cashier
+
+look carfully to the follow pasted page 
+
+(Menu
+Client ID: 03111000
+Unpaid Orders
+Order #1 - 11/30/2025, 6:22:59 PM - Items: 1 - Total: 4 $
+Order #2 - 11/30/2025, 6:23:33 PM - Items: 1 - Total: 5 $
+Total Unpaid: 9 $ (should be total itemes unpaid )
+Cart
+🚪 Entrance Status
+⏱️ 0:00:43
+Current Fee: $15.00
+No items selected.
+Items Total: 0 $( should show "the total unpaid items )
++ Entrance: 15 $
+Grand Total: 15.00 $should be ( the total unpaid items + the entrance fee )
+💰 Discount Request
+0-100
+%
+Request Discount
+Pay All Unpaid Orders (9 $)chould be = (to grand total )
+the logic is correct and the printing show the correct total but the UI is bad 
+Services
+Food
+Drinks
+Desserts
+Back)
+
+the casheir , bartender, waiter , chould see a list of active client 
+from the first page  
+stock some time work some time go to blanck 
+ from the fist page / stuff dont open 
+
+
+
+
+
+
+did we fixed that ???? i need to see a list of created client idea 
+the cashier dashboard show (Cash Drawer Status
+✅ OPEN
+Opened: 4:45:06 PM
+Opening
+$0.00
+Sales
+$0.00
+Expected
+$0.00) expected should see the totale of the total facture some of the active client
+
+from the casheir dashbaord remove create client , and to the enter client id (when the id is enterd seash for exting id if found active , if not prompt the cashier to create it accept and create id 
+
+and in active client researsh if the resarsh not found allow active when selected if the id is in the data activet it if not ask to create it if accecpted creart and avtivate auto
+
+
+ i want to make sure all autorisation and perssion for the fuction and pages are link to role the password complity controled from the user manger 
+and set the password to  
+
+Admin: username adminuser / password 1111
+Cashier: username merlien / password 2222
+Waiter: username rania / password 3333
+Bartender: username kirs / password 4444
+Supervisor: username ahmad / password 5555
+Accountant: username accountant / password 6666
+Stock: username stockmanager / password 7777
+
+
+the bartender can see live view from the stock and this is good but now he can change it this not good (Ready Sandwich
+Current stock: 10 units
+10
+⚠ Low
+Ready Salad
+Current stock: 100 units
+100
+✓ Good
+Energy Drink
+Current stock: 10 units
+10
+⚠ Low)
+and still faild to add items from stock to store
+
+
+
+pos-v2/
+├── frontend/
+│   ├── src/
+│   │   ├── components/
+│   │   │   ├── Cashier/
+│   │   │   ├── Bartender/
+│   │   │   ├── Admin/
+│   │   │   └── ...
+│   │   ├── hooks/
+│   │   ├── contexts/
+│   │   ├── services/
+│   │   └── App.js (small router only)
+│   └── ...
+├── backend/
+│   ├── routes/
+│   ├── controllers/
+│   ├── middleware/
+│   └── database/ (SQLite or PostgreSQL)
+└── shared/
+
+
+bartender menu should be the same no diferance as the cashier menu , 
+sof the bartender don't show the services and the UI should be the same too ,enter client field , 
+ 
+ 
+the cashier menu still don't trigerr the print out facture ,
+the UI is to busy we need to clear space so let's make the enter clien ID a dependent page to add the client number and name when selected or enterd
+ we go to the menu that will creat more space on the menu to display the actule facture detail befor click pay 
+
+add a botton to see the unpaid order 
+and the same change on the bartender menu exsact like the casheir and for the client entry too 
+
+we need to creat a stock manger dashboard  and supervisor dashboard separet from the admin dashboard and admin product and admin stock
+ and a seperat account (stock manger account )and (supervisor  account )

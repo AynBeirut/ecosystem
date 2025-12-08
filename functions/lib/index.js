@@ -55,11 +55,10 @@ app.use(express_1.default.json());
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp() {
     try {
-        // prefer FieldValue.serverTimestamp(), otherwise Timestamp.now(), otherwise Date
-        // optional chaining used to protect against undefined shapes in some runtimes
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const anyAdmin = admin;
-        return anyAdmin?.firestore?.FieldValue?.serverTimestamp?.() ?? anyAdmin?.firestore?.Timestamp?.now?.() ?? new Date();
+        return (anyAdmin.firestore.FieldValue.serverTimestamp?.() ||
+            anyAdmin.firestore.Timestamp.now?.() ||
+            new Date());
     }
     catch (e) {
         return new Date();
@@ -67,18 +66,29 @@ function getServerTimestamp() {
 }
 app.post('/checkout', async (req, res) => {
     try {
-        const rawAuth = req.get?.('authorization');
+        const rawAuth = req.get('authorization');
         const authHeader = String(rawAuth || '');
         const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
         if (!token)
             return res.status(401).json({ error: 'Missing auth token' });
         const decoded = await admin.auth().verifyIdToken(token);
         const userId = decoded.uid;
+        // Fetch user record for name/phone
+        let customerName = '';
+        let customerPhone = '';
+        try {
+            const userRecord = await admin.auth().getUser(userId);
+            customerName = userRecord.displayName || userRecord.email || '';
+            customerPhone = userRecord.phoneNumber || '';
+        }
+        catch (e) {
+            // fallback: leave blank
+        }
         const body = req.body;
         const { items } = body || {};
         if (!Array.isArray(items) || items.length === 0)
             return res.status(400).json({ error: 'No items' });
-        const checkoutItems = items.map(i => i);
+        const checkoutItems = items.map((i) => i);
         const itemsByStore = {};
         for (const it of checkoutItems) {
             if (!it.storeId)
@@ -89,7 +99,6 @@ app.post('/checkout', async (req, res) => {
         let ordersCreated = 0;
         await db.runTransaction(async (tx) => {
             const userRef = db.doc(`users/${userId}`);
-            // user credits system removed; no user data required here
             for (const storeId of Object.keys(itemsByStore)) {
                 const itemsForStore = itemsByStore[storeId];
                 let storeSubtotal = 0;
@@ -98,7 +107,7 @@ app.post('/checkout', async (req, res) => {
                     if (!it.productId)
                         throw new Error('Invalid item');
                     const productRef = db.doc(`products/${it.productId}`);
-                    const productSnap = (await tx.get(productRef));
+                    const productSnap = await tx.get(productRef);
                     if (!productSnap.exists)
                         throw new Error(`Product not found: ${it.productId}`);
                     const pData = productSnap.data();
@@ -112,13 +121,15 @@ app.post('/checkout', async (req, res) => {
                     storeSubtotal += serverPrice * qty;
                 }
                 const profileRef = db.doc(`storeProfiles/${storeId}`);
-                const profileSnap = (await tx.get(profileRef));
+                const profileSnap = await tx.get(profileRef);
                 const storeProfile = profileSnap.exists ? profileSnap.data() : undefined;
-                const totalAfterDiscount = storeSubtotal; // no credits/discounts applied
+                const totalAfterDiscount = storeSubtotal;
                 const orderRef = db.collection('orders').doc();
                 tx.set(orderRef, {
                     storeId,
                     customerId: userId,
+                    customerName,
+                    customerPhone,
                     items: orderItems,
                     subtotal: storeSubtotal,
                     discount: 0,
@@ -128,23 +139,20 @@ app.post('/checkout', async (req, res) => {
                 ordersCreated++;
                 for (const it of itemsForStore) {
                     const productRef = db.doc(`products/${it.productId}`);
-                    const prodSnap = (await tx.get(productRef));
+                    const prodSnap = await tx.get(productRef);
                     const pData = prodSnap.exists ? prodSnap.data() : {};
                     const qty = it.quantity && it.quantity > 0 ? it.quantity : 1;
                     if (typeof pData.stock === 'number') {
-                        // compute explicit new stock value instead of relying on FieldValue.increment
                         const newStock = pData.stock - qty;
                         tx.update(productRef, { stock: newStock });
                     }
                 }
             }
-            // no user credits to update
         });
         return res.json({ ok: true, ordersCreated });
     }
     catch (err) {
         console.error('Checkout failed', err);
-        // credits-related errors removed
         return res.status(500).json({ error: err instanceof Error ? err.message : 'Checkout failed' });
     }
 });
