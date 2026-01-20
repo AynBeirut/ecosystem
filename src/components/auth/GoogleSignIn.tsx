@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { auth } from '@/lib/firebase';
-import { GoogleAuthProvider, signInWithCredential } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { toast } from 'sonner';
-import { acquire, release, isLocked } from '@/lib/popupLock';
-import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { acquire, release } from '@/lib/popupLock';
 
 export function GoogleSignIn() {
   const [loading, setLoading] = useState(false);
@@ -16,33 +15,21 @@ export function GoogleSignIn() {
     }
     setLoading(true);
     try {
-      // Configure Google Sign-In
-      GoogleSignin.configure({
-        webClientId: '<YOUR_WEB_CLIENT_ID>', // Replace with your web client ID from Firebase
-        offlineAccess: true,
-      });
-
-      // Start the Google Sign-In process
-      const userInfo = await GoogleSignin.signIn();
-      const idToken = userInfo.idToken;
-
-      // Authenticate with Firebase using the ID token
-      const credential = GoogleAuthProvider.credential(idToken);
-      await signInWithCredential(auth, credential);
-
-      toast.success('Signed in with Google!');
-    } catch (error) {
-      const err = error as { code?: string; name?: string; message?: string } | undefined;
-      const code = err?.code || err?.name || '';
-      console.error('Error signing in with Google:', code, err);
-      if (code === 'auth/operation-not-allowed') {
-        toast.error('Google sign-in is not enabled in the Firebase console.');
+      const provider = new GoogleAuthProvider();
+      await signInWithPopup(auth, provider);
+      toast.success('Signed in successfully!');
+    } catch (error: any) {
+      console.error('Google sign-in error:', error);
+      if (error.code === 'auth/popup-closed-by-user') {
+        toast.error('Sign-in cancelled');
+      } else if (error.code === 'auth/popup-blocked') {
+        toast.error('Pop-up blocked. Please allow pop-ups for this site.');
       } else {
-        toast.error(err?.message || 'Error signing in with Google. Please try again.');
+        toast.error('Failed to sign in with Google');
       }
     } finally {
       setLoading(false);
-      setTimeout(() => release(), 500);
+      release();
     }
   }
 
@@ -52,7 +39,7 @@ export function GoogleSignIn() {
       onClick={signInWithGoogle} 
       disabled={loading} 
       className="w-full"
-(    >
+    >
       {loading ? (
         <span className="loading loading-spinner loading-sm"></span>
       ) : (

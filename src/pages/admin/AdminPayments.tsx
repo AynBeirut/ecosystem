@@ -165,6 +165,7 @@ const AdminPayments: React.FC = () => {
       {isMobile && <MobileHeader title="Payment Methods" />}
       
       <div className="p-4 md:p-6">
+        <BackButton />
         <div className="mb-6">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <CreditCard className="h-6 w-6" />

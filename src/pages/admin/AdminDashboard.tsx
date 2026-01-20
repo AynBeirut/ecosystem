@@ -11,9 +11,11 @@ import {
   CreditCard, 
   Clock, 
   User, 
+  Users,
   Palette, 
   Megaphone,
-  BarChart 
+  BarChart,
+  ShoppingCart
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -208,12 +210,26 @@ const AdminDashboard: React.FC = () => {
     {isMobile && <MobileHeader title="Admin Dashboard" showBackButton={false} showHomeButton={true} />}
     <div className="md:hidden px-4 pt-3 pb-2 bg-white border-b">
       <div className="flex items-center gap-3 overflow-x-auto">
+        <Link to="/admin/inventory" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-purple-600">
+            <Package className="h-4 w-4" />
+          </div>
+          <span className="text-xs text-gray-700 mt-1">Inventory</span>
+        </Link>
+
         <Link to="/admin/products" className="relative flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
           <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-market-primary">
             <Package className="h-4 w-4" />
           </div>
           {productCount > 0 && <span className="absolute -top-1 -right-1 bg-market-primary text-white text-[10px] px-1 rounded-full">{productCount}</span>}
           <span className="text-xs text-gray-700 mt-1">Products</span>
+        </Link>
+
+        <Link to="/admin/purchases" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-blue-600">
+            <ShoppingCart className="h-4 w-4" />
+          </div>
+          <span className="text-xs text-gray-700 mt-1">Purchases</span>
         </Link>
 
         <Link to="/admin/orders" className="relative flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
@@ -231,11 +247,11 @@ const AdminDashboard: React.FC = () => {
           <span className="text-xs text-gray-700 mt-1">Announcements</span>
         </Link>
 
-        <Link to="/admin/payments" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+        <Link to="/admin/expenses" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-orange-600">
             <CreditCard className="h-4 w-4" />
           </div>
-          <span className="text-xs text-gray-700 mt-1">Payments</span>
+          <span className="text-xs text-gray-700 mt-1">Expenses</span>
         </Link>
 
         <Link to="/admin/delivery" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
@@ -272,15 +288,15 @@ const AdminDashboard: React.FC = () => {
         <nav className="mt-6">
           <ul className="space-y-2 px-4">
             <li>
-              <Link to="/admin" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+              <Link to="/admin/dashboard" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
                 <StoreIcon className="h-5 w-5 mr-3 text-market-primary" />
                 <span className="font-medium">Dashboard</span>
               </Link>
             </li>
             <li>
-              <Link to="/admin/products" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <Package className="h-5 w-5 mr-3" />
-                <span>Products</span>
+              <Link to="/admin/inventory" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <Package className="h-5 w-5 mr-3 text-purple-600" />
+                <span className="font-medium">Inventory Overview</span>
               </Link>
             </li>
             <li>
@@ -307,7 +323,7 @@ const AdminDashboard: React.FC = () => {
                 <span>Store Profile</span>
               </Link>
             </li>
-            <li>
+            <li className="ml-4">
               <Link to="/admin/templates" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
                 <Palette className="h-5 w-5 mr-3" />
                 <span>Templates</span>
@@ -323,6 +339,18 @@ const AdminDashboard: React.FC = () => {
               <Link to="/admin/analytics" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
                 <BarChart className="h-5 w-5 mr-3" />
                 <span>Analytics</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/staff" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                <Users className="h-5 w-5 mr-3" />
+                <span>Staff (Payroll)</span>
+              </Link>
+            </li>
+            <li>
+              <Link to="/admin/sub-accounts" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-green-200 hover:shadow-sm transition">
+                <Users className="h-5 w-5 mr-3 text-green-600" />
+                <span className="font-medium">Sub-Accounts (Login)</span>
               </Link>
             </li>
           </ul>
@@ -341,8 +369,8 @@ const AdminDashboard: React.FC = () => {
         </div>
       </aside>
       <div className="flex-1 p-6">
-        {/* Main content: centered container at ~80% width on large screens */}
-  <div className="mx-auto w-full lg:w-[65%] max-w-screen-xl">
+        {/* Main content: full width with max constraint */}
+        <div className="mx-auto w-full max-w-screen-2xl">
           <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
@@ -513,13 +541,30 @@ const AdminDashboard: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold mb-3">Quick Actions</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                <Link to="/admin/inventory" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-purple-600/20 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                    <Package className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">Inventory</span>
+                </Link>
                 <Link to="/admin/products" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-market-primary/20 shadow-sm hover:shadow-md transition">
                   <div className="h-8 w-8 rounded-full bg-market-primary/10 flex items-center justify-center text-market-primary">
                     <Package className="h-4 w-4" />
                   </div>
-                  <span className="font-medium">Products</span>
+                  <span className="text-sm font-medium">Products</span>
                 </Link>
-
+                <Link to="/admin/purchases" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-blue-600/20 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                    <ShoppingCart className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">Purchases</span>
+                </Link>
+                <Link to="/admin/expenses" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-orange-600/20 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                    <CreditCard className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">Expenses</span>
+                </Link>
                 <Link to="/admin/orders" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
                   <div className="h-8 w-8 rounded-full bg-market-accent/10 flex items-center justify-center text-market-accent">
                     <Clock className="h-4 w-4" />
@@ -554,8 +599,15 @@ const AdminDashboard: React.FC = () => {
                   </div>
                   <span className="font-medium">Analytics</span>
                 </Link>
+
+                <Link to="/admin/staff" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+                    <Users className="h-4 w-4" />
+                  </div>
+                  <span className="font-medium">Team (5+5)</span>
+                </Link>
               </div>
-          </div>
+            </div>
           </div>
         </div>
       </div>

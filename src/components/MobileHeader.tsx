@@ -30,7 +30,7 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   // Credits feature removed
 
   const goBack = () => {
-    navigate(-1);
+    navigate('/admin');
   };
 
   const goHome = () => {

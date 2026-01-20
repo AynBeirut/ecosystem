@@ -132,6 +132,7 @@ const AdminAnnouncements: React.FC = () => {
     <div className="min-h-screen bg-background">
       {isMobile && <MobileHeader title="Announcements" />}
       <div className="p-4 md:p-6">
+        <BackButton />
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>

@@ -44,7 +44,7 @@ const Header: React.FC = () => {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             {user && user.role === 'admin' && (
-              <Link to="/admin" className="text-white hover:text-market-primary/80">
+              <Link to="/admin/dashboard" className="text-white hover:text-market-primary/80">
                 Dashboard
               </Link>
             )}
@@ -196,7 +196,7 @@ const Header: React.FC = () => {
               
               {user && user.role === 'admin' && (
                 <Link
-                  to="/admin"
+                  to="/admin/dashboard"
                   className="px-2 py-1 text-gray-600 hover:text-market-primary"
                   onClick={toggleMenu}
                 >

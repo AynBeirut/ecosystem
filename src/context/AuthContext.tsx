@@ -174,7 +174,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         lastAdWatchDate: new Date().toISOString().split('T')[0],
         storeId: undefined
       };
-      // Fetch seller info from Firestore
+      
+      // Check if this is a sub-account login
+      const userProfileRef = doc(db, 'users', userCredential.user.uid);
+      const userProfileSnap = await getDoc(userProfileRef);
+      
+      if (userProfileSnap.exists()) {
+        const userProfile = userProfileSnap.data();
+        
+        // If this is a sub-account, load their profile and permissions
+        if (userProfile.role === 'sub_account' && userProfile.subAccountId) {
+          const subAccountRef = doc(db, 'subAccounts', userProfile.subAccountId);
+          const subAccountSnap = await getDoc(subAccountRef);
+          
+          if (subAccountSnap.exists()) {
+            const subAccountData = subAccountSnap.data();
+            
+            // Update last login
+            await setDoc(subAccountRef, { lastLogin: new Date().toISOString() }, { merge: true });
+            
+            baseUser = {
+              ...baseUser,
+              name: subAccountData.name || baseUser.name,
+              role: 'sub_account' as UserRole,
+              storeId: subAccountData.storeId,
+              subAccountRole: subAccountData.role,
+              permissions: subAccountData.permissions,
+              subAccountId: userProfile.subAccountId,
+            };
+            
+            localStorage.setItem('subAccountInfo', JSON.stringify({
+              role: 'sub_account',
+              subAccountRole: subAccountData.role,
+              permissions: subAccountData.permissions,
+              storeId: subAccountData.storeId,
+              subAccountId: userProfile.subAccountId,
+            }));
+            
+            setUser(baseUser as User);
+            toast.success(`Welcome back, ${subAccountData.name}!`);
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+      
+      // If not a sub-account, check for seller/admin info from Firestore
       const sellerRef = doc(db, 'sellers', userCredential.user.uid);
       const sellerSnap = await getDoc(sellerRef);
       if (sellerSnap.exists()) {

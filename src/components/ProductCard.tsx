@@ -76,19 +76,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore }) => {
             </span>
           </div>
         </CardContent>
-        <CardFooter className="pt-0 flex items-center gap-2">
+        <CardFooter className="pt-0">
           <Button 
             onClick={handleAddToCart} 
-            className="flex-1 mt-2"
+            className="w-full"
             variant="outline"
             disabled={!product.inStock}
           >
             Add to Cart
           </Button>
-          <div className="mt-2">
-            {/* Lazy import to avoid bundle churn; small component so regular import is okay */}
-            <a href={product.image} target="_blank" rel="noopener noreferrer" className="text-sm text-gray-500">View</a>
-          </div>
         </CardFooter>
       </Card>
     </Link>

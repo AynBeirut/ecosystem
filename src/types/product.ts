@@ -1,3 +1,5 @@
+export type ProductType = 'simple' | 'service' | 'composed';
+
 export type Product = {
   id: string;
   name: string;
@@ -10,6 +12,17 @@ export type Product = {
   inStock: boolean;
   stock?: number; // Stock quantity
   rating?: number;
+  productType?: ProductType; // Type of product
+  sku?: string; // Stock Keeping Unit
+  barcode?: string; // Barcode for scanning
+  costPrice?: number; // Cost to produce/purchase
+  margin?: number; // Profit margin percentage
+  taxIncluded?: boolean; // Whether price includes tax
+  // Service-specific fields
+  serviceDuration?: number; // Duration in minutes
+  serviceProviderId?: string; // Staff member providing service
+  // Composed product fields
+  recipeId?: string; // Link to recipe for composed products
 };
 
 export type Store = {
@@ -52,7 +65,7 @@ export type StoreAnnouncement = {
   isActive: boolean;
 };
 
-export type UserRole = 'admin' | 'user';
+export type UserRole = 'admin' | 'user' | 'sub_account';
 
 export type User = {
   id: string;
@@ -70,6 +83,10 @@ export type User = {
   phone?: string;
   // List of followed store IDs
   following?: string[];
+  // Sub-account properties
+  subAccountId?: string;
+  subAccountRole?: 'sales' | 'delivery' | 'manager';
+  permissions?: string[];
 };
 
 export type StoreReview = {
@@ -96,3 +113,5 @@ export type SubscriptionTier = {
   billingCycle: 'monthly' | 'yearly';
   features: string[];
 };
+
+export type { ComposedProduct } from './inventory';

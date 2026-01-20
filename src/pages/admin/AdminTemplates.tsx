@@ -115,6 +115,7 @@ const AdminTemplates: React.FC = () => {
   {isMobile && <MobileHeader title="Store Templates" />}
       
       <div className="p-4 md:p-6">
+        <BackButton to="/admin/profile" label="Back to Store Profile" />
         <div className="mb-6">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Palette className="h-6 w-6" />

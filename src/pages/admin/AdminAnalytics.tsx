@@ -74,6 +74,7 @@ const AdminAnalytics: React.FC = () => {
   {isMobile && <MobileHeader title="Analytics" />}
       
       <div className="p-4 md:p-6">
+        <BackButton />
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>

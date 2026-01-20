@@ -1,14 +1,38 @@
 import { useNavigate } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useAuth } from "@/context/useAuth";
 
-export default function BackButton() {
+interface BackButtonProps {
+  to?: string;
+  label?: string;
+}
+
+export default function BackButton({ to, label }: BackButtonProps = {}) {
   const navigate = useNavigate();
+  const { user } = useAuth();
+  
+  const handleBack = () => {
+    if (to) {
+      navigate(to);
+    } else {
+      // Default behavior: Sub-accounts go to /admin, admins go to /admin/dashboard
+      if (user?.role === 'admin') {
+        navigate('/admin/dashboard');
+      } else {
+        navigate('/admin');
+      }
+    }
+  };
+  
   return (
-    <button
-      onClick={() => navigate(-1)}
-      className="px-4 py-2 rounded border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 flex items-center gap-2 mb-4"
+    <Button
+      variant="outline"
+      onClick={handleBack}
+      className="gap-2"
       type="button"
     >
-      <span aria-hidden="true">←</span> Back
-    </button>
+      <ArrowLeft className="h-4 w-4" /> {label || 'Back to Dashboard'}
+    </Button>
   );
 }

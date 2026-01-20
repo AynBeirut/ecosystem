@@ -1,0 +1,610 @@
+import React, { useState, useEffect } from 'react';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { useAuth } from '@/context/useAuth';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
+import { Trash2, Plus, Edit3, AlertTriangle, Package } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
+import { RawMaterial, Supplier } from '@/types/inventory';
+import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
+import { logAction } from '@/lib/auditLog';
+import MobileHeader from '@/components/MobileHeader';
+import BackButton from '@/components/BackButton';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Switch } from '@/components/ui/switch';
+
+const AdminRawMaterials: React.FC = () => {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const isMobile = useIsMobile();
+  const [materials, setMaterials] = useState<RawMaterial[]>([]);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [isAddingMaterial, setIsAddingMaterial] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
+  const [filterLowStock, setFilterLowStock] = useState(false);
+  const [newMaterial, setNewMaterial] = useState({
+    name: '',
+    unit: 'kg' as const,
+    currentStock: 0,
+    minimumThreshold: 10,
+    reorderPoint: 20,
+    costPerUnit: 0,
+    preferredSupplierId: '',
+    storageLocation: '',
+    expiryTracking: false,
+    expiryDate: '',
+    warrantyPeriod: 0,
+  });
+
+  // Load materials and suppliers
+  useEffect(() => {
+    const fetchData = async () => {
+      if (!user?.storeId) return;
+      const db = getFirestore();
+
+      // Fetch materials
+      const materialsRef = collection(db, 'rawMaterials');
+      const materialsQuery = query(materialsRef, where('storeId', '==', user.storeId));
+      const materialsSnapshot = await getDocs(materialsQuery);
+      const materialsList: RawMaterial[] = materialsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as RawMaterial));
+      setMaterials(materialsList);
+
+      // Fetch suppliers for dropdown
+      const suppliersRef = collection(db, 'suppliers');
+      const suppliersQuery = query(suppliersRef, where('storeId', '==', user.storeId));
+      const suppliersSnapshot = await getDocs(suppliersQuery);
+      const suppliersList: Supplier[] = suppliersSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Supplier));
+      setSuppliers(suppliersList);
+    };
+    fetchData();
+  }, [user?.storeId]);
+
+  const handleAddMaterial = async () => {
+    if (!newMaterial.name || !user?.storeId) {
+      toast({ title: "Error", description: "Material name is required", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const storePrefix = user.storeId.substring(0, 5).toUpperCase();
+      const sku = generateSKU(storePrefix, 'MAT', materials.length + 1);
+      const barcode = generateBarcode();
+
+      const materialData = {
+        ...newMaterial,
+        sku,
+        barcode,
+        storeId: user.storeId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        warrantyStartDate: new Date().toISOString(),
+      };
+
+      const docRef = await addDoc(collection(db, 'rawMaterials'), materialData);
+      setMaterials([...materials, { id: docRef.id, ...materialData }]);
+
+      // Audit log
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'create',
+        'rawMaterial',
+        docRef.id,
+        { newValue: materialData },
+        user.storeId
+      );
+
+      // Check if low stock
+      if (materialData.currentStock < materialData.minimumThreshold) {
+        toast({
+          title: "Warning",
+          description: `${newMaterial.name} is below minimum threshold!`,
+          variant: "destructive"
+        });
+      }
+
+      setNewMaterial({
+        name: '',
+        unit: 'kg',
+        currentStock: 0,
+        minimumThreshold: 10,
+        reorderPoint: 20,
+        costPerUnit: 0,
+        preferredSupplierId: '',
+        storageLocation: '',
+        expiryTracking: false,
+        expiryDate: '',
+        warrantyPeriod: 0,
+      });
+      setIsAddingMaterial(false);
+      toast({ title: "Success", description: "Material added successfully!" });
+    } catch (error) {
+      console.error('Error adding material:', error);
+      toast({ title: "Error", description: "Failed to add material", variant: "destructive" });
+    }
+  };
+
+  const handleUpdateMaterial = async () => {
+    if (!editingMaterial || !user?.storeId) return;
+
+    try {
+      const db = getFirestore();
+      const materialRef = doc(db, 'rawMaterials', editingMaterial.id);
+
+      const updatedData = {
+        ...editingMaterial,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await updateDoc(materialRef, updatedData);
+      setMaterials(materials.map(m => m.id === editingMaterial.id ? updatedData : m));
+
+      // Audit log
+      const oldMaterial = materials.find(m => m.id === editingMaterial.id);
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'rawMaterial',
+        editingMaterial.id,
+        { oldValue: oldMaterial, newValue: updatedData },
+        user.storeId
+      );
+
+      setEditingMaterial(null);
+      toast({ title: "Success", description: "Material updated successfully!" });
+    } catch (error) {
+      console.error('Error updating material:', error);
+      toast({ title: "Error", description: "Failed to update material", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteMaterial = async (materialId: string) => {
+    if (!confirm('Are you sure you want to delete this material?')) return;
+
+    try {
+      const db = getFirestore();
+      await deleteDoc(doc(db, 'rawMaterials', materialId));
+      const deletedMaterial = materials.find(m => m.id === materialId);
+      setMaterials(materials.filter(m => m.id !== materialId));
+
+      // Audit log
+      if (deletedMaterial && user) {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'delete',
+          'rawMaterial',
+          materialId,
+          { oldValue: deletedMaterial },
+          user.storeId
+        );
+      }
+
+      toast({ title: "Success", description: "Material deleted successfully!" });
+    } catch (error) {
+      console.error('Error deleting material:', error);
+      toast({ title: "Error", description: "Failed to delete material", variant: "destructive" });
+    }
+  };
+
+  const filteredMaterials = filterLowStock
+    ? materials.filter(m => m.currentStock < m.minimumThreshold)
+    : materials;
+
+  const lowStockCount = materials.filter(m => m.currentStock < m.minimumThreshold).length;
+
+  return (
+    <div className="min-h-screen bg-gray-50">
+      {isMobile ? <MobileHeader title="Raw Materials" /> : null}
+      <main className="container mx-auto px-4 py-8">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            {!isMobile && <BackButton />}
+            <h1 className="text-2xl font-bold">Raw Materials</h1>
+          </div>
+          <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Material
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Add New Raw Material</DialogTitle>
+                <DialogDescription>Enter material details (SKU & barcode auto-generated)</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="name">Material Name *</Label>
+                    <Input
+                      id="name"
+                      value={newMaterial.name}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="unit">Unit</Label>
+                    <Select
+                      value={newMaterial.unit}
+                      onValueChange={(value: any) => setNewMaterial({ ...newMaterial, unit: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                        <SelectItem value="gram">Gram (g)</SelectItem>
+                        <SelectItem value="liter">Liter (L)</SelectItem>
+                        <SelectItem value="ml">Milliliter (mL)</SelectItem>
+                        <SelectItem value="piece">Piece</SelectItem>
+                        <SelectItem value="meter">Meter (m)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="currentStock">Current Stock</Label>
+                    <Input
+                      id="currentStock"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newMaterial.currentStock}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, currentStock: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="minimumThreshold">Min Threshold</Label>
+                    <Input
+                      id="minimumThreshold"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newMaterial.minimumThreshold}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, minimumThreshold: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="reorderPoint">Reorder Point</Label>
+                    <Input
+                      id="reorderPoint"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newMaterial.reorderPoint}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, reorderPoint: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="costPerUnit">Cost Per Unit</Label>
+                    <Input
+                      id="costPerUnit"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newMaterial.costPerUnit}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, costPerUnit: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="preferredSupplier">Preferred Supplier</Label>
+                    <Select
+                      value={newMaterial.preferredSupplierId}
+                      onValueChange={(value) => setNewMaterial({ ...newMaterial, preferredSupplierId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select supplier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map(supplier => (
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="storageLocation">Storage Location</Label>
+                  <Input
+                    id="storageLocation"
+                    value={newMaterial.storageLocation}
+                    onChange={(e) => setNewMaterial({ ...newMaterial, storageLocation: e.target.value })}
+                    placeholder="e.g., Warehouse A, Shelf 3"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="expiryTracking"
+                    checked={newMaterial.expiryTracking}
+                    onCheckedChange={(checked) => setNewMaterial({ ...newMaterial, expiryTracking: checked })}
+                  />
+                  <Label htmlFor="expiryTracking">Enable Expiry Tracking</Label>
+                </div>
+                {newMaterial.expiryTracking && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="expiryDate">Expiry Date</Label>
+                      <Input
+                        id="expiryDate"
+                        type="date"
+                        value={newMaterial.expiryDate}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, expiryDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="warrantyPeriod">Warranty Period (days)</Label>
+                      <Input
+                        id="warrantyPeriod"
+                        type="number"
+                        min="0"
+                        value={newMaterial.warrantyPeriod}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, warrantyPeriod: parseInt(e.target.value) || 0 })}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setIsAddingMaterial(false)}>Cancel</Button>
+                <Button onClick={handleAddMaterial}>Add Material</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+
+        {/* Low Stock Alert */}
+        {lowStockCount > 0 && (
+          <Alert variant="destructive" className="mb-6">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {lowStockCount} material{lowStockCount > 1 ? 's are' : ' is'} below minimum threshold!
+              <Button
+                variant="link"
+                className="ml-2 p-0 h-auto"
+                onClick={() => setFilterLowStock(!filterLowStock)}
+              >
+                {filterLowStock ? 'Show all' : 'View low stock items'}
+              </Button>
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {/* Materials List */}
+        <div className="grid gap-4">
+          {filteredMaterials.length === 0 ? (
+            <Card>
+              <CardContent className="py-12 text-center">
+                <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                <p className="text-gray-500">
+                  {filterLowStock ? 'No materials below threshold' : 'No materials yet. Add your first material to get started.'}
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            filteredMaterials.map((material) => {
+              const isLowStock = material.currentStock < material.minimumThreshold;
+              const isReorderNeeded = material.currentStock <= material.reorderPoint;
+              const supplier = suppliers.find(s => s.id === material.preferredSupplierId);
+
+              return (
+                <Card key={material.id} className={isLowStock ? 'border-red-300' : ''}>
+                  <CardHeader>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          {material.name}
+                          {isLowStock && (
+                            <Badge variant="destructive">Low Stock</Badge>
+                          )}
+                          {isReorderNeeded && !isLowStock && (
+                            <Badge variant="secondary">Reorder</Badge>
+                          )}
+                        </CardTitle>
+                        <CardDescription>SKU: {material.sku} | Barcode: {material.barcode}</CardDescription>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setEditingMaterial(material)}
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteMaterial(material.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Current Stock</p>
+                        <p className="font-bold text-lg">{material.currentStock} {material.unit}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Min Threshold</p>
+                        <p className="font-medium">{material.minimumThreshold} {material.unit}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Cost Per Unit</p>
+                        <p className="font-medium">${material.costPerUnit.toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Total Value</p>
+                        <p className="font-medium">${(material.currentStock * material.costPerUnit).toFixed(2)}</p>
+                      </div>
+                      {supplier && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-500">Preferred Supplier</p>
+                          <p className="font-medium">{supplier.name}</p>
+                        </div>
+                      )}
+                      {material.storageLocation && (
+                        <div className="col-span-2">
+                          <p className="text-sm text-gray-500">Storage Location</p>
+                          <p className="font-medium">{material.storageLocation}</p>
+                        </div>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })
+          )}
+        </div>
+
+        {/* Edit Material Dialog */}
+        {editingMaterial && (
+          <Dialog open={!!editingMaterial} onOpenChange={() => setEditingMaterial(null)}>
+            <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Edit Raw Material</DialogTitle>
+                <DialogDescription>Update material details</DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-name">Material Name *</Label>
+                    <Input
+                      id="edit-name"
+                      value={editingMaterial.name}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, name: e.target.value })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-unit">Unit</Label>
+                    <Select
+                      value={editingMaterial.unit}
+                      onValueChange={(value: any) => setEditingMaterial({ ...editingMaterial, unit: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                        <SelectItem value="gram">Gram (g)</SelectItem>
+                        <SelectItem value="liter">Liter (L)</SelectItem>
+                        <SelectItem value="ml">Milliliter (mL)</SelectItem>
+                        <SelectItem value="piece">Piece</SelectItem>
+                        <SelectItem value="meter">Meter (m)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="edit-currentStock">Current Stock</Label>
+                    <Input
+                      id="edit-currentStock"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editingMaterial.currentStock}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, currentStock: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-minimumThreshold">Min Threshold</Label>
+                    <Input
+                      id="edit-minimumThreshold"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editingMaterial.minimumThreshold}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, minimumThreshold: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-reorderPoint">Reorder Point</Label>
+                    <Input
+                      id="edit-reorderPoint"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editingMaterial.reorderPoint}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, reorderPoint: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="edit-costPerUnit">Cost Per Unit</Label>
+                    <Input
+                      id="edit-costPerUnit"
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={editingMaterial.costPerUnit}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, costPerUnit: parseFloat(e.target.value) || 0 })}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-preferredSupplier">Preferred Supplier</Label>
+                    <Select
+                      value={editingMaterial.preferredSupplierId || ''}
+                      onValueChange={(value) => setEditingMaterial({ ...editingMaterial, preferredSupplierId: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select supplier" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {suppliers.map(supplier => (
+                          <SelectItem key={supplier.id} value={supplier.id}>
+                            {supplier.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="edit-storageLocation">Storage Location</Label>
+                  <Input
+                    id="edit-storageLocation"
+                    value={editingMaterial.storageLocation || ''}
+                    onChange={(e) => setEditingMaterial({ ...editingMaterial, storageLocation: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingMaterial(null)}>Cancel</Button>
+                <Button onClick={handleUpdateMaterial}>Update Material</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+      </main>
+    </div>
+  );
+};
+
+export default AdminRawMaterials;

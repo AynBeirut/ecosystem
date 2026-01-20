@@ -8,10 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, Package } from 'lucide-react';
+import { Trash2, Plus, Edit3, Package, AlertCircle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Product } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -34,7 +35,9 @@ const AdminProducts: React.FC = () => {
     deliveryTime: '',
     image: '',
     imageFile: null as File | null,
-    stock: ''
+    stock: '',
+    productType: 'simple' as 'simple' | 'service' | 'composed',
+    serviceCost: ''
   });
   // Load products from Firestore on mount and when user changes
   useEffect(() => {
@@ -87,14 +90,17 @@ const AdminProducts: React.FC = () => {
         storeId: user?.storeId || '',
         inStock: (newProduct.stock === '' || Number(newProduct.stock) > 0),
         stock: newProduct.stock === '' ? 0 : Number(newProduct.stock),
-        rating: 0
+        rating: 0,
+        productType: newProduct.productType,
+        isService: newProduct.productType === 'service',
+        serviceCost: newProduct.productType === 'service' && newProduct.serviceCost ? parseFloat(newProduct.serviceCost) : undefined
       };
       const cleanProductData = Object.fromEntries(
         Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])
       );
   const docRef = await addDoc(collection(db, 'products'), cleanProductData);
       setProducts([...products, { id: docRef.id, ...productData }]);
-    setNewProduct({ name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '' });
+    setNewProduct({ name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '', productType: 'simple', serviceCost: '' });
       setIsAddingProduct(false);
       toast({ title: "Success", description: "Product added successfully!" });
     } catch (err) {
@@ -183,6 +189,7 @@ const AdminProducts: React.FC = () => {
     <div className="min-h-screen bg-background">
       {isMobile && <MobileHeader title="Manage Products" />}
       <div className="p-4 md:p-6">
+        <BackButton to="/admin/inventory" label="Back to Inventory" />
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
@@ -273,6 +280,48 @@ const AdminProducts: React.FC = () => {
                       placeholder="e.g., 3-5 days"
                     />
                   </div>
+
+                  <div>
+                    <Label htmlFor="productType">Product Type *</Label>
+                    <Select
+                      value={newProduct.productType}
+                      onValueChange={(value: any) => setNewProduct({ ...newProduct, productType: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="simple">Simple Item - Buy & Sell with Stock</SelectItem>
+                        <SelectItem value="service">Service - No Stock, Has Cost</SelectItem>
+                        <SelectItem value="composed">Composed Product - Use Recipes Page</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {newProduct.productType === 'service' && (
+                    <div>
+                      <Label htmlFor="serviceCost">Service Cost</Label>
+                      <Input
+                        id="serviceCost"
+                        type="number"
+                        step="0.01"
+                        value={newProduct.serviceCost}
+                        onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value })}
+                        placeholder="Cost to provide service"
+                      />
+                    </div>
+                  )}
+
+                  {newProduct.productType === 'composed' && (
+                    <Alert>
+                      <AlertCircle className="h-4 w-4" />
+                      <AlertDescription>
+                        For composed products, create the product here first, then go to Composed Products page to set up the recipe.
+                      </AlertDescription>
+                    </Alert>
+                  )}
+
+                  {newProduct.productType !== 'service' && (
                   <div>
                     <Label htmlFor="stock">Stock Quantity</Label>
                     <Input
@@ -284,6 +333,7 @@ const AdminProducts: React.FC = () => {
                       placeholder="Enter stock quantity"
                     />
                   </div>
+                  )}
                   
                   <div>
                     <Label htmlFor="image">Image URL</Label>
@@ -355,7 +405,18 @@ const AdminProducts: React.FC = () => {
                       ${product.price}
                     </CardDescription>
                   </div>
-                  <Badge variant="secondary">{product.category}</Badge>
+                  <div className="flex flex-col gap-1 items-end">
+                    <Badge variant="secondary">{product.category}</Badge>
+                    <Badge variant={
+                      product.productType === 'service' ? 'default' : 
+                      product.productType === 'composed' ? 'outline' : 
+                      'secondary'
+                    }>
+                      {product.productType === 'service' ? 'Service' : 
+                       product.productType === 'composed' ? 'Composed' : 
+                       'Item'}
+                    </Badge>
+                  </div>
                 </div>
               </CardHeader>
               

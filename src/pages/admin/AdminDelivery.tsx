@@ -77,6 +77,7 @@ const AdminDelivery: React.FC = () => {
   {isMobile && <MobileHeader title="Delivery Settings" />}
       
       <div className="p-4 md:p-6">
+        <BackButton />
         <div className="mb-6">
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Truck className="h-6 w-6" />

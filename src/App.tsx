@@ -27,6 +27,28 @@ import OrderTracking from "./pages/OrderTracking";
 import DebugConsole from './components/DebugConsole';
 import Footer from './components/Footer';
 import OrderConfirmation from "./pages/OrderConfirmation";
+import AdminSuppliers from "./pages/admin/AdminSuppliers";
+import AdminSupplierStatements from "./pages/admin/AdminSupplierStatements";
+import AdminRawMaterials from "./pages/admin/AdminRawMaterials";
+import AdminRecipes from "./pages/admin/AdminRecipes";
+import AdminComposedProducts from "./pages/admin/AdminComposedProducts";
+import AdminPurchases from "./pages/admin/AdminPurchases";
+import AdminSupplierReturns from "./pages/admin/AdminSupplierReturns";
+import AdminSupplierCredits from "./pages/admin/AdminSupplierCredits";
+import AdminSupplierReturnDetail from "./pages/admin/AdminSupplierReturnDetail";
+import AdminStaff from "./pages/admin/AdminStaff";
+import AdminSalaries from "./pages/admin/AdminSalaries";
+import AdminSubAccounts from "./pages/admin/AdminSubAccounts";
+import SubAccountDashboard from "./pages/admin/SubAccountDashboard";
+import AdminExpenses from "./pages/admin/AdminExpenses";
+import AdminReports from "./pages/admin/AdminReports";
+import AdminCustomers from "./pages/admin/AdminCustomers";
+import AdminInventory from "./pages/admin/AdminInventory";
+import AdminProduction from "./pages/admin/AdminProduction";
+import AdminAccountStatement from "./pages/admin/AdminAccountStatement";
+import AdminBankReconciliation from "./pages/admin/AdminBankReconciliation";
+import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
+import AdminReturns from "./pages/admin/AdminReturns";
 
 
       function App() {
@@ -36,7 +58,12 @@ import OrderConfirmation from "./pages/OrderConfirmation";
               <CartProvider>
                 {/* CreditsProvider removed */}
                   <FavoritesProvider>
-                    <BrowserRouter>
+                    <BrowserRouter
+                      future={{
+                        v7_startTransition: true,
+                        v7_relativeSplatPath: true,
+                      }}
+                    >
                       <Routes>
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<Signup />} />
@@ -52,7 +79,8 @@ import OrderConfirmation from "./pages/OrderConfirmation";
                         <Route path="/orders/confirmation" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
                         <Route path="/upgrade" element={<ProtectedRoute><UpgradeToAdmin /></ProtectedRoute>} />
                         {/* Admin Routes */}
-                        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+                        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><SubAccountDashboard /></ProtectedRoute>} />
+                        <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                         <Route path="/admin/products" element={<ProtectedRoute allowedRoles={['admin']}><AdminProducts /></ProtectedRoute>} />
                         <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfile /></ProtectedRoute>} />
                         <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><AdminPayments /></ProtectedRoute>} />
@@ -61,6 +89,32 @@ import OrderConfirmation from "./pages/OrderConfirmation";
                         <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin']}><AdminAnnouncements /></ProtectedRoute>} />
                         <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin']}><AdminAnalytics /></ProtectedRoute>} />
                         <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin']}><AdminOrders /></ProtectedRoute>} />
+                        {/* Inventory Management */}
+                        <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['admin']}><AdminInventory /></ProtectedRoute>} />
+                        <Route path="/admin/suppliers" element={<ProtectedRoute allowedRoles={['admin']}><AdminSuppliers /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-statements" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierStatements /></ProtectedRoute>} />
+                        <Route path="/admin/raw-materials" element={<ProtectedRoute allowedRoles={['admin']}><AdminRawMaterials /></ProtectedRoute>} />
+                        <Route path="/admin/recipes" element={<ProtectedRoute allowedRoles={['admin']}><AdminRecipes /></ProtectedRoute>} />
+                        <Route path="/admin/composed-products" element={<ProtectedRoute allowedRoles={['admin']}><AdminComposedProducts /></ProtectedRoute>} />
+                        <Route path="/admin/production" element={<ProtectedRoute allowedRoles={['admin']}><AdminProduction /></ProtectedRoute>} />
+                        {/* Purchasing & Returns */}
+                        <Route path="/admin/purchases" element={<ProtectedRoute allowedRoles={['admin']}><AdminPurchases /></ProtectedRoute>} />
+                        <Route path="/admin/returns" element={<ProtectedRoute allowedRoles={['admin']}><AdminReturns /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-returns" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturns /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-returns/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturnDetail /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-credits" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierCredits /></ProtectedRoute>} />
+                        {/* Staff & HR */}
+                        <Route path="/admin/staff" element={<ProtectedRoute allowedRoles={['admin']}><AdminStaff /></ProtectedRoute>} />
+                        <Route path="/admin/salaries" element={<ProtectedRoute allowedRoles={['admin']}><AdminSalaries /></ProtectedRoute>} />
+                        <Route path="/admin/sub-accounts" element={<ProtectedRoute allowedRoles={['admin']}><AdminSubAccounts /></ProtectedRoute>} />
+                        {/* Financial */}
+                        <Route path="/admin/expenses" element={<ProtectedRoute allowedRoles={['admin']}><AdminExpenses /></ProtectedRoute>} />
+                        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} />
+                        <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']}><AdminAccountStatement /></ProtectedRoute>} />
+                        <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
+                        <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
+                        {/* CRM */}
+                        <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin']}><AdminCustomers /></ProtectedRoute>} />
                         {/* 404 catch-all route */}
                         <Route path="*" element={<NotFound />} />
                       </Routes>
