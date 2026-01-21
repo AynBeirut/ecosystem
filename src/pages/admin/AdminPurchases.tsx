@@ -1261,8 +1261,8 @@ const AdminPurchases: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
-                            placeholder="0"
-                            value={item.quantity}
+                            placeholder="Enter quantity"
+                            value={item.quantity === '' || item.quantity === 0 ? '' : item.quantity}
                             onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
                           />
                         </div>
@@ -1272,8 +1272,8 @@ const AdminPurchases: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
-                            placeholder="0.00"
-                            value={item.unitPrice}
+                            placeholder="Enter price"
+                            value={item.unitPrice === '' || item.unitPrice === 0 ? '' : item.unitPrice}
                             onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value))}
                           />
                         </div>
