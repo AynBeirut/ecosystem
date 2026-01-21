@@ -134,7 +134,11 @@ const AdminPurchases: React.FC = () => {
   };
 
   const calculateTotal = (items: PurchaseItem[]): number => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    return items.reduce((sum, item) => {
+      const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
+      const price = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
+      return sum + (qty * price);
+    }, 0);
   };
 
   const handleCreateInlineSupplier = async () => {
@@ -933,7 +937,7 @@ const AdminPurchases: React.FC = () => {
       ...newPurchase,
       items: [
         ...newPurchase.items,
-        { rawMaterialId: '', quantity: 0, unitPrice: 0, receivedQuantity: 0 }
+        { rawMaterialId: '', quantity: '' as any, unitPrice: '' as any, receivedQuantity: 0 }
       ]
     });
   };
@@ -969,7 +973,15 @@ const AdminPurchases: React.FC = () => {
     try {
       const db = getFirestore();
       const invoiceNumber = await generatePONumber();
-      const totalAmount = calculateTotal(newPurchase.items);
+      
+      // Ensure all numeric values are properly converted
+      const normalizedItems = newPurchase.items.map(item => ({
+        ...item,
+        quantity: typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0),
+        unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0),
+      }));
+      
+      const totalAmount = calculateTotal(normalizedItems);
 
       const purchaseData = {
         poNumber: invoiceNumber,
@@ -978,7 +990,7 @@ const AdminPurchases: React.FC = () => {
         orderDate: new Date().toISOString(),
         expectedDeliveryDate: newPurchase.expectedDeliveryDate,
         status: 'draft' as const,
-        items: newPurchase.items,
+        items: normalizedItems,
         totalAmount,
         totalCost: totalAmount,
         notes: newPurchase.notes,
@@ -1004,6 +1016,9 @@ const AdminPurchases: React.FC = () => {
 
       setNewPurchase({
         supplierId: '',
+        supplierName: '',
+        supplierContact: '',
+        supplierEmail: '',
         expectedDeliveryDate: '',
         notes: '',
         items: [],
@@ -1216,7 +1231,9 @@ const AdminPurchases: React.FC = () => {
                   </div>
                   {newPurchase.items.map((item, index) => {
                     const material = rawMaterials.find(m => m.id === item.rawMaterialId);
-                    const lineTotal = item.quantity * item.unitPrice;
+                    const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
+                    const price = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
+                    const lineTotal = qty * price;
 
                     return (
                       <div key={index} className="grid grid-cols-12 gap-2 mb-2 items-end">
@@ -1244,8 +1261,9 @@ const AdminPurchases: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
+                            placeholder="0"
                             value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
                           />
                         </div>
                         <div className="col-span-2">
@@ -1254,8 +1272,9 @@ const AdminPurchases: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
+                            placeholder="0.00"
                             value={item.unitPrice}
-                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value))}
                           />
                         </div>
                         <div className="col-span-2">
