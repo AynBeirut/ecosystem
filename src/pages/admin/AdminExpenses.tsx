@@ -1170,7 +1170,7 @@ const AdminExpenses: React.FC = () => {
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <CardTitle className="flex items-center gap-2">
-                        {expense.description}
+                        {expense.invoiceNumber ? `${expense.invoiceNumber} - ${expense.description}` : expense.description}
                         {getCategoryBadge(expense.category)}
                         {expense.recurring && <Badge variant="outline">Recurring</Badge>}
                       </CardTitle>

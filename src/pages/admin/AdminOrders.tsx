@@ -312,84 +312,8 @@ const AdminOrders: React.FC = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const itemsHtml = order.items?.map(item => {
-      const product = products.find(p => p.id === item.productId);
-      const price = product?.sellingPrice || 0;
-      const lineTotal = price * item.quantity;
-      return `
-        <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${product?.name || 'Product'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${price.toFixed(2)}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${lineTotal.toFixed(2)}</td>
-        </tr>
-      `;
-    }).join('');
-
-    printWindow.document.write(`
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice #${order.id}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header h1 { margin: 0; color: #333; }
-          .invoice-info { margin-bottom: 30px; }
-          .invoice-info div { margin: 5px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          th { background: #f8f9fa; padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6; }
-          .totals { margin-top: 20px; text-align: right; }
-          .totals div { margin: 8px 0; }
-          .grand-total { font-size: 18px; font-weight: bold; color: #2563eb; margin-top: 10px; padding-top: 10px; border-top: 2px solid #333; }
-          @media print {
-            body { padding: 20px; }
-          }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>INVOICE</h1>
-          <p>Invoice #${order.id}</p>
-          <p>Date: ${new Date(order.createdAt || '').toLocaleDateString()}</p>
-        </div>
-        
-        <div class="invoice-info">
-          <strong>Bill To:</strong><br/>
-          ${order.customerName || 'N/A'}<br/>
-          ${order.customerPhone || ''}<br/>
-          ${order.customerEmail || ''}<br/>
-          ${order.assignedSalesPersonName ? `<br/><strong>Sales Person:</strong> ${order.assignedSalesPersonName}` : ''}
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th style="text-align: center;">Quantity</th>
-              <th style="text-align: right;">Price</th>
-              <th style="text-align: right;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <div class="totals">
-          <div>Subtotal: $${(order.subtotal || 0).toFixed(2)}</div>
-          ${order.discountAmount ? `<div>Discount: -$${order.discountAmount.toFixed(2)}</div>` : ''}
-          ${order.taxAmount ? `<div>Tax (${order.taxRate}%): $${order.taxAmount.toFixed(2)}</div>` : ''}
-          <div class="grand-total">Total: $${(order.total || 0).toFixed(2)}</div>
-        </div>
-
-        <div style="margin-top: 50px; text-align: center; color: #666; font-size: 12px;">
-          <p>Thank you for your business!</p>
-        </div>
-      </body>
-      </html>
-    `);
-
+    const html = generateInvoiceHTMLTemplate(order, products, storeProfile, formatCurrency);
+    printWindow.document.write(html);
     printWindow.document.close();
     printWindow.print();
   };
@@ -765,7 +689,7 @@ const AdminOrders: React.FC = () => {
                   <div className="flex items-start justify-between">
                     <div>
                       <CardTitle className="flex items-center gap-2">
-                        Order #{order.id.slice(0, 8)}
+                        {order.invoiceNumber ? order.invoiceNumber : `Order #${order.id.slice(0, 8)}`}
                         {getStatusBadge(order.status)}
                       </CardTitle>
                       <CardDescription>
@@ -851,7 +775,7 @@ const AdminOrders: React.FC = () => {
           <Dialog open={!!viewingOrder} onOpenChange={() => setViewingOrder(null)}>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
-                <DialogTitle>Order Details #{viewingOrder.id.slice(0, 8)}</DialogTitle>
+                <DialogTitle>{viewingOrder.invoiceNumber ? viewingOrder.invoiceNumber : `Order #${viewingOrder.id.slice(0, 8)}`}</DialogTitle>
                 <DialogDescription>Complete order information</DialogDescription>
               </DialogHeader>
               <div className="space-y-4">

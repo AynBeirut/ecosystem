@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -1312,7 +1312,7 @@ const AdminPurchases: React.FC = () => {
                     <div className="flex items-start justify-between">
                       <div>
                         <CardTitle className="flex items-center gap-2">
-                          {purchase.poNumber}
+                          {purchase.invoiceNumber || purchase.poNumber || `PO-${purchase.id.slice(0, 8)}`}
                           {getStatusBadge(purchase.status)}
                         </CardTitle>
                         <CardDescription>
