@@ -425,6 +425,20 @@ const AdminAccountStatement: React.FC = () => {
       y += 7;
     });
     
+    // Add total row
+    y += 3;
+    doc.line(20, y, 190, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL', 20, y);
+    const totalPurchases = customers.reduce((sum, c) => sum + c.totalPurchases, 0);
+    const totalPayments = customers.reduce((sum, c) => sum + c.totalPayments, 0);
+    const totalBalance = customers.reduce((sum, c) => sum + c.balance, 0);
+    doc.text(`$${totalPurchases.toFixed(2)}`, 90, y);
+    doc.text(`$${totalPayments.toFixed(2)}`, 130, y);
+    doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
+    
     doc.save('customers_statement.pdf');
   };
 
@@ -457,6 +471,20 @@ const AdminAccountStatement: React.FC = () => {
       doc.text(`$${supplier.balance.toFixed(2)}`, 170, y);
       y += 7;
     });
+    
+    // Add total row
+    y += 3;
+    doc.line(20, y, 190, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL', 20, y);
+    const totalPurchases = suppliers.reduce((sum, s) => sum + s.totalPurchases, 0);
+    const totalPayments = suppliers.reduce((sum, s) => sum + s.totalPayments, 0);
+    const totalBalance = suppliers.reduce((sum, s) => sum + s.balance, 0);
+    doc.text(`$${totalPurchases.toFixed(2)}`, 90, y);
+    doc.text(`$${totalPayments.toFixed(2)}`, 130, y);
+    doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
     
     doc.save('suppliers_statement.pdf');
   };
@@ -491,6 +519,18 @@ const AdminAccountStatement: React.FC = () => {
       y += 7;
     });
     
+    // Add total row
+    y += 3;
+    doc.line(20, y, 190, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL', 20, y);
+    const totalSold = products.reduce((sum, p) => sum + p.totalSold, 0);
+    const totalRevenue = products.reduce((sum, p) => sum + p.totalRevenue, 0);
+    doc.text(totalSold.toString(), 130, y);
+    doc.text(`$${totalRevenue.toFixed(2)}`, 160, y);
+    
     doc.save('products_summary.pdf');
   };
 
@@ -504,25 +544,37 @@ const AdminAccountStatement: React.FC = () => {
     let y = 45;
     doc.setFontSize(12);
     doc.text('Date', 20, y);
-    doc.text('Supplier', 60, y);
-    doc.text('Amount', 130, y);
-    doc.text('Status', 170, y);
+    doc.text('Supplier', 70, y);
+    doc.text('Amount', 140, y);
+    doc.text('Status', 175, y);
     y += 5;
     doc.line(20, y, 190, y);
     y += 7;
     
-    doc.setFontSize(10);
+    doc.setFontSize(9);
     purchases.forEach(purchase => {
       if (y > 270) {
         doc.addPage();
         y = 20;
       }
-      doc.text(purchase.date, 20, y);
-      doc.text(purchase.supplier.substring(0, 30), 60, y);
-      doc.text(`$${purchase.amount.toFixed(2)}`, 130, y);
-      doc.text(purchase.status, 170, y);
+      // Format date to be shorter
+      const dateStr = new Date(purchase.date).toLocaleDateString();
+      doc.text(dateStr, 20, y);
+      doc.text(purchase.supplier.substring(0, 20), 70, y);
+      doc.text(`$${purchase.amount.toFixed(2)}`, 140, y);
+      doc.text(purchase.status, 175, y);
       y += 7;
     });
+    
+    // Add total row
+    y += 3;
+    doc.line(20, y, 190, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL', 70, y);
+    const totalAmount = purchases.reduce((sum, p) => sum + p.amount, 0);
+    doc.text(`$${totalAmount.toFixed(2)}`, 140, y);
     
     doc.save('purchases_statement.pdf');
   };
@@ -556,6 +608,16 @@ const AdminAccountStatement: React.FC = () => {
       doc.text(`$${expense.amount.toFixed(2)}`, 160, y);
       y += 7;
     });
+    
+    // Add total row
+    y += 3;
+    doc.line(20, y, 190, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL', 90, y);
+    const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+    doc.text(`$${totalAmount.toFixed(2)}`, 160, y);
     
     doc.save('expenses_statement.pdf');
   };
