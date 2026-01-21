@@ -72,14 +72,6 @@ app.get('/logtest', (req, res) => {
     console.error('LOGTEST endpoint hit (error)');
     res.json({ ok: true, message: 'Log test endpoint hit' });
 });
-// Explicit OPTIONS handler for all routes
-app.options('*', (req, res) => {
-    console.log('--- OPTIONS REQUEST ---');
-    console.log('Method:', req.method);
-    console.log('Path:', req.path);
-    console.log('Headers:', req.headers);
-    res.sendStatus(204);
-});
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp() {
     try {
