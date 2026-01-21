@@ -29,7 +29,7 @@ const AdminComposedProducts: React.FC = () => {
   const [newProduct, setNewProduct] = useState({
     productId: '',
     recipeId: '',
-    markupPercentage: 30,
+    markupPercentage: '' as any,
     sellingPrice: 0,
     useAutoPrice: true,
   });
@@ -89,13 +89,14 @@ const AdminComposedProducts: React.FC = () => {
     try {
       const db = getFirestore();
       const recipe = recipes.find(r => r.id === newProduct.recipeId);
-      const suggestedPrice = calculateSuggestedPrice(newProduct.recipeId, newProduct.markupPercentage);
+      const markup = typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0;
+      const suggestedPrice = calculateSuggestedPrice(newProduct.recipeId, markup);
       const finalPrice = newProduct.useAutoPrice ? suggestedPrice : newProduct.sellingPrice;
 
       const productData = {
         productId: newProduct.productId,
         recipeId: newProduct.recipeId,
-        markupPercentage: newProduct.markupPercentage,
+        markupPercentage: markup,
         sellingPrice: finalPrice,
         costPrice: recipe?.costPerUnit || 0,
         storeId: user.storeId,
@@ -112,7 +113,7 @@ const AdminComposedProducts: React.FC = () => {
         recipeId: newProduct.recipeId,
         costPrice: productData.costPrice,
         price: finalPrice,
-        margin: newProduct.markupPercentage,
+        margin: markup,
         updatedAt: new Date().toISOString(),
       });
 
@@ -131,7 +132,7 @@ const AdminComposedProducts: React.FC = () => {
       setNewProduct({
         productId: '',
         recipeId: '',
-        markupPercentage: 30,
+        markupPercentage: '' as any,
         sellingPrice: 0,
         useAutoPrice: true,
       });
@@ -244,17 +245,28 @@ const AdminComposedProducts: React.FC = () => {
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
-                Link Product to Recipe
+                Create Composed Product
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Link Product to Recipe</DialogTitle>
+                <DialogTitle>Create Composed Product</DialogTitle>
                 <DialogDescription>Connect a product with its production recipe and set pricing</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4">
                 <div>
-                  <Label htmlFor="productId">Product *</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label htmlFor="productId">Product *</Label>
+                    <Button 
+                      type="button" 
+                      variant="link" 
+                      size="sm" 
+                      className="text-xs h-auto p-0"
+                      onClick={() => window.open('/admin/products', '_blank')}
+                    >
+                      + Create product
+                    </Button>
+                  </div>
                   <Select
                     value={newProduct.productId}
                     onValueChange={(value) => setNewProduct({ ...newProduct, productId: value })}
@@ -272,11 +284,22 @@ const AdminComposedProducts: React.FC = () => {
                   </Select>
                 </div>
                 <div>
-                  <Label htmlFor="recipeId">Recipe *</Label>
+                  <div className="flex items-center justify-between mb-1">
+                    <Label htmlFor="recipeId">Recipe *</Label>
+                    <Button 
+                      type="button" 
+                      variant="link" 
+                      size="sm" 
+                      className="text-xs h-auto p-0"
+                      onClick={() => window.open('/admin/recipes', '_blank')}
+                    >
+                      + Create recipe
+                    </Button>
+                  </div>
                   <Select
                     value={newProduct.recipeId}
                     onValueChange={(value) => {
-                      const suggestedPrice = calculateSuggestedPrice(value, newProduct.markupPercentage);
+                      const suggestedPrice = calculateSuggestedPrice(value, typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0);
                       setNewProduct({ ...newProduct, recipeId: value, sellingPrice: suggestedPrice });
                     }}
                   >
@@ -299,10 +322,11 @@ const AdminComposedProducts: React.FC = () => {
                     type="number"
                     min="0"
                     step="1"
-                    value={newProduct.markupPercentage}
+                    placeholder="0"
+                    value={newProduct.markupPercentage === '' || newProduct.markupPercentage === 0 ? '' : newProduct.markupPercentage}
                     onChange={(e) => {
-                      const markup = parseFloat(e.target.value) || 0;
-                      const suggestedPrice = calculateSuggestedPrice(newProduct.recipeId, markup);
+                      const markup = e.target.value === '' ? '' : parseFloat(e.target.value);
+                      const suggestedPrice = calculateSuggestedPrice(newProduct.recipeId, typeof markup === 'number' ? markup : 0);
                       setNewProduct({ ...newProduct, markupPercentage: markup, sellingPrice: suggestedPrice });
                     }}
                   />
@@ -314,12 +338,12 @@ const AdminComposedProducts: React.FC = () => {
                       <span className="font-bold">${recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit.toFixed(2) || '0.00'}</span>
                     </div>
                     <div className="flex justify-between text-sm mb-2">
-                      <span>Markup: {newProduct.markupPercentage}%</span>
-                      <span className="font-bold">${((recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit || 0) * (newProduct.markupPercentage / 100)).toFixed(2)}</span>
+                      <span>Markup: {typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0}%</span>
+                      <span className="font-bold">${((recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit || 0) * ((typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0) / 100)).toFixed(2)}</span>
                     </div>
                     <div className="flex justify-between text-base border-t pt-2">
                       <span className="font-semibold">Suggested Selling Price:</span>
-                      <span className="font-bold text-green-600">${calculateSuggestedPrice(newProduct.recipeId, newProduct.markupPercentage).toFixed(2)}</span>
+                      <span className="font-bold text-green-600">${calculateSuggestedPrice(newProduct.recipeId, typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0).toFixed(2)}</span>
                     </div>
                   </div>
                 )}
