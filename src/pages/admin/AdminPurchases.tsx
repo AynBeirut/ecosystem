@@ -89,7 +89,7 @@ const AdminPurchases: React.FC = () => {
   }, [user?.storeId]);
 
   const generatePONumber = async (): Promise<string> => {
-    if (!user?.storeId || !storeProfile) {
+    if (!user?.storeId) {
       const date = new Date();
       const year = date.getFullYear().toString().slice(-2);
       const month = (date.getMonth() + 1).toString().padStart(2, '0');
@@ -100,16 +100,27 @@ const AdminPurchases: React.FC = () => {
     const db = getFirestore();
     const profileRef = doc(db, 'storeProfiles', user.storeId);
     
-    const prefix = storeProfile.invoiceNumberPrefix || 'PO';
-    const lastNumber = storeProfile.lastInvoiceNumber || 0;
+    // Fetch the latest store profile to ensure we have current data
+    const profileSnap = await getDoc(profileRef);
+    const currentProfile = profileSnap.exists() ? (profileSnap.data() as StoreProfile) : null;
+    
+    const prefix = currentProfile?.invoiceNumberPrefix || 'PO';
+    const lastNumber = currentProfile?.lastInvoiceNumber || 0;
     const newNumber = lastNumber + 1;
     const poNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
     
     // Update last invoice number in store profile
     await updateDoc(profileRef, { lastInvoiceNumber: newNumber });
     
+    // Update local state to keep UI in sync
+    if (currentProfile) {
+      setStoreProfile({ ...currentProfile, lastInvoiceNumber: newNumber });
+    }
+    
     return poNumber;
   };
+
+  // Format currency with LBP conversion
 
   const formatCurrency = (amount: number, showDual: boolean = true): string => {
     const usd = `$${amount.toFixed(2)}`;

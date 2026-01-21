@@ -129,18 +129,27 @@ const AdminOrders: React.FC = () => {
   };
 
   const generateInvoiceNumber = async (): Promise<string> => {
-    if (!user?.storeId || !storeProfile) return 'INV-001';
+    if (!user?.storeId) return 'INV-001';
     
     const db = getFirestore();
     const profileRef = doc(db, 'storeProfiles', user.storeId);
     
-    const prefix = storeProfile.invoiceNumberPrefix || 'INV';
-    const lastNumber = storeProfile.lastInvoiceNumber || 0;
+    // Fetch the latest store profile to ensure we have current data
+    const profileSnap = await getDoc(profileRef);
+    const currentProfile = profileSnap.exists() ? (profileSnap.data() as StoreProfile) : null;
+    
+    const prefix = currentProfile?.invoiceNumberPrefix || 'INV';
+    const lastNumber = currentProfile?.lastInvoiceNumber || 0;
     const newNumber = lastNumber + 1;
     const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
     
     // Update last invoice number in store profile
     await updateDoc(profileRef, { lastInvoiceNumber: newNumber });
+    
+    // Update local state to keep UI in sync
+    if (currentProfile) {
+      setStoreProfile({ ...currentProfile, lastInvoiceNumber: newNumber });
+    }
     
     return invoiceNumber;
   };

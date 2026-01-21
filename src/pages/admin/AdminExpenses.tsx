@@ -82,16 +82,26 @@ const AdminExpenses: React.FC = () => {
 
   // Generate expense report number
   const generateExpenseNumber = async (): Promise<string> => {
-    if (!user?.storeId || !storeProfile) return 'EXP-001';
+    if (!user?.storeId) return 'EXP-001';
     
     const db = getFirestore();
     const profileRef = doc(db, 'storeProfiles', user.storeId);
-    const prefix = storeProfile.invoiceNumberPrefix || 'EXP';
-    const nextNumber = (storeProfile.lastInvoiceNumber || 0) + 1;
+    
+    // Fetch the latest store profile to ensure we have current data
+    const profileSnap = await getDoc(profileRef);
+    const currentProfile = profileSnap.exists() ? (profileSnap.data() as StoreProfile) : null;
+    
+    const prefix = currentProfile?.invoiceNumberPrefix || 'EXP';
+    const nextNumber = (currentProfile?.lastInvoiceNumber || 0) + 1;
     
     await setDoc(profileRef, {
       lastInvoiceNumber: nextNumber
     }, { merge: true });
+    
+    // Update local state to keep UI in sync
+    if (currentProfile) {
+      setStoreProfile({ ...currentProfile, lastInvoiceNumber: nextNumber });
+    }
     
     return `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
   };
