@@ -439,7 +439,7 @@ const AdminComposedProducts: React.FC = () => {
         {/* Edit Composed Product Dialog */}
         {editingProduct && (
           <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Composed Product</DialogTitle>
                 <DialogDescription>Update recipe link and pricing</DialogDescription>

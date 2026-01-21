@@ -367,7 +367,7 @@ const AdminCustomers: React.FC = () => {
                 Add Customer
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add Customer</DialogTitle>
                 <DialogDescription>Create a new customer profile</DialogDescription>
@@ -546,7 +546,7 @@ const AdminCustomers: React.FC = () => {
 
         {editingCustomer && (
           <Dialog open={!!editingCustomer} onOpenChange={() => setEditingCustomer(null)}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Customer</DialogTitle>
                 <DialogDescription>Update customer information</DialogDescription>

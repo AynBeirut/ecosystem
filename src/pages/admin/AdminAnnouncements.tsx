@@ -150,7 +150,7 @@ const AdminAnnouncements: React.FC = () => {
                   New Announcement
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-md">
+              <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create Announcement</DialogTitle>
                   <DialogDescription>
@@ -329,7 +329,7 @@ const AdminAnnouncements: React.FC = () => {
 
       {/* Edit Announcement Dialog */}
       <Dialog open={!!editingAnnouncement} onOpenChange={() => setEditingAnnouncement(null)}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Announcement</DialogTitle>
             <DialogDescription>

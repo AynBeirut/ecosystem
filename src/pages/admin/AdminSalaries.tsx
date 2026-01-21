@@ -141,7 +141,7 @@ const AdminSalaries: React.FC = () => {
                   Process Payment
                 </Button>
               </DialogTrigger>
-              <DialogContent className="max-w-2xl">
+              <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Process Salary Payment</DialogTitle>
                   <DialogDescription>Record salary payment for {selectedMonth}</DialogDescription>

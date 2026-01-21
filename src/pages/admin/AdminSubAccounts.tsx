@@ -245,7 +245,7 @@ const AdminSubAccounts: React.FC = () => {
                 Add Sub-Account
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Sub-Account</DialogTitle>
                 <DialogDescription>
@@ -458,7 +458,7 @@ const AdminSubAccounts: React.FC = () => {
 
       {/* Edit Dialog */}
       <Dialog open={!!editingAccount} onOpenChange={(open) => !open && setEditingAccount(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle>Edit Sub-Account</DialogTitle>
             <DialogDescription>Update account details and permissions</DialogDescription>

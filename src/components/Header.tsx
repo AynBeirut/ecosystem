@@ -122,7 +122,7 @@ const Header: React.FC = () => {
                     
                     {user.role === 'admin' ? (
                       <DropdownMenuItem asChild>
-                        <Link to="/admin" className="flex cursor-pointer items-center">
+                        <Link to="/admin/dashboard" className="flex cursor-pointer items-center">
                           <Store className="mr-2 h-4 w-4" />
                           <span>Manage Store</span>
                         </Link>

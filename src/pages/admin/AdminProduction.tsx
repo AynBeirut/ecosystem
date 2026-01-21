@@ -391,7 +391,7 @@ const AdminProduction: React.FC = () => {
                 Schedule Production
               </Button>
             </DialogTrigger>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Schedule Production Batch</DialogTitle>
                 <DialogDescription>Create a new production batch</DialogDescription>
@@ -570,7 +570,7 @@ const AdminProduction: React.FC = () => {
 
         {editingBatch && (
           <Dialog open={!!editingBatch} onOpenChange={() => setEditingBatch(null)}>
-            <DialogContent className="max-w-2xl">
+            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Edit Production Batch</DialogTitle>
                 <DialogDescription>Update production batch details</DialogDescription>

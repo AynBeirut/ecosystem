@@ -1,7 +1,7 @@
 
 import React from 'react';
 import { useNavigate, Link } from 'react-router-dom';
-import { ChevronLeft, Menu, Home } from 'lucide-react';
+import { ChevronLeft, Menu, Home, Heart, ShoppingCart, Package, Store, PlusCircle, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Sheet,
@@ -82,37 +82,43 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
                   </div>
 
                   <nav className="space-y-2">
-                    <Link to="/" className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100">
+                    <Link to="/" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
                       <Home className="h-5 w-5" />
                       <span>Home</span>
                     </Link>
                     
-                    {user.role === 'admin' && (
-                      <Link to="/admin" className="flex items-center gap-3 p-2 rounded-md bg-market-primary text-white font-semibold hover:bg-market-primary/90 transition">
-                        <span>Admin Dashboard</span>
+                    {user.role === 'admin' ? (
+                      <Link to="/admin/dashboard" className="flex items-center gap-3 p-3 rounded-md bg-market-primary text-white font-semibold hover:bg-market-primary/90 transition">
+                        <Store className="h-5 w-5" />
+                        <span>Manage Store</span>
                       </Link>
-                    )}
-                    
-                    {/* Credits feature removed */}
-                    
-                    <Link to="/favorites" className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100">
-                      <span>Favorites</span>
-                    </Link>
-                    
-                    <Link to="/cart" className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100">
-                      <span>Cart</span>
-                    </Link>
-                    
-                    {user.role === 'user' && (
-                      <Link to="/upgrade" className="flex items-center gap-3 p-2 rounded-md hover:bg-gray-100">
+                    ) : (
+                      <Link to="/upgrade" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                        <PlusCircle className="h-5 w-5" />
                         <span>Become a Seller</span>
                       </Link>
                     )}
                     
+                    <Link to="/favorites" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <Heart className="h-5 w-5" />
+                      <span>Favorites</span>
+                    </Link>
+                    
+                    <Link to="/orders" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <Package className="h-5 w-5" />
+                      <span>Order Tracking</span>
+                    </Link>
+                    
+                    <Link to="/cart" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <ShoppingCart className="h-5 w-5" />
+                      <span>Cart</span>
+                    </Link>
+                    
                     <button 
                       onClick={logout}
-                      className="flex items-center gap-3 p-2 rounded-md text-red-500 hover:bg-red-50 w-full text-left"
+                      className="flex items-center gap-3 p-3 rounded-md text-red-500 hover:bg-red-50 w-full text-left transition"
                     >
+                      <LogOut className="h-5 w-5" />
                       <span>Log out</span>
                     </button>
                   </nav>

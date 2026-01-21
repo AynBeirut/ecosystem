@@ -128,10 +128,10 @@ const Marketplace: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col min-h-screen">
+    <div className="min-h-screen bg-gray-50 flex flex-col">
       {!isMobile ? <Header /> : <MobileHeader title="Market Space" showBackButton={false} />}
-      <main className="container mx-auto px-4 py-4 md:py-6 flex-1">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-3 md:gap-4 mb-4 md:mb-6">
+      <main className="container mx-auto px-3 md:px-4 py-3 md:py-6 flex-1">
+        <div className="flex flex-col md:flex-row justify-between items-start gap-3 md:gap-4 mb-3 md:mb-6">
           {!isMobile && <h1 className="text-2xl font-bold whitespace-nowrap">Market Space</h1>}
           <div className="flex items-center w-full gap-2">
             <form onSubmit={handleSearch} className="relative flex-grow">
@@ -140,7 +140,7 @@ const Marketplace: React.FC = () => {
                 placeholder="Search Market Space..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 h-10"
+                className="pl-10 pr-4 h-10 text-sm md:text-base"
               />
               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
             </form>
@@ -186,12 +186,12 @@ const Marketplace: React.FC = () => {
           </div>
         </div>
         {/* Debug: Show store counts */}
-        <div className="mb-4 text-sm text-gray-500">Total stores fetched: {allStores.length} | Filtered stores: {filteredStores.length}</div>
+        {/* <div className="mb-4 text-sm text-gray-500">Total stores fetched: {allStores.length} | Filtered stores: {filteredStores.length}</div> */}
 
-        <Tabs defaultValue="products" className="mb-6 md:mb-8">
-          <TabsList className="w-full md:w-auto grid grid-cols-2 md:flex">
-            <TabsTrigger value="products" className="flex-1 md:flex-none">Products</TabsTrigger>
-            <TabsTrigger value="stores" className="flex-1 md:flex-none">Stores</TabsTrigger>
+        <Tabs defaultValue="products" className="mb-4 md:mb-8">
+          <TabsList className="w-full md:w-auto grid grid-cols-2 md:flex h-10">
+            <TabsTrigger value="products" className="flex-1 md:flex-none text-sm">Products</TabsTrigger>
+            <TabsTrigger value="stores" className="flex-1 md:flex-none text-sm">Stores</TabsTrigger>
           </TabsList>
           
           <TabsContent value="products">
