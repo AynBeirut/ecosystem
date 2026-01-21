@@ -352,6 +352,18 @@ const AdminAccountStatement: React.FC = () => {
       'Total Payments': `$${c.totalPayments.toFixed(2)}`,
       'Balance': `$${c.balance.toFixed(2)}`
     }));
+    
+    // Add total row
+    const totalPurchases = customers.reduce((sum, c) => sum + c.totalPurchases, 0);
+    const totalPayments = customers.reduce((sum, c) => sum + c.totalPayments, 0);
+    const totalBalance = customers.reduce((sum, c) => sum + c.balance, 0);
+    data.push({
+      'Customer Name': 'TOTAL',
+      'Total Purchases': `$${totalPurchases.toFixed(2)}`,
+      'Total Payments': `$${totalPayments.toFixed(2)}`,
+      'Balance': `$${totalBalance.toFixed(2)}`
+    });
+    
     exportToCSV(data, 'customers_statement.csv');
   };
 
@@ -362,6 +374,18 @@ const AdminAccountStatement: React.FC = () => {
       'Total Payments': `$${s.totalPayments.toFixed(2)}`,
       'Balance Due': `$${s.balance.toFixed(2)}`
     }));
+    
+    // Add total row
+    const totalPurchases = suppliers.reduce((sum, s) => sum + s.totalPurchases, 0);
+    const totalPayments = suppliers.reduce((sum, s) => sum + s.totalPayments, 0);
+    const totalBalance = suppliers.reduce((sum, s) => sum + s.balance, 0);
+    data.push({
+      'Supplier Name': 'TOTAL',
+      'Total Purchases': `$${totalPurchases.toFixed(2)}`,
+      'Total Payments': `$${totalPayments.toFixed(2)}`,
+      'Balance Due': `$${totalBalance.toFixed(2)}`
+    });
+    
     exportToCSV(data, 'suppliers_statement.csv');
   };
 
@@ -372,6 +396,17 @@ const AdminAccountStatement: React.FC = () => {
       'Total Sold': p.totalSold,
       'Total Revenue': `$${p.totalRevenue.toFixed(2)}`
     }));
+    
+    // Add total row
+    const totalSold = products.reduce((sum, p) => sum + p.totalSold, 0);
+    const totalRevenue = products.reduce((sum, p) => sum + p.totalRevenue, 0);
+    data.push({
+      'Product Name': 'TOTAL',
+      'Category': '',
+      'Total Sold': totalSold,
+      'Total Revenue': `$${totalRevenue.toFixed(2)}`
+    });
+    
     exportToCSV(data, 'products_summary.csv');
   };
 
@@ -382,6 +417,16 @@ const AdminAccountStatement: React.FC = () => {
       'Amount': `$${p.amount.toFixed(2)}`,
       'Status': p.status
     }));
+    
+    // Add total row
+    const totalAmount = purchases.reduce((sum, p) => sum + p.amount, 0);
+    data.push({
+      'Date': '',
+      'Supplier': 'TOTAL',
+      'Amount': `$${totalAmount.toFixed(2)}`,
+      'Status': ''
+    });
+    
     exportToCSV(data, 'purchases_statement.csv');
   };
 
@@ -392,6 +437,16 @@ const AdminAccountStatement: React.FC = () => {
       'Description': e.description,
       'Amount': `$${e.amount.toFixed(2)}`
     }));
+    
+    // Add total row
+    const totalAmount = expenses.reduce((sum, e) => sum + e.amount, 0);
+    data.push({
+      'Date': '',
+      'Category': '',
+      'Description': 'TOTAL',
+      'Amount': `$${totalAmount.toFixed(2)}`
+    });
+    
     exportToCSV(data, 'expenses_statement.csv');
   };
 

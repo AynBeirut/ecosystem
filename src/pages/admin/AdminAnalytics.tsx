@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getFirestore, collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { useAuth } from '@/context/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, LineChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
@@ -8,66 +10,196 @@ import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const AdminAnalytics: React.FC = () => {
+  const { user } = useAuth();
   const isMobile = useIsMobile();
   const [timeRange, setTimeRange] = useState('7d');
+  const [loading, setLoading] = useState(true);
+  
+  const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalOrders, setTotalOrders] = useState(0);
+  const [activeProducts, setActiveProducts] = useState(0);
+  const [salesData, setSalesData] = useState<any[]>([]);
+  const [categoryData, setCategoryData] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
 
-  // Mock data for charts
-  const salesData = [
-    { name: 'Mon', sales: 4000, orders: 24 },
-    { name: 'Tue', sales: 3000, orders: 18 },
-    { name: 'Wed', sales: 2000, orders: 12 },
-    { name: 'Thu', sales: 2780, orders: 16 },
-    { name: 'Fri', sales: 1890, orders: 11 },
-    { name: 'Sat', sales: 2390, orders: 14 },
-    { name: 'Sun', sales: 3490, orders: 20 }
-  ];
+  useEffect(() => {
+    if (user?.storeId) {
+      fetchAnalyticsData();
+    }
+  }, [user?.storeId, timeRange]);
 
-  const categoryData = [
-    { name: 'Electronics', value: 45, sales: 4500 },
-    { name: 'Outdoor Gear', value: 30, sales: 3000 },
-    { name: 'Home & Decor', value: 25, sales: 2500 }
-  ];
+  const fetchAnalyticsData = async () => {
+    try {
+      setLoading(true);
+      const db = getFirestore();
+      
+      // Calculate date range
+      const now = new Date();
+      const daysBack = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : timeRange === '90d' ? 90 : 365;
+      const startDate = new Date(now.getTime() - daysBack * 24 * 60 * 60 * 1000);
+      
+      // Fetch orders
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where('storeId', '==', user?.storeId)
+      );
+      const ordersSnapshot = await getDocs(ordersQuery);
+      
+      let revenue = 0;
+      let orderCount = 0;
+      const dailySales: Record<string, { sales: number; orders: number }> = {};
+      const categorySales: Record<string, number> = {};
+      const productSales: Record<string, { name: string; sales: number; revenue: number }> = {};
+      
+      ordersSnapshot.forEach(doc => {
+        const order = doc.data();
+        const orderDate = order.createdAt ? new Date(order.createdAt) : new Date();
+        
+        // Only include orders within date range
+        if (orderDate >= startDate) {
+          const total = order.total || 0;
+          revenue += total;
+          orderCount++;
+          
+          // Daily sales
+          const dayKey = orderDate.toLocaleDateString('en-US', { weekday: 'short' });
+          if (!dailySales[dayKey]) {
+            dailySales[dayKey] = { sales: 0, orders: 0 };
+          }
+          dailySales[dayKey].sales += total;
+          dailySales[dayKey].orders++;
+          
+          // Process items for product and category sales
+          const items = order.items || [];
+          items.forEach((item: any) => {
+            const productId = item.productId;
+            const quantity = item.quantity || 0;
+            const price = item.price || 0;
+            const itemRevenue = quantity * price;
+            
+            if (!productSales[productId]) {
+              productSales[productId] = { name: 'Product', sales: 0, revenue: 0 };
+            }
+            productSales[productId].sales += quantity;
+            productSales[productId].revenue += itemRevenue;
+          });
+        }
+      });
+      
+      // Fetch products for names and categories
+      const productsQuery = query(
+        collection(db, 'products'),
+        where('storeId', '==', user?.storeId)
+      );
+      const productsSnapshot = await getDocs(productsQuery);
+      
+      let activeCount = 0;
+      productsSnapshot.forEach(doc => {
+        const product = doc.data();
+        if (product.inStock !== false) activeCount++;
+        
+        // Update product names and category sales
+        if (productSales[doc.id]) {
+          productSales[doc.id].name = product.name || 'Unknown Product';
+          
+          const category = product.category || 'Other';
+          if (!categorySales[category]) {
+            categorySales[category] = 0;
+          }
+          categorySales[category] += productSales[doc.id].revenue;
+        }
+      });
+      
+      // Format daily sales for chart (last 7 days)
+      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const last7Days = [];
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+        const dayName = days[date.getDay()];
+        last7Days.push({
+          name: dayName,
+          sales: dailySales[dayName]?.sales || 0,
+          orders: dailySales[dayName]?.orders || 0
+        });
+      }
+      
+      // Format category data
+      const totalCategoryRevenue = Object.values(categorySales).reduce((sum, val) => sum + val, 0);
+      const formattedCategories = Object.entries(categorySales)
+        .map(([name, sales]) => ({
+          name,
+          value: totalCategoryRevenue > 0 ? Math.round((sales / totalCategoryRevenue) * 100) : 0,
+          sales: Math.round(sales)
+        }))
+        .sort((a, b) => b.sales - a.sales)
+        .slice(0, 5);
+      
+      // Format top products
+      const formattedProducts = Object.values(productSales)
+        .sort((a, b) => b.revenue - a.revenue)
+        .slice(0, 5)
+        .map(p => ({
+          name: p.name,
+          sales: p.sales,
+          revenue: Math.round(p.revenue)
+        }));
+      
+      setTotalRevenue(revenue);
+      setTotalOrders(orderCount);
+      setActiveProducts(activeCount);
+      setSalesData(last7Days);
+      setCategoryData(formattedCategories);
+      setTopProducts(formattedProducts);
+      
+    } catch (error) {
+      console.error('Error fetching analytics:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const topProducts = [
-    { name: 'Wireless Earbuds', sales: 156, revenue: 1248 },
-    { name: 'Smart Watch', sales: 89, revenue: 1780 },
-    { name: 'Portable Charger', sales: 234, revenue: 1170 },
-    { name: 'Hiking Backpack', sales: 67, revenue: 536 },
-    { name: 'Handmade Candle', sales: 145, revenue: 362 }
-  ];
-
-  const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))'];
+  const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', '#f59e0b', '#8b5cf6'];
 
   const stats = [
     {
       title: 'Total Revenue',
-      value: '$12,543',
-      change: '+12.5%',
+      value: `$${totalRevenue.toFixed(2)}`,
+      change: timeRange === '7d' ? 'Last 7 days' : timeRange === '30d' ? 'Last 30 days' : timeRange === '90d' ? 'Last 90 days' : 'Last year',
       isPositive: true,
       icon: DollarSign
     },
     {
       title: 'Total Orders',
-      value: '1,247',
-      change: '+8.2%',
+      value: totalOrders.toString(),
+      change: timeRange === '7d' ? 'Last 7 days' : timeRange === '30d' ? 'Last 30 days' : timeRange === '90d' ? 'Last 90 days' : 'Last year',
       isPositive: true,
       icon: ShoppingCart
     },
     {
-      title: 'Store Views',
-      value: '8,492',
-      change: '+15.3%',
+      title: 'Average Order Value',
+      value: totalOrders > 0 ? `$${(totalRevenue / totalOrders).toFixed(2)}` : '$0.00',
+      change: 'Per order',
       isPositive: true,
-      icon: Eye
+      icon: DollarSign
     },
     {
       title: 'Active Products',
-      value: '24',
-      change: '+2',
+      value: activeProducts.toString(),
+      change: 'In stock',
       isPositive: true,
       icon: Package
     }
   ];
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <div className="text-lg">Loading analytics...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -114,13 +246,8 @@ const AdminAnalytics: React.FC = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="text-2xl font-bold">{stat.value}</div>
-                  <p className={`text-xs flex items-center ${stat.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                    {stat.isPositive ? (
-                      <TrendingUp className="h-3 w-3 mr-1" />
-                    ) : (
-                      <TrendingDown className="h-3 w-3 mr-1" />
-                    )}
-                    {stat.change} from last period
+                  <p className={`text-xs flex items-center text-muted-foreground`}>
+                    {stat.change}
                   </p>
                 </CardContent>
               </Card>
@@ -275,39 +402,36 @@ const AdminAnalytics: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Conversion Rate</CardTitle>
+              <CardTitle className="text-lg">Total Categories</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-primary">3.2%</div>
-              <p className="text-sm text-muted-foreground flex items-center mt-1">
-                <TrendingUp className="h-3 w-3 mr-1 text-green-600" />
-                +0.5% from last period
+              <div className="text-3xl font-bold text-primary">{categoryData.length}</div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Product categories
               </p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Average Order Value</CardTitle>
+              <CardTitle className="text-lg">Best Category</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-primary">$84.32</div>
-              <p className="text-sm text-muted-foreground flex items-center mt-1">
-                <TrendingUp className="h-3 w-3 mr-1 text-green-600" />
-                +$12.50 from last period
+              <div className="text-3xl font-bold text-primary">{categoryData[0]?.name || 'N/A'}</div>
+              <p className="text-sm text-muted-foreground mt-1">
+                {categoryData[0] ? `$${categoryData[0].sales} revenue` : 'No sales yet'}
               </p>
             </CardContent>
           </Card>
           
           <Card>
             <CardHeader>
-              <CardTitle className="text-lg">Return Customers</CardTitle>
+              <CardTitle className="text-lg">Top Product Sales</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-3xl font-bold text-primary">68%</div>
-              <p className="text-sm text-muted-foreground flex items-center mt-1">
-                <TrendingUp className="h-3 w-3 mr-1 text-green-600" />
-                +5% from last period
+              <div className="text-3xl font-bold text-primary">{topProducts[0]?.sales || 0}</div>
+              <p className="text-sm text-muted-foreground mt-1">
+                {topProducts[0]?.name || 'No products sold'}
               </p>
             </CardContent>
           </Card>
