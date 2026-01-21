@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from 'react';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
@@ -36,7 +38,7 @@ const AdminOrders: React.FC = () => {
   const isMobile = useIsMobile();
   
   const [orders, setOrders] = useState<(Order & { id: string })[]>([]);
-  const [products, setProducts] = useState<ComposedProduct[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
@@ -77,13 +79,13 @@ const AdminOrders: React.FC = () => {
 
       const [ordersData, productsData, customersData, staffData] = await Promise.all([
         fetchCollection('orders'),
-        fetchCollection('composedProducts'),
+        fetchCollection('products'),
         fetchCollection('customers'),
         fetchCollection('staff'),
       ]);
 
       setOrders(ordersData as (Order & { id: string })[]);
-      setProducts(productsData as ComposedProduct[]);
+      setProducts(productsData);
       setCustomers(customersData as Customer[]);
       setSalesStaff((staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active'));
       setLoading(false);
@@ -94,7 +96,7 @@ const AdminOrders: React.FC = () => {
   const calculateOrderTotals = (items: OrderItem[], taxType: string, taxRate: number, discountType: string, discountValue: number) => {
     const subtotal = items.reduce((sum, item) => {
       const product = products.find(p => p.id === item.productId);
-      return sum + (product?.sellingPrice || 0) * item.quantity;
+      return sum + ((product?.sellingPrice || product?.price || 0) * item.quantity);
     }, 0);
 
     let discountAmount = 0;
@@ -427,16 +429,30 @@ const AdminOrders: React.FC = () => {
     `;
   };
 
-  const handleDownloadPDF = (order: Order & { id: string }) => {
-    const html = generateInvoiceHTML(order);
-    const blob = new Blob([html], { type: 'text/html' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `invoice-${order.id}.html`;
-    link.click();
-    URL.revokeObjectURL(url);
-    toast({ title: "Success", description: "Invoice downloaded successfully" });
+  const handleDownloadPDF = async (order: Order & { id: string }) => {
+    try {
+      const html = generateInvoiceHTML(order);
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      document.body.appendChild(container);
+
+      const canvas = await html2canvas(container, { scale: 2 });
+      document.body.removeChild(container);
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`invoice-${order.id}.pdf`);
+      toast({ title: "Success", description: "Invoice downloaded as PDF" });
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast({ title: "Error", description: "Failed to generate PDF", variant: "destructive" });
+    }
   };
 
   const handleShareInvoice = async (order: Order & { id: string }) => {
@@ -470,7 +486,14 @@ const AdminOrders: React.FC = () => {
   };
 
   const addItemToOrder = () => {
-    if (products.length === 0) return;
+    if (products.length === 0) {
+      toast({ 
+        title: "No Products", 
+        description: "Please add products first before creating orders", 
+        variant: "destructive" 
+      });
+      return;
+    }
     setNewOrder({
       ...newOrder,
       items: [...newOrder.items, { productId: products[0].id, quantity: 1 }]
@@ -638,7 +661,7 @@ const AdminOrders: React.FC = () => {
                             <SelectContent>
                               {products.map(p => (
                                 <SelectItem key={p.id} value={p.id}>
-                                  {p.name} - ${p.sellingPrice.toFixed(2)}
+                                  {p.name} - ${(p.sellingPrice || p.price || 0).toFixed(2)}
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -652,7 +675,7 @@ const AdminOrders: React.FC = () => {
                             placeholder="Qty"
                           />
                           <div className="w-32 text-right font-medium">
-                            ${((product?.sellingPrice || 0) * item.quantity).toFixed(2)}
+                            ${((product?.sellingPrice || product?.price || 0) * item.quantity).toFixed(2)}
                           </div>
                           <Button
                             type="button"

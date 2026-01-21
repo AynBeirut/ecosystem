@@ -20,7 +20,9 @@ export async function logAction(
 ): Promise<void> {
   try {
     const db = getFirestore();
-    const auditLog: Omit<AuditLog, 'id'> = {
+    
+    // Prepare audit log data, filtering out undefined values
+    const auditLogData: any = {
       timestamp: new Date().toISOString(),
       userId,
       userName,
@@ -28,17 +30,21 @@ export async function logAction(
       action,
       entityType,
       entityId,
-      oldValue: changes?.oldValue,
-      newValue: changes?.newValue,
       ipAddress: await getClientIP(),
       userAgent: navigator.userAgent,
       storeId: storeId || '',
+      createdAt: serverTimestamp(),
     };
 
-    await addDoc(collection(db, 'auditLogs'), {
-      ...auditLog,
-      createdAt: serverTimestamp(),
-    });
+    // Only add oldValue and newValue if they are defined
+    if (changes?.oldValue !== undefined) {
+      auditLogData.oldValue = changes.oldValue;
+    }
+    if (changes?.newValue !== undefined) {
+      auditLogData.newValue = changes.newValue;
+    }
+
+    await addDoc(collection(db, 'auditLogs'), auditLogData);
   } catch (error) {
     console.error('Failed to log audit action:', error);
     // Don't throw - audit logging should not break the main flow

@@ -231,9 +231,6 @@ const AdminInventory: React.FC = () => {
                       <p className="text-2xl font-bold text-orange-500">{stats.simpleProducts.lowStock}</p>
                     </div>
                   </div>
-                  <Button onClick={() => navigate('/admin/products')}>
-                    Manage Products
-                  </Button>
                 </div>
               </CardContent>
             </Card>

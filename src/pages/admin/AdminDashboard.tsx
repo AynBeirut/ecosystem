@@ -280,12 +280,12 @@ const AdminDashboard: React.FC = () => {
       </div>
     </div>
   <div className="flex">
-  <aside className="hidden lg:block w-64 bg-white shadow-sm h-screen sticky top-0">
-        <div className="p-6">
+  <aside className="hidden lg:flex lg:flex-col w-64 bg-white shadow-sm h-screen sticky top-0">
+        <div className="p-6 flex-shrink-0">
           <Link to="/" className="text-2xl font-bold text-market-primary">Market Flow</Link>
           <p className="text-gray-500 text-sm mt-1">Admin Dashboard</p>
         </div>
-        <nav className="mt-6">
+        <nav className="mt-6 flex-1 overflow-y-auto pb-32">
           <ul className="space-y-2 px-4">
             <li>
               <Link to="/admin/dashboard" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
@@ -355,7 +355,7 @@ const AdminDashboard: React.FC = () => {
             </li>
           </ul>
         </nav>
-          <div className="px-6 py-4 absolute bottom-0 w-full border-t">
+          <div className="px-6 py-4 absolute bottom-0 w-full border-t bg-white">
           <div className="flex items-center">
             <div className="h-10 w-10 rounded-full bg-market-primary flex items-center justify-center text-white">
               {user?.name ? String(user.name).charAt(0) : 'G'}
@@ -612,7 +612,7 @@ const AdminDashboard: React.FC = () => {
         </div>
       </div>
     </div>
-  </div>
+    </div>
   );
 }
 
