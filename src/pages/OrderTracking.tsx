@@ -22,7 +22,8 @@ const OrderTracking: React.FC = () => {
       const ordersRef = collection(db, 'orders');
       const q = query(ordersRef, where('customerId', '==', user.id));
       const snapshot = await getDocs(q);
-  const ordersList = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as Partial<Order>) })) as Order[];
+      const ordersList = snapshot.docs.map(d => ({ id: d.id, ...(d.data() as Partial<Order>) })) as Order[];
+      console.log('Fetched orders for customer:', user.id, 'Count:', ordersList.length);
       setOrders(ordersList);
       // Fetch store contact info for each order
       const storeMap: Record<string, Record<string, unknown>> = {};
@@ -72,19 +73,31 @@ const OrderTracking: React.FC = () => {
             <div className="space-y-6">
               {orders.map(order => (
                 <div key={order.id} className="border rounded-lg p-4 flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div>
-                    <div className="font-semibold">Order #{order.id}</div>
-                    <div className="text-sm text-gray-500">Total: ${order.total}</div>
-                    <div className="text-sm text-gray-500">Status: <Badge>{order.status || 'pending'}</Badge></div>
+                  <div className="flex-1">
+                    <div className="font-semibold">
+                      {order.invoiceNumber ? `Invoice: ${order.invoiceNumber}` : `Order #${order.id.substring(0, 8)}`}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Date: {order.createdAt ? new Date(order.createdAt).toLocaleDateString() : 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      Items: {order.items?.length || 0} | Total: ${order.total?.toFixed(2) || '0.00'}
+                    </div>
+                    <div className="mt-2">
+                      <Badge variant={order.status === 'delivered' ? 'default' : order.status === 'cancelled' ? 'destructive' : 'secondary'}>
+                        {order.status || 'pending'}
+                      </Badge>
+                    </div>
                   </div>
-                  {stores[order.storeId] && (
-                    <div className="flex flex-col gap-2">
-                      <div className="flex items-center text-gray-600">
-                        <Phone size={18} className="mr-2" />
+                  {order.storeId && stores[order.storeId] && (
+                    <div className="flex flex-col gap-2 bg-gray-50 p-3 rounded">
+                      <div className="font-medium text-sm">Store Contact</div>
+                      <div className="flex items-center text-gray-600 text-sm">
+                        <Phone size={16} className="mr-2" />
                         {getStoreField(order.storeId, 'phone') || 'N/A'}
                       </div>
-                      <div className="flex items-center text-gray-600">
-                        <Mail size={18} className="mr-2" />
+                      <div className="flex items-center text-gray-600 text-sm">
+                        <Mail size={16} className="mr-2" />
                         {getStoreField(order.storeId, 'email') || 'N/A'}
                       </div>
                     </div>

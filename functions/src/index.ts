@@ -44,11 +44,11 @@ app.options('*', (req, res) => {
 });
 
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
-function getServerTimestamp(): Date | admin.firestore.FieldValue {
+function getServerTimestamp(): Date | any {
   try {
     const anyAdmin = admin as unknown as {
       firestore: {
-        FieldValue: { serverTimestamp: () => admin.firestore.FieldValue };
+        FieldValue: { serverTimestamp: () => any };
         Timestamp: { now: () => Date };
       };
     };
@@ -124,7 +124,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
     let ordersCreated = 0;
     let orderIds: string[] = [];
 
-    await db.runTransaction(async (tx) => {
+    await db.runTransaction(async (tx: any) => {
       const userRef = db.doc(`users/${userId}`);
 
       for (const storeId of Object.keys(itemsByStore)) {
@@ -176,6 +176,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           subtotal: storeSubtotal,
           discount: 0,
           total: totalAfterDiscount,
+          status: 'pending',
           createdAt: getServerTimestamp(),
         });
         orderIds.push(orderRef.id);
@@ -189,6 +190,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           items: orderItems,
           subtotal: storeSubtotal,
           total: totalAfterDiscount,
+          status: 'pending',
         });
 
         for (const it of itemsForStore) {
