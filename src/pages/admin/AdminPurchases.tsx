@@ -1193,22 +1193,63 @@ const AdminPurchases: React.FC = () => {
               <div className="grid gap-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="supplierId">Supplier *</Label>
-                    <Select
-                      value={newPurchase.supplierId}
-                      onValueChange={(value) => setNewPurchase({ ...newPurchase, supplierId: value })}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select supplier" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {suppliers.map(supplier => (
-                          <SelectItem key={supplier.id} value={supplier.id}>
-                            {supplier.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label htmlFor="supplierId">Supplier *</Label>
+                      <Button 
+                        type="button" 
+                        variant="link" 
+                        size="sm" 
+                        className="text-xs h-auto p-0"
+                        onClick={() => setIsCreatingNewSupplier(!isCreatingNewSupplier)}
+                      >
+                        {isCreatingNewSupplier ? "Select existing" : "+ Add new supplier"}
+                      </Button>
+                    </div>
+                    
+                    {!isCreatingNewSupplier ? (
+                      <Select
+                        value={newPurchase.supplierId}
+                        onValueChange={(value) => setNewPurchase({ ...newPurchase, supplierId: value })}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select supplier" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {suppliers.map(supplier => (
+                            <SelectItem key={supplier.id} value={supplier.id}>
+                              {supplier.name}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    ) : (
+                      <div className="space-y-3 p-3 border rounded-md bg-gray-50">
+                        <Input
+                          placeholder="Supplier Name *"
+                          value={newPurchase.supplierName || ''}
+                          onChange={(e) => setNewPurchase({ ...newPurchase, supplierName: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Contact Person *"
+                          value={newPurchase.supplierContact || ''}
+                          onChange={(e) => setNewPurchase({ ...newPurchase, supplierContact: e.target.value })}
+                        />
+                        <Input
+                          placeholder="Email (optional)"
+                          type="email"
+                          value={newPurchase.supplierEmail || ''}
+                          onChange={(e) => setNewPurchase({ ...newPurchase, supplierEmail: e.target.value })}
+                        />
+                        <Button 
+                          type="button" 
+                          size="sm" 
+                          onClick={handleCreateInlineSupplier}
+                          className="w-full"
+                        >
+                          Create Supplier
+                        </Button>
+                      </div>
+                    )}
                   </div>
                   <div>
                     <Label htmlFor="expectedDeliveryDate">Expected Delivery</Label>

@@ -107,7 +107,7 @@ const AdminInventory: React.FC = () => {
         </div>
 
         {/* Quick Navigation */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/products')}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-market-primary">
@@ -117,6 +117,18 @@ const AdminInventory: React.FC = () => {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">Manage all product types: Simple items, Services, and Composed products</p>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/suppliers')}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-purple-600">
+                <TrendingUp className="h-5 w-5" />
+                Suppliers
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Manage suppliers and vendor relationships</p>
             </CardContent>
           </Card>
 
