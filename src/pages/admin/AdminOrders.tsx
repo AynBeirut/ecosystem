@@ -17,8 +17,10 @@ import { Order, OrderItem } from '@/types/order';
 import { ComposedProduct } from '@/types/product';
 import { Customer } from '@/types/customer';
 import { StaffMember } from '@/types/staff';
+import { StoreProfile } from '@/types/storeProfile';
 import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2 } from 'lucide-react';
 import { logAction } from '@/lib/auditLog';
+import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -41,6 +43,7 @@ const AdminOrders: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
+  const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
@@ -76,6 +79,13 @@ const AdminOrders: React.FC = () => {
         const snapshot = await getDocs(q);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       };
+
+      // Fetch store profile
+      const profileRef = doc(db, 'storeProfiles', user.storeId);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        setStoreProfile(profileSnap.data() as StoreProfile);
+      }
 
       const [ordersData, productsData, customersData, staffData] = await Promise.all([
         fetchCollection('orders'),
@@ -116,6 +126,34 @@ const AdminOrders: React.FC = () => {
     const total = afterDiscount + taxAmount;
 
     return { subtotal, discountAmount, taxAmount, total };
+  };
+
+  const generateInvoiceNumber = async (): Promise<string> => {
+    if (!user?.storeId || !storeProfile) return 'INV-001';
+    
+    const db = getFirestore();
+    const profileRef = doc(db, 'storeProfiles', user.storeId);
+    
+    const prefix = storeProfile.invoiceNumberPrefix || 'INV';
+    const lastNumber = storeProfile.lastInvoiceNumber || 0;
+    const newNumber = lastNumber + 1;
+    const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
+    
+    // Update last invoice number in store profile
+    await updateDoc(profileRef, { lastInvoiceNumber: newNumber });
+    
+    return invoiceNumber;
+  };
+
+  const formatCurrency = (amount: number, showDual: boolean = true): string => {
+    const usd = `$${amount.toFixed(2)}`;
+    
+    if (showDual && storeProfile?.customExchangeRate && storeProfile.customExchangeRate > 0) {
+      const lbp = (amount * storeProfile.customExchangeRate).toFixed(0);
+      return `${usd} (${Number(lbp).toLocaleString()} LBP)`;
+    }
+    
+    return usd;
   };
 
   const handleCreateInlineCustomer = async () => {
@@ -194,12 +232,16 @@ const AdminOrders: React.FC = () => {
         newOrder.discountValue
       );
 
+      // Generate custom invoice number
+      const invoiceNumber = await generateInvoiceNumber();
+
       const orderData = {
         storeId: user.storeId,
         customerId: newOrder.customerId,
         customerName: customer?.name || '',
         customerPhone: customer?.phone || '',
         customerEmail: customer?.email || '',
+        invoiceNumber,
         items: newOrder.items,
         subtotal,
         taxType: newOrder.taxType,
@@ -245,7 +287,7 @@ const AdminOrders: React.FC = () => {
         discountValue: 0,
       });
       setIsCreatingOrder(false);
-      toast({ title: "Success", description: "Order created successfully!" });
+      toast({ title: "Success", description: `Order created! Invoice: ${invoiceNumber}` });
     } catch (error) {
       console.error('Error creating order:', error);
       toast({ title: "Error", description: "Failed to create order", variant: "destructive" });
@@ -353,80 +395,7 @@ const AdminOrders: React.FC = () => {
   };
 
   const generateInvoiceHTML = (order: Order & { id: string }) => {
-    const itemsHtml = order.items?.map(item => {
-      const product = products.find(p => p.id === item.productId);
-      const price = product?.sellingPrice || 0;
-      const lineTotal = price * item.quantity;
-      return `
-        <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${product?.name || 'Product'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${price.toFixed(2)}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${lineTotal.toFixed(2)}</td>
-        </tr>
-      `;
-    }).join('');
-
-    return `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <title>Invoice #${order.id}</title>
-        <style>
-          body { font-family: Arial, sans-serif; padding: 40px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header h1 { margin: 0; color: #333; }
-          .invoice-info { margin-bottom: 30px; }
-          .invoice-info div { margin: 5px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          th { background: #f8f9fa; padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6; }
-          .totals { margin-top: 20px; text-align: right; }
-          .totals div { margin: 8px 0; }
-          .grand-total { font-size: 18px; font-weight: bold; color: #2563eb; margin-top: 10px; padding-top: 10px; border-top: 2px solid #333; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>INVOICE</h1>
-          <p>Invoice #${order.id}</p>
-          <p>Date: ${new Date(order.createdAt || '').toLocaleDateString()}</p>
-        </div>
-        
-        <div class="invoice-info">
-          <strong>Bill To:</strong><br/>
-          ${order.customerName || 'N/A'}<br/>
-          ${order.customerPhone || ''}<br/>
-          ${order.customerEmail || ''}<br/>
-          ${order.assignedSalesPersonName ? `<br/><strong>Sales Person:</strong> ${order.assignedSalesPersonName}` : ''}
-        </div>
-
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th style="text-align: center;">Quantity</th>
-              <th style="text-align: right;">Price</th>
-              <th style="text-align: right;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
-
-        <div class="totals">
-          <div>Subtotal: $${(order.subtotal || 0).toFixed(2)}</div>
-          ${order.discountAmount ? `<div>Discount: -$${order.discountAmount.toFixed(2)}</div>` : ''}
-          ${order.taxAmount ? `<div>Tax (${order.taxRate}%): $${order.taxAmount.toFixed(2)}</div>` : ''}
-          <div class="grand-total">Total: $${(order.total || 0).toFixed(2)}</div>
-        </div>
-
-        <div style="margin-top: 50px; text-align: center; color: #666; font-size: 12px;">
-          <p>Thank you for your business!</p>
-        </div>
-      </body>
-      </html>
-    `;
+    return generateInvoiceHTMLTemplate(order, products, storeProfile, formatCurrency);
   };
 
   const handleDownloadPDF = async (order: Order & { id: string }) => {

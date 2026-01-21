@@ -327,6 +327,74 @@ const AdminProfile: React.FC = () => {
             </CardContent>
           </Card>
 
+          {/* Invoice Configuration */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Invoice Settings</CardTitle>
+              <CardDescription>
+                Customize your invoice appearance and numbering
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="invoicePrefix">Invoice Number Prefix</Label>
+                  <Input
+                    id="invoicePrefix"
+                    value={formData.invoiceNumberPrefix || 'INV'}
+                    onChange={(e) => setFormData({ ...formData, invoiceNumberPrefix: e.target.value })}
+                    placeholder="INV"
+                    maxLength={10}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Example: INV-001, INV-002
+                  </p>
+                </div>
+                
+                <div>
+                  <Label htmlFor="lastInvoiceNumber">Current Invoice Number</Label>
+                  <Input
+                    id="lastInvoiceNumber"
+                    type="number"
+                    value={formData.lastInvoiceNumber || 0}
+                    onChange={(e) => setFormData({ ...formData, lastInvoiceNumber: parseInt(e.target.value) || 0 })}
+                    placeholder="0"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Next invoice: {(formData.invoiceNumberPrefix || 'INV')}-{String((formData.lastInvoiceNumber || 0) + 1).padStart(3, '0')}
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="invoiceTemplate">Invoice Template</Label>
+                <select
+                  id="invoiceTemplate"
+                  value={formData.invoiceTemplate || 'modern'}
+                  onChange={(e) => setFormData({ ...formData, invoiceTemplate: e.target.value as 'modern' | 'classic' | 'vibrant' })}
+                  className="w-full p-2 border rounded-md"
+                >
+                  <option value="modern">Modern (Blue/Teal)</option>
+                  <option value="classic">Classic (Black/Gold)</option>
+                  <option value="vibrant">Vibrant (Orange/Purple)</option>
+                </select>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Choose the design style for your invoices
+                </p>
+              </div>
+
+              <div>
+                <Label htmlFor="taxNumber">Tax Registration Number</Label>
+                <Input
+                  id="taxNumber"
+                  value={formData.taxNumber || ''}
+                  onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
+                  placeholder="Enter your tax/VAT registration number"
+                />
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex justify-end space-x-4">
             <Button type="button" variant="outline" disabled={isSaving}>
               Cancel

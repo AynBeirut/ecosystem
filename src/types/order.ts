@@ -7,6 +7,7 @@ export interface OrderItem {
 export interface Order {
   id: string
   orderNumber?: string
+  invoiceNumber?: string // Custom invoice number like INV-001
   storeId?: string
   customerId?: string
   customerName?: string

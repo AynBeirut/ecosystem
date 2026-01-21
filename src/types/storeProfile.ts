@@ -27,6 +27,10 @@ export interface StoreProfile {
   pointsPerDollar?: number;
   // SKU configuration
   skuPrefix?: string; // Prefix for auto-generated SKUs
+  // Invoice configuration
+  invoiceNumberPrefix?: string; // Default: "INV"
+  lastInvoiceNumber?: number; // Last used invoice number
+  invoiceTemplate?: 'modern' | 'classic' | 'vibrant'; // Invoice design template
   // Migration tracking
   migrationVersion?: number;
   lastMigrationDate?: string;
