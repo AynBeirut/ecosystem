@@ -11,11 +11,19 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer } from 'lucide-react';
+import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -932,6 +940,56 @@ const AdminPurchases: React.FC = () => {
     printWindow.print();
   };
 
+  const handleDownloadPDF = async (purchase: Purchase) => {
+    try {
+      const html = generatePOHTML(purchase);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+      
+      const canvas = await html2canvas(tempDiv.querySelector('.invoice-container') as HTMLElement);
+      const imgData = canvas.toDataURL('image/png');
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`PO-${purchase.invoiceNumber || purchase.poNumber}.pdf`);
+      
+      document.body.removeChild(tempDiv);
+      toast({ title: "Success", description: "PDF downloaded successfully" });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({ title: "Error", description: "Failed to generate PDF", variant: "destructive" });
+    }
+  };
+
+  const handleSendEmail = (purchase: Purchase) => {
+    const supplier = suppliers.find(s => s.id === purchase.supplierId);
+    const subject = `Purchase Order ${purchase.invoiceNumber || purchase.poNumber}`;
+    const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: $${purchase.totalAmount.toFixed(2)}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
+      const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+      return `- ${material?.name}: ${item.quantity} ${material?.unit} @ $${item.unitPrice}`;
+    }).join('\n')}\n\nBest regards,\n${storeProfile?.name || 'Your Store'}`;
+    
+    const mailtoLink = `mailto:${supplier?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.open(mailtoLink, '_blank');
+  };
+
+  const handleSendWhatsApp = (purchase: Purchase) => {
+    const supplier = suppliers.find(s => s.id === purchase.supplierId);
+    const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: $${purchase.totalAmount.toFixed(2)}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${purchase.items.map(item => {
+      const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+      return `• ${material?.name}: ${item.quantity} ${material?.unit} @ $${item.unitPrice} = $${(item.quantity * item.unitPrice).toFixed(2)}`;
+    }).join('\n')}\n\nThank you!\n${storeProfile?.name || 'Your Store'}`;
+    
+    const whatsappUrl = `https://wa.me/${supplier?.phone?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
+    window.open(whatsappUrl, '_blank');
+  };
+
   const addItem = () => {
     setNewPurchase({
       ...newPurchase,
@@ -1392,13 +1450,40 @@ const AdminPurchases: React.FC = () => {
                       </div>
                       <div className="flex gap-2">
                         {purchase.status === 'draft' && (
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUpdateStatus(purchase.id, 'sent')}
-                          >
-                            Send to Supplier
-                          </Button>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="outline" size="sm">
+                                <Share2 className="h-4 w-4 mr-1" />
+                                Send to Supplier
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuLabel>Send Purchase Order</DropdownMenuLabel>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleSendEmail(purchase)}>
+                                <Mail className="h-4 w-4 mr-2" />
+                                Email
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handleSendWhatsApp(purchase)}>
+                                <MessageCircle className="h-4 w-4 mr-2" />
+                                WhatsApp
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleDownloadPDF(purchase)}>
+                                <Download className="h-4 w-4 mr-2" />
+                                Download PDF
+                              </DropdownMenuItem>
+                              <DropdownMenuItem onClick={() => handlePrintPO(purchase)}>
+                                <Printer className="h-4 w-4 mr-2" />
+                                Print
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem onClick={() => handleUpdateStatus(purchase.id, 'sent')}>
+                                <CheckCircle className="h-4 w-4 mr-2" />
+                                Mark as Sent
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         )}
                         {purchase.status === 'sent' && (
                           <Button
@@ -1485,6 +1570,24 @@ const AdminPurchases: React.FC = () => {
                         <span className="font-semibold">Notes:</span> {purchase.notes}
                       </div>
                     )}
+                    <div className="mt-4 pt-3 border-t flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleDownloadPDF(purchase)}
+                      >
+                        <Download className="h-4 w-4 mr-1" />
+                        Download PDF
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handlePrintPO(purchase)}
+                      >
+                        <Printer className="h-4 w-4 mr-1" />
+                        Print
+                      </Button>
+                    </div>
                   </CardContent>
                 </Card>
               );
