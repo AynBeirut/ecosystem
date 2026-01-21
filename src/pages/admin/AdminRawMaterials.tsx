@@ -216,7 +216,7 @@ const AdminRawMaterials: React.FC = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
+            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
             <h1 className="text-2xl font-bold">Raw Materials</h1>
           </div>
           <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
