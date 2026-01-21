@@ -80,28 +80,38 @@ const AdminOrders: React.FC = () => {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       };
 
-      // Fetch store profile
-      const profileRef = doc(db, 'storeProfiles', user.storeId);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
-        setStoreProfile(profileSnap.data() as StoreProfile);
+      try {
+        // Fetch store profile
+        const profileRef = doc(db, 'storeProfiles', user.storeId);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          setStoreProfile(profileSnap.data() as StoreProfile);
+        }
+
+        const [ordersData, productsData, customersData, staffData] = await Promise.all([
+          fetchCollection('orders'),
+          fetchCollection('products'),
+          fetchCollection('customers'),
+          fetchCollection('staff'),
+        ]);
+
+        setOrders(ordersData as (Order & { id: string })[]);
+        setProducts(productsData);
+        setCustomers(customersData as Customer[]);
+        setSalesStaff((staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active'));
+      } catch (error) {
+        console.error('Error fetching data:', error);
+        toast({ 
+          title: "Error", 
+          description: "Failed to load orders. Please refresh the page.", 
+          variant: "destructive" 
+        });
+      } finally {
+        setLoading(false);
       }
-
-      const [ordersData, productsData, customersData, staffData] = await Promise.all([
-        fetchCollection('orders'),
-        fetchCollection('products'),
-        fetchCollection('customers'),
-        fetchCollection('staff'),
-      ]);
-
-      setOrders(ordersData as (Order & { id: string })[]);
-      setProducts(productsData);
-      setCustomers(customersData as Customer[]);
-      setSalesStaff((staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active'));
-      setLoading(false);
     };
     fetchData();
-  }, [user?.storeId]);
+  }, [user?.storeId, toast]);
 
   const calculateOrderTotals = (items: OrderItem[], taxType: string, taxRate: number, discountType: string, discountValue: number) => {
     const subtotal = items.reduce((sum, item) => {
