@@ -15,7 +15,14 @@ export const generateInvoiceHTML = (
   const storePhone = storeProfile?.phone || '';
   const storeEmail = storeProfile?.email || '';
   const storeTaxNumber = storeProfile?.taxNumber || '';
-  const invoiceNum = order.invoiceNumber || order.id.slice(0, 8).toUpperCase();
+  
+  // Generate invoice number with store prefix
+  let invoiceNum = order.invoiceNumber;
+  if (!invoiceNum) {
+    const prefix = storeProfile?.invoiceNumberPrefix || 'INV';
+    const orderNumber = order.id.slice(0, 6).toUpperCase();
+    invoiceNum = `${prefix}-${orderNumber}`;
+  }
   
   const itemsHtml = order.items?.map(item => {
     const product = products.find(p => p.id === item.productId);
