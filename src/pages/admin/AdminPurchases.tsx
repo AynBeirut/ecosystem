@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -14,6 +14,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial } from '@/types/inventory';
+import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -26,6 +27,7 @@ const AdminPurchases: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [receivingPurchase, setReceivingPurchase] = useState<Purchase | null>(null);
@@ -45,6 +47,13 @@ const AdminPurchases: React.FC = () => {
     const fetchData = async () => {
       if (!user?.storeId) return;
       const db = getFirestore();
+
+      // Fetch store profile
+      const profileRef = doc(db, 'storeProfiles', user.storeId);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        setStoreProfile(profileSnap.data() as StoreProfile);
+      }
 
       // Fetch purchases
       const purchasesRef = collection(db, 'purchases');
@@ -79,12 +88,38 @@ const AdminPurchases: React.FC = () => {
     fetchData();
   }, [user?.storeId]);
 
-  const generatePONumber = (): string => {
-    const date = new Date();
-    const year = date.getFullYear().toString().slice(-2);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
-    const seq = (purchases.length + 1).toString().padStart(4, '0');
-    return `PO-${year}${month}-${seq}`;
+  const generatePONumber = async (): Promise<string> => {
+    if (!user?.storeId || !storeProfile) {
+      const date = new Date();
+      const year = date.getFullYear().toString().slice(-2);
+      const month = (date.getMonth() + 1).toString().padStart(2, '0');
+      const seq = (purchases.length + 1).toString().padStart(4, '0');
+      return `PO-${year}${month}-${seq}`;
+    }
+    
+    const db = getFirestore();
+    const profileRef = doc(db, 'storeProfiles', user.storeId);
+    
+    const prefix = storeProfile.invoiceNumberPrefix || 'PO';
+    const lastNumber = storeProfile.lastInvoiceNumber || 0;
+    const newNumber = lastNumber + 1;
+    const poNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
+    
+    // Update last invoice number in store profile
+    await updateDoc(profileRef, { lastInvoiceNumber: newNumber });
+    
+    return poNumber;
+  };
+
+  const formatCurrency = (amount: number, showDual: boolean = true): string => {
+    const usd = `$${amount.toFixed(2)}`;
+    
+    if (showDual && storeProfile?.customExchangeRate && storeProfile.customExchangeRate > 0) {
+      const lbp = (amount * storeProfile.customExchangeRate).toFixed(0);
+      return `${usd} (${Number(lbp).toLocaleString()} LBP)`;
+    }
+    
+    return usd;
   };
 
   const calculateTotal = (items: PurchaseItem[]): number => {
@@ -122,71 +157,699 @@ const AdminPurchases: React.FC = () => {
   };
 
   const generatePOHTML = (purchase: Purchase) => {
+    const template = storeProfile?.invoiceTemplate || 'modern';
+    const storeName = storeProfile?.name || 'Your Store';
+    const storeLogo = storeProfile?.logo || '';
+    const storeSlogan = storeProfile?.slogan || '';
+    const storeWebsite = storeProfile?.website || '';
+    const storePhone = storeProfile?.phone || '';
+    const storeEmail = storeProfile?.email || '';
+    const storeTaxNumber = storeProfile?.taxNumber || '';
+    const poNum = purchase.invoiceNumber || purchase.poNumber || purchase.purchaseOrderNumber || purchase.id.slice(0, 8).toUpperCase();
+    
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     const itemsHtml = purchase.items?.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
       const lineTotal = item.quantity * item.unitPrice;
       return `
         <tr>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd;">${material?.name || 'Material'}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: center;">${item.quantity}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${item.unitPrice.toFixed(2)}</td>
-          <td style="padding: 8px; border-bottom: 1px solid #ddd; text-align: right;">$${lineTotal.toFixed(2)}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">${material?.name || 'Material'}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.unitPrice, true)}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(lineTotal, true)}</td>
         </tr>
       `;
     }).join('');
 
+    // Modern Template
+    if (template === 'modern') {
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Purchase Order ${poNum}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              padding: 40px; 
+              background: #f0f9ff;
+              color: #1e293b;
+            }
+            .invoice-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+              padding: 40px;
+              border-radius: 12px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .header { 
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              padding-bottom: 30px;
+              border-bottom: 3px solid #0ea5e9;
+              margin-bottom: 30px;
+            }
+            .logo-section {
+              display: flex;
+              align-items: center;
+              gap: 20px;
+            }
+            .logo {
+              width: 150px;
+              height: 150px;
+              object-fit: contain;
+              border-radius: 8px;
+            }
+            .store-info h1 {
+              color: #0ea5e9;
+              font-size: 28px;
+              margin-bottom: 5px;
+            }
+            .store-info p {
+              color: #64748b;
+              font-size: 14px;
+              margin: 2px 0;
+            }
+            .invoice-info {
+              text-align: right;
+            }
+            .invoice-info h2 {
+              color: #0ea5e9;
+              font-size: 32px;
+              margin-bottom: 10px;
+            }
+            .invoice-info .invoice-number {
+              font-size: 20px;
+              font-weight: bold;
+              color: #1e293b;
+              margin-bottom: 5px;
+            }
+            .details-section {
+              display: flex;
+              justify-content: space-between;
+              margin: 30px 0;
+              gap: 40px;
+            }
+            .section-title {
+              font-size: 14px;
+              font-weight: 600;
+              color: #64748b;
+              text-transform: uppercase;
+              margin-bottom: 10px;
+              letter-spacing: 0.5px;
+            }
+            .detail-text {
+              font-size: 15px;
+              line-height: 1.6;
+              color: #334155;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin: 30px 0;
+            }
+            th { 
+              background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+              color: white;
+              padding: 14px 8px;
+              text-align: left;
+              font-weight: 600;
+              font-size: 14px;
+              text-transform: uppercase;
+              letter-spacing: 0.5px;
+            }
+            td {
+              font-size: 15px;
+              color: #334155;
+            }
+            .totals { 
+              margin-top: 30px;
+              text-align: right;
+            }
+            .grand-total {
+              font-size: 20px;
+              font-weight: bold;
+              color: #0ea5e9;
+              margin-top: 15px;
+              padding-top: 15px;
+              border-top: 3px solid #0ea5e9;
+            }
+            .footer {
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 2px solid #e5e7eb;
+              text-align: center;
+              color: #64748b;
+              font-size: 13px;
+            }
+            @media print {
+              body { padding: 20px; background: white; }
+              .invoice-container { box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-container">
+            <div class="header">
+              <div class="logo-section">
+                ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
+                <div class="store-info">
+                  <h1>${storeName}</h1>
+                  ${storeSlogan ? `<p style="font-style: italic; color: #0ea5e9;">"${storeSlogan}"</p>` : ''}
+                  ${storeWebsite ? `<p>🌐 ${storeWebsite}</p>` : ''}
+                  ${storePhone ? `<p>📞 ${storePhone}</p>` : ''}
+                  ${storeEmail ? `<p>📧 ${storeEmail}</p>` : ''}
+                  ${storeTaxNumber ? `<p>Tax #: ${storeTaxNumber}</p>` : ''}
+                </div>
+              </div>
+              <div class="invoice-info">
+                <h2>PURCHASE ORDER</h2>
+                <div class="invoice-number">${poNum}</div>
+                <p style="color: #64748b;">${new Date(purchase.orderDate || '').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+            </div>
+            
+            <div class="details-section">
+              <div>
+                <div class="section-title">Supplier</div>
+                <div class="detail-text">
+                  <strong style="font-size: 17px; color: #0ea5e9;">${supplier?.name || 'N/A'}</strong><br/>
+                  ${supplier?.contactPerson ? `${supplier.contactPerson}<br/>` : ''}
+                  ${supplier?.email ? `${supplier.email}<br/>` : ''}
+                  ${supplier?.phone ? `${supplier.phone}<br/>` : ''}
+                </div>
+              </div>
+              ${purchase.expectedDeliveryDate ? `
+              <div>
+                <div class="section-title">Expected Delivery</div>
+                <div class="detail-text">
+                  <strong style="font-size: 17px; color: #0ea5e9;">${new Date(purchase.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</strong>
+                </div>
+              </div>
+              ` : ''}
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Item Description</th>
+                  <th style="text-align: center; width: 100px;">Qty</th>
+                  <th style="text-align: right; width: 150px;">Unit Price</th>
+                  <th style="text-align: right; width: 150px;">Amount</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div class="grand-total">TOTAL: ${formatCurrency(purchase.totalCost || purchase.totalAmount || purchase.total || 0, true)}</div>
+            </div>
+
+            ${purchase.notes ? `
+            <div style="margin-top: 30px; padding: 20px; background: #f0f9ff; border-left: 4px solid #0ea5e9; border-radius: 8px;">
+              <strong style="color: #0ea5e9;">Notes:</strong><br/>
+              <p style="color: #334155; margin-top: 10px;">${purchase.notes}</p>
+            </div>
+            ` : ''}
+
+            <div class="footer">
+              <p>For questions about this purchase order, please contact us at ${storeEmail || storePhone || 'our office'}</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    }
+    
+    // Classic Template
+    if (template === 'classic') {
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Purchase Order ${poNum}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Georgia', serif;
+              padding: 40px; 
+              background: #fafafa;
+              color: #2c2c2c;
+            }
+            .invoice-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+              padding: 50px;
+              border: 2px solid #d4af37;
+            }
+            .header { 
+              text-align: center;
+              padding-bottom: 30px;
+              border-bottom: 3px double #d4af37;
+              margin-bottom: 40px;
+            }
+            .logo {
+              width: 150px;
+              height: 150px;
+              object-fit: contain;
+              margin: 0 auto 20px;
+              display: block;
+              border: 3px solid #d4af37;
+              padding: 10px;
+              background: white;
+            }
+            .header h1 {
+              color: #2c2c2c;
+              font-size: 32px;
+              margin-bottom: 10px;
+              font-weight: 400;
+              letter-spacing: 2px;
+            }
+            .header .slogan {
+              color: #d4af37;
+              font-style: italic;
+              font-size: 16px;
+              margin-bottom: 15px;
+            }
+            .header .contact-info {
+              font-size: 13px;
+              color: #666;
+              line-height: 1.6;
+            }
+            .invoice-title {
+              text-align: center;
+              margin: 30px 0;
+            }
+            .invoice-title h2 {
+              font-size: 36px;
+              color: #d4af37;
+              font-weight: 400;
+              letter-spacing: 3px;
+              margin-bottom: 10px;
+            }
+            .invoice-title .invoice-number {
+              font-size: 18px;
+              color: #2c2c2c;
+              font-weight: 600;
+            }
+            .details-section {
+              display: flex;
+              justify-content: space-between;
+              margin: 40px 0;
+              gap: 60px;
+            }
+            .section-title {
+              font-size: 12px;
+              font-weight: 600;
+              color: #d4af37;
+              text-transform: uppercase;
+              margin-bottom: 15px;
+              letter-spacing: 1.5px;
+              border-bottom: 1px solid #d4af37;
+              padding-bottom: 5px;
+            }
+            .detail-text {
+              font-size: 15px;
+              line-height: 1.8;
+              color: #2c2c2c;
+            }
+            table { 
+              width: 100%; 
+              border-collapse: collapse; 
+              margin: 40px 0;
+            }
+            th { 
+              background: #2c2c2c;
+              color: #d4af37;
+              padding: 15px 10px;
+              text-align: left;
+              font-weight: 600;
+              font-size: 13px;
+              text-transform: uppercase;
+              letter-spacing: 1px;
+              border-bottom: 3px solid #d4af37;
+            }
+            td {
+              padding: 15px 10px;
+              border-bottom: 1px solid #e0e0e0;
+              font-size: 15px;
+            }
+            .totals { 
+              margin-top: 40px;
+              text-align: right;
+            }
+            .grand-total {
+              font-size: 22px;
+              font-weight: bold;
+              color: #d4af37;
+              padding: 20px;
+              background: #2c2c2c;
+              border: 3px double #d4af37;
+              margin-top: 20px;
+            }
+            .footer {
+              margin-top: 60px;
+              padding-top: 30px;
+              border-top: 3px double #d4af37;
+              text-align: center;
+              color: #666;
+              font-size: 13px;
+              font-style: italic;
+            }
+            @media print {
+              body { padding: 20px; background: white; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="invoice-container">
+            <div class="header">
+              ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
+              <h1>${storeName}</h1>
+              ${storeSlogan ? `<div class="slogan">"${storeSlogan}"</div>` : ''}
+              <div class="contact-info">
+                ${storeWebsite ? `${storeWebsite}<br/>` : ''}
+                ${storePhone ? `${storePhone} • ` : ''}${storeEmail ? `${storeEmail}` : ''}<br/>
+                ${storeTaxNumber ? `Tax Registration: ${storeTaxNumber}` : ''}
+              </div>
+            </div>
+            
+            <div class="invoice-title">
+              <h2>PURCHASE ORDER</h2>
+              <div class="invoice-number">${poNum}</div>
+              <p style="color: #999; font-size: 14px; margin-top: 10px;">${new Date(purchase.orderDate || '').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <div class="details-section">
+              <div style="flex: 1;">
+                <div class="section-title">Supplier</div>
+                <div class="detail-text">
+                  <strong style="font-size: 18px;">${supplier?.name || 'N/A'}</strong><br/>
+                  ${supplier?.contactPerson || ''}<br/>
+                  ${supplier?.email || ''}<br/>
+                  ${supplier?.phone || ''}
+                </div>
+              </div>
+              ${purchase.expectedDeliveryDate ? `
+              <div style="flex: 1;">
+                <div class="section-title">Expected Delivery</div>
+                <div class="detail-text">
+                  <strong style="font-size: 18px;">${new Date(purchase.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</strong>
+                </div>
+              </div>
+              ` : ''}
+            </div>
+
+            <table>
+              <thead>
+                <tr>
+                  <th>Description</th>
+                  <th style="text-align: center; width: 100px;">Quantity</th>
+                  <th style="text-align: right; width: 150px;">Unit Price</th>
+                  <th style="text-align: right; width: 150px;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
+
+            <div class="totals">
+              <div class="grand-total">AMOUNT: ${formatCurrency(purchase.totalCost || purchase.totalAmount || purchase.total || 0, true)}</div>
+            </div>
+
+            ${purchase.notes ? `
+            <div style="margin-top: 40px; padding: 20px; border: 1px solid #d4af37; border-radius: 5px;">
+              <strong style="color: #d4af37;">Notes:</strong><br/>
+              <p style="color: #2c2c2c; margin-top: 10px; line-height: 1.8;">${purchase.notes}</p>
+            </div>
+            ` : ''}
+
+            <div class="footer">
+              <p>Thank you for your service.</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    }
+    
+    // Vibrant Template - default
     return `
       <!DOCTYPE html>
       <html>
       <head>
-        <title>Purchase Order ${purchase.poNumber}</title>
+        <title>Purchase Order ${poNum}</title>
         <style>
-          body { font-family: Arial, sans-serif; padding: 40px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header h1 { margin: 0; color: #333; }
-          .po-info { margin-bottom: 30px; }
-          .po-info div { margin: 5px 0; }
-          table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-          th { background: #f8f9fa; padding: 12px; text-align: left; border-bottom: 2px solid #dee2e6; }
-          .totals { margin-top: 20px; text-align: right; }
-          .grand-total { font-size: 18px; font-weight: bold; color: #2563eb; margin-top: 10px; padding-top: 10px; border-top: 2px solid #333; }
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            padding: 40px; 
+            background: linear-gradient(135deg, #fff5eb 0%, #fef3f2 100%);
+            color: #1a1a1a;
+          }
+          .invoice-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+          }
+          .header-banner {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #9333ea 100%);
+            padding: 40px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+          }
+          .header-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+          }
+          .header-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+          }
+          .logo {
+            width: 150px;
+            height: 150px;
+            object-fit: contain;
+            background: white;
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+          }
+          .store-details h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            font-weight: 700;
+          }
+          .store-details p {
+            font-size: 14px;
+            opacity: 0.95;
+            margin: 3px 0;
+          }
+          .invoice-badge {
+            background: white;
+            color: #f97316;
+            padding: 20px 30px;
+            border-radius: 15px;
+            text-align: right;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+          }
+          .invoice-badge h2 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #f97316;
+          }
+          .invoice-badge .number {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1a1a1a;
+          }
+          .content-area {
+            padding: 40px;
+          }
+          .details-row {
+            display: flex;
+            gap: 40px;
+            margin-bottom: 40px;
+          }
+          .detail-box {
+            flex: 1;
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #f97316;
+          }
+          .detail-box h3 {
+            color: #f97316;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 12px;
+            font-weight: 700;
+          }
+          .detail-box p {
+            font-size: 15px;
+            line-height: 1.6;
+            color: #4a4a4a;
+          }
+          .detail-box strong {
+            font-size: 17px;
+            color: #1a1a1a;
+            display: block;
+            margin-bottom: 5px;
+          }
+          table { 
+            width: 100%; 
+            border-collapse: collapse; 
+            margin: 30px 0;
+            border-radius: 12px;
+            overflow: hidden;
+          }
+          th { 
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 100%);
+            color: white;
+            padding: 16px 12px;
+            text-align: left;
+            font-weight: 700;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+          }
+          td {
+            padding: 14px 12px;
+            border-bottom: 1px solid #fee2e2;
+            font-size: 15px;
+          }
+          tbody tr:hover {
+            background: #fff7ed;
+          }
+          .totals { 
+            margin-top: 40px;
+            text-align: right;
+          }
+          .grand-total {
+            background: linear-gradient(135deg, #f97316 0%, #9333ea 100%);
+            color: white;
+            padding: 20px 30px;
+            border-radius: 12px;
+            font-size: 22px;
+            font-weight: bold;
+            display: inline-block;
+          }
+          .footer {
+            margin-top: 50px;
+            padding: 30px;
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            border-radius: 12px;
+            text-align: center;
+          }
+          .footer p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+          }
+          @media print {
+            body { padding: 0; background: white; }
+            .invoice-container { box-shadow: none; }
+          }
         </style>
       </head>
       <body>
-        <div class="header">
-          <h1>PURCHASE ORDER</h1>
-          <p>PO #${purchase.poNumber}</p>
-          <p>Date: ${new Date(purchase.orderDate || '').toLocaleDateString()}</p>
-        </div>
-        
-        <div class="po-info">
-          <strong>Supplier:</strong><br/>
-          ${supplier?.name || 'N/A'}<br/>
-          ${supplier?.contactPerson || ''}<br/>
-          ${supplier?.email || ''}<br/>
-          ${purchase.expectedDeliveryDate ? `<br/><strong>Expected Delivery:</strong> ${new Date(purchase.expectedDeliveryDate).toLocaleDateString()}` : ''}
-        </div>
+        <div class="invoice-container">
+          <div class="header-banner">
+            <div class="header-content">
+              <div class="logo-section">
+                ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
+                <div class="store-details">
+                  <h1>${storeName}</h1>
+                  ${storeSlogan ? `<p style="font-style: italic; font-size: 16px;">"${storeSlogan}"</p>` : ''}
+                  ${storeWebsite ? `<p>🌐 ${storeWebsite}</p>` : ''}
+                  ${storePhone ? `<p>📞 ${storePhone}</p>` : ''}
+                  ${storeEmail ? `<p>📧 ${storeEmail}</p>` : ''}
+                  ${storeTaxNumber ? `<p>🔖 Tax: ${storeTaxNumber}</p>` : ''}
+                </div>
+              </div>
+              <div class="invoice-badge">
+                <h2>PURCHASE ORDER</h2>
+                <div class="number">${poNum}</div>
+                <p style="font-size: 13px; color: #666; margin-top: 8px;">${new Date(purchase.orderDate || '').toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="content-area">
+            <div class="details-row">
+              <div class="detail-box">
+                <h3>Supplier</h3>
+                <strong>${supplier?.name || 'N/A'}</strong>
+                <p>
+                  ${supplier?.contactPerson ? `👤 ${supplier.contactPerson}<br/>` : ''}
+                  ${supplier?.email ? `📧 ${supplier.email}<br/>` : ''}
+                  ${supplier?.phone ? `📱 ${supplier.phone}` : ''}
+                </p>
+              </div>
+              ${purchase.expectedDeliveryDate ? `
+              <div class="detail-box" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-left-color: #9333ea;">
+                <h3 style="color: #9333ea;">Expected Delivery</h3>
+                <strong>${new Date(purchase.expectedDeliveryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</strong>
+              </div>
+              ` : ''}
+            </div>
 
-        <table>
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th style="text-align: center;">Quantity</th>
-              <th style="text-align: right;">Unit Price</th>
-              <th style="text-align: right;">Total</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${itemsHtml}
-          </tbody>
-        </table>
+            <table>
+              <thead>
+                <tr>
+                  <th>Product Description</th>
+                  <th style="text-align: center; width: 100px;">Qty</th>
+                  <th style="text-align: right; width: 150px;">Price</th>
+                  <th style="text-align: right; width: 150px;">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${itemsHtml}
+              </tbody>
+            </table>
 
-        <div class="totals">
-          <div class="grand-total">Total: $${(purchase.totalCost || 0).toFixed(2)}</div>
+            <div class="totals">
+              <div class="grand-total">TOTAL AMOUNT: ${formatCurrency(purchase.totalCost || purchase.totalAmount || purchase.total || 0, true)}</div>
+            </div>
+
+            ${purchase.notes ? `
+            <div style="margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-left: 4px solid #f97316; border-radius: 12px;">
+              <h3 style="color: #f97316; font-size: 16px; margin-bottom: 10px;">Notes</h3>
+              <p style="color: #4a4a4a; line-height: 1.6;">${purchase.notes}</p>
+            </div>
+            ` : ''}
+
+            <div class="footer">
+              <p>Questions? Contact us at ${storeEmail || storePhone || 'our office'}</p>
+            </div>
+          </div>
         </div>
-
-        ${purchase.notes ? `<div style="margin-top: 30px;"><strong>Notes:</strong><br/>${purchase.notes}</div>` : ''}
       </body>
       </html>
     `;
@@ -294,17 +957,19 @@ const AdminPurchases: React.FC = () => {
 
     try {
       const db = getFirestore();
-      const poNumber = generatePONumber();
+      const invoiceNumber = await generatePONumber();
       const totalAmount = calculateTotal(newPurchase.items);
 
       const purchaseData = {
-        poNumber,
+        poNumber: invoiceNumber,
+        invoiceNumber,
         supplierId: newPurchase.supplierId,
         orderDate: new Date().toISOString(),
         expectedDeliveryDate: newPurchase.expectedDeliveryDate,
         status: 'draft' as const,
         items: newPurchase.items,
         totalAmount,
+        totalCost: totalAmount,
         notes: newPurchase.notes,
         storeId: user.storeId,
         createdAt: new Date().toISOString(),
@@ -333,7 +998,7 @@ const AdminPurchases: React.FC = () => {
         items: [],
       });
       setIsAddingPurchase(false);
-      toast({ title: "Success", description: `Purchase order ${poNumber} created!` });
+      toast({ title: "Success", description: `Purchase order ${invoiceNumber} created!` });
     } catch (error) {
       console.error('Error adding purchase:', error);
       toast({ title: "Error", description: "Failed to create purchase order", variant: "destructive" });

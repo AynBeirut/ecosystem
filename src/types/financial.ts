@@ -30,6 +30,7 @@ export interface Expense {
   paymentMethod: string;
   receiptUrl?: string;
   receiptNumber?: string;
+  invoiceNumber?: string;
   vendor?: string;
   notes?: string;
   recurring?: boolean; // alias for isRecurring

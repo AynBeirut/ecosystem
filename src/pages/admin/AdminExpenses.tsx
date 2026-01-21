@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,13 +9,16 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { DollarSign, Plus, Edit2, Trash2, Calendar, TrendingUp, AlertCircle } from 'lucide-react';
+import { DollarSign, Plus, Edit2, Trash2, Calendar, TrendingUp, AlertCircle, FileText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Expense, ExpenseCategory } from '@/types/financial';
+import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
 
 const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string; color: string }[] = [
   { value: 'rent', label: 'Rent', color: 'bg-blue-100 text-blue-800' },
@@ -35,6 +38,7 @@ const AdminExpenses: React.FC = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [isAddingExpense, setIsAddingExpense] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [selectedCategory, setSelectedCategory] = useState<ExpenseCategory | 'all'>('all');
@@ -56,6 +60,14 @@ const AdminExpenses: React.FC = () => {
     const fetchExpenses = async () => {
       if (!user?.storeId) return;
       const db = getFirestore();
+      
+      // Fetch store profile
+      const profileRef = doc(db, 'storeProfiles', user.storeId);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        setStoreProfile(profileSnap.data() as StoreProfile);
+      }
+      
       const expensesRef = collection(db, 'expenses');
       const q = query(expensesRef, where('storeId', '==', user.storeId));
       const snapshot = await getDocs(q);
@@ -68,6 +80,32 @@ const AdminExpenses: React.FC = () => {
     fetchExpenses();
   }, [user?.storeId]);
 
+  // Generate expense report number
+  const generateExpenseNumber = async (): Promise<string> => {
+    if (!user?.storeId || !storeProfile) return 'EXP-001';
+    
+    const db = getFirestore();
+    const profileRef = doc(db, 'storeProfiles', user.storeId);
+    const prefix = storeProfile.invoiceNumberPrefix || 'EXP';
+    const nextNumber = (storeProfile.lastInvoiceNumber || 0) + 1;
+    
+    await setDoc(profileRef, {
+      lastInvoiceNumber: nextNumber
+    }, { merge: true });
+    
+    return `${prefix}-${nextNumber.toString().padStart(3, '0')}`;
+  };
+
+  // Format currency with LBP conversion
+  const formatCurrency = (amount: number, includeSymbol: boolean = true): string => {
+    const formatted = includeSymbol ? `$${amount.toFixed(2)}` : amount.toFixed(2);
+    if (storeProfile?.currency === 'USD' && storeProfile.exchangeRate) {
+      const lbpAmount = amount * storeProfile.exchangeRate;
+      return `${formatted} (${lbpAmount.toLocaleString()} LBP)`;
+    }
+    return formatted;
+  };
+
   const handleAddExpense = async () => {
     if (!newExpense.description || newExpense.amount <= 0 || !user?.storeId) {
       toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
@@ -76,11 +114,15 @@ const AdminExpenses: React.FC = () => {
 
     try {
       const db = getFirestore();
+      const invoiceNumber = await generateExpenseNumber();
       const expenseData = {
         ...newExpense,
+        invoiceNumber,
         storeId: user.storeId,
         createdAt: new Date().toISOString(),
         createdBy: user.id,
+        taxDeductible: false,
+        isRecurring: newExpense.recurring || false,
       };
 
       const docRef = await addDoc(collection(db, 'expenses'), expenseData);
@@ -111,7 +153,7 @@ const AdminExpenses: React.FC = () => {
         notes: '',
       });
       setIsAddingExpense(false);
-      toast({ title: "Success", description: "Expense added successfully!" });
+      toast({ title: "Success", description: `Expense ${invoiceNumber} recorded!` });
     } catch (error) {
       console.error('Error adding expense:', error);
       toast({ title: "Error", description: "Failed to add expense", variant: "destructive" });
@@ -186,6 +228,650 @@ const AdminExpenses: React.FC = () => {
     } catch (error) {
       console.error('Error deleting expense:', error);
       toast({ title: "Error", description: "Failed to delete expense", variant: "destructive" });
+    }
+  };
+
+  // Generate Expense Report HTML with templates
+  const generateExpenseHTML = (expense: Expense) => {
+    const template = storeProfile?.invoiceTemplate || 'modern';
+    const storeName = storeProfile?.name || 'Your Store';
+    const storeLogo = storeProfile?.logo || '';
+    const storeSlogan = storeProfile?.slogan || '';
+    const storeWebsite = storeProfile?.website || '';
+    const storePhone = storeProfile?.phone || '';
+    const storeEmail = storeProfile?.email || '';
+    const storeTaxNumber = storeProfile?.taxNumber || '';
+    const expNum = expense.invoiceNumber || expense.receiptNumber || expense.id.slice(0, 8).toUpperCase();
+    
+    const categoryLabel = EXPENSE_CATEGORIES.find(c => c.value === expense.category)?.label || expense.category;
+
+    // Modern Template
+    if (template === 'modern') {
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Expense Report ${expNum}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+              padding: 40px; 
+              background: #f0f9ff;
+              color: #1e293b;
+            }
+            .report-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+              padding: 40px;
+              border-radius: 12px;
+              box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            }
+            .header { 
+              display: flex;
+              justify-content: space-between;
+              align-items: flex-start;
+              padding-bottom: 30px;
+              border-bottom: 3px solid #0ea5e9;
+              margin-bottom: 30px;
+            }
+            .logo-section {
+              display: flex;
+              align-items: center;
+              gap: 20px;
+            }
+            .logo {
+              width: 150px;
+              height: 150px;
+              object-fit: contain;
+              border-radius: 8px;
+            }
+            .store-info h1 {
+              color: #0ea5e9;
+              font-size: 28px;
+              margin-bottom: 5px;
+            }
+            .store-info p {
+              color: #64748b;
+              font-size: 14px;
+              margin: 2px 0;
+            }
+            .report-info {
+              text-align: right;
+            }
+            .report-info h2 {
+              color: #0ea5e9;
+              font-size: 32px;
+              margin-bottom: 10px;
+            }
+            .report-info .report-number {
+              font-size: 20px;
+              font-weight: bold;
+              color: #1e293b;
+              margin-bottom: 5px;
+            }
+            .details-section {
+              background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
+              padding: 25px;
+              border-radius: 12px;
+              margin: 30px 0;
+              border-left: 4px solid #0ea5e9;
+            }
+            .detail-grid {
+              display: grid;
+              grid-template-columns: repeat(2, 1fr);
+              gap: 20px;
+            }
+            .detail-item {
+              margin-bottom: 15px;
+            }
+            .detail-label {
+              font-size: 12px;
+              font-weight: 600;
+              color: #64748b;
+              text-transform: uppercase;
+              margin-bottom: 5px;
+            }
+            .detail-value {
+              font-size: 16px;
+              color: #1e293b;
+              font-weight: 600;
+            }
+            .amount-display {
+              background: linear-gradient(135deg, #0ea5e9 0%, #0284c7 100%);
+              color: white;
+              padding: 30px;
+              border-radius: 12px;
+              text-align: center;
+              margin: 30px 0;
+            }
+            .amount-display .label {
+              font-size: 14px;
+              opacity: 0.9;
+              margin-bottom: 10px;
+            }
+            .amount-display .amount {
+              font-size: 36px;
+              font-weight: bold;
+            }
+            .notes-section {
+              margin-top: 30px;
+              padding: 20px;
+              background: #f0f9ff;
+              border-left: 4px solid #0ea5e9;
+              border-radius: 8px;
+            }
+            .footer {
+              margin-top: 50px;
+              padding-top: 20px;
+              border-top: 2px solid #e5e7eb;
+              text-align: center;
+              color: #64748b;
+              font-size: 13px;
+            }
+            @media print {
+              body { padding: 20px; background: white; }
+              .report-container { box-shadow: none; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-container">
+            <div class="header">
+              <div class="logo-section">
+                ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
+                <div class="store-info">
+                  <h1>${storeName}</h1>
+                  ${storeSlogan ? `<p style="font-style: italic; color: #0ea5e9;">"${storeSlogan}"</p>` : ''}
+                  ${storeWebsite ? `<p>🌐 ${storeWebsite}</p>` : ''}
+                  ${storePhone ? `<p>📞 ${storePhone}</p>` : ''}
+                  ${storeEmail ? `<p>📧 ${storeEmail}</p>` : ''}
+                  ${storeTaxNumber ? `<p>Tax #: ${storeTaxNumber}</p>` : ''}
+                </div>
+              </div>
+              <div class="report-info">
+                <h2>EXPENSE REPORT</h2>
+                <div class="report-number">${expNum}</div>
+                <p style="color: #64748b;">${new Date(expense.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+            </div>
+            
+            <div class="details-section">
+              <div class="detail-grid">
+                <div class="detail-item">
+                  <div class="detail-label">Category</div>
+                  <div class="detail-value">${categoryLabel}</div>
+                </div>
+                <div class="detail-item">
+                  <div class="detail-label">Payment Method</div>
+                  <div class="detail-value" style="text-transform: capitalize;">${expense.paymentMethod.replace('_', ' ')}</div>
+                </div>
+                <div class="detail-item">
+                  <div class="detail-label">Description</div>
+                  <div class="detail-value">${expense.description}</div>
+                </div>
+                ${expense.vendor ? `
+                <div class="detail-item">
+                  <div class="detail-label">Vendor</div>
+                  <div class="detail-value">${expense.vendor}</div>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+
+            <div class="amount-display">
+              <div class="label">EXPENSE AMOUNT</div>
+              <div class="amount">${formatCurrency(expense.amount, true)}</div>
+            </div>
+
+            ${expense.notes ? `
+            <div class="notes-section">
+              <strong style="color: #0ea5e9;">Notes:</strong><br/>
+              <p style="color: #334155; margin-top: 10px;">${expense.notes}</p>
+            </div>
+            ` : ''}
+
+            <div class="footer">
+              <p>This is an official expense record from ${storeName}</p>
+              ${storeEmail || storePhone ? `<p>Contact: ${storeEmail || storePhone}</p>` : ''}
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    }
+    
+    // Classic Template
+    if (template === 'classic') {
+      return `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <title>Expense Report ${expNum}</title>
+          <style>
+            * { margin: 0; padding: 0; box-sizing: border-box; }
+            body { 
+              font-family: 'Georgia', serif;
+              padding: 40px; 
+              background: #fafafa;
+              color: #2c2c2c;
+            }
+            .report-container {
+              max-width: 800px;
+              margin: 0 auto;
+              background: white;
+              padding: 50px;
+              border: 2px solid #d4af37;
+            }
+            .header { 
+              text-align: center;
+              padding-bottom: 30px;
+              border-bottom: 3px double #d4af37;
+              margin-bottom: 40px;
+            }
+            .logo {
+              width: 150px;
+              height: 150px;
+              object-fit: contain;
+              margin: 0 auto 20px;
+              display: block;
+              border: 3px solid #d4af37;
+              padding: 10px;
+              background: white;
+            }
+            .header h1 {
+              color: #2c2c2c;
+              font-size: 32px;
+              margin-bottom: 10px;
+              font-weight: 400;
+              letter-spacing: 2px;
+            }
+            .header .slogan {
+              color: #d4af37;
+              font-style: italic;
+              font-size: 16px;
+              margin-bottom: 15px;
+            }
+            .report-title {
+              text-align: center;
+              margin: 30px 0;
+            }
+            .report-title h2 {
+              font-size: 36px;
+              color: #d4af37;
+              font-weight: 400;
+              letter-spacing: 3px;
+              margin-bottom: 10px;
+            }
+            .report-title .report-number {
+              font-size: 18px;
+              color: #2c2c2c;
+              font-weight: 600;
+            }
+            .details-box {
+              background: #faf9f6;
+              padding: 30px;
+              border: 1px solid #d4af37;
+              margin: 30px 0;
+            }
+            .detail-item {
+              padding: 15px 0;
+              border-bottom: 1px solid #e0e0e0;
+            }
+            .detail-label {
+              font-size: 12px;
+              font-weight: 600;
+              color: #d4af37;
+              text-transform: uppercase;
+              letter-spacing: 1.5px;
+              margin-bottom: 8px;
+            }
+            .detail-value {
+              font-size: 17px;
+              color: #2c2c2c;
+            }
+            .amount-box {
+              background: #2c2c2c;
+              color: #d4af37;
+              padding: 30px;
+              text-align: center;
+              border: 3px double #d4af37;
+              margin: 40px 0;
+            }
+            .amount-box .label {
+              font-size: 14px;
+              letter-spacing: 2px;
+              margin-bottom: 15px;
+            }
+            .amount-box .amount {
+              font-size: 40px;
+              font-weight: bold;
+            }
+            .footer {
+              margin-top: 60px;
+              padding-top: 30px;
+              border-top: 3px double #d4af37;
+              text-align: center;
+              color: #666;
+              font-size: 13px;
+              font-style: italic;
+            }
+            @media print {
+              body { padding: 20px; background: white; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="report-container">
+            <div class="header">
+              ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
+              <h1>${storeName}</h1>
+              ${storeSlogan ? `<div class="slogan">"${storeSlogan}"</div>` : ''}
+              <div class="contact-info" style="font-size: 13px; color: #666; line-height: 1.6;">
+                ${storeWebsite ? `${storeWebsite}<br/>` : ''}
+                ${storePhone ? `${storePhone} • ` : ''}${storeEmail ? `${storeEmail}` : ''}<br/>
+                ${storeTaxNumber ? `Tax Registration: ${storeTaxNumber}` : ''}
+              </div>
+            </div>
+            
+            <div class="report-title">
+              <h2>EXPENSE REPORT</h2>
+              <div class="report-number">${expNum}</div>
+              <p style="color: #999; font-size: 14px; margin-top: 10px;">${new Date(expense.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+            </div>
+            
+            <div class="details-box">
+              <div class="detail-item">
+                <div class="detail-label">Category</div>
+                <div class="detail-value">${categoryLabel}</div>
+              </div>
+              <div class="detail-item">
+                <div class="detail-label">Description</div>
+                <div class="detail-value">${expense.description}</div>
+              </div>
+              ${expense.vendor ? `
+              <div class="detail-item">
+                <div class="detail-label">Vendor/Payee</div>
+                <div class="detail-value">${expense.vendor}</div>
+              </div>
+              ` : ''}
+              <div class="detail-item" style="border-bottom: none;">
+                <div class="detail-label">Payment Method</div>
+                <div class="detail-value" style="text-transform: capitalize;">${expense.paymentMethod.replace('_', ' ')}</div>
+              </div>
+            </div>
+
+            <div class="amount-box">
+              <div class="label">TOTAL EXPENSE</div>
+              <div class="amount">${formatCurrency(expense.amount, true)}</div>
+            </div>
+
+            ${expense.notes ? `
+            <div style="margin-top: 40px; padding: 20px; border: 1px solid #d4af37; border-radius: 5px;">
+              <strong style="color: #d4af37;">Notes:</strong><br/>
+              <p style="color: #2c2c2c; margin-top: 10px; line-height: 1.8;">${expense.notes}</p>
+            </div>
+            ` : ''}
+
+            <div class="footer">
+              <p>Certified expense record from ${storeName}</p>
+            </div>
+          </div>
+        </body>
+        </html>
+      `;
+    }
+    
+    // Vibrant Template - default
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Expense Report ${expNum}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { 
+            font-family: 'Helvetica Neue', Arial, sans-serif;
+            padding: 40px; 
+            background: linear-gradient(135deg, #fff5eb 0%, #fef3f2 100%);
+            color: #1a1a1a;
+          }
+          .report-container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            overflow: hidden;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+          }
+          .header-banner {
+            background: linear-gradient(135deg, #f97316 0%, #ea580c 50%, #9333ea 100%);
+            padding: 40px;
+            color: white;
+            position: relative;
+            overflow: hidden;
+          }
+          .header-banner::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            right: -10%;
+            width: 300px;
+            height: 300px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 50%;
+          }
+          .header-content {
+            position: relative;
+            z-index: 1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+          }
+          .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 20px;
+          }
+          .logo {
+            width: 150px;
+            height: 150px;
+            object-fit: contain;
+            background: white;
+            padding: 10px;
+            border-radius: 15px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+          }
+          .store-details h1 {
+            font-size: 32px;
+            margin-bottom: 8px;
+            font-weight: 700;
+          }
+          .store-details p {
+            font-size: 14px;
+            opacity: 0.95;
+            margin: 3px 0;
+          }
+          .report-badge {
+            background: white;
+            color: #f97316;
+            padding: 20px 30px;
+            border-radius: 15px;
+            text-align: right;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+          }
+          .report-badge h2 {
+            font-size: 28px;
+            margin-bottom: 8px;
+            color: #f97316;
+          }
+          .report-badge .number {
+            font-size: 20px;
+            font-weight: bold;
+            color: #1a1a1a;
+          }
+          .content-area {
+            padding: 40px;
+          }
+          .details-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 20px;
+            margin-bottom: 40px;
+          }
+          .detail-box {
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            padding: 20px;
+            border-radius: 12px;
+            border-left: 4px solid #f97316;
+          }
+          .detail-box h3 {
+            color: #f97316;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 10px;
+            font-weight: 700;
+          }
+          .detail-box .value {
+            font-size: 17px;
+            font-weight: 600;
+            color: #1a1a1a;
+          }
+          .amount-display {
+            background: linear-gradient(135deg, #f97316 0%, #9333ea 100%);
+            color: white;
+            padding: 35px;
+            border-radius: 15px;
+            text-align: center;
+            margin: 30px 0;
+          }
+          .amount-display .label {
+            font-size: 16px;
+            letter-spacing: 2px;
+            margin-bottom: 15px;
+          }
+          .amount-display .amount {
+            font-size: 42px;
+            font-weight: bold;
+          }
+          .footer {
+            margin-top: 50px;
+            padding: 30px;
+            background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%);
+            border-radius: 12px;
+            text-align: center;
+          }
+          .footer p {
+            color: #666;
+            font-size: 14px;
+            line-height: 1.6;
+          }
+          @media print {
+            body { padding: 0; background: white; }
+            .report-container { box-shadow: none; }
+          }
+        </style>
+      </head>
+      <body>
+        <div class="report-container">
+          <div class="header-banner">
+            <div class="header-content">
+              <div class="logo-section">
+                ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
+                <div class="store-details">
+                  <h1>${storeName}</h1>
+                  ${storeSlogan ? `<p style="font-style: italic; font-size: 16px;">"${storeSlogan}"</p>` : ''}
+                  ${storeWebsite ? `<p>🌐 ${storeWebsite}</p>` : ''}
+                  ${storePhone ? `<p>📞 ${storePhone}</p>` : ''}
+                  ${storeEmail ? `<p>📧 ${storeEmail}</p>` : ''}
+                  ${storeTaxNumber ? `<p>🔖 Tax: ${storeTaxNumber}</p>` : ''}
+                </div>
+              </div>
+              <div class="report-badge">
+                <h2>EXPENSE REPORT</h2>
+                <div class="number">${expNum}</div>
+                <p style="font-size: 13px; color: #666; margin-top: 8px;">${new Date(expense.date).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
+              </div>
+            </div>
+          </div>
+          
+          <div class="content-area">
+            <div class="details-grid">
+              <div class="detail-box">
+                <h3>Category</h3>
+                <div class="value">${categoryLabel}</div>
+              </div>
+              <div class="detail-box">
+                <h3>Payment Method</h3>
+                <div class="value" style="text-transform: capitalize;">${expense.paymentMethod.replace('_', ' ')}</div>
+              </div>
+              <div class="detail-box" style="grid-column: span 2;">
+                <h3>Description</h3>
+                <div class="value">${expense.description}</div>
+              </div>
+              ${expense.vendor ? `
+              <div class="detail-box" style="grid-column: span 2;">
+                <h3>Vendor/Payee</h3>
+                <div class="value">${expense.vendor}</div>
+              </div>
+              ` : ''}
+            </div>
+
+            <div class="amount-display">
+              <div class="label">TOTAL EXPENSE</div>
+              <div class="amount">${formatCurrency(expense.amount, true)}</div>
+            </div>
+
+            ${expense.notes ? `
+            <div style="margin-top: 40px; padding: 25px; background: linear-gradient(135deg, #fff7ed 0%, #ffedd5 100%); border-left: 4px solid #f97316; border-radius: 12px;">
+              <h3 style="color: #f97316; font-size: 16px; margin-bottom: 10px;">Notes</h3>
+              <p style="color: #4a4a4a; line-height: 1.6;">${expense.notes}</p>
+            </div>
+            ` : ''}
+
+            <div class="footer">
+              <p><strong>Official Expense Record</strong></p>
+              <p>${storeName} | ${storeEmail || storePhone || ''}</p>
+            </div>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  };
+
+  // Export expense as PDF
+  const handleExportExpensePDF = async (expense: Expense) => {
+    try {
+      const html = generateExpenseHTML(expense);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+
+      const canvas = await html2canvas(tempDiv, {
+        scale: 2,
+        useCORS: true,
+        logging: false,
+      });
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      const expNum = expense.invoiceNumber || expense.receiptNumber || expense.id.slice(0, 8).toUpperCase();
+      pdf.save(`Expense-${expNum}.pdf`);
+
+      document.body.removeChild(tempDiv);
+      toast({ title: "Success", description: "Expense report downloaded!" });
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      toast({ title: "Error", description: "Failed to generate PDF", variant: "destructive" });
     }
   };
 
@@ -495,10 +1181,21 @@ const AdminExpenses: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <div className="text-right mr-4">
                         <div className="text-2xl font-bold">${expense.amount.toFixed(2)}</div>
+                        {expense.invoiceNumber && (
+                          <div className="text-xs text-gray-500">Report: {expense.invoiceNumber}</div>
+                        )}
                         {expense.receiptNumber && (
                           <div className="text-xs text-gray-500">Receipt: {expense.receiptNumber}</div>
                         )}
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => handleExportExpensePDF(expense)}
+                        title="Download PDF"
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="ghost"
                         size="icon"

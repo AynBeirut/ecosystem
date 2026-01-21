@@ -140,6 +140,7 @@ export interface Purchase {
   id: string;
   purchaseOrderNumber: string;
   poNumber?: string; // alias for purchaseOrderNumber
+  invoiceNumber?: string; // Custom PO number like PO-001
   supplierId: string;
   supplierName: string;
   items: PurchaseItem[];
