@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,9 +8,10 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, Package2 } from 'lucide-react';
+import { Trash2, Plus, Edit3, Package2, Minus } from 'lucide-react';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { ComposedProduct, Recipe } from '@/types/inventory';
+import { ComposedProduct, Recipe, RawMaterial } from '@/types/inventory';
 import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
@@ -24,17 +25,21 @@ const AdminComposedProducts: React.FC = () => {
   const [composedProducts, setComposedProducts] = useState<ComposedProduct[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [categories, setCategories] = useState<string[]>(['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other']);
+  const [priceMultiplier, setPriceMultiplier] = useState<number>(2.5);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<ComposedProduct | null>(null);
   const [newProduct, setNewProduct] = useState({
-    productId: '',
-    recipeId: '',
-    markupPercentage: '' as any,
+    name: '',
+    category: '',
+    icon: '📦',
+    serviceCost: '' as number | '',
+    materials: [] as { rawMaterialId: string; quantity: number | string }[],
     sellingPrice: 0,
-    useAutoPrice: true,
   });
 
-  // Load composed products, recipes, and products
+  // Load composed products, recipes, products, and raw materials
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.storeId) return;
@@ -69,11 +74,72 @@ const AdminComposedProducts: React.FC = () => {
         ...doc.data()
       } as Product));
       setProducts(productsList.filter(p => p.productType === 'composed'));
+
+      // Fetch raw materials
+      const rawMaterialsRef = collection(db, 'rawMaterials');
+      const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', user.storeId));
+      const rawMaterialsSnapshot = await getDocs(rawMaterialsQuery);
+      const rawMaterialsList: RawMaterial[] = rawMaterialsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as RawMaterial));
+      setRawMaterials(rawMaterialsList);
+
+      // Fetch store profile for categories and price multiplier
+      const profileRef = doc(db, 'storeProfiles', user.storeId);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        const profileData = profileSnap.data();
+        setCategories(profileData.productCategories || ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other']);
+        setPriceMultiplier(profileData.priceMultiplier || 2.5);
+      }
     };
     fetchData();
   }, [user?.storeId]);
 
-  const calculateSuggestedPrice = (recipeId: string, markupPercentage: number): number => {
+  const calculateTotalCost = (): number => {
+    const materialCost = newProduct.materials.reduce((sum, material) => {
+      const raw = rawMaterials.find(r => r.id === material.rawMaterialId);
+      if (!raw) return sum;
+      const qty = typeof material.quantity === 'number' ? material.quantity : (parseFloat(material.quantity as any) || 0);
+      return sum + (raw.costPerUnit * qty);
+    }, 0);
+    const service = typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0;
+    return materialCost + service;
+  };
+
+  const calculateLineCost = (materialId: string, quantity: number | string): number => {
+    const raw = rawMaterials.find(r => r.id === materialId);
+    if (!raw) return 0;
+    const qty = typeof quantity === 'number' ? quantity : (parseFloat(quantity as any) || 0);
+    return raw.costPerUnit * qty;
+  };
+
+  const calculateSuggestedPrice = (): number => {
+    return calculateTotalCost() * priceMultiplier;
+  };
+
+  const addMaterial = () => {
+    setNewProduct(prev => ({
+      ...prev,
+      materials: [...prev.materials, { rawMaterialId: '', quantity: '' }]
+    }));
+  };
+
+  const removeMaterial = (index: number) => {
+    setNewProduct({
+      ...newProduct,
+      materials: newProduct.materials.filter((_, i) => i !== index)
+    });
+  };
+
+  const updateMaterial = (index: number, field: 'rawMaterialId' | 'quantity', value: any) => {
+    const updated = [...newProduct.materials];
+    updated[index] = { ...updated[index], [field]: value };
+    setNewProduct({ ...newProduct, materials: updated });
+  };
+
+  const calculateSuggestedPriceOld = (recipeId: string, markupPercentage: number): number => {
     const recipe = recipes.find(r => r.id === recipeId);
     if (!recipe) return 0;
     const costPerUnit = recipe.costPerUnit || 0;
@@ -81,41 +147,74 @@ const AdminComposedProducts: React.FC = () => {
   };
 
   const handleAddProduct = async () => {
-    if (!newProduct.productId || !newProduct.recipeId || !user?.storeId) {
-      toast({ title: "Error", description: "Product and recipe are required", variant: "destructive" });
+    if (!newProduct.name || !newProduct.category || newProduct.materials.length === 0 || !user?.storeId) {
+      toast({ title: "Error", description: "Product name, category, and at least one material are required", variant: "destructive" });
       return;
     }
 
     try {
       const db = getFirestore();
-      const recipe = recipes.find(r => r.id === newProduct.recipeId);
-      const markup = typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0;
-      const suggestedPrice = calculateSuggestedPrice(newProduct.recipeId, markup);
-      const finalPrice = newProduct.useAutoPrice ? suggestedPrice : newProduct.sellingPrice;
+      
+      // Normalize materials
+      const normalizedMaterials = newProduct.materials.map(m => ({
+        rawMaterialId: m.rawMaterialId,
+        quantity: typeof m.quantity === 'number' ? m.quantity : (parseFloat(m.quantity as any) || 0)
+      }));
 
-      const productData = {
-        productId: newProduct.productId,
-        recipeId: newProduct.recipeId,
-        markupPercentage: markup,
-        sellingPrice: finalPrice,
-        costPrice: recipe?.costPerUnit || 0,
+      const totalCost = calculateTotalCost();
+      const finalPrice = newProduct.sellingPrice || calculateSuggestedPrice();
+
+      // Create recipe first
+      const recipeData = {
+        name: `Recipe for ${newProduct.name}`,
+        description: `Auto-generated recipe for ${newProduct.name}`,
+        materials: normalizedMaterials,
+        yieldQuantity: 1,
+        yieldUnit: 'unit',
+        costPerUnit: totalCost,
         storeId: user.storeId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
-      const docRef = await addDoc(collection(db, 'composedProducts'), productData);
-      setComposedProducts([...composedProducts, { id: docRef.id, ...productData }]);
+      const recipeRef = await addDoc(collection(db, 'recipes'), recipeData);
 
-      // Update the product with recipeId and pricing
-      const productRef = doc(db, 'products', newProduct.productId);
-      await updateDoc(productRef, {
-        recipeId: newProduct.recipeId,
-        costPrice: productData.costPrice,
+      // Create product
+      const productData = {
+        name: newProduct.name,
+        description: `${newProduct.icon} ${newProduct.category}`,
+        category: newProduct.category,
+        icon: newProduct.icon,
         price: finalPrice,
-        margin: markup,
+        costPrice: totalCost,
+        serviceCost: typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0,
+        productType: 'composed' as const,
+        inStock: true,
+        stock: 0,
+        recipeId: recipeRef.id,
+        storeId: user.storeId,
+        createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
-      });
+      };
+
+      const productDocRef = await addDoc(collection(db, 'products'), productData);
+
+      // Create composed product link
+      const composedData = {
+        productId: productDocRef.id,
+        recipeId: recipeRef.id,
+        sellingPrice: finalPrice,
+        costPrice: totalCost,
+        serviceCost: typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0,
+        category: newProduct.category,
+        icon: newProduct.icon,
+        storeId: user.storeId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const composedDocRef = await addDoc(collection(db, 'composedProducts'), composedData);
+      setComposedProducts([...composedProducts, { id: composedDocRef.id, ...composedData }]);
 
       // Audit log
       await logAction(
@@ -124,17 +223,18 @@ const AdminComposedProducts: React.FC = () => {
         user.role,
         'create',
         'composedProduct',
-        docRef.id,
-        { newValue: productData },
+        composedDocRef.id,
+        { newValue: composedData },
         user.storeId
       );
 
       setNewProduct({
-        productId: '',
-        recipeId: '',
-        markupPercentage: '' as any,
+        name: '',
+        category: '',
+        icon: '📦',
+        serviceCost: '',
+        materials: [],
         sellingPrice: 0,
-        useAutoPrice: true,
       });
       setIsAddingProduct(false);
       toast({ title: "Success", description: "Composed product created successfully!" });
@@ -185,8 +285,8 @@ const AdminComposedProducts: React.FC = () => {
         user.storeId
       );
 
-      setEditingProduct(null);
       toast({ title: "Success", description: "Composed product updated successfully!" });
+      setEditingProduct(null);
     } catch (error) {
       console.error('Error updating composed product:', error);
       toast({ title: "Error", description: "Failed to update composed product", variant: "destructive" });
@@ -251,129 +351,207 @@ const AdminComposedProducts: React.FC = () => {
             <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Composed Product</DialogTitle>
-                <DialogDescription>Connect a product with its production recipe and set pricing</DialogDescription>
+                <DialogDescription>Create a product from raw materials with automatic cost calculation</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4">
+                {/* Product Name */}
                 <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label htmlFor="productId">Product *</Label>
-                    <Button 
-                      type="button" 
-                      variant="link" 
-                      size="sm" 
-                      className="text-xs h-auto p-0"
-                      onClick={() => window.open('/admin/products', '_blank')}
-                    >
-                      + Create product
-                    </Button>
-                  </div>
-                  <Select
-                    value={newProduct.productId}
-                    onValueChange={(value) => setNewProduct({ ...newProduct, productId: value })}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select product" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {products.map(product => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <div className="flex items-center justify-between mb-1">
-                    <Label htmlFor="recipeId">Recipe *</Label>
-                    <Button 
-                      type="button" 
-                      variant="link" 
-                      size="sm" 
-                      className="text-xs h-auto p-0"
-                      onClick={() => window.open('/admin/recipes', '_blank')}
-                    >
-                      + Create recipe
-                    </Button>
-                  </div>
-                  <Select
-                    value={newProduct.recipeId}
-                    onValueChange={(value) => {
-                      const suggestedPrice = calculateSuggestedPrice(value, typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0);
-                      setNewProduct({ ...newProduct, recipeId: value, sellingPrice: suggestedPrice });
-                    }}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select recipe" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {recipes.map(recipe => (
-                        <SelectItem key={recipe.id} value={recipe.id}>
-                          {recipe.name} (Cost: ${recipe.costPerUnit.toFixed(2)})
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div>
-                  <Label htmlFor="markupPercentage">Markup Percentage</Label>
+                  <Label htmlFor="productName">Product Name *</Label>
                   <Input
-                    id="markupPercentage"
+                    id="productName"
+                    value={newProduct.name}
+                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                    placeholder="e.g., Chicken Sandwich"
+                  />
+                </div>
+
+                {/* Category */}
+                <div>
+                  <Label htmlFor="category">Category *</Label>
+                  <Select
+                    value={newProduct.category}
+                    onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(cat => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Icon */}
+                <div>
+                  <Label htmlFor="icon">Icon (Emoji)</Label>
+                  <Input
+                    id="icon"
+                    value={newProduct.icon}
+                    onChange={(e) => setNewProduct({ ...newProduct, icon: e.target.value })}
+                    placeholder="📦"
+                    maxLength={2}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Paste an emoji to represent this product
+                  </p>
+                </div>
+
+                {/* Service Cost */}
+                <div>
+                  <Label htmlFor="serviceCost">Service Cost ($)</Label>
+                  <Input
+                    id="serviceCost"
                     type="number"
                     min="0"
-                    step="1"
-                    placeholder="0"
-                    value={newProduct.markupPercentage === '' || newProduct.markupPercentage === 0 ? '' : newProduct.markupPercentage}
-                    onChange={(e) => {
-                      const markup = e.target.value === '' ? '' : parseFloat(e.target.value);
-                      const suggestedPrice = calculateSuggestedPrice(newProduct.recipeId, typeof markup === 'number' ? markup : 0);
-                      setNewProduct({ ...newProduct, markupPercentage: markup, sellingPrice: suggestedPrice });
-                    }}
+                    step="0.01"
+                    value={newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
+                    onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value === '' ? '' : (parseFloat(e.target.value) || 0) })}
+                    placeholder="0.00"
                   />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Labor/preparation cost
+                  </p>
                 </div>
-                {newProduct.recipeId && (
-                  <div className="p-4 bg-blue-50 rounded">
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Recipe Cost Per Unit:</span>
-                      <span className="font-bold">${recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit.toFixed(2) || '0.00'}</span>
-                    </div>
-                    <div className="flex justify-between text-sm mb-2">
-                      <span>Markup: {typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0}%</span>
-                      <span className="font-bold">${((recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit || 0) * ((typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0) / 100)).toFixed(2)}</span>
-                    </div>
-                    <div className="flex justify-between text-base border-t pt-2">
-                      <span className="font-semibold">Suggested Selling Price:</span>
-                      <span className="font-bold text-green-600">${calculateSuggestedPrice(newProduct.recipeId, typeof newProduct.markupPercentage === 'number' ? newProduct.markupPercentage : 0).toFixed(2)}</span>
-                    </div>
+
+                {/* Raw Materials Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Raw Materials *</Label>
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm"
+                      onClick={addMaterial}
+                      disabled={rawMaterials.length === 0}
+                    >
+                      <Plus className="mr-1 h-4 w-4" />
+                      Add Material
+                    </Button>
                   </div>
-                )}
-                <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    id="useAutoPrice"
-                    checked={newProduct.useAutoPrice}
-                    onChange={(e) => setNewProduct({ ...newProduct, useAutoPrice: e.target.checked })}
-                    className="rounded"
-                  />
-                  <Label htmlFor="useAutoPrice">Use suggested price automatically</Label>
+
+                  {rawMaterials.length === 0 ? (
+                    <div className="p-4 border border-dashed rounded text-center text-yellow-600 text-sm">
+                      ⚠️ No raw materials found. Please add raw materials first in the Raw Materials section.
+                    </div>
+                  ) : newProduct.materials.length === 0 ? (
+                    <div className="p-4 border border-dashed rounded text-center text-gray-500 text-sm">
+                      No materials added yet. Click "Add Material" to start.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {newProduct.materials.map((material, index) => {
+                        const rawMat = rawMaterials.find(rm => rm.id === material.rawMaterialId);
+                        const lineCost = calculateLineCost(material.rawMaterialId, material.quantity);
+                        return (
+                          <div key={index} className="flex gap-2 items-center p-3 border rounded">
+                            <div className="flex-1">
+                              <Select
+                                value={material.rawMaterialId}
+                                onValueChange={(value) => updateMaterial(index, 'rawMaterialId', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="-- Select raw material --" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {rawMaterials.map(rm => (
+                                    <SelectItem key={rm.id} value={rm.id}>
+                                      {rm.name} (${(rm.costPerUnit || 0).toFixed(2)}/{rm.unit})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div className="w-24">
+                              <Input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                placeholder="0"
+                                value={material.quantity}
+                                onChange={(e) => updateMaterial(index, 'quantity', e.target.value)}
+                              />
+                            </div>
+                            <div className="w-20 text-sm text-gray-600 font-medium text-right">
+                              ${(lineCost || 0).toFixed(2)}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => removeMaterial(index)}
+                              className="text-destructive"
+                            >
+                              🗑️
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
-                {!newProduct.useAutoPrice && (
-                  <div>
-                    <Label htmlFor="sellingPrice">Custom Selling Price</Label>
-                    <Input
-                      id="sellingPrice"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={newProduct.sellingPrice}
-                      onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: parseFloat(e.target.value) || 0 })}
-                    />
+
+                {/* Cost Calculation Display */}
+                {newProduct.materials.length > 0 && (
+                  <div className="p-4 bg-blue-50 rounded space-y-2">
+                    <div className="flex justify-between text-sm">
+                      <span>Material Cost</span>
+                      <span className="font-bold">
+                        ${newProduct.materials.reduce((sum, m) => {
+                          const raw = rawMaterials.find(r => r.id === m.rawMaterialId);
+                          if (!raw) return sum;
+                          const qty = typeof m.quantity === 'number' ? m.quantity : (parseFloat(m.quantity as any) || 0);
+                          return sum + (raw.costPerUnit * qty);
+                        }, 0).toFixed(2)}
+                        {newProduct.materials.some(m => {
+                          const raw = rawMaterials.find(r => r.id === m.rawMaterialId);
+                          return raw && raw.costPerUnit === 0;
+                        }) && (
+                          <span className="text-yellow-700 text-xs ml-2">⚠️ Some materials have $0 cost</span>
+                        )}
+                      </span>
+                    </div>
+                    
+                    <div className="flex justify-between text-sm">
+                      <span>Service Cost</span>
+                      <span className="font-bold">${(typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0).toFixed(2)}</span>
+                    </div>
+                    
+                    <div className="flex justify-between text-sm border-t pt-2">
+                      <span className="font-semibold">Total Cost</span>
+                      <span className="font-bold">${calculateTotalCost().toFixed(2)}</span>
+                    </div>
+                    
+                    <div className="flex justify-between text-sm">
+                      <span>Suggested Price</span>
+                      <span className="font-medium text-green-600">${calculateSuggestedPrice().toFixed(2)} (Cost × {priceMultiplier})</span>
+                    </div>
+
+                    <div className="border-t pt-2">
+                      <Label htmlFor="sellingPrice" className="text-sm">Final Sell Price ($) *</Label>
+                      <Input
+                        id="sellingPrice"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={newProduct.sellingPrice || parseFloat(calculateSuggestedPrice().toFixed(2))}
+                        onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: parseFloat(e.target.value) || 0 })}
+                        placeholder={calculateSuggestedPrice().toFixed(2)}
+                        className="mt-1"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        You can adjust this price manually or use the suggested price
+                      </p>
+                    </div>
                   </div>
                 )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsAddingProduct(false)}>Cancel</Button>
-                <Button onClick={handleAddProduct}>Link Product</Button>
+                <Button onClick={handleAddProduct}>Create Product</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -523,7 +701,7 @@ const AdminComposedProducts: React.FC = () => {
                     min="0"
                     step="0.01"
                     value={editingProduct.sellingPrice}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, sellingPrice: parseFloat(e.target.value) || 0 })}
+                    onChange={(e) => setEditingProduct({ ...editingProduct, sellingPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                   />
                 </div>
                 {editingProduct.recipeId && (

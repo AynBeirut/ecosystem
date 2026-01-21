@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Upload, Store, Camera } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
+import { Upload, Store, Camera, Plus, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -26,7 +27,9 @@ const defaultProfile: StoreProfile = {
   instagram: '',
   twitter: '',
   logo: '',
-  status: 'online'
+  status: 'online',
+  productCategories: ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other'],
+  priceMultiplier: 2.5
 };
 
 const AdminProfile: React.FC = () => {
@@ -65,6 +68,7 @@ const AdminProfile: React.FC = () => {
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
+  const [newCategory, setNewCategory] = useState<string>('');
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -78,6 +82,23 @@ const AdminProfile: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  const handleAddCategory = () => {
+    if (newCategory.trim() && !formData.productCategories?.includes(newCategory.trim())) {
+      setFormData({
+        ...formData,
+        productCategories: [...(formData.productCategories || []), newCategory.trim()]
+      });
+      setNewCategory('');
+    }
+  };
+
+  const handleRemoveCategory = (category: string) => {
+    setFormData({
+      ...formData,
+      productCategories: formData.productCategories?.filter(c => c !== category) || []
+    });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -391,6 +412,66 @@ const AdminProfile: React.FC = () => {
                   onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
                   placeholder="Enter your tax/VAT registration number"
                 />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Product Settings */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Product Settings</CardTitle>
+              <CardDescription>
+                Configure settings for composed products
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div>
+                <Label htmlFor="priceMultiplier">Default Price Multiplier</Label>
+                <Input
+                  id="priceMultiplier"
+                  type="number"
+                  min="1"
+                  step="0.1"
+                  value={formData.priceMultiplier || 2.5}
+                  onChange={(e) => setFormData({ ...formData, priceMultiplier: parseFloat(e.target.value) || 2.5 })}
+                  placeholder="2.5"
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Suggested selling price = Total cost × {formData.priceMultiplier || 2.5}
+                </p>
+              </div>
+
+              <div>
+                <Label>Product Categories</Label>
+                <div className="flex gap-2 mb-2">
+                  <Input
+                    value={newCategory}
+                    onChange={(e) => setNewCategory(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), handleAddCategory())}
+                    placeholder="Enter category name"
+                  />
+                  <Button type="button" onClick={handleAddCategory} size="sm">
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {(formData.productCategories || []).map((category) => (
+                    <Badge key={category} variant="secondary" className="flex items-center gap-1">
+                      {category}
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCategory(category)}
+                        className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </Badge>
+                  ))}
+                </div>
+                <p className="text-xs text-muted-foreground mt-2">
+                  These categories will be available when creating composed products
+                </p>
               </div>
             </CardContent>
           </Card>

@@ -31,6 +31,9 @@ export interface StoreProfile {
   invoiceNumberPrefix?: string; // Default: "INV"
   lastInvoiceNumber?: number; // Last used invoice number
   invoiceTemplate?: 'modern' | 'classic' | 'vibrant'; // Invoice design template
+  // Product settings
+  productCategories?: string[]; // Categories for composed products
+  priceMultiplier?: number; // Default price multiplier for composed products (default: 2.5)
   // Migration tracking
   migrationVersion?: number;
   lastMigrationDate?: string;

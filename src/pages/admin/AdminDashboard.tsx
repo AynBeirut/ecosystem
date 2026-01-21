@@ -15,7 +15,8 @@ import {
   Palette, 
   Megaphone,
   BarChart,
-  ShoppingCart
+  ShoppingCart,
+  FileText
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -564,6 +565,12 @@ const AdminDashboard: React.FC = () => {
                     <CreditCard className="h-4 w-4" />
                   </div>
                   <span className="text-sm font-medium">Expenses</span>
+                </Link>
+                <Link to="/admin/account-statement" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-indigo-600/20 shadow-sm hover:shadow-md transition">
+                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                    <FileText className="h-4 w-4" />
+                  </div>
+                  <span className="text-sm font-medium">Account Statement</span>
                 </Link>
                 <Link to="/admin/orders" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
                   <div className="h-8 w-8 rounded-full bg-market-accent/10 flex items-center justify-center text-market-accent">
