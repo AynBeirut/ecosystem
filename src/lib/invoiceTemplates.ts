@@ -26,7 +26,8 @@ export const generateInvoiceHTML = (
   
   const itemsHtml = order.items?.map(item => {
     const product = products.find(p => p.id === item.productId);
-    const price = product?.sellingPrice || 0;
+    // Use item.price (the actual price at time of order) or fallback to product price
+    const price = item.price || product?.price || product?.sellingPrice || 0;
     const lineTotal = price * item.quantity;
     return `
       <tr>
@@ -220,8 +221,10 @@ export const generateInvoiceHTML = (
               <div class="section-title">Bill To</div>
               <div class="detail-text">
                 <strong style="font-size: 17px; color: #0ea5e9;">${order.customerName || 'N/A'}</strong><br/>
-                ${order.customerPhone ? `${order.customerPhone}<br/>` : ''}
-                ${order.customerEmail ? `${order.customerEmail}<br/>` : ''}
+                ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
+                ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
+                ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
+                ${order.deliveryNotes ? `📝 ${order.deliveryNotes}<br/>` : ''}
               </div>
             </div>
             ${order.assignedSalesPersonName ? `
@@ -468,8 +471,10 @@ export const generateInvoiceHTML = (
               <div class="section-title">Billed To</div>
               <div class="detail-text">
                 <strong style="font-size: 18px;">${order.customerName || 'N/A'}</strong><br/>
-                ${order.customerPhone || ''}<br/>
-                ${order.customerEmail || ''}
+                ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
+                ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
+                ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
+                ${order.deliveryNotes ? `📝 ${order.deliveryNotes}<br/>` : ''}
               </div>
             </div>
             ${order.assignedSalesPersonName ? `
@@ -765,8 +770,10 @@ export const generateInvoiceHTML = (
               <h3>Customer Details</h3>
               <strong>${order.customerName || 'N/A'}</strong>
               <p>
-                ${order.customerPhone ? `📱 ${order.customerPhone}<br/>` : ''}
-                ${order.customerEmail ? `📧 ${order.customerEmail}` : ''}
+                ${order.customerPhone ? `� ${order.customerPhone}<br/>` : ''}
+                ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
+                ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
+                ${order.deliveryNotes ? `📝 ${order.deliveryNotes}` : ''}
               </p>
             </div>
             ${order.assignedSalesPersonName ? `
