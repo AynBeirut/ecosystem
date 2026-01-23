@@ -130,8 +130,8 @@ const AdminDelivery: React.FC = () => {
                             id="standardFee"
                             type="number"
                             step="0.01"
-                            value={deliverySettings.standardFee}
-                            onChange={(e) => handleSettingChange('standardFee', e.target.value)}
+                            value={deliverySettings.standardFee === 0 || deliverySettings.standardFee === '' ? '' : deliverySettings.standardFee}
+                            onChange={(e) => handleSettingChange('standardFee', e.target.value === '' ? 0 : e.target.value)}
                             placeholder="5.99"
                           />
                         </div>
@@ -171,8 +171,8 @@ const AdminDelivery: React.FC = () => {
                             id="expressFee"
                             type="number"
                             step="0.01"
-                            value={deliverySettings.expressFee}
-                            onChange={(e) => handleSettingChange('expressFee', e.target.value)}
+                            value={deliverySettings.expressFee === 0 || deliverySettings.expressFee === '' ? '' : deliverySettings.expressFee}
+                            onChange={(e) => handleSettingChange('expressFee', e.target.value === '' ? 0 : e.target.value)}
                             placeholder="12.99"
                           />
                         </div>
@@ -211,8 +211,8 @@ const AdminDelivery: React.FC = () => {
                     id="freeShipping"
                     type="number"
                     step="0.01"
-                    value={deliverySettings.freeShippingThreshold}
-                    onChange={(e) => handleSettingChange('freeShippingThreshold', e.target.value)}
+                    value={deliverySettings.freeShippingThreshold === 0 || deliverySettings.freeShippingThreshold === '' ? '' : deliverySettings.freeShippingThreshold}
+                    onChange={(e) => handleSettingChange('freeShippingThreshold', e.target.value === '' ? 0 : e.target.value)}
                     placeholder="50.00"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -308,8 +308,8 @@ const AdminDelivery: React.FC = () => {
                           <Input
                             type="number"
                             step="0.01"
-                            value={zone.fee}
-                            onChange={(e) => updateZone(zone.id, 'fee', e.target.value)}
+                            value={zone.fee === 0 || zone.fee === '' ? '' : zone.fee}
+                            onChange={(e) => updateZone(zone.id, 'fee', e.target.value === '' ? 0 : e.target.value)}
                             placeholder="3.99"
                           />
                         </div>

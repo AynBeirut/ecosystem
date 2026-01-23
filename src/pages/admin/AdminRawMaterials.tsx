@@ -269,8 +269,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={newMaterial.currentStock}
-                      onChange={(e) => setNewMaterial({ ...newMaterial, currentStock: parseFloat(e.target.value) || 0 })}
+                      value={newMaterial.currentStock === 0 ? '' : newMaterial.currentStock}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, currentStock: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                   <div>
@@ -280,8 +281,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={newMaterial.minimumThreshold}
-                      onChange={(e) => setNewMaterial({ ...newMaterial, minimumThreshold: parseFloat(e.target.value) || 0 })}
+                      value={newMaterial.minimumThreshold === 0 ? '' : newMaterial.minimumThreshold}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, minimumThreshold: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                   <div>
@@ -291,8 +293,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={newMaterial.reorderPoint}
-                      onChange={(e) => setNewMaterial({ ...newMaterial, reorderPoint: parseFloat(e.target.value) || 0 })}
+                      value={newMaterial.reorderPoint === 0 ? '' : newMaterial.reorderPoint}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, reorderPoint: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
@@ -304,8 +307,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={newMaterial.costPerUnit}
-                      onChange={(e) => setNewMaterial({ ...newMaterial, costPerUnit: parseFloat(e.target.value) || 0 })}
+                      value={newMaterial.costPerUnit === 0 ? '' : newMaterial.costPerUnit}
+                      onChange={(e) => setNewMaterial({ ...newMaterial, costPerUnit: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                   <div>
@@ -361,8 +365,9 @@ const AdminRawMaterials: React.FC = () => {
                         id="warrantyPeriod"
                         type="number"
                         min="0"
-                        value={newMaterial.warrantyPeriod}
-                        onChange={(e) => setNewMaterial({ ...newMaterial, warrantyPeriod: parseInt(e.target.value) || 0 })}
+                        value={newMaterial.warrantyPeriod === 0 ? '' : newMaterial.warrantyPeriod}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, warrantyPeriod: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+                        placeholder="0"
                       />
                     </div>
                   </div>
@@ -528,8 +533,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={editingMaterial.currentStock}
-                      onChange={(e) => setEditingMaterial({ ...editingMaterial, currentStock: parseFloat(e.target.value) || 0 })}
+                      value={editingMaterial.currentStock === 0 ? '' : editingMaterial.currentStock}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, currentStock: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                   <div>
@@ -539,8 +545,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={editingMaterial.minimumThreshold}
-                      onChange={(e) => setEditingMaterial({ ...editingMaterial, minimumThreshold: parseFloat(e.target.value) || 0 })}
+                      value={editingMaterial.minimumThreshold === 0 ? '' : editingMaterial.minimumThreshold}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, minimumThreshold: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                   <div>
@@ -550,8 +557,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={editingMaterial.reorderPoint}
-                      onChange={(e) => setEditingMaterial({ ...editingMaterial, reorderPoint: parseFloat(e.target.value) || 0 })}
+                      value={editingMaterial.reorderPoint === 0 ? '' : editingMaterial.reorderPoint}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, reorderPoint: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                 </div>
@@ -563,8 +571,9 @@ const AdminRawMaterials: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={editingMaterial.costPerUnit}
-                      onChange={(e) => setEditingMaterial({ ...editingMaterial, costPerUnit: parseFloat(e.target.value) || 0 })}
+                      value={editingMaterial.costPerUnit === 0 ? '' : editingMaterial.costPerUnit}
+                      onChange={(e) => setEditingMaterial({ ...editingMaterial, costPerUnit: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                   <div>

@@ -291,8 +291,9 @@ const AdminProduction: React.FC = () => {
             id="quantity"
             type="number"
             min="1"
-            value={batch.quantity}
-            onChange={(e) => onChange({ quantity: parseInt(e.target.value) || 0 })}
+            value={batch.quantity === 0 ? '' : batch.quantity}
+            onChange={(e) => onChange({ quantity: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+            placeholder="1"
           />
         </div>
         <div>
@@ -355,8 +356,9 @@ const AdminProduction: React.FC = () => {
                 id="actualQuantity"
                 type="number"
                 min="0"
-                value={(batch as ProductionBatch).actualQuantity}
-                onChange={(e) => onChange({ actualQuantity: parseInt(e.target.value) || 0 })}
+                value={(batch as ProductionBatch).actualQuantity === 0 ? '' : (batch as ProductionBatch).actualQuantity}
+                onChange={(e) => onChange({ actualQuantity: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+                placeholder="0"
               />
             </div>
           </>

@@ -297,8 +297,8 @@ const AdminPayments: React.FC = () => {
                       id="creditCardFee"
                       type="number"
                       step="0.1"
-                      value={fees.creditCardFee}
-                      onChange={(e) => setFees({ ...fees, creditCardFee: e.target.value })}
+                      value={fees.creditCardFee === 0 || fees.creditCardFee === '' ? '' : fees.creditCardFee}
+                      onChange={(e) => setFees({ ...fees, creditCardFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="2.9"
                     />
                   </div>
@@ -309,8 +309,8 @@ const AdminPayments: React.FC = () => {
                       id="debitCardFee"
                       type="number"
                       step="0.1"
-                      value={fees.debitCardFee}
-                      onChange={(e) => setFees({ ...fees, debitCardFee: e.target.value })}
+                      value={fees.debitCardFee === 0 || fees.debitCardFee === '' ? '' : fees.debitCardFee}
+                      onChange={(e) => setFees({ ...fees, debitCardFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="1.5"
                     />
                   </div>
@@ -321,8 +321,8 @@ const AdminPayments: React.FC = () => {
                       id="paypalFee"
                       type="number"
                       step="0.1"
-                      value={fees.paypalFee}
-                      onChange={(e) => setFees({ ...fees, paypalFee: e.target.value })}
+                      value={fees.paypalFee === 0 || fees.paypalFee === '' ? '' : fees.paypalFee}
+                      onChange={(e) => setFees({ ...fees, paypalFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="3.5"
                     />
                   </div>
@@ -333,8 +333,8 @@ const AdminPayments: React.FC = () => {
                       id="processingFee"
                       type="number"
                       step="0.01"
-                      value={fees.processingFee}
-                      onChange={(e) => setFees({ ...fees, processingFee: e.target.value })}
+                      value={fees.processingFee === 0 || fees.processingFee === '' ? '' : fees.processingFee}
+                      onChange={(e) => setFees({ ...fees, processingFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="0.30"
                     />
                   </div>

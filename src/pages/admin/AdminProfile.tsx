@@ -377,8 +377,8 @@ const AdminProfile: React.FC = () => {
                   <Input
                     id="lastInvoiceNumber"
                     type="number"
-                    value={formData.lastInvoiceNumber || 0}
-                    onChange={(e) => setFormData({ ...formData, lastInvoiceNumber: parseInt(e.target.value) || 0 })}
+                    value={(formData.lastInvoiceNumber || 0) === 0 ? '' : (formData.lastInvoiceNumber || 0)}
+                    onChange={(e) => setFormData({ ...formData, lastInvoiceNumber: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
                     placeholder="0"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -432,8 +432,8 @@ const AdminProfile: React.FC = () => {
                   type="number"
                   min="1"
                   step="0.1"
-                  value={formData.priceMultiplier || 2.5}
-                  onChange={(e) => setFormData({ ...formData, priceMultiplier: parseFloat(e.target.value) || 2.5 })}
+                  value={(formData.priceMultiplier || 2.5) === 0 ? '' : (formData.priceMultiplier || 2.5)}
+                  onChange={(e) => setFormData({ ...formData, priceMultiplier: e.target.value === '' ? 2.5 : (parseFloat(e.target.value) || 2.5) })}
                   placeholder="2.5"
                 />
                 <p className="text-xs text-muted-foreground mt-1">

@@ -337,10 +337,10 @@ const Cart: React.FC = () => {
                                 <Input
                                   type="number"
                                   min="1"
-                                  value={item.quantity}
+                                  value={item.quantity === 0 ? '' : item.quantity}
                                   aria-label="Quantity"
-                                  placeholder="Qty"
-                                  onChange={(e) => handleQuantityChange(item.product.id, parseInt(e.target.value) || 1)}
+                                  placeholder="1"
+                                  onChange={(e) => handleQuantityChange(item.product.id, e.target.value === '' ? 1 : (parseInt(e.target.value) || 1))}
                                   className="text-center mx-2 w-16"
                                 />
                                 <Button 

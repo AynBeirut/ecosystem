@@ -378,8 +378,9 @@ const AdminReturns: React.FC = () => {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={refundAmount}
-                    onChange={(e) => setRefundAmount(parseFloat(e.target.value) || 0)}
+                    value={refundAmount === 0 ? '' : refundAmount}
+                    onChange={(e) => setRefundAmount(e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                    placeholder="0.00"
                   />
                 </div>
                 <div>

@@ -647,10 +647,10 @@ const AdminOrders: React.FC = () => {
                           <Input
                             type="number"
                             min="1"
-                            value={item.quantity}
-                            onChange={(e) => updateOrderItem(index, 'quantity', parseInt(e.target.value) || 1)}
+                            value={item.quantity === 0 ? '' : item.quantity}
+                            onChange={(e) => updateOrderItem(index, 'quantity', e.target.value === '' ? 1 : (parseInt(e.target.value) || 1))}
                             className="w-24"
-                            placeholder="Qty"
+                            placeholder="1"
                           />
                           <div className="w-32 text-right font-medium">
                             ${((product?.sellingPrice || product?.price || 0) * item.quantity).toFixed(2)}
@@ -691,8 +691,9 @@ const AdminOrders: React.FC = () => {
                         min="0"
                         max="100"
                         step="0.1"
-                        value={newOrder.taxRate}
-                        onChange={(e) => setNewOrder({ ...newOrder, taxRate: parseFloat(e.target.value) || 0 })}
+                        value={newOrder.taxRate === 0 ? '' : newOrder.taxRate}
+                        onChange={(e) => setNewOrder({ ...newOrder, taxRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        placeholder="0.0"
                       />
                     </div>
                   )}
@@ -717,9 +718,9 @@ const AdminOrders: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      placeholder={newOrder.discountType === 'percentage' ? "Enter %" : "Enter amount"}
-                      value={newOrder.discountValue || ''}
-                      onChange={(e) => setNewOrder({ ...newOrder, discountValue: parseFloat(e.target.value) || 0 })}
+                      placeholder={newOrder.discountType === 'percentage' ? "0%" : "0.00"}
+                      value={newOrder.discountValue === 0 ? '' : newOrder.discountValue}
+                      onChange={(e) => setNewOrder({ ...newOrder, discountValue: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                     />
                   </div>
                 </div>

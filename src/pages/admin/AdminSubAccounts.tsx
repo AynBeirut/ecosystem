@@ -340,8 +340,8 @@ const AdminSubAccounts: React.FC = () => {
                       min="0"
                       max="100"
                       step="0.1"
-                      value={newAccount.commissionRate}
-                      onChange={(e) => setNewAccount({ ...newAccount, commissionRate: parseFloat(e.target.value) || 0 })}
+                      value={newAccount.commissionRate === 0 ? '' : newAccount.commissionRate}
+                      onChange={(e) => setNewAccount({ ...newAccount, commissionRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                       placeholder="5"
                     />
                     <p className="text-xs text-gray-500 mt-1">Percentage commission on sales</p>
@@ -356,8 +356,8 @@ const AdminSubAccounts: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={newAccount.kmRate}
-                      onChange={(e) => setNewAccount({ ...newAccount, kmRate: parseFloat(e.target.value) || 0 })}
+                      value={newAccount.kmRate === 0 ? '' : newAccount.kmRate}
+                      onChange={(e) => setNewAccount({ ...newAccount, kmRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                       placeholder="1.50"
                     />
                     <p className="text-xs text-gray-500 mt-1">Payment amount per kilometer driven</p>
@@ -531,8 +531,8 @@ const AdminSubAccounts: React.FC = () => {
                     min="0"
                     max="100"
                     step="0.1"
-                    value={editingAccount.commissionRate || 0}
-                    onChange={(e) => setEditingAccount({ ...editingAccount, commissionRate: parseFloat(e.target.value) || 0 })}
+                    value={(editingAccount.commissionRate || 0) === 0 ? '' : (editingAccount.commissionRate || 0)}
+                    onChange={(e) => setEditingAccount({ ...editingAccount, commissionRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                     placeholder="5"
                   />
                   <p className="text-xs text-gray-500 mt-1">Percentage commission on sales</p>
@@ -547,8 +547,8 @@ const AdminSubAccounts: React.FC = () => {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={editingAccount.kmRate || 0}
-                    onChange={(e) => setEditingAccount({ ...editingAccount, kmRate: parseFloat(e.target.value) || 0 })}
+                    value={(editingAccount.kmRate || 0) === 0 ? '' : (editingAccount.kmRate || 0)}
+                    onChange={(e) => setEditingAccount({ ...editingAccount, kmRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                     placeholder="1.50"
                   />
                   <p className="text-xs text-gray-500 mt-1">Payment amount per kilometer driven</p>

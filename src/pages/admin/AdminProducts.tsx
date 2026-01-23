@@ -232,8 +232,8 @@ const AdminProducts: React.FC = () => {
                       id="price"
                       type="number"
                       step="0.01"
-                      value={newProduct.price}
-                      onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                      value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
+                      onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="0.00"
                     />
                   </div>
@@ -305,9 +305,9 @@ const AdminProducts: React.FC = () => {
                         id="serviceCost"
                         type="number"
                         step="0.01"
-                        value={newProduct.serviceCost}
-                        onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value })}
-                        placeholder="Cost to provide service"
+                        value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
+                        onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value === '' ? 0 : e.target.value })}
+                        placeholder="0.00"
                       />
                     </div>
                   )}
@@ -328,9 +328,9 @@ const AdminProducts: React.FC = () => {
                       id="stock"
                       type="number"
                       min="0"
-                      value={newProduct.stock}
-                      onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })}
-                      placeholder="Enter stock quantity"
+                      value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
+                      onChange={e => setNewProduct({ ...newProduct, stock: e.target.value === '' ? 0 : e.target.value })}
+                      placeholder="0"
                     />
                   </div>
                   )}
@@ -511,8 +511,8 @@ const AdminProducts: React.FC = () => {
                 id="edit-price"
                 type="number"
                 step="0.01"
-                value={newProduct.price}
-                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value })}
+                value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
+                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value === '' ? 0 : e.target.value })}
                 placeholder="0.00"
               />
             </div>
@@ -559,9 +559,9 @@ const AdminProducts: React.FC = () => {
                 id="edit-stock"
                 type="number"
                 min="0"
-                value={newProduct.stock}
-                onChange={e => setNewProduct({ ...newProduct, stock: e.target.value })}
-                placeholder="Enter stock quantity"
+                value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
+                onChange={e => setNewProduct({ ...newProduct, stock: e.target.value === '' ? 0 : e.target.value })}
+                placeholder="0"
               />
             </div>
             

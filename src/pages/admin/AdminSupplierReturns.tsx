@@ -382,8 +382,9 @@ const AdminSupplierReturns: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', parseFloat(e.target.value) || 0)}
+                            value={item.quantity === 0 ? '' : item.quantity}
+                            onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                            placeholder="0.00"
                           />
                         </div>
                         <div className="col-span-2">
@@ -392,8 +393,9 @@ const AdminSupplierReturns: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={item.unitPrice}
-                            onChange={(e) => updateItem(index, 'unitPrice', parseFloat(e.target.value) || 0)}
+                            value={item.unitPrice === 0 ? '' : item.unitPrice}
+                            onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                            placeholder="0.00"
                           />
                         </div>
                         <div className="col-span-2">

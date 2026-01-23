@@ -278,8 +278,9 @@ const AdminRecipes: React.FC = () => {
                       id="preparationTime"
                       type="number"
                       min="0"
-                      value={newRecipe.preparationTime}
-                      onChange={(e) => setNewRecipe({ ...newRecipe, preparationTime: parseInt(e.target.value) || 0 })}
+                      value={newRecipe.preparationTime === 0 ? '' : newRecipe.preparationTime}
+                      onChange={(e) => setNewRecipe({ ...newRecipe, preparationTime: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+                      placeholder="0"
                     />
                   </div>
                 </div>
@@ -300,8 +301,9 @@ const AdminRecipes: React.FC = () => {
                       type="number"
                       min="0.01"
                       step="0.01"
-                      value={newRecipe.outputQuantity}
-                      onChange={(e) => setNewRecipe({ ...newRecipe, outputQuantity: parseFloat(e.target.value) || 1 })}
+                      value={newRecipe.outputQuantity === 0 ? '' : newRecipe.outputQuantity}
+                      onChange={(e) => setNewRecipe({ ...newRecipe, outputQuantity: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 1) })}
+                      placeholder="1.00"
                     />
                   </div>
                   <div>
@@ -353,8 +355,9 @@ const AdminRecipes: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={ingredient.quantity}
-                            onChange={(e) => updateIngredient(index, 'quantity', parseFloat(e.target.value) || 0)}
+                            value={ingredient.quantity === 0 ? '' : ingredient.quantity}
+                            onChange={(e) => updateIngredient(index, 'quantity', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                            placeholder="0.00"
                           />
                         </div>
                         <div className="col-span-2">

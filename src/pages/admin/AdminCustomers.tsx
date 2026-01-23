@@ -314,8 +314,9 @@ const AdminCustomers: React.FC = () => {
             type="number"
             min="0"
             step="0.01"
-            value={customer.creditLimit}
-            onChange={(e) => onChange({ creditLimit: parseFloat(e.target.value) || 0 })}
+            value={customer.creditLimit === 0 ? '' : customer.creditLimit}
+            onChange={(e) => onChange({ creditLimit: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+            placeholder="0.00"
           />
         </div>
         <div>
@@ -333,8 +334,9 @@ const AdminCustomers: React.FC = () => {
             id="loyaltyPoints"
             type="number"
             min="0"
-            value={customer.loyaltyPoints}
-            onChange={(e) => onChange({ loyaltyPoints: parseInt(e.target.value) || 0 })}
+            value={customer.loyaltyPoints === 0 ? '' : customer.loyaltyPoints}
+            onChange={(e) => onChange({ loyaltyPoints: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+            placeholder="0"
           />
         </div>
         <div className="col-span-2">

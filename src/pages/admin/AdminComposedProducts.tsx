@@ -408,8 +408,8 @@ const AdminComposedProducts: React.FC = () => {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
-                    onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value === '' ? '' : (parseFloat(e.target.value) || 0) })}
+                    value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
+                    onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                     placeholder="0.00"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -471,8 +471,8 @@ const AdminComposedProducts: React.FC = () => {
                                 min="0"
                                 step="0.01"
                                 placeholder="0"
-                                value={material.quantity}
-                                onChange={(e) => updateMaterial(index, 'quantity', e.target.value)}
+                                value={material.quantity === 0 || material.quantity === '' ? '' : material.quantity}
+                                onChange={(e) => updateMaterial(index, 'quantity', e.target.value === '' ? 0 : e.target.value)}
                               />
                             </div>
                             <div className="w-20 text-sm text-gray-600 font-medium text-right">
@@ -537,8 +537,8 @@ const AdminComposedProducts: React.FC = () => {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={newProduct.sellingPrice || parseFloat(calculateSuggestedPrice().toFixed(2))}
-                        onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: parseFloat(e.target.value) || 0 })}
+                        value={newProduct.sellingPrice === 0 ? '' : (newProduct.sellingPrice || parseFloat(calculateSuggestedPrice().toFixed(2)))}
+                        onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                         placeholder={calculateSuggestedPrice().toFixed(2)}
                         className="mt-1"
                       />
@@ -685,12 +685,13 @@ const AdminComposedProducts: React.FC = () => {
                     type="number"
                     min="0"
                     step="1"
-                    value={editingProduct.markupPercentage}
+                    value={editingProduct.markupPercentage === 0 ? '' : editingProduct.markupPercentage}
                     onChange={(e) => {
-                      const markup = parseFloat(e.target.value) || 0;
+                      const markup = e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0);
                       const suggestedPrice = calculateSuggestedPrice(editingProduct.recipeId, markup);
                       setEditingProduct({ ...editingProduct, markupPercentage: markup, sellingPrice: suggestedPrice });
                     }}
+                    placeholder="0"
                   />
                 </div>
                 <div>
@@ -700,8 +701,9 @@ const AdminComposedProducts: React.FC = () => {
                     type="number"
                     min="0"
                     step="0.01"
-                    value={editingProduct.sellingPrice}
+                    value={editingProduct.sellingPrice === 0 ? '' : editingProduct.sellingPrice}
                     onChange={(e) => setEditingProduct({ ...editingProduct, sellingPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                    placeholder="0.00"
                   />
                 </div>
                 {editingProduct.recipeId && (

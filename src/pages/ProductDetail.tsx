@@ -201,10 +201,11 @@ const ProductDetail: React.FC = () => {
                     <Input
                       type="number"
                       min="1"
-                      value={quantity}
+                      value={quantity === 0 ? '' : quantity}
                       onChange={handleQuantityChange}
                       className="text-center mx-2"
                       disabled={!product.inStock}
+                      placeholder="1"
                     />
                     <Button 
                       variant="outline" 

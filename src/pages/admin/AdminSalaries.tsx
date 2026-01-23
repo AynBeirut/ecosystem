@@ -180,8 +180,9 @@ const AdminSalaries: React.FC = () => {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={newPayment.baseSalary}
-                        onChange={(e) => setNewPayment({ ...newPayment, baseSalary: parseFloat(e.target.value) || 0 })}
+                        value={newPayment.baseSalary === 0 ? '' : newPayment.baseSalary}
+                        onChange={(e) => setNewPayment({ ...newPayment, baseSalary: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        placeholder="0.00"
                       />
                     </div>
                     <div>
@@ -191,8 +192,9 @@ const AdminSalaries: React.FC = () => {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={newPayment.commissionAmount}
-                        onChange={(e) => setNewPayment({ ...newPayment, commissionAmount: parseFloat(e.target.value) || 0 })}
+                        value={newPayment.commissionAmount === 0 ? '' : newPayment.commissionAmount}
+                        onChange={(e) => setNewPayment({ ...newPayment, commissionAmount: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        placeholder="0.00"
                       />
                     </div>
                   </div>
@@ -204,8 +206,9 @@ const AdminSalaries: React.FC = () => {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={newPayment.bonus}
-                        onChange={(e) => setNewPayment({ ...newPayment, bonus: parseFloat(e.target.value) || 0 })}
+                        value={newPayment.bonus === 0 ? '' : newPayment.bonus}
+                        onChange={(e) => setNewPayment({ ...newPayment, bonus: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        placeholder="0.00"
                       />
                     </div>
                     <div>
@@ -215,8 +218,9 @@ const AdminSalaries: React.FC = () => {
                         type="number"
                         min="0"
                         step="0.01"
-                        value={newPayment.deductions}
-                        onChange={(e) => setNewPayment({ ...newPayment, deductions: parseFloat(e.target.value) || 0 })}
+                        value={newPayment.deductions === 0 ? '' : newPayment.deductions}
+                        onChange={(e) => setNewPayment({ ...newPayment, deductions: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        placeholder="0.00"
                       />
                     </div>
                   </div>

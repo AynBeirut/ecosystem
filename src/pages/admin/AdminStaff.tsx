@@ -226,9 +226,9 @@ const AdminStaff: React.FC = () => {
                       type="number"
                       min="0"
                       step="0.01"
-                      value={newStaff.salary}
-                      onChange={(e) => setNewStaff({ ...newStaff, salary: parseFloat(e.target.value) || 0 })}
-                      placeholder="1000"
+                      value={newStaff.salary === 0 ? '' : newStaff.salary}
+                      onChange={(e) => setNewStaff({ ...newStaff, salary: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      placeholder="0.00"
                     />
                   </div>
                   <div>
