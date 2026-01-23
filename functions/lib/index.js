@@ -39,7 +39,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
-const functions = __importStar(require("firebase-functions"));
+const functions = __importStar(require("firebase-functions/v2"));
 const cors_1 = __importDefault(require("cors"));
 console.log('TOP-LEVEL LOG: Cloud Function module loaded');
 console.error('TOP-LEVEL ERROR: Cloud Function module loaded');
@@ -99,18 +99,20 @@ app.post('/checkout', async (req, res) => {
         }
         const decoded = await admin.auth().verifyIdToken(token);
         const userId = decoded.uid;
-        // Fetch user record for name/phone
+        // Fetch user record for name/phone/email
         let customerName = '';
         let customerPhone = '';
+        let customerEmail = '';
         try {
             const userRecord = await admin.auth().getUser(userId);
             customerName = userRecord.displayName || userRecord.email || '';
             customerPhone = userRecord.phoneNumber || '';
+            customerEmail = userRecord.email || '';
         }
         catch (e) {
             console.error('Failed to fetch user record', e);
         }
-        console.log('User:', { userId, customerName, customerPhone });
+        console.log('User:', { userId, customerName, customerPhone, customerEmail });
         const body = req.body;
         const { items, deliveryInfo } = body || {};
         if (!Array.isArray(items) || items.length === 0) {
@@ -194,6 +196,7 @@ app.post('/checkout', async (req, res) => {
                     customerId: userId,
                     customerName,
                     customerPhone: deliveryInfo?.phone || customerPhone || '',
+                    customerEmail: deliveryInfo?.email || customerEmail || '',
                     items: orderData.orderItems,
                     subtotal: orderData.subtotal,
                     discount: 0,
@@ -213,6 +216,7 @@ app.post('/checkout', async (req, res) => {
                     customerId: userId,
                     customerName,
                     customerPhone,
+                    customerEmail,
                     items: orderData.orderItems,
                     subtotal: orderData.subtotal,
                     total: orderData.total,
@@ -233,4 +237,7 @@ app.post('/checkout', async (req, res) => {
         return res.status(500).json({ error: err instanceof Error ? err.message : 'Checkout failed' });
     }
 });
-exports.api = functions.https.onRequest(app);
+exports.api = functions.https.onRequest({
+    cors: true,
+    region: 'us-central1',
+}, app);

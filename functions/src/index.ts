@@ -1,6 +1,6 @@
 import express, { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
-import * as functions from 'firebase-functions';
+import * as functions from 'firebase-functions/v2';
 import cors from 'cors';
 
 console.log('TOP-LEVEL LOG: Cloud Function module loaded');
@@ -80,17 +80,19 @@ app.post('/checkout', async (req: Request, res: Response) => {
 
     const decoded = await admin.auth().verifyIdToken(token);
     const userId = decoded.uid;
-    // Fetch user record for name/phone
+    // Fetch user record for name/phone/email
     let customerName = '';
     let customerPhone = '';
+    let customerEmail = '';
     try {
       const userRecord = await admin.auth().getUser(userId);
       customerName = userRecord.displayName || userRecord.email || '';
       customerPhone = userRecord.phoneNumber || '';
+      customerEmail = userRecord.email || '';
     } catch (e) {
       console.error('Failed to fetch user record', e);
     }
-    console.log('User:', { userId, customerName, customerPhone });
+    console.log('User:', { userId, customerName, customerPhone, customerEmail });
 
     const body = req.body as { items?: unknown[]; deliveryInfo?: any } | undefined;
     const { items, deliveryInfo } = body || {};
@@ -192,6 +194,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           customerId: userId,
           customerName,
           customerPhone: deliveryInfo?.phone || customerPhone || '',
+          customerEmail: deliveryInfo?.email || customerEmail || '',
           items: orderData.orderItems,
           subtotal: orderData.subtotal,
           discount: 0,
@@ -211,6 +214,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           customerId: userId,
           customerName,
           customerPhone,
+          customerEmail,
           items: orderData.orderItems,
           subtotal: orderData.subtotal,
           total: orderData.total,
@@ -233,4 +237,10 @@ app.post('/checkout', async (req: Request, res: Response) => {
   }
 });
 
-export const api = functions.https.onRequest(app);
+export const api = functions.https.onRequest(
+  {
+    cors: true,
+    region: 'us-central1',
+  },
+  app
+);
