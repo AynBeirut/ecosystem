@@ -1,33 +1,117 @@
-## 2025 Project Updates & Changelog
+# Market Flow - Grabio Space
 
-### Android App (Capacitor) Integration & Fixes
-- Migrated web app to Android using Capacitor.
-- Updated Gradle and SDK configuration to support Android 15 (Vanilla Ice Cream, API 35).
-- Fixed build errors by aligning compileSdkVersion/targetSdkVersion to 35 and Java compatibility to 17.
-- Guided installation of correct Android SDKs and Build-Tools.
-- Resolved "Browser plugin is not implemented on android" by removing all @capacitor/browser usage and switching to signInWithRedirect for Google Sign-In.
-- Ensured all sign-in logic is Android-compatible and does not use unsupported plugins.
+**Modern Multi-Vendor Marketplace Platform**
 
-### Google Sign-In & Auth
-- All authentication now uses signInWithRedirect for maximum compatibility (no signInWithPopup or Browser plugin).
-- Cleaned up authentication logic for both web and Android.
+A comprehensive e-commerce platform built with React, TypeScript, and Firebase, enabling multiple vendors to manage their stores, products, and orders in a unified marketplace.
 
-### Build & Launch Instructions (Web)
-To run the web app locally:
+## Features
+
+### For Buyers
+- Browse products from multiple stores
+- Add items to cart with delivery address and GPS coordinates
+- Google OAuth authentication
+- Track order status in real-time
+- View detailed order history with product information
+- Dual currency display (USD/LBP)
+
+### For Sellers (Premium)
+- **Complete Store Management**: Create and customize your store profile
+- **Product Management**: Add unlimited products with images and details
+- **Order Processing**: Track orders with customer delivery info and GPS coordinates
+- **Invoice Generation**: Create and share professional PDF invoices
+- **Inventory Control**: Manage stock levels and raw materials
+- **Purchase Orders**: Create and track supplier purchase orders
+- **Customer Management**: Access customer data and order history
+- **Analytics Dashboard**: View sales insights and store performance
+- **Template Selection**: Choose from Modern, Classic, or Vibrant store templates
+- **Custom Exchange Rates**: Set USD to LBP conversion rates
+- **Multi-User Access**: Manage sales staff and sub-accounts
+
+## Technology Stack
+
+- **Frontend**: React 18, TypeScript, TailwindCSS
+- **Backend**: Firebase (Authentication, Firestore, Storage, Functions)
+- **Build Tool**: Vite
+- **PDF Generation**: jsPDF + html2canvas
+- **Routing**: React Router
+- **State Management**: React Context API
+- **UI Components**: Custom components with shadcn/ui patterns
+
+## Authentication
+- Google OAuth with popup authentication
+- Firebase Authentication for secure user management
+- Role-based access control (User/Admin/Seller)
+
+## Development Setup
+
+### Prerequisites
+- Node.js (v18 or higher)
+- npm or yarn
+- Firebase CLI (`npm install -g firebase-tools`)
+
+### Installation
 
 ```sh
 npm install
+```
+
+### Environment Variables
+Create `.env.production` file:
+```env
+VITE_API_BASE=https://us-central1-market-flow-7b074.cloudfunctions.net/api
+VITE_FIREBASE_AUTH_DOMAIN=market-flow-7b074.firebaseapp.com
+```
+
+### Local Development
+
+```sh
 npm run dev
 ```
-The app will be available at http://localhost:5173 (or the port shown in your terminal).
+The app will be available at http://localhost:8080
 
-To build for production:
+### Build for Production
 
 ```sh
 npm run build
-npm run preview
 ```
-The preview server will show your production build locally.
+
+### Deploy to Firebase
+
+```sh
+firebase deploy --only hosting
+```
+
+## Deployment
+- **Live URL**: https://www.grabio.space
+- **Firebase Hosting**: market-flow-7b074.web.app
+- **Firebase Project**: market-flow-7b074
+
+## Key Features Implementation
+
+### Dual Currency System
+- USD as primary currency
+- LBP conversion with custom exchange rates per store
+- Display both currencies on cart and invoices
+
+### Delivery Management
+- Customer delivery address input
+- City and notes fields
+- GPS coordinates capture
+- Google Maps integration for location viewing
+
+### Invoice System
+- Generate professional PDF invoices
+- Multiple template styles (Modern, Classic, Vibrant)
+- Share via native share API or download
+- Dual currency display on invoices
+
+### Order Tracking
+- Real-time order status updates
+- Product details with quantities and prices
+- Customer delivery information display
+- Store contact information
+
+
 
 To deploy, use Vercel, Netlify, or your preferred static hosting provider. Upload the contents of the `dist/` folder.
 

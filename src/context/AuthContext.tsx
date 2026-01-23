@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { User, UserRole, Store } from '@/types/product';
 import { auth } from '@/lib/firebase';
-import { GoogleAuthProvider, signInWithEmailAndPassword, signOut, onAuthStateChanged, signInWithRedirect, getRedirectResult, User as FirebaseUser } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithEmailAndPassword, signOut, onAuthStateChanged, User as FirebaseUser } from 'firebase/auth';
 import { acquire, release } from '@/lib/popupLock';
 
 export type AuthContextType = {
@@ -132,31 +132,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => unsubscribe();
   }, [loadFollows]);
 
-  // Handle redirect result for Google sign-in
-  // Handle redirect result for Google sign-in
-  useEffect(() => {
-    getRedirectResult(auth).then((result) => {
-      if (result && result.user) {
-        const firebaseUser = result.user;
-        const baseUser = {
-          id: firebaseUser.uid,
-          name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
-          email: firebaseUser.email || '',
-          role: 'user' as UserRole,
-          avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=38B2AC&color=fff`,
-          dailyAdsWatched: 0,
-          lastAdWatchDate: new Date().toISOString().split('T')[0],
-          storeId: undefined
-        };
-        setUser(baseUser);
-        toast.success('Google login successful!');
-      }
-    }).catch((error) => {
-      console.error('Redirect result error:', error);
-      toast.error('Google login failed');
-    });
-  }, []);
-
   // Removed Supabase profile/role logic. User state is now managed by Firebase only.
 
   const login = async (email: string, password: string) => {
@@ -242,20 +217,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const provider = new GoogleAuthProvider();
-      if (window.location.hostname === 'localhost') {
-        // Use popup for local dev to avoid sessionStorage/redirect issues
-        const result = await import('firebase/auth').then(m => m.signInWithPopup(auth, provider));
-        if (result && result.user) {
-          console.log('[AuthContext] signInWithPopup user:', result.user);
-          toast.success('Google login successful!');
-        }
-      } else {
-        await signInWithRedirect(auth, provider);
+      // Use popup for immediate login (redirect was causing 404 issues on mobile)
+      const result = await import('firebase/auth').then(m => m.signInWithPopup(auth, provider));
+      if (result && result.user) {
+        console.log('[AuthContext] signInWithPopup successful:', result.user);
+        toast.success('Google login successful!');
       }
     } catch (error) {
       const e = error as { code?: string; message?: string; name?: string };
       console.error('Google login error:', e);
-      toast.error(e?.message || 'An error occurred during Google login');
+      if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
+        toast.error(e?.message || 'An error occurred during Google login');
+      }
     } finally {
       setIsLoading(false);
     }

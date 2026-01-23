@@ -1,27 +1,39 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { useAuth } from "@/context/useAuth";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
+  const { user } = useAuth();
 
   useEffect(() => {
-    async function handleAuth() {
-      // If there is a hash, convert it to a query string and reload
-        if (window.location.hash) {
-          const newUrl = window.location.pathname + window.location.hash.replace('#', '?');
-          navigate(newUrl, { replace: true });
-          return;
-        }
+    console.log('[AuthCallback] Component mounted, user:', user);
+    
+    // If user is already authenticated, redirect to home
+    if (user) {
+      console.log('[AuthCallback] User found, redirecting to home');
+      setTimeout(() => {
+        navigate('/', { replace: true });
+      }, 100);
+      return;
     }
-    handleAuth();
-  }, [navigate]);
+    
+    // Otherwise wait a bit and redirect anyway
+    const timer = setTimeout(() => {
+      console.log('[AuthCallback] Timeout reached, redirecting to login');
+      navigate('/login', { replace: true });
+    }, 2000);
+    
+    return () => clearTimeout(timer);
+  }, [navigate, user]);
 
-  // This route is no longer needed for Firebase authentication.
   return (
-    <div>
-      <p>Authentication callback not required for Firebase.</p>
+    <div className="min-h-screen flex items-center justify-center">
+      <div className="text-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-market-primary mx-auto mb-4"></div>
+        <p className="text-gray-600">Completing sign in...</p>
+      </div>
     </div>
   );
 }

@@ -15,15 +15,26 @@ const Login: React.FC = () => {
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showAccountTypeSelection, setShowAccountTypeSelection] = useState(false);
-  const { login, googleLogin, upgradeToAdmin, user } = useAuth();
+  const { login, googleLogin, upgradeToAdmin, user, isLoading } = useAuth();
   const navigate = useNavigate();
 
   // Redirect if already logged in
   useEffect(() => {
     console.log('[Login] useEffect: user state changed:', user);
     if (user) {
-      console.log('[Login] Navigating to / because user is set');
-      navigate('/');
+      console.log('[Login] User detected, checking for redirect');
+      // Check if there's a redirect path saved
+      const redirectPath = localStorage.getItem('redirectAfterLogin');
+      console.log('[Login] Redirect path from localStorage:', redirectPath);
+      
+      if (redirectPath) {
+        localStorage.removeItem('redirectAfterLogin');
+        console.log('[Login] Navigating to saved path:', redirectPath);
+        navigate(redirectPath, { replace: true });
+      } else {
+        console.log('[Login] No redirect path, navigating to home');
+        navigate('/', { replace: true });
+      }
     }
   }, [user, navigate]);
 
@@ -55,12 +66,19 @@ const Login: React.FC = () => {
       if (type === 'admin') {
         // Upgrade to admin with free trial
         await upgradeToAdmin();
-        console.log('[Login] Upgraded to admin, navigating to /admin');
-        navigate('/admin');
+        console.log('[Login] Upgraded to admin, redirecting to /admin');
+        navigate('/admin', { replace: true });
       } else {
-        // Continue as regular user
-        console.log('[Login] Continuing as regular user, navigating to /');
-        navigate('/');
+        // Continue as regular user - check for redirect
+        const redirectPath = localStorage.getItem('redirectAfterLogin');
+        if (redirectPath) {
+          localStorage.removeItem('redirectAfterLogin');
+          console.log('[Login] Continuing as regular user, redirecting to', redirectPath);
+          navigate(redirectPath, { replace: true });
+        } else {
+          console.log('[Login] Continuing as regular user, redirecting to /');
+          navigate('/', { replace: true });
+        }
       }
     } catch (e) {
       console.error('[Login] Error in handleAccountTypeSelection:', e);
@@ -68,6 +86,18 @@ const Login: React.FC = () => {
       setIsSubmitting(false);
     }
   };
+
+  // Show loading while auth state is being determined (especially for OAuth redirects)
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-market-primary mx-auto mb-4"></div>
+          <p className="text-gray-600">Checking authentication...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (showAccountTypeSelection) {
     return (

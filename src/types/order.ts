@@ -13,6 +13,10 @@ export interface Order {
   customerName?: string
   customerPhone?: string
   customerEmail?: string
+  deliveryAddress?: string
+  deliveryCity?: string
+  deliveryNotes?: string
+  deliveryCoordinates?: { lat: number; lng: number }
   total?: number
   status?: string
   items?: OrderItem[]

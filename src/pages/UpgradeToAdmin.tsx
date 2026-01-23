@@ -17,16 +17,9 @@ const UpgradeToAdmin: React.FC = () => {
   const [monthsFreeLeft, setMonthsFreeLeft] = useState(0);
   const FREE_SELLER_LIMIT = 50;
   const [isProcessing, setIsProcessing] = useState(false);
-  const [showBanner, setShowBanner] = useState(true);
   const [plan, setPlan] = useState<'monthly' | 'yearly'>('monthly');
   const navigate = useNavigate();
   const db = getFirestore();
-  // Auto-dismiss banner after 2 minutes
-  useEffect(() => {
-    if (!showBanner) return;
-    const timer = setTimeout(() => setShowBanner(false), 120000);
-    return () => clearTimeout(timer);
-  }, [showBanner]);
 
   useEffect(() => {
     // Fetch seller count and user subscription status from Firestore
@@ -106,12 +99,7 @@ const UpgradeToAdmin: React.FC = () => {
       <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6 text-center">Upgrade to Admin</h1>
-          {showBanner && (
-            <div className="mb-6 bg-blue-100 border border-blue-300 text-blue-800 rounded px-4 py-2 text-center text-sm transition-opacity duration-500">
-              <strong>First 50 sellers get 1 year free!</strong>
-            </div>
-          )}
+          <h1 className="text-2xl font-bold mb-6 text-center">Upgrade to Premium</h1>
           <Card className="mb-8">
             <CardHeader>
               <CardTitle>Premium Plan</CardTitle>
@@ -130,34 +118,38 @@ const UpgradeToAdmin: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <ul className="space-y-2">
+              <ul className="space-y-3">
                 <li className="flex items-start">
                   <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span>Create and manage your own store in the marketplace</span>
+                  <span><strong>Full Store Management:</strong> Create and manage your own store in the marketplace with complete control</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span>Add unlimited products with custom details and images</span>
+                  <span><strong>Unlimited Products:</strong> Add unlimited products with custom details, images, and pricing</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span>Configure payment options and delivery settings</span>
+                  <span><strong>Order Management:</strong> Track orders, manage delivery info with GPS coordinates, and customer details</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span>Customize your store profile and branding</span>
+                  <span><strong>Professional Templates:</strong> Choose from 3 beautiful store templates (Modern, Classic, Vibrant)</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span>Choose from 3 professional store templates</span>
+                  <span><strong>Dual Currency Support:</strong> Display prices in USD and LBP with custom exchange rates</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span>Create special announcements and promotions</span>
+                  <span><strong>Inventory Management:</strong> Track stock levels, manage raw materials, and purchase orders</span>
                 </li>
                 <li className="flex items-start">
                   <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span>Access detailed store analytics and insights</span>
+                  <span><strong>Customer Insights:</strong> Access detailed analytics, customer data, and order history</span>
+                </li>
+                <li className="flex items-start">
+                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
+                  <span><strong>PDF Invoicing:</strong> Generate and share professional invoices and purchase orders</span>
                 </li>
               </ul>
             </CardContent>

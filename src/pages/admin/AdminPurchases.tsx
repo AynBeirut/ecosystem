@@ -905,30 +905,53 @@ const AdminPurchases: React.FC = () => {
   };
 
   const handleSharePO = async (purchase: Purchase) => {
-    const supplier = suppliers.find(s => s.id === purchase.supplierId);
-    const html = generatePOHTML(purchase);
-    const poText = `Purchase Order ${purchase.poNumber}\nSupplier: ${supplier?.name}\nTotal: $${(purchase.totalCost || 0).toFixed(2)}`;
-    
-    if (navigator.share && isMobile) {
-      try {
-        const blob = new Blob([html], { type: 'text/html' });
-        const file = new File([blob], `PO-${purchase.poNumber}.html`, { type: 'text/html' });
-        
-        await navigator.share({
-          title: `Purchase Order ${purchase.poNumber}`,
-          text: poText,
-          files: [file]
-        });
-        toast({ title: "Success", description: "Purchase order shared" });
-      } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-          const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(poText)}`;
-          window.open(whatsappUrl, '_blank');
+    try {
+      // Generate PDF
+      const html = generatePOHTML(purchase);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+
+      const canvas = await html2canvas(tempDiv, { scale: 2 });
+      document.body.removeChild(tempDiv);
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      
+      // Get PDF as blob
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], `PO-${purchase.poNumber}.pdf`, { type: 'application/pdf' });
+      
+      if (navigator.share && isMobile) {
+        try {
+          await navigator.share({
+            title: `Purchase Order ${purchase.poNumber}`,
+            text: `PO for ${suppliers.find(s => s.id === purchase.supplierId)?.name}`,
+            files: [pdfFile]
+          });
+          toast({ title: "Success", description: "Purchase order PDF shared" });
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') {
+            console.error('Error sharing:', error);
+            // Fallback to download
+            pdf.save(`PO-${purchase.poNumber}.pdf`);
+            toast({ title: "Downloaded", description: "Purchase order PDF downloaded" });
+          }
         }
+      } else {
+        // Desktop fallback - download PDF
+        pdf.save(`PO-${purchase.poNumber}.pdf`);
+        toast({ title: "Downloaded", description: "Purchase order PDF downloaded" });
       }
-    } else {
-      navigator.clipboard.writeText(poText);
-      toast({ title: "Copied", description: "Purchase order details copied to clipboard" });
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast({ title: "Error", description: "Failed to generate PDF", variant: "destructive" });
     }
   };
 

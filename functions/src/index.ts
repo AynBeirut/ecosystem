@@ -92,13 +92,14 @@ app.post('/checkout', async (req: Request, res: Response) => {
     }
     console.log('User:', { userId, customerName, customerPhone });
 
-    const body = req.body as { items?: unknown[] } | undefined;
-    const { items } = body || {};
+    const body = req.body as { items?: unknown[]; deliveryInfo?: any } | undefined;
+    const { items, deliveryInfo } = body || {};
     if (!Array.isArray(items) || items.length === 0) {
       console.error('No items in request');
       return res.status(400).json({ error: 'No items' });
     }
     console.log('Checkout items:', items);
+    console.log('Delivery info:', deliveryInfo);
 
     const checkoutItems = items.map((i) => i as CheckoutItem);
     const itemsByStore: Record<string, CheckoutItem[]> = {};
@@ -116,13 +117,22 @@ app.post('/checkout', async (req: Request, res: Response) => {
     let orderIds: string[] = [];
 
     await db.runTransaction(async (tx: any) => {
-      const userRef = db.doc(`users/${userId}`);
+      // PHASE 1: ALL READS FIRST (Firestore requirement)
+      const ordersToCreate: Array<{
+        storeId: string;
+        orderItems: Array<{ productId: string; price: number; quantity: number }>;
+        subtotal: number;
+        total: number;
+      }> = [];
+      
+      const stockUpdates: Array<{ productId: string; newStock: number }> = [];
 
       for (const storeId of Object.keys(itemsByStore)) {
         const itemsForStore = itemsByStore[storeId];
         let storeSubtotal = 0;
         const orderItems: Array<{ productId: string; price: number; quantity: number }> = [];
 
+        // Read all products for this store
         for (const it of itemsForStore) {
           if (!it.productId) {
             console.error('Invalid item, missing productId:', it);
@@ -147,53 +157,71 @@ app.post('/checkout', async (req: Request, res: Response) => {
           }
           orderItems.push({ productId: it.productId, price: serverPrice, quantity: qty });
           storeSubtotal += serverPrice * qty;
+          
+          // Prepare stock update
+          if (typeof pData.stock === 'number') {
+            stockUpdates.push({ 
+              productId: it.productId, 
+              newStock: (pData.stock as number) - qty 
+            });
+          }
         }
-        // Log order creation attempt
-        console.log('Attempting to create order for store:', storeId, 'with items:', orderItems);
 
+        // Read store profile
         const profileRef = db.doc(`storeProfiles/${storeId}`);
         const profileSnap = await tx.get(profileRef);
         const storeProfile = profileSnap.exists ? (profileSnap.data() as StoreProfile) : undefined;
 
         const totalAfterDiscount = storeSubtotal;
+        
+        ordersToCreate.push({
+          storeId,
+          orderItems,
+          subtotal: storeSubtotal,
+          total: totalAfterDiscount,
+        });
+        
+        console.log('Prepared order for store:', storeId, 'with items:', orderItems);
+      }
 
+      // PHASE 2: ALL WRITES (after all reads are complete)
+      for (const orderData of ordersToCreate) {
         const orderRef = db.collection('orders').doc();
         tx.set(orderRef, {
-          storeId,
+          storeId: orderData.storeId,
           customerId: userId,
           customerName,
-          customerPhone,
-          items: orderItems,
-          subtotal: storeSubtotal,
+          customerPhone: deliveryInfo?.phone || customerPhone || '',
+          items: orderData.orderItems,
+          subtotal: orderData.subtotal,
           discount: 0,
-          total: totalAfterDiscount,
+          total: orderData.total,
           status: 'pending',
+          deliveryAddress: deliveryInfo?.address || '',
+          deliveryCity: deliveryInfo?.city || '',
+          deliveryNotes: deliveryInfo?.notes || '',
+          deliveryCoordinates: deliveryInfo?.coordinates || null,
           createdAt: getServerTimestamp(),
         });
         orderIds.push(orderRef.id);
         ordersCreated++;
         console.log('Order created:', {
           orderId: orderRef.id,
-          storeId,
+          storeId: orderData.storeId,
           customerId: userId,
           customerName,
           customerPhone,
-          items: orderItems,
-          subtotal: storeSubtotal,
-          total: totalAfterDiscount,
+          items: orderData.orderItems,
+          subtotal: orderData.subtotal,
+          total: orderData.total,
           status: 'pending',
         });
+      }
 
-        for (const it of itemsForStore) {
-          const productRef = db.doc(`products/${it.productId}`);
-          const prodSnap = await tx.get(productRef);
-          const pData = prodSnap.exists ? (prodSnap.data() as Record<string, unknown>) : {};
-          const qty = it.quantity && it.quantity > 0 ? it.quantity : 1;
-          if (typeof pData.stock === 'number') {
-            const newStock = (pData.stock as number) - qty;
-            tx.update(productRef, { stock: newStock });
-          }
-        }
+      // Update stock for all products
+      for (const update of stockUpdates) {
+        const productRef = db.doc(`products/${update.productId}`);
+        tx.update(productRef, { stock: update.newStock });
       }
     });
 

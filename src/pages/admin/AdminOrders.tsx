@@ -69,7 +69,11 @@ const AdminOrders: React.FC = () => {
 
   useEffect(() => {
     const fetchData = async () => {
-      if (!user?.storeId) return;
+      if (!user?.storeId) {
+        console.log('AdminOrders: No storeId found for user', user);
+        return;
+      }
+      console.log('AdminOrders: Fetching orders for storeId:', user.storeId);
       setLoading(true);
       const db = getFirestore();
 
@@ -77,6 +81,7 @@ const AdminOrders: React.FC = () => {
         const ref = collection(db, collectionName);
         const q = query(ref, where('storeId', '==', user.storeId));
         const snapshot = await getDocs(q);
+        console.log(`AdminOrders: Found ${snapshot.docs.length} ${collectionName} for storeId:`, user.storeId);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       };
 
@@ -95,7 +100,43 @@ const AdminOrders: React.FC = () => {
           fetchCollection('staff'),
         ]);
 
-        setOrders(ordersData as (Order & { id: string })[]);
+        console.log('AdminOrders: Orders fetched:', ordersData);
+        
+        // Convert Firestore Timestamps and sort orders
+        const ordersWithDates = (ordersData as (Order & { id: string })[]).map(order => {
+          let createdAt = order.createdAt;
+          if (createdAt && typeof createdAt === 'object' && 'toDate' in createdAt) {
+            createdAt = (createdAt as any).toDate();
+          } else if (createdAt && typeof createdAt === 'object' && 'seconds' in createdAt) {
+            createdAt = new Date((createdAt as any).seconds * 1000);
+          }
+          return { ...order, createdAt };
+        });
+        
+        // Sort orders: Active first (pending, confirmed, processing, ready), then delivered, then cancelled - all by newest date
+        const sortedOrders = ordersWithDates.sort((a, b) => {
+          // Define priority groups
+          const getPriority = (status?: string) => {
+            if (status === 'cancelled') return 3; // Cancelled at bottom
+            if (status === 'delivered') return 2; // Delivered in middle
+            return 1; // Active orders (pending, confirmed, processing, ready) at top
+          };
+          
+          const priorityA = getPriority(a.status);
+          const priorityB = getPriority(b.status);
+          
+          // First sort by priority group
+          if (priorityA !== priorityB) {
+            return priorityA - priorityB;
+          }
+          
+          // Within same priority group, sort by date - newest first
+          const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          return dateB - dateA;
+        });
+        
+        setOrders(sortedOrders);
         setProducts(productsData);
         setCustomers(customersData as Customer[]);
         setSalesStaff((staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active'));
@@ -167,11 +208,15 @@ const AdminOrders: React.FC = () => {
   const formatCurrency = (amount: number, showDual: boolean = true): string => {
     const usd = `$${amount.toFixed(2)}`;
     
+    console.log('formatCurrency called:', { amount, showDual, hasProfile: !!storeProfile, rate: storeProfile?.customExchangeRate });
+    
     if (showDual && storeProfile?.customExchangeRate && storeProfile.customExchangeRate > 0) {
       const lbp = (amount * storeProfile.customExchangeRate).toFixed(0);
-      return `${usd} (${Number(lbp).toLocaleString()} LBP)`;
+      console.log('Showing dual currency:', { usd, lbp });
+      return `${usd}<br/><span style="font-size: 12px; color: #666;">${Number(lbp).toLocaleString()} LBP</span>`;
     }
     
+    console.log('Showing USD only');
     return usd;
   };
 
@@ -368,32 +413,53 @@ const AdminOrders: React.FC = () => {
   };
 
   const handleShareInvoice = async (order: Order & { id: string }) => {
-    const html = generateInvoiceHTML(order);
-    const invoiceText = `Invoice #${order.id}\nCustomer: ${order.customerName}\nTotal: $${(order.total || 0).toFixed(2)}\n\nThank you for your business!`;
-    
-    if (navigator.share && isMobile) {
-      try {
-        const blob = new Blob([html], { type: 'text/html' });
-        const file = new File([blob], `invoice-${order.id}.html`, { type: 'text/html' });
-        
-        await navigator.share({
-          title: `Invoice #${order.id}`,
-          text: invoiceText,
-          files: [file]
-        });
-        toast({ title: "Success", description: "Invoice shared successfully" });
-      } catch (error) {
-        if ((error as Error).name !== 'AbortError') {
-          console.error('Error sharing:', error);
-          // Fallback to WhatsApp
-          const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(invoiceText)}`;
-          window.open(whatsappUrl, '_blank');
+    try {
+      // Generate PDF
+      const html = generateInvoiceHTML(order);
+      const container = document.createElement('div');
+      container.innerHTML = html;
+      container.style.position = 'absolute';
+      container.style.left = '-9999px';
+      document.body.appendChild(container);
+
+      const canvas = await html2canvas(container, { scale: 2 });
+      document.body.removeChild(container);
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      
+      // Get PDF as blob
+      const pdfBlob = pdf.output('blob');
+      const pdfFile = new File([pdfBlob], `invoice-${order.id}.pdf`, { type: 'application/pdf' });
+      
+      if (navigator.share && isMobile) {
+        try {
+          await navigator.share({
+            title: `Invoice #${order.id}`,
+            text: `Invoice for ${order.customerName}`,
+            files: [pdfFile]
+          });
+          toast({ title: "Success", description: "Invoice PDF shared successfully" });
+        } catch (error) {
+          if ((error as Error).name !== 'AbortError') {
+            console.error('Error sharing:', error);
+            // Fallback to download
+            pdf.save(`invoice-${order.id}.pdf`);
+            toast({ title: "Downloaded", description: "Invoice PDF downloaded" });
+          }
         }
+      } else {
+        // Desktop fallback - download PDF
+        pdf.save(`invoice-${order.id}.pdf`);
+        toast({ title: "Downloaded", description: "Invoice PDF downloaded" });
       }
-    } else {
-      // Desktop fallback - copy to clipboard
-      navigator.clipboard.writeText(invoiceText);
-      toast({ title: "Copied", description: "Invoice details copied to clipboard" });
+    } catch (error) {
+      console.error('PDF generation error:', error);
+      toast({ title: "Error", description: "Failed to generate PDF", variant: "destructive" });
     }
   };
 
@@ -766,23 +832,60 @@ const AdminOrders: React.FC = () => {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div>
-                      <p className="text-sm text-gray-500">Items</p>
-                      <p className="font-medium">{order.items?.length || 0}</p>
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-500">Items</p>
+                        <p className="font-medium">{order.items?.length || 0}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Subtotal</p>
+                        <p className="font-medium">${(order.subtotal || 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Tax</p>
+                        <p className="font-medium">${(order.taxAmount || 0).toFixed(2)}</p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Total</p>
+                        <p className="font-bold text-green-600">${(order.total || 0).toFixed(2)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Subtotal</p>
-                      <p className="font-medium">${(order.subtotal || 0).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Tax</p>
-                      <p className="font-medium">${(order.taxAmount || 0).toFixed(2)}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-gray-500">Total</p>
-                      <p className="font-bold text-green-600">${(order.total || 0).toFixed(2)}</p>
-                    </div>
+                    
+                    {/* Delivery Information Preview */}
+                    {(order.customerPhone || order.deliveryAddress) && (
+                      <div className="bg-blue-50 p-3 rounded-lg border border-blue-200">
+                        <p className="text-xs font-semibold text-blue-900 mb-2">📦 Delivery Info</p>
+                        <div className="space-y-1">
+                          {order.customerPhone && (
+                            <p className="text-sm text-blue-900">
+                              <strong>📞 Phone:</strong> {order.customerPhone}
+                            </p>
+                          )}
+                          {order.deliveryAddress && (
+                            <p className="text-sm text-blue-900">
+                              <strong>📍 Address:</strong> {order.deliveryAddress}
+                              {order.deliveryCity && `, ${order.deliveryCity}`}
+                            </p>
+                          )}
+                          {order.deliveryNotes && (
+                            <p className="text-sm text-blue-900">
+                              <strong>📝 Notes:</strong> {order.deliveryNotes}
+                            </p>
+                          )}
+                          {order.deliveryCoordinates && order.deliveryCoordinates.lat !== 0 && (
+                            <a 
+                              href={`https://www.google.com/maps?q=${order.deliveryCoordinates.lat},${order.deliveryCoordinates.lng}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-sm text-blue-600 hover:underline inline-flex items-center gap-1"
+                            >
+                              🗺️ Open Location in Maps →
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -809,6 +912,37 @@ const AdminOrders: React.FC = () => {
                     <div className="mt-1">{getStatusBadge(viewingOrder.status)}</div>
                   </div>
                 </div>
+
+                {/* Delivery Information */}
+                {(viewingOrder.deliveryAddress || viewingOrder.deliveryCity || viewingOrder.deliveryNotes || viewingOrder.deliveryCoordinates) && (
+                  <div className="bg-blue-50 p-4 rounded">
+                    <Label className="text-blue-900">Delivery Information</Label>
+                    <div className="mt-2 space-y-1">
+                      {viewingOrder.deliveryAddress && (
+                        <p className="text-sm"><strong>Address:</strong> {viewingOrder.deliveryAddress}</p>
+                      )}
+                      {viewingOrder.deliveryCity && (
+                        <p className="text-sm"><strong>City:</strong> {viewingOrder.deliveryCity}</p>
+                      )}
+                      {viewingOrder.deliveryNotes && (
+                        <p className="text-sm"><strong>Notes:</strong> {viewingOrder.deliveryNotes}</p>
+                      )}
+                      {viewingOrder.deliveryCoordinates && viewingOrder.deliveryCoordinates.lat !== 0 && (
+                        <p className="text-sm">
+                          <strong>Location:</strong>{' '}
+                          <a 
+                            href={`https://www.google.com/maps?q=${viewingOrder.deliveryCoordinates.lat},${viewingOrder.deliveryCoordinates.lng}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="text-blue-600 underline"
+                          >
+                            {viewingOrder.deliveryCoordinates.lat.toFixed(4)}, {viewingOrder.deliveryCoordinates.lng.toFixed(4)} (Open in Maps)
+                          </a>
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                )}
 
                 <div>
                   <Label>Items</Label>

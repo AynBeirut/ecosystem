@@ -10,7 +10,7 @@
   "description": "Modern marketplace platform for stores and products",
   "icons": [
     {
-      "src": "/icon-192x192.png",
+      "src": "/icon-512x512.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
