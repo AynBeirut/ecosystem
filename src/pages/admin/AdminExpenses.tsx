@@ -929,8 +929,9 @@ const AdminExpenses: React.FC = () => {
             type="number"
             min="0"
             step="0.01"
-            value={expense.amount}
-            onChange={(e) => onChange({ amount: parseFloat(e.target.value) || 0 })}
+            value={expense.amount === 0 ? '' : expense.amount}
+            onChange={(e) => onChange({ amount: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+            placeholder="0.00"
           />
         </div>
         <div>
