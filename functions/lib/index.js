@@ -185,11 +185,20 @@ app.post('/checkout', async (req, res) => {
                     orderItems,
                     subtotal: storeSubtotal,
                     total: totalAfterDiscount,
+                    storeProfile,
                 });
                 console.log('Prepared order for store:', storeId, 'with items:', orderItems);
             }
             // PHASE 2: ALL WRITES (after all reads are complete)
             for (const orderData of ordersToCreate) {
+                // Generate online order invoice number
+                const prefix = 'ON';
+                const lastNumber = orderData.storeProfile?.lastInvoiceNumber || 0;
+                const newNumber = lastNumber + 1;
+                const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
+                // Update store profile with new invoice number
+                const profileRef = db.doc(`storeProfiles/${orderData.storeId}`);
+                tx.update(profileRef, { lastInvoiceNumber: newNumber });
                 const orderRef = db.collection('orders').doc();
                 tx.set(orderRef, {
                     storeId: orderData.storeId,
@@ -197,6 +206,7 @@ app.post('/checkout', async (req, res) => {
                     customerName,
                     customerPhone: deliveryInfo?.phone || customerPhone || '',
                     customerEmail: deliveryInfo?.email || customerEmail || '',
+                    invoiceNumber,
                     items: orderData.orderItems,
                     subtotal: orderData.subtotal,
                     discount: 0,
@@ -212,6 +222,7 @@ app.post('/checkout', async (req, res) => {
                 ordersCreated++;
                 console.log('Order created:', {
                     orderId: orderRef.id,
+                    invoiceNumber,
                     storeId: orderData.storeId,
                     customerId: userId,
                     customerName,
