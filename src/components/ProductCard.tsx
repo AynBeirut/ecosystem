@@ -35,7 +35,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore }) => {
     addToCart(product);
   };
 
-  const cardLink = linkToStore ? `/store/${product.storeId}` : `/product/${product.id}`;
+  const cardLink = linkToStore 
+    ? `/store/${product.store?.slug || product.storeId}` 
+    : product.slug && product.store?.slug
+      ? `/store/${product.store.slug}/product/${product.slug}`
+      : `/product/id/${product.id}`;
   return (
     <Link to={cardLink}>
       <Card className="h-full overflow-hidden card-hover">

@@ -1,5 +1,5 @@
 import React from 'react'
-import { Facebook, MessageCircle, Instagram, Link as LinkIcon, Phone } from 'lucide-react'
+import { Facebook, MessageCircle, Instagram, Link as LinkIcon, Phone, Mail, Linkedin, Image as ImageIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/use-toast'
 
@@ -74,25 +74,63 @@ const ShareButtons: React.FC<Props> = ({ url, title, description }) => {
     toast({ title: 'Tip', description: 'Open TikTok and paste the link into your story or post.' })
   }
 
+  const shareTwitter = async () => {
+    if (await handleNativeShare()) return
+    const text = `${title || ''} ${url}`
+    const href = `https://twitter.com/intent/tweet?text=${encoded(text)}`
+    openWindow(href)
+  }
+
+  const shareLinkedIn = async () => {
+    if (await handleNativeShare()) return
+    const href = `https://www.linkedin.com/sharing/share-offsite/?url=${encoded(url)}`
+    openWindow(href)
+  }
+
+  const sharePinterest = async () => {
+    if (await handleNativeShare()) return
+    // Pinterest requires media URL - use product image if available
+    const href = `https://pinterest.com/pin/create/button/?url=${encoded(url)}&description=${encoded(title || description || '')}`
+    openWindow(href)
+  }
+
+  const shareEmail = () => {
+    const subject = encoded(title || 'Check out this product')
+    const body = encoded(`${description || ''}\n\n${url}`)
+    window.location.href = `mailto:?subject=${subject}&body=${body}`
+  }
+
   return (
-    <div className="flex items-center gap-2">
-      <Button variant="ghost" size="sm" onClick={shareFacebook} aria-label="Share on Facebook">
+    <div className="flex items-center gap-2 flex-wrap">
+      <Button variant="ghost" size="sm" onClick={shareFacebook} aria-label="Share on Facebook" title="Facebook">
         <Facebook className="h-4 w-4" />
       </Button>
 
-      <Button variant="ghost" size="sm" onClick={shareInstagramStory} aria-label="Share to Instagram Story">
-        <Instagram className="h-4 w-4" />
-      </Button>
-
-      <Button variant="ghost" size="sm" onClick={shareTikTok} aria-label="Share on TikTok">
+      <Button variant="ghost" size="sm" onClick={shareTwitter} aria-label="Share on X (Twitter)" title="X (Twitter)">
         <MessageCircle className="h-4 w-4" />
       </Button>
 
-      <Button variant="ghost" size="sm" onClick={shareWhatsApp} aria-label="Share on WhatsApp">
+      <Button variant="ghost" size="sm" onClick={shareInstagramStory} aria-label="Share to Instagram Story" title="Instagram">
+        <Instagram className="h-4 w-4" />
+      </Button>
+
+      <Button variant="ghost" size="sm" onClick={shareLinkedIn} aria-label="Share on LinkedIn" title="LinkedIn">
+        <Linkedin className="h-4 w-4" />
+      </Button>
+
+      <Button variant="ghost" size="sm" onClick={sharePinterest} aria-label="Share on Pinterest" title="Pinterest">
+        <ImageIcon className="h-4 w-4" />
+      </Button>
+
+      <Button variant="ghost" size="sm" onClick={shareWhatsApp} aria-label="Share on WhatsApp" title="WhatsApp">
         <Phone className="h-4 w-4" />
       </Button>
 
-      <Button variant="ghost" size="sm" onClick={handleCopy} aria-label="Copy link">
+      <Button variant="ghost" size="sm" onClick={shareEmail} aria-label="Share via Email" title="Email">
+        <Mail className="h-4 w-4" />
+      </Button>
+
+      <Button variant="ghost" size="sm" onClick={handleCopy} aria-label="Copy link" title="Copy Link">
         <LinkIcon className="h-4 w-4" />
       </Button>
     </div>

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, runTransaction, orderBy, serverTimestamp } from 'firebase/firestore';
 import { auth as firebaseAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/useAuth';
@@ -17,7 +17,9 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 
 const StoreDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, slug } = useParams<{ id?: string; slug?: string }>();
+  const navigate = useNavigate();
+  const [storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [announcements, setAnnouncements] = useState<StoreAnnouncement[]>([]);
@@ -30,17 +32,17 @@ const StoreDetail: React.FC = () => {
   const [editRating, setEditRating] = useState<number>(5);
   const [editComment, setEditComment] = useState<string>('');
   const { user, followStore, unfollowStore } = useAuth();
-  const isFollowing = !!user?.following?.includes(id || '');
+  const isFollowing = !!user?.following?.includes(storeId || '');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
 
   // Fetch reviews helper (declared early so effects can call it)
   const fetchReviews = useCallback(async () => {
-    if (!id) return;
+    if (!storeId) return;
     try {
       const db = getFirestore();
       const reviewsRef = collection(db, 'storeReviews');
-      const q = query(reviewsRef, where('storeId', '==', id), orderBy('createdAt', 'desc'));
+      const q = query(reviewsRef, where('storeId', '==', storeId), orderBy('createdAt', 'desc'));
       const snap = await getDocs(q);
       const items: StoreReview[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as StoreReview));
       setReviews(items);
@@ -53,11 +55,14 @@ const StoreDetail: React.FC = () => {
     } catch (e) {
       console.error('Failed to fetch reviews', e);
     }
-  }, [id]);
+  }, [storeId]);
 
   useEffect(() => {
-    if (!id) {
-      setError('Store ID is missing');
+    // Determine if we have a slug or ID
+    const identifier = slug || id;
+    
+    if (!identifier) {
+      setError('Store identifier is missing');
       setIsLoading(false);
       return;
     }
@@ -66,19 +71,56 @@ const StoreDetail: React.FC = () => {
       setIsLoading(true);
       try {
         const db = getFirestore();
-        // Fetch store profile
-        const storeRef = doc(db, 'storeProfiles', id);
-        const storeSnap = await getDoc(storeRef);
-        if (!storeSnap.exists()) {
-          setError('Store not found');
-          setIsLoading(false);
-          return;
+        let storeData: any = null;
+        let docId: string = identifier;
+        
+        // Check if identifier is a slug or Firebase ID
+        // Slugs: lowercase, hyphens, no uppercase (e.g., "johns-coffee-shop")
+        // Firebase IDs: mixed case, no hyphens, 20-28 chars (e.g., "1HfsBr45XYM5SkaaazWegmyqGpA3")
+        const isSlug = identifier.includes('-') && !/[A-Z0-9]{10,}/.test(identifier);
+        
+        if (isSlug) {
+          // Search by slug
+          const storesRef = collection(db, 'storeProfiles');
+          const slugQuery = query(storesRef, where('slug', '==', identifier));
+          const slugSnap = await getDocs(slugQuery);
+          
+          if (!slugSnap.empty) {
+            docId = slugSnap.docs[0].id;
+            storeData = slugSnap.docs[0].data();
+            setStoreId(docId);
+          } else {
+            setError('Store not found');
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          // Direct ID lookup (backward compatibility)
+          const storeRef = doc(db, 'storeProfiles', identifier);
+          const storeSnap = await getDoc(storeRef);
+          
+          if (!storeSnap.exists()) {
+            setError('Store not found');
+            setIsLoading(false);
+            return;
+          }
+          
+          storeData = storeSnap.data();
+          docId = identifier;
+          setStoreId(docId);
+          
+          // Redirect to slug URL if store has a slug
+          if (storeData.slug) {
+            navigate(`/store/${storeData.slug}`, { replace: true });
+            return;
+          }
         }
-        setStore({ id, ...storeSnap.data() } as Store);
+        
+        setStore({ id: docId, ...storeData } as Store);
 
         // Fetch products for this store
         const productsRef = collection(db, 'products');
-        const productsQuery = query(productsRef, where('storeId', '==', id));
+        const productsQuery = query(productsRef, where('storeId', '==', docId));
         const productsSnap = await getDocs(productsQuery);
         setProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
 
@@ -86,7 +128,7 @@ const StoreDetail: React.FC = () => {
         let announcementsList: StoreAnnouncement[] = [];
         try {
           const announcementsRef = collection(db, 'announcements');
-          const announcementsQuery = query(announcementsRef, where('storeId', '==', id));
+          const announcementsQuery = query(announcementsRef, where('storeId', '==', docId));
           const announcementsSnap = await getDocs(announcementsQuery);
           announcementsList = announcementsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StoreAnnouncement));
         } catch (e) {
@@ -102,9 +144,14 @@ const StoreDetail: React.FC = () => {
     };
 
     loadStore();
-    // Also load reviews when store loads
-    fetchReviews();
-  }, [id, fetchReviews]);
+  }, [id, slug, navigate]);
+  
+  // Load reviews when storeId is set
+  useEffect(() => {
+    if (storeId) {
+      fetchReviews();
+    }
+  }, [storeId, fetchReviews]);
 
   
 

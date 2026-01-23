@@ -31,7 +31,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ store }) => {
   }, [store.id]);
 
   return (
-    <Link to={`/store/${store.id}`}>
+    <Link to={`/store/${store.slug || store.id}`}>
       <Card className="h-full overflow-hidden card-hover">
         <div className="p-4 flex items-center justify-center bg-gray-50">
           <img 

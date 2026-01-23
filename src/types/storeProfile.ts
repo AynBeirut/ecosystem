@@ -1,5 +1,6 @@
 export interface StoreProfile {
   name: string;
+  slug?: string; // URL-friendly store identifier (e.g., 'tech-gadgets')
   description: string;
   location: string;
   website: string;

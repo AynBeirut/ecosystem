@@ -8,6 +8,7 @@ import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import Marketplace from "./pages/Marketplace";
 import StoreDetail from "./pages/StoreDetail";
+import ProductDetail from "./pages/ProductDetail";
 import NotFound from "./pages/NotFound";
 import AuthCallback from "./routes/auth/auth-callback";
 import Cart from "./pages/Cart";
@@ -71,7 +72,11 @@ import AdminReturns from "./pages/admin/AdminReturns";
                         {/* Main app routes */}
                         <Route path="/" element={<Marketplace />} />
                         <Route path="/search" element={<Marketplace />} />
-                        <Route path="/store/:id" element={<StoreDetail />} />
+                        <Route path="/store/:slug" element={<StoreDetail />} />
+                        <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
+                        {/* Backward compatibility routes */}
+                        <Route path="/store/id/:id" element={<StoreDetail />} />
+                        <Route path="/product/id/:id" element={<ProductDetail />} />
                         {/* Protected routes */}
                         <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
                         <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />

@@ -3,6 +3,7 @@ export type ProductType = 'simple' | 'service' | 'composed';
 export type Product = {
   id: string;
   name: string;
+  slug?: string; // URL-friendly product identifier (e.g., 'iphone-15-pro')
   description: string;
   price: number;
   image: string;
@@ -28,6 +29,7 @@ export type Product = {
 export type Store = {
   id: string;
   name: string;
+  slug?: string; // URL-friendly store identifier
   description: string;
   logo: string;
   location: string;

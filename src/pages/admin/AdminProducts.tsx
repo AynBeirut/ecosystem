@@ -19,6 +19,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
+import { generateUniqueSlug } from '@/lib/slugify';
 
 const AdminProducts: React.FC = () => {
   const { user } = useAuth();
@@ -74,12 +75,16 @@ const AdminProducts: React.FC = () => {
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
         await uploadBytes(imageRef, newProduct.imageFile);
         imageUrl = await getDownloadURL(imageRef);
-      } catch {
-        toast({ title: "Error", description: "Image upload failed.", variant: "destructive" });
+      } catch (error) {
+        console.error('Image upload failed:', error);
+        toast({ title: "Error", description: `Image upload failed: ${error.message || 'Unknown error'}`, variant: "destructive" });
         return;
       }
     }
     try {
+      // Generate unique slug for the product
+      const productSlug = await generateUniqueSlug(newProduct.name, 'products', undefined);
+      
       const productData = {
         name: newProduct.name,
         description: newProduct.description,
@@ -88,6 +93,7 @@ const AdminProducts: React.FC = () => {
         deliveryTime: newProduct.deliveryTime || '3-5 days',
         image: imageUrl || `https://placehold.co/400x300/38B2AC/fff?text=${encodeURIComponent(newProduct.name)}`,
         storeId: user?.storeId || '',
+        slug: productSlug,
         inStock: (newProduct.stock === '' || Number(newProduct.stock) > 0),
         stock: newProduct.stock === '' ? 0 : Number(newProduct.stock),
         rating: 0,
@@ -104,7 +110,8 @@ const AdminProducts: React.FC = () => {
       setIsAddingProduct(false);
       toast({ title: "Success", description: "Product added successfully!" });
     } catch (err) {
-      toast({ title: "Error", description: "Failed to add product.", variant: "destructive" });
+      console.error('Failed to add product:', err);
+      toast({ title: "Error", description: `Failed to add product: ${err.message || 'Unknown error'}`, variant: "destructive" });
     }
   };
 
@@ -152,6 +159,9 @@ const AdminProducts: React.FC = () => {
       }
     }
     try {
+      // Generate slug if product doesn't have one yet
+      const productSlug = editingProduct.slug || await generateUniqueSlug(newProduct.name, 'products', editingProduct.id);
+      
       const updatedProduct = {
         name: newProduct.name,
         description: newProduct.description,
@@ -160,6 +170,7 @@ const AdminProducts: React.FC = () => {
         deliveryTime: newProduct.deliveryTime,
         image: imageUrl || editingProduct.image,
         storeId: editingProduct.storeId,
+        slug: productSlug,
         inStock: (newProduct.stock === '' || Number(newProduct.stock) > 0),
         stock: newProduct.stock === '' ? 0 : Number(newProduct.stock),
         rating: editingProduct.rating

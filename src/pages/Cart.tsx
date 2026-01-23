@@ -299,7 +299,13 @@ const Cart: React.FC = () => {
                             <div className="flex flex-col sm:flex-row sm:justify-between">
                               <div>
                                 <h3 className="font-medium text-gray-900">
-                                  <Link to={`/product/${item.product.id}`} className="hover:text-market-primary">
+                                  <Link 
+                                    to={item.product.slug && item.product.store?.slug 
+                                      ? `/store/${item.product.store.slug}/product/${item.product.slug}`
+                                      : `/product/id/${item.product.id}`
+                                    } 
+                                    className="hover:text-market-primary"
+                                  >
                                     {item.product.name}
                                   </Link>
                                 </h3>

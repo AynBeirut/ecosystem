@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Store, Camera, Plus, X } from 'lucide-react';
+import { Upload, Store, Camera, Plus, X, Check, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { StoreProfile } from '../../types/storeProfile';
+import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 
 const defaultProfile: StoreProfile = {
   name: '',
@@ -69,6 +70,10 @@ const AdminProfile: React.FC = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
   const [newCategory, setNewCategory] = useState<string>('');
+  const [slugError, setSlugError] = useState<string>('');
+  const [slugSuggestions, setSlugSuggestions] = useState<string[]>([]);
+  const [isCheckingSlug, setIsCheckingSlug] = useState(false);
+  const [slugAvailable, setSlugAvailable] = useState(false);
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -101,11 +106,59 @@ const AdminProfile: React.FC = () => {
     });
   };
 
+  const handleSlugChange = async (value: string) => {
+    const newSlug = value.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-');
+    setFormData({ ...formData, slug: newSlug });
+    
+    if (!newSlug || newSlug.length < 2) {
+      setSlugError('');
+      setSlugAvailable(false);
+      return;
+    }
+    
+    if (!isValidSlug(newSlug)) {
+      setSlugError('Invalid slug format. Use lowercase letters, numbers, and hyphens only.');
+      setSlugAvailable(false);
+      return;
+    }
+    
+    setIsCheckingSlug(true);
+    try {
+      const result = await checkSlugAvailability(newSlug, 'storeProfiles', user?.id);
+      if (result.available) {
+        setSlugError('');
+        setSlugSuggestions([]);
+        setSlugAvailable(true);
+      } else {
+        setSlugError('This store name is already taken. Choose another one:');
+        setSlugSuggestions(result.suggestions);
+        setSlugAvailable(false);
+      }
+    } catch (err) {
+      setSlugError('Failed to check availability');
+      setSlugAvailable(false);
+    }
+    setIsCheckingSlug(false);
+  };
+
+  const handleGenerateSlug = () => {
+    if (formData.name) {
+      const slug = generateSlug(formData.name);
+      handleSlugChange(slug);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
     if (user?.id) {
       try {
+        // Auto-generate slug if not provided
+        if (!formData.slug && formData.name) {
+          const autoSlug = await generateUniqueSlug(formData.name, 'storeProfiles', user.id);
+          formData.slug = autoSlug;
+        }
+        
         // Sanitize formData: replace undefined with null
         const cleanFormData = Object.fromEntries(
           Object.entries(formData).map(([k, v]) => [k, v === undefined ? null : v])
@@ -218,7 +271,14 @@ const AdminProfile: React.FC = () => {
                   <Input
                     id="name"
                     value={formData.name}
-                    onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, name: e.target.value });
+                      // Auto-generate slug on name change if slug is empty
+                      if (!formData.slug) {
+                        const slug = generateSlug(e.target.value);
+                        handleSlugChange(slug);
+                      }
+                    }}
                     placeholder="Your store name"
                     required
                   />
@@ -232,6 +292,71 @@ const AdminProfile: React.FC = () => {
                     onChange={(e) => setFormData({ ...formData, location: e.target.value })}
                     placeholder="City, State/Country"
                   />
+                </div>
+              </div>
+              
+              {/* Store Slug/URL */}
+              <div>
+                <Label htmlFor="slug">
+                  Store URL *
+                  <span className="text-xs text-muted-foreground ml-2">
+                    (This will be your store's web address)
+                  </span>
+                </Label>
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <div className="relative">
+                      <Input
+                        id="slug"
+                        value={formData.slug || ''}
+                        onChange={(e) => handleSlugChange(e.target.value)}
+                        placeholder="your-store-name"
+                        required
+                        className={slugError ? 'border-red-500' : slugAvailable && formData.slug ? 'border-green-500' : ''}
+                      />
+                      {isCheckingSlug && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <div className="animate-spin h-4 w-4 border-2 border-gray-300 border-t-gray-600 rounded-full" />
+                        </div>
+                      )}
+                      {!isCheckingSlug && slugAvailable && formData.slug && (
+                        <Check className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-green-500" />
+                      )}
+                      {!isCheckingSlug && slugError && (
+                        <AlertCircle className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-red-500" />
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      https://grabio.space/store/{formData.slug || 'your-store-name'}
+                    </p>
+                    {slugError && (
+                      <div className="mt-2">
+                        <p className="text-xs text-red-500 mb-2">{slugError}</p>
+                        {slugSuggestions.length > 0 && (
+                          <div className="flex flex-wrap gap-2">
+                            {slugSuggestions.map((suggestion) => (
+                              <Badge
+                                key={suggestion}
+                                variant="outline"
+                                className="cursor-pointer hover:bg-gray-100"
+                                onClick={() => handleSlugChange(suggestion)}
+                              >
+                                {suggestion}
+                              </Badge>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleGenerateSlug}
+                    disabled={!formData.name}
+                  >
+                    Generate
+                  </Button>
                 </div>
               </div>
               

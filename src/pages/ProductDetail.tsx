@@ -1,19 +1,20 @@
 
 import React, { useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
-import { getProductById, getStoreById } from '@/data/mockData';
+import { useParams, Link, useNavigate } from 'react-router-dom';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { Product, Store } from '@/types/product';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { useFavorites } from '@/context/FavoritesContext';
-import { Heart, Minus, Plus, Clock, Store as StoreIcon } from 'lucide-react';
+import { Heart, Minus, Plus, Clock, Store as StoreIcon, ArrowLeft } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import ShareButtons from '@/components/ui/ShareButtons';
 
 const ProductDetail: React.FC = () => {
-  const { id } = useParams<{ id: string }>();
+  const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
+  const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
   const [store, setStore] = useState<Store | null>(null);
   const [quantity, setQuantity] = useState(1);
@@ -24,8 +25,10 @@ const ProductDetail: React.FC = () => {
   const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
 
   useEffect(() => {
-    if (!id) {
-      setError('Product ID is missing');
+    const identifier = productSlug || id;
+    
+    if (!identifier) {
+      setError('Product identifier is missing');
       setIsLoading(false);
       return;
     }
@@ -33,19 +36,81 @@ const ProductDetail: React.FC = () => {
     const loadProduct = async () => {
       setIsLoading(true);
       try {
-        // Simulate API delay
-        await new Promise(resolve => setTimeout(resolve, 500));
+        const db = getFirestore();
+        let productData: any = null;
+        let productId: string = identifier;
         
-        const productData = getProductById(id);
-        if (!productData) {
-          setError('Product not found');
-          return;
+        // Check if identifier is a slug or Firebase ID
+        // Slugs: lowercase, hyphens, no uppercase (e.g., "iphone-15-pro")
+        // Firebase IDs: mixed case, no hyphens, 20-28 chars
+        const isSlug = identifier.includes('-') && !/[A-Z0-9]{10,}/.test(identifier);
+        
+        if (isSlug && storeSlug) {
+          // Search by slug within store
+          // First get store ID from store slug
+          const storesRef = collection(db, 'storeProfiles');
+          const storeQuery = query(storesRef, where('slug', '==', storeSlug));
+          const storeSnap = await getDocs(storeQuery);
+          
+          if (!storeSnap.empty) {
+            const storeId = storeSnap.docs[0].id;
+            const storeData = { id: storeId, ...storeSnap.docs[0].data() };
+            setStore(storeData as Store);
+            
+            // Now search for product by slug within this store
+            const productsRef = collection(db, 'products');
+            const productQuery = query(
+              productsRef, 
+              where('slug', '==', identifier),
+              where('storeId', '==', storeId)
+            );
+            const productSnap = await getDocs(productQuery);
+            
+            if (!productSnap.empty) {
+              productId = productSnap.docs[0].id;
+              productData = productSnap.docs[0].data();
+            } else {
+              setError('Product not found');
+              setIsLoading(false);
+              return;
+            }
+          } else {
+            setError('Store not found');
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          // Direct ID lookup (backward compatibility)
+          const productRef = doc(db, 'products', identifier);
+          const productSnap = await getDoc(productRef);
+          
+          if (!productSnap.exists()) {
+            setError('Product not found');
+            setIsLoading(false);
+            return;
+          }
+          
+          productData = productSnap.data();
+          productId = identifier;
+          
+          // Fetch store
+          if (productData.storeId) {
+            const storeRef = doc(db, 'storeProfiles', productData.storeId);
+            const storeSnap = await getDoc(storeRef);
+            if (storeSnap.exists()) {
+              const storeData = { id: productData.storeId, ...storeSnap.data() };
+              setStore(storeData as Store);
+              
+              // Redirect to slug URL if both product and store have slugs
+              if (productData.slug && storeData.slug) {
+                navigate(`/store/${storeData.slug}/product/${productData.slug}`, { replace: true });
+                return;
+              }
+            }
+          }
         }
         
-        setProduct(productData);
-        
-        const storeData = getStoreById(productData.storeId);
-        setStore(storeData || null);
+        setProduct({ id: productId, ...productData } as Product);
       } catch (err) {
         setError('Failed to load product data');
         console.error(err);
@@ -55,7 +120,7 @@ const ProductDetail: React.FC = () => {
     };
 
     loadProduct();
-  }, [id]);
+  }, [id, productSlug, storeSlug, navigate]);
 
   const handleAddToCart = () => {
     if (product) {
@@ -178,9 +243,16 @@ const ProductDetail: React.FC = () => {
                 </div>
                 
                 {store && (
-                  <Link to={`/store/${store.id}`} className="flex items-center text-market-secondary hover:underline mb-6">
+                  <Link to={`/store/${store.slug || store.id}`} className="flex items-center text-market-secondary hover:underline mb-6">
                     <StoreIcon size={18} className="mr-2" />
                     Sold by: {store.name}
+                  </Link>
+                )}
+                
+                {store && (
+                  <Link to={`/store/${store.slug || store.id}`} className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6">
+                    <ArrowLeft size={18} className="mr-2" />
+                    Back to Store
                   </Link>
                 )}
                 
