@@ -86,19 +86,68 @@ const AdminPayments: React.FC = () => {
     processingFee: '0.30'
   });
 
-  const handleMethodToggle = (method: string, enabled: boolean) => {
-    setPaymentMethods(prev => ({ ...prev, [method]: enabled }));
-    toast({
-      title: enabled ? "Payment Method Enabled" : "Payment Method Disabled",
-      description: `${method.charAt(0).toUpperCase() + method.slice(1)} has been ${enabled ? 'enabled' : 'disabled'} for your store.`
-    });
+  // Load payment methods and fees from Firestore on mount
+  useEffect(() => {
+    const fetchPaymentSettings = async () => {
+      if (user?.id) {
+        const settingsRef = doc(db, 'storeProfiles', user.id);
+        const settingsSnap = await getDoc(settingsRef);
+        if (settingsSnap.exists()) {
+          const data = settingsSnap.data();
+          if (data.paymentMethods) {
+            setPaymentMethods(data.paymentMethods);
+          }
+          if (data.paymentFees) {
+            setFees(data.paymentFees);
+          }
+        }
+      }
+    };
+    fetchPaymentSettings();
+  }, [user?.id, db]);
+
+  const handleMethodToggle = async (method: string, enabled: boolean) => {
+    const updatedMethods = { ...paymentMethods, [method]: enabled };
+    setPaymentMethods(updatedMethods);
+    
+    // Save to Firestore immediately
+    if (user?.id) {
+      try {
+        const settingsRef = doc(db, 'storeProfiles', user.id);
+        await setDoc(settingsRef, { paymentMethods: updatedMethods }, { merge: true });
+        toast({
+          title: enabled ? "Payment Method Enabled" : "Payment Method Disabled",
+          description: `${method.charAt(0).toUpperCase() + method.slice(1)} has been ${enabled ? 'enabled' : 'disabled'} for your store.`
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to save payment method setting.",
+          variant: "destructive"
+        });
+        // Revert on error
+        setPaymentMethods(paymentMethods);
+      }
+    }
   };
 
-  const handleSaveFees = () => {
-    toast({
-      title: "Payment Settings Saved",
-      description: "Your payment processing fees have been updated."
-    });
+  const handleSaveFees = async () => {
+    if (user?.id) {
+      try {
+        const settingsRef = doc(db, 'storeProfiles', user.id);
+        await setDoc(settingsRef, { paymentFees: fees }, { merge: true });
+        toast({
+          title: "Payment Settings Saved",
+          description: "Your payment processing fees have been updated."
+        });
+      } catch (error) {
+        toast({
+          title: "Error",
+          description: "Failed to save fee settings.",
+          variant: "destructive"
+        });
+      }
+    }
   };
 
   const paymentOptions = [
@@ -174,7 +223,7 @@ const AdminPayments: React.FC = () => {
           <p className="text-muted-foreground">Configure which payment methods to accept in your store</p>
         </div>
 
-  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Payment Methods */}
           <div className="space-y-4">
             <Card>
@@ -205,10 +254,38 @@ const AdminPayments: React.FC = () => {
                 })}
               </CardContent>
             </Card>
+            
+            <Card>
+              <CardHeader>
+                <CardTitle>Payment Security</CardTitle>
+                <CardDescription>
+                  Your payment processing is secured with industry-standard encryption
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3 text-sm">
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                    <span>SSL/TLS Encryption</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                    <span>PCI DSS Compliant</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                    <span>Fraud Protection</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
+                    <span>3D Secure Authentication</span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
-          {/* Payment Processing Fees */}
-          {/* Payment Credentials */}
+          {/* Payment Credentials and Processing Fees */}
           <div className="space-y-4">
             <Card>
               <CardHeader>
@@ -280,8 +357,7 @@ const AdminPayments: React.FC = () => {
                 </Button>
               </CardContent>
             </Card>
-          </div>
-          <div className="space-y-4">
+            
             <Card>
               <CardHeader>
                 <CardTitle>Processing Fees</CardTitle>
@@ -343,35 +419,6 @@ const AdminPayments: React.FC = () => {
                 <Button onClick={handleSaveFees} className="w-full">
                   Save Fee Settings
                 </Button>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardHeader>
-                <CardTitle>Payment Security</CardTitle>
-                <CardDescription>
-                  Your payment processing is secured with industry-standard encryption
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3 text-sm">
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                    <span>SSL/TLS Encryption</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                    <span>PCI DSS Compliant</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                    <span>Fraud Protection</span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="h-2 w-2 bg-green-500 rounded-full"></div>
-                    <span>3D Secure Authentication</span>
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
