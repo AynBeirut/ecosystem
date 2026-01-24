@@ -1059,7 +1059,7 @@ const AdminExpenses: React.FC = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
+            {!isMobile && <BackButton to="/admin/dashboard" label="Back to Dashboard" />}
             <h1 className="text-2xl font-bold">Expense Tracking</h1>
           </div>
           <div className="flex gap-2">

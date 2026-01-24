@@ -251,10 +251,10 @@ const AdminFinishedGoods: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      <MobileHeader title="Finished Goods" />
+      {isMobile && <MobileHeader title="Finished Goods" />}
       <div className="container mx-auto p-4 md:p-6">
         <div className="mb-4 md:mb-6">
-          <BackButton to="/admin/inventory" label="Back to Inventory" />
+          {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
         </div>
 
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
