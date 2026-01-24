@@ -23,7 +23,17 @@ const Cart: React.FC = () => {
   const { items, updateQuantity, removeFromCart, clearCart, subtotal } = useCart();
   const { user, setUser } = useAuth();
   // credits feature removed
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('visa');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>('cash');
+  const [availablePaymentMethods, setAvailablePaymentMethods] = useState({
+    creditCard: false,
+    debitCard: false,
+    paypal: false,
+    applePay: false,
+    googlePay: false,
+    bankTransfer: false,
+    cashOnDelivery: true,
+    storeCredits: false
+  });
   const [deliveryInfo, setDeliveryInfo] = useState({
     phone: '',
     address: '',
@@ -81,6 +91,103 @@ const Cart: React.FC = () => {
     
     if (items.length > 0) {
       fetchExchangeRates();
+    }
+  }, [items]);
+
+  // Fetch available payment methods from all stores in cart
+  useEffect(() => {
+    const fetchPaymentMethods = async () => {
+      const storeIds = [...new Set(items.map(item => item.product.storeId))];
+      if (storeIds.length === 0) return;
+      
+      const db = getFirestore();
+      const storePaymentSettings: any[] = [];
+      
+      // Fetch payment settings for each store
+      for (const storeId of storeIds) {
+        try {
+          const storeDoc = await getDoc(doc(db, 'storeProfiles', storeId));
+          if (storeDoc.exists()) {
+            const storeData = storeDoc.data();
+            // If store has payment methods configured, use them; otherwise allow all
+            if (storeData.paymentMethods) {
+              storePaymentSettings.push(storeData.paymentMethods);
+            } else {
+              // Default: all methods enabled if not configured
+              storePaymentSettings.push({
+                creditCard: true,
+                debitCard: true,
+                paypal: true,
+                applePay: true,
+                googlePay: true,
+                bankTransfer: true,
+                cashOnDelivery: true,
+                storeCredits: true
+              });
+            }
+          } else {
+            // Default: all methods enabled if store not found
+            storePaymentSettings.push({
+              creditCard: true,
+              debitCard: true,
+              paypal: true,
+              applePay: true,
+              googlePay: true,
+              bankTransfer: true,
+              cashOnDelivery: true,
+              storeCredits: true
+            });
+          }
+        } catch (error) {
+          console.error('Error fetching payment methods for store:', storeId, error);
+          // Default on error
+          storePaymentSettings.push({
+            creditCard: true,
+            debitCard: true,
+            paypal: true,
+            applePay: true,
+            googlePay: true,
+            bankTransfer: true,
+            cashOnDelivery: true,
+            storeCredits: true
+          });
+        }
+      }
+      
+      // Only show payment methods that ALL stores support (intersection)
+      const commonMethods = {
+        creditCard: storePaymentSettings.every(s => s.creditCard),
+        debitCard: storePaymentSettings.every(s => s.debitCard),
+        paypal: storePaymentSettings.every(s => s.paypal),
+        applePay: storePaymentSettings.every(s => s.applePay),
+        googlePay: storePaymentSettings.every(s => s.googlePay),
+        bankTransfer: storePaymentSettings.every(s => s.bankTransfer),
+        cashOnDelivery: storePaymentSettings.every(s => s.cashOnDelivery),
+        storeCredits: storePaymentSettings.every(s => s.storeCredits)
+      };
+      
+      setAvailablePaymentMethods(commonMethods);
+      
+      // Set default payment method to first available
+      if (commonMethods.cashOnDelivery) {
+        setPaymentMethod('cash');
+      } else if (commonMethods.creditCard) {
+        setPaymentMethod('visa');
+      } else if (commonMethods.debitCard) {
+        setPaymentMethod('visa');
+      } else if (commonMethods.paypal) {
+        setPaymentMethod('paypal');
+      } else if (commonMethods.applePay) {
+        setPaymentMethod('apple_pay');
+      } else if (commonMethods.googlePay) {
+        setPaymentMethod('google_pay');
+      } else if (commonMethods.bankTransfer) {
+        setPaymentMethod('bank_transfer');
+      }
+    };
+    
+    if (items.length > 0) {
+      fetchPaymentMethods();
     }
   }, [items]);
 
@@ -416,34 +523,42 @@ const Cart: React.FC = () => {
                       onValueChange={(value) => setPaymentMethod(value as PaymentMethod)}
                       className="space-y-2"
                     >
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="visa" id="visa" />
-                        <Label htmlFor="visa" className="flex items-center">
-                          <img src="https://placehold.co/40x25/2C5282/fff?text=VISA" alt="Visa" className="mr-2 h-6" />
-                          Visa
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="mastercard" id="mastercard" />
-                        <Label htmlFor="mastercard" className="flex items-center">
-                          <img src="https://placehold.co/40x25/ED8936/fff?text=MC" alt="Mastercard" className="mr-2 h-6" />
-                          Mastercard
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="paypal" id="paypal" />
-                        <Label htmlFor="paypal" className="flex items-center">
-                          <img src="https://placehold.co/40x25/38B2AC/fff?text=PP" alt="PayPal" className="mr-2 h-6" />
-                          PayPal
-                        </Label>
-                      </div>
-                      <div className="flex items-center space-x-2">
-                        <RadioGroupItem value="cash" id="cash" />
-                        <Label htmlFor="cash" className="flex items-center">
-                          <img src="https://placehold.co/40x25/718096/fff?text=CASH" alt="Cash" className="mr-2 h-6" />
-                          Cash on Delivery
-                        </Label>
-                      </div>
+                      {(availablePaymentMethods.creditCard || availablePaymentMethods.debitCard) && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="visa" id="visa" />
+                          <Label htmlFor="visa" className="flex items-center">
+                            <img src="https://placehold.co/40x25/2C5282/fff?text=VISA" alt="Visa" className="mr-2 h-6" />
+                            Visa
+                          </Label>
+                        </div>
+                      )}
+                      {(availablePaymentMethods.creditCard || availablePaymentMethods.debitCard) && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="mastercard" id="mastercard" />
+                          <Label htmlFor="mastercard" className="flex items-center">
+                            <img src="https://placehold.co/40x25/ED8936/fff?text=MC" alt="Mastercard" className="mr-2 h-6" />
+                            Mastercard
+                          </Label>
+                        </div>
+                      )}
+                      {availablePaymentMethods.paypal && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="paypal" id="paypal" />
+                          <Label htmlFor="paypal" className="flex items-center">
+                            <img src="https://placehold.co/40x25/38B2AC/fff?text=PP" alt="PayPal" className="mr-2 h-6" />
+                            PayPal
+                          </Label>
+                        </div>
+                      )}
+                      {availablePaymentMethods.cashOnDelivery && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="cash" id="cash" />
+                          <Label htmlFor="cash" className="flex items-center">
+                            <img src="https://placehold.co/40x25/718096/fff?text=CASH" alt="Cash" className="mr-2 h-6" />
+                            Cash on Delivery
+                          </Label>
+                        </div>
+                      )}
                     </RadioGroup>
                   </div>
                   
