@@ -5,6 +5,9 @@ import { FileDown, Download, ArrowLeft } from 'lucide-react';
 import { exportToCSV } from '@/lib/exportUtils';
 import jsPDF from 'jspdf';
 import { useNavigate } from 'react-router-dom';
+import MobileHeader from '@/components/MobileHeader';
+import BackButton from '@/components/BackButton';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface CustomerBalance {
   id: string;
@@ -49,6 +52,7 @@ interface ExpenseRecord {
 const AdminAccountStatement: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses'>('customers');
   const [loading, setLoading] = useState(true);
   
@@ -766,24 +770,30 @@ const AdminAccountStatement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="container mx-auto p-4">
-        <div className="flex justify-center items-center h-64">
-          <div className="text-lg">Loading account statement...</div>
+      <div className="min-h-screen bg-background">
+        {isMobile && <MobileHeader title="Account Statement" />}
+        <div className="container mx-auto p-4">
+          <div className="flex justify-center items-center h-64">
+            <div className="text-lg">Loading account statement...</div>
+          </div>
         </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto p-4">
-      <div className="flex items-center justify-between mb-6">
-        <div className="flex items-center gap-4">
-          <button
-            onClick={() => navigate('/admin/dashboard')}
-            className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
-          >
-            <ArrowLeft size={20} />
-            Back to Dashboard
+    <div className="min-h-screen bg-background">
+      {isMobile && <MobileHeader title="Account Statement" />}
+      <div className="container mx-auto p-4">
+        {!isMobile && (
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-4">
+            <button
+              onClick={() => navigate('/admin/dashboard')}
+              className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
+            >
+              <ArrowLeft size={20} />
+              Back to Dashboard
           </button>
           <h1 className="text-2xl font-bold">Account Statement</h1>
         </div>
@@ -804,6 +814,7 @@ const AdminAccountStatement: React.FC = () => {
           </button>
         </div>
       </div>
+        )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
@@ -1163,6 +1174,7 @@ const AdminAccountStatement: React.FC = () => {
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );
