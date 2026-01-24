@@ -91,36 +91,68 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
       const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
         if (firebaseUser) {
-          // Try to restore seller/admin info from localStorage
-          const savedSellerInfo = localStorage.getItem('sellerInfo');
-          let role: UserRole = 'user';
-          let isSeller = false;
-          let sellerSince = undefined;
-          let sellerIndex = undefined;
-          if (savedSellerInfo) {
-            try {
-              const sellerData = JSON.parse(savedSellerInfo);
-              role = sellerData.role || 'user';
-              isSeller = sellerData.isSeller || false;
-              sellerSince = sellerData.sellerSince;
-              sellerIndex = sellerData.sellerIndex;
-            } catch (e) {
-              console.error('Failed to parse sellerInfo from localStorage', e);
-            }
-          }
-          const baseUser: User = {
+          // Base user object
+          let baseUser: User = {
             id: firebaseUser.uid,
             name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
             email: firebaseUser.email || '',
-            role,
+            role: 'user',
             avatar: firebaseUser.photoURL || `https://ui-avatars.com/api/?name=${encodeURIComponent(firebaseUser.displayName || 'User')}&background=38B2AC&color=fff`,
             dailyAdsWatched: 0,
             lastAdWatchDate: new Date().toISOString().split('T')[0],
-            storeId: savedSellerInfo ? JSON.parse(savedSellerInfo).storeId : undefined,
-            isSeller,
-            sellerSince,
-            sellerIndex,
+            storeId: undefined,
           };
+          
+          // Check if this is a sub-account
+          const userProfileRef = doc(db, 'users', firebaseUser.uid);
+          const userProfileSnap = await getDoc(userProfileRef);
+          
+          if (userProfileSnap.exists()) {
+            const userProfile = userProfileSnap.data();
+            
+            // If this is a sub-account, load their profile
+            if (userProfile.role === 'sub_account' && userProfile.subAccountId) {
+              const subAccountRef = doc(db, 'subAccounts', userProfile.subAccountId);
+              const subAccountSnap = await getDoc(subAccountRef);
+              
+              if (subAccountSnap.exists()) {
+                const subAccountData = subAccountSnap.data();
+                
+                baseUser = {
+                  ...baseUser,
+                  name: subAccountData.name || baseUser.name,
+                  role: 'sub_account' as UserRole,
+                  storeId: subAccountData.storeId,
+                  subAccountRole: subAccountData.role,
+                  permissions: subAccountData.permissions,
+                  subAccountId: userProfile.subAccountId,
+                };
+                
+                localStorage.setItem('subAccountInfo', JSON.stringify({
+                  role: 'sub_account',
+                  subAccountRole: subAccountData.role,
+                  permissions: subAccountData.permissions,
+                  storeId: subAccountData.storeId,
+                  subAccountId: userProfile.subAccountId,
+                }));
+                
+                setUser(baseUser);
+                await loadFollows(firebaseUser.uid);
+                setIsLoading(false);
+                return;
+              }
+            }
+          }
+          
+          // If not a sub-account, check for seller/admin info from Firestore
+          const sellerRef = doc(db, 'sellers', firebaseUser.uid);
+          const sellerSnap = await getDoc(sellerRef);
+          if (sellerSnap.exists()) {
+            const sellerData = sellerSnap.data();
+            baseUser = { ...baseUser, ...sellerData, role: sellerData.role as UserRole };
+            localStorage.setItem('sellerInfo', JSON.stringify(sellerData));
+          }
+          
           setUser(baseUser);
           // Load follows into user context
           await loadFollows(firebaseUser.uid);

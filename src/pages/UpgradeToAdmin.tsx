@@ -38,6 +38,11 @@ const UpgradeToAdmin: React.FC = () => {
         const sellerSnap = await getDoc(sellerRef);
         if (sellerSnap.exists()) {
           const sellerData = sellerSnap.data();
+          // If user is already a seller/admin, redirect them immediately
+          if (sellerData.role === 'admin') {
+            navigate('/admin/dashboard', { replace: true });
+            return;
+          }
           if (sellerData.sellerSince) {
             const months = Math.max(0, 12 - Math.floor((Date.now() - new Date(sellerData.sellerSince).getTime()) / (1000 * 60 * 60 * 24 * 30.44)));
             freeLeft = months;
@@ -49,7 +54,7 @@ const UpgradeToAdmin: React.FC = () => {
       setIsFreeSeller(isFree);
     };
     fetchSellerStatus();
-  }, [user]);
+  }, [user, navigate]);
 
   const handleUpgrade = async () => {
     setIsProcessing(true);

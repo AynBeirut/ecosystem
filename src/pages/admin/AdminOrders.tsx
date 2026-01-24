@@ -1283,11 +1283,12 @@ const AdminOrders: React.FC = () => {
                   <div className="mt-2 space-y-2">
                     {viewingOrder.items?.map((item, index) => {
                       const product = products.find(p => p.id === item.productId);
+                      const itemPrice = item.price || product?.sellingPrice || product?.price || 0;
                       return (
                         <div key={index} className="flex justify-between p-2 bg-gray-50 rounded">
                           <span>{product?.name || 'Product'}</span>
                           <span className="font-medium">
-                            {item.quantity} × ${(product?.sellingPrice || 0).toFixed(2)} = ${((product?.sellingPrice || 0) * item.quantity).toFixed(2)}
+                            {item.quantity} × ${itemPrice.toFixed(2)} = ${(itemPrice * item.quantity).toFixed(2)}
                           </span>
                         </div>
                       );
