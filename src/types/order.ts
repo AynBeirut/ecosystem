@@ -34,6 +34,23 @@ export interface Order {
   assignedSalesPersonName?: string
   assignedDeliveryPerson?: string
   assignedDeliveryPersonName?: string
+  // Payment tracking
+  paymentStatus?: 'unpaid' | 'partial' | 'paid'
+  amountPaid?: number
+  paymentDate?: string
+  paymentMethod?: string
+  paymentNotes?: string
+  paymentHistory?: PaymentRecord[]
+}
+
+export interface PaymentRecord {
+  id: string
+  amount: number
+  date: string
+  method: string
+  notes?: string
+  recordedBy: string
+  recordedAt: string
 }
 
 export interface Customer {

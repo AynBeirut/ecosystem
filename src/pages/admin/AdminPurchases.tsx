@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical } from 'lucide-react';
+import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
@@ -39,6 +39,14 @@ const AdminPurchases: React.FC = () => {
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [receivingPurchase, setReceivingPurchase] = useState<Purchase | null>(null);
+  const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
+  const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ purchase: Purchase; payment: any } | null>(null);
+  const [paymentData, setPaymentData] = useState({
+    amountPaid: 0,
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'cash',
+    paymentNotes: '',
+  });
   const [newPurchase, setNewPurchase] = useState({
     supplierId: '',
     supplierName: '',
@@ -71,7 +79,20 @@ const AdminPurchases: React.FC = () => {
         id: doc.id,
         ...doc.data()
       } as Purchase));
-      setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
+      
+      // Fix amountPaid from paymentHistory if missing
+      const fixedPurchases = purchasesList.map(purchase => {
+        if (purchase.paymentHistory && purchase.paymentHistory.length > 0) {
+          const calculatedPaid = purchase.paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
+          if (purchase.amountPaid !== calculatedPaid) {
+            // Sync amountPaid with paymentHistory total
+            return { ...purchase, amountPaid: calculatedPaid };
+          }
+        }
+        return purchase;
+      });
+      
+      setPurchases(fixedPurchases.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
 
       // Fetch suppliers
       const suppliersRef = collection(db, 'suppliers');
@@ -400,6 +421,28 @@ const AdminPurchases: React.FC = () => {
             </div>
             ` : ''}
 
+            ${(purchase.paymentStatus && purchase.paymentStatus !== 'unpaid') ? `
+            <div style="margin-top: 30px; padding: 20px; background: #d1fae5; border-left: 4px solid #10b981; border-radius: 8px;">
+              <strong style="color: #10b981;">💰 Payment Information</strong><br/>
+              <div style="margin-top: 15px; display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                  <p style="color: #666; font-size: 12px; margin: 0;">Status</p>
+                  <p style="color: #1a1a1a; font-weight: 600; margin: 5px 0 0;">${purchase.paymentStatus === 'paid' ? '✓ Fully Paid' : '◐ Partially Paid'}</p>
+                </div>
+                <div>
+                  <p style="color: #666; font-size: 12px; margin: 0;">Amount Paid</p>
+                  <p style="color: #10b981; font-weight: bold; margin: 5px 0 0;">${formatCurrency(purchase.amountPaid || 0, true)}</p>
+                </div>
+                ${purchase.paymentStatus !== 'paid' ? `
+                <div>
+                  <p style="color: #666; font-size: 12px; margin: 0;">Balance Due</p>
+                  <p style="color: #ef4444; font-weight: bold; margin: 5px 0 0;">${formatCurrency((purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0), true)}</p>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+            ` : ''}
+
             <div class="footer">
               <p>For questions about this purchase order, please contact us at ${storeEmail || storePhone || 'our office'}</p>
             </div>
@@ -611,6 +654,17 @@ const AdminPurchases: React.FC = () => {
             <div style="margin-top: 40px; padding: 20px; border: 1px solid #d4af37; border-radius: 5px;">
               <strong style="color: #d4af37;">Notes:</strong><br/>
               <p style="color: #2c2c2c; margin-top: 10px; line-height: 1.8;">${purchase.notes}</p>
+            </div>
+            ` : ''}
+
+            ${(purchase.paymentStatus && purchase.paymentStatus !== 'unpaid') ? `
+            <div style="margin-top: 30px; padding: 20px; border: 2px solid #10b981; border-radius: 5px; background: #f0fdf4;">
+              <strong style="color: #10b981;">💰 Payment Information</strong><br/>
+              <div style="margin-top: 15px; color: #2c2c2c; line-height: 2;">
+                <p><strong>Status:</strong> ${purchase.paymentStatus === 'paid' ? '✓ Fully Paid' : '◐ Partially Paid'}</p>
+                <p><strong>Amount Paid:</strong> <span style="color: #10b981; font-weight: bold;">${formatCurrency(purchase.amountPaid || 0, true)}</span></p>
+                ${purchase.paymentStatus !== 'paid' ? `<p><strong>Balance Due:</strong> <span style="color: #ef4444; font-weight: bold;">${formatCurrency((purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0), true)}</span></p>` : ''}
+              </div>
             </div>
             ` : ''}
 
@@ -868,6 +922,34 @@ const AdminPurchases: React.FC = () => {
             </div>
             ` : ''}
 
+            ${(purchase.paymentStatus && purchase.paymentStatus !== 'unpaid') ? `
+            <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-left: 4px solid #10b981; border-radius: 12px;">
+              <h3 style="color: #10b981; font-size: 16px; margin-bottom: 15px;">💰 Payment Information</h3>
+              <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div>
+                  <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Status</p>
+                  <p style="color: #1a1a1a; font-weight: 600; font-size: 15px;">${purchase.paymentStatus === 'paid' ? '✓ Fully Paid' : '◐ Partially Paid'}</p>
+                </div>
+                <div>
+                  <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Amount Paid</p>
+                  <p style="color: #10b981; font-weight: bold; font-size: 15px;">${formatCurrency(purchase.amountPaid || 0, true)}</p>
+                </div>
+                ${purchase.paymentStatus !== 'paid' ? `
+                <div>
+                  <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Balance Due</p>
+                  <p style="color: #ef4444; font-weight: bold; font-size: 15px;">${formatCurrency((purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0), true)}</p>
+                </div>
+                ` : ''}
+                ${purchase.paymentDate ? `
+                <div>
+                  <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Last Payment</p>
+                  <p style="color: #1a1a1a; font-weight: 600; font-size: 15px;">${new Date(purchase.paymentDate).toLocaleDateString()}</p>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+            ` : ''}
+
             <div class="footer">
               <p>Questions? Contact us at ${storeEmail || storePhone || 'our office'}</p>
             </div>
@@ -1056,11 +1138,15 @@ const AdminPurchases: React.FC = () => {
       const invoiceNumber = await generatePONumber();
       
       // Ensure all numeric values are properly converted
-      const normalizedItems = newPurchase.items.map(item => ({
-        ...item,
-        quantity: typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0),
-        unitPrice: typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0),
-      }));
+      const normalizedItems = newPurchase.items.map(item => {
+        const unitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
+        return {
+          ...item,
+          quantity: typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0),
+          unitPrice,
+          unitCost: unitPrice, // Ensure unitCost is also set for compatibility
+        };
+      });
       
       const totalAmount = calculateTotal(normalizedItems);
 
@@ -1075,6 +1161,8 @@ const AdminPurchases: React.FC = () => {
         totalAmount,
         totalCost: totalAmount,
         notes: newPurchase.notes,
+        paymentStatus: 'unpaid' as const,
+        amountPaid: 0,
         storeId: user.storeId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -1161,28 +1249,67 @@ const AdminPurchases: React.FC = () => {
         updatedAt: new Date().toISOString(),
       });
 
-      // Update raw material stock levels
+      // Update raw material stock levels and costs
+      let updatedCount = 0;
       for (const item of receivingPurchase.items) {
         const material = rawMaterials.find(m => m.id === item.rawMaterialId);
-        if (material && item.receivedQuantity > 0) {
+        const receivedQty = item.receivedQuantity || 0;
+        
+        if (material && receivedQty > 0) {
           const materialRef = doc(db, 'rawMaterials', item.rawMaterialId);
-          const newStock = material.currentStock + item.receivedQuantity;
+          const newStock = material.currentStock + receivedQty;
+          
+          // Get the unit cost from the purchase item
+          const itemUnitCost = item.unitCost || item.unitPrice || 0;
+          
+          // Calculate weighted average cost
+          const currentValue = material.currentStock * (material.costPerUnit || 0);
+          const newValue = receivedQty * itemUnitCost;
+          const totalValue = currentValue + newValue;
+          
+          // If this is the first stock (material.currentStock was 0), use the item unit cost directly
+          // Otherwise use weighted average
+          let newCostPerUnit: number;
+          if (material.currentStock === 0) {
+            newCostPerUnit = itemUnitCost;
+          } else {
+            newCostPerUnit = newStock > 0 ? totalValue / newStock : itemUnitCost;
+          }
+          
+          console.log(`Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)})`);
           
           await updateDoc(materialRef, {
             currentStock: newStock,
+            costPerUnit: newCostPerUnit,
             updatedAt: new Date().toISOString(),
           });
-
-          // Update local state
-          setRawMaterials(rawMaterials.map(m => 
-            m.id === item.rawMaterialId ? { ...m, currentStock: newStock } : m
-          ));
+          updatedCount++;
+        } else if (!material) {
+          console.error(`Material not found: ${item.rawMaterialId}`);
+        } else if (receivedQty <= 0) {
+          console.warn(`No quantity received for ${material.name || item.materialName}`);
         }
       }
 
-      setPurchases(purchases.map(p => 
-        p.id === receivingPurchase.id ? { ...receivingPurchase, status: 'received', receivedDate: new Date().toISOString() } : p
-      ));
+      // Refetch raw materials to ensure sync
+      const rawMaterialsRef = collection(db, 'rawMaterials');
+      const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', user.storeId));
+      const rawMaterialsSnapshot = await getDocs(rawMaterialsQuery);
+      const rawMaterialsList: RawMaterial[] = rawMaterialsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as RawMaterial));
+      setRawMaterials(rawMaterialsList);
+
+      // Refetch purchases to update UI
+      const purchasesRef = collection(db, 'purchases');
+      const purchasesQuery = query(purchasesRef, where('storeId', '==', user.storeId));
+      const purchasesSnapshot = await getDocs(purchasesQuery);
+      const purchasesList: Purchase[] = purchasesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Purchase));
+      setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
 
       // Audit log
       await logAction(
@@ -1197,10 +1324,236 @@ const AdminPurchases: React.FC = () => {
       );
 
       setReceivingPurchase(null);
-      toast({ title: "Success", description: "Purchase order received and stock updated!" });
+      toast({ 
+        title: "Success", 
+        description: `Purchase received! ${updatedCount} material(s) stock updated.` 
+      });
     } catch (error) {
       console.error('Error receiving purchase:', error);
       toast({ title: "Error", description: "Failed to receive purchase order", variant: "destructive" });
+    }
+  };
+
+  const handlePayPurchase = async () => {
+    if (!payingPurchase || !user?.storeId) return;
+
+    try {
+      const db = getFirestore();
+      const purchaseRef = doc(db, 'purchases', payingPurchase.id);
+
+      const currentPaid = payingPurchase.amountPaid || 0;
+      const newAmountPaid = currentPaid + paymentData.amountPaid;
+      const totalAmount = payingPurchase.totalAmount || payingPurchase.total || 0;
+
+      let paymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
+      if (newAmountPaid >= totalAmount) {
+        paymentStatus = 'paid';
+      } else if (newAmountPaid > 0) {
+        paymentStatus = 'partial';
+      }
+
+      // Create payment record
+      const paymentRecord = {
+        id: `PMT-${Date.now()}`,
+        amount: paymentData.amountPaid,
+        date: paymentData.paymentDate,
+        method: paymentData.paymentMethod,
+        notes: paymentData.paymentNotes,
+        recordedBy: user.name,
+        recordedAt: new Date().toISOString(),
+      };
+
+      const existingHistory = payingPurchase.paymentHistory || [];
+      const updatedHistory = [...existingHistory, paymentRecord];
+
+      await updateDoc(purchaseRef, {
+        paymentStatus,
+        amountPaid: newAmountPaid,
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: paymentData.paymentMethod,
+        paymentNotes: paymentData.paymentNotes,
+        paymentHistory: updatedHistory,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Refetch purchases
+      const purchasesRef = collection(db, 'purchases');
+      const purchasesQuery = query(purchasesRef, where('storeId', '==', user.storeId));
+      const purchasesSnapshot = await getDocs(purchasesQuery);
+      const purchasesList: Purchase[] = purchasesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Purchase));
+      setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
+
+      // Audit log
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'purchase_payment',
+        payingPurchase.id,
+        { 
+          oldValue: { amountPaid: currentPaid, paymentStatus: payingPurchase.paymentStatus },
+          newValue: { amountPaid: newAmountPaid, paymentStatus, ...paymentData }
+        },
+        user.storeId
+      );
+
+      setPayingPurchase(null);
+      setPaymentData({
+        amountPaid: 0,
+        paymentDate: new Date().toISOString().split('T')[0],
+        paymentMethod: 'cash',
+        paymentNotes: '',
+      });
+
+      toast({ 
+        title: "Success", 
+        description: `Payment recorded! Status: ${paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Unpaid'}` 
+      });
+
+      // Show voucher after successful payment
+      const updatedPurchase = purchasesList.find(p => p.id === payingPurchase.id);
+      if (updatedPurchase) {
+        setViewingPaymentVoucher({ purchase: updatedPurchase, payment: paymentRecord });
+      }
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
+    }
+  };
+
+  const generatePaymentVoucherHTML = (purchase: Purchase, payment: any) => {
+    const supplier = suppliers.find(s => s.id === purchase.supplierId);
+    return `
+      <div class="voucher-container" style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">PAYMENT VOUCHER</h1>
+          <p style="margin: 5px 0; color: #666; font-size: 14px;">Voucher #${payment.id}</p>
+        </div>
+
+        <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+              <p style="margin: 0; color: #666; font-size: 12px;">Date</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${new Date(payment.date).toLocaleDateString()}</p>
+              <p style="margin: 0; color: #666; font-size: 12px;">Purchase Order</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${purchase.invoiceNumber || purchase.purchaseOrderNumber}</p>
+            </div>
+            <div style="text-align: right;">
+              <p style="margin: 0; color: #666; font-size: 12px;">Payment Method</p>
+              <p style="margin: 5px 0 15px; font-weight: 600; text-transform: capitalize;">${payment.method}</p>
+              <p style="margin: 0; color: #666; font-size: 12px;">Recorded By</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${payment.recordedBy}</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+          <h3 style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px;">Supplier Information</h3>
+          <p style="margin: 5px 0;"><strong>Name:</strong> ${supplier?.name || purchase.supplierName || 'N/A'}</p>
+          ${supplier?.phone ? `<p style="margin: 5px 0;"><strong>Phone:</strong> ${supplier.phone}</p>` : ''}
+          ${supplier?.email ? `<p style="margin: 5px 0;"><strong>Email:</strong> ${supplier.email}</p>` : ''}
+        </div>
+
+        <div style="border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+            <div>
+              <p style="margin: 0; color: #666; font-size: 12px;">Purchase Total</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${(purchase.totalAmount || purchase.total || 0).toFixed(2)}</p>
+            </div>
+            <div style="text-align: right;">
+              <p style="margin: 0; color: #666; font-size: 12px;">Previous Payments</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${((purchase.amountPaid || 0) - payment.amount).toFixed(2)}</p>
+            </div>
+          </div>
+          <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; text-align: center;">
+            <p style="margin: 0; color: #666; font-size: 14px;">PAYMENT AMOUNT</p>
+            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #10b981;">$${payment.amount.toFixed(2)}</p>
+          </div>
+          <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 16px; font-weight: 600;">Total Paid:</span>
+              <span style="font-size: 18px; font-weight: bold;">$${(purchase.amountPaid || 0).toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+              <span style="font-size: 16px; font-weight: 600;">Balance Due:</span>
+              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">$${((purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0)).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        ${payment.notes ? `
+          <div style="margin-bottom: 25px;">
+            <h3 style="margin: 0 0 10px; color: #1a1a1a; font-size: 14px;">Notes</h3>
+            <p style="margin: 0; color: #666; background: #f9fafb; padding: 15px; border-radius: 6px;">${payment.notes}</p>
+          </div>
+        ` : ''}
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+          <p style="margin: 0; color: #999; font-size: 11px; text-align: center;">
+            Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
+          </p>
+        </div>
+      </div>
+    `;
+  };
+
+  const downloadPaymentVoucher = async (purchase: Purchase, payment: any) => {
+    try {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = generatePaymentVoucherHTML(purchase, payment);
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+      
+      const canvas = await html2canvas(tempDiv.querySelector('.voucher-container') as HTMLElement);
+      const imgData = canvas.toDataURL('image/png');
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Payment-Voucher-${payment.id}.pdf`);
+      
+      document.body.removeChild(tempDiv);
+      toast({ title: "Success", description: "Payment voucher downloaded" });
+    } catch (error) {
+      console.error('Error generating voucher:', error);
+      toast({ title: "Error", description: "Failed to generate voucher", variant: "destructive" });
+    }
+  };
+
+  const printPaymentVoucher = (purchase: Purchase, payment: any) => {
+    const printWindow = window.open('', '', 'height=600,width=800');
+    if (printWindow) {
+      printWindow.document.write('<html><head><title>Payment Voucher</title></head><body>');
+      printWindow.document.write(generatePaymentVoucherHTML(purchase, payment));
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
+  };
+
+  const sharePaymentVoucher = async (purchase: Purchase, payment: any) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Payment Voucher ${payment.id}`,
+          text: `Payment of $${payment.amount.toFixed(2)} recorded for PO ${purchase.invoiceNumber || purchase.purchaseOrderNumber}`,
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+    } else {
+      toast({ title: "Info", description: "Sharing not supported on this browser", variant: "default" });
     }
   };
 
@@ -1240,14 +1593,34 @@ const AdminPurchases: React.FC = () => {
   };
 
   const getStatusBadge = (status: Purchase['status']) => {
-    const variants: Record<Purchase['status'], { variant: any; label: string }> = {
+    const variants: Record<string, { variant: any; label: string }> = {
       draft: { variant: 'secondary', label: 'Draft' },
       sent: { variant: 'default', label: 'Sent' },
       confirmed: { variant: 'default', label: 'Confirmed' },
       received: { variant: 'default', label: 'Received' },
+      returned: { variant: 'default', label: 'Returned' },
       cancelled: { variant: 'destructive', label: 'Cancelled' },
     };
-    return <Badge variant={variants[status].variant}>{variants[status].label}</Badge>;
+    return <Badge variant={variants[status]?.variant || 'secondary'}>{variants[status]?.label || status}</Badge>;
+  };
+
+  const getPaymentBadge = (purchase: Purchase) => {
+    const paymentStatus = purchase.paymentStatus || 'unpaid';
+    const variants: Record<string, { variant: any; label: string; color: string }> = {
+      paid: { variant: 'default', label: 'Paid', color: 'bg-green-100 text-green-800' },
+      partial: { variant: 'secondary', label: 'Partial', color: 'bg-yellow-100 text-yellow-800' },
+      unpaid: { variant: 'destructive', label: 'Unpaid', color: 'bg-red-100 text-red-800' },
+    };
+    
+    if (purchase.status !== 'received') {
+      return null; // Don't show payment status for non-received orders
+    }
+    
+    return (
+      <Badge className={variants[paymentStatus].color}>
+        {variants[paymentStatus].label}
+      </Badge>
+    );
   };
 
   return (
@@ -1466,6 +1839,7 @@ const AdminPurchases: React.FC = () => {
                         <CardTitle className="flex items-center gap-2">
                           {purchase.invoiceNumber || purchase.poNumber || `PO-${purchase.id.slice(0, 8)}`}
                           {getStatusBadge(purchase.status)}
+                          {getPaymentBadge(purchase)}
                         </CardTitle>
                         <CardDescription>
                           Supplier: {supplier?.name || 'Unknown'} | Order Date: {new Date(purchase.orderDate).toLocaleDateString()}
@@ -1527,6 +1901,45 @@ const AdminPurchases: React.FC = () => {
                             Receive Items
                           </Button>
                         )}
+                        {purchase.status === 'received' && (
+                          <>
+                            {(!purchase.paymentStatus || purchase.paymentStatus !== 'paid') && (
+                              <Button
+                                variant="default"
+                                size="sm"
+                                onClick={() => {
+                                  const remaining = (purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0);
+                                  setPayingPurchase(purchase);
+                                  setPaymentData({
+                                    amountPaid: remaining,
+                                    paymentDate: new Date().toISOString().split('T')[0],
+                                    paymentMethod: 'cash',
+                                    paymentNotes: '',
+                                  });
+                                }}
+                              >
+                                <DollarSign className="h-4 w-4 mr-1" />
+                                Record Payment
+                              </Button>
+                            )}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleDownloadPDF(purchase)}
+                            >
+                              <Download className="h-4 w-4 mr-1" />
+                              Download PDF
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handlePrintPO(purchase)}
+                            >
+                              <Printer className="h-4 w-4 mr-1" />
+                              Print
+                            </Button>
+                          </>
+                        )}
                         {purchase.status !== 'received' && (
                           <>
                             <Button
@@ -1554,6 +1967,20 @@ const AdminPurchases: React.FC = () => {
                         <p className="text-sm text-gray-500">Total Amount</p>
                         <p className="font-bold text-lg">${purchase.totalAmount.toFixed(2)}</p>
                       </div>
+                      {purchase.status === 'received' && (
+                        <div>
+                          <p className="text-sm text-gray-500">Amount Paid</p>
+                          <p className="font-bold text-lg text-green-600">${(purchase.amountPaid || 0).toFixed(2)}</p>
+                        </div>
+                      )}
+                      {purchase.status === 'received' && purchase.paymentStatus !== 'paid' && (
+                        <div>
+                          <p className="text-sm text-gray-500">Amount Due</p>
+                          <p className="font-bold text-lg text-red-600">
+                            ${((purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0)).toFixed(2)}
+                          </p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-sm text-gray-500">Items</p>
                         <p className="font-medium">{purchase.items.length} item(s)</p>
@@ -1568,6 +1995,12 @@ const AdminPurchases: React.FC = () => {
                         <div>
                           <p className="text-sm text-gray-500">Received Date</p>
                           <p className="font-medium">{new Date(purchase.receivedDate).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                      {purchase.paymentDate && (
+                        <div>
+                          <p className="text-sm text-gray-500">Payment Date</p>
+                          <p className="font-medium">{new Date(purchase.paymentDate).toLocaleDateString()}</p>
                         </div>
                       )}
                     </div>
@@ -1593,24 +2026,33 @@ const AdminPurchases: React.FC = () => {
                         <span className="font-semibold">Notes:</span> {purchase.notes}
                       </div>
                     )}
-                    <div className="mt-4 pt-3 border-t flex gap-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDownloadPDF(purchase)}
-                      >
-                        <Download className="h-4 w-4 mr-1" />
-                        Download PDF
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handlePrintPO(purchase)}
-                      >
-                        <Printer className="h-4 w-4 mr-1" />
-                        Print
-                      </Button>
-                    </div>
+                    {purchase.paymentHistory && purchase.paymentHistory.length > 0 && (
+                      <div className="mt-3 border-t pt-3">
+                        <p className="text-sm font-semibold mb-2">Payment History:</p>
+                        <div className="space-y-2">
+                          {purchase.paymentHistory.map((payment, idx) => (
+                            <div key={idx} className="flex items-center justify-between p-2 bg-green-50 rounded border border-green-200">
+                              <div className="flex-1">
+                                <p className="text-sm font-medium">${payment.amount.toFixed(2)} - {payment.method}</p>
+                                <p className="text-xs text-gray-600">
+                                  {new Date(payment.date).toLocaleDateString()} by {payment.recordedBy}
+                                </p>
+                              </div>
+                              <div className="flex gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => setViewingPaymentVoucher({ purchase, payment })}
+                                  title="View Voucher"
+                                >
+                                  <Download className="h-3 w-3" />
+                                </Button>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               );
@@ -1668,6 +2110,122 @@ const AdminPurchases: React.FC = () => {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setReceivingPurchase(null)}>Cancel</Button>
                 <Button onClick={handleReceivePurchase}>Receive & Update Stock</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Payment Dialog */}
+        {payingPurchase && (
+          <Dialog open={!!payingPurchase} onOpenChange={() => setPayingPurchase(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Record Payment</DialogTitle>
+                <DialogDescription>
+                  Purchase Order: {payingPurchase.invoiceNumber || payingPurchase.poNumber}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Amount</p>
+                    <p className="font-bold">${(payingPurchase.totalAmount || payingPurchase.total || 0).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Already Paid</p>
+                    <p className="font-bold text-green-600">${(payingPurchase.amountPaid || 0).toFixed(2)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-500">Amount Due</p>
+                    <p className="font-bold text-red-600">
+                      ${((payingPurchase.totalAmount || payingPurchase.total || 0) - (payingPurchase.amountPaid || 0)).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentAmount">Payment Amount *</Label>
+                  <Input
+                    id="paymentAmount"
+                    type="number"
+                    min="0"
+                    max={(payingPurchase.totalAmount || payingPurchase.total || 0) - (payingPurchase.amountPaid || 0)}
+                    step="0.01"
+                    value={paymentData.amountPaid || ''}
+                    onChange={(e) => setPaymentData({ ...paymentData, amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentDate">Payment Date *</Label>
+                  <Input
+                    id="paymentDate"
+                    type="date"
+                    value={paymentData.paymentDate}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentMethod">Payment Method *</Label>
+                  <Select
+                    value={paymentData.paymentMethod}
+                    onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
+                  >
+                    <SelectTrigger id="paymentMethod">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="check">Check</SelectItem>
+                      <SelectItem value="credit_card">Credit Card</SelectItem>
+                      <SelectItem value="mobile_payment">Mobile Payment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentNotes">Notes (optional)</Label>
+                  <Textarea
+                    id="paymentNotes"
+                    placeholder="Transaction reference, check number, etc."
+                    value={paymentData.paymentNotes}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentNotes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPayingPurchase(null)}>Cancel</Button>
+                <Button onClick={handlePayPurchase}>Record Payment</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Payment Voucher Dialog */}
+        {viewingPaymentVoucher && (
+          <Dialog open={!!viewingPaymentVoucher} onOpenChange={() => setViewingPaymentVoucher(null)}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Payment Voucher - {viewingPaymentVoucher.payment.id}</DialogTitle>
+                <DialogDescription>Payment receipt and details</DialogDescription>
+              </DialogHeader>
+              <div dangerouslySetInnerHTML={{ __html: generatePaymentVoucherHTML(viewingPaymentVoucher.purchase, viewingPaymentVoucher.payment) }} />
+              <DialogFooter className="flex gap-2">
+                <Button variant="outline" onClick={() => printPaymentVoucher(viewingPaymentVoucher.purchase, viewingPaymentVoucher.payment)}>
+                  <Printer className="h-4 w-4 mr-1" />
+                  Print
+                </Button>
+                <Button variant="outline" onClick={() => downloadPaymentVoucher(viewingPaymentVoucher.purchase, viewingPaymentVoucher.payment)}>
+                  <Download className="h-4 w-4 mr-1" />
+                  Download PDF
+                </Button>
+                <Button variant="outline" onClick={() => sharePaymentVoucher(viewingPaymentVoucher.purchase, viewingPaymentVoucher.payment)}>
+                  <Share2 className="h-4 w-4 mr-1" />
+                  Share
+                </Button>
+                <Button onClick={() => setViewingPaymentVoucher(null)}>Close</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

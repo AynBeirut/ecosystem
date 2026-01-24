@@ -175,13 +175,56 @@ const AdminRawMaterials: React.FC = () => {
   };
 
   const handleDeleteMaterial = async (materialId: string) => {
-    if (!confirm('Are you sure you want to delete this material?')) return;
+    const deletedMaterial = materials.find(m => m.id === materialId);
+    
+    // Check if material is used in any recipes
+    try {
+      const db = getFirestore();
+      const recipesRef = collection(db, 'recipes');
+      const recipesQuery = query(recipesRef, where('storeId', '==', user?.storeId));
+      const recipesSnapshot = await getDocs(recipesQuery);
+      
+      let usedInRecipes: string[] = [];
+      recipesSnapshot.docs.forEach(doc => {
+        const recipe = doc.data();
+        if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
+          const isUsed = recipe.ingredients.some((ing: any) => ing.rawMaterialId === materialId);
+          if (isUsed) {
+            usedInRecipes.push(recipe.name || 'Unknown Recipe');
+          }
+        }
+      });
+      
+      if (usedInRecipes.length > 0) {
+        toast({ 
+          title: "Cannot Delete", 
+          description: `This material is used in ${usedInRecipes.length} recipe(s): ${usedInRecipes.slice(0, 3).join(', ')}${usedInRecipes.length > 3 ? '...' : ''}`,
+          variant: "destructive" 
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking material usage:', error);
+    }
+    
+    if (!confirm(`Are you sure you want to delete "${deletedMaterial?.name}"?`)) return;
 
     try {
       const db = getFirestore();
+      
       await deleteDoc(doc(db, 'rawMaterials', materialId));
-      const deletedMaterial = materials.find(m => m.id === materialId);
-      setMaterials(materials.filter(m => m.id !== materialId));
+      
+      // Refetch from Firestore to ensure sync
+      if (user?.storeId) {
+        const materialsRef = collection(db, 'rawMaterials');
+        const materialsQuery = query(materialsRef, where('storeId', '==', user.storeId));
+        const materialsSnapshot = await getDocs(materialsQuery);
+        const materialsList: RawMaterial[] = materialsSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as RawMaterial));
+        setMaterials(materialsList);
+      }
 
       // Audit log
       if (deletedMaterial && user) {
@@ -261,19 +304,7 @@ const AdminRawMaterials: React.FC = () => {
                     </Select>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="currentStock">Current Stock</Label>
-                    <Input
-                      id="currentStock"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={newMaterial.currentStock === 0 ? '' : newMaterial.currentStock}
-                      onChange={(e) => setNewMaterial({ ...newMaterial, currentStock: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
-                      placeholder="0.00"
-                    />
-                  </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="minimumThreshold">Min Threshold</Label>
                     <Input
@@ -525,19 +556,7 @@ const AdminRawMaterials: React.FC = () => {
                     </Select>
                   </div>
                 </div>
-                <div className="grid grid-cols-3 gap-4">
-                  <div>
-                    <Label htmlFor="edit-currentStock">Current Stock</Label>
-                    <Input
-                      id="edit-currentStock"
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={editingMaterial.currentStock === 0 ? '' : editingMaterial.currentStock}
-                      onChange={(e) => setEditingMaterial({ ...editingMaterial, currentStock: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
-                      placeholder="0.00"
-                    />
-                  </div>
+                <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="edit-minimumThreshold">Min Threshold</Label>
                     <Input

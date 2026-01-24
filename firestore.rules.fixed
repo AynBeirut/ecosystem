@@ -80,19 +80,22 @@ service cloud.firestore {
     // Suppliers: only store owners can manage
     match /suppliers/{supplierId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update, delete: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.storeId;
     }
 
-    // Raw Materials: only store owners can manage
+    // Raw Materials: only store owners can manage - FIXED
     match /rawMaterials/{materialId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update, delete: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.storeId;
     }
 
-    // Purchases: only store owners can manage
+    // Purchases: only store owners can manage - FIXED
     match /purchases/{purchaseId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update, delete: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.storeId;
     }
 
     // Customer Returns (RMA): customers can create and read own, store owners can manage
@@ -108,12 +111,6 @@ service cloud.firestore {
 
     // Supplier Returns (SRA): only store owners can manage
     match /supplierReturns/{sraId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      allow delete: if false; // Prevent deletion for audit trail
-    }
-
-    // Sales Returns: only store owners can manage
-    match /salesReturns/{returnId} {
       allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
       allow delete: if false; // Prevent deletion for audit trail
     }
@@ -144,9 +141,11 @@ service cloud.firestore {
       allow read, create, update: if request.auth != null;
     }
 
-    // Recipes: only store owners can manage
+    // Recipes: only store owners can manage - FIXED
     match /recipes/{recipeId} {
-      allow read, create, update, delete: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.storeId;
     }
 
     // Production Batches: only store owners can manage
@@ -178,6 +177,12 @@ service cloud.firestore {
     // Refund Transactions: only store owners can manage
     match /refundTransactions/{refundId} {
       allow read, write: if request.auth != null;
+    }
+
+    // Announcements: allow read and write for authenticated users
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow write: if request.auth != null;
     }
 
     // Fallback: allow reads, deny writes by default

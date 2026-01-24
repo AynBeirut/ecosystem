@@ -1,5 +1,15 @@
 // Inventory management types
 
+export interface PaymentRecord {
+  id: string;
+  amount: number;
+  date: string;
+  method: string;
+  notes?: string;
+  recordedBy: string;
+  recordedAt: string;
+}
+
 export interface Supplier {
   id: string;
   supplierCode: string;
@@ -156,6 +166,12 @@ export interface Purchase {
   receivedDate?: string;
   invoiceUrl?: string;
   notes?: string;
+  paymentStatus?: 'unpaid' | 'partial' | 'paid';
+  amountPaid?: number;
+  paymentDate?: string;
+  paymentMethod?: string;
+  paymentNotes?: string;
+  paymentHistory?: PaymentRecord[];
   storeId: string;
   createdAt: string;
   updatedAt: string;

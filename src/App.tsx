@@ -37,6 +37,8 @@ import AdminPurchases from "./pages/admin/AdminPurchases";
 import AdminSupplierReturns from "./pages/admin/AdminSupplierReturns";
 import AdminSupplierCredits from "./pages/admin/AdminSupplierCredits";
 import AdminSupplierReturnDetail from "./pages/admin/AdminSupplierReturnDetail";
+import SupplierReturns from "./pages/admin/SupplierReturns";
+import SalesReturns from "./pages/admin/SalesReturns";
 import AdminStaff from "./pages/admin/AdminStaff";
 import AdminSalaries from "./pages/admin/AdminSalaries";
 import AdminSubAccounts from "./pages/admin/AdminSubAccounts";
@@ -105,9 +107,11 @@ import AdminReturns from "./pages/admin/AdminReturns";
                         {/* Purchasing & Returns */}
                         <Route path="/admin/purchases" element={<ProtectedRoute allowedRoles={['admin']}><AdminPurchases /></ProtectedRoute>} />
                         <Route path="/admin/returns" element={<ProtectedRoute allowedRoles={['admin']}><AdminReturns /></ProtectedRoute>} />
-                        <Route path="/admin/supplier-returns" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturns /></ProtectedRoute>} />
-                        <Route path="/admin/supplier-returns/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturnDetail /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-returns-old" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturns /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-returns-old/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturnDetail /></ProtectedRoute>} />
                         <Route path="/admin/supplier-credits" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierCredits /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-returns" element={<ProtectedRoute allowedRoles={['admin']}><SupplierReturns /></ProtectedRoute>} />
+                        <Route path="/admin/sales-returns" element={<ProtectedRoute allowedRoles={['admin']}><SalesReturns /></ProtectedRoute>} />
                         {/* Staff & HR */}
                         <Route path="/admin/staff" element={<ProtectedRoute allowedRoles={['admin']}><AdminStaff /></ProtectedRoute>} />
                         <Route path="/admin/salaries" element={<ProtectedRoute allowedRoles={['admin']}><AdminSalaries /></ProtectedRoute>} />

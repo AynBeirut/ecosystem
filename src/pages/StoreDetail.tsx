@@ -10,6 +10,8 @@ import { StoreReview } from '@/types/product';
 import { Button } from '@/components/ui/button';
 import { Star } from 'lucide-react';
 import { Store, Product, StoreAnnouncement } from '@/types/product';
+import { Recipe, RawMaterial } from '@/types/inventory';
+import { calculateAvailableStock } from '@/lib/composedProductStock';
 import Header from '@/components/Header';
 import ProductCard from '@/components/ProductCard';
 import { MapPin, Globe, Facebook, Instagram, Twitter, Phone, Mail } from 'lucide-react';
@@ -22,6 +24,8 @@ const StoreDetail: React.FC = () => {
   const [storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [announcements, setAnnouncements] = useState<StoreAnnouncement[]>([]);
   const [reviews, setReviews] = useState<StoreReview[]>([]);
   const [avgRating, setAvgRating] = useState<number | null>(null);
@@ -118,11 +122,51 @@ const StoreDetail: React.FC = () => {
         
         setStore({ id: docId, ...storeData } as Store);
 
+        // Fetch recipes and raw materials for stock calculation
+        const recipesRef = collection(db, 'recipes');
+        const recipesQuery = query(recipesRef, where('storeId', '==', docId));
+        const recipesSnap = await getDocs(recipesQuery);
+        const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as Recipe));
+        setRecipes(recipesList);
+
+        const rawMaterialsRef = collection(db, 'rawMaterials');
+        const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', docId));
+        const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
+        const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ 
+          id: doc.id, 
+          ...doc.data() 
+        } as RawMaterial));
+        setRawMaterials(rawMaterialsList);
+
         // Fetch products for this store
         const productsRef = collection(db, 'products');
         const productsQuery = query(productsRef, where('storeId', '==', docId));
         const productsSnap = await getDocs(productsQuery);
-        setProducts(productsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+        
+        // Attach store information and calculate stock for composed products
+        const storeInfo = { id: docId, name: storeData.name, slug: storeData.slug };
+        const productsList = productsSnap.docs.map(doc => {
+          const productData = doc.data();
+          let product: Product = { 
+            id: doc.id, 
+            ...productData,
+            store: storeInfo 
+          } as Product;
+
+          // If it's a composed product, calculate available stock from raw materials
+          if (product.productType === 'composed' && product.recipeId) {
+            const recipe = recipesList.find(r => r.id === product.recipeId);
+            const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
+            product.stock = availableStock;
+            product.inStock = availableStock > 0;
+          }
+
+          return product;
+        });
+        setProducts(productsList);
 
         // Fetch announcements for this store (optional, if you have this collection)
         let announcementsList: StoreAnnouncement[] = [];

@@ -16,7 +16,8 @@ import {
   Megaphone,
   BarChart,
   ShoppingCart,
-  FileText
+  FileText,
+  Undo2
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -547,18 +548,6 @@ const AdminDashboard: React.FC = () => {
                     <Package className="h-4 w-4" />
                   </div>
                   <span className="text-sm font-medium">Inventory</span>
-                </Link>
-                <Link to="/admin/products" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-market-primary/20 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-market-primary/10 flex items-center justify-center text-market-primary">
-                    <Package className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Products</span>
-                </Link>
-                <Link to="/admin/purchases" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-blue-600/20 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
-                    <ShoppingCart className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Purchases</span>
                 </Link>
                 <Link to="/admin/expenses" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-orange-600/20 shadow-sm hover:shadow-md transition">
                   <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">

@@ -276,6 +276,34 @@ export const generateInvoiceHTML = (
             </table>
           </div>
 
+          ${(order.paymentStatus && order.paymentStatus !== 'unpaid') ? `
+          <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-left: 4px solid #10b981; border-radius: 12px;">
+            <h3 style="color: #10b981; font-size: 16px; margin-bottom: 15px;">💰 Payment Information</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Status</p>
+                <p style="color: #1a1a1a; font-weight: 600; font-size: 15px;">${order.paymentStatus === 'paid' ? '✓ Fully Paid' : '◐ Partially Paid'}</p>
+              </div>
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Amount Paid</p>
+                <p style="color: #10b981; font-weight: bold; font-size: 15px;">${formatCurrency(order.amountPaid || 0, true)}</p>
+              </div>
+              ${order.paymentStatus !== 'paid' ? `
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Balance Due</p>
+                <p style="color: #ef4444; font-weight: bold; font-size: 15px;">${formatCurrency((order.total || 0) - (order.amountPaid || 0), true)}</p>
+              </div>
+              ` : ''}
+              ${order.paymentDate ? `
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Last Payment</p>
+                <p style="color: #1a1a1a; font-weight: 600; font-size: 15px;">${new Date(order.paymentDate).toLocaleDateString()}</p>
+              </div>
+              ` : ''}
+            </div>
+          </div>
+          ` : ''}
+
           <div class="footer">
             <p><strong>Thank you for your business!</strong></p>
             <p>For questions about this invoice, please contact us at ${storeEmail || storePhone || 'our support desk'}</p>
@@ -525,6 +553,17 @@ export const generateInvoiceHTML = (
               </tr>
             </table>
           </div>
+
+          ${(order.paymentStatus && order.paymentStatus !== 'unpaid') ? `
+          <div style="margin-top: 30px; padding: 20px; border: 2px solid #10b981; border-radius: 5px; background: #f0fdf4;">
+            <strong style="color: #10b981;">💰 Payment Information</strong><br/>
+            <div style="margin-top: 15px; color: #2c2c2c; line-height: 2;">
+              <p><strong>Status:</strong> ${order.paymentStatus === 'paid' ? '✓ Fully Paid' : '◐ Partially Paid'}</p>
+              <p><strong>Amount Paid:</strong> <span style="color: #10b981; font-weight: bold;">${formatCurrency(order.amountPaid || 0, true)}</span></p>
+              ${order.paymentStatus !== 'paid' ? `<p><strong>Balance Due:</strong> <span style="color: #c41e3a; font-weight: bold;">${formatCurrency((order.total || 0) - (order.amountPaid || 0), true)}</span></p>` : ''}
+            </div>
+          </div>
+          ` : ''}
 
           <div class="footer">
             <p>Thank you for choosing ${storeName}. We appreciate your business.</p>
@@ -822,6 +861,34 @@ export const generateInvoiceHTML = (
               </tr>
             </table>
           </div>
+
+          ${(order.paymentStatus && order.paymentStatus !== 'unpaid') ? `
+          <div style="margin-top: 30px; padding: 25px; background: linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%); border-left: 4px solid #10b981; border-radius: 12px;">
+            <h3 style="color: #10b981; font-size: 16px; margin-bottom: 15px;">💰 Payment Information</h3>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Status</p>
+                <p style="color: #1a1a1a; font-weight: 600; font-size: 15px;">${order.paymentStatus === 'paid' ? '✓ Fully Paid' : '◐ Partially Paid'}</p>
+              </div>
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Amount Paid</p>
+                <p style="color: #10b981; font-weight: bold; font-size: 15px;">${formatCurrency(order.amountPaid || 0, true)}</p>
+              </div>
+              ${order.paymentStatus !== 'paid' ? `
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Balance Due</p>
+                <p style="color: #dc2626; font-weight: bold; font-size: 15px;">${formatCurrency((order.total || 0) - (order.amountPaid || 0), true)}</p>
+              </div>
+              ` : ''}
+              ${order.paymentDate ? `
+              <div>
+                <p style="color: #666; font-size: 12px; margin-bottom: 5px;">Last Payment</p>
+                <p style="color: #1a1a1a; font-weight: 600; font-size: 15px;">${new Date(order.paymentDate).toLocaleDateString()}</p>
+              </div>
+              ` : ''}
+            </div>
+          </div>
+          ` : ''}
 
           <div class="footer">
             <h3>Thank You! 🎉</h3>

@@ -105,7 +105,14 @@ const AdminProducts: React.FC = () => {
         Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])
       );
   const docRef = await addDoc(collection(db, 'products'), cleanProductData);
-      setProducts([...products, { id: docRef.id, ...productData }]);
+      
+      // Refetch products to get complete data
+      const productsRef = collection(db, 'products');
+      const q = query(productsRef, where('storeId', '==', user.storeId));
+      const snapshot = await getDocs(q);
+      const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      setProducts(productsList);
+      
     setNewProduct({ name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '', productType: 'simple', serviceCost: '' });
       setIsAddingProduct(false);
       toast({ title: "Success", description: "Product added successfully!" });

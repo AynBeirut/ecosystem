@@ -33,6 +33,153 @@ const EXPENSE_CATEGORIES: { value: ExpenseCategory; label: string; color: string
   { value: 'other', label: 'Other', color: 'bg-gray-100 text-gray-800' },
 ];
 
+// Move ExpenseForm outside to prevent re-creation on every render
+const ExpenseForm = ({ expense, onChange, isEdit = false }: { 
+  expense: {
+    description: string;
+    amount: number;
+    category: ExpenseCategory;
+    date: string;
+    paymentMethod: 'cash' | 'card' | 'bank_transfer' | 'other';
+    vendor: string;
+    receiptNumber: string;
+    recurring: boolean;
+    recurringFrequency?: 'weekly' | 'monthly' | 'quarterly' | 'yearly';
+    notes: string;
+  }, 
+  onChange: (updates: Partial<typeof expense>) => void,
+  isEdit?: boolean 
+}) => (
+  <div className="grid gap-4">
+    <div className="grid grid-cols-2 gap-4">
+      <div className="col-span-2">
+        <Label htmlFor="description">Description *</Label>
+        <Input
+          id="description"
+          value={expense.description}
+          onChange={(e) => onChange({ description: e.target.value })}
+          placeholder="e.g., Monthly rent payment"
+        />
+      </div>
+      <div>
+        <Label htmlFor="amount">Amount *</Label>
+        <Input
+          id="amount"
+          type="number"
+          min="0"
+          step="0.01"
+          value={expense.amount === 0 ? '' : expense.amount}
+          onChange={(e) => onChange({ amount: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+          placeholder="0.00"
+        />
+      </div>
+      <div>
+        <Label htmlFor="category">Category *</Label>
+        <Select
+          value={expense.category}
+          onValueChange={(value: ExpenseCategory) => onChange({ category: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {EXPENSE_CATEGORIES.map(cat => (
+              <SelectItem key={cat.value} value={cat.value}>
+                {cat.label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="date">Date *</Label>
+        <Input
+          id="date"
+          type="date"
+          value={expense.date}
+          onChange={(e) => onChange({ date: e.target.value })}
+        />
+      </div>
+      <div>
+        <Label htmlFor="paymentMethod">Payment Method</Label>
+        <Select
+          value={expense.paymentMethod}
+          onValueChange={(value: typeof expense.paymentMethod) => onChange({ paymentMethod: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="cash">Cash</SelectItem>
+            <SelectItem value="card">Card</SelectItem>
+            <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+            <SelectItem value="other">Other</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="vendor">Vendor</Label>
+        <Input
+          id="vendor"
+          value={expense.vendor}
+          onChange={(e) => onChange({ vendor: e.target.value })}
+          placeholder="Vendor name"
+        />
+      </div>
+      <div>
+        <Label htmlFor="receiptNumber">Receipt Number</Label>
+        <Input
+          id="receiptNumber"
+          value={expense.receiptNumber}
+          onChange={(e) => onChange({ receiptNumber: e.target.value })}
+          placeholder="Receipt #"
+        />
+      </div>
+      <div className="col-span-2">
+        <div className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            id="recurring"
+            checked={expense.recurring}
+            onChange={(e) => onChange({ recurring: e.target.checked })}
+            className="rounded"
+          />
+          <Label htmlFor="recurring">Recurring Expense</Label>
+        </div>
+      </div>
+      {expense.recurring && (
+        <div className="col-span-2">
+          <Label htmlFor="recurringFrequency">Frequency</Label>
+          <Select
+            value={expense.recurringFrequency}
+            onValueChange={(value: typeof expense.recurringFrequency) => onChange({ recurringFrequency: value })}
+          >
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="weekly">Weekly</SelectItem>
+              <SelectItem value="monthly">Monthly</SelectItem>
+              <SelectItem value="quarterly">Quarterly</SelectItem>
+              <SelectItem value="yearly">Yearly</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+      <div className="col-span-2">
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea
+          id="notes"
+          value={expense.notes}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder="Additional notes..."
+          rows={3}
+        />
+      </div>
+    </div>
+  </div>
+);
+
 const AdminExpenses: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -905,141 +1052,6 @@ const AdminExpenses: React.FC = () => {
     const cat = EXPENSE_CATEGORIES.find(c => c.value === category);
     return <Badge className={cat?.color}>{cat?.label}</Badge>;
   };
-
-  const ExpenseForm = ({ expense, onChange, isEdit = false }: { 
-    expense: typeof newExpense, 
-    onChange: (updates: Partial<typeof newExpense>) => void,
-    isEdit?: boolean 
-  }) => (
-    <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <Label htmlFor="description">Description *</Label>
-          <Input
-            id="description"
-            value={expense.description}
-            onChange={(e) => onChange({ description: e.target.value })}
-            placeholder="e.g., Monthly rent payment"
-          />
-        </div>
-        <div>
-          <Label htmlFor="amount">Amount *</Label>
-          <Input
-            id="amount"
-            type="number"
-            min="0"
-            step="0.01"
-            value={expense.amount === 0 ? '' : expense.amount}
-            onChange={(e) => onChange({ amount: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
-            placeholder="0.00"
-          />
-        </div>
-        <div>
-          <Label htmlFor="category">Category *</Label>
-          <Select
-            value={expense.category}
-            onValueChange={(value: ExpenseCategory) => onChange({ category: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {EXPENSE_CATEGORIES.map(cat => (
-                <SelectItem key={cat.value} value={cat.value}>
-                  {cat.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="date">Date *</Label>
-          <Input
-            id="date"
-            type="date"
-            value={expense.date}
-            onChange={(e) => onChange({ date: e.target.value })}
-          />
-        </div>
-        <div>
-          <Label htmlFor="paymentMethod">Payment Method</Label>
-          <Select
-            value={expense.paymentMethod}
-            onValueChange={(value: typeof expense.paymentMethod) => onChange({ paymentMethod: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="cash">Cash</SelectItem>
-              <SelectItem value="card">Card</SelectItem>
-              <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-              <SelectItem value="other">Other</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="vendor">Vendor</Label>
-          <Input
-            id="vendor"
-            value={expense.vendor}
-            onChange={(e) => onChange({ vendor: e.target.value })}
-            placeholder="Vendor name"
-          />
-        </div>
-        <div>
-          <Label htmlFor="receiptNumber">Receipt Number</Label>
-          <Input
-            id="receiptNumber"
-            value={expense.receiptNumber}
-            onChange={(e) => onChange({ receiptNumber: e.target.value })}
-            placeholder="Receipt #"
-          />
-        </div>
-        <div className="col-span-2">
-          <div className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              id="recurring"
-              checked={expense.recurring}
-              onChange={(e) => onChange({ recurring: e.target.checked })}
-              className="rounded"
-            />
-            <Label htmlFor="recurring">Recurring Expense</Label>
-          </div>
-        </div>
-        {expense.recurring && (
-          <div className="col-span-2">
-            <Label htmlFor="recurringFrequency">Frequency</Label>
-            <Select
-              value={expense.recurringFrequency}
-              onValueChange={(value: typeof expense.recurringFrequency) => onChange({ recurringFrequency: value })}
-            >
-              <SelectTrigger>
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
-                <SelectItem value="quarterly">Quarterly</SelectItem>
-                <SelectItem value="yearly">Yearly</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-        )}
-        <div className="col-span-2">
-          <Label htmlFor="notes">Notes</Label>
-          <Textarea
-            id="notes"
-            value={expense.notes}
-            onChange={(e) => onChange({ notes: e.target.value })}
-            placeholder="Additional notes..."
-            rows={3}
-          />
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gray-50">

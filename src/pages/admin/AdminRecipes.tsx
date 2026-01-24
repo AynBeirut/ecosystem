@@ -188,12 +188,33 @@ const AdminRecipes: React.FC = () => {
   };
 
   const handleDeleteRecipe = async (recipeId: string) => {
-    if (!confirm('Are you sure you want to delete this recipe?')) return;
+    const deletedRecipe = recipes.find(r => r.id === recipeId);
+    
+    // Check if recipe is used in any composed products
+    try {
+      const db = getFirestore();
+      const composedRef = collection(db, 'composedProducts');
+      const composedQuery = query(composedRef, where('storeId', '==', user?.storeId), where('recipeId', '==', recipeId));
+      const composedSnapshot = await getDocs(composedQuery);
+      
+      if (!composedSnapshot.empty) {
+        const productCount = composedSnapshot.size;
+        toast({ 
+          title: "Cannot Delete", 
+          description: `This recipe is used by ${productCount} composed product(s). Delete those products first or unlink them from this recipe.`,
+          variant: "destructive" 
+        });
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking recipe usage:', error);
+    }
+    
+    if (!confirm(`Are you sure you want to delete "${deletedRecipe?.name}"?`)) return;
 
     try {
       const db = getFirestore();
       await deleteDoc(doc(db, 'recipes', recipeId));
-      const deletedRecipe = recipes.find(r => r.id === recipeId);
       setRecipes(recipes.filter(r => r.id !== recipeId));
 
       // Audit log

@@ -12,11 +12,12 @@ import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Expense } from '@/types/financial';
-import { PurchaseOrder } from '@/types/purchase';
+import { Purchase } from '@/types/inventory';
 import { RawMaterial } from '@/types/material';
 import { Customer } from '@/types/customer';
 import { SalaryPayment } from '@/types/staff';
 import { ProductionBatch } from '@/types/production';
+import { Order } from '@/types/order';
 import { exportToCSV, exportToPDF } from '@/lib/exportUtils';
 
 const AdminReports: React.FC = () => {
@@ -29,7 +30,8 @@ const AdminReports: React.FC = () => {
   const [reportType, setReportType] = useState<'monthly' | 'quarterly' | 'yearly'>('monthly');
 
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [purchases, setPurchases] = useState<PurchaseOrder[]>([]);
+  const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salaryPayments, setSalaryPayments] = useState<SalaryPayment[]>([]);
@@ -47,9 +49,10 @@ const AdminReports: React.FC = () => {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       };
 
-      const [expensesData, purchasesData, materialsData, customersData, salariesData, batchesData] = await Promise.all([
+      const [expensesData, purchasesData, ordersData, materialsData, customersData, salariesData, batchesData] = await Promise.all([
         fetchCollection('expenses'),
-        fetchCollection('purchaseOrders'),
+        fetchCollection('purchases'),
+        fetchCollection('orders'),
         fetchCollection('rawMaterials'),
         fetchCollection('customers'),
         fetchCollection('salaryPayments'),
@@ -57,7 +60,8 @@ const AdminReports: React.FC = () => {
       ]);
 
       setExpenses(expensesData as Expense[]);
-      setPurchases(purchasesData as PurchaseOrder[]);
+      setPurchases(purchasesData as Purchase[]);
+      setOrders(ordersData as Order[]);
       setMaterials(materialsData as RawMaterial[]);
       setCustomers(customersData as Customer[]);
       setSalaryPayments(salariesData as SalaryPayment[]);
@@ -76,15 +80,44 @@ const AdminReports: React.FC = () => {
     .filter(e => filterByDateRange(e.date))
     .reduce((sum, e) => sum + e.amount, 0);
 
-  const totalPurchases = purchases
-    .filter(p => p.status === 'received' && filterByDateRange(p.orderDate))
-    .reduce((sum, p) => sum + p.totalCost, 0);
+  // Purchases - Total amounts for received orders
+  const receivedPurchases = purchases.filter(p => p.status === 'received' && filterByDateRange(p.orderDate || p.createdAt));
+  
+  const totalPurchases = receivedPurchases
+    .reduce((sum, p) => sum + (p.totalAmount || p.total || 0), 0);
+  
+  // Paid purchases
+  const totalPurchasesPaid = receivedPurchases
+    .filter(p => p.paymentStatus === 'paid')
+    .reduce((sum, p) => sum + (p.amountPaid || 0), 0);
+  
+  // Unpaid purchases (Accounts Payable)
+  const unpaidPurchases = receivedPurchases.filter(p => p.paymentStatus !== 'paid');
+  const accountsPayable = unpaidPurchases
+    .reduce((sum, p) => sum + ((p.totalAmount || p.total || 0) - (p.amountPaid || 0)), 0);
 
   const totalSalaries = salaryPayments
     .filter(s => filterByDateRange(s.paymentDate))
     .reduce((sum, s) => sum + s.totalAmount, 0);
 
-  const totalCosts = totalExpenses + totalPurchases + totalSalaries;
+  const totalCosts = totalExpenses + totalPurchasesPaid + totalSalaries;
+
+  // Sales & Revenue (Orders)
+  const completedOrders = orders.filter(o => 
+    o.status !== 'cancelled' && o.createdAt && filterByDateRange(o.createdAt.toString())
+  );
+  
+  const totalRevenue = completedOrders
+    .reduce((sum, o) => sum + (o.total || 0), 0);
+  
+  const totalRevenuePaid = completedOrders
+    .filter(o => o.paymentStatus === 'paid')
+    .reduce((sum, o) => sum + (o.amountPaid || 0), 0);
+  
+  // Unpaid orders (Accounts Receivable)
+  const unpaidOrders = completedOrders.filter(o => o.paymentStatus !== 'paid');
+  const accountsReceivable = unpaidOrders
+    .reduce((sum, o) => sum + ((o.total || 0) - (o.amountPaid || 0)), 0);
 
   // Inventory Metrics
   const totalInventoryValue = materials.reduce((sum, m) => sum + (m.stockQuantity * m.costPerUnit), 0);
@@ -165,13 +198,17 @@ const AdminReports: React.FC = () => {
   };
 
   const handleExportPurchases = () => {
-    const filteredPurchases = purchases.filter(p => filterByDateRange(p.orderDate));
+    const filteredPurchases = purchases.filter(p => filterByDateRange(p.orderDate || p.createdAt));
     const exportData = filteredPurchases.map(p => ({
-      Date: new Date(p.orderDate).toLocaleDateString(),
-      PONumber: p.poNumber || p.id,
+      Date: new Date(p.orderDate || p.createdAt).toLocaleDateString(),
+      PONumber: p.invoiceNumber || p.poNumber || p.id,
       Supplier: p.supplierName || 'N/A',
       Status: p.status,
-      TotalCost: p.totalCost.toFixed(2),
+      TotalAmount: (p.totalAmount || p.total || 0).toFixed(2),
+      AmountPaid: (p.amountPaid || 0).toFixed(2),
+      AmountDue: ((p.totalAmount || p.total || 0) - (p.amountPaid || 0)).toFixed(2),
+      PaymentStatus: p.paymentStatus || 'unpaid',
+      PaymentDate: p.paymentDate ? new Date(p.paymentDate).toLocaleDateString() : 'Not Paid',
       ReceivedDate: p.receivedDate ? new Date(p.receivedDate).toLocaleDateString() : 'Not Received',
     }));
     exportToCSV(exportData, 'purchases_report');
@@ -196,9 +233,11 @@ const AdminReports: React.FC = () => {
     const exportData = [
       { Category: 'Total Expenses', Amount: totalExpenses.toFixed(2) },
       { Category: 'Total Purchases', Amount: totalPurchases.toFixed(2) },
+      { Category: 'Purchases Paid', Amount: totalPurchasesPaid.toFixed(2) },
+      { Category: 'Accounts Payable', Amount: accountsPayable.toFixed(2) },
       { Category: 'Total Salaries', Amount: totalSalaries.toFixed(2) },
       { Category: 'Production Cost', Amount: productionCost.toFixed(2) },
-      { Category: 'Total Costs', Amount: totalCosts.toFixed(2) },
+      { Category: 'Total Costs (Actual Paid)', Amount: totalCosts.toFixed(2) },
       { Category: 'Inventory Value', Amount: totalInventoryValue.toFixed(2) },
     ];
     exportToCSV(exportData, 'financial_summary');
@@ -305,6 +344,24 @@ const AdminReports: React.FC = () => {
                   <CardTitle>Quick Insights</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="flex justify-between items-center pb-2 border-b">
+                    <span className="text-sm font-semibold text-gray-700">Revenue</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Total Revenue</span>
+                    <span className="font-bold">${totalRevenue.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Revenue Received</span>
+                    <span className="font-bold text-green-600">${totalRevenuePaid.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Accounts Receivable</span>
+                    <span className="font-bold text-orange-600">${accountsReceivable.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center pb-2 border-b mt-4">
+                    <span className="text-sm font-semibold text-gray-700">Costs</span>
+                  </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Total Expenses</span>
                     <span className="font-bold">${totalExpenses.toFixed(2)}</span>
@@ -312,6 +369,14 @@ const AdminReports: React.FC = () => {
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Total Purchases</span>
                     <span className="font-bold">${totalPurchases.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Purchases Paid</span>
+                    <span className="font-bold text-green-600">${totalPurchasesPaid.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-sm text-gray-600">Accounts Payable</span>
+                    <span className="font-bold text-red-600">${accountsPayable.toFixed(2)}</span>
                   </div>
                   <div className="flex justify-between items-center">
                     <span className="text-sm text-gray-600">Total Salaries</span>
@@ -344,10 +409,14 @@ const AdminReports: React.FC = () => {
                     <span className="text-sm">Low Stock Items</span>
                     <span className="font-bold text-yellow-600">{lowStockItems.length}</span>
                   </div>
+                  <div className="flex justify-between items-center p-3 bg-orange-50 rounded">
+                    <span className="text-sm">Unpaid Purchases</span>
+                    <span className="font-bold text-orange-600">{unpaidPurchases.length}</span>
+                  </div>
                   <div className="flex justify-between items-center p-3 bg-blue-50 rounded">
                     <span className="text-sm">Pending Orders</span>
                     <span className="font-bold text-blue-600">
-                      {purchases.filter(p => p.status === 'pending').length}
+                      {purchases.filter(p => p.status === 'draft' || p.status === 'sent' || p.status === 'confirmed').length}
                     </span>
                   </div>
                   <div className="flex justify-between items-center p-3 bg-purple-50 rounded">
@@ -373,7 +442,7 @@ const AdminReports: React.FC = () => {
               </Button>
             </div>
             
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <StatCard
                 title="Total Expenses"
                 value={`$${totalExpenses.toFixed(2)}`}
@@ -381,10 +450,16 @@ const AdminReports: React.FC = () => {
                 color="text-red-600"
               />
               <StatCard
-                title="Total Purchases"
-                value={`$${totalPurchases.toFixed(2)}`}
+                title="Purchases (Paid)"
+                value={`$${totalPurchasesPaid.toFixed(2)}`}
                 icon={ShoppingCart}
-                color="text-orange-600"
+                color="text-green-600"
+              />
+              <StatCard
+                title="Accounts Payable"
+                value={`$${accountsPayable.toFixed(2)}`}
+                icon={AlertTriangle}
+                color="text-red-600"
               />
               <StatCard
                 title="Salary Payments"
@@ -393,6 +468,80 @@ const AdminReports: React.FC = () => {
                 color="text-purple-600"
               />
             </div>
+
+            {unpaidPurchases.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-red-600" />
+                    Unpaid Purchases (Accounts Payable)
+                  </CardTitle>
+                  <CardDescription>{unpaidPurchases.length} purchase order(s) awaiting payment</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {unpaidPurchases.map(purchase => {
+                      const totalAmount = purchase.totalAmount || purchase.total || 0;
+                      const amountPaid = purchase.amountPaid || 0;
+                      const amountDue = totalAmount - amountPaid;
+                      return (
+                        <div key={purchase.id} className="flex justify-between items-center p-3 bg-red-50 rounded">
+                          <div>
+                            <p className="font-medium">{purchase.invoiceNumber || purchase.poNumber || `PO-${purchase.id.slice(0, 8)}`}</p>
+                            <p className="text-xs text-gray-500">
+                              {purchase.supplierName} • {new Date(purchase.orderDate || purchase.createdAt).toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-red-600">${amountDue.toFixed(2)}</p>
+                            {amountPaid > 0 && (
+                              <p className="text-xs text-gray-500">Paid: ${amountPaid.toFixed(2)}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {unpaidOrders.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <AlertTriangle className="h-5 w-5 text-orange-600" />
+                    Unpaid Orders (Accounts Receivable)
+                  </CardTitle>
+                  <CardDescription>{unpaidOrders.length} order(s) awaiting payment</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    {unpaidOrders.map(order => {
+                      const totalAmount = order.total || 0;
+                      const amountPaid = order.amountPaid || 0;
+                      const amountDue = totalAmount - amountPaid;
+                      return (
+                        <div key={order.id} className="flex justify-between items-center p-3 bg-orange-50 rounded">
+                          <div>
+                            <p className="font-medium">{order.invoiceNumber || `Order #${order.id.slice(0, 8)}`}</p>
+                            <p className="text-xs text-gray-500">
+                              {order.customerName} • {new Date(order.createdAt || '').toLocaleDateString()}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="font-bold text-orange-600">${amountDue.toFixed(2)}</p>
+                            {amountPaid > 0 && (
+                              <p className="text-xs text-gray-500">Paid: ${amountPaid.toFixed(2)}</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <Card>
               <CardHeader>

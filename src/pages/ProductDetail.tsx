@@ -3,6 +3,8 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
 import { Product, Store } from '@/types/product';
+import { Recipe, RawMaterial } from '@/types/inventory';
+import { calculateAvailableStock } from '@/lib/composedProductStock';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
@@ -110,7 +112,27 @@ const ProductDetail: React.FC = () => {
           }
         }
         
-        setProduct({ id: productId, ...productData } as Product);
+        // Calculate stock for composed products
+        let finalProduct: Product = { id: productId, ...productData } as Product;
+        if (finalProduct.productType === 'composed' && finalProduct.recipeId && productData.storeId) {
+          // Fetch recipe and raw materials
+          const recipesRef = collection(db, 'recipes');
+          const recipeQuery = query(recipesRef, where('storeId', '==', productData.storeId));
+          const recipesSnap = await getDocs(recipeQuery);
+          const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
+          
+          const rawMaterialsRef = collection(db, 'rawMaterials');
+          const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', productData.storeId));
+          const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
+          const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawMaterial));
+          
+          const recipe = recipesList.find(r => r.id === finalProduct.recipeId);
+          const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
+          finalProduct.stock = availableStock;
+          finalProduct.inStock = availableStock > 0;
+        }
+        
+        setProduct(finalProduct);
       } catch (err) {
         setError('Failed to load product data');
         console.error(err);
@@ -226,7 +248,13 @@ const ProductDetail: React.FC = () => {
                     ${product.price.toFixed(2)}
                   </span>
                   
-                  {!product.inStock && (
+                  {product.productType === 'composed' && product.stock !== undefined && (
+                    <Badge variant={product.stock > 5 ? "default" : product.stock > 0 ? "outline" : "destructive"} className={`ml-3 ${product.stock <= 5 && product.stock > 0 ? "border-orange-500 text-orange-700" : ""}`}>
+                      {product.stock > 0 ? `${product.stock} units available` : 'Out of Stock'}
+                    </Badge>
+                  )}
+                  
+                  {product.productType !== 'composed' && !product.inStock && (
                     <Badge variant="destructive" className="ml-3">
                       Out of Stock
                     </Badge>

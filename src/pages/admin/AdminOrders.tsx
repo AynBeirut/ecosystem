@@ -12,13 +12,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Order, OrderItem } from '@/types/order';
 import { ComposedProduct } from '@/types/product';
 import { Customer } from '@/types/customer';
 import { StaffMember } from '@/types/staff';
 import { StoreProfile } from '@/types/storeProfile';
-import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2 } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign } from 'lucide-react';
 import { logAction } from '@/lib/auditLog';
 import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
 import MobileHeader from '@/components/MobileHeader';
@@ -31,6 +32,7 @@ const ORDER_STATUSES = [
   { value: 'processing', label: 'Processing', color: 'bg-purple-100 text-purple-800' },
   { value: 'ready', label: 'Ready', color: 'bg-green-100 text-green-800' },
   { value: 'delivered', label: 'Delivered', color: 'bg-gray-100 text-gray-800' },
+  { value: 'returned', label: 'Returned', color: 'bg-orange-100 text-orange-800' },
   { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
 ];
 
@@ -47,6 +49,14 @@ const AdminOrders: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
+  const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
+  const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: any } | null>(null);
+  const [paymentData, setPaymentData] = useState({
+    amountPaid: 0,
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'cash',
+    paymentNotes: '',
+  });
   
   const [newOrder, setNewOrder] = useState({
     customerId: '',
@@ -299,6 +309,15 @@ const AdminOrders: React.FC = () => {
       // Generate custom invoice number
       const invoiceNumber = await generateInvoiceNumber();
 
+      // Add prices to items
+      const itemsWithPrices = newOrder.items.map(item => {
+        const product = products.find(p => p.id === item.productId);
+        return {
+          ...item,
+          price: product?.sellingPrice || product?.price || 0
+        };
+      });
+
       const orderData = {
         storeId: user.storeId,
         customerId: newOrder.customerId,
@@ -306,7 +325,7 @@ const AdminOrders: React.FC = () => {
         customerPhone: customer?.phone || '',
         customerEmail: customer?.email || '',
         invoiceNumber,
-        items: newOrder.items,
+        items: itemsWithPrices,
         subtotal,
         taxType: newOrder.taxType,
         taxRate: newOrder.taxRate,
@@ -316,6 +335,8 @@ const AdminOrders: React.FC = () => {
         discountAmount,
         total,
         status: 'pending',
+        paymentStatus: 'unpaid' as const,
+        amountPaid: 0,
         assignedSalesPerson: newOrder.assignedSalesPerson,
         assignedSalesPersonName: salesPerson?.name || '',
         createdAt: new Date().toISOString(),
@@ -369,6 +390,224 @@ const AdminOrders: React.FC = () => {
     } catch (error) {
       console.error('Error updating status:', error);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
+    }
+  };
+
+  const handlePayOrder = async () => {
+    if (!payingOrder || !user?.storeId) return;
+
+    try {
+      const db = getFirestore();
+      const orderRef = doc(db, 'orders', payingOrder.id);
+
+      const currentPaid = payingOrder.amountPaid || 0;
+      const newAmountPaid = currentPaid + paymentData.amountPaid;
+      const totalAmount = payingOrder.total || 0;
+
+      let paymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
+      if (newAmountPaid >= totalAmount) {
+        paymentStatus = 'paid';
+      } else if (newAmountPaid > 0) {
+        paymentStatus = 'partial';
+      }
+
+      // Create payment record
+      const paymentRecord = {
+        id: `PMT-${Date.now()}`,
+        amount: paymentData.amountPaid,
+        date: paymentData.paymentDate,
+        method: paymentData.paymentMethod,
+        notes: paymentData.paymentNotes,
+        recordedBy: user.name,
+        recordedAt: new Date().toISOString(),
+      };
+
+      const existingHistory = payingOrder.paymentHistory || [];
+      const updatedHistory = [...existingHistory, paymentRecord];
+
+      await updateDoc(orderRef, {
+        paymentStatus,
+        amountPaid: newAmountPaid,
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: paymentData.paymentMethod,
+        paymentNotes: paymentData.paymentNotes,
+        paymentHistory: updatedHistory,
+      });
+
+      const updatedOrder = { 
+        ...payingOrder, 
+        paymentStatus, 
+        amountPaid: newAmountPaid,
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: paymentData.paymentMethod,
+        paymentNotes: paymentData.paymentNotes,
+        paymentHistory: updatedHistory,
+      };
+
+      setOrders(orders.map(o => o.id === payingOrder.id ? updatedOrder : o));
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'order_payment',
+        payingOrder.id,
+        { 
+          oldValue: { amountPaid: currentPaid, paymentStatus: payingOrder.paymentStatus },
+          newValue: { amountPaid: newAmountPaid, paymentStatus, ...paymentData }
+        },
+        user.storeId
+      );
+
+      setPayingOrder(null);
+      setPaymentData({
+        amountPaid: 0,
+        paymentDate: new Date().toISOString().split('T')[0],
+        paymentMethod: 'cash',
+        paymentNotes: '',
+      });
+
+      toast({ 
+        title: "Success", 
+        description: `Payment recorded! Status: ${paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Unpaid'}` 
+      });
+
+      // Show voucher after successful payment
+      setViewingPaymentVoucher({ order: updatedOrder, payment: paymentRecord });
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
+    }
+  };
+
+  const generatePaymentVoucherHTML = (order: Order & { id: string }, payment: any) => {
+    return `
+      <div class="voucher-container" style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
+        <div style="text-align: center; margin-bottom: 30px;">
+          <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">PAYMENT RECEIPT</h1>
+          <p style="margin: 5px 0; color: #666; font-size: 14px;">Receipt #${payment.id}</p>
+        </div>
+
+        <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px;">
+            <div>
+              <p style="margin: 0; color: #666; font-size: 12px;">Date</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${new Date(payment.date).toLocaleDateString()}</p>
+              <p style="margin: 0; color: #666; font-size: 12px;">Invoice Number</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${order.invoiceNumber || order.orderNumber || order.id.slice(0, 8)}</p>
+            </div>
+            <div style="text-align: right;">
+              <p style="margin: 0; color: #666; font-size: 12px;">Payment Method</p>
+              <p style="margin: 5px 0 15px; font-weight: 600; text-transform: capitalize;">${payment.method}</p>
+              <p style="margin: 0; color: #666; font-size: 12px;">Recorded By</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${payment.recordedBy}</p>
+            </div>
+          </div>
+        </div>
+
+        <div style="margin-bottom: 25px;">
+          <h3 style="margin: 0 0 15px; color: #1a1a1a; font-size: 16px;">Customer Information</h3>
+          <p style="margin: 5px 0;"><strong>Name:</strong> ${order.customerName || 'N/A'}</p>
+          ${order.customerPhone ? `<p style="margin: 5px 0;"><strong>Phone:</strong> ${order.customerPhone}</p>` : ''}
+        </div>
+
+        <div style="border: 2px solid #e5e7eb; border-radius: 8px; padding: 20px; margin-bottom: 25px;">
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+            <div>
+              <p style="margin: 0; color: #666; font-size: 12px;">Invoice Total</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${(order.total || 0).toFixed(2)}</p>
+            </div>
+            <div style="text-align: right;">
+              <p style="margin: 0; color: #666; font-size: 12px;">Previous Payments</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${((order.amountPaid || 0) - payment.amount).toFixed(2)}</p>
+            </div>
+          </div>
+          <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; text-align: center;">
+            <p style="margin: 0; color: #666; font-size: 14px;">PAYMENT AMOUNT</p>
+            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #10b981;">$${payment.amount.toFixed(2)}</p>
+          </div>
+          <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; margin-top: 15px;">
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <span style="font-size: 16px; font-weight: 600;">Total Paid:</span>
+              <span style="font-size: 18px; font-weight: bold;">$${(order.amountPaid || 0).toFixed(2)}</span>
+            </div>
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
+              <span style="font-size: 16px; font-weight: 600;">Balance Due:</span>
+              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">$${((order.total || 0) - (order.amountPaid || 0)).toFixed(2)}</span>
+            </div>
+          </div>
+        </div>
+
+        ${payment.notes ? `
+          <div style="margin-bottom: 25px;">
+            <h3 style="margin: 0 0 10px; color: #1a1a1a; font-size: 14px;">Notes</h3>
+            <p style="margin: 0; color: #666; background: #f9fafb; padding: 15px; border-radius: 6px;">${payment.notes}</p>
+          </div>
+        ` : ''}
+
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #e5e7eb;">
+          <p style="margin: 0; color: #999; font-size: 11px; text-align: center;">
+            Generated on ${new Date().toLocaleDateString()} at ${new Date().toLocaleTimeString()}
+          </p>
+        </div>
+      </div>
+    `;
+  };
+
+  const downloadPaymentVoucher = async (order: Order & { id: string }, payment: any) => {
+    try {
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = generatePaymentVoucherHTML(order, payment);
+      tempDiv.style.position = 'absolute';
+      tempDiv.style.left = '-9999px';
+      document.body.appendChild(tempDiv);
+      
+      const canvas = await html2canvas(tempDiv.querySelector('.voucher-container') as HTMLElement);
+      const imgData = canvas.toDataURL('image/png');
+      
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
+      
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Payment-Receipt-${payment.id}.pdf`);
+      
+      document.body.removeChild(tempDiv);
+      toast({ title: "Success", description: "Payment receipt downloaded" });
+    } catch (error) {
+      console.error('Error generating receipt:', error);
+      toast({ title: "Error", description: "Failed to generate receipt", variant: "destructive" });
+    }
+  };
+
+  const printPaymentVoucher = (order: Order & { id: string }, payment: any) => {
+    const printWindow = window.open('', '', 'height=600,width=800');
+    if (printWindow) {
+      printWindow.document.write('<html><head><title>Payment Receipt</title></head><body>');
+      printWindow.document.write(generatePaymentVoucherHTML(order, payment));
+      printWindow.document.write('</body></html>');
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 250);
+    }
+  };
+
+  const sharePaymentVoucher = async (order: Order & { id: string }, payment: any) => {
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Payment Receipt ${payment.id}`,
+          text: `Payment of $${payment.amount.toFixed(2)} received for Invoice ${order.invoiceNumber || order.orderNumber}`,
+        });
+      } catch (error) {
+        console.error('Error sharing:', error);
+      }
+    } else {
+      toast({ title: "Info", description: "Sharing not supported on this browser", variant: "default" });
     }
   };
 
@@ -494,6 +733,25 @@ const AdminOrders: React.FC = () => {
   const getStatusBadge = (status?: string) => {
     const statusConfig = ORDER_STATUSES.find(s => s.value === status) || ORDER_STATUSES[0];
     return <Badge className={statusConfig.color}>{statusConfig.label}</Badge>;
+  };
+
+  const getPaymentBadge = (order: Order & { id: string }) => {
+    const paymentStatus = order.paymentStatus || 'unpaid';
+    const variants: Record<string, { color: string; label: string }> = {
+      paid: { color: 'bg-green-100 text-green-800', label: 'Paid' },
+      partial: { color: 'bg-yellow-100 text-yellow-800', label: 'Partial' },
+      unpaid: { color: 'bg-red-100 text-red-800', label: 'Unpaid' },
+    };
+    
+    if (order.status === 'cancelled') {
+      return null;
+    }
+    
+    return (
+      <Badge className={variants[paymentStatus].color}>
+        {variants[paymentStatus].label}
+      </Badge>
+    );
   };
 
   const totals = calculateOrderTotals(newOrder.items, newOrder.taxType, newOrder.taxRate, newOrder.discountType, newOrder.discountValue);
@@ -777,6 +1035,7 @@ const AdminOrders: React.FC = () => {
                       <CardTitle className="flex items-center gap-2">
                         {order.invoiceNumber ? order.invoiceNumber : `Order #${order.id.slice(0, 8)}`}
                         {getStatusBadge(order.status)}
+                        {getPaymentBadge(order)}
                       </CardTitle>
                       <CardDescription>
                         {new Date(order.createdAt || '').toLocaleDateString()} | {order.customerName}
@@ -829,6 +1088,25 @@ const AdminOrders: React.FC = () => {
                       >
                         <Share2 className="h-4 w-4" />
                       </Button>
+                      {order.status !== 'cancelled' && (!order.paymentStatus || order.paymentStatus !== 'paid') && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          onClick={() => {
+                            const remaining = (order.total || 0) - (order.amountPaid || 0);
+                            setPayingOrder(order);
+                            setPaymentData({
+                              amountPaid: remaining,
+                              paymentDate: new Date().toISOString().split('T')[0],
+                              paymentMethod: 'cash',
+                              paymentNotes: '',
+                            });
+                          }}
+                        >
+                          <DollarSign className="h-4 w-4 mr-1" />
+                          Record Payment
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardHeader>
@@ -839,6 +1117,32 @@ const AdminOrders: React.FC = () => {
                         <p className="text-sm text-gray-500">Items</p>
                         <p className="font-medium">{order.items?.length || 0}</p>
                       </div>
+                      <div>
+                        <p className="text-sm text-gray-500">Total Amount</p>
+                        <p className="font-bold text-lg">${(order.total || 0).toFixed(2)}</p>
+                      </div>
+                      {order.status !== 'cancelled' && (
+                        <>
+                          <div>
+                            <p className="text-sm text-gray-500">Amount Paid</p>
+                            <p className="font-bold text-lg text-green-600">${(order.amountPaid || 0).toFixed(2)}</p>
+                          </div>
+                          {order.paymentStatus !== 'paid' && (
+                            <div>
+                              <p className="text-sm text-gray-500">Amount Due</p>
+                              <p className="font-bold text-lg text-red-600">
+                                ${((order.total || 0) - (order.amountPaid || 0)).toFixed(2)}
+                              </p>
+                            </div>
+                          )}
+                        </>
+                      )}
+                      {order.paymentDate && (
+                        <div>
+                          <p className="text-sm text-gray-500">Payment Date</p>
+                          <p className="font-medium">{new Date(order.paymentDate).toLocaleDateString()}</p>
+                        </div>
+                      )}
                       <div>
                         <p className="text-sm text-gray-500">Subtotal</p>
                         <p className="font-medium">${(order.subtotal || 0).toFixed(2)}</p>
@@ -888,6 +1192,35 @@ const AdminOrders: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  
+                  {/* Payment History */}
+                  {order.paymentHistory && order.paymentHistory.length > 0 && (
+                    <div className="mt-3 border-t pt-3">
+                      <p className="text-sm font-semibold mb-2">Payment History:</p>
+                      <div className="space-y-2">
+                        {order.paymentHistory.map((payment, idx) => (
+                          <div key={idx} className="flex items-center justify-between p-2 bg-green-50 rounded border border-green-200">
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">${payment.amount.toFixed(2)} - {payment.method}</p>
+                              <p className="text-xs text-gray-600">
+                                {new Date(payment.date).toLocaleDateString()} by {payment.recordedBy}
+                              </p>
+                            </div>
+                            <div className="flex gap-1">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => setViewingPaymentVoucher({ order, payment })}
+                                title="View Receipt"
+                              >
+                                <Download className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))
@@ -1001,6 +1334,122 @@ const AdminOrders: React.FC = () => {
                   Share
                 </Button>
                 <Button onClick={() => setViewingOrder(null)}>Close</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Payment Dialog */}
+        {payingOrder && (
+          <Dialog open={!!payingOrder} onOpenChange={() => setPayingOrder(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Record Payment</DialogTitle>
+                <DialogDescription>
+                  Order: {payingOrder.invoiceNumber || `#${payingOrder.id.slice(0, 8)}`}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Amount</p>
+                    <p className="font-bold">${(payingOrder.total || 0).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Already Paid</p>
+                    <p className="font-bold text-green-600">${(payingOrder.amountPaid || 0).toFixed(2)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-500">Amount Due</p>
+                    <p className="font-bold text-red-600">
+                      ${((payingOrder.total || 0) - (payingOrder.amountPaid || 0)).toFixed(2)}
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentAmount">Payment Amount *</Label>
+                  <Input
+                    id="paymentAmount"
+                    type="number"
+                    min="0"
+                    max={(payingOrder.total || 0) - (payingOrder.amountPaid || 0)}
+                    step="0.01"
+                    value={paymentData.amountPaid || ''}
+                    onChange={(e) => setPaymentData({ ...paymentData, amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentDate">Payment Date *</Label>
+                  <Input
+                    id="paymentDate"
+                    type="date"
+                    value={paymentData.paymentDate}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentMethod">Payment Method *</Label>
+                  <Select
+                    value={paymentData.paymentMethod}
+                    onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
+                  >
+                    <SelectTrigger id="paymentMethod">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="check">Check</SelectItem>
+                      <SelectItem value="credit_card">Credit Card</SelectItem>
+                      <SelectItem value="mobile_payment">Mobile Payment</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentNotes">Notes (optional)</Label>
+                  <Textarea
+                    id="paymentNotes"
+                    placeholder="Transaction reference, check number, etc."
+                    value={paymentData.paymentNotes}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentNotes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setPayingOrder(null)}>Cancel</Button>
+                <Button onClick={handlePayOrder}>Record Payment</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Payment Voucher Dialog */}
+        {viewingPaymentVoucher && (
+          <Dialog open={!!viewingPaymentVoucher} onOpenChange={() => setViewingPaymentVoucher(null)}>
+            <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+              <DialogHeader>
+                <DialogTitle>Payment Receipt - {viewingPaymentVoucher.payment.id}</DialogTitle>
+                <DialogDescription>Payment receipt and details</DialogDescription>
+              </DialogHeader>
+              <div dangerouslySetInnerHTML={{ __html: generatePaymentVoucherHTML(viewingPaymentVoucher.order, viewingPaymentVoucher.payment) }} />
+              <DialogFooter className="flex gap-2">
+                <Button variant="outline" onClick={() => printPaymentVoucher(viewingPaymentVoucher.order, viewingPaymentVoucher.payment)}>
+                  <Printer className="h-4 w-4 mr-1" />
+                  Print
+                </Button>
+                <Button variant="outline" onClick={() => downloadPaymentVoucher(viewingPaymentVoucher.order, viewingPaymentVoucher.payment)}>
+                  <Download className="h-4 w-4 mr-1" />
+                  Download PDF
+                </Button>
+                <Button variant="outline" onClick={() => sharePaymentVoucher(viewingPaymentVoucher.order, viewingPaymentVoucher.payment)}>
+                  <Share2 className="h-4 w-4 mr-1" />
+                  Share
+                </Button>
+                <Button onClick={() => setViewingPaymentVoucher(null)}>Close</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

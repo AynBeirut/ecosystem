@@ -5,7 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp } from 'lucide-react';
+import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2 } from 'lucide-react';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -144,9 +144,33 @@ const AdminInventory: React.FC = () => {
             </CardContent>
           </Card>
 
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/expenses')}>
+          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/supplier-returns')}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-orange-600">
+                <Undo2 className="h-5 w-5" />
+                Supplier Returns
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Return defective or incorrect items to suppliers</p>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/sales-returns')}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-red-600">
+                <Undo2 className="h-5 w-5" />
+                Sales Returns
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Process customer returns and refunds</p>
+            </CardContent>
+          </Card>
+
+          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/expenses')}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-amber-600">
                 <DollarSign className="h-5 w-5" />
                 Expenses
               </CardTitle>

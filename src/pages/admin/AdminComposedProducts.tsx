@@ -8,12 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, Package2, Minus } from 'lucide-react';
+import { Trash2, Plus, Edit3, Package2, Minus, AlertTriangle } from 'lucide-react';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { ComposedProduct, Recipe, RawMaterial } from '@/types/inventory';
 import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
+import { calculateAvailableStock, getComposedStockStatus } from '@/lib/composedProductStock';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -332,6 +333,83 @@ const AdminComposedProducts: React.FC = () => {
     }
   };
 
+  const handleDeleteRecipe = async (recipeId: string) => {
+    try {
+      const db = getFirestore();
+      const deletedRecipe = recipes.find(r => r.id === recipeId);
+      
+      // Find products using this recipe
+      const affectedProducts = composedProducts.filter(cp => cp.recipeId === recipeId);
+      
+      // Show warning if products are using this recipe
+      const confirmMessage = affectedProducts.length > 0
+        ? `This recipe is used by ${affectedProducts.length} product(s). Deleting it will unlink all these products. Continue?`
+        : `Are you sure you want to delete "${deletedRecipe?.name}"?`;
+      
+      if (!confirm(confirmMessage)) return;
+      
+      // Delete the recipe
+      await deleteDoc(doc(db, 'recipes', recipeId));
+      
+      for (const composedProduct of affectedProducts) {
+        // Delete composed product entry
+        await deleteDoc(doc(db, 'composedProducts', composedProduct.id));
+        
+        // Remove recipeId from the actual product
+        const productRef = doc(db, 'products', composedProduct.productId);
+        await updateDoc(productRef, {
+          recipeId: null,
+          updatedAt: new Date().toISOString(),
+        });
+      }
+      
+      // Refetch data to ensure sync
+      if (user?.storeId) {
+        // Refetch recipes
+        const recipesRef = collection(db, 'recipes');
+        const recipesQuery = query(recipesRef, where('storeId', '==', user.storeId));
+        const recipesSnapshot = await getDocs(recipesQuery);
+        const recipesList: Recipe[] = recipesSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Recipe));
+        setRecipes(recipesList);
+        
+        // Refetch composed products
+        const composedRef = collection(db, 'composedProducts');
+        const composedQuery = query(composedRef, where('storeId', '==', user.storeId));
+        const composedSnapshot = await getDocs(composedQuery);
+        const composedList: ComposedProduct[] = composedSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as ComposedProduct));
+        setComposedProducts(composedList);
+      }
+
+      // Audit log
+      if (deletedRecipe && user) {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'delete',
+          'recipe',
+          recipeId,
+          { oldValue: deletedRecipe, affectedProducts: affectedProducts.length },
+          user.storeId
+        );
+      }
+
+      toast({ 
+        title: "Success", 
+        description: `Recipe deleted and ${affectedProducts.length} product(s) unlinked successfully!` 
+      });
+    } catch (error) {
+      console.error('Error deleting recipe:', error);
+      toast({ title: "Error", description: "Failed to delete recipe", variant: "destructive" });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {isMobile ? <MobileHeader title="Composed Products" /> : null}
@@ -572,15 +650,27 @@ const AdminComposedProducts: React.FC = () => {
               const recipe = recipes.find(r => r.id === composedProduct.recipeId);
               const profitMargin = composedProduct.sellingPrice - composedProduct.costPrice;
               const profitPercentage = (profitMargin / composedProduct.costPrice) * 100;
+              const stockStatus = getComposedStockStatus(recipe, rawMaterials);
+              const availableUnits = calculateAvailableStock(recipe, rawMaterials);
 
               return (
                 <Card key={composedProduct.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
-                      <div>
+                      <div className="flex-1">
                         <CardTitle className="flex items-center gap-2">
                           {product?.name || 'Unknown Product'}
                           <Badge variant="secondary">Composed</Badge>
+                          {stockStatus.inStock ? (
+                            <Badge variant={availableUnits <= 5 ? "outline" : "default"} className={availableUnits <= 5 ? "border-orange-500 text-orange-700" : "bg-green-600"}>
+                              {availableUnits} units available
+                            </Badge>
+                          ) : (
+                            <Badge variant="destructive" className="flex items-center gap-1">
+                              <AlertTriangle className="h-3 w-3" />
+                              Out of Stock
+                            </Badge>
+                          )}
                         </CardTitle>
                         <CardDescription>Recipe: {recipe?.name || 'Unknown Recipe'}</CardDescription>
                       </div>
@@ -627,8 +717,20 @@ const AdminComposedProducts: React.FC = () => {
                     </div>
                     {recipe && (
                       <div className="mt-4 p-3 bg-gray-50 rounded">
-                        <p className="text-sm font-semibold mb-1">Recipe Details:</p>
-                        <p className="text-sm">Output: {recipe.outputQuantity} {recipe.outputUnit} | Prep: {recipe.preparationTime} min</p>
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <p className="text-sm font-semibold mb-1">Recipe Details:</p>
+                            <p className="text-sm">Output: {recipe.outputQuantity} {recipe.outputUnit} | Prep: {recipe.preparationTime} min</p>
+                          </div>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => handleDeleteRecipe(recipe.id)}
+                            title="Delete this recipe"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
                       </div>
                     )}
                   </CardContent>
