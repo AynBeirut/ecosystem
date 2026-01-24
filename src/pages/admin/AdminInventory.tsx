@@ -20,7 +20,8 @@ const AdminInventory: React.FC = () => {
     simpleProducts: { count: 0, totalValue: 0, lowStock: 0 },
     services: { count: 0, totalRevenue: 0 },
     composedProducts: { count: 0, totalValue: 0 },
-    rawMaterials: { count: 0, totalValue: 0, lowStock: 0 }
+    rawMaterials: { count: 0, totalValue: 0, lowStock: 0 },
+    finishedGoods: { count: 0, totalValue: 0, lowStock: 0 }
   });
 
   useEffect(() => {
@@ -68,15 +69,29 @@ const AdminInventory: React.FC = () => {
         rawSnap.forEach(doc => {
           const data = doc.data();
           rawCount++;
-          rawValue += (data.currentStock || 0) * (data.unitCost || 0);
+          rawValue += (data.currentStock || 0) * (data.costPerUnit || 0);
           if ((data.currentStock || 0) <= (data.reorderPoint || 0)) rawLowStock++;
+        });
+
+        // Finished Goods
+        const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
+        const fgQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
+        const fgSnap = await getDocs(fgQuery);
+        
+        let fgCount = 0, fgValue = 0, fgLowStock = 0;
+        fgSnap.forEach(doc => {
+          const data = doc.data();
+          fgCount++;
+          fgValue += data.totalValue || 0;
+          if (data.reorderPoint && (data.currentBalance || 0) < data.reorderPoint) fgLowStock++;
         });
 
         setStats({
           simpleProducts: { count: simpleCount, totalValue: simpleValue, lowStock: simpleLowStock },
           services: { count: serviceSnap.size, totalRevenue: 0 },
           composedProducts: { count: composedCount, totalValue: composedValue },
-          rawMaterials: { count: rawCount, totalValue: rawValue, lowStock: rawLowStock }
+          rawMaterials: { count: rawCount, totalValue: rawValue, lowStock: rawLowStock },
+          finishedGoods: { count: fgCount, totalValue: fgValue, lowStock: fgLowStock }
         });
 
       } catch (error) {
@@ -89,8 +104,8 @@ const AdminInventory: React.FC = () => {
     fetchInventoryStats();
   }, [user?.storeId]);
 
-  const totalInventoryValue = stats.simpleProducts.totalValue + stats.composedProducts.totalValue + stats.rawMaterials.totalValue;
-  const totalLowStock = stats.simpleProducts.lowStock + stats.rawMaterials.lowStock;
+  const totalInventoryValue = stats.simpleProducts.totalValue + stats.composedProducts.totalValue + stats.rawMaterials.totalValue + stats.finishedGoods.totalValue;
+  const totalLowStock = stats.simpleProducts.lowStock + stats.rawMaterials.lowStock + stats.finishedGoods.lowStock;
 
   return (
     <div className="min-h-screen bg-background">
@@ -168,6 +183,18 @@ const AdminInventory: React.FC = () => {
             </CardContent>
           </Card>
 
+          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/finished-goods')}>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-green-600">
+                <Package className="h-5 w-5" />
+                Finished Goods
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-sm text-muted-foreground">Track manufactured items ready for sale</p>
+            </CardContent>
+          </Card>
+
           <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/expenses')}>
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-amber-600">
@@ -238,11 +265,12 @@ const AdminInventory: React.FC = () => {
 
         {/* Detailed Tabs */}
         <Tabs defaultValue="simple" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="simple">Simple Items</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="composed">Composed</TabsTrigger>
             <TabsTrigger value="raw">Raw Materials</TabsTrigger>
+            <TabsTrigger value="finished">Finished Goods</TabsTrigger>
           </TabsList>
 
           <TabsContent value="simple">
@@ -350,6 +378,36 @@ const AdminInventory: React.FC = () => {
                       Purchase Orders
                     </Button>
                   </div>
+                </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="finished">
+            <Card>
+              <CardHeader>
+                <CardTitle>Finished Goods</CardTitle>
+                <CardDescription>Manufactured items ready for sale with FIFO cost tracking</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div className="grid grid-cols-3 gap-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Items</p>
+                      <p className="text-2xl font-bold">{stats.finishedGoods.count}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Value</p>
+                      <p className="text-2xl font-bold">${stats.finishedGoods.totalValue.toFixed(2)}</p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Low Stock</p>
+                      <p className="text-2xl font-bold text-orange-500">{stats.finishedGoods.lowStock}</p>
+                    </div>
+                  </div>
+                  <Button onClick={() => navigate('/admin/finished-goods')}>
+                    Manage Finished Goods
+                  </Button>
                 </div>
               </CardContent>
             </Card>

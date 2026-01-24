@@ -159,7 +159,7 @@ const AdminAccountStatement: React.FC = () => {
         const supplierId = purchase.supplierId || 'unknown';
         const supplierName = suppliersData.get(supplierId) || purchase.supplierName || 'Unknown Supplier';
         const total = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
-        const paid = purchase.paid || 0;
+        const paid = purchase.amountPaid || purchase.paid || 0;
         
         if (!supplierMap.has(supplierId)) {
           supplierMap.set(supplierId, {

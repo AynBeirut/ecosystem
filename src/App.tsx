@@ -52,6 +52,7 @@ import AdminAccountStatement from "./pages/admin/AdminAccountStatement";
 import AdminBankReconciliation from "./pages/admin/AdminBankReconciliation";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminReturns from "./pages/admin/AdminReturns";
+import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
 
 
       function App() {
@@ -104,6 +105,7 @@ import AdminReturns from "./pages/admin/AdminReturns";
                         <Route path="/admin/recipes" element={<ProtectedRoute allowedRoles={['admin']}><AdminRecipes /></ProtectedRoute>} />
                         <Route path="/admin/composed-products" element={<ProtectedRoute allowedRoles={['admin']}><AdminComposedProducts /></ProtectedRoute>} />
                         <Route path="/admin/production" element={<ProtectedRoute allowedRoles={['admin']}><AdminProduction /></ProtectedRoute>} />
+                        <Route path="/admin/finished-goods" element={<ProtectedRoute allowedRoles={['admin']}><AdminFinishedGoods /></ProtectedRoute>} />
                         {/* Purchasing & Returns */}
                         <Route path="/admin/purchases" element={<ProtectedRoute allowedRoles={['admin']}><AdminPurchases /></ProtectedRoute>} />
                         <Route path="/admin/returns" element={<ProtectedRoute allowedRoles={['admin']}><AdminReturns /></ProtectedRoute>} />
