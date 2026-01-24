@@ -70,6 +70,8 @@ const AdminAccountStatement: React.FC = () => {
   useEffect(() => {
     if (user?.storeId) {
       fetchAllData();
+    } else {
+      setLoading(false);
     }
   }, [user?.storeId]);
 
@@ -156,6 +158,14 @@ const AdminAccountStatement: React.FC = () => {
       );
       const purchasesSnapshot = await getDocs(purchasesQuery);
       
+      // Fetch supplier returns
+      const returnsQuery = query(
+        collection(db, 'supplierReturns'),
+        where('storeId', '==', user?.storeId),
+        where('status', '==', 'credited')
+      );
+      const returnsSnapshot = await getDocs(returnsQuery);
+      
       const supplierMap = new Map<string, SupplierBalance>();
       
       purchasesSnapshot.forEach(doc => {
@@ -179,6 +189,20 @@ const AdminAccountStatement: React.FC = () => {
         supplier.totalPurchases += total;
         supplier.totalPayments += paid;
         supplier.balance = supplier.totalPurchases - supplier.totalPayments;
+      });
+      
+      // Subtract credited returns from supplier balances
+      returnsSnapshot.forEach(doc => {
+        const returnDoc = doc.data();
+        const supplierId = returnDoc.supplierId || 'unknown';
+        const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
+        
+        if (supplierMap.has(supplierId)) {
+          const supplier = supplierMap.get(supplierId)!;
+          // Reduce the total purchases by the return amount
+          supplier.totalPurchases -= creditAmount;
+          supplier.balance = supplier.totalPurchases - supplier.totalPayments;
+        }
       });
       
       setSuppliers(Array.from(supplierMap.values()));
@@ -838,11 +862,11 @@ const AdminAccountStatement: React.FC = () => {
       </div>
 
       <div className="bg-white rounded shadow">
-        <div className="border-b">
-          <div className="flex">
+        <div className="border-b overflow-x-auto">
+          <div className="flex min-w-max">
             <button
               onClick={() => setActiveTab('customers')}
-              className={`px-6 py-3 font-medium ${
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'customers'
                   ? 'border-b-2 border-blue-600 text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
@@ -852,7 +876,7 @@ const AdminAccountStatement: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('suppliers')}
-              className={`px-6 py-3 font-medium ${
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'suppliers'
                   ? 'border-b-2 border-blue-600 text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
@@ -862,7 +886,7 @@ const AdminAccountStatement: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('products')}
-              className={`px-6 py-3 font-medium ${
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'products'
                   ? 'border-b-2 border-blue-600 text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
@@ -872,7 +896,7 @@ const AdminAccountStatement: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('purchases')}
-              className={`px-6 py-3 font-medium ${
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'purchases'
                   ? 'border-b-2 border-blue-600 text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
@@ -882,7 +906,7 @@ const AdminAccountStatement: React.FC = () => {
             </button>
             <button
               onClick={() => setActiveTab('expenses')}
-              className={`px-6 py-3 font-medium ${
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'expenses'
                   ? 'border-b-2 border-blue-600 text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
@@ -896,33 +920,33 @@ const AdminAccountStatement: React.FC = () => {
         <div className="p-6">
           {activeTab === 'customers' && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-4 gap-2">
                 <h2 className="text-xl font-semibold">Customer Balances</h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={exportCustomersToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
                   >
-                    <Download size={18} />
-                    Export Excel
+                    <Download size={16} />
+                    {!isMobile && 'Export Excel'}
                   </button>
                   <button
                     onClick={exportCustomersToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
                   >
-                    <FileDown size={18} />
-                    Export PDF
+                    <FileDown size={16} />
+                    {!isMobile && 'Export PDF'}
                   </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left">Customer Name</th>
-                      <th className="px-4 py-2 text-right">Total Purchases</th>
-                      <th className="px-4 py-2 text-right">Total Payments</th>
-                      <th className="px-4 py-2 text-right">Balance</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Customer Name</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Purchases</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Payments</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Balance</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -952,33 +976,33 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'suppliers' && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-4 gap-2">
                 <h2 className="text-xl font-semibold">Supplier Balances</h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={exportSuppliersToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
                   >
-                    <Download size={18} />
-                    Export Excel
+                    <Download size={16} />
+                    {!isMobile && 'Export Excel'}
                   </button>
                   <button
                     onClick={exportSuppliersToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
                   >
-                    <FileDown size={18} />
-                    Export PDF
+                    <FileDown size={16} />
+                    {!isMobile && 'Export PDF'}
                   </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left">Supplier Name</th>
-                      <th className="px-4 py-2 text-right">Total Purchases</th>
-                      <th className="px-4 py-2 text-right">Total Payments</th>
-                      <th className="px-4 py-2 text-right">Balance Due</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Supplier Name</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Purchases</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Payments</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Balance Due</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1008,33 +1032,33 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'products' && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-4 gap-2">
                 <h2 className="text-xl font-semibold">Product Summary</h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={exportProductsToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
                   >
-                    <Download size={18} />
-                    Export Excel
+                    <Download size={16} />
+                    {!isMobile && 'Export Excel'}
                   </button>
                   <button
                     onClick={exportProductsToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
                   >
-                    <FileDown size={18} />
-                    Export PDF
+                    <FileDown size={16} />
+                    {!isMobile && 'Export PDF'}
                   </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left">Product Name</th>
-                      <th className="px-4 py-2 text-left">Category</th>
-                      <th className="px-4 py-2 text-right">Total Sold</th>
-                      <th className="px-4 py-2 text-right">Total Revenue</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Product Name</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Category</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Sold</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Revenue</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1063,33 +1087,33 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'purchases' && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-4 gap-2">
                 <h2 className="text-xl font-semibold">Purchase History</h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={exportPurchasesToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
                   >
-                    <Download size={18} />
-                    Export Excel
+                    <Download size={16} />
+                    {!isMobile && 'Export Excel'}
                   </button>
                   <button
                     onClick={exportPurchasesToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
                   >
-                    <FileDown size={18} />
-                    Export PDF
+                    <FileDown size={16} />
+                    {!isMobile && 'Export PDF'}
                   </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left">Date</th>
-                      <th className="px-4 py-2 text-left">Supplier</th>
-                      <th className="px-4 py-2 text-right">Amount</th>
-                      <th className="px-4 py-2 text-left">Status</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Date</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Supplier</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Amount</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Status</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1122,33 +1146,33 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'expenses' && (
             <div>
-              <div className="flex justify-between items-center mb-4">
+              <div className="flex justify-between items-center mb-4 gap-2">
                 <h2 className="text-xl font-semibold">Expense History</h2>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <button
                     onClick={exportExpensesToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
                   >
-                    <Download size={18} />
-                    Export Excel
+                    <Download size={16} />
+                    {!isMobile && 'Export Excel'}
                   </button>
                   <button
                     onClick={exportExpensesToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
                   >
-                    <FileDown size={18} />
-                    Export PDF
+                    <FileDown size={16} />
+                    {!isMobile && 'Export PDF'}
                   </button>
                 </div>
               </div>
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left">Date</th>
-                      <th className="px-4 py-2 text-left">Category</th>
-                      <th className="px-4 py-2 text-left">Description</th>
-                      <th className="px-4 py-2 text-right">Amount</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Date</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Category</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Description</th>
+                      <th className="px-4 py-2 text-right whitespace-nowrap">Amount</th>
                     </tr>
                   </thead>
                   <tbody>

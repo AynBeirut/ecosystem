@@ -25,6 +25,8 @@ const AdminAnalytics: React.FC = () => {
   useEffect(() => {
     if (user?.storeId) {
       fetchAnalyticsData();
+    } else {
+      setLoading(false);
     }
   }, [user?.storeId, timeRange]);
 
@@ -206,7 +208,7 @@ const AdminAnalytics: React.FC = () => {
   {isMobile && <MobileHeader title="Analytics" />}
       
       <div className="p-4 md:p-6">
-        <BackButton />
+        {!isMobile && <BackButton to="/admin/dashboard" label="Back to Dashboard" />}
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>

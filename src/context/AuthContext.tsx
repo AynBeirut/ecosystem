@@ -46,46 +46,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (savedSellerInfo) {
           try {
             const sellerData = JSON.parse(savedSellerInfo);
-            setUser((prev) => prev ? { ...prev, ...sellerData, role: sellerData.role || prev.role } : prev);
+            // Ensure storeId is set, use user id as fallback for admin/seller accounts
+            const storeId = sellerData.storeId || (auth.currentUser ? auth.currentUser.uid : undefined);
+            setUser((prev) => prev ? { ...prev, ...sellerData, role: sellerData.role || prev.role, storeId } : prev);
+            // Update localStorage with storeId if it was missing
+            if (!sellerData.storeId && storeId) {
+              localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId }));
+            }
           } catch (e) {
             console.error('Failed to parse sellerInfo from localStorage', e);
           }
         }
     }, []);
 
-    // Always fetch and set storeId after login or auth state change
-    useEffect(() => {
-      const fetchAndSetStoreId = async (firebaseUser: FirebaseUser) => {
-        if (!firebaseUser) return;
-        const db = getFirestore();
-        // Try to find a store profile with this user as owner
-        const storeProfileRef = doc(db, 'storeProfiles', firebaseUser.uid);
-        const storeProfileSnap = await getDoc(storeProfileRef);
-        let storeId = undefined;
-        if (storeProfileSnap.exists()) {
-          storeId = storeProfileSnap.id;
-        }
-        // Update user context and localStorage
-        setUser((prev) => prev ? { ...prev, storeId } : prev);
-        // Also update sellerInfo in localStorage if present
-        const savedSellerInfo = localStorage.getItem('sellerInfo');
-        if (savedSellerInfo) {
-          try {
-            const sellerData = JSON.parse(savedSellerInfo);
-            sellerData.storeId = storeId;
-            localStorage.setItem('sellerInfo', JSON.stringify(sellerData));
-          } catch (e) {
-            console.error('Failed to parse sellerInfo while updating storeId', e);
-          }
-        }
-      };
-      const unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
-        if (firebaseUser) {
-          fetchAndSetStoreId(firebaseUser);
-        }
-      });
-      return () => unsubscribe();
-    }, []);
+
 
   // Check if user is already logged in and listen for auth changes
   useEffect(() => {
@@ -149,8 +123,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           const sellerSnap = await getDoc(sellerRef);
           if (sellerSnap.exists()) {
             const sellerData = sellerSnap.data();
-            baseUser = { ...baseUser, ...sellerData, role: sellerData.role as UserRole };
-            localStorage.setItem('sellerInfo', JSON.stringify(sellerData));
+            // Ensure storeId is set to user's id for admin/seller accounts
+            const storeId = sellerData.storeId || firebaseUser.uid;
+            baseUser = { ...baseUser, ...sellerData, role: sellerData.role as UserRole, storeId };
+            localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId }));
           }
           
           setUser(baseUser);

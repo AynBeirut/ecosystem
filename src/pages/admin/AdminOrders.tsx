@@ -81,6 +81,7 @@ const AdminOrders: React.FC = () => {
     const fetchData = async () => {
       if (!user?.storeId) {
         console.log('AdminOrders: No storeId found for user', user);
+        setLoading(false);
         return;
       }
       console.log('AdminOrders: Fetching orders for storeId:', user.storeId);

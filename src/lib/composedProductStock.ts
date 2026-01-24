@@ -1,106 +1,82 @@
-import { Recipe, RawMaterial } from '@/types/inventory';
+import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { ComposedProduct, RawMaterial } from '@/types/product';
+
+export interface StockStatus {
+  available: number;
+  status: 'in-stock' | 'low-stock' | 'out-of-stock';
+  canMake: number;
+}
 
 /**
- * Calculate how many units of a composed product can be made
- * based on available raw material stock
+ * Calculate how many units of a composed product can be made with current raw material stock
  */
-export function calculateAvailableStock(
-  recipe: Recipe | undefined,
-  rawMaterials: RawMaterial[]
-): number {
-  if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
+export async function calculateAvailableStock(
+  product: ComposedProduct,
+  storeId: string
+): Promise<number> {
+  if (!product.materials || product.materials.length === 0) {
     return 0;
   }
 
-  let maxUnits = Infinity;
+  const db = getFirestore();
+  const materialsQuery = query(
+    collection(db, 'rawMaterials'),
+    where('storeId', '==', storeId)
+  );
 
-  // For each ingredient in the recipe, calculate how many units we can make
-  for (const ingredient of recipe.ingredients) {
-    const material = rawMaterials.find(m => m.id === ingredient.rawMaterialId);
+  const snapshot = await getDocs(materialsQuery);
+  const rawMaterials = new Map<string, RawMaterial>();
+  
+  snapshot.forEach(doc => {
+    const material = doc.data() as RawMaterial;
+    rawMaterials.set(doc.id, material);
+  });
+
+  // Calculate minimum units that can be made based on each material
+  let minUnits = Infinity;
+
+  for (const material of product.materials) {
+    const rawMaterial = rawMaterials.get(material.materialId);
     
-    if (!material) {
-      // If any material is missing, we can't make any units
-      return 0;
+    if (!rawMaterial) {
+      return 0; // Material not found
     }
 
-    // Calculate how many units we can make with this material's current stock
-    const unitsFromThisMaterial = Math.floor(material.currentStock / ingredient.quantity);
-    
-    // The maximum units we can make is limited by the ingredient with the least availability
-    maxUnits = Math.min(maxUnits, unitsFromThisMaterial);
+    const availableStock = rawMaterial.currentStock || 0;
+    const requiredPerUnit = material.quantityNeeded || 0;
+
+    if (requiredPerUnit === 0) {
+      continue;
+    }
+
+    const unitsFromThisMaterial = Math.floor(availableStock / requiredPerUnit);
+    minUnits = Math.min(minUnits, unitsFromThisMaterial);
   }
 
-  // If no limiting ingredient found, return 0
-  return maxUnits === Infinity ? 0 : maxUnits;
+  return minUnits === Infinity ? 0 : minUnits;
 }
 
 /**
- * Check if a composed product is in stock
+ * Get stock status for a composed product
  */
-export function isComposedProductInStock(
-  recipe: Recipe | undefined,
-  rawMaterials: RawMaterial[]
-): boolean {
-  return calculateAvailableStock(recipe, rawMaterials) > 0;
-}
+export async function getComposedStockStatus(
+  product: ComposedProduct,
+  storeId: string
+): Promise<StockStatus> {
+  const canMake = await calculateAvailableStock(product, storeId);
 
-/**
- * Get stock status message for composed product
- */
-export function getComposedStockStatus(
-  recipe: Recipe | undefined,
-  rawMaterials: RawMaterial[]
-): { inStock: boolean; availableUnits: number; message: string } {
-  const availableUnits = calculateAvailableStock(recipe, rawMaterials);
-  
-  if (availableUnits === 0) {
-    return {
-      inStock: false,
-      availableUnits: 0,
-      message: 'Out of stock - Insufficient raw materials'
-    };
+  let status: 'in-stock' | 'low-stock' | 'out-of-stock';
+  if (canMake === 0) {
+    status = 'out-of-stock';
+  } else if (canMake < 10) {
+    status = 'low-stock';
+  } else {
+    status = 'in-stock';
   }
-  
-  if (availableUnits <= 5) {
-    return {
-      inStock: true,
-      availableUnits,
-      message: `Low stock - Only ${availableUnits} units available`
-    };
-  }
-  
+
   return {
-    inStock: true,
-    availableUnits,
-    message: `In stock - ${availableUnits} units available`
+    available: canMake,
+    status,
+    canMake
   };
-}
-
-/**
- * Find which raw materials are insufficient for production
- */
-export function getInsufficientMaterials(
-  recipe: Recipe | undefined,
-  rawMaterials: RawMaterial[]
-): Array<{ materialName: string; required: number; available: number; unit: string }> {
-  if (!recipe || !recipe.ingredients) {
-    return [];
-  }
-
-  const insufficient: Array<{ materialName: string; required: number; available: number; unit: string }> = [];
-
-  for (const ingredient of recipe.ingredients) {
-    const material = rawMaterials.find(m => m.id === ingredient.rawMaterialId);
-    
-    if (!material || material.currentStock < ingredient.quantity) {
-      insufficient.push({
-        materialName: ingredient.materialName,
-        required: ingredient.quantity,
-        available: material?.currentStock || 0,
-        unit: ingredient.unit
-      });
-    }
-  }
-
-  return insufficient;
 }

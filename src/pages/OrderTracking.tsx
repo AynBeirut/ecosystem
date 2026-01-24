@@ -18,7 +18,10 @@ const OrderTracking: React.FC = () => {
 
   useEffect(() => {
     const fetchOrders = async () => {
-      if (!user?.id) return;
+      if (!user?.id) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
       const db = getFirestore();
       const ordersRef = collection(db, 'orders');
