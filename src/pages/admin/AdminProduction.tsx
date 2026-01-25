@@ -31,6 +31,7 @@ const AdminProduction: React.FC = () => {
   const isMobile = useIsMobile();
   const [batches, setBatches] = useState<ProductionBatch[]>([]);
   const [products, setProducts] = useState<ComposedProduct[]>([]);
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [isAddingBatch, setIsAddingBatch] = useState(false);
   const [editingBatch, setEditingBatch] = useState<ProductionBatch | null>(null);
   const [filterStatus, setFilterStatus] = useState<ProductionBatchStatus | 'all'>('all');
@@ -56,6 +57,16 @@ const AdminProduction: React.FC = () => {
         ...doc.data()
       } as ComposedProduct));
       setProducts(productsList);
+
+      // Fetch recipes
+      const recipesRef = collection(db, 'recipes');
+      const recipesQuery = query(recipesRef, where('storeId', '==', user.storeId));
+      const recipesSnapshot = await getDocs(recipesQuery);
+      const recipesList: Recipe[] = recipesSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Recipe));
+      setRecipes(recipesList);
 
       const batchesRef = collection(db, 'productionBatches');
       const batchesQuery = query(batchesRef, where('storeId', '==', user.storeId));
@@ -83,6 +94,9 @@ const AdminProduction: React.FC = () => {
 
     try {
       const db = getFirestore();
+      const recipe = recipes.find(r => r.id === product.recipeId);
+      const costPerUnit = recipe?.costPerUnit || product.costPrice || 0;
+      
       const batchData = {
         ...newBatch,
         productName: product.name,
@@ -91,7 +105,7 @@ const AdminProduction: React.FC = () => {
         startDate: null,
         completionDate: null,
         assignedStaff: [],
-        materialsCost: product.productionCost * newBatch.quantity,
+        materialsCost: costPerUnit * newBatch.quantity,
         storeId: user.storeId,
         createdAt: new Date().toISOString(),
         createdBy: user.id,
@@ -447,11 +461,15 @@ const AdminProduction: React.FC = () => {
               <SelectValue placeholder="Select product" />
             </SelectTrigger>
             <SelectContent>
-              {products.map(product => (
-                <SelectItem key={product.id} value={product.id}>
-                  {product.name} (Cost: ${(product.productionCost || 0).toFixed(2)})
-                </SelectItem>
-              ))}
+              {products.map(product => {
+                const recipe = recipes.find(r => r.id === product.recipeId);
+                const cost = recipe?.costPerUnit || product.costPrice || 0;
+                return (
+                  <SelectItem key={product.id} value={product.id}>
+                    {product.name} (Cost: ${cost.toFixed(2)}/unit)
+                  </SelectItem>
+                );
+              })}
             </SelectContent>
           </Select>
         </div>
