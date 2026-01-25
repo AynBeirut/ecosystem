@@ -1276,11 +1276,13 @@ const AdminPurchases: React.FC = () => {
             newCostPerUnit = newStock > 0 ? totalValue / newStock : itemUnitCost;
           }
           
-          console.log(`Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)})`);
+          console.log(`Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)}), Unit: ${material.unit}`);
           
+          // Update stock, cost, and ensure unit is set from raw material
           await updateDoc(materialRef, {
             currentStock: newStock,
             costPerUnit: newCostPerUnit,
+            unit: material.unit, // Ensure unit is preserved/set
             updatedAt: new Date().toISOString(),
           });
           updatedCount++;

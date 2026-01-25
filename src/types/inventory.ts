@@ -181,6 +181,7 @@ export interface PurchaseItem {
   rawMaterialId: string;
   materialName: string;
   sku: string;
+  unit?: string; // Unit from raw material (kg, liter, piece, etc.)
   quantity: number;
   unitCost: number;
   unitPrice?: number; // alias for unitCost
