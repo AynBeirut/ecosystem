@@ -150,15 +150,15 @@ const AdminFinishedGoods: React.FC = () => {
     const rows = filteredGoods.map(item => [
       item.itemCode,
       item.productName,
-      item.openingBalance,
-      item.quantityManufactured,
-      item.quantitySold,
+      item.openingBalance || 0,
+      item.quantityManufactured || 0,
+      item.quantitySold || 0,
       item.quantityAdjusted || 0,
-      item.currentBalance,
-      item.unit,
-      item.costPrice.toFixed(2),
-      item.sellingPrice.toFixed(2),
-      item.totalValue.toFixed(2),
+      item.currentBalance || 0,
+      item.unit || '',
+      (item.costPrice || 0).toFixed(2),
+      (item.sellingPrice || 0).toFixed(2),
+      (item.totalValue || 0).toFixed(2),
     ]);
     
     const csv = [headers, ...rows].map(row => row.join(',')).join('\n');
@@ -380,11 +380,11 @@ const AdminFinishedGoods: React.FC = () => {
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Cost Price:</span>
-                      <span>${item.costPrice.toFixed(2)}</span>
+                      <span>${(item.costPrice || 0).toFixed(2)}</span>
                     </div>
-                    <div className="flex justify-between">
+                    <div className="flex justify-between text-sm font-semibold">
                       <span className="text-gray-600">Total Value:</span>
-                      <span className="font-semibold">${item.totalValue.toFixed(2)}</span>
+                      <span className="font-semibold">${(item.totalValue || 0).toFixed(2)}</span>
                     </div>
                   </div>
                   <div className="flex gap-2 mt-4">
@@ -446,8 +446,8 @@ const AdminFinishedGoods: React.FC = () => {
                         <td className="p-4 text-right text-green-600">{item.quantityManufactured}</td>
                         <td className="p-4 text-right text-red-600">{item.quantitySold}</td>
                         <td className="p-4 text-right font-semibold">{item.currentBalance}</td>
-                        <td className="p-4 text-right">${item.costPrice.toFixed(2)}</td>
-                        <td className="p-4 text-right font-semibold">${item.totalValue.toFixed(2)}</td>
+                        <td className="p-4 text-right">${(item.costPrice || 0).toFixed(2)}</td>
+                        <td className="p-4 text-right font-semibold">${(item.totalValue || 0).toFixed(2)}</td>
                         <td className="p-4 text-right">
                           <div className="flex justify-end gap-2">
                             <Button
