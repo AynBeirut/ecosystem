@@ -396,7 +396,7 @@ const SalesReturns: React.FC = () => {
                             <div className="space-y-3">
                               <div>
                                 <Label className="font-semibold text-sm md:text-base">{item.productName}</Label>
-                                <p className="text-xs md:text-sm text-gray-500">Unit Price: ${item.price.toFixed(2)}</p>
+                                <p className="text-xs md:text-sm text-gray-500">Unit Price: ${(item.price || 0).toFixed(2)}</p>
                                 <p className="text-xs md:text-sm font-medium text-blue-600">Original Quantity: {item.originalQuantity || 0}</p>
                               </div>
                               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -427,7 +427,7 @@ const SalesReturns: React.FC = () => {
                               </div>
                               <div className="flex justify-between items-center pt-2 border-t">
                                 <Label className="text-sm">Subtotal</Label>
-                                <p className="text-base md:text-lg font-semibold">${item.subtotal.toFixed(2)}</p>
+                                <p className="text-base md:text-lg font-semibold">${(item.subtotal || 0).toFixed(2)}</p>
                               </div>
                             </div>
                           </CardContent>
@@ -563,8 +563,8 @@ const SalesReturns: React.FC = () => {
                       {returnDoc.items.map((item, idx) => (
                         <div key={idx} className="text-sm p-2 bg-gray-50 rounded mb-1">
                           <div className="flex justify-between">
-                            <span>{item.productName}: {item.quantity} units @ ${item.price.toFixed(2)}</span>
-                            <span className="font-semibold">${item.subtotal.toFixed(2)}</span>
+                            <span>{item.productName}: {item.quantity} units @ ${(item.price || 0).toFixed(2)}</span>
+                            <span className="font-semibold">${(item.subtotal || 0).toFixed(2)}</span>
                           </div>
                           <p className="text-xs text-gray-600">Reason: {item.reason}</p>
                         </div>
