@@ -449,7 +449,7 @@ const AdminProduction: React.FC = () => {
             <SelectContent>
               {products.map(product => (
                 <SelectItem key={product.id} value={product.id}>
-                  {product.name} (Cost: ${product.productionCost.toFixed(2)})
+                  {product.name} (Cost: ${(product.productionCost || 0).toFixed(2)})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -713,7 +713,7 @@ const AdminProduction: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Materials Cost</p>
-                        <p className="font-medium">${batch.materialsCost.toFixed(2)}</p>
+                        <p className="font-medium">${(batch.materialsCost || 0).toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Start Date</p>
