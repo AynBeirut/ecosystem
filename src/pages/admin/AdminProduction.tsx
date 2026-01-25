@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Factory, Plus, Edit2, Trash2, CheckCircle, Clock, AlertCircle, Package } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { ProductionBatch, ProductionBatchStatus, ComposedProduct } from '@/types/inventory';
+import { ProductionBatch, ProductionBatchStatus, ComposedProduct, RawMaterial, Recipe } from '@/types/inventory';
+import { FinishedGoodsItem } from '@/types/finishedGoods';
 import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -219,18 +220,187 @@ const AdminProduction: React.FC = () => {
     if (!user?.storeId) return;
     const actualQuantity = prompt(`Enter actual quantity produced (planned: ${batch.quantity}):`, batch.quantity.toString());
     if (!actualQuantity) return;
+    
+    const actualQty = parseInt(actualQuantity);
+    if (actualQty <= 0) {
+      toast({ title: "Error", description: "Quantity must be greater than 0", variant: "destructive" });
+      return;
+    }
 
     try {
       const db = getFirestore();
+      
+      // 1. Get the composed product and its recipe
+      const composedProductDoc = await getDoc(doc(db, 'composedProducts', batch.productId));
+      if (!composedProductDoc.exists()) {
+        toast({ title: "Error", description: "Composed product not found", variant: "destructive" });
+        return;
+      }
+      const composedProduct = { id: composedProductDoc.id, ...composedProductDoc.data() } as ComposedProduct;
+      
+      // 2. Get recipe details
+      const recipeDoc = await getDoc(doc(db, 'recipes', composedProduct.recipeId || ''));
+      if (!recipeDoc.exists()) {
+        toast({ title: "Error", description: "Recipe not found", variant: "destructive" });
+        return;
+      }
+      const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as Recipe;
+      
+      // 3. Calculate material costs and reduce raw materials stock
+      let totalMaterialCost = 0;
+      const materialsUsed = [];
+      
+      for (const ingredient of recipe.ingredients || []) {
+        const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId));
+        if (!rawMaterialDoc.exists()) continue;
+        
+        const rawMaterial = { id: rawMaterialDoc.id, ...rawMaterialDoc.data() } as RawMaterial;
+        const quantityNeeded = ingredient.quantity * actualQty;
+        const currentStock = rawMaterial.currentStock || 0;
+        
+        // Check if enough stock
+        if (currentStock < quantityNeeded) {
+          toast({
+            title: "Insufficient Stock",
+            description: `Not enough ${rawMaterial.name}. Need: ${quantityNeeded}, Available: ${currentStock}`,
+            variant: "destructive"
+          });
+          return;
+        }
+        
+        // Calculate cost for this material
+        const materialCost = (rawMaterial.costPerUnit || 0) * quantityNeeded;
+        totalMaterialCost += materialCost;
+        
+        // Reduce stock
+        await updateDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId), {
+          currentStock: currentStock - quantityNeeded,
+          updatedAt: new Date().toISOString(),
+        });
+        
+        materialsUsed.push({
+          materialId: ingredient.rawMaterialId,
+          materialName: rawMaterial.name,
+          quantityUsed: quantityNeeded,
+          unitCost: rawMaterial.costPerUnit || 0,
+          totalCost: materialCost,
+        });
+      }
+      
+      // 4. Calculate total cost per unit (materials + service cost)
+      // Service cost is the difference between recipe totalCost and material costs
+      const recipeTotalCost = recipe.totalCost || 0;
+      const serviceCost = Math.max(0, recipeTotalCost - (totalMaterialCost / actualQty));
+      const totalCostPerUnit = (totalMaterialCost + (serviceCost * actualQty)) / actualQty;
+      
+      // 5. Update or create finished goods entry
+      const fgQuery = query(
+        collection(db, 'finishedGoodsInventory'),
+        where('storeId', '==', user.storeId),
+        where('composedProductId', '==', batch.productId)
+      );
+      const fgSnapshot = await getDocs(fgQuery);
+      
+      const batchDetails = {
+        batchId: batch.id,
+        batchNumber: `BATCH-${batch.id.slice(-6)}`,
+        quantity: actualQty,
+        costPerUnit: totalCostPerUnit,
+        remainingQuantity: actualQty,
+        productionDate: new Date().toISOString(),
+      };
+      
+      const transaction = {
+        id: `${Date.now()}`,
+        date: new Date().toISOString(),
+        actionType: 'manufactured' as const,
+        quantity: actualQty,
+        unitCost: totalCostPerUnit,
+        totalCost: totalCostPerUnit * actualQty,
+        referenceId: batch.id,
+        referenceNumber: `BATCH-${batch.id.slice(-6)}`,
+        userId: user.id,
+        userName: user.name,
+        batchDetails,
+      };
+      
+      if (!fgSnapshot.empty) {
+        // Update existing finished goods
+        const fgDoc = fgSnapshot.docs[0];
+        const fgData = fgDoc.data() as FinishedGoodsItem;
+        
+        await updateDoc(doc(db, 'finishedGoodsInventory', fgDoc.id), {
+          currentBalance: (fgData.currentBalance || 0) + actualQty,
+          quantityManufactured: (fgData.quantityManufactured || 0) + actualQty,
+          transactions: [...(fgData.transactions || []), transaction],
+          batchQueue: [...(fgData.batchQueue || []), batchDetails],
+          costPrice: totalCostPerUnit, // Update cost price to latest
+          totalValue: ((fgData.currentBalance || 0) + actualQty) * totalCostPerUnit,
+          updatedAt: new Date().toISOString(),
+        });
+      } else {
+        // Create new finished goods entry
+        const fgCode = `FG-${Date.now().toString().slice(-6)}`;
+        const fgData: Omit<FinishedGoodsItem, 'id'> = {
+          itemCode: fgCode,
+          productId: composedProduct.productId || '',
+          composedProductId: batch.productId,
+          recipeId: composedProduct.recipeId || '',
+          description: composedProduct.name,
+          productName: composedProduct.name,
+          unit: 'units',
+          openingBalance: 0,
+          quantityManufactured: actualQty,
+          quantitySold: 0,
+          quantityAdjusted: 0,
+          currentBalance: actualQty,
+          costPrice: totalCostPerUnit,
+          sellingPrice: composedProduct.sellingPrice || (totalCostPerUnit * 2.5),
+          totalValue: actualQty * totalCostPerUnit,
+          valuationMethod: 'FIFO',
+          transactions: [transaction],
+          batchQueue: [batchDetails],
+          storeId: user.storeId,
+          createdBy: user.id,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        };
+        
+        await addDoc(collection(db, 'finishedGoodsInventory'), fgData);
+      }
+      
+      // 6. Update production batch
       const batchRef = doc(db, 'productionBatches', batch.id);
       const updateData = {
         status: 'completed' as ProductionBatchStatus,
         completionDate: new Date().toISOString(),
-        actualQuantity: parseInt(actualQuantity),
+        actualQuantity: actualQty,
+        materialsCost: totalMaterialCost,
+        totalCost: totalMaterialCost + serviceCost,
+        costPerUnit: totalCostPerUnit,
       };
       await updateDoc(batchRef, updateData);
       setBatches(batches.map(b => b.id === batch.id ? { ...b, ...updateData } : b));
-      toast({ title: "Success", description: "Production completed!" });
+      
+      // Log the action
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'productionBatch',
+        batch.id,
+        {
+          oldValue: { status: 'in_progress' },
+          newValue: { status: 'completed', actualQuantity: actualQty, materialsUsed }
+        },
+        user.storeId
+      );
+      
+      toast({ 
+        title: "Production Completed!", 
+        description: `${actualQty} units of ${composedProduct.name} manufactured. Cost: $${totalCostPerUnit.toFixed(2)}/unit`,
+      });
     } catch (error) {
       console.error('Error completing production:', error);
       toast({ title: "Error", description: "Failed to complete production", variant: "destructive" });

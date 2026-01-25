@@ -192,16 +192,29 @@ const AdminAccountStatement: React.FC = () => {
       });
       
       // Subtract credited returns from supplier balances
+      console.log('Processing supplier returns, count:', returnsSnapshot.size);
       returnsSnapshot.forEach(doc => {
         const returnDoc = doc.data();
         const supplierId = returnDoc.supplierId || 'unknown';
         const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
         
+        console.log('Return doc:', {
+          id: doc.id,
+          supplierId,
+          creditAmount,
+          status: returnDoc.status,
+          hasSupplier: supplierMap.has(supplierId)
+        });
+        
         if (supplierMap.has(supplierId)) {
           const supplier = supplierMap.get(supplierId)!;
+          console.log('Before reduction:', supplier.name, 'totalPurchases:', supplier.totalPurchases);
           // Reduce the total purchases by the return amount
           supplier.totalPurchases -= creditAmount;
           supplier.balance = supplier.totalPurchases - supplier.totalPayments;
+          console.log('After reduction:', supplier.name, 'totalPurchases:', supplier.totalPurchases);
+        } else {
+          console.warn('Supplier not found in map:', supplierId);
         }
       });
       
