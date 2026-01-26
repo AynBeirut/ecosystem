@@ -55,6 +55,8 @@ const AdminPurchases: React.FC = () => {
     expectedDeliveryDate: '',
     notes: '',
     items: [] as PurchaseItem[],
+    taxType: 'none' as 'none' | 'VAT' | 'TTC',
+    taxRate: 0,
   });
 
   const [isCreatingNewSupplier, setIsCreatingNewSupplier] = useState(false);
@@ -162,12 +164,16 @@ const AdminPurchases: React.FC = () => {
     return usd;
   };
 
-  const calculateTotal = (items: PurchaseItem[]): number => {
-    return items.reduce((sum, item) => {
+  const calculateTotal = (items: PurchaseItem[], taxType: string = 'none', taxRate: number = 0): number => {
+    const subtotal = items.reduce((sum, item) => {
       const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
       const price = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
       return sum + (qty * price);
     }, 0);
+    
+    if (taxType === 'none') return subtotal;
+    const taxAmount = subtotal * (taxRate / 100);
+    return subtotal + taxAmount;
   };
 
   const handleCreateInlineSupplier = async () => {
@@ -1148,7 +1154,9 @@ const AdminPurchases: React.FC = () => {
         };
       });
       
-      const totalAmount = calculateTotal(normalizedItems);
+      const subtotal = normalizedItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+      const taxAmount = newPurchase.taxType !== 'none' ? subtotal * (newPurchase.taxRate / 100) : 0;
+      const totalAmount = subtotal + taxAmount;
 
       const purchaseData = {
         poNumber: invoiceNumber,
@@ -1158,6 +1166,10 @@ const AdminPurchases: React.FC = () => {
         expectedDeliveryDate: newPurchase.expectedDeliveryDate,
         status: 'draft' as const,
         items: normalizedItems,
+        subtotal,
+        taxType: newPurchase.taxType,
+        taxRate: newPurchase.taxRate,
+        vat: taxAmount,
         totalAmount,
         totalCost: totalAmount,
         notes: newPurchase.notes,
@@ -1191,6 +1203,8 @@ const AdminPurchases: React.FC = () => {
         expectedDeliveryDate: '',
         notes: '',
         items: [],
+        taxType: 'none',
+        taxRate: 0,
       });
       setIsAddingPurchase(false);
       toast({ title: "Success", description: `Purchase order ${invoiceNumber} created!` });
@@ -1826,11 +1840,51 @@ const AdminPurchases: React.FC = () => {
                     );
                   })}
                   {newPurchase.items.length > 0 && (
-                    <div className="mt-2 p-3 bg-gray-100 rounded">
-                      <div className="flex justify-between text-lg font-bold">
-                        <span>Total Amount:</span>
-                        <span>${calculateTotal(newPurchase.items).toFixed(2)}</span>
+                    <div className="mt-2 p-3 bg-gray-100 rounded space-y-2">
+                      <div className="flex justify-between">
+                        <span>Subtotal:</span>
+                        <span>${newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toFixed(2)}</span>
                       </div>
+                      {newPurchase.taxType !== 'none' && (
+                        <div className="flex justify-between">
+                          <span>Tax ({newPurchase.taxRate}%):</span>
+                          <span>${(newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (newPurchase.taxRate / 100)).toFixed(2)}</span>
+                        </div>
+                      )}
+                      <div className="flex justify-between text-lg font-bold border-t pt-2">
+                        <span>Total Amount:</span>
+                        <span>${calculateTotal(newPurchase.items, newPurchase.taxType, newPurchase.taxRate).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Tax Type</Label>
+                    <Select value={newPurchase.taxType} onValueChange={(value: any) => setNewPurchase({ ...newPurchase, taxType: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">No Tax</SelectItem>
+                        <SelectItem value="VAT">VAT</SelectItem>
+                        <SelectItem value="TTC">TTC</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  {newPurchase.taxType !== 'none' && (
+                    <div>
+                      <Label>Tax Rate (%)</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        max="100"
+                        step="0.1"
+                        value={newPurchase.taxRate === 0 ? '' : newPurchase.taxRate}
+                        onChange={(e) => setNewPurchase({ ...newPurchase, taxRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        placeholder="0.0"
+                      />
                     </div>
                   )}
                 </div>

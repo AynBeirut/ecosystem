@@ -522,8 +522,8 @@ const AdminAccountStatement: React.FC = () => {
         purchasesSnap.forEach(doc => {
           const purchase = doc.data();
           const total = purchase.totalCost || purchase.total || 0;
-          const subtotal = purchase.subtotal || (total / 1.11) || 0; // Assuming 11% VAT if not provided
-          const vat = total - subtotal;
+          const subtotal = purchase.subtotal || total; // Use total if no subtotal (no VAT applied)
+          const vat = purchase.vat || (total - subtotal);
           
           allTxns.push({
             date: purchase.date || purchase.createdAt || '',
@@ -596,8 +596,8 @@ const AdminAccountStatement: React.FC = () => {
         ordersSnap.forEach(doc => {
           const order = doc.data();
           const total = order.totalAmount || order.total || 0;
-          const subtotal = order.subtotal || (total / 1.11) || 0; // Assuming 11% VAT if not provided
-          const vat = total - subtotal;
+          const subtotal = order.subtotal || total; // Use total if no subtotal (no VAT applied)
+          const vat = order.vat || (total - subtotal);
           
           allTxns.push({
             date: order.createdAt || order.date || '',
