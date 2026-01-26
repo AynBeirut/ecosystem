@@ -636,10 +636,12 @@ const AdminProduction: React.FC = () => {
       }
       
       // 4. Calculate total cost per unit (materials + service cost)
-      // Service cost is the difference between recipe totalCost and material costs
-      const recipeTotalCost = recipe.totalCost || 0;
-      const serviceCost = Math.max(0, recipeTotalCost - (totalMaterialCost / actualQty));
-      const totalCostPerUnit = (totalMaterialCost + (serviceCost * actualQty)) / actualQty;
+      // recipeTotalCost is the total for the recipe's output quantity
+      // recipe.costPerUnit is the cost per single unit from the recipe
+      const materialCostPerUnit = totalMaterialCost / actualQty;
+      const recipeCostPerUnit = recipe.costPerUnit || 0;
+      const serviceCostPerUnit = Math.max(0, recipeCostPerUnit - materialCostPerUnit);
+      const totalCostPerUnit = materialCostPerUnit + serviceCostPerUnit;
       
       // 5. Update or create finished goods entry
       const fgQuery = query(
@@ -724,7 +726,7 @@ const AdminProduction: React.FC = () => {
         completionDate: new Date().toISOString(),
         actualQuantity: actualQty,
         materialsCost: totalMaterialCost,
-        totalCost: totalMaterialCost + serviceCost,
+        totalCost: totalCostPerUnit * actualQty,
         costPerUnit: totalCostPerUnit,
       };
       await updateDoc(batchRef, updateData);

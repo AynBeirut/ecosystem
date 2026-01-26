@@ -229,9 +229,12 @@ const AdminFinishedGoods: React.FC = () => {
       }
       
       // Calculate total cost per unit including service cost
-      const recipeTotalCost = recipe.totalCost || 0;
-      const serviceCost = Math.max(0, recipeTotalCost - totalMaterialCost);
-      const newCostPerUnit = totalMaterialCost + serviceCost;
+      // recipe.costPerUnit is the cost per single unit from the recipe
+      // totalMaterialCost is based on current raw material prices for the recipe quantity
+      const materialCostPerUnit = totalMaterialCost / (recipe.outputQuantity || 1);
+      const recipeCostPerUnit = recipe.costPerUnit || 0;
+      const serviceCostPerUnit = Math.max(0, recipeCostPerUnit - materialCostPerUnit);
+      const newCostPerUnit = materialCostPerUnit + serviceCostPerUnit;
       const newTotalValue = item.currentBalance * newCostPerUnit;
       
       // Update the finished goods item
@@ -518,6 +521,16 @@ const AdminFinishedGoods: React.FC = () => {
                       <Edit className="h-4 w-4 mr-1" />
                       Adjust
                     </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleRecalculateCost(item)}
+                      className="flex-1 text-blue-600"
+                      title="Recalculate Cost from Recipe"
+                    >
+                      <RefreshCw className="h-4 w-4 mr-1" />
+                      Recalc
+                    </Button>
                   </div>
                 </CardContent>
               </Card>
@@ -578,26 +591,24 @@ const AdminFinishedGoods: React.FC = () => {
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleRecalculateCost(item)}
+                              title="Recalculate Cost from Recipe"
+                              className="text-blue-600"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
                             {(item.costPrice || 0) === 0 && (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleRecalculateCost(item)}
-                                  title="Recalculate Cost"
-                                  className="text-blue-600"
-                                >
-                                  <RefreshCw className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  onClick={() => handleDeleteItem(item)}
-                                  title="Delete $0 cost item"
-                                >
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => handleDeleteItem(item)}
+                                title="Delete $0 cost item"
+                              >
                                   <Trash2 className="h-4 w-4 text-red-500" />
-                                </Button>
-                              </>
+                              </Button>
                             )}
                           </div>
                         </td>
