@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -45,9 +46,11 @@ const AdminProfile: React.FC = () => {
   useEffect(() => {
     const fetchProfile = async () => {
       if (user?.id) {
+        const actualStoreId = getActualStoreId(user);
+        if (!actualStoreId) return;
         try {
           const db = getFirestore();
-          const profileRef = doc(db, 'storeProfiles', user.id);
+          const profileRef = doc(db, 'storeProfiles', actualStoreId);
           const profileSnap = await getDoc(profileRef);
           if (profileSnap.exists()) {
             const data = profileSnap.data() as StoreProfile;

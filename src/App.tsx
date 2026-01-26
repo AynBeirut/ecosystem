@@ -16,6 +16,7 @@ import Favorites from "./pages/Favorites";
 import UpgradeToAdmin from "./pages/UpgradeToAdmin";
 import ProtectedRoute from "./components/ProtectedRoute";
 import AdminDashboard from "./pages/admin/AdminDashboard";
+import SubAccountDashboard from "./pages/admin/SubAccountDashboard";
 import AdminProducts from "./pages/admin/AdminProducts";
 import AdminProfile from "./pages/admin/AdminProfile";
 import AdminPayments from "./pages/admin/AdminPayments";
@@ -42,7 +43,6 @@ import SalesReturns from "./pages/admin/SalesReturns";
 import AdminStaff from "./pages/admin/AdminStaff";
 import AdminSalaries from "./pages/admin/AdminSalaries";
 import AdminSubAccounts from "./pages/admin/AdminSubAccounts";
-import SubAccountDashboard from "./pages/admin/SubAccountDashboard";
 import AdminExpenses from "./pages/admin/AdminExpenses";
 import AdminReports from "./pages/admin/AdminReports";
 import AdminCustomers from "./pages/admin/AdminCustomers";
@@ -87,23 +87,25 @@ import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
                         <Route path="/orders/confirmation" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
                         <Route path="/upgrade" element={<ProtectedRoute><UpgradeToAdmin /></ProtectedRoute>} />
                         {/* Admin Routes */}
-                        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><SubAccountDashboard /></ProtectedRoute>} />
+                        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                         <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-                        <Route path="/admin/products" element={<ProtectedRoute allowedRoles={['admin']}><AdminProducts /></ProtectedRoute>} />
+                        {/* Sub-Account Routes */}
+                        <Route path="/team/dashboard" element={<ProtectedRoute allowedRoles={['sub_account']}><SubAccountDashboard /></ProtectedRoute>} />
+                        <Route path="/admin/products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory"><AdminProducts /></ProtectedRoute>} />
                         <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfile /></ProtectedRoute>} />
                         <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><AdminPayments /></ProtectedRoute>} />
-                        <Route path="/admin/delivery" element={<ProtectedRoute allowedRoles={['admin']}><AdminDelivery /></ProtectedRoute>} />
+                        <Route path="/admin/delivery" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="manage_deliveries"><AdminDelivery /></ProtectedRoute>} />
                         <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']}><AdminTemplates /></ProtectedRoute>} />
-                        <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin']}><AdminAnnouncements /></ProtectedRoute>} />
-                        <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin']}><AdminAnalytics /></ProtectedRoute>} />
-                        <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin']}><AdminOrders /></ProtectedRoute>} />
+                        <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminAnnouncements /></ProtectedRoute>} />
+                        <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports"><AdminAnalytics /></ProtectedRoute>} />
+                        <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_orders"><AdminOrders /></ProtectedRoute>} />
                         {/* Inventory Management */}
                         <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['admin']}><AdminInventory /></ProtectedRoute>} />
                         <Route path="/admin/suppliers" element={<ProtectedRoute allowedRoles={['admin']}><AdminSuppliers /></ProtectedRoute>} />
                         <Route path="/admin/supplier-statements" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierStatements /></ProtectedRoute>} />
                         <Route path="/admin/raw-materials" element={<ProtectedRoute allowedRoles={['admin']}><AdminRawMaterials /></ProtectedRoute>} />
                         <Route path="/admin/recipes" element={<ProtectedRoute allowedRoles={['admin']}><AdminRecipes /></ProtectedRoute>} />
-                        <Route path="/admin/composed-products" element={<ProtectedRoute allowedRoles={['admin']}><AdminComposedProducts /></ProtectedRoute>} />
+                        <Route path="/admin/composed-products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory"><AdminComposedProducts /></ProtectedRoute>} />
                         <Route path="/admin/production" element={<ProtectedRoute allowedRoles={['admin']}><AdminProduction /></ProtectedRoute>} />
                         <Route path="/admin/finished-goods" element={<ProtectedRoute allowedRoles={['admin']}><AdminFinishedGoods /></ProtectedRoute>} />
                         {/* Purchasing & Returns */}
@@ -125,7 +127,7 @@ import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
                         <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
                         <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
                         {/* CRM */}
-                        <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin']}><AdminCustomers /></ProtectedRoute>} />
+                        <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />
                         {/* 404 catch-all route */}
                         <Route path="*" element={<NotFound />} />
                       </Routes>

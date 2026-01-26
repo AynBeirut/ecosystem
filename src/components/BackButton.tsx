@@ -16,11 +16,13 @@ export default function BackButton({ to, label }: BackButtonProps = {}) {
     if (to) {
       navigate(to);
     } else {
-      // Default behavior: Sub-accounts go to /admin, admins go to /admin/dashboard
+      // Default behavior: Sub-accounts go to /team/dashboard, admins go to /admin/dashboard
       if (user?.role === 'admin') {
         navigate('/admin/dashboard');
+      } else if (user?.role === 'sub_account') {
+        navigate('/team/dashboard');
       } else {
-        navigate('/admin');
+        navigate('/');
       }
     }
   };

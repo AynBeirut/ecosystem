@@ -28,6 +28,10 @@ const AdminProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  
+  // Check if user has permission to manage inventory
+  const canManageInventory = user?.role === 'admin' || 
+    (user?.role === 'sub_account' && user?.permissions?.includes('manage_inventory'));
   const [newProduct, setNewProduct] = useState({
     name: '',
     description: '',
@@ -207,24 +211,29 @@ const AdminProducts: React.FC = () => {
     <div className="min-h-screen bg-background">
       {isMobile && <MobileHeader title="Manage Products" />}
       <div className="p-4 md:p-6">
-        <BackButton to="/admin/inventory" label="Back to Inventory" />
+        <BackButton label="Back to Dashboard" />
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold flex items-center gap-2">
                 <Package className="h-6 w-6" />
-                Manage Products
+                {canManageInventory ? 'Manage Products' : 'View Products'}
               </h1>
-              <p className="text-muted-foreground">Add, edit, and manage your store products</p>
+              <p className="text-muted-foreground">
+                {canManageInventory 
+                  ? 'Add, edit, and manage your store products'
+                  : 'View your store products'}
+              </p>
             </div>
             
-            <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Product
-                </Button>
-              </DialogTrigger>
+            {canManageInventory && (
+              <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+                <DialogTrigger asChild>
+                  <Button>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Product
+                  </Button>
+                </DialogTrigger>
               <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Product</DialogTitle>
@@ -396,6 +405,7 @@ const AdminProducts: React.FC = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
+            )}
           </div>
         </div>
 
@@ -461,22 +471,29 @@ const AdminProducts: React.FC = () => {
                 </div>
                 
                 <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleEditProduct(product)}
-                    className="flex-1"
-                  >
-                    <Edit3 className="h-3 w-3 mr-1" />
-                    Edit
-                  </Button>
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => handleDeleteProduct(product.id)}
-                  >
-                    <Trash2 className="h-3 w-3" />
-                  </Button>
+                  {canManageInventory && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditProduct(product)}
+                        className="flex-1"
+                      >
+                        <Edit3 className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteProduct(product.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
+                  {!canManageInventory && (
+                    <Badge variant="secondary" className="w-full justify-center">View Only</Badge>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -489,12 +506,16 @@ const AdminProducts: React.FC = () => {
                   <Package className="h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No Products Yet</h3>
                   <p className="text-muted-foreground text-center mb-4">
-                    Start building your store by adding your first product
+                    {canManageInventory 
+                      ? "Start building your store by adding your first product"
+                      : "No products available to view"}
                   </p>
-                  <Button onClick={() => setIsAddingProduct(true)}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Your First Product
-                  </Button>
+                  {canManageInventory && (
+                    <Button onClick={() => setIsAddingProduct(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Your First Product
+                    </Button>
+                  )}
                 </CardContent>
               </Card>
             </div>

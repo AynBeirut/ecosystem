@@ -2,6 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 // tabs import removed (unused)
@@ -68,6 +69,18 @@ const AdminDashboard: React.FC = () => {
   // Use `useIsMobile` unconditionally so mobile-specific UI (header/quick-actions)
   // appears based on viewport size even while auth is resolving.
   const isMobile = useIsMobile();
+  
+  // Permission checks for sub-accounts
+  const canViewInventory = user?.role === 'admin' || user?.permissions?.includes('view_inventory');
+  const canManageInventory = user?.role === 'admin' || user?.permissions?.includes('manage_inventory');
+  const canViewReports = user?.role === 'admin' || user?.permissions?.includes('view_reports');
+  const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
+  const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
+
+  // Set document title based on user role
+  useEffect(() => {
+    document.title = user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard';
+  }, [user?.role]);
 
   // Mount/unmount instrumentation removed after verification.
 
@@ -85,8 +98,12 @@ const AdminDashboard: React.FC = () => {
       }
       try {
         const db = getFirestore();
+        // Use storeId for sub-accounts, user.id for regular admins
+        const actualStoreId = getActualStoreId(user);
+        if (!actualStoreId) return;
+        
         // Store profile
-        const profileRef = doc(db, 'storeProfiles', user.id);
+        const profileRef = doc(db, 'storeProfiles', actualStoreId);
         const profileSnap = await getDoc(profileRef);
         if (profileSnap.exists()) {
           const profileData = profileSnap.data() as Record<string, unknown>;
@@ -104,12 +121,12 @@ const AdminDashboard: React.FC = () => {
         }
         // Products count
         const productsRef = collection(db, 'products');
-        const productsQuery = query(productsRef, where('storeId', '==', user.id));
+        const productsQuery = query(productsRef, where('storeId', '==', actualStoreId));
         const productsSnap = await getDocs(productsQuery);
         setProductCount(productsSnap.size);
         // Orders
         const ordersRef = collection(db, 'orders');
-        const ordersQuery = query(ordersRef, where('storeId', '==', user.id));
+        const ordersQuery = query(ordersRef, where('storeId', '==', actualStoreId));
         const ordersSnap = await getDocs(ordersQuery);
         setOrderCount(ordersSnap.size);
         // Revenue and customers
@@ -135,7 +152,7 @@ const AdminDashboard: React.FC = () => {
         // Recent Activity: fetch last 5 events (products, orders, announcements)
   const events: RecentEvent[] = [];
         // Recent products
-        const recentProductsQuery = query(productsRef, where('storeId', '==', user.id), orderBy('createdAt', 'desc'), limit(2));
+        const recentProductsQuery = query(productsRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(2));
         const recentProductsSnap = await getDocs(recentProductsQuery);
         recentProductsSnap.forEach(doc => {
           events.push({
@@ -145,7 +162,7 @@ const AdminDashboard: React.FC = () => {
           });
         });
         // Recent orders
-        const recentOrdersQuery = query(ordersRef, where('storeId', '==', user.id), orderBy('createdAt', 'desc'), limit(2));
+        const recentOrdersQuery = query(ordersRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(2));
         const recentOrdersSnap = await getDocs(recentOrdersQuery);
         recentOrdersSnap.forEach(doc => {
           events.push({
@@ -156,7 +173,7 @@ const AdminDashboard: React.FC = () => {
         });
         // Recent announcements
         const announcementsRef = collection(db, 'announcements');
-        const recentAnnouncementsQuery = query(announcementsRef, where('storeId', '==', user.id), orderBy('createdAt', 'desc'), limit(1));
+        const recentAnnouncementsQuery = query(announcementsRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(1));
         const recentAnnouncementsSnap = await getDocs(recentAnnouncementsQuery);
         recentAnnouncementsSnap.forEach(doc => {
           events.push({
@@ -178,7 +195,7 @@ const AdminDashboard: React.FC = () => {
       }
     };
     fetchStats();
-  }, [user?.id]);
+  }, [user?.id, user?.storeId]);
 
   // credits toggle removed
 
@@ -196,9 +213,11 @@ const AdminDashboard: React.FC = () => {
   // Toggle store online/offline
   const handleStatusToggle = async () => {
     if (!user?.id || !store) return;
+    const actualStoreId = getActualStoreId(user);
+    if (!actualStoreId) return;
     try {
       const db = getFirestore();
-      const profileRef = doc(db, 'storeProfiles', user.id);
+      const profileRef = doc(db, 'storeProfiles', actualStoreId);
       const newStatus = store.status === 'online' ? 'offline' : 'online';
       await updateDoc(profileRef, { status: newStatus });
       setStore({ ...store, status: newStatus });
@@ -209,14 +228,14 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-    {isMobile && <MobileHeader title="Admin Dashboard" showBackButton={false} showHomeButton={true} />}
+    {isMobile && <MobileHeader title={user?.role === 'sub_account' ? "Seller Dashboard" : "Admin Dashboard"} showBackButton={false} showHomeButton={true} />}
     <div className="md:hidden px-4 pt-3 pb-2 bg-white border-b">
       <div className="flex items-center gap-3 overflow-x-auto">
-        <Link to="/admin/inventory" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-purple-600">
+        <Link to={user?.role === 'admin' ? "/admin/inventory" : "/admin/products"} className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700">
             <Package className="h-4 w-4" />
           </div>
-          <span className="text-xs text-gray-700 mt-1">Inventory</span>
+          <span className="text-xs text-gray-700 mt-1">{user?.role === 'admin' ? 'Inventory' : 'Products'}</span>
         </Link>
 
         <Link to="/admin/products" className="relative flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
@@ -285,7 +304,7 @@ const AdminDashboard: React.FC = () => {
   <aside className="hidden lg:flex lg:flex-col w-64 bg-white shadow-sm h-screen sticky top-0">
         <div className="p-6 flex-shrink-0">
           <Link to="/" className="text-2xl font-bold text-market-primary">Market Flow</Link>
-          <p className="text-gray-500 text-sm mt-1">Admin Dashboard</p>
+          <p className="text-gray-500 text-sm mt-1">{user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}</p>
         </div>
         <nav className="mt-6 flex-1 overflow-y-auto pb-32">
           <ul className="space-y-2 px-4">
@@ -295,66 +314,82 @@ const AdminDashboard: React.FC = () => {
                 <span className="font-medium">Dashboard</span>
               </Link>
             </li>
-            <li>
-              <Link to="/admin/inventory" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <Package className="h-5 w-5 mr-3 text-purple-600" />
-                <span className="font-medium">Inventory Overview</span>
-              </Link>
-            </li>
+            {canViewInventory && (
+              <li>
+                <Link to={user?.role === 'admin' ? "/admin/inventory" : "/admin/products"} className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <Package className="h-5 w-5 mr-3 text-purple-600" />
+                  <span className="font-medium">{user?.role === 'admin' ? 'Inventory Overview' : 'Products'}</span>
+                </Link>
+              </li>
+            )}
             <li>
               <Link to="/admin/orders" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
                 <Package className="h-5 w-5 mr-3" />
                 <span>Orders</span>
               </Link>
             </li>
-            <li>
-              <Link to="/admin/payments" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <CreditCard className="h-5 w-5 mr-3" />
-                <span>Payments</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/admin/delivery" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <Clock className="h-5 w-5 mr-3" />
-                <span>Delivery</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/admin/profile" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <User className="h-5 w-5 mr-3" />
-                <span>Store Profile</span>
-              </Link>
-            </li>
-            <li className="ml-4">
-              <Link to="/admin/templates" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <Palette className="h-5 w-5 mr-3" />
-                <span>Templates</span>
-              </Link>
-            </li>
+            {canProcessPayments && (
+              <li>
+                <Link to="/admin/payments" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <CreditCard className="h-5 w-5 mr-3" />
+                  <span>Payments</span>
+                </Link>
+              </li>
+            )}
+            {canManageDeliveries && (
+              <li>
+                <Link to="/admin/delivery" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <Clock className="h-5 w-5 mr-3" />
+                  <span>Delivery</span>
+                </Link>
+              </li>
+            )}
+            {user?.role === 'admin' && (
+              <>
+                <li>
+                  <Link to="/admin/profile" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                    <User className="h-5 w-5 mr-3" />
+                    <span>Store Profile</span>
+                  </Link>
+                </li>
+                <li className="ml-4">
+                  <Link to="/admin/templates" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                    <Palette className="h-5 w-5 mr-3" />
+                    <span>Templates</span>
+                  </Link>
+                </li>
+              </>
+            )}
             <li>
               <Link to="/admin/announcements" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
                 <Megaphone className="h-5 w-5 mr-3" />
                 <span>Announcements</span>
               </Link>
             </li>
-            <li>
-              <Link to="/admin/analytics" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <BarChart className="h-5 w-5 mr-3" />
-                <span>Analytics</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/admin/staff" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <Users className="h-5 w-5 mr-3" />
-                <span>Staff (Payroll)</span>
-              </Link>
-            </li>
-            <li>
-              <Link to="/admin/sub-accounts" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-green-200 hover:shadow-sm transition">
-                <Users className="h-5 w-5 mr-3 text-green-600" />
-                <span className="font-medium">Sub-Accounts (Login)</span>
-              </Link>
-            </li>
+            {canViewReports && (
+              <li>
+                <Link to="/admin/analytics" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <BarChart className="h-5 w-5 mr-3" />
+                  <span>Analytics</span>
+                </Link>
+              </li>
+            )}
+            {user?.role === 'admin' && (
+              <>
+                <li>
+                  <Link to="/admin/staff" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                    <Users className="h-5 w-5 mr-3" />
+                    <span>Staff (Payroll)</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/admin/sub-accounts" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-green-200 hover:shadow-sm transition">
+                    <Users className="h-5 w-5 mr-3 text-green-600" />
+                    <span className="font-medium">Sub-Accounts (Login)</span>
+                  </Link>
+                </li>
+              </>
+            )}
           </ul>
         </nav>
           <div className="px-6 py-4 absolute bottom-0 w-full border-t bg-white">
@@ -376,7 +411,7 @@ const AdminDashboard: React.FC = () => {
           <div className="space-y-6">
           <div className="flex items-center justify-between">
             <div>
-              <h1 className="text-3xl font-extrabold text-gray-900">Admin Dashboard</h1>
+              <h1 className="text-3xl font-extrabold text-gray-900">{user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}</h1>
               <p className="text-sm text-gray-600 mt-1">Welcome back, {user?.name || 'Store Owner'}</p>
             </div>
             <div className="text-right">
@@ -499,10 +534,12 @@ const AdminDashboard: React.FC = () => {
                                   return;
                                 }
                                 if (!user?.id) return;
+                                const actualStoreId = getActualStoreId(user);
+                                if (!actualStoreId) return;
                                 setSavingRate(true);
                                 try {
                                   const db = getFirestore();
-                                  const profileRef = doc(db, 'storeProfiles', user.id);
+                                  const profileRef = doc(db, 'storeProfiles', actualStoreId);
                                   await updateDoc(profileRef, { usdToLbpRate: parsed });
                                   // update local state
                                   setUsdToLbpRate(parsed);
@@ -543,24 +580,30 @@ const AdminDashboard: React.FC = () => {
           <div>
             <h3 className="text-lg font-semibold mb-3">Quick Actions</h3>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                <Link to="/admin/inventory" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-purple-600/20 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
-                    <Package className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Inventory</span>
-                </Link>
-                <Link to="/admin/expenses" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-orange-600/20 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-                    <CreditCard className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Expenses</span>
-                </Link>
-                <Link to="/admin/account-statement" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-indigo-600/20 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
-                    <FileText className="h-4 w-4" />
-                  </div>
-                  <span className="text-sm font-medium">Account Statement</span>
-                </Link>
+                {canViewInventory && (
+                  <Link to={user?.role === 'admin' ? "/admin/inventory" : "/admin/products"} className="flex items-center gap-3 p-3 rounded-lg bg-white border border-purple-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">{user?.role === 'admin' ? 'Inventory' : 'Products'}</span>
+                  </Link>
+                )}
+                {user?.role === 'admin' && (
+                  <>
+                    <Link to="/admin/expenses" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-orange-600/20 shadow-sm hover:shadow-md transition">
+                      <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
+                        <CreditCard className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm font-medium">Expenses</span>
+                    </Link>
+                    <Link to="/admin/account-statement" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-indigo-600/20 shadow-sm hover:shadow-md transition">
+                      <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                        <FileText className="h-4 w-4" />
+                      </div>
+                      <span className="text-sm font-medium">Account Statement</span>
+                    </Link>
+                  </>
+                )}
                 <Link to="/admin/orders" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
                   <div className="h-8 w-8 rounded-full bg-market-accent/10 flex items-center justify-center text-market-accent">
                     <Clock className="h-4 w-4" />
@@ -568,19 +611,23 @@ const AdminDashboard: React.FC = () => {
                   <span className="font-medium">Orders</span>
                 </Link>
 
-                <Link to="/admin/payments" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-                    <CreditCard className="h-4 w-4" />
-                  </div>
-                  <span className="font-medium">Payments</span>
-                </Link>
+                {user?.role === 'admin' && (
+                  <Link to="/admin/payments" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+                      <CreditCard className="h-4 w-4" />
+                    </div>
+                    <span className="font-medium">Payments</span>
+                  </Link>
+                )}
 
-                <Link to="/admin/delivery" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-                    <Package className="h-4 w-4" />
-                  </div>
-                  <span className="font-medium">Delivery</span>
-                </Link>
+                {canManageDeliveries && (
+                  <Link to="/admin/delivery" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+                      <Package className="h-4 w-4" />
+                    </div>
+                    <span className="font-medium">Delivery</span>
+                  </Link>
+                )}
 
                 <Link to="/admin/announcements" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
                   <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
@@ -589,19 +636,23 @@ const AdminDashboard: React.FC = () => {
                   <span className="font-medium">Announcements</span>
                 </Link>
 
-                <Link to="/admin/analytics" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-                    <BarChart className="h-4 w-4" />
-                  </div>
-                  <span className="font-medium">Analytics</span>
-                </Link>
+                {canViewReports && (
+                  <Link to="/admin/analytics" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
+                      <BarChart className="h-4 w-4" />
+                    </div>
+                    <span className="font-medium">Analytics</span>
+                  </Link>
+                )}
 
-                <Link to="/admin/staff" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
-                    <Users className="h-4 w-4" />
-                  </div>
-                  <span className="font-medium">Team (5+5)</span>
-                </Link>
+                {user?.role === 'admin' && (
+                  <Link to="/admin/staff" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+                      <Users className="h-4 w-4" />
+                    </div>
+                    <span className="font-medium">Team (5+5)</span>
+                  </Link>
+                )}
               </div>
             </div>
           </div>

@@ -23,6 +23,11 @@ const AdminComposedProducts: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  
+  // Check if user has permission to manage inventory
+  const canManageInventory = user?.role === 'admin' || 
+    (user?.role === 'sub_account' && user?.permissions?.includes('manage_inventory'));
+    
   const [composedProducts, setComposedProducts] = useState<ComposedProduct[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -427,16 +432,17 @@ const AdminComposedProducts: React.FC = () => {
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-            <h1 className="text-2xl font-bold">Composed Products</h1>
+            {!isMobile && <BackButton label="Back to Dashboard" />}
+            <h1 className="text-2xl font-bold">{canManageInventory ? 'Composed Products' : 'View Composed Products'}</h1>
           </div>
-          <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Composed Product
-              </Button>
-            </DialogTrigger>
+          {canManageInventory && (
+            <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Create Composed Product
+                </Button>
+              </DialogTrigger>
             <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Composed Product</DialogTitle>
@@ -644,6 +650,7 @@ const AdminComposedProducts: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          )}
         </div>
 
         {/* Composed Products List */}
@@ -696,22 +703,26 @@ const AdminComposedProducts: React.FC = () => {
                         </CardTitle>
                         <CardDescription>Recipe: {recipe?.name || 'Unknown Recipe'}</CardDescription>
                       </div>
-                      <div className="flex gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => setEditingProduct(composedProduct)}
-                        >
-                          <Edit3 className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleDeleteProduct(composedProduct.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      {canManageInventory ? (
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingProduct(composedProduct)}
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeleteProduct(composedProduct.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <Badge variant="secondary">View Only</Badge>
+                      )}
                     </div>
                   </CardHeader>
                   <CardContent>

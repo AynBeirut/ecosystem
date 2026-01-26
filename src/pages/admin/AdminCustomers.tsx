@@ -507,15 +507,15 @@ const AdminCustomers: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                       <div>
                         <p className="text-sm text-gray-500">Loyalty Points</p>
-                        <p className="font-bold text-purple-600">{customer.loyaltyPoints}</p>
+                        <p className="font-bold text-purple-600">{customer.loyaltyPoints || 0}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Credit Limit</p>
-                        <p className="font-medium">${customer.creditLimit.toFixed(2)}</p>
+                        <p className="font-medium">${(customer.creditLimit || 0).toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Payment Terms</p>
-                        <p className="font-medium">{customer.paymentTerms} days</p>
+                        <p className="font-medium">{customer.paymentTerms || 0} days</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Total Orders</p>

@@ -23,11 +23,11 @@ const ProtectedRoute: React.FC<{
 
   // Check role-based access
   if (allowedRoles) {
-    // For admin routes, allow both 'admin' and sub-accounts with manager role
+    // For admin routes, allow both 'admin' and all sub-accounts
     if (allowedRoles.includes('admin')) {
       const hasAccess = 
         user.role === 'admin' || 
-        (user.role === 'sub_account' && user.subAccountRole === 'manager');
+        user.role === 'sub_account';
       
       if (!hasAccess) {
         return <Navigate to="/" replace />;

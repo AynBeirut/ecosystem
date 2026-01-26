@@ -44,7 +44,7 @@ const Header: React.FC = () => {
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             {user && (user.role === 'admin' || user.role === 'sub_account') && (
-              <Link to="/admin/dashboard" className="text-white hover:text-market-primary/80">
+              <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className="text-white hover:text-market-primary/80">
                 Dashboard
               </Link>
             )}
@@ -122,7 +122,7 @@ const Header: React.FC = () => {
                     
                     {(user.role === 'admin' || user.role === 'sub_account') ? (
                       <DropdownMenuItem asChild>
-                        <Link to="/admin/dashboard" className="flex cursor-pointer items-center">
+                        <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className="flex cursor-pointer items-center">
                           <Store className="mr-2 h-4 w-4" />
                           <span>Manage Store</span>
                         </Link>
@@ -196,7 +196,7 @@ const Header: React.FC = () => {
               
               {user && (user.role === 'admin' || user.role === 'sub_account') && (
                 <Link
-                  to="/admin/dashboard"
+                  to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'}
                   className="px-2 py-1 text-gray-600 hover:text-market-primary"
                   onClick={toggleMenu}
                 >

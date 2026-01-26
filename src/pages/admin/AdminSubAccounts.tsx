@@ -184,8 +184,20 @@ const AdminSubAccounts: React.FC = () => {
 
     try {
       const db = getFirestore();
-      await deleteDoc(doc(db, 'subAccounts', accountId));
       const deletedAccount = subAccounts.find(a => a.id === accountId);
+      
+      // Delete from subAccounts collection
+      await deleteDoc(doc(db, 'subAccounts', accountId));
+      
+      // Find and delete the user document (search by subAccountId)
+      const usersRef = collection(db, 'users');
+      const userQuery = query(usersRef, where('subAccountId', '==', accountId));
+      const userSnapshot = await getDocs(userQuery);
+      
+      for (const userDoc of userSnapshot.docs) {
+        await deleteDoc(doc(db, 'users', userDoc.id));
+      }
+      
       setSubAccounts(subAccounts.filter(a => a.id !== accountId));
 
       if (deletedAccount && user) {
@@ -201,7 +213,11 @@ const AdminSubAccounts: React.FC = () => {
         );
       }
 
-      toast({ title: "Success", description: "Sub-account removed successfully!" });
+      toast({ 
+        title: "Success", 
+        description: "Sub-account removed! Note: You must manually delete the user from Firebase Authentication.",
+        duration: 8000,
+      });
     } catch (error) {
       console.error('Error deleting sub-account:', error);
       toast({ title: "Error", description: "Failed to remove sub-account", variant: "destructive" });
