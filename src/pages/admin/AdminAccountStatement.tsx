@@ -38,7 +38,10 @@ interface PurchaseRecord {
   date: string;
   supplier: string;
   amount: number;
+  amountPaid: number;
   status: string;
+  items: any[];
+  invoiceNumber?: string;
 }
 
 interface ExpenseRecord {
@@ -47,13 +50,49 @@ interface ExpenseRecord {
   category: string;
   description: string;
   amount: number;
+  paymentMethod?: string;
+  reference?: string;
+}
+
+interface SalesRecord {
+  id: string;
+  date: string;
+  customer: string;
+  invoiceNumber?: string;
+  total: number;
+  amountPaid: number;
+  status: string;
+  paymentStatus?: string;
+}
+
+interface DetailedTransaction {
+  date: string;
+  ref: string;
+  description: string;
+  debit: number;
+  netVat: number;
+  credit: number;
+  balance: number;
+  vatLL: number;
+}
+
+interface DetailedStatement {
+  accountNo: string;
+  accountName: string;
+  currency: string;
+  asOfDate: string;
+  phone: string;
+  attn: string;
+  openingBalance: number;
+  transactions: DetailedTransaction[];
+  closingBalance: number;
 }
 
 const AdminAccountStatement: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales'>('customers');
   const [loading, setLoading] = useState(true);
   
   const [customers, setCustomers] = useState<CustomerBalance[]>([]);
@@ -61,11 +100,16 @@ const AdminAccountStatement: React.FC = () => {
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
+  const [sales, setSales] = useState<SalesRecord[]>([]);
   
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
+  const [totalSales, setTotalSales] = useState(0);
   const [customerBalances, setCustomerBalances] = useState(0);
   const [netBalance, setNetBalance] = useState(0);
+  
+  const [viewingDetailedStatement, setViewingDetailedStatement] = useState<{ type: 'supplier' | 'customer', id: string, name: string } | null>(null);
+  const [detailedStatement, setDetailedStatement] = useState<DetailedStatement | null>(null);
 
   useEffect(() => {
     if (user?.storeId) {
@@ -83,7 +127,8 @@ const AdminAccountStatement: React.FC = () => {
         fetchSuppliers(),
         fetchProducts(),
         fetchPurchases(),
-        fetchExpenses()
+        fetchExpenses(),
+        fetchSales()
       ]);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -167,9 +212,11 @@ const AdminAccountStatement: React.FC = () => {
       const returnsSnapshot = await getDocs(returnsQuery);
       
       const supplierMap = new Map<string, SupplierBalance>();
+      const validPurchaseIds = new Set<string>();
       
       purchasesSnapshot.forEach(doc => {
         const purchase = doc.data();
+        validPurchaseIds.add(doc.id); // Track valid purchase IDs
         const supplierId = purchase.supplierId || 'unknown';
         const supplierName = suppliersData.get(supplierId) || purchase.supplierName || 'Unknown Supplier';
         const total = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
@@ -191,10 +238,18 @@ const AdminAccountStatement: React.FC = () => {
         supplier.balance = supplier.totalPurchases - supplier.totalPayments;
       });
       
-      // Subtract credited returns from supplier balances
+      // Add credited returns to supplier payments (only for returns linked to existing purchases)
       console.log('Processing supplier returns, count:', returnsSnapshot.size);
       returnsSnapshot.forEach(doc => {
         const returnDoc = doc.data();
+        const purchaseId = returnDoc.purchaseId || returnDoc.originalPurchaseId;
+        
+        // Only count returns that reference valid purchases
+        if (!purchaseId || !validPurchaseIds.has(purchaseId)) {
+          console.log('Skipping orphaned return:', doc.id, 'purchaseId:', purchaseId);
+          return;
+        }
+        
         const supplierId = returnDoc.supplierId || 'unknown';
         const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
         
@@ -202,17 +257,18 @@ const AdminAccountStatement: React.FC = () => {
           id: doc.id,
           supplierId,
           creditAmount,
+          purchaseId,
           status: returnDoc.status,
           hasSupplier: supplierMap.has(supplierId)
         });
         
         if (supplierMap.has(supplierId)) {
           const supplier = supplierMap.get(supplierId)!;
-          console.log('Before reduction:', supplier.name, 'totalPurchases:', supplier.totalPurchases);
-          // Reduce the total purchases by the return amount
-          supplier.totalPurchases -= creditAmount;
+          console.log('Before credit:', supplier.name, 'totalPayments:', supplier.totalPayments);
+          // Add credit to payments (returns reduce what we owe, like making a payment)
+          supplier.totalPayments += creditAmount;
           supplier.balance = supplier.totalPurchases - supplier.totalPayments;
-          console.log('After reduction:', supplier.name, 'totalPurchases:', supplier.totalPurchases);
+          console.log('After credit:', supplier.name, 'totalPayments:', supplier.totalPayments);
         } else {
           console.warn('Supplier not found in map:', supplierId);
         }
@@ -326,7 +382,10 @@ const AdminAccountStatement: React.FC = () => {
           date: dateStr,
           supplier: supplierName,
           amount: purchase.totalCost || purchase.total || 0,
-          status: purchase.status || 'Completed'
+          amountPaid: purchase.amountPaid || purchase.paid || 0,
+          status: purchase.status || 'Completed',
+          items: purchase.items || purchase.materials || [],
+          invoiceNumber: purchase.invoiceNumber || purchase.purchaseNumber
         });
         total += purchase.totalCost || purchase.total || 0;
       });
@@ -368,7 +427,9 @@ const AdminAccountStatement: React.FC = () => {
           date: dateStr,
           category: expense.category || 'Other',
           description: expense.description || 'N/A',
-          amount: expense.amount || 0
+          amount: expense.amount || 0,
+          paymentMethod: expense.paymentMethod || 'Cash',
+          reference: expense.referenceNumber || expense.reference
         });
         total += expense.amount || 0;
       });
@@ -380,11 +441,400 @@ const AdminAccountStatement: React.FC = () => {
     }
   };
 
+  const fetchSales = async () => {
+    try {
+      const db = getFirestore();
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where('storeId', '==', user?.storeId)
+      );
+      const ordersSnapshot = await getDocs(ordersQuery);
+      
+      const salesList: SalesRecord[] = [];
+      let total = 0;
+      
+      ordersSnapshot.forEach(doc => {
+        const order = doc.data();
+        let dateStr = 'N/A';
+        if (order.createdAt) {
+          if (typeof order.createdAt === 'string') {
+            dateStr = order.createdAt.split('T')[0];
+          } else if (order.createdAt.toDate) {
+            dateStr = order.createdAt.toDate().toLocaleDateString();
+          }
+        }
+        
+        salesList.push({
+          id: doc.id,
+          date: dateStr,
+          customer: order.customerName || 'Walk-in Customer',
+          invoiceNumber: order.invoiceNumber,
+          total: order.total || 0,
+          amountPaid: order.amountPaid || 0,
+          status: order.status || 'pending',
+          paymentStatus: order.paymentStatus || 'unpaid'
+        });
+        total += order.total || 0;
+      });
+      
+      setSales(salesList);
+      setTotalSales(total);
+    } catch (error) {
+      console.error('Error fetching sales:', error);
+    }
+  };
+
   useEffect(() => {
     const supplierBalance = suppliers.reduce((sum, s) => sum + s.balance, 0);
     const net = customerBalances - supplierBalance - totalExpenses;
     setNetBalance(net);
   }, [customerBalances, suppliers, totalExpenses]);
+
+  const generateDetailedStatement = async (type: 'supplier' | 'customer', id: string, name: string) => {
+    if (!user?.storeId) return;
+    
+    try {
+      const db = getFirestore();
+      const transactions: DetailedTransaction[] = [];
+      let runningBalance = 0;
+      
+      if (type === 'supplier') {
+        // Fetch all purchases for this supplier
+        const purchasesQuery = query(
+          collection(db, 'purchases'),
+          where('storeId', '==', user.storeId),
+          where('supplierId', '==', id)
+        );
+        const purchasesSnap = await getDocs(purchasesQuery);
+        
+        // Fetch all returns for this supplier
+        const returnsQuery = query(
+          collection(db, 'supplierReturns'),
+          where('storeId', '==', user.storeId),
+          where('supplierId', '==', id),
+          where('status', '==', 'credited')
+        );
+        const returnsSnap = await getDocs(returnsQuery);
+        
+        // Collect all transactions
+        const allTxns: any[] = [];
+        
+        purchasesSnap.forEach(doc => {
+          const purchase = doc.data();
+          const total = purchase.totalCost || purchase.total || 0;
+          const subtotal = purchase.subtotal || (total / 1.11) || 0; // Assuming 11% VAT if not provided
+          const vat = total - subtotal;
+          
+          allTxns.push({
+            date: purchase.date || purchase.createdAt || '',
+            type: 'purchase',
+            ref: purchase.invoiceNumber || doc.id.substring(0, 8),
+            description: `Pur.Inv.${purchase.invoiceNumber || doc.id.substring(0, 6)}`,
+            debit: total,
+            net: subtotal,
+            vat: vat,
+            credit: purchase.amountPaid || 0,
+            data: purchase
+          });
+        });
+        
+        returnsSnap.forEach(doc => {
+          const returnDoc = doc.data();
+          const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
+          
+          allTxns.push({
+            date: returnDoc.date || returnDoc.createdAt || '',
+            type: 'return',
+            ref: returnDoc.returnNumber || doc.id.substring(0, 8),
+            description: `Return Credit`,
+            debit: 0,
+            net: 0,
+            vat: 0,
+            credit: creditAmount,
+            data: returnDoc
+          });
+        });
+        
+        // Sort by date
+        allTxns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        // Calculate running balance
+        allTxns.forEach(txn => {
+          runningBalance += txn.debit - txn.credit;
+          transactions.push({
+            date: new Date(txn.date).toLocaleDateString('en-GB'),
+            ref: txn.ref,
+            description: txn.description,
+            debit: txn.debit,
+            netVat: txn.net || 0,
+            credit: txn.credit,
+            balance: runningBalance,
+            vatLL: txn.vat || 0
+          });
+        });
+      } else if (type === 'customer') {
+        // Fetch all orders for this customer
+        const ordersQuery = query(
+          collection(db, 'orders'),
+          where('storeId', '==', user.storeId),
+          where('customerId', '==', id)
+        );
+        const ordersSnap = await getDocs(ordersQuery);
+        
+        // Fetch all sales returns for this customer
+        const returnsQuery = query(
+          collection(db, 'salesReturns'),
+          where('storeId', '==', user.storeId),
+          where('customerId', '==', id),
+          where('status', '==', 'completed')
+        );
+        const returnsSnap = await getDocs(returnsQuery);
+        
+        // Collect all transactions
+        const allTxns: any[] = [];
+        
+        ordersSnap.forEach(doc => {
+          const order = doc.data();
+          const total = order.totalAmount || order.total || 0;
+          const subtotal = order.subtotal || (total / 1.11) || 0; // Assuming 11% VAT if not provided
+          const vat = total - subtotal;
+          
+          allTxns.push({
+            date: order.createdAt || order.date || '',
+            type: 'order',
+            ref: order.invoiceNumber || order.orderNumber || doc.id.substring(0, 8),
+            description: `Sales Inv.${order.invoiceNumber || doc.id.substring(0, 6)}`,
+            debit: total,
+            net: subtotal,
+            vat: vat,
+            credit: order.amountPaid || 0,
+            data: order
+          });
+        });
+        
+        returnsSnap.forEach(doc => {
+          const returnDoc = doc.data();
+          const creditAmount = returnDoc.refundAmount || returnDoc.subtotal || 0;
+          
+          allTxns.push({
+            date: returnDoc.returnDate || returnDoc.date || returnDoc.createdAt || '',
+            type: 'return',
+            ref: returnDoc.returnNumber || doc.id.substring(0, 8),
+            description: `Return Credit`,
+            debit: 0,
+            net: 0,
+            vat: 0,
+            credit: creditAmount,
+            data: returnDoc
+          });
+        });
+        
+        // Sort by date
+        allTxns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        
+        // Calculate running balance
+        allTxns.forEach(txn => {
+          runningBalance += txn.debit - txn.credit;
+          transactions.push({
+            date: new Date(txn.date).toLocaleDateString('en-GB'),
+            ref: txn.ref,
+            description: txn.description,
+            debit: txn.debit,
+            netVat: txn.net || 0,
+            credit: txn.credit,
+            balance: runningBalance,
+            vatLL: txn.vat || 0
+          });
+        });
+      }
+      
+      setDetailedStatement({
+        accountNo: id.substring(0, 8).toUpperCase(),
+        accountName: name,
+        currency: 'US',
+        asOfDate: new Date().toLocaleDateString('en-GB'),
+        phone: '',
+        attn: '',
+        openingBalance: 0,
+        transactions,
+        closingBalance: runningBalance
+      });
+      
+      setViewingDetailedStatement({ type, id, name });
+    } catch (error) {
+      console.error('Error generating detailed statement:', error);
+    }
+  };
+
+  const numberToWords = (num: number): string => {
+    const ones = ['', 'ONE', 'TWO', 'THREE', 'FOUR', 'FIVE', 'SIX', 'SEVEN', 'EIGHT', 'NINE'];
+    const tens = ['', '', 'TWENTY', 'THIRTY', 'FORTY', 'FIFTY', 'SIXTY', 'SEVENTY', 'EIGHTY', 'NINETY'];
+    const teens = ['TEN', 'ELEVEN', 'TWELVE', 'THIRTEEN', 'FOURTEEN', 'FIFTEEN', 'SIXTEEN', 'SEVENTEEN', 'EIGHTEEN', 'NINETEEN'];
+    
+    if (num === 0) return 'ZERO';
+    
+    const dollars = Math.floor(num);
+    const cents = Math.round((num - dollars) * 100);
+    
+    let words = 'ONLY ';
+    
+    if (dollars >= 1000000) {
+      const millions = Math.floor(dollars / 1000000);
+      words += ones[millions] + ' MILLION ';
+    }
+    
+    const thousands = Math.floor((dollars % 1000000) / 1000);
+    if (thousands > 0) {
+      if (thousands >= 100) {
+        words += ones[Math.floor(thousands / 100)] + ' HUNDRED ';
+      }
+      const remainderThousands = thousands % 100;
+      if (remainderThousands >= 10 && remainderThousands < 20) {
+        words += teens[remainderThousands - 10] + ' ';
+      } else {
+        if (remainderThousands >= 20) words += tens[Math.floor(remainderThousands / 10)] + ' ';
+        if (remainderThousands % 10 > 0) words += ones[remainderThousands % 10] + ' ';
+      }
+      words += 'THOUSAND ';
+    }
+    
+    const hundreds = Math.floor((dollars % 1000) / 100);
+    if (hundreds > 0) {
+      words += ones[hundreds] + ' HUNDRED ';
+    }
+    
+    const remainder = dollars % 100;
+    if (remainder >= 10 && remainder < 20) {
+      words += teens[remainder - 10] + ' ';
+    } else {
+      if (remainder >= 20) words += tens[Math.floor(remainder / 10)] + ' ';
+      if (remainder % 10 > 0) words += ones[remainder % 10] + ' ';
+    }
+    
+    words += 'US DOLLAR';
+    if (cents > 0) {
+      words += ` & ${cents}%`;
+    }
+    words += ' .';
+    
+    return words.trim();
+  };
+
+  const exportDetailedStatementToPDF = () => {
+    if (!detailedStatement) return;
+    
+    const doc = new jsPDF();
+    let currentPage = 1;
+    
+    // Page number
+    doc.setFontSize(10);
+    doc.text(`Page   ${currentPage}`, 20, 15);
+    
+    // Header
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text(`STATEMENT OF ACCOUNT AS AT ${detailedStatement.asOfDate}`, 20, 25);
+    
+    // Account details
+    let y = 35;
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    doc.text('A/c No.', 20, y);
+    doc.text(detailedStatement.accountNo, 50, y);
+    y += 5;
+    doc.text('A/c name:', 20, y);
+    doc.text(detailedStatement.accountName, 50, y);
+    y += 5;
+    doc.text('Attn:', 20, y);
+    doc.text(detailedStatement.attn || '', 50, y);
+    y += 5;
+    doc.text('Phone #', 20, y);
+    doc.text(detailedStatement.phone || '', 50, y);
+    y += 5;
+    doc.text('Currency', 20, y);
+    doc.text(detailedStatement.currency, 50, y);
+    y += 8;
+    
+    // Table header
+    doc.setFontSize(8);
+    doc.setFont(undefined, 'bold');
+    doc.text('Date', 20, y);
+    doc.text('Ref.', 40, y);
+    doc.text('Description', 65, y);
+    doc.text('Debit', 105, y, { align: 'right' });
+    doc.text('Net', 120, y, { align: 'right' });
+    doc.text('VAT', 130, y, { align: 'right' });
+    doc.text('Credit', 150, y, { align: 'right' });
+    doc.text('Balance', 170, y, { align: 'right' });
+    doc.text('VAT LL', 190, y, { align: 'right' });
+    y += 2;
+    doc.line(20, y, 195, y);
+    y += 5;
+    
+    // Opening balance
+    doc.setFont(undefined, 'normal');
+    if (detailedStatement.openingBalance !== 0) {
+      const firstDate = detailedStatement.transactions[0]?.date || '01/01/2026';
+      doc.text(firstDate, 20, y);
+      doc.text('JVO00000001', 40, y);
+      doc.text('Brought forward year', 65, y);
+      doc.text(Math.abs(detailedStatement.openingBalance).toFixed(2), 170, y, { align: 'right' });
+      y += 5;
+    }
+    
+    // Transactions
+    doc.setFontSize(8);
+    detailedStatement.transactions.forEach(txn => {
+      if (y > 265) {
+        doc.addPage();
+        currentPage++;
+        doc.text(`Page   ${currentPage}`, 20, 15);
+        y = 25;
+      }
+      
+      doc.text(txn.date, 20, y);
+      doc.text(txn.ref.substring(0, 12), 40, y);
+      doc.text(txn.description.substring(0, 20), 65, y);
+      if (txn.debit > 0) doc.text(txn.debit.toFixed(2), 105, y, { align: 'right' });
+      if (txn.netVat > 0) doc.text(txn.netVat.toFixed(2), 120, y, { align: 'right' });
+      if (txn.credit > 0) doc.text(txn.credit.toFixed(2), 150, y, { align: 'right' });
+      doc.text(txn.balance.toFixed(2), 170, y, { align: 'right' });
+      if (txn.vatLL > 0) doc.text(txn.vatLL.toFixed(2), 190, y, { align: 'right' });
+      y += 5;
+    });
+    
+    // Total row
+    y += 2;
+    doc.line(20, y, 195, y);
+    y += 5;
+    doc.setFont(undefined, 'bold');
+    doc.text('Total', 65, y);
+    const totalDebit = detailedStatement.transactions.reduce((sum, t) => sum + t.debit, 0);
+    const totalCredit = detailedStatement.transactions.reduce((sum, t) => sum + t.credit, 0);
+    if (totalDebit > 0) doc.text(totalDebit.toFixed(2), 105, y, { align: 'right' });
+    if (totalCredit > 0) doc.text(totalCredit.toFixed(2), 150, y, { align: 'right' });
+    doc.text(Math.abs(detailedStatement.closingBalance).toFixed(2), 170, y, { align: 'right' });
+    
+    // Balance favour
+    y += 7;
+    doc.setFont(undefined, 'normal');
+    if (detailedStatement.closingBalance > 0) {
+      doc.text('Balance in our favour', 20, y);
+    } else {
+      doc.text('Balance in your favour', 20, y);
+    }
+    
+    // Amount in words
+    y += 7;
+    const amountInWords = numberToWords(Math.abs(detailedStatement.closingBalance));
+    doc.text(amountInWords, 20, y);
+    
+    // Signature
+    y += 10;
+    doc.text('Accounts dept. _________________', 20, y);
+    
+    doc.save(`statement_${detailedStatement.accountName.replace(/\s+/g, '_')}_${detailedStatement.asOfDate.replace(/\//g, '-')}.pdf`);
+  };
 
   const exportCustomersToExcel = () => {
     const data = customers.map(c => ({
@@ -853,14 +1303,18 @@ const AdminAccountStatement: React.FC = () => {
       </div>
         )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-600">Total Expenses</div>
-          <div className="text-2xl font-bold text-red-600">${totalExpenses.toFixed(2)}</div>
+          <div className="text-sm text-gray-600">Total Sales</div>
+          <div className="text-2xl font-bold text-blue-600">${totalSales.toFixed(2)}</div>
         </div>
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-600">Total Purchases</div>
           <div className="text-2xl font-bold text-orange-600">${totalPurchases.toFixed(2)}</div>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <div className="text-sm text-gray-600">Total Expenses</div>
+          <div className="text-2xl font-bold text-red-600">${totalExpenses.toFixed(2)}</div>
         </div>
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-600">Customer Balances</div>
@@ -927,6 +1381,16 @@ const AdminAccountStatement: React.FC = () => {
             >
               Expenses ({expenses.length})
             </button>
+            <button
+              onClick={() => setActiveTab('sales')}
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
+                activeTab === 'sales'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Sales ({sales.length})
+            </button>
           </div>
         </div>
 
@@ -960,6 +1424,7 @@ const AdminAccountStatement: React.FC = () => {
                       <th className="px-4 py-2 text-right whitespace-nowrap">Total Purchases</th>
                       <th className="px-4 py-2 text-right whitespace-nowrap">Total Payments</th>
                       <th className="px-4 py-2 text-right whitespace-nowrap">Balance</th>
+                      <th className="px-4 py-2 text-left whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -971,6 +1436,14 @@ const AdminAccountStatement: React.FC = () => {
                         <td className={`px-4 py-2 text-right font-semibold ${customer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
                           ${customer.balance.toFixed(2)}
                         </td>
+                        <td className="px-4 py-2">
+                          <button
+                            onClick={() => generateDetailedStatement('customer', customer.id, customer.name)}
+                            className="text-blue-600 hover:text-blue-800 text-sm underline"
+                          >
+                            View Statement
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -980,6 +1453,7 @@ const AdminAccountStatement: React.FC = () => {
                       <td className="px-4 py-3 text-right">${customers.reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right">${customers.reduce((sum, c) => sum + c.totalPayments, 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-blue-600">${customers.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</td>
+                      <td className="px-4 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1016,6 +1490,7 @@ const AdminAccountStatement: React.FC = () => {
                       <th className="px-4 py-2 text-right whitespace-nowrap">Total Purchases</th>
                       <th className="px-4 py-2 text-right whitespace-nowrap">Total Payments</th>
                       <th className="px-4 py-2 text-right whitespace-nowrap">Balance Due</th>
+                      <th className="px-4 py-2 text-center whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1027,6 +1502,14 @@ const AdminAccountStatement: React.FC = () => {
                         <td className={`px-4 py-2 text-right font-semibold ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
                           ${supplier.balance.toFixed(2)}
                         </td>
+                        <td className="px-4 py-2 text-center">
+                          <button
+                            onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
+                            className="text-blue-600 hover:text-blue-800 text-sm underline"
+                          >
+                            View Statement
+                          </button>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -1036,6 +1519,7 @@ const AdminAccountStatement: React.FC = () => {
                       <td className="px-4 py-3 text-right">${suppliers.reduce((sum, s) => sum + s.totalPurchases, 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right">${suppliers.reduce((sum, s) => sum + s.totalPayments, 0).toFixed(2)}</td>
                       <td className="px-4 py-3 text-right text-blue-600">${suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}</td>
+                      <td className="px-4 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1123,33 +1607,58 @@ const AdminAccountStatement: React.FC = () => {
                 <table className="min-w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Date</th>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Supplier</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Amount</th>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Status</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Date</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Ref.</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Description</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Debit</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Net</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">VAT</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Credit</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Balance</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Status</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {purchases.map(purchase => (
-                      <tr key={purchase.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-2">{purchase.date}</td>
-                        <td className="px-4 py-2">{purchase.supplier}</td>
-                        <td className="px-4 py-2 text-right font-semibold">${purchase.amount.toFixed(2)}</td>
-                        <td className="px-4 py-2">
-                          <span className={`px-2 py-1 rounded text-sm ${
-                            purchase.status === 'Completed' ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {purchase.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      let runningBalance = 0;
+                      return purchases.map(purchase => {
+                        const total = purchase.amount;
+                        const net = total / 1.11; // Assuming 11% VAT
+                        const vat = total - net;
+                        runningBalance += total - purchase.amountPaid;
+                        return (
+                          <tr key={purchase.id} className="border-b hover:bg-gray-50 text-sm">
+                            <td className="px-3 py-2">{new Date(purchase.date).toLocaleDateString('en-GB')}</td>
+                            <td className="px-3 py-2">{purchase.invoiceNumber || '-'}</td>
+                            <td className="px-3 py-2">{purchase.supplier} - {purchase.items.length} item(s)</td>
+                            <td className="px-3 py-2 text-right font-semibold">{total.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{net.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{vat.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-green-600">{purchase.amountPaid.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{runningBalance.toFixed(2)}</td>
+                            <td className="px-3 py-2">
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                purchase.status === 'received' ? 'bg-green-100 text-green-800' : 
+                                purchase.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                                'bg-yellow-100 text-yellow-800'
+                              }`}>
+                                {purchase.status}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
-                      <td className="px-4 py-3" colSpan={2}>TOTAL</td>
-                      <td className="px-4 py-3 text-right text-blue-600">${purchases.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</td>
-                      <td className="px-4 py-3"></td>
+                      <td className="px-3 py-3" colSpan={3}>TOTAL</td>
+                      <td className="px-3 py-3 text-right text-blue-600">{purchases.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + (p.amount / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + (p.amount - p.amount / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right text-green-600">{purchases.reduce((sum, p) => sum + p.amountPaid, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + (p.amount - p.amountPaid), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1182,28 +1691,118 @@ const AdminAccountStatement: React.FC = () => {
                 <table className="min-w-full">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Date</th>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Category</th>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Description</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Amount</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Date</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Ref.</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Description</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Debit</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Net</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">VAT</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Credit</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Balance</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Payment</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {expenses.map(expense => (
-                      <tr key={expense.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-2">{expense.date}</td>
-                        <td className="px-4 py-2">{expense.category}</td>
-                        <td className="px-4 py-2">{expense.description}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-red-600">
-                          ${expense.amount.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
+                    {(() => {
+                      let runningBalance = 0;
+                      return expenses.map(expense => {
+                        const total = expense.amount;
+                        const net = total / 1.11;
+                        const vat = total - net;
+                        runningBalance += total;
+                        return (
+                          <tr key={expense.id} className="border-b hover:bg-gray-50 text-sm">
+                            <td className="px-3 py-2">{new Date(expense.date).toLocaleDateString('en-GB')}</td>
+                            <td className="px-3 py-2">{expense.reference || '-'}</td>
+                            <td className="px-3 py-2">{expense.category} - {expense.description}</td>
+                            <td className="px-3 py-2 text-right font-semibold text-red-600">{total.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{net.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{vat.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-green-600">{total.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{runningBalance.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-xs">{expense.paymentMethod || '-'}</td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
-                      <td className="px-4 py-3" colSpan={3}>TOTAL</td>
-                      <td className="px-4 py-3 text-right text-blue-600">${expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3" colSpan={3}>TOTAL</td>
+                      <td className="px-3 py-3 text-right text-blue-600">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + (e.amount / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + (e.amount - e.amount / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right text-green-600">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'sales' && (
+            <div>
+              <div className="flex justify-between items-center mb-4 gap-2">
+                <h2 className="text-xl font-semibold">Sales History</h2>
+              </div>
+              <div className="overflow-x-auto -mx-6 px-6">
+                <table className="min-w-full">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Date</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Ref.</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Description</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Debit</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Net</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">VAT</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Credit</th>
+                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Balance</th>
+                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(() => {
+                      let runningBalance = 0;
+                      return sales.map(sale => {
+                        const total = sale.total;
+                        const net = total / 1.11;
+                        const vat = total - net;
+                        runningBalance += total - sale.amountPaid;
+                        return (
+                          <tr key={sale.id} className="border-b hover:bg-gray-50 text-sm">
+                            <td className="px-3 py-2">{new Date(sale.date).toLocaleDateString('en-GB')}</td>
+                            <td className="px-3 py-2">{sale.invoiceNumber || '-'}</td>
+                            <td className="px-3 py-2">{sale.customer}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{total.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{net.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{vat.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right text-green-600">{sale.amountPaid.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right font-semibold">{runningBalance.toFixed(2)}</td>
+                            <td className="px-3 py-2">
+                              <span className={`px-2 py-1 rounded text-xs ${
+                                sale.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 
+                                sale.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                                'bg-red-100 text-red-800'
+                              }`}>
+                                {sale.paymentStatus || 'unpaid'}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
+                  </tbody>
+                  <tfoot className="bg-gray-100 font-bold">
+                    <tr>
+                      <td className="px-3 py-3" colSpan={3}>TOTAL</td>
+                      <td className="px-3 py-3 text-right text-blue-600">{sales.reduce((sum, s) => sum + s.total, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total - s.total / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right text-green-600">{sales.reduce((sum, s) => sum + s.amountPaid, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total - s.amountPaid), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1212,6 +1811,151 @@ const AdminAccountStatement: React.FC = () => {
           )}
         </div>
       </div>
+      
+      {/* Detailed Statement Modal */}
+      {viewingDetailedStatement && detailedStatement && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-5xl w-full max-h-[90vh] overflow-auto">
+            <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center">
+              <h2 className="text-xl font-bold">Statement of Account</h2>
+              <div className="flex gap-2">
+                <button
+                  onClick={exportDetailedStatementToPDF}
+                  className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+                >
+                  <FileDown size={16} />
+                  Export PDF
+                </button>
+                <button
+                  onClick={() => {
+                    setViewingDetailedStatement(null);
+                    setDetailedStatement(null);
+                  }}
+                  className="text-gray-600 hover:text-gray-800 px-4 py-2"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+            
+            <div className="p-8 bg-white">
+              {/* Page Number */}
+              <div className="text-sm mb-2">Page   1</div>
+              
+              {/* Statement Header */}
+              <div className="mb-6">
+                <h3 className="text-lg font-bold">STATEMENT OF ACCOUNT AS AT {detailedStatement.asOfDate}</h3>
+              </div>
+              
+              {/* Account Details */}
+              <div className="mb-6 space-y-1 text-sm">
+                <div className="flex">
+                  <span className="w-24">A/c No.</span>
+                  <span className="font-medium">{detailedStatement.accountNo}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-24">A/c name:</span>
+                  <span className="font-medium">{detailedStatement.accountName}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-24">Attn:</span>
+                  <span className="font-medium">{detailedStatement.attn || ''}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-24">Phone #</span>
+                  <span className="font-medium">{detailedStatement.phone || ''}</span>
+                </div>
+                <div className="flex">
+                  <span className="w-24">Currency</span>
+                  <span className="font-medium">{detailedStatement.currency}</span>
+                </div>
+              </div>
+              
+              {/* Transactions Table */}
+              <div className="overflow-x-auto">
+                <table className="min-w-full border-collapse text-sm">
+                  <thead>
+                    <tr className="border-b-2 border-black">
+                      <th className="px-2 py-1 text-left text-xs font-bold">Date</th>
+                      <th className="px-2 py-1 text-left text-xs font-bold">Ref.</th>
+                      <th className="px-2 py-1 text-left text-xs font-bold">Description</th>
+                      <th className="px-2 py-1 text-right text-xs font-bold">Debit</th>
+                      <th className="px-2 py-1 text-right text-xs font-bold">Net</th>
+                      <th className="px-2 py-1 text-right text-xs font-bold">VAT</th>
+                      <th className="px-2 py-1 text-right text-xs font-bold">Credit</th>
+                      <th className="px-2 py-1 text-right text-xs font-bold">Balance</th>
+                      <th className="px-2 py-1 text-right text-xs font-bold">VAT LL</th>
+                    </tr>
+                  </thead>
+                  <tbody className="text-xs">
+                    {detailedStatement.openingBalance !== 0 && (
+                      <tr>
+                        <td className="px-2 py-1">{detailedStatement.transactions[0]?.date || '01/01/2026'}</td>
+                        <td className="px-2 py-1">JVO00000001</td>
+                        <td className="px-2 py-1">Brought forward year</td>
+                        <td className="px-2 py-1 text-right"></td>
+                        <td className="px-2 py-1 text-right"></td>
+                        <td className="px-2 py-1 text-right"></td>
+                        <td className="px-2 py-1 text-right"></td>
+                        <td className="px-2 py-1 text-right font-semibold">{Math.abs(detailedStatement.openingBalance).toFixed(2)}</td>
+                        <td className="px-2 py-1 text-right"></td>
+                      </tr>
+                    )}
+                    {detailedStatement.transactions.map((txn, idx) => (
+                      <tr key={idx}>
+                        <td className="px-2 py-1 whitespace-nowrap">{txn.date}</td>
+                        <td className="px-2 py-1">{txn.ref}</td>
+                        <td className="px-2 py-1">{txn.description}</td>
+                        <td className="px-2 py-1 text-right">{txn.debit > 0 ? txn.debit.toFixed(2) : ''}</td>
+                        <td className="px-2 py-1 text-right">{txn.netVat > 0 ? txn.netVat.toFixed(2) : ''}</td>
+                        <td className="px-2 py-1 text-right"></td>
+                        <td className="px-2 py-1 text-right">{txn.credit > 0 ? txn.credit.toFixed(2) : ''}</td>
+                        <td className="px-2 py-1 text-right font-semibold">{txn.balance.toFixed(2)}</td>
+                        <td className="px-2 py-1 text-right">{txn.vatLL > 0 ? txn.vatLL.toFixed(2) : ''}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot>
+                    <tr className="border-t-2 border-black font-bold">
+                      <td colSpan={3} className="px-2 py-2">Total</td>
+                      <td className="px-2 py-2 text-right">
+                        {detailedStatement.transactions.reduce((sum, t) => sum + t.debit, 0).toFixed(2)}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {detailedStatement.transactions.reduce((sum, t) => sum + t.netVat, 0).toFixed(2)}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {detailedStatement.transactions.reduce((sum, t) => sum + t.vatLL, 0).toFixed(2)}
+                      </td>
+                      <td className="px-2 py-2 text-right">
+                        {detailedStatement.transactions.reduce((sum, t) => sum + t.credit, 0).toFixed(2)}
+                      </td>
+                      <td className="px-2 py-2 text-right">{Math.abs(detailedStatement.closingBalance).toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+              
+              {/* Footer */}
+              <div className="mt-6 space-y-3 text-sm">
+                <p className="font-medium">
+                  {detailedStatement.closingBalance > 0 
+                    ? 'Balance in our favour'
+                    : 'Balance in your favour'
+                  }
+                </p>
+                <p className="text-xs uppercase">
+                  ONLY {Math.abs(detailedStatement.closingBalance).toFixed(2)} US DOLLAR .
+                </p>
+                <div className="mt-6 pt-4">
+                  <p className="text-xs">Accounts dept. _________________</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );

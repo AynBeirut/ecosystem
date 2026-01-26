@@ -67,7 +67,7 @@ const AdminRecipes: React.FC = () => {
     return ingredients.reduce((total, ing) => {
       const material = rawMaterials.find(m => m.id === ing.rawMaterialId);
       if (!material) return total;
-      return total + (ing.quantity * material.costPerUnit);
+      return total + (ing.quantity * (material.costPerUnit || 0));
     }, 0);
   };
 
@@ -263,11 +263,11 @@ const AdminRecipes: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Recipes" /> : null}
+      {isMobile ? <MobileHeader title="Recipes" showBackButton={true} /> : null}
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
+            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
             <h1 className="text-2xl font-bold">Recipes</h1>
           </div>
           <Dialog open={isAddingRecipe} onOpenChange={setIsAddingRecipe}>
@@ -346,9 +346,9 @@ const AdminRecipes: React.FC = () => {
                       <Plus className="h-4 w-4 mr-1" /> Add Ingredient
                     </Button>
                   </div>
-                  {newRecipe.ingredients.map((ingredient, index) => {
+                  {(newRecipe.ingredients || []).map((ingredient, index) => {
                     const material = rawMaterials.find(m => m.id === ingredient.rawMaterialId);
-                    const cost = material ? ingredient.quantity * material.costPerUnit : 0;
+                    const cost = material ? ingredient.quantity * (material.costPerUnit || 0) : 0;
 
                     return (
                       <div key={index} className="grid grid-cols-12 gap-2 mb-2 items-end">
@@ -364,7 +364,7 @@ const AdminRecipes: React.FC = () => {
                             <SelectContent>
                               {rawMaterials.map(mat => (
                                 <SelectItem key={mat.id} value={mat.id}>
-                                  {mat.name} (${mat.costPerUnit}/{mat.unit})
+                                  {mat.name} (${ (mat.costPerUnit || 0)}/{mat.unit})
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -405,7 +405,7 @@ const AdminRecipes: React.FC = () => {
                       </div>
                     );
                   })}
-                  {newRecipe.ingredients.length > 0 && (
+                  {(newRecipe.ingredients || []).length > 0 && (
                     <div className="mt-2 p-3 bg-gray-100 rounded">
                       <div className="flex justify-between text-sm">
                         <span>Total Cost:</span>
@@ -486,22 +486,22 @@ const AdminRecipes: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Total Cost</p>
-                      <p className="font-bold text-lg">${recipe.totalCost.toFixed(2)}</p>
+                      <p className="font-bold text-lg">${(recipe.totalCost || 0).toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Cost Per Unit</p>
-                      <p className="font-bold text-lg">${recipe.costPerUnit.toFixed(2)}</p>
+                      <p className="font-bold text-lg">${(recipe.costPerUnit || 0).toFixed(2)}</p>
                     </div>
                   </div>
                   <div>
                     <p className="text-sm font-semibold mb-2">Ingredients:</p>
                     <ul className="space-y-1">
-                      {recipe.ingredients.map((ing, idx) => {
+                      {(recipe.ingredients || []).map((ing, idx) => {
                         const material = rawMaterials.find(m => m.id === ing.rawMaterialId);
                         return (
                           <li key={idx} className="text-sm flex justify-between">
                             <span>{material?.name || 'Unknown'}: {ing.quantity} {ing.unit}</span>
-                            <span className="text-gray-500">${material ? (ing.quantity * material.costPerUnit).toFixed(2) : '0.00'}</span>
+                            <span className="text-gray-500">${material ? (ing.quantity * (material.costPerUnit || 0)).toFixed(2) : '0.00'}</span>
                           </li>
                         );
                       })}
@@ -580,9 +580,9 @@ const AdminRecipes: React.FC = () => {
                       <Plus className="h-4 w-4 mr-1" /> Add Ingredient
                     </Button>
                   </div>
-                  {editingRecipe.ingredients.map((ingredient, index) => {
+                  {(editingRecipe.ingredients || []).map((ingredient, index) => {
                     const material = rawMaterials.find(m => m.id === ingredient.rawMaterialId);
-                    const cost = material ? ingredient.quantity * material.costPerUnit : 0;
+                    const cost = material ? ingredient.quantity * (material.costPerUnit || 0) : 0;
 
                     return (
                       <div key={index} className="grid grid-cols-12 gap-2 mb-2 items-end">
@@ -598,7 +598,7 @@ const AdminRecipes: React.FC = () => {
                             <SelectContent>
                               {rawMaterials.map(mat => (
                                 <SelectItem key={mat.id} value={mat.id}>
-                                  {mat.name} (${mat.costPerUnit}/{mat.unit})
+                                  {mat.name} (${(mat.costPerUnit || 0)}/{mat.unit})
                                 </SelectItem>
                               ))}
                             </SelectContent>
@@ -638,7 +638,7 @@ const AdminRecipes: React.FC = () => {
                       </div>
                     );
                   })}
-                  {editingRecipe.ingredients.length > 0 && (
+                  {(editingRecipe.ingredients || []).length > 0 && (
                     <div className="mt-2 p-3 bg-gray-100 rounded">
                       <div className="flex justify-between text-sm">
                         <span>Total Cost:</span>

@@ -27,6 +27,7 @@ const AdminComposedProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [finishedGoods, setFinishedGoods] = useState<any[]>([]);
   const [categories, setCategories] = useState<string[]>(['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other']);
   const [priceMultiplier, setPriceMultiplier] = useState<number>(2.5);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -85,6 +86,16 @@ const AdminComposedProducts: React.FC = () => {
         ...doc.data()
       } as RawMaterial));
       setRawMaterials(rawMaterialsList);
+
+      // Fetch finished goods inventory
+      const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
+      const finishedGoodsQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
+      const finishedGoodsSnapshot = await getDocs(finishedGoodsQuery);
+      const finishedGoodsList = finishedGoodsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      }));
+      setFinishedGoods(finishedGoodsList);
 
       // Fetch store profile for categories and price multiplier
       const profileRef = doc(db, 'storeProfiles', user.storeId);
@@ -650,6 +661,12 @@ const AdminComposedProducts: React.FC = () => {
               const recipe = recipes.find(r => r.id === composedProduct.recipeId);
               const profitMargin = composedProduct.sellingPrice - composedProduct.costPrice;
               const profitPercentage = (profitMargin / composedProduct.costPrice) * 100;
+              
+              // Check actual finished goods inventory
+              const finishedGood = finishedGoods.find(fg => fg.composedProductId === composedProduct.id);
+              const actualStock = finishedGood?.currentBalance || 0;
+              
+              // Also check if we can produce more from raw materials
               const stockStatus = getComposedStockStatus(recipe, rawMaterials);
               const availableUnits = calculateAvailableStock(recipe, rawMaterials);
 
@@ -661,14 +678,19 @@ const AdminComposedProducts: React.FC = () => {
                         <CardTitle className="flex items-center gap-2">
                           {product?.name || 'Unknown Product'}
                           <Badge variant="secondary">Composed</Badge>
-                          {stockStatus.inStock ? (
-                            <Badge variant={availableUnits <= 5 ? "outline" : "default"} className={availableUnits <= 5 ? "border-orange-500 text-orange-700" : "bg-green-600"}>
-                              {availableUnits} units available
+                          {actualStock > 0 ? (
+                            <Badge variant={actualStock <= 5 ? "outline" : "default"} className={actualStock <= 5 ? "border-orange-500 text-orange-700" : "bg-green-600"}>
+                              {actualStock} in stock
                             </Badge>
                           ) : (
                             <Badge variant="destructive" className="flex items-center gap-1">
                               <AlertTriangle className="h-3 w-3" />
                               Out of Stock
+                            </Badge>
+                          )}
+                          {stockStatus.inStock && actualStock === 0 && (
+                            <Badge variant="outline" className="border-blue-500 text-blue-700">
+                              Can produce {availableUnits}
                             </Badge>
                           )}
                         </CardTitle>

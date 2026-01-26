@@ -1,5 +1,4 @@
-import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
-import { ComposedProduct, RawMaterial } from '@/types/product';
+import { Recipe, RawMaterial } from '@/types/inventory';
 
 export interface StockStatus {
   available: number;
@@ -10,40 +9,34 @@ export interface StockStatus {
 /**
  * Calculate how many units of a composed product can be made with current raw material stock
  */
-export async function calculateAvailableStock(
-  product: ComposedProduct,
-  storeId: string
-): Promise<number> {
-  if (!product.materials || product.materials.length === 0) {
+export function calculateAvailableStock(
+  recipe: Recipe | undefined,
+  rawMaterials: RawMaterial[]
+): number {
+  if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
     return 0;
   }
 
-  const db = getFirestore();
-  const materialsQuery = query(
-    collection(db, 'rawMaterials'),
-    where('storeId', '==', storeId)
-  );
-
-  const snapshot = await getDocs(materialsQuery);
-  const rawMaterials = new Map<string, RawMaterial>();
+  const rawMaterialsMap = new Map<string, RawMaterial>();
   
-  snapshot.forEach(doc => {
-    const material = doc.data() as RawMaterial;
-    rawMaterials.set(doc.id, material);
+  rawMaterials.forEach(material => {
+    if (material.id) {
+      rawMaterialsMap.set(material.id, material);
+    }
   });
 
-  // Calculate minimum units that can be made based on each material
+  // Calculate minimum units that can be made based on each ingredient
   let minUnits = Infinity;
 
-  for (const material of product.materials) {
-    const rawMaterial = rawMaterials.get(material.materialId);
+  for (const ingredient of recipe.ingredients) {
+    const rawMaterial = rawMaterialsMap.get(ingredient.rawMaterialId);
     
     if (!rawMaterial) {
       return 0; // Material not found
     }
 
     const availableStock = rawMaterial.currentStock || 0;
-    const requiredPerUnit = material.quantityNeeded || 0;
+    const requiredPerUnit = ingredient.quantity || 0;
 
     if (requiredPerUnit === 0) {
       continue;
@@ -57,13 +50,13 @@ export async function calculateAvailableStock(
 }
 
 /**
- * Get stock status for a composed product
+ * Get stock status for a composed product based on recipe and raw materials
  */
-export async function getComposedStockStatus(
-  product: ComposedProduct,
-  storeId: string
-): Promise<StockStatus> {
-  const canMake = await calculateAvailableStock(product, storeId);
+export function getComposedStockStatus(
+  recipe: Recipe | undefined,
+  rawMaterials: RawMaterial[]
+): StockStatus {
+  const canMake = calculateAvailableStock(recipe, rawMaterials);
 
   let status: 'in-stock' | 'low-stock' | 'out-of-stock';
   if (canMake === 0) {

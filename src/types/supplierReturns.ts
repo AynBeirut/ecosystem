@@ -26,6 +26,7 @@ export interface SupplierReturnItem {
   materialName: string;
   sku: string;
   quantity: number;
+  originalQuantity?: number;
   unitCost: number;
   unitPrice?: number; // alias for unitCost
   totalCost: number;

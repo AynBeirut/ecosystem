@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, doc, updateDoc, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, doc, updateDoc, addDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,12 +10,13 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown } from 'lucide-react';
+import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw } from 'lucide-react';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { FinishedGoodsItem, StockTransaction, FinishedGoodsAdjustment } from '@/types/finishedGoods';
 import { logAction } from '@/lib/auditLog';
+import { Recipe, RawMaterial } from '@/types/inventory';
 
 const AdminFinishedGoods: React.FC = () => {
   const { user } = useAuth();
@@ -89,6 +90,41 @@ const AdminFinishedGoods: React.FC = () => {
     }
   };
 
+  const handleDeleteItem = async (item: FinishedGoodsItem & { id: string }) => {
+    if (!user?.storeId) return;
+    
+    if ((item.costPrice || 0) > 0) {
+      toast({ 
+        title: "Cannot Delete", 
+        description: "Only items with $0 cost can be deleted", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      await deleteDoc(doc(db, 'finishedGoodsInventory', item.id));
+      setFinishedGoods(finishedGoods.filter(g => g.id !== item.id));
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'delete',
+        'finishedGoodsInventory',
+        item.id,
+        { oldValue: item },
+        user.storeId
+      );
+
+      toast({ title: "Success", description: "Finished goods item deleted successfully!" });
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      toast({ title: "Error", description: "Failed to delete item", variant: "destructive" });
+    }
+  };
+
   const handleAdjustStock = async () => {
     if (!adjustingItem || !user?.storeId) return;
     
@@ -142,6 +178,82 @@ const AdminFinishedGoods: React.FC = () => {
     } catch (error) {
       console.error('Error adjusting stock:', error);
       toast({ title: "Error", description: "Failed to adjust stock", variant: "destructive" });
+    }
+  };
+
+  const handleRecalculateCost = async (item: FinishedGoodsItem & { id: string }) => {
+    if (!user?.storeId) return;
+    
+    try {
+      const db = getFirestore();
+      
+      // Get the recipe for this product
+      if (!item.recipeId) {
+        toast({ title: "Error", description: "No recipe found for this product", variant: "destructive" });
+        return;
+      }
+      
+      const recipeDoc = await getDoc(doc(db, 'recipes', item.recipeId));
+      if (!recipeDoc.exists()) {
+        toast({ title: "Error", description: "Recipe not found", variant: "destructive" });
+        return;
+      }
+      
+      const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as Recipe;
+      
+      // Calculate cost based on current raw material prices
+      let totalMaterialCost = 0;
+      const zeroCostMaterials: string[] = [];
+      
+      for (const ingredient of recipe.ingredients || []) {
+        const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId));
+        if (!rawMaterialDoc.exists()) continue;
+        
+        const rawMaterial = { id: rawMaterialDoc.id, ...rawMaterialDoc.data() } as RawMaterial;
+        
+        if (!rawMaterial.costPerUnit || rawMaterial.costPerUnit === 0) {
+          zeroCostMaterials.push(rawMaterial.name);
+        }
+        
+        const materialCost = (rawMaterial.costPerUnit || 0) * ingredient.quantity;
+        totalMaterialCost += materialCost;
+      }
+      
+      if (zeroCostMaterials.length > 0) {
+        toast({
+          title: "Warning",
+          description: `Some materials have zero cost: ${zeroCostMaterials.join(', ')}. Update Raw Materials costs first.`,
+          variant: "destructive"
+        });
+        return;
+      }
+      
+      // Calculate total cost per unit including service cost
+      const recipeTotalCost = recipe.totalCost || 0;
+      const serviceCost = Math.max(0, recipeTotalCost - totalMaterialCost);
+      const newCostPerUnit = totalMaterialCost + serviceCost;
+      const newTotalValue = item.currentBalance * newCostPerUnit;
+      
+      // Update the finished goods item
+      await updateDoc(doc(db, 'finishedGoodsInventory', item.id), {
+        costPrice: newCostPerUnit,
+        totalValue: newTotalValue,
+        updatedAt: new Date().toISOString(),
+      });
+      
+      await logAction(user.id, user.name, user.role, 'update', 'finished_goods', item.id, {
+        oldValue: { costPrice: item.costPrice },
+        newValue: { costPrice: newCostPerUnit }
+      }, user.storeId);
+      
+      toast({ 
+        title: "Success", 
+        description: `Cost updated from $${item.costPrice.toFixed(2)} to $${newCostPerUnit.toFixed(2)} per unit`
+      });
+      fetchFinishedGoods();
+    } catch (error) {
+      console.error('Error recalculating cost:', error);
+      toast({ title: "Error", description: "Failed to recalculate cost", variant: "destructive" });
     }
   };
 
@@ -251,7 +363,7 @@ const AdminFinishedGoods: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="Finished Goods" />}
+      {isMobile && <MobileHeader title="Finished Goods" showBackButton={true} />}
       <div className="container mx-auto p-4 md:p-6">
         <div className="mb-4 md:mb-6">
           {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
@@ -454,6 +566,7 @@ const AdminFinishedGoods: React.FC = () => {
                               size="sm"
                               variant="ghost"
                               onClick={() => setViewingHistory(item)}
+                              title="View History"
                             >
                               <History className="h-4 w-4" />
                             </Button>
@@ -461,9 +574,31 @@ const AdminFinishedGoods: React.FC = () => {
                               size="sm"
                               variant="ghost"
                               onClick={() => setAdjustingItem(item)}
+                              title="Adjust Stock"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
+                            {(item.costPrice || 0) === 0 && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleRecalculateCost(item)}
+                                  title="Recalculate Cost"
+                                  className="text-blue-600"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => handleDeleteItem(item)}
+                                  title="Delete $0 cost item"
+                                >
+                                  <Trash2 className="h-4 w-4 text-red-500" />
+                                </Button>
+                              </>
+                            )}
                           </div>
                         </td>
                       </tr>

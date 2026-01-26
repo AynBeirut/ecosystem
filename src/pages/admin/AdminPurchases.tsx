@@ -1251,16 +1251,49 @@ const AdminPurchases: React.FC = () => {
 
       // Update raw material stock levels and costs
       let updatedCount = 0;
+      let createdCount = 0;
+      
       for (const item of receivingPurchase.items) {
-        const material = rawMaterials.find(m => m.id === item.rawMaterialId);
         const receivedQty = item.receivedQuantity || 0;
+        if (receivedQty <= 0) continue;
         
-        if (material && receivedQty > 0) {
+        let material = rawMaterials.find(m => m.id === item.rawMaterialId);
+        const itemUnitCost = item.unitCost || item.unitPrice || 0;
+        
+        // If material doesn't exist, create it
+        if (!material) {
+          console.log(`Creating new raw material from purchase: ${item.materialName}`);
+          
+          const newMaterialData = {
+            name: item.materialName || 'Unknown Material',
+            category: 'Imported from Purchase',
+            unit: item.unit || 'units',
+            currentStock: receivedQty,
+            minimumStock: 0,
+            reorderPoint: 0,
+            costPerUnit: itemUnitCost,
+            supplier: receivingPurchase.supplierName || '',
+            supplierId: receivingPurchase.supplierId || '',
+            description: `Auto-imported from purchase ${receivingPurchase.invoiceNumber || receivingPurchase.id}`,
+            storeId: user.storeId,
+            createdBy: user.id,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          };
+          
+          const newMaterialRef = await addDoc(collection(db, 'rawMaterials'), newMaterialData);
+          
+          // Update the purchase item with the new material ID
+          const updatedItems = receivingPurchase.items.map(i => 
+            i === item ? { ...i, rawMaterialId: newMaterialRef.id } : i
+          );
+          await updateDoc(purchaseRef, { items: updatedItems });
+          
+          createdCount++;
+        } else {
+          // Update existing material
           const materialRef = doc(db, 'rawMaterials', item.rawMaterialId);
           const newStock = material.currentStock + receivedQty;
-          
-          // Get the unit cost from the purchase item
-          const itemUnitCost = item.unitCost || item.unitPrice || 0;
           
           // Calculate weighted average cost
           const currentValue = material.currentStock * (material.costPerUnit || 0);
@@ -1276,20 +1309,16 @@ const AdminPurchases: React.FC = () => {
             newCostPerUnit = newStock > 0 ? totalValue / newStock : itemUnitCost;
           }
           
-          console.log(`Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)}), Unit: ${material.unit}`);
+          console.log(`Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)})`);
           
-          // Update stock, cost, and ensure unit is set from raw material
+          // Update stock and cost
           await updateDoc(materialRef, {
             currentStock: newStock,
             costPerUnit: newCostPerUnit,
-            unit: material.unit, // Ensure unit is preserved/set
+            unit: item.unit || material.unit, // Update unit if provided in purchase
             updatedAt: new Date().toISOString(),
           });
           updatedCount++;
-        } else if (!material) {
-          console.error(`Material not found: ${item.rawMaterialId}`);
-        } else if (receivedQty <= 0) {
-          console.warn(`No quantity received for ${material.name || item.materialName}`);
         }
       }
 
@@ -1326,9 +1355,14 @@ const AdminPurchases: React.FC = () => {
       );
 
       setReceivingPurchase(null);
+      
+      const successMessage = createdCount > 0 
+        ? `Purchase received! ${updatedCount} material(s) updated, ${createdCount} new material(s) created.`
+        : `Purchase received! ${updatedCount} material(s) stock updated.`;
+      
       toast({ 
         title: "Success", 
-        description: `Purchase received! ${updatedCount} material(s) stock updated.` 
+        description: successMessage
       });
     } catch (error) {
       console.error('Error receiving purchase:', error);
@@ -1943,22 +1977,26 @@ const AdminPurchases: React.FC = () => {
                           </>
                         )}
                         {purchase.status !== 'received' && (
-                          <>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleUpdateStatus(purchase.id, 'cancelled')}
-                            >
-                              <XCircle className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => handleDeletePurchase(purchase.id)}
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleUpdateStatus(purchase.id, 'cancelled')}
+                            title="Cancel Purchase"
+                          >
+                            <XCircle className="h-4 w-4 mr-1" />
+                            Cancel
+                          </Button>
+                        )}
+                        {(purchase.status === 'returned' || purchase.status === 'cancelled') && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleDeletePurchase(purchase.id)}
+                            title="Delete returned/cancelled purchase"
+                          >
+                            <Trash2 className="h-4 w-4 mr-1" />
+                            Delete
+                          </Button>
                         )}
                       </div>
                     </div>

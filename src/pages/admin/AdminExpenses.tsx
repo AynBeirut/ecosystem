@@ -1226,13 +1226,6 @@ const AdminExpenses: React.FC = () => {
                       >
                         <Edit2 className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => handleDeleteExpense(expense)}
-                      >
-                        <Trash2 className="h-4 w-4 text-red-500" />
-                      </Button>
                     </div>
                   </div>
                 </CardHeader>

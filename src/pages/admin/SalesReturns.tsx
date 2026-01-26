@@ -345,7 +345,7 @@ const SalesReturns: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 pb-20">
-      {isMobile ? <MobileHeader title="Sales Returns" /> : null}
+      {isMobile ? <MobileHeader title="Sales Returns" showBackButton={true} /> : null}
       
       <main className="container mx-auto p-4 md:p-6 max-w-7xl">
         <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">

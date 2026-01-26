@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -391,6 +391,35 @@ const AdminOrders: React.FC = () => {
     } catch (error) {
       console.error('Error updating status:', error);
       toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteOrder = async (orderId: string) => {
+    if (!user?.storeId) return;
+    
+    const order = orders.find(o => o.id === orderId);
+    if (!order) return;
+
+    try {
+      const db = getFirestore();
+      await deleteDoc(doc(db, 'orders', orderId));
+      setOrders(orders.filter(o => o.id !== orderId));
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'delete',
+        'order',
+        orderId,
+        { oldValue: order },
+        user.storeId
+      );
+
+      toast({ title: "Success", description: "Order deleted successfully!" });
+    } catch (error) {
+      console.error('Error deleting order:', error);
+      toast({ title: "Error", description: "Failed to delete order", variant: "destructive" });
     }
   };
 
@@ -1106,6 +1135,17 @@ const AdminOrders: React.FC = () => {
                         >
                           <DollarSign className="h-4 w-4 mr-1" />
                           Record Payment
+                        </Button>
+                      )}
+                      {order.status === 'cancelled' && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDeleteOrder(order.id)}
+                          title="Delete cancelled order"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
                         </Button>
                       )}
                     </div>
