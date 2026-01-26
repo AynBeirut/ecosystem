@@ -530,10 +530,10 @@ const AdminAccountStatement: React.FC = () => {
             type: 'purchase',
             ref: purchase.invoiceNumber || doc.id.substring(0, 8),
             description: `Pur.Inv.${purchase.invoiceNumber || doc.id.substring(0, 6)}`,
-            debit: total,
+            debit: purchase.amountPaid || 0,  // Payment reduces the balance (debit)
             net: subtotal,
             vat: vat,
-            credit: purchase.amountPaid || 0,
+            credit: total,  // Purchase increases what we owe (credit)
             data: purchase
           });
         });
@@ -1417,43 +1417,53 @@ const AdminAccountStatement: React.FC = () => {
                 </div>
               </div>
               <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full">
+                <table className="min-w-full border-collapse">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Customer Name</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Purchases</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Payments</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Balance</th>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Actions</th>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Customer Name</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Debit</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Net</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">VAT</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Credit</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Balance</th>
+                      <th className="border px-4 py-2 text-center whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {customers.map(customer => (
-                      <tr key={customer.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-2">{customer.name}</td>
-                        <td className="px-4 py-2 text-right">${customer.totalPurchases.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right">${customer.totalPayments.toFixed(2)}</td>
-                        <td className={`px-4 py-2 text-right font-semibold ${customer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          ${customer.balance.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-2">
-                          <button
-                            onClick={() => generateDetailedStatement('customer', customer.id, customer.name)}
-                            className="text-blue-600 hover:text-blue-800 text-sm underline"
-                          >
-                            View Statement
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {customers.map(customer => {
+                      const netAmount = customer.totalPurchases / 1.11;
+                      const vatAmount = customer.totalPurchases - netAmount;
+                      return (
+                        <tr key={customer.id} className="border-b hover:bg-gray-50">
+                          <td className="border px-4 py-2">{customer.name}</td>
+                          <td className="border px-4 py-2 text-right">{customer.totalPurchases.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{netAmount.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{vatAmount.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right text-green-600">{customer.totalPayments.toFixed(2)}</td>
+                          <td className={`border px-4 py-2 text-right font-semibold ${customer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {customer.balance.toFixed(2)}
+                          </td>
+                          <td className="border px-4 py-2 text-center">
+                            <button
+                              onClick={() => generateDetailedStatement('customer', customer.id, customer.name)}
+                              className="text-blue-600 hover:text-blue-800 text-sm underline"
+                            >
+                              View Statement
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
-                      <td className="px-4 py-3">TOTAL</td>
-                      <td className="px-4 py-3 text-right">${customers.reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right">${customers.reduce((sum, c) => sum + c.totalPayments, 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-blue-600">${customers.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</td>
-                      <td className="px-4 py-3"></td>
+                      <td className="border px-4 py-3">TOTAL</td>
+                      <td className="border px-4 py-3 text-right text-blue-600">{customers.reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{(customers.reduce((sum, c) => sum + c.totalPurchases, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{(customers.reduce((sum, c) => sum + c.totalPurchases, 0) - customers.reduce((sum, c) => sum + c.totalPurchases, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right text-green-600">{customers.reduce((sum, c) => sum + c.totalPayments, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right text-blue-600">{customers.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1483,43 +1493,53 @@ const AdminAccountStatement: React.FC = () => {
                 </div>
               </div>
               <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full">
+                <table className="min-w-full border-collapse">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Supplier Name</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Purchases</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Payments</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Balance Due</th>
-                      <th className="px-4 py-2 text-center whitespace-nowrap">Actions</th>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Supplier Name</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Debit</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Net</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">VAT</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Credit</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Balance</th>
+                      <th className="border px-4 py-2 text-center whitespace-nowrap">Actions</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {suppliers.map(supplier => (
-                      <tr key={supplier.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-2">{supplier.name}</td>
-                        <td className="px-4 py-2 text-right">${supplier.totalPurchases.toFixed(2)}</td>
-                        <td className="px-4 py-2 text-right">${supplier.totalPayments.toFixed(2)}</td>
-                        <td className={`px-4 py-2 text-right font-semibold ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                          ${supplier.balance.toFixed(2)}
-                        </td>
-                        <td className="px-4 py-2 text-center">
-                          <button
-                            onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
-                            className="text-blue-600 hover:text-blue-800 text-sm underline"
-                          >
-                            View Statement
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
+                    {suppliers.map(supplier => {
+                      const netAmount = supplier.totalPurchases / 1.11;
+                      const vatAmount = supplier.totalPurchases - netAmount;
+                      return (
+                        <tr key={supplier.id} className="border-b hover:bg-gray-50">
+                          <td className="border px-4 py-2">{supplier.name}</td>
+                          <td className="border px-4 py-2 text-right text-green-600">{supplier.totalPayments.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{(supplier.totalPayments / 1.11).toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{(supplier.totalPayments - supplier.totalPayments / 1.11).toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{supplier.totalPurchases.toFixed(2)}</td>
+                          <td className={`border px-4 py-2 text-right font-semibold ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {supplier.balance.toFixed(2)}
+                          </td>
+                          <td className="border px-4 py-2 text-center">
+                            <button
+                              onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
+                              className="text-blue-600 hover:text-blue-800 text-sm underline"
+                            >
+                              View Statement
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
-                      <td className="px-4 py-3">TOTAL</td>
-                      <td className="px-4 py-3 text-right">${suppliers.reduce((sum, s) => sum + s.totalPurchases, 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right">${suppliers.reduce((sum, s) => sum + s.totalPayments, 0).toFixed(2)}</td>
-                      <td className="px-4 py-3 text-right text-blue-600">${suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}</td>
-                      <td className="px-4 py-3"></td>
+                      <td className="border px-4 py-3">TOTAL</td>
+                      <td className="border px-4 py-3 text-right text-green-600">{suppliers.reduce((sum, s) => sum + s.totalPayments, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{(suppliers.reduce((sum, s) => sum + s.totalPayments, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{(suppliers.reduce((sum, s) => sum + s.totalPayments, 0) - suppliers.reduce((sum, s) => sum + s.totalPayments, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right text-blue-600">{suppliers.reduce((sum, s) => sum + s.totalPurchases, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right text-blue-600">{suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1549,32 +1569,40 @@ const AdminAccountStatement: React.FC = () => {
                 </div>
               </div>
               <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full">
+                <table className="min-w-full border-collapse">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Product Name</th>
-                      <th className="px-4 py-2 text-left whitespace-nowrap">Category</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Sold</th>
-                      <th className="px-4 py-2 text-right whitespace-nowrap">Total Revenue</th>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Product Name</th>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Category</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Quantity Sold</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Total Revenue</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Net</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">VAT</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {products.map(product => (
-                      <tr key={product.id} className="border-b hover:bg-gray-50">
-                        <td className="px-4 py-2">{product.name}</td>
-                        <td className="px-4 py-2">{product.category}</td>
-                        <td className="px-4 py-2 text-right">{product.totalSold}</td>
-                        <td className="px-4 py-2 text-right font-semibold text-green-600">
-                          ${product.totalRevenue.toFixed(2)}
-                        </td>
-                      </tr>
-                    ))}
+                    {products.map(product => {
+                      const netRevenue = product.totalRevenue / 1.11;
+                      const vatRevenue = product.totalRevenue - netRevenue;
+                      return (
+                        <tr key={product.id} className="border-b hover:bg-gray-50">
+                          <td className="border px-4 py-2">{product.name}</td>
+                          <td className="border px-4 py-2">{product.category}</td>
+                          <td className="border px-4 py-2 text-right">{product.totalSold}</td>
+                          <td className="border px-4 py-2 text-right font-semibold">{product.totalRevenue.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{netRevenue.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{vatRevenue.toFixed(2)}</td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
-                      <td className="px-4 py-3" colSpan={2}>TOTAL</td>
-                      <td className="px-4 py-3 text-right">{products.reduce((sum, p) => sum + p.totalSold, 0)}</td>
-                      <td className="px-4 py-3 text-right text-blue-600">${products.reduce((sum, p) => sum + p.totalRevenue, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3" colSpan={2}>TOTAL</td>
+                      <td className="border px-4 py-3 text-right">{products.reduce((sum, p) => sum + p.totalSold, 0)}</td>
+                      <td className="border px-4 py-3 text-right text-blue-600">{products.reduce((sum, p) => sum + p.totalRevenue, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{(products.reduce((sum, p) => sum + p.totalRevenue, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{(products.reduce((sum, p) => sum + p.totalRevenue, 0) - products.reduce((sum, p) => sum + p.totalRevenue, 0) / 1.11).toFixed(2)}</td>
                     </tr>
                   </tfoot>
                 </table>

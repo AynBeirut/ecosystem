@@ -385,8 +385,71 @@ const AdminOrders: React.FC = () => {
     try {
       const db = getFirestore();
       const orderRef = doc(db, 'orders', orderId);
-      await updateDoc(orderRef, { status: newStatus });
+      const order = orders.find(o => o.id === orderId);
+      
+      if (!order) {
+        toast({ title: "Error", description: "Order not found", variant: "destructive" });
+        return;
+      }
+      
+      // If marking as delivered/completed, deduct from finished goods inventory
+      if ((newStatus === 'delivered' || newStatus === 'completed') && order.status !== 'delivered' && order.status !== 'completed') {
+        for (const item of order.items) {
+          // Check if this product is a composed product (has finished goods entry)
+          // Try both productId and composedProductId since they might be stored differently
+          const fgQuery = query(
+            collection(db, 'finishedGoodsInventory'),
+            where('storeId', '==', user.storeId)
+          );
+          const fgSnapshot = await getDocs(fgQuery);
+          
+          // Find matching finished goods by productId or composedProductId
+          const matchingFG = fgSnapshot.docs.find(doc => {
+            const data = doc.data();
+            return data.productId === item.productId || data.composedProductId === item.productId;
+          });
+          
+          if (matchingFG) {
+            const fgData = matchingFG.data();
+            
+            const newBalance = Math.max(0, (fgData.currentBalance || 0) - item.quantity);
+            const newQuantitySold = (fgData.quantitySold || 0) + item.quantity;
+            const newTotalValue = newBalance * (fgData.costPrice || 0);
+            
+            // Create transaction record
+            const transaction = {
+              id: `TXN-${Date.now()}-${item.productId}`,
+              date: new Date().toISOString(),
+              actionType: 'sold' as const,
+              quantity: -item.quantity,
+              unitCost: fgData.costPrice || 0,
+              totalCost: (fgData.costPrice || 0) * item.quantity,
+              reason: `Sale from order ${order.invoiceNumber || order.id}`,
+              referenceId: orderId,
+              referenceNumber: order.invoiceNumber || order.id,
+              userId: user.id,
+              userName: user.name,
+            };
+            
+            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
+              currentBalance: newBalance,
+              quantitySold: newQuantitySold,
+              totalValue: newTotalValue,
+              transactions: [...(fgData.transactions || []), transaction],
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+      
+      await updateDoc(orderRef, { status: newStatus, updatedAt: new Date().toISOString() });
       setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      
+      await logAction(user.id, user.name, user.role, 'update', 'order', orderId, {
+        oldValue: { status: order.status },
+        newValue: { status: newStatus }
+      }, user.storeId);
+      
       toast({ title: "Success", description: "Order status updated!" });
     } catch (error) {
       console.error('Error updating status:', error);

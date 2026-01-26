@@ -41,7 +41,7 @@ const ProductionForm: React.FC<{
           onValueChange={(value) => onChange({ productId: value })}
           disabled={isEdit}
         >
-          <SelectTrigger>
+          <SelectTrigger id="productId">
             <SelectValue placeholder="Select product" />
           </SelectTrigger>
           <SelectContent>
@@ -76,7 +76,7 @@ const ProductionForm: React.FC<{
           value={batch.priority}
           onValueChange={(value) => onChange({ priority: value })}
         >
-          <SelectTrigger>
+          <SelectTrigger id="priority">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -113,7 +113,7 @@ const ProductionForm: React.FC<{
               value={(batch as ProductionBatch).status}
               onValueChange={(value: ProductionBatchStatus) => onChange({ status: value })}
             >
-              <SelectTrigger>
+              <SelectTrigger id="status">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -341,8 +341,10 @@ const AdminProduction: React.FC = () => {
     try {
       const db = getFirestore();
       
-      // Get the composed product
-      const product = products.find(p => p.id === batch.productId);
+      // Get the composed product - try both productId and composedProductId
+      const productIdToFind = batch.composedProductId || batch.productId;
+      const product = products.find(p => p.id === productIdToFind);
+      
       if (!product || !product.recipeId) {
         toast({ title: "Error", description: "Product or recipe not found", variant: "destructive" });
         return;
@@ -354,7 +356,10 @@ const AdminProduction: React.FC = () => {
         toast({ title: "Error", description: "Recipe not found", variant: "destructive" });
         return;
       }
-      const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as Recipe;
+      const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as any;
+      
+      // Support both 'ingredients' and 'materials' field names
+      const recipeIngredients = recipe.ingredients || recipe.materials || [];
       
       // Get all purchases to find material costs
       const purchasesQuery = query(
@@ -368,7 +373,7 @@ const AdminProduction: React.FC = () => {
       let totalMaterialCost = 0;
       const missingMaterials: string[] = [];
       
-      for (const ingredient of recipe.ingredients || []) {
+      for (const ingredient of recipeIngredients) {
         const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId));
         if (!rawMaterialDoc.exists()) {
           missingMaterials.push(`Unknown material (${ingredient.rawMaterialId})`);
@@ -380,8 +385,6 @@ const AdminProduction: React.FC = () => {
         
         // If raw material has no cost, try to get it from latest purchase
         if (!materialCostPerUnit || materialCostPerUnit === 0) {
-          console.log(`Material ${rawMaterial.name} has no cost, searching purchases...`);
-          
           // Find the most recent purchase with this material
           let latestCost = 0;
           let latestDate = new Date(0);
@@ -399,7 +402,6 @@ const AdminProduction: React.FC = () => {
                 if (itemCost > 0 && purchaseDate > latestDate) {
                   latestCost = itemCost;
                   latestDate = purchaseDate;
-                  console.log(`Found cost $${itemCost} from purchase dated ${purchaseDate.toLocaleDateString()}`);
                 }
               }
             });
@@ -407,7 +409,6 @@ const AdminProduction: React.FC = () => {
           
           if (latestCost > 0) {
             materialCostPerUnit = latestCost;
-            console.log(`Using purchase cost $${latestCost} for ${rawMaterial.name}`);
             
             // Update the raw material with this cost
             await updateDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId), {
@@ -422,8 +423,6 @@ const AdminProduction: React.FC = () => {
         const quantityNeeded = ingredient.quantity * (batch.actualQuantity || batch.quantity);
         const materialCost = materialCostPerUnit * quantityNeeded;
         totalMaterialCost += materialCost;
-        
-        console.log(`${rawMaterial.name}: ${quantityNeeded} × $${materialCostPerUnit} = $${materialCost}`);
       }
       
       if (missingMaterials.length > 0) {
@@ -454,7 +453,7 @@ const AdminProduction: React.FC = () => {
       const fgQuery = query(
         collection(db, 'finishedGoodsInventory'),
         where('storeId', '==', user.storeId),
-        where('composedProductId', '==', batch.productId)
+        where('composedProductId', '==', productIdToFind)
       );
       const fgSnapshot = await getDocs(fgQuery);
       
