@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, setDoc } from 'firebase/firestore';
 import { getAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -94,9 +94,8 @@ const AdminSubAccounts: React.FC = () => {
 
       const docRef = await addDoc(collection(db, 'subAccounts'), subAccountData);
       
-      // Also create user profile
-      await addDoc(collection(db, 'users'), {
-        uid: userCredential.user.uid,
+      // Also create user profile with Auth UID as document ID
+      await setDoc(doc(db, 'users', userCredential.user.uid), {
         email: newAccount.email,
         name: newAccount.name,
         role: 'sub_account',
