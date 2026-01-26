@@ -87,17 +87,17 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
                       <span>Home</span>
                     </Link>
                     
-                    {user.role === 'admin' ? (
+                    {(user.role === 'admin' || user.role === 'sub_account') ? (
                       <Link to="/admin/dashboard" className="flex items-center gap-3 p-3 rounded-md bg-market-primary text-white font-semibold hover:bg-market-primary/90 transition">
                         <Store className="h-5 w-5" />
                         <span>Manage Store</span>
                       </Link>
-                    ) : (
+                    ) : user.role === 'user' ? (
                       <Link to="/upgrade" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
                         <PlusCircle className="h-5 w-5" />
                         <span>Become a Seller</span>
                       </Link>
-                    )}
+                    ) : null}
                     
                     <Link to="/favorites" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
                       <Heart className="h-5 w-5" />

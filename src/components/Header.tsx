@@ -43,7 +43,7 @@ const Header: React.FC = () => {
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            {user && user.role === 'admin' && (
+            {user && (user.role === 'admin' || user.role === 'sub_account') && (
               <Link to="/admin/dashboard" className="text-white hover:text-market-primary/80">
                 Dashboard
               </Link>
@@ -120,21 +120,21 @@ const Header: React.FC = () => {
                     
                     {/* Credits feature removed */}
                     
-                    {user.role === 'admin' ? (
+                    {(user.role === 'admin' || user.role === 'sub_account') ? (
                       <DropdownMenuItem asChild>
                         <Link to="/admin/dashboard" className="flex cursor-pointer items-center">
                           <Store className="mr-2 h-4 w-4" />
                           <span>Manage Store</span>
                         </Link>
                       </DropdownMenuItem>
-                    ) : (
+                    ) : user.role === 'user' ? (
                       <DropdownMenuItem asChild>
                         <Link to="/upgrade" className="flex cursor-pointer items-center">
                           <PlusCircle className="mr-2 h-4 w-4" />
                           <span>Become a Seller</span>
                         </Link>
                       </DropdownMenuItem>
-                    )}
+                    ) : null}
                     
                     <DropdownMenuItem asChild>
                       <Link to="/favorites" className="flex cursor-pointer items-center">
@@ -194,7 +194,7 @@ const Header: React.FC = () => {
                 Home
               </Link>
               
-              {user && user.role === 'admin' && (
+              {user && (user.role === 'admin' || user.role === 'sub_account') && (
                 <Link
                   to="/admin/dashboard"
                   className="px-2 py-1 text-gray-600 hover:text-market-primary"
