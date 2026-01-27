@@ -93,10 +93,10 @@ const AdminFinishedGoods: React.FC = () => {
   const handleDeleteItem = async (item: FinishedGoodsItem & { id: string }) => {
     if (!user?.storeId) return;
     
-    if ((item.costPrice || 0) > 0) {
+    if ((item.currentBalance || 0) > 0) {
       toast({ 
         title: "Cannot Delete", 
-        description: "Only items with $0 cost can be deleted", 
+        description: "Only items with 0 current stock can be deleted", 
         variant: "destructive" 
       });
       return;
@@ -106,6 +106,7 @@ const AdminFinishedGoods: React.FC = () => {
       const db = getFirestore();
       await deleteDoc(doc(db, 'finishedGoodsInventory', item.id));
       setFinishedGoods(finishedGoods.filter(g => g.id !== item.id));
+      setFilteredGoods(filteredGoods.filter(g => g.id !== item.id));
 
       await logAction(
         user.id,
@@ -600,12 +601,12 @@ const AdminFinishedGoods: React.FC = () => {
                             >
                               <RefreshCw className="h-4 w-4" />
                             </Button>
-                            {(item.costPrice || 0) === 0 && (
+                            {(item.currentBalance || 0) === 0 && (
                               <Button
                                 size="sm"
                                 variant="ghost"
                                 onClick={() => handleDeleteItem(item)}
-                                title="Delete $0 cost item"
+                                title="Delete zero stock item"
                               >
                                   <Trash2 className="h-4 w-4 text-red-500" />
                               </Button>

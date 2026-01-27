@@ -41,6 +41,7 @@ export interface Expense {
   bankAccount?: string;
   approvalStatus?: 'pending' | 'approved' | 'rejected';
   approvedBy?: string;
+  staffId?: string; // For salary expenses - links to staff member
   storeId: string;
   createdAt: string;
   updatedAt: string;

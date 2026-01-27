@@ -289,10 +289,9 @@ const AdminInventory: React.FC = () => {
 
         {/* Detailed Tabs */}
         <Tabs defaultValue="simple" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-4">
             <TabsTrigger value="simple">Simple Items</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
-            <TabsTrigger value="composed">Composed</TabsTrigger>
             <TabsTrigger value="raw">Raw Materials</TabsTrigger>
             <TabsTrigger value="finished">Finished Goods</TabsTrigger>
           </TabsList>
@@ -340,32 +339,6 @@ const AdminInventory: React.FC = () => {
                   </div>
                   <Button onClick={() => navigate('/admin/products')}>
                     Manage Services
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </TabsContent>
-
-          <TabsContent value="composed">
-            <Card>
-              <CardHeader>
-                <CardTitle>Composed Products</CardTitle>
-                <CardDescription>Products made from recipes with raw materials</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Products</p>
-                      <p className="text-2xl font-bold">{stats.composedProducts.count}</p>
-                    </div>
-                    <div>
-                      <p className="text-sm text-muted-foreground">Total Value</p>
-                      <p className="text-2xl font-bold">${stats.composedProducts.totalValue.toFixed(2)}</p>
-                    </div>
-                  </div>
-                  <Button onClick={() => navigate('/admin/composed-products')}>
-                    Manage Composed Products
                   </Button>
                 </div>
               </CardContent>

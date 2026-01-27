@@ -2,6 +2,9 @@ export interface OrderItem {
   productId: string
   quantity: number
   price?: number
+  discountType?: 'percentage' | 'fixed'
+  discountValue?: number
+  discountAmount?: number
 }
 
 export interface Order {

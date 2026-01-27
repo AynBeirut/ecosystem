@@ -166,28 +166,55 @@ const AdminOrders: React.FC = () => {
   }, [user?.storeId, toast]);
 
   const calculateOrderTotals = (items: OrderItem[], taxType: string, taxRate: number, discountType: string, discountValue: number) => {
-    const subtotal = items.reduce((sum, item) => {
+    // Calculate raw subtotal (before any discounts)
+    let rawSubtotal = 0;
+    let itemDiscounts = 0;
+    
+    items.forEach(item => {
       const product = products.find(p => p.id === item.productId);
-      return sum + ((product?.sellingPrice || product?.price || 0) * item.quantity);
-    }, 0);
+      const itemPrice = (product?.sellingPrice || product?.price || 0) * item.quantity;
+      rawSubtotal += itemPrice;
+      
+      // Calculate item discount
+      let itemDiscount = 0;
+      if (item.discountType === 'percentage' && item.discountValue !== undefined) {
+        itemDiscount = (itemPrice * item.discountValue) / 100;
+      } else if (item.discountType === 'fixed' && item.discountValue !== undefined) {
+        itemDiscount = item.discountValue;
+      }
+      
+      itemDiscounts += itemDiscount;
+    });
 
-    let discountAmount = 0;
+    // Subtotal after item discounts
+    const subtotalAfterItemDiscounts = rawSubtotal - itemDiscounts;
+
+    // Calculate order-level discount (applied after item discounts)
+    let orderDiscountAmount = 0;
     if (discountType === 'percentage') {
-      discountAmount = (subtotal * discountValue) / 100;
+      orderDiscountAmount = (subtotalAfterItemDiscounts * discountValue) / 100;
     } else {
-      discountAmount = discountValue;
+      orderDiscountAmount = discountValue;
     }
 
-    const afterDiscount = subtotal - discountAmount;
+    const afterAllDiscounts = subtotalAfterItemDiscounts - orderDiscountAmount;
     
     let taxAmount = 0;
     if (taxType !== 'none') {
-      taxAmount = (afterDiscount * taxRate) / 100;
+      taxAmount = (afterAllDiscounts * taxRate) / 100;
     }
 
-    const total = afterDiscount + taxAmount;
+    const total = afterAllDiscounts + taxAmount;
+    const totalDiscountAmount = itemDiscounts + orderDiscountAmount;
 
-    return { subtotal, discountAmount, taxAmount, total };
+    return { 
+      subtotal: rawSubtotal, 
+      itemDiscounts,
+      orderDiscount: orderDiscountAmount,
+      discountAmount: totalDiscountAmount, 
+      taxAmount, 
+      total 
+    };
   };
 
   const generateInvoiceNumber = async (): Promise<string> => {
@@ -806,7 +833,12 @@ const AdminOrders: React.FC = () => {
     }
     setNewOrder({
       ...newOrder,
-      items: [...newOrder.items, { productId: products[0].id, quantity: 1 }]
+      items: [...newOrder.items, { 
+        productId: products[0].id, 
+        quantity: 1,
+        discountType: 'percentage',
+        discountValue: 0
+      }]
     });
   };
 
@@ -978,42 +1010,90 @@ const AdminOrders: React.FC = () => {
                   <div className="space-y-2">
                     {newOrder.items.map((item, index) => {
                       const product = products.find(p => p.id === item.productId);
+                      const itemPrice = (product?.sellingPrice || product?.price || 0) * item.quantity;
+                      let itemDiscount = 0;
+                      if (item.discountType === 'percentage' && item.discountValue !== undefined) {
+                        itemDiscount = (itemPrice * item.discountValue) / 100;
+                      } else if (item.discountType === 'fixed' && item.discountValue !== undefined) {
+                        itemDiscount = item.discountValue;
+                      }
+                      const itemTotal = itemPrice - itemDiscount;
+                      
                       return (
-                        <div key={index} className="flex gap-2 items-center p-2 bg-gray-50 rounded">
-                          <Select
-                            value={item.productId}
-                            onValueChange={(value) => updateOrderItem(index, 'productId', value)}
-                          >
-                            <SelectTrigger className="flex-1">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {products.map(p => (
-                                <SelectItem key={p.id} value={p.id}>
-                                  {p.name} - ${(p.sellingPrice || p.price || 0).toFixed(2)}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <Input
-                            type="number"
-                            min="1"
-                            value={item.quantity === 0 ? '' : item.quantity}
-                            onChange={(e) => updateOrderItem(index, 'quantity', e.target.value === '' ? 1 : (parseInt(e.target.value) || 1))}
-                            className="w-24"
-                            placeholder="1"
-                          />
-                          <div className="w-32 text-right font-medium">
-                            ${((product?.sellingPrice || product?.price || 0) * item.quantity).toFixed(2)}
+                        <div key={index} className="p-3 bg-gray-50 rounded-lg space-y-2">
+                          <div className="flex gap-2 items-center">
+                            <Select
+                              value={item.productId}
+                              onValueChange={(value) => updateOrderItem(index, 'productId', value)}
+                            >
+                              <SelectTrigger className="flex-1">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {products.map(p => (
+                                  <SelectItem key={p.id} value={p.id}>
+                                    {p.name} - ${(p.sellingPrice || p.price || 0).toFixed(2)}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              min="1"
+                              value={item.quantity || ''}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                if (val === '') {
+                                  updateOrderItem(index, 'quantity', 1);
+                                } else {
+                                  const num = parseInt(val);
+                                  updateOrderItem(index, 'quantity', num > 0 ? num : 1);
+                                }
+                              }}
+                              className="w-20"
+                              placeholder="Qty"
+                            />
+                            <div className="w-28 text-right font-medium">
+                              ${itemTotal.toFixed(2)}
+                            </div>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => removeOrderItem(index)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
                           </div>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeOrderItem(index)}
-                          >
-                            <Trash2 className="h-4 w-4 text-red-500" />
-                          </Button>
+                          
+                          {/* Item discount controls */}
+                          <div className="flex gap-2 items-center pl-2">
+                            <Label className="text-xs text-gray-600 w-16">Discount:</Label>
+                            <Select
+                              value={item.discountType || 'percentage'}
+                              onValueChange={(value: 'percentage' | 'fixed') => updateOrderItem(index, 'discountType', value)}
+                            >
+                              <SelectTrigger className="w-32 h-8 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="percentage">%</SelectItem>
+                                <SelectItem value="fixed">$</SelectItem>
+                              </SelectContent>
+                            </Select>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={item.discountValue === 0 ? '' : item.discountValue}
+                              onChange={(e) => updateOrderItem(index, 'discountValue', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                              className="w-24 h-8 text-xs"
+                              placeholder="0"
+                            />
+                            {itemDiscount > 0 && (
+                              <span className="text-xs text-green-600 font-medium">-${itemDiscount.toFixed(2)}</span>
+                            )}
+                          </div>
                         </div>
                       );
                     })}
@@ -1080,10 +1160,16 @@ const AdminOrders: React.FC = () => {
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>Subtotal:</div>
                     <div className="text-right font-medium">${totals.subtotal.toFixed(2)}</div>
-                    {totals.discountAmount > 0 && (
+                    {totals.itemDiscounts > 0 && (
                       <>
-                        <div>Discount:</div>
-                        <div className="text-right font-medium text-red-600">-${totals.discountAmount.toFixed(2)}</div>
+                        <div className="text-xs text-gray-600">Item Discounts:</div>
+                        <div className="text-right text-xs font-medium text-green-600">-${totals.itemDiscounts.toFixed(2)}</div>
+                      </>
+                    )}
+                    {totals.orderDiscount > 0 && (
+                      <>
+                        <div className="text-xs text-gray-600">Order Discount:</div>
+                        <div className="text-right text-xs font-medium text-green-600">-${totals.orderDiscount.toFixed(2)}</div>
                       </>
                     )}
                     {totals.taxAmount > 0 && (

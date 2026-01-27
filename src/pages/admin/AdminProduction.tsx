@@ -161,6 +161,8 @@ const AdminProduction: React.FC = () => {
   const [isAddingBatch, setIsAddingBatch] = useState(false);
   const [editingBatch, setEditingBatch] = useState<ProductionBatch | null>(null);
   const [filterStatus, setFilterStatus] = useState<ProductionBatchStatus | 'all'>('all');
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   const [newBatch, setNewBatch] = useState({
     productId: '',
     quantity: 0,
@@ -719,7 +721,25 @@ const AdminProduction: React.FC = () => {
         await addDoc(collection(db, 'finishedGoodsInventory'), fgData);
       }
       
-      // 6. Update production batch
+      // 6. Reduce raw material inventory for materials used
+      for (const materialUsed of materialsUsed) {
+        const rawMaterialRef = doc(db, 'rawMaterials', materialUsed.rawMaterialId);
+        const rawMaterialDoc = await getDoc(rawMaterialRef);
+        
+        if (rawMaterialDoc.exists()) {
+          const rawMaterial = rawMaterialDoc.data();
+          const newStock = (rawMaterial.currentStock || 0) - materialUsed.quantityUsed;
+          const newValue = newStock * (rawMaterial.costPerUnit || 0);
+          
+          await updateDoc(rawMaterialRef, {
+            currentStock: Math.max(0, newStock),
+            totalValue: Math.max(0, newValue),
+            updatedAt: new Date().toISOString(),
+          });
+        }
+      }
+      
+      // 7. Update production batch
       const batchRef = doc(db, 'productionBatches', batch.id);
       const updateData = {
         status: 'completed' as ProductionBatchStatus,
@@ -758,7 +778,16 @@ const AdminProduction: React.FC = () => {
   };
 
   const getFilteredBatches = () => {
-    return batches.filter(batch => filterStatus === 'all' || batch.status === filterStatus);
+    return batches.filter(batch => {
+      const statusMatch = filterStatus === 'all' || batch.status === filterStatus;
+      
+      // Date filtering based on completion date (for completed batches) or scheduled date
+      const batchDate = batch.completionDate || batch.scheduledDate;
+      const dateMatch = (!filterStartDate || batchDate >= filterStartDate) && 
+                       (!filterEndDate || batchDate <= filterEndDate);
+      
+      return statusMatch && dateMatch;
+    });
   };
 
   const filteredBatches = getFilteredBatches();
@@ -860,7 +889,7 @@ const AdminProduction: React.FC = () => {
           </Card>
         </div>
 
-        <div className="mb-4">
+        <div className="mb-4 flex gap-4 flex-wrap">
           <Select value={filterStatus} onValueChange={(value: ProductionBatchStatus | 'all') => setFilterStatus(value)}>
             <SelectTrigger className="w-48">
               <SelectValue placeholder="Filter by status" />
@@ -873,6 +902,39 @@ const AdminProduction: React.FC = () => {
               <SelectItem value="cancelled">Cancelled</SelectItem>
             </SelectContent>
           </Select>
+          
+          <div className="flex gap-2 items-center">
+            <Label className="text-sm text-gray-600">From:</Label>
+            <Input
+              type="date"
+              value={filterStartDate}
+              onChange={(e) => setFilterStartDate(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          
+          <div className="flex gap-2 items-center">
+            <Label className="text-sm text-gray-600">To:</Label>
+            <Input
+              type="date"
+              value={filterEndDate}
+              onChange={(e) => setFilterEndDate(e.target.value)}
+              className="w-40"
+            />
+          </div>
+          
+          {(filterStartDate || filterEndDate) && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setFilterStartDate('');
+                setFilterEndDate('');
+              }}
+            >
+              Clear Dates
+            </Button>
+          )}
         </div>
 
         <div className="grid gap-4">

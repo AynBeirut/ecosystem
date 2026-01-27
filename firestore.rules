@@ -129,10 +129,10 @@ service cloud.firestore {
     match /finishedGoodsInventory/{itemId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
       allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      // Allow deletion only for items with $0 cost
+      // Allow deletion only for items with 0 current stock
       allow delete: if request.auth != null && 
         request.auth.uid == resource.data.storeId && 
-        resource.data.costPrice == 0;
+        resource.data.currentBalance == 0;
     }
 
     // Supplier Credits: only store owners can manage

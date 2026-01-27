@@ -131,31 +131,62 @@ const AdminStaff: React.FC = () => {
   };
 
   const handleDeleteStaff = async (staffId: string) => {
-    if (!confirm('Are you sure you want to remove this staff member?')) return;
+    if (!confirm('Are you sure you want to remove this staff member? This will terminate their employment and remove future salary expenses.')) return;
 
     try {
       const db = getFirestore();
-      await deleteDoc(doc(db, 'staff', staffId));
       const deletedStaff = staff.find(s => s.id === staffId);
-      setStaff(staff.filter(s => s.id !== staffId));
+      const today = new Date().toISOString().split('T')[0];
+      
+      // Mark staff as terminated with end date instead of deleting
+      const staffRef = doc(db, 'staff', staffId);
+      await updateDoc(staffRef, {
+        status: 'terminated',
+        endDate: today,
+        updatedAt: new Date().toISOString(),
+      });
+      
+      // Delete only future/current salary expenses (today onwards) for this staff member
+      const expensesRef = collection(db, 'expenses');
+      const salaryExpensesQuery = query(
+        expensesRef, 
+        where('staffId', '==', staffId),
+        where('storeId', '==', user?.storeId)
+      );
+      const salaryExpensesSnapshot = await getDocs(salaryExpensesQuery);
+      
+      // Filter and delete only expenses from today onwards (keep historical records)
+      const futureExpenses = salaryExpensesSnapshot.docs.filter(doc => {
+        const expenseDate = doc.data().date;
+        return expenseDate >= today;
+      });
+      
+      const deletePromises = futureExpenses.map(doc => deleteDoc(doc.ref));
+      await Promise.all(deletePromises);
+      
+      // Update local state to show terminated status
+      setStaff(staff.map(s => s.id === staffId ? { ...s, status: 'terminated', endDate: today } : s));
 
       if (deletedStaff && user) {
         await logAction(
           user.id,
           user.name,
           user.role,
-          'delete',
+          'update',
           'staffMember',
           staffId,
-          { oldValue: deletedStaff },
+          { oldValue: deletedStaff, newValue: { status: 'terminated', endDate: today } },
           user.storeId
         );
       }
 
-      toast({ title: "Success", description: "Staff member removed successfully!" });
+      toast({ 
+        title: "Success", 
+        description: `Staff member terminated. ${futureExpenses.length} future salary expense(s) removed. Historical records preserved.` 
+      });
     } catch (error) {
-      console.error('Error deleting staff:', error);
-      toast({ title: "Error", description: "Failed to remove staff member", variant: "destructive" });
+      console.error('Error terminating staff:', error);
+      toast({ title: "Error", description: "Failed to terminate staff member", variant: "destructive" });
     }
   };
 
