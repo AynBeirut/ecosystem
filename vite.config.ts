@@ -8,15 +8,9 @@ import { VitePWA } from 'vite-plugin-pwa';
 export default defineConfig(({ mode }) => ({
   base: '/',
   server: {
-    // Bind to all addresses for network access, but explicitly set HMR host
-    // so the client will connect via localhost over WebSocket (avoids some
-    // environments where automatic host detection causes WS failures).
-    host: "::",
+    // Bind to all addresses for network access
+    host: "0.0.0.0",
     port: 8080,
-    hmr: {
-      host: 'localhost',
-      clientPort: 8080,
-    },
     // Proxy '/api' to the functions emulator in development so fetch('/api/checkout')
     // hits the local function instead of returning the Vite index.html page.
     proxy: {

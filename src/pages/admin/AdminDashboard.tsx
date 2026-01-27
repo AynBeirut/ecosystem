@@ -336,6 +336,14 @@ const AdminDashboard: React.FC = () => {
                 </Link>
               </li>
             )}
+            {user?.role === 'admin' && (
+              <li>
+                <Link to="/admin/account-statement" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <FileText className="h-5 w-5 mr-3" />
+                  <span>Account Statement</span>
+                </Link>
+              </li>
+            )}
             {canManageDeliveries && (
               <li>
                 <Link to="/admin/delivery" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
@@ -588,22 +596,6 @@ const AdminDashboard: React.FC = () => {
                     <span className="text-sm font-medium">{user?.role === 'admin' ? 'Inventory' : 'Products'}</span>
                   </Link>
                 )}
-                {user?.role === 'admin' && (
-                  <>
-                    <Link to="/admin/expenses" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-orange-600/20 shadow-sm hover:shadow-md transition">
-                      <div className="h-8 w-8 rounded-full bg-orange-100 flex items-center justify-center text-orange-600">
-                        <CreditCard className="h-4 w-4" />
-                      </div>
-                      <span className="text-sm font-medium">Expenses</span>
-                    </Link>
-                    <Link to="/admin/account-statement" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-indigo-600/20 shadow-sm hover:shadow-md transition">
-                      <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
-                        <FileText className="h-4 w-4" />
-                      </div>
-                      <span className="text-sm font-medium">Account Statement</span>
-                    </Link>
-                  </>
-                )}
                 <Link to="/admin/orders" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
                   <div className="h-8 w-8 rounded-full bg-market-accent/10 flex items-center justify-center text-market-accent">
                     <Clock className="h-4 w-4" />
@@ -611,12 +603,21 @@ const AdminDashboard: React.FC = () => {
                   <span className="font-medium">Orders</span>
                 </Link>
 
-                {user?.role === 'admin' && (
+                {canProcessPayments && (
                   <Link to="/admin/payments" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
                     <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
                       <CreditCard className="h-4 w-4" />
                     </div>
                     <span className="font-medium">Payments</span>
+                  </Link>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link to="/admin/account-statement" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-indigo-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">Account Statement</span>
                   </Link>
                 )}
 
@@ -646,12 +647,20 @@ const AdminDashboard: React.FC = () => {
                 )}
 
                 {user?.role === 'admin' && (
-                  <Link to="/admin/staff" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
-                      <Users className="h-4 w-4" />
-                    </div>
-                    <span className="font-medium">Team (5+5)</span>
-                  </Link>
+                  <>
+                    <Link to="/admin/sub-accounts" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
+                      <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+                        <Users className="h-4 w-4" />
+                      </div>
+                      <span className="font-medium">Sub-Accounts</span>
+                    </Link>
+                    <Link to="/admin/staff" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
+                      <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+                        <Users className="h-4 w-4" />
+                      </div>
+                      <span className="font-medium">Team (5+5)</span>
+                    </Link>
+                  </>
                 )}
               </div>
             </div>

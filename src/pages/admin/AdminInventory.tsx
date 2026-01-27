@@ -10,6 +10,7 @@ import { getFirestore, collection, query, where, getDocs } from 'firebase/firest
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import SwipeableLayout from '@/components/SwipeableLayout';
 
 const AdminInventory: React.FC = () => {
   const { user } = useAuth();
@@ -108,10 +109,13 @@ const AdminInventory: React.FC = () => {
   const totalLowStock = stats.simpleProducts.lowStock + stats.rawMaterials.lowStock + stats.finishedGoods.lowStock;
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Inventory Overview" />}
-      <div className="p-4 md:p-6">
-        <BackButton />
+    <SwipeableLayout>
+      <div className="min-h-screen bg-background">
+        {isMobile && <MobileHeader title="Inventory Overview" />}
+        <div className="p-4 md:p-6">
+          <div className="hidden md:block">
+            <BackButton />
+          </div>
         
         <div className="mb-6">
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -412,6 +416,7 @@ const AdminInventory: React.FC = () => {
         </Tabs>
       </div>
     </div>
+    </SwipeableLayout>
   );
 };
 

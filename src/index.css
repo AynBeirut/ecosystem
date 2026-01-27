@@ -117,3 +117,18 @@
     @apply bg-market-accent text-white hover:bg-market-accent/90 transition-colors;
   }
 }
+
+@layer utilities {
+  @keyframes bounce-horizontal {
+    0%, 100% {
+      transform: translateX(0) translateY(-50%);
+    }
+    50% {
+      transform: translateX(10px) translateY(-50%);
+    }
+  }
+  
+  .animate-bounce-horizontal {
+    animation: bounce-horizontal 1.5s ease-in-out infinite;
+  }
+}

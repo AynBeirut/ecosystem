@@ -322,6 +322,20 @@ const AdminOrders: React.FC = () => {
       return;
     }
 
+    // Validate all items have valid quantity
+    const invalidItems = newOrder.items.filter(item => {
+      const qty = typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity;
+      return !qty || qty < 1 || isNaN(qty);
+    });
+    if (invalidItems.length > 0) {
+      toast({ 
+        title: "Invalid Quantity", 
+        description: "Please enter a valid quantity (minimum 1) for all items", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     try {
       const db = getFirestore();
       const customer = customers.find(c => c.id === newOrder.customerId);
@@ -1043,12 +1057,7 @@ const AdminOrders: React.FC = () => {
                               value={item.quantity || ''}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                if (val === '') {
-                                  updateOrderItem(index, 'quantity', 1);
-                                } else {
-                                  const num = parseInt(val);
-                                  updateOrderItem(index, 'quantity', num > 0 ? num : 1);
-                                }
+                                updateOrderItem(index, 'quantity', val === '' ? '' : parseInt(val) || 0);
                               }}
                               className="w-20"
                               placeholder="Qty"
