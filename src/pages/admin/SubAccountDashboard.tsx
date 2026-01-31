@@ -256,11 +256,27 @@ const SubAccountDashboard: React.FC = () => {
           </CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {user.permissions?.map(permission => (
-                <Badge key={permission} variant="outline">
-                  {permission.replace(/_/g, ' ')}
-                </Badge>
-              ))}
+              {user.permissions?.map(permission => {
+                const permissionLabels: Record<string, string> = {
+                  'view_orders': 'View Orders',
+                  'create_orders': 'Create Orders',
+                  'manage_orders': 'Manage Orders',
+                  'view_inventory': 'View Inventory',
+                  'manage_inventory': 'Manage Inventory',
+                  'view_customers': 'View Customers',
+                  'manage_customers': 'Manage Customers',
+                  'view_reports': 'View Reports',
+                  'manage_deliveries': 'Manage Deliveries',
+                  'process_payments': 'Process Payments',
+                  'view_payments': 'View Payments',
+                  'manage_payments': 'Manage Payments',
+                };
+                return (
+                  <Badge key={permission} variant="outline">
+                    {permissionLabels[permission] || permission.replace(/_/g, ' ')}
+                  </Badge>
+                );
+              })}
             </div>
           </CardContent>
         </Card>

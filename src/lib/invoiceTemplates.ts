@@ -30,9 +30,16 @@ export const generateInvoiceHTML = (
     const price = item.price || product?.price || product?.sellingPrice || 0;
     const lineTotal = price * item.quantity;
     
-    // Calculate item discount
+    // Calculate item discount properly
     const hasDiscount = item.discountValue && item.discountValue > 0;
-    const itemDiscount = item.discountAmount || 0;
+    let itemDiscount = 0;
+    if (hasDiscount) {
+      if (item.discountType === 'percentage') {
+        itemDiscount = (lineTotal * item.discountValue) / 100;
+      } else {
+        itemDiscount = item.discountValue;
+      }
+    }
     const finalTotal = lineTotal - itemDiscount;
     
     return `

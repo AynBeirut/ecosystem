@@ -26,6 +26,7 @@ const AdminProducts: React.FC = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
+  const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
@@ -49,11 +50,26 @@ const AdminProducts: React.FC = () => {
     const db = getFirestore();
     const fetchProducts = async () => {
       if (!user?.storeId) return setProducts([]);
+      
+      // Fetch products
       const productsRef = collection(db, 'products');
       const q = query(productsRef, where('storeId', '==', user.storeId));
       const snapshot = await getDocs(q);
       const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
       setProducts(productsList);
+      
+      // Fetch finished goods stock for composed products
+      const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
+      const fgQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
+      const fgSnapshot = await getDocs(fgQuery);
+      const stockMap: Record<string, number> = {};
+      fgSnapshot.docs.forEach(doc => {
+        const data = doc.data();
+        if (data.productId && typeof data.currentBalance === 'number') {
+          stockMap[data.productId] = data.currentBalance;
+        }
+      });
+      setFinishedGoodsStock(stockMap);
     };
     fetchProducts();
   }, [user?.storeId]);
@@ -459,6 +475,30 @@ const AdminProducts: React.FC = () => {
                   {product.description}
                 </p>
                 
+                {/* Stock Information */}
+                <div className="mb-3 p-2 bg-muted rounded-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Stock Quantity:</span>
+                    <span className={`text-lg font-bold ${
+                      (() => {
+                        if (product.productType === 'service') return 'text-muted-foreground';
+                        const actualStock = finishedGoodsStock[product.id] ?? product.stock ?? 0;
+                        return actualStock <= 10 ? 'text-red-600' : 
+                               actualStock <= 50 ? 'text-yellow-600' : 
+                               'text-green-600';
+                      })()
+                    }`}>
+                      {product.productType === 'service' ? 'N/A' : (finishedGoodsStock[product.id] ?? product.stock ?? 0)}
+                    </span>
+                  </div>
+                  {(() => {
+                    if (product.productType === 'service') return null;
+                    const actualStock = finishedGoodsStock[product.id] ?? product.stock ?? 0;
+                    return actualStock <= 10 && (
+                      <p className="text-xs text-red-600 mt-1">⚠️ Low stock alert!</p>
+                    );
+                  })()}
+                </div>
 
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
                   <span>Delivery: {product.deliveryTime}</span>
@@ -466,8 +506,12 @@ const AdminProducts: React.FC = () => {
                   <span className={product.inStock ? "text-green-600" : "text-red-600"}>
                     {product.inStock ? "In Stock" : "Out of Stock"}
                   </span>
-                  <Switch checked={product.inStock} onCheckedChange={() => handleToggleStock(product)} className="ml-2" />
-                  <span className="ml-1">Toggle Stock</span>
+                  {canManageInventory && (
+                    <>
+                      <Switch checked={product.inStock} onCheckedChange={() => handleToggleStock(product)} className="ml-2" />
+                      <span className="ml-1">Toggle</span>
+                    </>
+                  )}
                 </div>
                 
                 <div className="flex gap-2">

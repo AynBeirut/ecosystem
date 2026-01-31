@@ -428,46 +428,52 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Card className="p-4">
-              <CardContent className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-md bg-market-primary text-white flex items-center justify-center">
-                  <Package className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-gray-500">Products</div>
-                  <div className="text-2xl font-semibold text-gray-900">{productCount}</div>
-                </div>
-              </CardContent>
-            </Card>
+            <Link to="/admin/inventory">
+              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
+                <CardContent className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-md bg-market-primary text-white flex items-center justify-center">
+                    <Package className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Products</div>
+                    <div className="text-2xl font-semibold text-gray-900">{productCount}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
 
-            <Card className="p-4">
-              <CardContent className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-md bg-market-accent text-white flex items-center justify-center">
-                  <Clock className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-gray-500">Orders</div>
-                  <div className="text-2xl font-semibold text-gray-900">{orderCount}</div>
-                </div>
-              </CardContent>
-            </Card>
+            <Link to="/admin/orders">
+              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
+                <CardContent className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-md bg-market-accent text-white flex items-center justify-center">
+                    <Clock className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Orders</div>
+                    <div className="text-2xl font-semibold text-gray-900">{orderCount}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
 
-            <Card className="p-4">
-              <CardContent className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-md bg-green-500 text-white flex items-center justify-center">
-                  <CreditCard className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-gray-500">Revenue</div>
-                  <div className="text-2xl font-semibold text-gray-900">${revenue.toFixed(2)}</div>
-                  {usdToLbpRate ? (
-                    <div className="text-xs text-gray-500">≈ {formatLbp(revenue, usdToLbpRate)} <span className="ml-2">{rateFetchedAt ? `(rate updated ${new Date(rateFetchedAt).toLocaleTimeString()})` : ''}</span></div>
-                  ) : (
-                    <div className="text-xs text-gray-500">LBP estimate unavailable</div>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+            <Link to="/admin/account-statement?tab=sales">
+              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
+                <CardContent className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-md bg-green-500 text-white flex items-center justify-center">
+                    <CreditCard className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Revenue</div>
+                    <div className="text-2xl font-semibold text-gray-900">${revenue.toFixed(2)}</div>
+                    {usdToLbpRate ? (
+                      <div className="text-xs text-gray-500">≈ {formatLbp(revenue, usdToLbpRate)} <span className="ml-2">{rateFetchedAt ? `(rate updated ${new Date(rateFetchedAt).toLocaleTimeString()})` : ''}</span></div>
+                    ) : (
+                      <div className="text-xs text-gray-500">LBP estimate unavailable</div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
 
             <Link to="/admin/customers">
               <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">

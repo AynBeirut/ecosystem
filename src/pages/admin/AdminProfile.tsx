@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Store, Camera, Plus, X, Check, AlertCircle } from 'lucide-react';
+import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -73,6 +73,8 @@ const AdminProfile: React.FC = () => {
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
   const [newCategory, setNewCategory] = useState<string>('');
+  const [editingCategory, setEditingCategory] = useState<string | null>(null);
+  const [editCategoryValue, setEditCategoryValue] = useState<string>('');
   const [slugError, setSlugError] = useState<string>('');
   const [slugSuggestions, setSlugSuggestions] = useState<string[]>([]);
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
@@ -107,6 +109,33 @@ const AdminProfile: React.FC = () => {
       ...formData,
       productCategories: formData.productCategories?.filter(c => c !== category) || []
     });
+  };
+
+  const handleStartEditCategory = (category: string) => {
+    setEditingCategory(category);
+    setEditCategoryValue(category);
+  };
+
+  const handleSaveEditCategory = () => {
+    if (editCategoryValue.trim() && editingCategory) {
+      const categories = formData.productCategories || [];
+      const index = categories.indexOf(editingCategory);
+      if (index !== -1 && !categories.includes(editCategoryValue.trim())) {
+        const updatedCategories = [...categories];
+        updatedCategories[index] = editCategoryValue.trim();
+        setFormData({
+          ...formData,
+          productCategories: updatedCategories
+        });
+      }
+      setEditingCategory(null);
+      setEditCategoryValue('');
+    }
+  };
+
+  const handleCancelEditCategory = () => {
+    setEditingCategory(null);
+    setEditCategoryValue('');
   };
 
   const handleSlugChange = async (value: string) => {
@@ -585,16 +614,58 @@ const AdminProfile: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap gap-2">
                   {(formData.productCategories || []).map((category) => (
-                    <Badge key={category} variant="secondary" className="flex items-center gap-1">
-                      {category}
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCategory(category)}
-                        className="ml-1 hover:bg-destructive/20 rounded-full p-0.5"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                    </Badge>
+                    <div key={category}>
+                      {editingCategory === category ? (
+                        <div className="flex items-center gap-1 bg-secondary px-2 py-1 rounded-md">
+                          <Input
+                            value={editCategoryValue}
+                            onChange={(e) => setEditCategoryValue(e.target.value)}
+                            onKeyPress={(e) => {
+                              if (e.key === 'Enter') {
+                                e.preventDefault();
+                                handleSaveEditCategory();
+                              } else if (e.key === 'Escape') {
+                                handleCancelEditCategory();
+                              }
+                            }}
+                            className="h-6 w-32 text-sm"
+                            autoFocus
+                          />
+                          <button
+                            type="button"
+                            onClick={handleSaveEditCategory}
+                            className="hover:bg-green-500/20 rounded-full p-1"
+                          >
+                            <Check className="h-3 w-3 text-green-600" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleCancelEditCategory}
+                            className="hover:bg-destructive/20 rounded-full p-1"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Badge variant="secondary" className="flex items-center gap-1">
+                          {category}
+                          <button
+                            type="button"
+                            onClick={() => handleStartEditCategory(category)}
+                            className="ml-1 hover:bg-blue-500/20 rounded-full p-0.5"
+                          >
+                            <Pencil className="h-3 w-3" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveCategory(category)}
+                            className="hover:bg-destructive/20 rounded-full p-0.5"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </Badge>
+                      )}
+                    </div>
                   ))}
                 </div>
                 <p className="text-xs text-muted-foreground mt-2">
