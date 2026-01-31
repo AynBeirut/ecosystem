@@ -36,6 +36,11 @@ const AdminSubAccounts: React.FC = () => {
     kmRate: 0,
   });
 
+  const ROLE_LIMITS = {
+    manager: 1,
+    sales: 4,
+    delivery: 5,
+  };
   const MAX_SUB_ACCOUNTS = 10;
 
   useEffect(() => {
@@ -63,6 +68,18 @@ const AdminSubAccounts: React.FC = () => {
 
     if (subAccounts.filter(a => a.status === 'active').length >= MAX_SUB_ACCOUNTS) {
       toast({ title: "Error", description: `Maximum ${MAX_SUB_ACCOUNTS} sub-accounts allowed`, variant: "destructive" });
+      return;
+    }
+
+    // Check role-specific limits
+    const activeRoleCount = subAccounts.filter(a => a.status === 'active' && a.role === newAccount.role).length;
+    const roleLimit = ROLE_LIMITS[newAccount.role as SubAccountRole];
+    if (activeRoleCount >= roleLimit) {
+      toast({ 
+        title: "Error", 
+        description: `Maximum ${roleLimit} ${newAccount.role} account${roleLimit > 1 ? 's' : ''} allowed`, 
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -331,8 +348,9 @@ const AdminSubAccounts: React.FC = () => {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="sales">Sales Person - Can create orders, manage customers</SelectItem>
-                      <SelectItem value="delivery">Delivery Person - Can view orders and manage deliveries</SelectItem>
+                      <SelectItem value="sales">Sales Person - Can create orders, manage customers (Max: 4)</SelectItem>
+                      <SelectItem value="delivery">Delivery Person - Can view orders and manage deliveries (Max: 5)</SelectItem>
+                      <SelectItem value="manager">Manager - Full access to all features (Max: 1)</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="mt-2 p-3 bg-gray-50 rounded text-xs">
