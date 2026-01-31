@@ -33,7 +33,6 @@ export const ROLE_PERMISSIONS: Record<SubAccountRole, SubAccountPermission[]> = 
   sales: [
     'view_orders',
     'create_orders',
-    'view_inventory',
     'view_customers',
     'manage_customers',
     'process_payments',
