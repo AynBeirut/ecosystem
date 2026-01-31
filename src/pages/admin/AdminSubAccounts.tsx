@@ -333,7 +333,6 @@ const AdminSubAccounts: React.FC = () => {
                     <SelectContent>
                       <SelectItem value="sales">Sales Person - Can create orders, manage customers</SelectItem>
                       <SelectItem value="delivery">Delivery Person - Can view orders and manage deliveries</SelectItem>
-                      <SelectItem value="manager">Manager - Full access to all features</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="mt-2 p-3 bg-gray-50 rounded text-xs">
