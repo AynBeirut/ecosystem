@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,140 @@ const CUSTOMER_TIERS = [
   { value: 'gold', label: 'Gold', color: 'bg-yellow-100 text-yellow-800', minPoints: 1000 },
   { value: 'platinum', label: 'Platinum', color: 'bg-purple-100 text-purple-800', minPoints: 2500 },
 ];
+
+// CustomerForm component moved outside to prevent recreation on every render
+const CustomerForm: React.FC<{ 
+  customer: any;
+  onChange: (updates: any) => void;
+  isEdit?: boolean;
+}> = React.memo(({ customer, onChange, isEdit = false }) => (
+  <div className="grid gap-4">
+    <div className="grid grid-cols-2 gap-4">
+      <div className="col-span-2">
+        <Label htmlFor="name">Customer Name *</Label>
+        <Input
+          id="name"
+          value={customer.name}
+          onChange={(e) => onChange({ name: e.target.value })}
+          placeholder="John Doe"
+        />
+      </div>
+      <div>
+        <Label htmlFor="email">Email *</Label>
+        <Input
+          id="email"
+          type="email"
+          value={customer.email}
+          onChange={(e) => onChange({ email: e.target.value })}
+          placeholder="customer@example.com"
+        />
+      </div>
+      <div>
+        <Label htmlFor="phone">Phone</Label>
+        <Input
+          id="phone"
+          value={customer.phone || ''}
+          onChange={(e) => onChange({ phone: e.target.value })}
+          placeholder="+1234567890"
+        />
+      </div>
+      <div className="col-span-2">
+        <Label htmlFor="address">Address</Label>
+        <Input
+          id="address"
+          value={customer.address || ''}
+          onChange={(e) => onChange({ address: e.target.value })}
+          placeholder="123 Main St"
+        />
+      </div>
+      <div>
+        <Label htmlFor="city">City</Label>
+        <Input
+          id="city"
+          value={customer.city || ''}
+          onChange={(e) => onChange({ city: e.target.value })}
+          placeholder="New York"
+        />
+      </div>
+      <div>
+        <Label htmlFor="country">Country</Label>
+        <Input
+          id="country"
+          value={customer.country || ''}
+          onChange={(e) => onChange({ country: e.target.value })}
+          placeholder="USA"
+        />
+      </div>
+      <div>
+        <Label htmlFor="taxId">Tax ID / VAT</Label>
+        <Input
+          id="taxId"
+          value={customer.taxId || ''}
+          onChange={(e) => onChange({ taxId: e.target.value })}
+          placeholder="Tax ID"
+        />
+      </div>
+      <div>
+        <Label htmlFor="status">Status</Label>
+        <Select
+          value={customer.status || 'active'}
+          onValueChange={(value: typeof customer.status) => onChange({ status: value })}
+        >
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+            <SelectItem value="suspended">Suspended</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      <div>
+        <Label htmlFor="creditLimit">Credit Limit</Label>
+        <Input
+          id="creditLimit"
+          type="number"
+          min="0"
+          step="0.01"
+          value={customer.creditLimit === 0 ? '' : customer.creditLimit}
+          onChange={(e) => onChange({ creditLimit: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+          placeholder="0.00"
+        />
+      </div>
+      <div>
+        <Label htmlFor="paymentTerms">Payment Terms (days)</Label>
+        <Input
+          id="paymentTerms"
+          value={customer.paymentTerms || ''}
+          onChange={(e) => onChange({ paymentTerms: e.target.value })}
+          placeholder="30"
+        />
+      </div>
+      <div>
+        <Label htmlFor="loyaltyPoints">Loyalty Points</Label>
+        <Input
+          id="loyaltyPoints"
+          type="number"
+          min="0"
+          value={customer.loyaltyPoints === 0 ? '' : customer.loyaltyPoints}
+          onChange={(e) => onChange({ loyaltyPoints: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+          placeholder="0"
+        />
+      </div>
+      <div className="col-span-2">
+        <Label htmlFor="notes">Notes</Label>
+        <Textarea
+          id="notes"
+          value={customer.notes || ''}
+          onChange={(e) => onChange({ notes: e.target.value })}
+          placeholder="Additional notes about the customer..."
+          rows={3}
+        />
+      </div>
+    </div>
+  </div>
+));
 
 const AdminCustomers: React.FC = () => {
   const { user } = useAuth();
@@ -135,19 +269,21 @@ const AdminCustomers: React.FC = () => {
     try {
       const db = getFirestore();
       const customerRef = doc(db, 'customers', editingCustomer.id);
-      const updateData = {
+      
+      // Filter out undefined values to prevent Firestore errors
+      const updateData: any = {
         name: editingCustomer.name,
         email: editingCustomer.email,
-        phone: editingCustomer.phone,
-        address: editingCustomer.address,
-        city: editingCustomer.city,
-        country: editingCustomer.country,
-        taxId: editingCustomer.taxId,
-        creditLimit: editingCustomer.creditLimit,
-        paymentTerms: editingCustomer.paymentTerms,
-        loyaltyPoints: editingCustomer.loyaltyPoints,
-        status: editingCustomer.status,
-        notes: editingCustomer.notes,
+        phone: editingCustomer.phone || '',
+        address: editingCustomer.address || '',
+        city: editingCustomer.city || '',
+        country: editingCustomer.country || '',
+        taxId: editingCustomer.taxId || '',
+        creditLimit: editingCustomer.creditLimit || 0,
+        paymentTerms: editingCustomer.paymentTerms || '30',
+        loyaltyPoints: editingCustomer.loyaltyPoints || 0,
+        status: editingCustomer.status || 'active',
+        notes: editingCustomer.notes || '',
       };
 
       await updateDoc(customerRef, updateData);
@@ -202,6 +338,11 @@ const AdminCustomers: React.FC = () => {
     }
   };
 
+  // Memoized onChange handler to prevent input blur
+  const handleCustomerFormChange = useCallback((updates: Partial<Customer>) => {
+    setEditingCustomer(prev => prev ? { ...prev, ...updates } : null);
+  }, []);
+
   const getFilteredCustomers = () => {
     return customers.filter(customer => {
       const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -219,139 +360,6 @@ const AdminCustomers: React.FC = () => {
   const avgCreditLimit = customers.length > 0 
     ? customers.reduce((sum, c) => sum + c.creditLimit, 0) / customers.length 
     : 0;
-
-  const CustomerForm = ({ customer, onChange, isEdit = false }: { 
-    customer: typeof newCustomer, 
-    onChange: (updates: Partial<typeof newCustomer>) => void,
-    isEdit?: boolean 
-  }) => (
-    <div className="grid gap-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div className="col-span-2">
-          <Label htmlFor="name">Customer Name *</Label>
-          <Input
-            id="name"
-            value={customer.name}
-            onChange={(e) => onChange({ name: e.target.value })}
-            placeholder="John Doe"
-          />
-        </div>
-        <div>
-          <Label htmlFor="email">Email *</Label>
-          <Input
-            id="email"
-            type="email"
-            value={customer.email}
-            onChange={(e) => onChange({ email: e.target.value })}
-            placeholder="customer@example.com"
-          />
-        </div>
-        <div>
-          <Label htmlFor="phone">Phone</Label>
-          <Input
-            id="phone"
-            value={customer.phone}
-            onChange={(e) => onChange({ phone: e.target.value })}
-            placeholder="+1234567890"
-          />
-        </div>
-        <div className="col-span-2">
-          <Label htmlFor="address">Address</Label>
-          <Input
-            id="address"
-            value={customer.address}
-            onChange={(e) => onChange({ address: e.target.value })}
-            placeholder="123 Main St"
-          />
-        </div>
-        <div>
-          <Label htmlFor="city">City</Label>
-          <Input
-            id="city"
-            value={customer.city}
-            onChange={(e) => onChange({ city: e.target.value })}
-            placeholder="New York"
-          />
-        </div>
-        <div>
-          <Label htmlFor="country">Country</Label>
-          <Input
-            id="country"
-            value={customer.country}
-            onChange={(e) => onChange({ country: e.target.value })}
-            placeholder="USA"
-          />
-        </div>
-        <div>
-          <Label htmlFor="taxId">Tax ID / VAT</Label>
-          <Input
-            id="taxId"
-            value={customer.taxId}
-            onChange={(e) => onChange({ taxId: e.target.value })}
-            placeholder="Tax ID"
-          />
-        </div>
-        <div>
-          <Label htmlFor="status">Status</Label>
-          <Select
-            value={customer.status}
-            onValueChange={(value: typeof customer.status) => onChange({ status: value })}
-          >
-            <SelectTrigger>
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="active">Active</SelectItem>
-              <SelectItem value="inactive">Inactive</SelectItem>
-              <SelectItem value="suspended">Suspended</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
-        <div>
-          <Label htmlFor="creditLimit">Credit Limit</Label>
-          <Input
-            id="creditLimit"
-            type="number"
-            min="0"
-            step="0.01"
-            value={customer.creditLimit === 0 ? '' : customer.creditLimit}
-            onChange={(e) => onChange({ creditLimit: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
-            placeholder="0.00"
-          />
-        </div>
-        <div>
-          <Label htmlFor="paymentTerms">Payment Terms (days)</Label>
-          <Input
-            id="paymentTerms"
-            value={customer.paymentTerms}
-            onChange={(e) => onChange({ paymentTerms: e.target.value })}
-            placeholder="30"
-          />
-        </div>
-        <div>
-          <Label htmlFor="loyaltyPoints">Loyalty Points</Label>
-          <Input
-            id="loyaltyPoints"
-            type="number"
-            min="0"
-            value={customer.loyaltyPoints === 0 ? '' : customer.loyaltyPoints}
-            onChange={(e) => onChange({ loyaltyPoints: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
-            placeholder="0"
-          />
-        </div>
-        <div className="col-span-2">
-          <Label htmlFor="notes">Notes</Label>
-          <Textarea
-            id="notes"
-            value={customer.notes}
-            onChange={(e) => onChange({ notes: e.target.value })}
-            placeholder="Additional notes about the customer..."
-            rows={3}
-          />
-        </div>
-      </div>
-    </div>
-  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -555,7 +563,7 @@ const AdminCustomers: React.FC = () => {
               </DialogHeader>
               <CustomerForm
                 customer={editingCustomer}
-                onChange={(updates) => setEditingCustomer({ ...editingCustomer, ...updates })}
+                onChange={handleCustomerFormChange}
                 isEdit
               />
               <DialogFooter>

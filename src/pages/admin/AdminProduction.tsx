@@ -584,13 +584,35 @@ const AdminProduction: React.FC = () => {
       const materialsUsed = [];
       const zeroCostMaterials: string[] = [];
       
+      console.log('🔧 Production Completion Started:', {
+        batchId: batch.id,
+        productId: batch.productId,
+        actualQty,
+        recipeIngredients: recipe.ingredients?.length || 0
+      });
+      
       for (const ingredient of recipe.ingredients || []) {
+        console.log('📦 Processing ingredient:', {
+          rawMaterialId: ingredient.rawMaterialId,
+          quantityInRecipe: ingredient.quantity
+        });
+        
         const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId));
-        if (!rawMaterialDoc.exists()) continue;
+        if (!rawMaterialDoc.exists()) {
+          console.error('❌ Raw material not found:', ingredient.rawMaterialId);
+          continue;
+        }
         
         const rawMaterial = { id: rawMaterialDoc.id, ...rawMaterialDoc.data() } as RawMaterial;
         const quantityNeeded = ingredient.quantity * actualQty;
         const currentStock = rawMaterial.currentStock || 0;
+        
+        console.log('📊 Material details:', {
+          name: rawMaterial.name,
+          currentStock,
+          quantityNeeded,
+          costPerUnit: rawMaterial.costPerUnit
+        });
         
         // Check if material has zero cost
         if (!rawMaterial.costPerUnit || rawMaterial.costPerUnit === 0) {
@@ -612,10 +634,19 @@ const AdminProduction: React.FC = () => {
         totalMaterialCost += materialCost;
         
         // Reduce stock
+        console.log('✅ Reducing stock:', {
+          material: rawMaterial.name,
+          from: currentStock,
+          reducing: quantityNeeded,
+          to: currentStock - quantityNeeded
+        });
+        
         await updateDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId), {
           currentStock: currentStock - quantityNeeded,
           updatedAt: new Date().toISOString(),
         });
+        
+        console.log('✅ Stock reduced successfully for:', rawMaterial.name);
         
         materialsUsed.push({
           materialId: ingredient.rawMaterialId,
@@ -625,6 +656,12 @@ const AdminProduction: React.FC = () => {
           totalCost: materialCost,
         });
       }
+      
+      console.log('🎉 All materials processed:', {
+        totalMaterialsProcessed: materialsUsed.length,
+        totalMaterialCost,
+        materialsUsed: materialsUsed.map(m => ({ name: m.materialName, qty: m.quantityUsed }))
+      });
       
       // Warn if materials have zero cost
       if (zeroCostMaterials.length > 0) {

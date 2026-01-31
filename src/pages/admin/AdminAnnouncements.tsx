@@ -164,7 +164,7 @@ const AdminAnnouncements: React.FC = () => {
                     <Input
                       id="title"
                       value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                       placeholder="Announcement title"
                     />
                   </div>
@@ -174,7 +174,7 @@ const AdminAnnouncements: React.FC = () => {
                     <Textarea
                       id="message"
                       value={formData.message}
-                      onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                      onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
                       placeholder="Announcement message"
                       rows={4}
                     />
@@ -194,7 +194,7 @@ const AdminAnnouncements: React.FC = () => {
                           <Calendar
                             mode="single"
                             selected={formData.startDate}
-                            onSelect={(date) => date && setFormData({ ...formData, startDate: date })}
+                            onSelect={(date) => date && setFormData(prev => ({ ...prev, startDate: date }))}
                             initialFocus
                           />
                         </PopoverContent>
@@ -214,7 +214,7 @@ const AdminAnnouncements: React.FC = () => {
                           <Calendar
                             mode="single"
                             selected={formData.endDate}
-                            onSelect={(date) => date && setFormData({ ...formData, endDate: date })}
+                            onSelect={(date) => date && setFormData(prev => ({ ...prev, endDate: date }))}
                             initialFocus
                           />
                         </PopoverContent>
@@ -226,7 +226,7 @@ const AdminAnnouncements: React.FC = () => {
                     <Switch
                       id="active"
                       checked={formData.isActive}
-                      onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                      onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
                     />
                     <Label htmlFor="active">Active immediately</Label>
                   </div>
@@ -343,7 +343,7 @@ const AdminAnnouncements: React.FC = () => {
               <Input
                 id="edit-title"
                 value={formData.title}
-                onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
                 placeholder="Announcement title"
               />
             </div>
@@ -353,7 +353,7 @@ const AdminAnnouncements: React.FC = () => {
               <Textarea
                 id="edit-message"
                 value={formData.message}
-                onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
                 placeholder="Announcement message"
                 rows={4}
               />
@@ -373,7 +373,7 @@ const AdminAnnouncements: React.FC = () => {
                     <Calendar
                       mode="single"
                       selected={formData.startDate}
-                      onSelect={(date) => date && setFormData({ ...formData, startDate: date })}
+                      onSelect={(date) => date && setFormData(prev => ({ ...prev, startDate: date }))}
                       initialFocus
                     />
                   </PopoverContent>
@@ -393,7 +393,7 @@ const AdminAnnouncements: React.FC = () => {
                     <Calendar
                       mode="single"
                       selected={formData.endDate}
-                      onSelect={(date) => date && setFormData({ ...formData, endDate: date })}
+                      onSelect={(date) => date && setFormData(prev => ({ ...prev, endDate: date }))}
                       initialFocus
                     />
                   </PopoverContent>
@@ -405,7 +405,7 @@ const AdminAnnouncements: React.FC = () => {
               <Switch
                 id="edit-active"
                 checked={formData.isActive}
-                onCheckedChange={(checked) => setFormData({ ...formData, isActive: checked })}
+                onCheckedChange={(checked) => setFormData(prev => ({ ...prev, isActive: checked }))}
               />
               <Label htmlFor="edit-active">Active</Label>
             </div>

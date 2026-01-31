@@ -986,44 +986,27 @@ const AdminOrders: React.FC = () => {
                   </div>
                   <div>
                     <Label htmlFor="salesPerson">Sales Person</Label>
-                    {isCreatingNewSalesPerson ? (
-                      <div className="space-y-2 p-3 border rounded-md">
-                        <Input
-                          placeholder="Sales Person Name"
-                          value={newOrder.salesPersonName}
-                          onChange={(e) => setNewOrder({ ...newOrder, salesPersonName: e.target.value })}
-                        />
-                        <div className="flex gap-2">
-                          <Button size="sm" onClick={handleCreateInlineSalesPerson}>Save</Button>
-                          <Button size="sm" variant="outline" onClick={() => setIsCreatingNewSalesPerson(false)}>Cancel</Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Select value={newOrder.assignedSalesPerson} onValueChange={(value) => setNewOrder({ ...newOrder, assignedSalesPerson: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select sales person" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {salesStaff.map(staff => (
+                    <div className="space-y-2">
+                      <Select value={newOrder.assignedSalesPerson} onValueChange={(value) => setNewOrder({ ...newOrder, assignedSalesPerson: value })}>
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select sales person" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {salesStaff.length === 0 ? (
+                            <div className="p-2 text-sm text-gray-500">No sales people available</div>
+                          ) : (
+                            salesStaff.map(staff => (
                               <SelectItem key={staff.id} value={staff.id}>
                                 {staff.name}
                               </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => setIsCreatingNewSalesPerson(true)}
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          Add New Sales Person
-                        </Button>
-                      </div>
-                    )}
+                            ))
+                          )}
+                        </SelectContent>
+                      </Select>
+                      <p className="text-xs text-gray-500">
+                        To add sales people, go to Sub-Accounts menu and create a new sales account
+                      </p>
+                    </div>
                   </div>
                 </div>
 

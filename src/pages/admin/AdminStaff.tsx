@@ -224,7 +224,7 @@ const AdminStaff: React.FC = () => {
                     <Input
                       id="name"
                       value={newStaff.name}
-                      onChange={(e) => setNewStaff({ ...newStaff, name: e.target.value })}
+                      onChange={(e) => setNewStaff(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="John Doe"
                     />
                   </div>
@@ -233,7 +233,7 @@ const AdminStaff: React.FC = () => {
                     <Input
                       id="phone"
                       value={newStaff.phone}
-                      onChange={(e) => setNewStaff({ ...newStaff, phone: e.target.value })}
+                      onChange={(e) => setNewStaff(prev => ({ ...prev, phone: e.target.value }))}
                       placeholder="+961 ..."
                     />
                   </div>
@@ -244,7 +244,7 @@ const AdminStaff: React.FC = () => {
                     <Input
                       id="role"
                       value={newStaff.role}
-                      onChange={(e) => setNewStaff({ ...newStaff, role: e.target.value })}
+                      onChange={(e) => setNewStaff(prev => ({ ...prev, role: e.target.value }))}
                       placeholder="Cashier, Cook, Manager, Cleaner..."
                     />
                   </div>
@@ -258,7 +258,7 @@ const AdminStaff: React.FC = () => {
                       min="0"
                       step="0.01"
                       value={newStaff.salary === 0 ? '' : newStaff.salary}
-                      onChange={(e) => setNewStaff({ ...newStaff, salary: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                      onChange={(e) => setNewStaff(prev => ({ ...prev, salary: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) }))}
                       placeholder="0.00"
                     />
                   </div>
@@ -266,7 +266,7 @@ const AdminStaff: React.FC = () => {
                     <Label htmlFor="paymentFrequency">Payment Frequency *</Label>
                     <Select
                       value={newStaff.paymentFrequency}
-                      onValueChange={(value: any) => setNewStaff({ ...newStaff, paymentFrequency: value })}
+                      onValueChange={(value: any) => setNewStaff(prev => ({ ...prev, paymentFrequency: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -395,7 +395,7 @@ const AdminStaff: React.FC = () => {
                     <Input
                       id="edit-name"
                       value={editingStaff.name}
-                      onChange={(e) => setEditingStaff({ ...editingStaff, name: e.target.value })}
+                      onChange={(e) => setEditingStaff(prev => prev ? { ...prev, name: e.target.value } : null)}
                     />
                   </div>
                   <div>
@@ -403,7 +403,7 @@ const AdminStaff: React.FC = () => {
                     <Input
                       id="edit-phone"
                       value={editingStaff.phone || ''}
-                      onChange={(e) => setEditingStaff({ ...editingStaff, phone: e.target.value })}
+                      onChange={(e) => setEditingStaff(prev => prev ? { ...prev, phone: e.target.value } : null)}
                     />
                   </div>
                 </div>
@@ -413,7 +413,7 @@ const AdminStaff: React.FC = () => {
                     <Input
                       id="edit-role"
                       value={editingStaff.role}
-                      onChange={(e) => setEditingStaff({ ...editingStaff, role: e.target.value })}
+                      onChange={(e) => setEditingStaff(prev => prev ? { ...prev, role: e.target.value } : null)}
                       placeholder="Cashier, Cook, Manager..."
                     />
                   </div>
@@ -443,7 +443,7 @@ const AdminStaff: React.FC = () => {
                       min="0"
                       step="0.01"
                       value={editingStaff.salary}
-                      onChange={(e) => setEditingStaff({ ...editingStaff, salary: parseFloat(e.target.value) || 0 })}
+                      onChange={(e) => setEditingStaff(prev => prev ? { ...prev, salary: parseFloat(e.target.value) || 0 } : null)}
                     />
                   </div>
                   <div>

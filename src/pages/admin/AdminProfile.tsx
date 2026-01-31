@@ -275,7 +275,7 @@ const AdminProfile: React.FC = () => {
                     id="name"
                     value={formData.name}
                     onChange={(e) => {
-                      setFormData({ ...formData, name: e.target.value });
+                      setFormData(prev => ({ ...prev, name: e.target.value }));
                       // Auto-generate slug on name change if slug is empty
                       if (!formData.slug) {
                         const slug = generateSlug(e.target.value);
@@ -292,7 +292,7 @@ const AdminProfile: React.FC = () => {
                   <Input
                     id="location"
                     value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, location: e.target.value }))}
                     placeholder="City, State/Country"
                   />
                 </div>
@@ -368,7 +368,7 @@ const AdminProfile: React.FC = () => {
                 <Input
                   id="slogan"
                   value={formData.slogan}
-                  onChange={(e) => setFormData({ ...formData, slogan: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, slogan: e.target.value }))}
                   placeholder="A catchy tagline for your store"
                 />
               </div>
@@ -378,7 +378,7 @@ const AdminProfile: React.FC = () => {
                 <Textarea
                   id="description"
                   value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Tell customers what makes your store special"
                   rows={4}
                 />
@@ -390,7 +390,7 @@ const AdminProfile: React.FC = () => {
                   id="website"
                   type="url"
                   value={formData.website}
-                  onChange={(e) => setFormData({ ...formData, website: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, website: e.target.value }))}
                   placeholder="https://your-website.com"
                 />
               </div>
@@ -413,7 +413,7 @@ const AdminProfile: React.FC = () => {
                     id="email"
                     type="email"
                     value={formData.email}
-                    onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     placeholder="contact@yourstore.com"
                   />
                 </div>
@@ -424,7 +424,7 @@ const AdminProfile: React.FC = () => {
                     id="phone"
                     type="tel"
                     value={formData.phone}
-                    onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                     placeholder="(555) 123-4567"
                   />
                 </div>
@@ -447,7 +447,7 @@ const AdminProfile: React.FC = () => {
                   id="facebook"
                   type="url"
                   value={formData.facebook}
-                  onChange={(e) => setFormData({ ...formData, facebook: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, facebook: e.target.value }))}
                   placeholder="https://facebook.com/yourstore"
                 />
               </div>
@@ -458,7 +458,7 @@ const AdminProfile: React.FC = () => {
                   id="instagram"
                   type="url"
                   value={formData.instagram}
-                  onChange={(e) => setFormData({ ...formData, instagram: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
                   placeholder="https://instagram.com/yourstore"
                 />
               </div>
@@ -469,7 +469,7 @@ const AdminProfile: React.FC = () => {
                   id="twitter"
                   type="url"
                   value={formData.twitter}
-                  onChange={(e) => setFormData({ ...formData, twitter: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, twitter: e.target.value }))}
                   placeholder="https://twitter.com/yourstore"
                 />
               </div>
@@ -491,7 +491,7 @@ const AdminProfile: React.FC = () => {
                   <Input
                     id="invoicePrefix"
                     value={formData.invoiceNumberPrefix || 'INV'}
-                    onChange={(e) => setFormData({ ...formData, invoiceNumberPrefix: e.target.value })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, invoiceNumberPrefix: e.target.value }))}
                     placeholder="INV"
                     maxLength={10}
                   />
@@ -506,7 +506,7 @@ const AdminProfile: React.FC = () => {
                     id="lastInvoiceNumber"
                     type="number"
                     value={(formData.lastInvoiceNumber || 0) === 0 ? '' : (formData.lastInvoiceNumber || 0)}
-                    onChange={(e) => setFormData({ ...formData, lastInvoiceNumber: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+                    onChange={(e) => setFormData(prev => ({ ...prev, lastInvoiceNumber: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) }))}
                     placeholder="0"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -520,7 +520,7 @@ const AdminProfile: React.FC = () => {
                 <select
                   id="invoiceTemplate"
                   value={formData.invoiceTemplate || 'modern'}
-                  onChange={(e) => setFormData({ ...formData, invoiceTemplate: e.target.value as 'modern' | 'classic' | 'vibrant' })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, invoiceTemplate: e.target.value as 'modern' | 'classic' | 'vibrant' }))}
                   className="w-full p-2 border rounded-md"
                 >
                   <option value="modern">Modern (Blue/Teal)</option>
@@ -537,7 +537,7 @@ const AdminProfile: React.FC = () => {
                 <Input
                   id="taxNumber"
                   value={formData.taxNumber || ''}
-                  onChange={(e) => setFormData({ ...formData, taxNumber: e.target.value })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, taxNumber: e.target.value }))}
                   placeholder="Enter your tax/VAT registration number"
                 />
               </div>
@@ -561,7 +561,7 @@ const AdminProfile: React.FC = () => {
                   min="1"
                   step="0.1"
                   value={(formData.priceMultiplier || 2.5) === 0 ? '' : (formData.priceMultiplier || 2.5)}
-                  onChange={(e) => setFormData({ ...formData, priceMultiplier: e.target.value === '' ? 2.5 : (parseFloat(e.target.value) || 2.5) })}
+                  onChange={(e) => setFormData(prev => ({ ...prev, priceMultiplier: e.target.value === '' ? 2.5 : (parseFloat(e.target.value) || 2.5) }))}
                   placeholder="2.5"
                 />
                 <p className="text-xs text-muted-foreground mt-1">

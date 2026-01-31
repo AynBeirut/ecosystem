@@ -248,7 +248,7 @@ const AdminProducts: React.FC = () => {
                     <Input
                       id="name"
                       value={newProduct.name}
-                      onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="Enter product name"
                     />
                   </div>
@@ -260,14 +260,14 @@ const AdminProducts: React.FC = () => {
                       type="number"
                       step="0.01"
                       value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
-                      onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value === '' ? 0 : e.target.value })}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value === '' ? 0 : e.target.value }))}
                       placeholder="0.00"
                     />
                   </div>
                   
                   <div>
                     <Label htmlFor="category">Category</Label>
-                    <Select value={newProduct.category} onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}>
+                    <Select value={newProduct.category} onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}>
                       <SelectTrigger>
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
@@ -292,7 +292,7 @@ const AdminProducts: React.FC = () => {
                     <Textarea
                       id="description"
                       value={newProduct.description}
-                      onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
                       placeholder="Product description"
                       rows={3}
                     />
@@ -303,7 +303,7 @@ const AdminProducts: React.FC = () => {
                     <Input
                       id="deliveryTime"
                       value={newProduct.deliveryTime}
-                      onChange={(e) => setNewProduct({ ...newProduct, deliveryTime: e.target.value })}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, deliveryTime: e.target.value }))}
                       placeholder="e.g., 3-5 days"
                     />
                   </div>
@@ -312,7 +312,7 @@ const AdminProducts: React.FC = () => {
                     <Label htmlFor="productType">Product Type *</Label>
                     <Select
                       value={newProduct.productType}
-                      onValueChange={(value: any) => setNewProduct({ ...newProduct, productType: value })}
+                      onValueChange={(value: any) => setNewProduct(prev => ({ ...prev, productType: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -333,7 +333,7 @@ const AdminProducts: React.FC = () => {
                         type="number"
                         step="0.01"
                         value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
-                        onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value === '' ? 0 : e.target.value })}
+                        onChange={(e) => setNewProduct(prev => ({ ...prev, serviceCost: e.target.value === '' ? 0 : e.target.value }))}
                         placeholder="0.00"
                       />
                     </div>
@@ -356,7 +356,7 @@ const AdminProducts: React.FC = () => {
                       type="number"
                       min="0"
                       value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
-                      onChange={e => setNewProduct({ ...newProduct, stock: e.target.value === '' ? 0 : e.target.value })}
+                      onChange={e => setNewProduct(prev => ({ ...prev, stock: e.target.value === '' ? 0 : e.target.value }))}
                       placeholder="0"
                     />
                   </div>
@@ -367,7 +367,7 @@ const AdminProducts: React.FC = () => {
                     <Input
                       id="image"
                       value={newProduct.image}
-                      onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, image: e.target.value }))}
                       placeholder="https://example.com/image.jpg"
                     />
                     <Label htmlFor="imageFile" className="mt-2 block">Or upload image</Label>
@@ -378,7 +378,7 @@ const AdminProducts: React.FC = () => {
                         accept="image/*"
                         capture="environment"
                         style={{ display: 'none' }}
-                        onChange={e => setNewProduct({ ...newProduct, imageFile: e.target.files?.[0] || null })}
+                        onChange={e => setNewProduct(prev => ({ ...prev, imageFile: e.target.files?.[0] || null }))}
                       />
                       <Button
                         type="button"
@@ -539,7 +539,7 @@ const AdminProducts: React.FC = () => {
               <Input
                 id="edit-name"
                 value={newProduct.name}
-                onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
                 placeholder="Enter product name"
               />
             </div>
@@ -551,14 +551,14 @@ const AdminProducts: React.FC = () => {
                 type="number"
                 step="0.01"
                 value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
-                onChange={(e) => setNewProduct({ ...newProduct, price: e.target.value === '' ? 0 : e.target.value })}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value === '' ? 0 : e.target.value }))}
                 placeholder="0.00"
               />
             </div>
             
             <div>
               <Label htmlFor="edit-category">Category</Label>
-              <Select value={newProduct.category} onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}>
+              <Select value={newProduct.category} onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
@@ -577,7 +577,7 @@ const AdminProducts: React.FC = () => {
               <Textarea
                 id="edit-description"
                 value={newProduct.description}
-                onChange={(e) => setNewProduct({ ...newProduct, description: e.target.value })}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, description: e.target.value }))}
                 placeholder="Product description"
                 rows={3}
               />
@@ -588,7 +588,7 @@ const AdminProducts: React.FC = () => {
               <Input
                 id="edit-deliveryTime"
                 value={newProduct.deliveryTime}
-                onChange={(e) => setNewProduct({ ...newProduct, deliveryTime: e.target.value })}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, deliveryTime: e.target.value }))}
                 placeholder="e.g., 3-5 days"
               />
             </div>
@@ -599,7 +599,7 @@ const AdminProducts: React.FC = () => {
                 type="number"
                 min="0"
                 value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
-                onChange={e => setNewProduct({ ...newProduct, stock: e.target.value === '' ? 0 : e.target.value })}
+                onChange={e => setNewProduct(prev => ({ ...prev, stock: e.target.value === '' ? 0 : e.target.value }))}
                 placeholder="0"
               />
             </div>
@@ -609,7 +609,7 @@ const AdminProducts: React.FC = () => {
               <Input
                 id="edit-image"
                 value={newProduct.image}
-                onChange={(e) => setNewProduct({ ...newProduct, image: e.target.value })}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, image: e.target.value }))}
                 placeholder="https://example.com/image.jpg"
               />
             </div>

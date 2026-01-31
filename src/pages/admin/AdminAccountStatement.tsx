@@ -111,6 +111,10 @@ const AdminAccountStatement: React.FC = () => {
   
   const [viewingDetailedStatement, setViewingDetailedStatement] = useState<{ type: 'supplier' | 'customer', id: string, name: string } | null>(null);
   const [detailedStatement, setDetailedStatement] = useState<DetailedStatement | null>(null);
+  
+  // Date filters
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
 
   useEffect(() => {
     if (user?.storeId) {
@@ -1411,9 +1415,35 @@ const AdminAccountStatement: React.FC = () => {
         <div className="p-6">
           {activeTab === 'customers' && (
             <div>
-              <div className="flex justify-between items-center mb-4 gap-2">
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Customer Balances</h2>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  {(filterStartDate || filterEndDate) && (
+                    <button
+                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Clear Dates
+                    </button>
+                  )}
                   <button
                     onClick={exportCustomersToExcel}
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
@@ -1445,8 +1475,8 @@ const AdminAccountStatement: React.FC = () => {
                   </thead>
                   <tbody>
                     {customers.map(customer => {
-                      const netAmount = customer.totalPurchases / 1.11;
-                      const vatAmount = customer.totalPurchases - netAmount;
+                      const netAmount = customer.totalPurchases;
+                      const vatAmount = 0;
                       return (
                         <tr key={customer.id} className="border-b hover:bg-gray-50">
                           <td className="border px-4 py-2">{customer.name}</td>
@@ -1473,8 +1503,8 @@ const AdminAccountStatement: React.FC = () => {
                     <tr>
                       <td className="border px-4 py-3">TOTAL</td>
                       <td className="border px-4 py-3 text-right text-blue-600">{customers.reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{(customers.reduce((sum, c) => sum + c.totalPurchases, 0) / 1.11).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{(customers.reduce((sum, c) => sum + c.totalPurchases, 0) - customers.reduce((sum, c) => sum + c.totalPurchases, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{customers.reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">0.00</td>
                       <td className="border px-4 py-3 text-right text-green-600">{customers.reduce((sum, c) => sum + c.totalPayments, 0).toFixed(2)}</td>
                       <td className="border px-4 py-3 text-right text-blue-600">{customers.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</td>
                       <td className="border px-4 py-3"></td>
@@ -1487,9 +1517,35 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'suppliers' && (
             <div>
-              <div className="flex justify-between items-center mb-4 gap-2">
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Supplier Balances</h2>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  {(filterStartDate || filterEndDate) && (
+                    <button
+                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Clear Dates
+                    </button>
+                  )}
                   <button
                     onClick={exportSuppliersToExcel}
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
@@ -1521,14 +1577,14 @@ const AdminAccountStatement: React.FC = () => {
                   </thead>
                   <tbody>
                     {suppliers.map(supplier => {
-                      const netAmount = supplier.totalPurchases / 1.11;
-                      const vatAmount = supplier.totalPurchases - netAmount;
+                      const netAmount = supplier.totalPurchases;
+                      const vatAmount = 0;
                       return (
                         <tr key={supplier.id} className="border-b hover:bg-gray-50">
                           <td className="border px-4 py-2">{supplier.name}</td>
                           <td className="border px-4 py-2 text-right text-green-600">{supplier.totalPayments.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{(supplier.totalPayments / 1.11).toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{(supplier.totalPayments - supplier.totalPayments / 1.11).toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{supplier.totalPayments.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">0.00</td>
                           <td className="border px-4 py-2 text-right">{supplier.totalPurchases.toFixed(2)}</td>
                           <td className={`border px-4 py-2 text-right font-semibold ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
                             {supplier.balance.toFixed(2)}
@@ -1549,8 +1605,8 @@ const AdminAccountStatement: React.FC = () => {
                     <tr>
                       <td className="border px-4 py-3">TOTAL</td>
                       <td className="border px-4 py-3 text-right text-green-600">{suppliers.reduce((sum, s) => sum + s.totalPayments, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{(suppliers.reduce((sum, s) => sum + s.totalPayments, 0) / 1.11).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{(suppliers.reduce((sum, s) => sum + s.totalPayments, 0) - suppliers.reduce((sum, s) => sum + s.totalPayments, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{suppliers.reduce((sum, s) => sum + s.totalPayments, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">0.00</td>
                       <td className="border px-4 py-3 text-right text-blue-600">{suppliers.reduce((sum, s) => sum + s.totalPurchases, 0).toFixed(2)}</td>
                       <td className="border px-4 py-3 text-right text-blue-600">{suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}</td>
                       <td className="border px-4 py-3"></td>
@@ -1563,9 +1619,35 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'products' && (
             <div>
-              <div className="flex justify-between items-center mb-4 gap-2">
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Product Summary</h2>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  {(filterStartDate || filterEndDate) && (
+                    <button
+                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Clear Dates
+                    </button>
+                  )}
                   <button
                     onClick={exportProductsToExcel}
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
@@ -1596,8 +1678,9 @@ const AdminAccountStatement: React.FC = () => {
                   </thead>
                   <tbody>
                     {products.map(product => {
-                      const netRevenue = product.totalRevenue / 1.11;
-                      const vatRevenue = product.totalRevenue - netRevenue;
+                      // Don't auto-calculate VAT - it should come from actual order tax data
+                      const netRevenue = product.totalRevenue;
+                      const vatRevenue = 0; // No automatic VAT calculation
                       return (
                         <tr key={product.id} className="border-b hover:bg-gray-50">
                           <td className="border px-4 py-2">{product.name}</td>
@@ -1615,8 +1698,8 @@ const AdminAccountStatement: React.FC = () => {
                       <td className="border px-4 py-3" colSpan={2}>TOTAL</td>
                       <td className="border px-4 py-3 text-right">{products.reduce((sum, p) => sum + p.totalSold, 0)}</td>
                       <td className="border px-4 py-3 text-right text-blue-600">{products.reduce((sum, p) => sum + p.totalRevenue, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{(products.reduce((sum, p) => sum + p.totalRevenue, 0) / 1.11).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{(products.reduce((sum, p) => sum + p.totalRevenue, 0) - products.reduce((sum, p) => sum + p.totalRevenue, 0) / 1.11).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{products.reduce((sum, p) => sum + p.totalRevenue, 0).toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">0.00</td>
                     </tr>
                   </tfoot>
                 </table>
@@ -1626,9 +1709,35 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'purchases' && (
             <div>
-              <div className="flex justify-between items-center mb-4 gap-2">
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Purchase History</h2>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  {(filterStartDate || filterEndDate) && (
+                    <button
+                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Clear Dates
+                    </button>
+                  )}
                   <button
                     onClick={exportPurchasesToExcel}
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
@@ -1665,8 +1774,8 @@ const AdminAccountStatement: React.FC = () => {
                       let runningBalance = 0;
                       return purchases.map(purchase => {
                         const total = purchase.amount;
-                        const net = total / 1.11; // Assuming 11% VAT
-                        const vat = total - net;
+                        const vat = (purchase as any).taxAmount || 0;
+                        const net = total - vat;
                         runningBalance += total - purchase.amountPaid;
                         return (
                           <tr key={purchase.id} className="border-b hover:bg-gray-50 text-sm">
@@ -1696,8 +1805,8 @@ const AdminAccountStatement: React.FC = () => {
                     <tr>
                       <td className="px-3 py-3" colSpan={3}>TOTAL</td>
                       <td className="px-3 py-3 text-right text-blue-600">{purchases.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + (p.amount / 1.11), 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + (p.amount - p.amount / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">0.00</td>
                       <td className="px-3 py-3 text-right text-green-600">{purchases.reduce((sum, p) => sum + p.amountPaid, 0).toFixed(2)}</td>
                       <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + (p.amount - p.amountPaid), 0).toFixed(2)}</td>
                       <td className="px-3 py-3"></td>
@@ -1710,9 +1819,35 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'expenses' && (
             <div>
-              <div className="flex justify-between items-center mb-4 gap-2">
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Expense History</h2>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  {(filterStartDate || filterEndDate) && (
+                    <button
+                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Clear Dates
+                    </button>
+                  )}
                   <button
                     onClick={exportExpensesToExcel}
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
@@ -1749,8 +1884,8 @@ const AdminAccountStatement: React.FC = () => {
                       let runningBalance = 0;
                       return expenses.map(expense => {
                         const total = expense.amount;
-                        const net = total / 1.11;
-                        const vat = total - net;
+                        const vat = (expense as any).taxAmount || 0;
+                        const net = total - vat;
                         runningBalance += total;
                         return (
                           <tr key={expense.id} className="border-b hover:bg-gray-50 text-sm">
@@ -1772,8 +1907,8 @@ const AdminAccountStatement: React.FC = () => {
                     <tr>
                       <td className="px-3 py-3" colSpan={3}>TOTAL</td>
                       <td className="px-3 py-3 text-right text-blue-600">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + (e.amount / 1.11), 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + (e.amount - e.amount / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">0.00</td>
                       <td className="px-3 py-3 text-right text-green-600">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
                       <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
                       <td className="px-3 py-3"></td>
@@ -1786,8 +1921,39 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'sales' && (
             <div>
-              <div className="flex justify-between items-center mb-4 gap-2">
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Sales History</h2>
+                <div className="flex gap-2 items-center flex-wrap">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={filterStartDate}
+                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={filterEndDate}
+                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  {(filterStartDate || filterEndDate) && (
+                    <button
+                      onClick={() => {
+                        setFilterStartDate('');
+                        setFilterEndDate('');
+                      }}
+                      className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm"
+                    >
+                      Clear Dates
+                    </button>
+                  )}
+                </div>
               </div>
               <div className="overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full">
@@ -1807,7 +1973,15 @@ const AdminAccountStatement: React.FC = () => {
                   <tbody>
                     {(() => {
                       let runningBalance = 0;
-                      return sales.map(sale => {
+                      // Filter sales by date
+                      const filteredSales = sales.filter(sale => {
+                        const saleDate = new Date(sale.date).toISOString().split('T')[0];
+                        const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                        const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                        return matchesStart && matchesEnd;
+                      }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+                      
+                      return filteredSales.map(sale => {
                         const total = sale.total;
                         // Use actual tax amount if available, don't assume 11%
                         const vat = sale.taxAmount || 0;
@@ -1840,11 +2014,36 @@ const AdminAccountStatement: React.FC = () => {
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
                       <td className="px-3 py-3" colSpan={3}>TOTAL</td>
-                      <td className="px-3 py-3 text-right text-blue-600">{sales.reduce((sum, s) => sum + s.total, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total - (s.taxAmount || 0)), 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.taxAmount || 0), 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right text-green-600">{sales.reduce((sum, s) => sum + s.amountPaid, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total - s.amountPaid), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right text-blue-600">
+                        {sales.filter(s => {
+                          const saleDate = new Date(s.date).toISOString().split('T')[0];
+                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                        }).reduce((sum, s) => sum + s.total, 0).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        {sales.filter(s => {
+                          const saleDate = new Date(s.date).toISOString().split('T')[0];
+                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                        }).reduce((sum, s) => sum + (s.total - (s.taxAmount || 0)), 0).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        {sales.filter(s => {
+                          const saleDate = new Date(s.date).toISOString().split('T')[0];
+                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                        }).reduce((sum, s) => sum + (s.taxAmount || 0), 0).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-3 text-right text-green-600">
+                        {sales.filter(s => {
+                          const saleDate = new Date(s.date).toISOString().split('T')[0];
+                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                        }).reduce((sum, s) => sum + s.amountPaid, 0).toFixed(2)}
+                      </td>
+                      <td className="px-3 py-3 text-right">
+                        {sales.filter(s => {
+                          const saleDate = new Date(s.date).toISOString().split('T')[0];
+                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                        }).reduce((sum, s) => sum + (s.total - s.amountPaid), 0).toFixed(2)}
+                      </td>
                       <td className="px-3 py-3"></td>
                     </tr>
                   </tfoot>

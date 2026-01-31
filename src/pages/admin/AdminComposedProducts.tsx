@@ -455,7 +455,7 @@ const AdminComposedProducts: React.FC = () => {
                   <Input
                     id="productName"
                     value={newProduct.name}
-                    onChange={(e) => setNewProduct({ ...newProduct, name: e.target.value })}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, name: e.target.value }))}
                     placeholder="e.g., Chicken Sandwich"
                   />
                 </div>
@@ -465,7 +465,7 @@ const AdminComposedProducts: React.FC = () => {
                   <Label htmlFor="category">Category *</Label>
                   <Select
                     value={newProduct.category}
-                    onValueChange={(value) => setNewProduct({ ...newProduct, category: value })}
+                    onValueChange={(value) => setNewProduct(prev => ({ ...prev, category: value }))}
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select category" />
@@ -486,7 +486,7 @@ const AdminComposedProducts: React.FC = () => {
                   <Input
                     id="icon"
                     value={newProduct.icon}
-                    onChange={(e) => setNewProduct({ ...newProduct, icon: e.target.value })}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, icon: e.target.value }))}
                     placeholder="📦"
                     maxLength={2}
                   />
@@ -504,7 +504,7 @@ const AdminComposedProducts: React.FC = () => {
                     min="0"
                     step="0.01"
                     value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
-                    onChange={(e) => setNewProduct({ ...newProduct, serviceCost: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, serviceCost: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) }))}
                     placeholder="0.00"
                   />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -633,7 +633,7 @@ const AdminComposedProducts: React.FC = () => {
                         min="0"
                         step="0.01"
                         value={newProduct.sellingPrice === 0 ? '' : (newProduct.sellingPrice || parseFloat(calculateSuggestedPrice().toFixed(2)))}
-                        onChange={(e) => setNewProduct({ ...newProduct, sellingPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        onChange={(e) => setNewProduct(prev => ({ ...prev, sellingPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) }))}
                         placeholder={calculateSuggestedPrice().toFixed(2)}
                         className="mt-1"
                       />
@@ -837,7 +837,7 @@ const AdminComposedProducts: React.FC = () => {
                     min="0"
                     step="0.01"
                     value={editingProduct.sellingPrice === 0 ? '' : editingProduct.sellingPrice}
-                    onChange={(e) => setEditingProduct({ ...editingProduct, sellingPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                    onChange={(e) => setEditingProduct(prev => prev ? { ...prev, sellingPrice: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) } : null)}
                     placeholder="0.00"
                   />
                 </div>

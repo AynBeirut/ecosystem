@@ -1731,18 +1731,18 @@ const AdminPurchases: React.FC = () => {
                         <Input
                           placeholder="Supplier Name *"
                           value={newPurchase.supplierName || ''}
-                          onChange={(e) => setNewPurchase({ ...newPurchase, supplierName: e.target.value })}
+                          onChange={(e) => setNewPurchase(prev => ({ ...prev, supplierName: e.target.value }))}
                         />
                         <Input
                           placeholder="Contact Person *"
                           value={newPurchase.supplierContact || ''}
-                          onChange={(e) => setNewPurchase({ ...newPurchase, supplierContact: e.target.value })}
+                          onChange={(e) => setNewPurchase(prev => ({ ...prev, supplierContact: e.target.value }))}
                         />
                         <Input
                           placeholder="Email (optional)"
                           type="email"
                           value={newPurchase.supplierEmail || ''}
-                          onChange={(e) => setNewPurchase({ ...newPurchase, supplierEmail: e.target.value })}
+                          onChange={(e) => setNewPurchase(prev => ({ ...prev, supplierEmail: e.target.value }))}
                         />
                         <Button 
                           type="button" 
@@ -1761,7 +1761,7 @@ const AdminPurchases: React.FC = () => {
                       id="expectedDeliveryDate"
                       type="date"
                       value={newPurchase.expectedDeliveryDate}
-                      onChange={(e) => setNewPurchase({ ...newPurchase, expectedDeliveryDate: e.target.value })}
+                      onChange={(e) => setNewPurchase(prev => ({ ...prev, expectedDeliveryDate: e.target.value }))}
                     />
                   </div>
                 </div>
@@ -1882,7 +1882,7 @@ const AdminPurchases: React.FC = () => {
                         max="100"
                         step="0.1"
                         value={newPurchase.taxRate === 0 ? '' : newPurchase.taxRate}
-                        onChange={(e) => setNewPurchase({ ...newPurchase, taxRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
+                        onChange={(e) => setNewPurchase(prev => ({ ...prev, taxRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) }))}
                         placeholder="0.0"
                       />
                     </div>
@@ -1894,7 +1894,7 @@ const AdminPurchases: React.FC = () => {
                   <Textarea
                     id="notes"
                     value={newPurchase.notes}
-                    onChange={(e) => setNewPurchase({ ...newPurchase, notes: e.target.value })}
+                    onChange={(e) => setNewPurchase(prev => ({ ...prev, notes: e.target.value }))}
                     placeholder="Additional notes or special instructions..."
                     rows={3}
                   />
@@ -2246,7 +2246,7 @@ const AdminPurchases: React.FC = () => {
                     max={(payingPurchase.totalAmount || payingPurchase.total || 0) - (payingPurchase.amountPaid || 0)}
                     step="0.01"
                     value={paymentData.amountPaid || ''}
-                    onChange={(e) => setPaymentData({ ...paymentData, amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                    onChange={(e) => setPaymentData(prev => ({ ...prev, amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value) }))}
                   />
                 </div>
 
@@ -2256,7 +2256,7 @@ const AdminPurchases: React.FC = () => {
                     id="paymentDate"
                     type="date"
                     value={paymentData.paymentDate}
-                    onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
+                    onChange={(e) => setPaymentData(prev => ({ ...prev, paymentDate: e.target.value }))}
                   />
                 </div>
 
@@ -2285,7 +2285,7 @@ const AdminPurchases: React.FC = () => {
                     id="paymentNotes"
                     placeholder="Transaction reference, check number, etc."
                     value={paymentData.paymentNotes}
-                    onChange={(e) => setPaymentData({ ...paymentData, paymentNotes: e.target.value })}
+                    onChange={(e) => setPaymentData(prev => ({ ...prev, paymentNotes: e.target.value }))}
                   />
                 </div>
               </div>

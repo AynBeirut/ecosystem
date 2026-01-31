@@ -281,7 +281,7 @@ const AdminSubAccounts: React.FC = () => {
                     <Input
                       id="name"
                       value={newAccount.name}
-                      onChange={(e) => setNewAccount({ ...newAccount, name: e.target.value })}
+                      onChange={(e) => setNewAccount(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="John Doe"
                     />
                   </div>
@@ -291,7 +291,7 @@ const AdminSubAccounts: React.FC = () => {
                       id="phone"
                       type="tel"
                       value={newAccount.phone}
-                      onChange={(e) => setNewAccount({ ...newAccount, phone: e.target.value })}
+                      onChange={(e) => setNewAccount(prev => ({ ...prev, phone: e.target.value }))}
                       placeholder="+961 ..."
                     />
                   </div>
@@ -303,7 +303,7 @@ const AdminSubAccounts: React.FC = () => {
                     id="email"
                     type="email"
                     value={newAccount.email}
-                    onChange={(e) => setNewAccount({ ...newAccount, email: e.target.value })}
+                    onChange={(e) => setNewAccount(prev => ({ ...prev, email: e.target.value }))}
                     placeholder="john@example.com"
                   />
                   <p className="text-xs text-gray-500 mt-1">This will be their login username</p>
@@ -315,7 +315,7 @@ const AdminSubAccounts: React.FC = () => {
                     id="password"
                     type="password"
                     value={newAccount.password}
-                    onChange={(e) => setNewAccount({ ...newAccount, password: e.target.value })}
+                    onChange={(e) => setNewAccount(prev => ({ ...prev, password: e.target.value }))}
                     placeholder="At least 6 characters"
                   />
                   <p className="text-xs text-gray-500 mt-1">Minimum 6 characters</p>

@@ -1,152 +1,135 @@
-# Today's Changes - January 31, 2026
+# Remaining Issues - January 31, 2026
 
 ## 🧪 Testing URL
+**Live:** https://market-flow-7b074.web.app  
 **Local:** http://localhost:8080/  
 **Network (Mobile):** http://192.168.0.106:8080/
 
 ---
 
-## ✅ Fixed Issues (Ready to Test)
+## ✅ DEPLOYED & FIXED
 
-### 1. **Invoice Discounts Display**
-**What Changed:** Item-level discounts now appear on printed/downloaded invoices  
-**How to Test:**
-1. Go to Orders → Create New Order
-2. Add 2-3 items with different discounts:
-   - Item 1: 10% discount
-   - Item 2: $5.00 fixed discount
-   - Item 3: No discount
-3. Create the order
-4. Click "Print" or "Download PDF"
-5. **Expected:** 
-   - Discount type/value shown below item name in red
-   - Original price shown with strikethrough
-   - Final discounted price displayed correctly
+### 1. **Invoice Discount Display** ✅
+**Status:** FIXED & DEPLOYED  
+**Change:** Better formatting with "Before" and "After" prices in green  
+**Test:**
+1. Create order with item discounts
+2. Print/download invoice
+3. **Expected:** Discount shows as separate line, "Before: $X" and "After: $Y" in green
 
----
+### 2. **Account Statement VAT Calculation** ✅
+**Status:** FIXED & DEPLOYED  
+**Change:** Uses actual tax from order, not hardcoded 11%  
+**Test:**
+1. Create order WITHOUT tax
+2. Go to Account Statement
+3. **Expected:** VAT column shows $0.00, Net = Total
 
-### 2. **Decimal Quantities Support**
-**What Changed:** Can now enter decimal quantities (1.5, 2.75, etc.)  
-**How to Test:**
-1. Go to Orders → Create New Order
-2. Add an item
-3. Try entering quantities: `1.5`, `0.75`, `2.3`, `10.25`
-4. **Expected:** 
-   - All decimal values accepted
-   - Calculations correct
-   - Order creates successfully
+### 3. **Decimal Quantities** ✅
+**Status:** WORKING  
+
+### 4. **Customer Navigation** ✅
+**Status:** WORKING
 
 ---
 
-### 3. **Customer Card Navigation**
-**What Changed:** Clicking "Customers" card on dashboard now navigates to customers page  
-**How to Test:**
-1. Go to Admin Dashboard
-2. Find the "Customers" card (shows count: "2")
-3. Click anywhere on the card
-4. **Expected:** 
-   - Navigates to `/admin/customers`
-   - Shows customer list
-   - Hover shows shadow effect
+## ⏳ PENDING ISSUES (Need Your Testing/Feedback)
+
+### 1. **Raw Materials Not Reducing in Production** ⏳
+**Status:** CODE IS CORRECT - Need debugging  
+**What to do:**
+1. Open browser console (F12) before completing production
+2. Complete a production batch
+3. Take screenshot of:
+   - Raw materials before
+   - Raw materials after
+   - Console errors (if any)
+   - Recipe ingredients list
+4. Share screenshots so I can identify the issue
 
 ---
 
-### 4. **Cancelled Orders Filtering**
-**What Changed:** Cancelled orders no longer appear in Account Statement  
-**How to Test:**
-1. Create a test order (e.g., INV-025)
-2. Go to Account Statement → verify it appears in Sales History
-3. Go back to Orders → Cancel the order
-4. Return to Account Statement
-5. **Expected:**
-   - INV-025 no longer in Sales History table
-   - Customer balance doesn't include cancelled order
-   - Detailed customer statement also excludes it
+### 2. **Cancelled Orders Still Showing** ⏳
+**Status:** Need more info  
+**You said:** "still not canceled"  
+**What I need:**
+1. Which page are you checking? (Orders list? Account Statement? Somewhere else?)
+2. What's the invoice number?
+3. Screenshot of where it's still showing
+4. The code filters cancelled orders - need to see where it's not working
 
 ---
 
-### 5. **Sales Person Dropdown**
-**What Changed:** Sub-accounts with "Sales" role now appear in sales person dropdown  
-**How to Test:**
-1. Go to Sub-Accounts → Add a new sub-account
-2. Set Role: "Sales"
-3. Save the sub-account
-4. Go to Orders → Create New Order
-5. Click "Sales Person" dropdown
-6. **Expected:**
-   - The sales sub-account appears in the list
-   - Can select and assign to order
-   - Both staff and sub-accounts visible
+### 3. **Sales Person Dropdown Empty** ⏳
+**Status:** Fixed code but need verification  
+**What changed:** Now fetches both Staff AND Sub-Accounts collections  
+**What to do:**
+1. Go to Sub-Accounts
+2. Create new sub-account with Role = "Sales"
+3. Go to Orders → Create New Order
+4. Click "Sales Person" dropdown
+5. **Does the sub-account appear?**
+6. If not, press F12, check Console for errors, take screenshot
 
 ---
 
-## 📋 Quick Test Checklist
+## 📝 Testing Instructions
 
-```
-[ ] 1. Invoice shows item discounts correctly
-[ ] 2. Can enter quantity: 1.5
-[ ] 3. Can enter quantity: 0.75
-[ ] 4. Dashboard → Customers card navigates
-[ ] 5. Cancelled order disappears from Account Statement
-[ ] 6. Sales sub-account appears in dropdown
+### For Each Pending Issue:
+
+**Raw Materials:**
+```bash
+# Before completing production
+1. Note raw material quantities
+2. Open F12 console
+3. Complete production
+4. Check console for errors
+5. Check raw materials again
 ```
 
----
-
-## 🔍 Known Issues (Not Yet Fixed)
-
-### ⏳ Raw Materials Not Reducing in Production
-**Status:** Under investigation  
-**What to Check:**
-1. Create a production batch
-2. Click "Complete Production" (not just "Start")
-3. Check browser console (F12) for errors
-4. Verify raw materials stock actually reduces
-
-**Please report:**
-- Does raw material stock change?
-- Any console errors?
-- Does finished goods increase?
-- Screenshots if possible
-
----
-
-## 📝 Testing Tips
-
-1. **Clear Browser Cache:** Press `Ctrl+Shift+R` (or `Cmd+Shift+R` on Mac) to hard refresh
-2. **Check Console:** Press `F12` to open Developer Tools → Console tab for errors
-3. **Test on Mobile:** Use http://192.168.0.106:8080/ on your phone
-4. **Multiple Scenarios:** Try edge cases (0 discount, 100% discount, very small decimals like 0.01)
-
----
-
-## 🐛 Bug Report Format
-
-If you find issues, please report:
+**Cancelled Orders:**
+```bash
+# Tell me exactly where you see it
+1. Cancel order INV-XXX
+2. Where does it still show up?
+3. Screenshot that page
 ```
-Issue: [Brief description]
-Page: [Where it occurs]
-Steps: 
-1. [What you did]
-2. [What you clicked]
-Expected: [What should happen]
-Actual: [What actually happened]
-Console Errors: [Any red errors in F12 console]
+
+**Sales Person:**
+```bash
+# Step by step
+1. Sub-Accounts → Add (Role: Sales)
+2. Save
+3. Orders → Create Order
+4. Sales Person dropdown
+5. See the person? (Yes/No + screenshot if No)
 ```
 
 ---
 
-## ⚙️ Changes Made Today
+## 🐛 Report Format
 
-**Files Modified:**
-- `src/lib/invoiceTemplates.ts` - Added discount display to invoice items
-- `src/pages/admin/AdminOrders.tsx` - Decimal quantities + sub-accounts in dropdown
-- `src/pages/admin/AdminDashboard.tsx` - Customer card navigation
-- `src/pages/admin/AdminAccountStatement.tsx` - Filter cancelled orders
-- `TESTING_CHECKLIST.md` - Comprehensive test document created
-
-**Next Deployment:** After you confirm all tests pass
+```
+Issue: [Which one from above]
+Browser: [Chrome/Firefox/Safari]
+What I See: [Screenshot or description]
+Console Errors: [Screenshot of F12 console red errors]
+```
 
 ---
 
-**Ready to test!** 🚀
+## 📊 Summary
+
+**Deployed Today:**
+- ✅ Better invoice discount display
+- ✅ Correct VAT calculations (no more forced 11%)
+- ✅ Sales person dropdown includes sub-accounts
+
+**Awaiting Your Testing:**
+- ⏳ Raw materials reduction (need debug info)
+- ⏳ Cancelled orders visibility (need location)
+- ⏳ Sales dropdown working (need confirmation)
+
+---
+
+**Live URL:** https://market-flow-7b074.web.app 🚀
