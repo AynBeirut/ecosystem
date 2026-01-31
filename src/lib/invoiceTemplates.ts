@@ -29,12 +29,24 @@ export const generateInvoiceHTML = (
     // Use item.price (the actual price at time of order) or fallback to product price
     const price = item.price || product?.price || product?.sellingPrice || 0;
     const lineTotal = price * item.quantity;
+    
+    // Calculate item discount
+    const hasDiscount = item.discountValue && item.discountValue > 0;
+    const itemDiscount = item.discountAmount || 0;
+    const finalTotal = lineTotal - itemDiscount;
+    
     return `
       <tr>
-        <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">${product?.name || 'Product'}</td>
+        <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">
+          ${product?.name || 'Product'}
+          ${hasDiscount ? `<br/><span style="font-size: 12px; color: #ef4444;">Discount: ${item.discountType === 'percentage' ? `${item.discountValue}%` : formatCurrency(item.discountValue, true)}</span>` : ''}
+        </td>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(price, true)}</td>
-        <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(lineTotal, true)}</td>
+        <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">
+          ${hasDiscount ? `<div style="text-decoration: line-through; color: #9ca3af; font-size: 13px;">${formatCurrency(lineTotal, true)}</div>` : ''}
+          ${formatCurrency(finalTotal, true)}
+        </td>
       </tr>
     `;
   }).join('');

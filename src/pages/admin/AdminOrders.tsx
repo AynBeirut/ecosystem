@@ -324,8 +324,8 @@ const AdminOrders: React.FC = () => {
 
     // Validate all items have valid quantity
     const invalidItems = newOrder.items.filter(item => {
-      const qty = typeof item.quantity === 'string' ? parseInt(item.quantity) : item.quantity;
-      return !qty || qty < 1 || isNaN(qty);
+      const qty = typeof item.quantity === 'string' ? parseFloat(item.quantity) : item.quantity;
+      return !qty || qty <= 0 || isNaN(qty);
     });
     if (invalidItems.length > 0) {
       toast({ 
@@ -1053,11 +1053,12 @@ const AdminOrders: React.FC = () => {
                             </Select>
                             <Input
                               type="number"
-                              min="1"
+                              min="0.01"
+                              step="0.01"
                               value={item.quantity || ''}
                               onChange={(e) => {
                                 const val = e.target.value;
-                                updateOrderItem(index, 'quantity', val === '' ? '' : parseInt(val) || 0);
+                                updateOrderItem(index, 'quantity', val === '' ? '' : parseFloat(val) || 0);
                               }}
                               className="w-20"
                               placeholder="Qty"
