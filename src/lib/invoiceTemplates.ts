@@ -38,14 +38,16 @@ export const generateInvoiceHTML = (
     return `
       <tr>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">
-          ${product?.name || 'Product'}
-          ${hasDiscount ? `<br/><span style="font-size: 12px; color: #ef4444;">Discount: ${item.discountType === 'percentage' ? `${item.discountValue}%` : formatCurrency(item.discountValue, true)}</span>` : ''}
+          <div>${product?.name || 'Product'}</div>
+          ${hasDiscount ? `<div style="font-size: 11px; color: #ef4444; margin-top: 4px;">Discount: ${item.discountType === 'percentage' ? `${item.discountValue}%` : formatCurrency(item.discountValue, true)}</div>` : ''}
         </td>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(price, true)}</td>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">
-          ${hasDiscount ? `<div style="text-decoration: line-through; color: #9ca3af; font-size: 13px;">${formatCurrency(lineTotal, true)}</div>` : ''}
-          ${formatCurrency(finalTotal, true)}
+          ${hasDiscount ? `
+            <div style="color: #9ca3af; font-size: 11px;">Before: ${formatCurrency(lineTotal, true)}</div>
+            <div style="font-weight: 600; color: #16a34a;">After: ${formatCurrency(finalTotal, true)}</div>
+          ` : `<div style="font-weight: 600;">${formatCurrency(finalTotal, true)}</div>`}
         </td>
       </tr>
     `;

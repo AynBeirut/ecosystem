@@ -469,17 +469,19 @@ const AdminDashboard: React.FC = () => {
               </CardContent>
             </Card>
 
-            <Card className="p-4">
-              <CardContent className="flex items-center gap-4">
-                <div className="h-12 w-12 rounded-md bg-indigo-500 text-white flex items-center justify-center">
-                  <User className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm text-gray-500">Customers</div>
-                  <div className="text-2xl font-semibold text-gray-900">{customerCount}</div>
-                </div>
-              </CardContent>
-            </Card>
+            <Link to="/admin/customers">
+              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
+                <CardContent className="flex items-center gap-4">
+                  <div className="h-12 w-12 rounded-md bg-indigo-500 text-white flex items-center justify-center">
+                    <User className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-500">Customers</div>
+                    <div className="text-2xl font-semibold text-gray-900">{customerCount}</div>
+                  </div>
+                </CardContent>
+              </Card>
+            </Link>
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

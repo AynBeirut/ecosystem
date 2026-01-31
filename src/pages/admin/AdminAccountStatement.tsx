@@ -61,6 +61,7 @@ interface SalesRecord {
   invoiceNumber?: string;
   total: number;
   amountPaid: number;
+  taxAmount?: number;
   status: string;
   paymentStatus?: string;
 }
@@ -455,6 +456,12 @@ const AdminAccountStatement: React.FC = () => {
       
       ordersSnapshot.forEach(doc => {
         const order = doc.data();
+        
+        // Skip cancelled orders
+        if (order.status === 'cancelled') {
+          return;
+        }
+        
         let dateStr = 'N/A';
         if (order.createdAt) {
           if (typeof order.createdAt === 'string') {
@@ -471,6 +478,7 @@ const AdminAccountStatement: React.FC = () => {
           invoiceNumber: order.invoiceNumber,
           total: order.total || 0,
           amountPaid: order.amountPaid || 0,
+          taxAmount: order.taxAmount || 0,
           status: order.status || 'pending',
           paymentStatus: order.paymentStatus || 'unpaid'
         });
@@ -595,6 +603,12 @@ const AdminAccountStatement: React.FC = () => {
         
         ordersSnap.forEach(doc => {
           const order = doc.data();
+          
+          // Skip cancelled orders
+          if (order.status === 'cancelled') {
+            return;
+          }
+          
           const total = order.totalAmount || order.total || 0;
           const subtotal = order.subtotal || total; // Use total if no subtotal (no VAT applied)
           const vat = order.vat || (total - subtotal);
@@ -1795,8 +1809,9 @@ const AdminAccountStatement: React.FC = () => {
                       let runningBalance = 0;
                       return sales.map(sale => {
                         const total = sale.total;
-                        const net = total / 1.11;
-                        const vat = total - net;
+                        // Use actual tax amount if available, don't assume 11%
+                        const vat = sale.taxAmount || 0;
+                        const net = total - vat;
                         runningBalance += total - sale.amountPaid;
                         return (
                           <tr key={sale.id} className="border-b hover:bg-gray-50 text-sm">
@@ -1826,8 +1841,8 @@ const AdminAccountStatement: React.FC = () => {
                     <tr>
                       <td className="px-3 py-3" colSpan={3}>TOTAL</td>
                       <td className="px-3 py-3 text-right text-blue-600">{sales.reduce((sum, s) => sum + s.total, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total / 1.11), 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total - s.total / 1.11), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total - (s.taxAmount || 0)), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.taxAmount || 0), 0).toFixed(2)}</td>
                       <td className="px-3 py-3 text-right text-green-600">{sales.reduce((sum, s) => sum + s.amountPaid, 0).toFixed(2)}</td>
                       <td className="px-3 py-3 text-right">{sales.reduce((sum, s) => sum + (s.total - s.amountPaid), 0).toFixed(2)}</td>
                       <td className="px-3 py-3"></td>

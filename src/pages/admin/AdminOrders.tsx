@@ -104,11 +104,12 @@ const AdminOrders: React.FC = () => {
           setStoreProfile(profileSnap.data() as StoreProfile);
         }
 
-        const [ordersData, productsData, customersData, staffData] = await Promise.all([
+        const [ordersData, productsData, customersData, staffData, subAccountsData] = await Promise.all([
           fetchCollection('orders'),
           fetchCollection('products'),
           fetchCollection('customers'),
           fetchCollection('staff'),
+          fetchCollection('subAccounts'),
         ]);
 
         console.log('AdminOrders: Orders fetched:', ordersData);
@@ -150,7 +151,20 @@ const AdminOrders: React.FC = () => {
         setOrders(sortedOrders);
         setProducts(productsData);
         setCustomers(customersData as Customer[]);
-        setSalesStaff((staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active'));
+        
+        // Combine staff members with role 'sales_person' and sub-accounts with role 'sales'
+        const staffSalesPeople = (staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active');
+        const subAccountSalesPeople = (subAccountsData as any[])
+          .filter(s => s.role === 'sales' && s.status === 'active')
+          .map(s => ({
+            id: s.id,
+            name: s.name,
+            email: s.email,
+            role: 'sales_person', // Normalize role for compatibility
+            status: s.status,
+          } as StaffMember));
+        
+        setSalesStaff([...staffSalesPeople, ...subAccountSalesPeople]);
       } catch (error) {
         console.error('Error fetching data:', error);
         toast({ 
