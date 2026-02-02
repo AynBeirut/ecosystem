@@ -161,8 +161,8 @@ const AdminAccountStatement: React.FC = () => {
         const customerId = order.customerId || 'Walk-in';
         const customerName = order.customerName || 'Walk-in Customer';
         const total = order.total || 0;
-        // Assume full payment for delivered orders, partial for others
-        const paid = order.status === 'delivered' ? total : 0;
+        // Use paymentStatus to determine if order is paid
+        const paid = (order.paymentStatus === 'paid' || order.status === 'delivered') ? total : 0;
         
         if (!customerMap.has(customerId)) {
           customerMap.set(customerId, {
@@ -498,7 +498,7 @@ const AdminAccountStatement: React.FC = () => {
           total: order.total || 0,
           subtotal: order.subtotal || order.total || 0,
           discountAmount: order.discountAmount || 0,
-          amountPaid: order.amountPaid || 0,
+          amountPaid: order.paymentStatus === 'paid' ? (order.total || 0) : (order.amountPaid || 0),
           taxAmount: order.taxAmount || 0,
           status: order.status || 'pending',
           paymentStatus: order.paymentStatus || 'unpaid'
