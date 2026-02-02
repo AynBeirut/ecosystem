@@ -161,8 +161,8 @@ const AdminAccountStatement: React.FC = () => {
         const customerId = order.customerId || 'Walk-in';
         const customerName = order.customerName || 'Walk-in Customer';
         const total = order.total || 0;
-        // Use paymentStatus to determine if order is paid
-        const paid = (order.paymentStatus === 'paid' || order.status === 'delivered') ? total : 0;
+        // Use ONLY paymentStatus to determine if order is paid
+        const paid = order.paymentStatus === 'paid' ? total : 0;
         
         if (!customerMap.has(customerId)) {
           customerMap.set(customerId, {
