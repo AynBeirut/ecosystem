@@ -721,13 +721,25 @@ const AdminProduction: React.FC = () => {
         const fgDoc = fgSnapshot.docs[0];
         const fgData = fgDoc.data() as FinishedGoodsItem;
         
+        // Calculate weighted average cost
+        const oldQty = fgData.currentBalance || 0;
+        const oldCost = fgData.costPrice || 0;
+        const newQty = actualQty;
+        const newCost = totalCostPerUnit;
+        const totalQty = oldQty + newQty;
+        
+        // Weighted average: (oldQty * oldCost + newQty * newCost) / totalQty
+        const weightedAvgCost = totalQty > 0 
+          ? ((oldQty * oldCost) + (newQty * newCost)) / totalQty 
+          : newCost;
+        
         await updateDoc(doc(db, 'finishedGoodsInventory', fgDoc.id), {
-          currentBalance: (fgData.currentBalance || 0) + actualQty,
+          currentBalance: totalQty,
           quantityManufactured: (fgData.quantityManufactured || 0) + actualQty,
           transactions: [...(fgData.transactions || []), transaction],
           batchQueue: [...(fgData.batchQueue || []), batchDetails],
-          costPrice: totalCostPerUnit, // Update cost price to latest
-          totalValue: ((fgData.currentBalance || 0) + actualQty) * totalCostPerUnit,
+          costPrice: weightedAvgCost, // Use weighted average cost
+          totalValue: totalQty * weightedAvgCost,
           updatedAt: new Date().toISOString(),
         });
       } else {

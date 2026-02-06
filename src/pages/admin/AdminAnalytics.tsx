@@ -16,6 +16,8 @@ const AdminAnalytics: React.FC = () => {
   const [loading, setLoading] = useState(true);
   
   const [totalRevenue, setTotalRevenue] = useState(0);
+  const [totalCost, setTotalCost] = useState(0);
+  const [totalProfit, setTotalProfit] = useState(0);
   const [totalOrders, setTotalOrders] = useState(0);
   const [activeProducts, setActiveProducts] = useState(0);
   const [salesData, setSalesData] = useState<any[]>([]);
@@ -48,10 +50,29 @@ const AdminAnalytics: React.FC = () => {
       const ordersSnapshot = await getDocs(ordersQuery);
       
       let revenue = 0;
+      let totalCostOfGoodsSold = 0;
       let orderCount = 0;
-      const dailySales: Record<string, { sales: number; orders: number }> = {};
+      const dailySales: Record<string, { sales: number; orders: number; cost: number; profit: number }> = {};
       const categorySales: Record<string, number> = {};
-      const productSales: Record<string, { name: string; sales: number; revenue: number }> = {};
+      const productSales: Record<string, { name: string; sales: number; revenue: number; cost: number; profit: number }> = {};
+      
+      // Fetch finished goods for cost data
+      const finishedGoodsQuery = query(
+        collection(db, 'finishedGoodsInventory'),
+        where('storeId', '==', user?.storeId)
+      );
+      const finishedGoodsSnapshot = await getDocs(finishedGoodsQuery);
+      const finishedGoodsCosts: Record<string, number> = {};
+      
+      finishedGoodsSnapshot.forEach(doc => {
+        const fg = doc.data();
+        if (fg.productId) {
+          finishedGoodsCosts[fg.productId] = fg.costPrice || 0;
+        }
+        if (fg.composedProductId) {
+          finishedGoodsCosts[fg.composedProductId] = fg.costPrice || 0;
+        }
+      });
       
       ordersSnapshot.forEach(doc => {
         const order = doc.data();
@@ -66,7 +87,7 @@ const AdminAnalytics: React.FC = () => {
           // Daily sales
           const dayKey = orderDate.toLocaleDateString('en-US', { weekday: 'short' });
           if (!dailySales[dayKey]) {
-            dailySales[dayKey] = { sales: 0, orders: 0 };
+            dailySales[dayKey] = { sales: 0, orders: 0, cost: 0, profit: 0 };
           }
           dailySales[dayKey].sales += total;
           dailySales[dayKey].orders++;
@@ -79,11 +100,22 @@ const AdminAnalytics: React.FC = () => {
             const price = item.price || 0;
             const itemRevenue = quantity * price;
             
+            // Get cost from finished goods (for composed products) or use a default
+            const unitCost = finishedGoodsCosts[productId] || 0;
+            const itemCost = quantity * unitCost;
+            const itemProfit = itemRevenue - itemCost;
+            
+            totalCostOfGoodsSold += itemCost;
+            dailySales[dayKey].cost += itemCost;
+            dailySales[dayKey].profit += itemProfit;
+            
             if (!productSales[productId]) {
-              productSales[productId] = { name: 'Product', sales: 0, revenue: 0 };
+              productSales[productId] = { name: 'Product', sales: 0, revenue: 0, cost: 0, profit: 0 };
             }
             productSales[productId].sales += quantity;
             productSales[productId].revenue += itemRevenue;
+            productSales[productId].cost += itemCost;
+            productSales[productId].profit += itemProfit;
           });
         }
       });
@@ -121,7 +153,9 @@ const AdminAnalytics: React.FC = () => {
         last7Days.push({
           name: dayName,
           sales: dailySales[dayName]?.sales || 0,
-          orders: dailySales[dayName]?.orders || 0
+          orders: dailySales[dayName]?.orders || 0,
+          cost: dailySales[dayName]?.cost || 0,
+          profit: dailySales[dayName]?.profit || 0
         });
       }
       
@@ -136,17 +170,24 @@ const AdminAnalytics: React.FC = () => {
         .sort((a, b) => b.sales - a.sales)
         .slice(0, 5);
       
-      // Format top products
+      // Format top products with profit data
       const formattedProducts = Object.values(productSales)
         .sort((a, b) => b.revenue - a.revenue)
         .slice(0, 5)
         .map(p => ({
           name: p.name,
           sales: p.sales,
-          revenue: Math.round(p.revenue)
+          revenue: Math.round(p.revenue),
+          cost: Math.round(p.cost),
+          profit: Math.round(p.profit),
+          margin: p.revenue > 0 ? Math.round((p.profit / p.revenue) * 100) : 0
         }));
       
+      const grossProfit = revenue - totalCostOfGoodsSold;
+      
       setTotalRevenue(revenue);
+      setTotalCost(totalCostOfGoodsSold);
+      setTotalProfit(grossProfit);
       setTotalOrders(orderCount);
       setActiveProducts(activeCount);
       setSalesData(last7Days);
@@ -169,6 +210,20 @@ const AdminAnalytics: React.FC = () => {
       change: timeRange === '7d' ? 'Last 7 days' : timeRange === '30d' ? 'Last 30 days' : timeRange === '90d' ? 'Last 90 days' : 'Last year',
       isPositive: true,
       icon: DollarSign
+    },
+    {
+      title: 'Total Cost',
+      value: `$${totalCost.toFixed(2)}`,
+      change: 'Cost of goods sold',
+      isPositive: false,
+      icon: Package
+    },
+    {
+      title: 'Gross Profit',
+      value: `$${totalProfit.toFixed(2)}`,
+      change: totalRevenue > 0 ? `${((totalProfit / totalRevenue) * 100).toFixed(1)}% margin` : '0% margin',
+      isPositive: totalProfit >= 0,
+      icon: TrendingUp
     },
     {
       title: 'Total Orders',
@@ -374,7 +429,7 @@ const AdminAnalytics: React.FC = () => {
           <Card>
             <CardHeader>
               <CardTitle>Top Products</CardTitle>
-              <CardDescription>Best performing products by sales volume</CardDescription>
+              <CardDescription>Best performing products with profit margins</CardDescription>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
@@ -391,7 +446,9 @@ const AdminAnalytics: React.FC = () => {
                     </div>
                     <div className="text-right">
                       <div className="font-medium">${product.revenue}</div>
-                      <div className="text-sm text-muted-foreground">Revenue</div>
+                      <div className="text-xs text-muted-foreground">
+                        Cost: ${product.cost} • Profit: ${product.profit} ({product.margin}%)
+                      </div>
                     </div>
                   </div>
                 ))}
