@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Factory, Plus, Edit2, Trash2, CheckCircle, Clock, AlertCircle, Package, RefreshCw } from 'lucide-react';
+import { Factory, Plus, Edit2, Trash2, CheckCircle, Clock, AlertCircle, Package, RefreshCw, Download, FileDown } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ProductionBatch, ProductionBatchStatus, ComposedProduct, RawMaterial, Recipe } from '@/types/inventory';
 import { FinishedGoodsItem } from '@/types/finishedGoods';
@@ -17,6 +17,9 @@ import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 const STATUS_CONFIG: Record<ProductionBatchStatus, { label: string; color: string; icon: any }> = {
   planned: { label: 'Planned', color: 'bg-blue-100 text-blue-800', icon: Clock },
@@ -845,6 +848,71 @@ const AdminProduction: React.FC = () => {
     return <Badge className={colors[priority as keyof typeof colors]}>{priority.toUpperCase()}</Badge>;
   };
 
+  const exportToExcel = () => {
+    const data = filteredBatches.map(batch => ({
+      'Batch Code': batch.batchNumber,
+      'Product': batch.productName,
+      'Quantity': batch.quantity,
+      'Actual Quantity': batch.actualQuantity || '-',
+      'Status': batch.status.toUpperCase(),
+      'Priority': batch.priority.toUpperCase(),
+      'Scheduled Date': batch.scheduledDate,
+      'Completion Date': batch.completionDate || '-',
+      'Cost': batch.totalCost ? `$${batch.totalCost.toFixed(2)}` : '-',
+      'Notes': batch.notes || '-'
+    }));
+
+    const ws = XLSX.utils.json_to_sheet(data);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Production Batches');
+    
+    const dateRange = filterStartDate && filterEndDate 
+      ? `_${filterStartDate}_to_${filterEndDate}` 
+      : '';
+    XLSX.writeFile(wb, `production_batches${dateRange}.xlsx`);
+  };
+
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    
+    doc.setFontSize(18);
+    doc.text('PRODUCTION BATCHES REPORT', 105, 15, { align: 'center' });
+    
+    if (filterStartDate && filterEndDate) {
+      doc.setFontSize(10);
+      doc.text(`Period from ${new Date(filterStartDate).toLocaleDateString('en-GB')} to ${new Date(filterEndDate).toLocaleDateString('en-GB')}`, 105, 22, { align: 'center' });
+    }
+    
+    doc.setFontSize(8);
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString()}`, 105, filterStartDate && filterEndDate ? 28 : 22, { align: 'center' });
+    
+    const tableData = filteredBatches.map(batch => [
+      batch.batchNumber,
+      batch.productName,
+      batch.quantity.toString(),
+      batch.actualQuantity?.toString() || '-',
+      batch.status.toUpperCase(),
+      batch.priority.toUpperCase(),
+      new Date(batch.scheduledDate).toLocaleDateString('en-GB'),
+      batch.completionDate ? new Date(batch.completionDate).toLocaleDateString('en-GB') : '-',
+      batch.totalCost ? `$${batch.totalCost.toFixed(2)}` : '-'
+    ]);
+    
+    autoTable(doc, {
+      startY: filterStartDate && filterEndDate ? 32 : 26,
+      head: [['Batch', 'Product', 'Qty', 'Actual', 'Status', 'Priority', 'Scheduled', 'Completed', 'Cost']],
+      body: tableData,
+      theme: 'striped',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [66, 66, 66], textColor: 255, fontStyle: 'bold' }
+    });
+    
+    const dateRange = filterStartDate && filterEndDate 
+      ? `_${filterStartDate}_to_${filterEndDate}` 
+      : '';
+    doc.save(`production_batches${dateRange}.pdf`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {isMobile ? <MobileHeader title="Production Planning" showBackButton={true} /> : null}
@@ -972,6 +1040,27 @@ const AdminProduction: React.FC = () => {
               Clear Dates
             </Button>
           )}
+          
+          <div className="ml-auto flex gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToExcel}
+              className="flex items-center gap-2"
+            >
+              <Download className="h-4 w-4" />
+              {!isMobile && 'Export Excel'}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={exportToPDF}
+              className="flex items-center gap-2"
+            >
+              <FileDown className="h-4 w-4" />
+              {!isMobile && 'Export PDF'}
+            </Button>
+          </div>
         </div>
 
         <div className="grid gap-4">
