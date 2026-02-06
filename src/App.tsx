@@ -24,6 +24,7 @@ import AdminDelivery from "./pages/admin/AdminDelivery";
 import AdminTemplates from "./pages/admin/AdminTemplates";
 import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
 import AdminAnalytics from "./pages/admin/AdminAnalytics";
+import AdminRevenue from "./pages/admin/AdminRevenue";
 import AdminOrders from "./pages/admin/AdminOrders";
 import OrderTracking from "./pages/OrderTracking";
 import DebugConsole from './components/DebugConsole';
@@ -98,6 +99,7 @@ import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
                         <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']}><AdminTemplates /></ProtectedRoute>} />
                         <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminAnnouncements /></ProtectedRoute>} />
                         <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports"><AdminAnalytics /></ProtectedRoute>} />
+                        <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports"><AdminRevenue /></ProtectedRoute>} />
                         <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_orders"><AdminOrders /></ProtectedRoute>} />
                         {/* Inventory Management */}
                         <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['admin']}><AdminInventory /></ProtectedRoute>} />

@@ -399,20 +399,36 @@ const AdminOrders: React.FC = () => {
         createdBy: user.id,
       };
 
+      console.log('Creating order with data:', orderData);
       const docRef = await addDoc(collection(db, 'orders'), orderData);
+      console.log('Order created successfully, ID:', docRef.id);
       setOrders([{ id: docRef.id, ...orderData }, ...orders]);
 
       // Update customer stats
       if (customer) {
-        const customerRef = doc(db, 'customers', customer.id);
-        await updateDoc(customerRef, {
-          totalOrders: (customer.totalOrders || 0) + 1,
-          lifetimeValue: (customer.lifetimeValue || 0) + total,
-          lastOrderDate: new Date().toISOString(),
-        });
+        try {
+          console.log('Updating customer stats for:', customer.id);
+          const customerRef = doc(db, 'customers', customer.id);
+          await updateDoc(customerRef, {
+            totalOrders: (customer.totalOrders || 0) + 1,
+            lifetimeValue: (customer.lifetimeValue || 0) + total,
+            lastOrderDate: new Date().toISOString(),
+          });
+          console.log('Customer stats updated successfully');
+        } catch (updateError) {
+          console.error('Failed to update customer stats:', updateError);
+          // Don't fail the order creation if customer update fails
+        }
       }
 
-      await logAction(user.id, user.name, user.role, 'create', 'order', docRef.id, { newValue: orderData }, user.storeId);
+      try {
+        console.log('Logging action...');
+        await logAction(user.id, user.name, user.role, 'create', 'order', docRef.id, { newValue: orderData }, user.storeId);
+        console.log('Action logged successfully');
+      } catch (logError) {
+        console.error('Failed to log action:', logError);
+        // Don't fail the order creation if logging fails
+      }
 
       setNewOrder({
         customerId: '',

@@ -5,7 +5,8 @@ import { useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { CheckCircle2, CreditCard, Star } from 'lucide-react';
+import { CheckCircle2, CreditCard } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/context/useAuth';
 import { toast } from '@/components/ui/sonner';
 
@@ -103,78 +104,180 @@ const UpgradeToAdmin: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="container mx-auto px-4 py-8">
-        <div className="max-w-3xl mx-auto">
-          <h1 className="text-2xl font-bold mb-6 text-center">Upgrade to Premium</h1>
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle>Premium Plan</CardTitle>
-              <CardDescription>
-                <div className="flex items-center gap-4">
-                  <span className="font-semibold text-lg">{plan === 'monthly' ? '$9/month' : '$90/year'}</span>
-                  <Button
-                    variant={plan === 'monthly' ? 'outline' : 'secondary'}
-                    size="sm"
-                    onClick={() => setPlan(plan === 'monthly' ? 'yearly' : 'monthly')}
-                  >
-                    Switch to {plan === 'monthly' ? 'Yearly' : 'Monthly'}
-                  </Button>
-                </div>
-                <span className="text-xs text-gray-500">Unlock store management capabilities and premium features</span>
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ul className="space-y-3">
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>Full Store Management:</strong> Create and manage your own store in the marketplace with complete control</span>
-                </li>
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>Unlimited Products:</strong> Add unlimited products with custom details, images, and pricing</span>
-                </li>
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>Order Management:</strong> Track orders, manage delivery info with GPS coordinates, and customer details</span>
-                </li>
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>Professional Templates:</strong> Choose from 3 beautiful store templates (Modern, Classic, Vibrant)</span>
-                </li>
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>Dual Currency Support:</strong> Display prices in USD and LBP with custom exchange rates</span>
-                </li>
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>Inventory Management:</strong> Track stock levels, manage raw materials, and purchase orders</span>
-                </li>
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>Customer Insights:</strong> Access detailed analytics, customer data, and order history</span>
-                </li>
-                <li className="flex items-start">
-                  <Star className="mr-2 h-5 w-5 text-yellow-500 flex-shrink-0 mt-0.5" />
-                  <span><strong>PDF Invoicing:</strong> Generate and share professional invoices and purchase orders</span>
-                </li>
-              </ul>
-            </CardContent>
-            <CardFooter>
-              <Button 
-                className="w-full"
-                onClick={handleUpgrade}
-                disabled={isProcessing || sellerCount >= FREE_SELLER_LIMIT && !isFreeSeller}
+        <div className="max-w-5xl mx-auto">
+          <h1 className="text-3xl font-bold mb-2 text-center">Upgrade Your Account</h1>
+          <p className="text-center text-gray-600 mb-8">Choose the plan that fits your business needs</p>
+          
+          {/* Pricing Toggle */}
+          <div className="flex justify-center mb-8">
+            <div className="bg-white rounded-lg p-1 shadow-sm inline-flex">
+              <Button
+                variant={plan === 'monthly' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setPlan('monthly')}
               >
-                {isProcessing ? (
-                  <>Processing Subscription...</>
-                ) : (
-                  <>
-                    <CreditCard className="mr-2 h-4 w-4" />
-                    Subscribe now
-                  </>
-                )}
+                Monthly
               </Button>
-            </CardFooter>
-          </Card>
+              <Button
+                variant={plan === 'yearly' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setPlan('yearly')}
+              >
+                Yearly <span className="ml-1 text-xs text-green-600">(Save 17%)</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Pricing Cards */}
+          <div className="grid md:grid-cols-2 gap-6 mb-8">
+            {/* Premium Plan */}
+            <Card className="border-2">
+              <CardHeader>
+                <CardTitle className="text-2xl">Premium</CardTitle>
+                <CardDescription>
+                  <div className="mt-2">
+                    <span className="text-3xl font-bold">${plan === 'monthly' ? '10' : '100'}</span>
+                    <span className="text-gray-500">/{plan === 'monthly' ? 'month' : 'year'}</span>
+                  </div>
+                  <p className="text-sm mt-2">Perfect for getting started</p>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-3">
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Full Store Management</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Unlimited Simple Products</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Order Management & Tracking</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Professional Templates</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Dual Currency Support</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Basic Inventory Management</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Customer & Analytics</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>PDF Invoicing</span>
+                  </li>
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Button 
+                  className="w-full"
+                  onClick={handleUpgrade}
+                  variant="outline"
+                  disabled={isProcessing}
+                >
+                  Get Premium
+                </Button>
+              </CardFooter>
+            </Card>
+
+            {/* Pro Plan */}
+            <Card className="border-2 border-primary shadow-lg relative">
+              <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                <Badge className="bg-primary text-white px-4 py-1">RECOMMENDED</Badge>
+              </div>
+              <CardHeader>
+                <CardTitle className="text-2xl">Pro</CardTitle>
+                <CardDescription>
+                  <div className="mt-2">
+                    <span className="text-3xl font-bold">${plan === 'monthly' ? '20' : '220'}</span>
+                    <span className="text-gray-500">/{plan === 'monthly' ? 'month' : 'year'}</span>
+                  </div>
+                  <p className="text-sm mt-2">For advanced businesses</p>
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <ul className="space-y-3">
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Everything in Premium</strong></span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>POS System Included</strong> - Point of Sale for in-store</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Composed Products</strong> - Create products from recipes</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span><strong>Composed Services</strong> - Recurring service billing</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Advanced Production Management</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Raw Materials Tracking</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Recipe & Cost Management</span>
+                  </li>
+                  <li className="flex items-start">
+                    <CheckCircle2 className="mr-2 h-5 w-5 text-green-500 flex-shrink-0 mt-0.5" />
+                    <span>Priority Support</span>
+                  </li>
+                </ul>
+              </CardContent>
+              <CardFooter>
+                <Button 
+                  className="w-full"
+                  onClick={handleUpgrade}
+                  disabled={isProcessing}
+                >
+                  {isProcessing ? (
+                    <>Processing...</>
+                  ) : (
+                    <>
+                      <CreditCard className="mr-2 h-4 w-4" />
+                      Get Pro
+                    </>
+                  )}
+                </Button>
+              </CardFooter>
+            </Card>
+          </div>
+
+          {/* Add-ons */}
+          <div className="bg-white rounded-lg p-6 shadow-sm">
+            <h2 className="text-xl font-bold mb-4">Add-ons</h2>
+            <div className="grid md:grid-cols-1 gap-4">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Extra Storage (10GB)</CardTitle>
+                  <CardDescription>
+                    <span className="text-2xl font-bold">${plan === 'monthly' ? '5' : '50'}</span>
+                    <span className="text-gray-500">/{plan === 'monthly' ? 'month' : 'year'}</span>
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <p className="text-sm text-gray-600">Additional storage for images and documents</p>
+                </CardContent>
+              </Card>
+            </div>
+          </div>
         </div>
       </main>
     </div>

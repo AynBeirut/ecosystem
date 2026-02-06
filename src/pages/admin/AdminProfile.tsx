@@ -16,6 +16,7 @@ import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { StoreProfile } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
+import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
 
 const defaultProfile: StoreProfile = {
   name: '',
@@ -247,6 +248,36 @@ const AdminProfile: React.FC = () => {
           </h1>
           <p className="text-muted-foreground">Manage your store information and branding</p>
         </div>
+
+        {/* Subscription Card */}
+        <Card className="max-w-2xl mb-6 border-2 border-primary">
+          <CardHeader>
+            <CardTitle>Subscription Plan</CardTitle>
+            <CardDescription>
+              Your current subscription tier and features
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-2xl font-bold mb-1">{getSubscriptionTierName(formData)}</div>
+                <div className="text-sm text-gray-600">
+                  {hasComposedAccess(formData) ? (
+                    <span className="text-green-600">✓ Includes Composed Products & POS System</span>
+                  ) : (
+                    <span className="text-amber-600">Basic features only</span>
+                  )}
+                </div>
+              </div>
+              <Button 
+                variant={hasComposedAccess(formData) ? "outline" : "default"}
+                onClick={() => window.location.href = '/upgrade'}
+              >
+                {hasComposedAccess(formData) ? 'Manage Plan' : 'Upgrade to Pro'}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
 
         <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
           {/* Logo Upload Section */}

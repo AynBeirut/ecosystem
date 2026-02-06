@@ -13,6 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { ComposedProduct, Recipe, RawMaterial } from '@/types/inventory';
 import { Product } from '@/types/product';
+import { StoreProfile } from '@/types/storeProfile';
+import { hasComposedAccess } from '@/lib/subscriptionHelper';
 import { logAction } from '@/lib/auditLog';
 import { calculateAvailableStock, getComposedStockStatus } from '@/lib/composedProductStock';
 import MobileHeader from '@/components/MobileHeader';
@@ -33,6 +35,7 @@ const AdminComposedProducts: React.FC = () => {
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [finishedGoods, setFinishedGoods] = useState<any[]>([]);
+  const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [categories, setCategories] = useState<string[]>(['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other']);
   const [priceMultiplier, setPriceMultiplier] = useState<number>(2.5);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
@@ -102,11 +105,12 @@ const AdminComposedProducts: React.FC = () => {
       }));
       setFinishedGoods(finishedGoodsList);
 
-      // Fetch store profile for categories and price multiplier
+      // Fetch store profile for subscription check, categories and price multiplier
       const profileRef = doc(db, 'storeProfiles', user.storeId);
       const profileSnap = await getDoc(profileRef);
       if (profileSnap.exists()) {
-        const profileData = profileSnap.data();
+        const profileData = profileSnap.data() as StoreProfile;
+        setStoreProfile(profileData);
         setCategories(profileData.productCategories || ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other']);
         setPriceMultiplier(profileData.priceMultiplier || 2.5);
       }
@@ -435,7 +439,7 @@ const AdminComposedProducts: React.FC = () => {
             {!isMobile && <BackButton label="Back to Dashboard" />}
             <h1 className="text-2xl font-bold">{canManageInventory ? 'Composed Products' : 'View Composed Products'}</h1>
           </div>
-          {canManageInventory && (
+          {canManageInventory && hasComposedAccess(storeProfile) && (
             <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
               <DialogTrigger asChild>
                 <Button>
@@ -653,17 +657,36 @@ const AdminComposedProducts: React.FC = () => {
           )}
         </div>
 
-        {/* Composed Products List */}
-        <div className="grid gap-4">
-          {composedProducts.length === 0 ? (
-            <Card>
-              <CardContent className="py-12 text-center">
-                <Package2 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                <p className="text-gray-500">No composed products yet. Link products to recipes to get started.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            composedProducts.map((composedProduct) => {
+        {/* Upgrade Prompt for Premium Users */}
+        {!hasComposedAccess(storeProfile) ? (
+          <Card className="border-2 border-amber-500 bg-amber-50">
+            <CardContent className="py-12">
+              <div className="text-center max-w-md mx-auto">
+                <AlertTriangle className="h-16 w-16 text-amber-600 mx-auto mb-4" />
+                <h3 className="text-2xl font-semibold mb-3">Upgrade to Pro Required</h3>
+                <p className="text-gray-600 mb-6">
+                  Composed Products and Services are available exclusively in the Pro plan.
+                  Upgrade now to create products from recipes, manage recurring services, and access the POS system.
+                </p>
+                <Button onClick={() => window.location.href = '/upgrade'} className="bg-amber-600 hover:bg-amber-700" size="lg">
+                  <span className="mr-2">🚀</span> Upgrade to Pro
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+        ) : (
+          <>
+            {/* Composed Products List */}
+            <div className="grid gap-4">
+              {composedProducts.length === 0 ? (
+                <Card>
+                  <CardContent className="py-12 text-center">
+                    <Package2 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                    <p className="text-gray-500">No composed products yet. Link products to recipes to get started.</p>
+                  </CardContent>
+                </Card>
+              ) : (
+                composedProducts.map((composedProduct) => {
               const product = products.find(p => p.id === composedProduct.productId);
               const recipe = recipes.find(r => r.id === composedProduct.recipeId);
               const profitMargin = composedProduct.sellingPrice - composedProduct.costPrice;
@@ -771,7 +794,9 @@ const AdminComposedProducts: React.FC = () => {
               );
             })
           )}
-        </div>
+            </div>
+          </>
+        )}
 
         {/* Edit Composed Product Dialog */}
         {editingProduct && (

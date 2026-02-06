@@ -143,13 +143,20 @@ const AdminProducts: React.FC = () => {
   };
 
   const handleDeleteProduct = async (productId: string) => {
+    if (!confirm('Are you sure you want to delete this product? This action cannot be undone.')) {
+      return;
+    }
+    
     try {
+      console.log('Attempting to delete product:', productId);
       const db = getFirestore();
       await deleteDoc(doc(db, 'products', productId));
       setProducts(products.filter(p => p.id !== productId));
       toast({ title: "Success", description: "Product deleted successfully!" });
+      console.log('Product deleted successfully');
     } catch (err) {
-      toast({ title: "Error", description: "Failed to delete product.", variant: "destructive" });
+      console.error('Delete error:', err);
+      toast({ title: "Error", description: `Failed to delete product: ${err.message}`, variant: "destructive" });
     }
   };
 

@@ -42,7 +42,7 @@ const CustomerForm: React.FC<{
         />
       </div>
       <div>
-        <Label htmlFor="email">Email *</Label>
+        <Label htmlFor="email">Email</Label>
         <Input
           id="email"
           type="email"
@@ -209,7 +209,7 @@ const AdminCustomers: React.FC = () => {
   };
 
   const handleAddCustomer = async () => {
-    if (!newCustomer.name || !newCustomer.email || !user?.storeId) {
+    if (!newCustomer.name || !user?.storeId) {
       toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
       return;
     }

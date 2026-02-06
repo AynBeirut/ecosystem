@@ -12,6 +12,9 @@ export interface StoreProfile {
   twitter: string;
   logo: string;
   status: 'online' | 'offline'; // Store visibility status
+  // Subscription & Add-ons
+  subscriptionTier?: 'premium' | 'pro'; // Default premium (without composed), pro (with composed)
+  addOns?: string[]; // ['pos', 'storage'] - Active add-ons
   // Multi-currency support
   mainCurrency?: string; // Main currency for calculations (USD, EUR, LBP)
   secondaryCurrency?: string; // Display currency

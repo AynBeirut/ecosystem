@@ -18,7 +18,8 @@ import {
   BarChart,
   ShoppingCart,
   FileText,
-  Undo2
+  Undo2,
+  DollarSign
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -375,12 +376,20 @@ const AdminDashboard: React.FC = () => {
               </Link>
             </li>
             {canViewReports && (
-              <li>
-                <Link to="/admin/analytics" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <BarChart className="h-5 w-5 mr-3" />
-                  <span>Analytics</span>
-                </Link>
-              </li>
+              <>
+                <li>
+                  <Link to="/admin/analytics" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                    <BarChart className="h-5 w-5 mr-3" />
+                    <span>Analytics</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/admin/revenue" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                    <DollarSign className="h-5 w-5 mr-3" />
+                    <span>Revenue</span>
+                  </Link>
+                </li>
+              </>
             )}
             {user?.role === 'admin' && (
               <>
@@ -456,7 +465,7 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </Link>
 
-            <Link to="/admin/account-statement?tab=sales">
+            <Link to="/admin/revenue">
               <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
                 <CardContent className="flex items-center gap-4">
                   <div className="h-12 w-12 rounded-md bg-green-500 text-white flex items-center justify-center">

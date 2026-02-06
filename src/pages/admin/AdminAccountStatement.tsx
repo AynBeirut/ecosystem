@@ -8,6 +8,7 @@ import { useNavigate } from 'react-router-dom';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { initArabicPDF, writeText, cleanTextForPDF } from '@/lib/arabicPDF';
 
 interface CustomerBalance {
   id: string;
@@ -67,6 +68,7 @@ interface SalesRecord {
   taxAmount?: number;
   status: string;
   paymentStatus?: string;
+  items?: any[];
 }
 
 interface DetailedTransaction {
@@ -118,6 +120,8 @@ const AdminAccountStatement: React.FC = () => {
   // Date filters
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [filterCustomer, setFilterCustomer] = useState('');
+  const [filterProduct, setFilterProduct] = useState('');
 
   useEffect(() => {
     if (user?.storeId) {
@@ -161,8 +165,8 @@ const AdminAccountStatement: React.FC = () => {
         const customerId = order.customerId || 'Walk-in';
         const customerName = order.customerName || 'Walk-in Customer';
         const total = order.total || 0;
-        // Use ONLY paymentStatus to determine if order is paid
-        const paid = order.paymentStatus === 'paid' ? total : 0;
+        // Use the actual amount paid (handles partial payments)
+        const paid = order.paymentStatus === 'paid' ? total : (order.amountPaid || 0);
         
         if (!customerMap.has(customerId)) {
           customerMap.set(customerId, {
@@ -501,7 +505,8 @@ const AdminAccountStatement: React.FC = () => {
           amountPaid: order.paymentStatus === 'paid' ? (order.total || 0) : (order.amountPaid || 0),
           taxAmount: order.taxAmount || 0,
           status: order.status || 'pending',
-          paymentStatus: order.paymentStatus || 'unpaid'
+          paymentStatus: order.paymentStatus || 'unpaid',
+          items: order.items || []
         });
         total += order.total || 0;
       });
@@ -792,7 +797,8 @@ const AdminAccountStatement: React.FC = () => {
     doc.text(detailedStatement.accountNo, 50, y);
     y += 5;
     doc.text('A/c name:', 20, y);
-    doc.text(detailedStatement.accountName, 50, y);
+    const cleanAccName = cleanTextForPDF(detailedStatement.accountName);
+    doc.text(cleanAccName, 50, y);
     y += 5;
     doc.text('Attn:', 20, y);
     doc.text(detailedStatement.attn || '', 50, y);
@@ -1293,10 +1299,20 @@ const AdminAccountStatement: React.FC = () => {
       const saleDate = new Date(sale.date).toISOString().split('T')[0];
       const matchesStart = !filterStartDate || saleDate >= filterStartDate;
       const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-      return matchesStart && matchesEnd;
+      const matchesCustomer = !filterCustomer || sale.customer === filterCustomer;
+      const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: any) => item.productId === filterProduct));
+      return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
     });
 
-    const doc = new jsPDF();
+    const doc = new jsPDF('p', 'mm', 'a4');
+    
+    // Try to use a unicode-friendly font, fallback to helvetica
+    try {
+      doc.setFont('helvetica');
+    } catch (e) {
+      console.warn('Font setting failed:', e);
+    }
+    
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text('SALES HISTORY REPORT', 105, 15, { align: 'center' });
@@ -1331,11 +1347,13 @@ const AdminAccountStatement: React.FC = () => {
         y = 20;
       }
       
-      // Customer header
+      // Customer header - clean up Arabic text for PDF
       if (y > 35) y += 5;
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
-      doc.text(`CLIENT: ${customer.toUpperCase()}`, 14, y);
+      // Remove or replace non-Latin characters for PDF compatibility
+      const cleanCustomerName = customer.replace(/[^\x00-\x7F]/g, '?');
+      doc.text(`CLIENT: ${cleanCustomerName.toUpperCase()}`, 14, y);
       y += 5;
       
       // Column headers
@@ -1385,7 +1403,8 @@ const AdminAccountStatement: React.FC = () => {
       y += 4;
       doc.setFontSize(8);
       doc.setFont(undefined, 'bold');
-      doc.text(`SUBTOTAL - ${customer}`, 14, y);
+      const cleanSubtotal = customer.replace(/[^\x00-\x7F]/g, '?');
+      doc.text(`SUBTOTAL - ${cleanSubtotal}`, 14, y);
       doc.text(`$${customerDiscount.toFixed(2)}`, 85, y, { align: 'right' });
       doc.text(`$${customerTotal.toFixed(2)}`, 115, y, { align: 'right' });
       doc.text(`$${customerPaid.toFixed(2)}`, 145, y, { align: 'right' });
@@ -1418,8 +1437,12 @@ const AdminAccountStatement: React.FC = () => {
     doc.save('sales_history.pdf');
   };
 
-  const exportCustomersToPDF = () => {
+  const exportCustomersToPDF = async () => {
     const doc = new jsPDF();
+    
+    // Initialize Arabic font support
+    await initArabicPDF(doc);
+    
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text('CUSTOMER BALANCES STATEMENT', 105, 15, { align: 'center' });
@@ -1448,7 +1471,9 @@ const AdminAccountStatement: React.FC = () => {
         doc.addPage();
         y = 20;
       }
-      doc.text(customer.name.substring(0, 30), 20, y);
+      // Use writeText for Arabic support
+      const customerName = customer.name.substring(0, 30);
+      writeText(doc, customerName, 20, y);
       doc.text(`$${customer.totalPurchases.toFixed(2)}`, 90, y);
       doc.text(`$${customer.totalPayments.toFixed(2)}`, 130, y);
       doc.text(`$${customer.balance.toFixed(2)}`, 170, y);
@@ -1502,7 +1527,8 @@ const AdminAccountStatement: React.FC = () => {
         doc.addPage();
         y = 20;
       }
-      doc.text(supplier.name.substring(0, 30), 20, y);
+      const cleanName = cleanTextForPDF(supplier.name).substring(0, 30);
+      doc.text(cleanName, 20, y);
       doc.text(`$${supplier.totalPurchases.toFixed(2)}`, 90, y);
       doc.text(`$${supplier.totalPayments.toFixed(2)}`, 130, y);
       doc.text(`$${supplier.balance.toFixed(2)}`, 170, y);
@@ -1588,8 +1614,10 @@ const AdminAccountStatement: React.FC = () => {
           doc.addPage();
           y = 20;
         }
-        doc.text(product.name.substring(0, 30), 20, y);
-        doc.text(product.category.substring(0, 15), 90, y);
+        const cleanName = cleanTextForPDF(product.name).substring(0, 30);
+        doc.text(cleanName, 20, y);
+        const cleanCat = cleanTextForPDF(product.category).substring(0, 15);
+        doc.text(cleanCat, 90, y);
         doc.text(product.totalSold.toString(), 130, y, { align: 'right' });
         doc.text(`$${product.totalRevenue.toFixed(2)}`, 170, y, { align: 'right' });
         y += 6;
@@ -1668,7 +1696,8 @@ const AdminAccountStatement: React.FC = () => {
       if (y > 35) y += 5;
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
-      doc.text(`SUPPLIER: ${supplier.toUpperCase()}`, 20, y);
+      const cleanSupplierHeader = cleanTextForPDF(supplier);
+      doc.text(`SUPPLIER: ${cleanSupplierHeader.toUpperCase()}`, 20, y);
       y += 5;
       
       // Column headers
@@ -1692,7 +1721,8 @@ const AdminAccountStatement: React.FC = () => {
           y = 20;
         }
         doc.text(new Date(purchase.date).toLocaleDateString('en-GB'), 20, y);
-        doc.text(purchase.supplier.substring(0, 25), 60, y);
+        const cleanSupplierName = cleanTextForPDF(purchase.supplier).substring(0, 25);
+        doc.text(cleanSupplierName, 60, y);
         doc.text(`$${purchase.amount.toFixed(2)}`, 140, y, { align: 'right' });
         doc.text(purchase.status.substring(0, 10), 180, y);
         y += 5;
@@ -1706,7 +1736,8 @@ const AdminAccountStatement: React.FC = () => {
       y += 4;
       doc.setFontSize(9);
       doc.setFont(undefined, 'bold');
-      doc.text(`SUBTOTAL - ${supplier}`, 60, y);
+      const cleanSubtotal = cleanTextForPDF(supplier);
+      doc.text(`SUBTOTAL - ${cleanSubtotal}`, 60, y);
       doc.text(`$${supplierTotal.toFixed(2)}`, 140, y, { align: 'right' });
       y += 7;
       
@@ -1767,7 +1798,8 @@ const AdminAccountStatement: React.FC = () => {
       if (y > 35) y += 5;
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
-      doc.text(`CATEGORY: ${category.toUpperCase()}`, 20, y);
+      const cleanCategory = cleanTextForPDF(category);
+      doc.text(`CATEGORY: ${cleanCategory.toUpperCase()}`, 20, y);
       y += 5;
       
       // Column headers
@@ -1791,8 +1823,10 @@ const AdminAccountStatement: React.FC = () => {
           y = 20;
         }
         doc.text(expense.date, 20, y);
-        doc.text(expense.category.substring(0, 12), 50, y);
-        doc.text(expense.description.substring(0, 28), 90, y);
+        const cleanCat = cleanTextForPDF(expense.category).substring(0, 12);
+        doc.text(cleanCat, 50, y);
+        const cleanDesc = cleanTextForPDF(expense.description).substring(0, 28);
+        doc.text(cleanDesc, 90, y);
         doc.text(`$${expense.amount.toFixed(2)}`, 170, y, { align: 'right' });
         y += 5;
         
@@ -1885,7 +1919,8 @@ const AdminAccountStatement: React.FC = () => {
     y += 8;
     doc.setFontSize(10);
     customers.slice(0, 5).forEach(customer => {
-      doc.text(`${customer.name}: $${customer.balance.toFixed(2)}`, 25, y);
+      const cleanName = cleanTextForPDF(customer.name);
+      doc.text(`${cleanName}: $${customer.balance.toFixed(2)}`, 25, y);
       y += 6;
     });
     
@@ -1895,7 +1930,8 @@ const AdminAccountStatement: React.FC = () => {
     y += 8;
     doc.setFontSize(10);
     suppliers.slice(0, 5).forEach(supplier => {
-      doc.text(`${supplier.name}: $${supplier.balance.toFixed(2)}`, 25, y);
+      const cleanName = cleanTextForPDF(supplier.name);
+      doc.text(`${cleanName}: $${supplier.balance.toFixed(2)}`, 25, y);
       y += 6;
     });
     
@@ -1909,7 +1945,8 @@ const AdminAccountStatement: React.FC = () => {
     y += 8;
     doc.setFontSize(10);
     products.slice(0, 5).forEach(product => {
-      doc.text(`${product.name}: $${product.totalRevenue.toFixed(2)}`, 25, y);
+      const cleanName = cleanTextForPDF(product.name);
+      doc.text(`${cleanName}: $${product.totalRevenue.toFixed(2)}`, 25, y);
       y += 6;
     });
     
@@ -2322,36 +2359,125 @@ const AdminAccountStatement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {products.map(product => {
-                      // Don't auto-calculate VAT - it should come from actual order tax data
-                      const discount = product.totalDiscount || 0;
-                      const subtotal = product.totalRevenue + discount;
-                      const netRevenue = product.totalRevenue;
-                      const vatRevenue = 0; // No automatic VAT calculation
-                      return (
-                        <tr key={product.id} className="border-b hover:bg-gray-50">
-                          <td className="border px-4 py-2">{product.name}</td>
-                          <td className="border px-4 py-2">{product.category}</td>
-                          <td className="border px-4 py-2 text-right">{product.totalSold}</td>
-                          <td className="border px-4 py-2 text-right">{subtotal.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right text-red-600">{discount > 0 ? `-${discount.toFixed(2)}` : '0.00'}</td>
-                          <td className="border px-4 py-2 text-right font-semibold">{product.totalRevenue.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{netRevenue.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{vatRevenue.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
+                    {(() => {
+                      // Filter sales by date and recalculate product summary
+                      const filteredSales = sales.filter(sale => {
+                        const saleDate = new Date(sale.date).toISOString().split('T')[0];
+                        const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                        const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                        return matchesStart && matchesEnd;
+                      });
+
+                      // Recalculate product totals from filtered sales
+                      const filteredProductMap = new Map<string, ProductSummary>();
+                      
+                      // Initialize all products with zero values
+                      products.forEach(product => {
+                        filteredProductMap.set(product.id, {
+                          id: product.id,
+                          name: product.name,
+                          category: product.category,
+                          totalSold: 0,
+                          totalRevenue: 0,
+                          totalDiscount: 0
+                        });
+                      });
+
+                      // Calculate from filtered sales
+                      filteredSales.forEach(sale => {
+                        const items = sale.items || [];
+                        const orderSubtotal = sale.subtotal || sale.total || 0;
+                        const orderDiscount = sale.discountAmount || 0;
+                        
+                        items.forEach((item: any) => {
+                          const productId = item.productId || item.id;
+                          if (productId && filteredProductMap.has(productId)) {
+                            const product = filteredProductMap.get(productId)!;
+                            const quantity = item.quantity || 0;
+                            const price = item.price || 0;
+                            const itemSubtotal = quantity * price;
+                            
+                            // Calculate proportional discount for this item
+                            const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
+                            const itemTotal = itemSubtotal - itemDiscount;
+                            
+                            product.totalSold += quantity;
+                            product.totalRevenue += itemTotal;
+                            product.totalDiscount += itemDiscount;
+                          }
+                        });
+                      });
+
+                      const filteredProducts = Array.from(filteredProductMap.values()).filter(p => p.totalSold > 0);
+
+                      return filteredProducts.map(product => {
+                        const discount = product.totalDiscount || 0;
+                        const subtotal = product.totalRevenue + discount;
+                        const netRevenue = product.totalRevenue;
+                        const vatRevenue = 0; // No automatic VAT calculation
+                        return (
+                          <tr key={product.id} className="border-b hover:bg-gray-50">
+                            <td className="border px-4 py-2">{product.name}</td>
+                            <td className="border px-4 py-2">{product.category}</td>
+                            <td className="border px-4 py-2 text-right">{product.totalSold}</td>
+                            <td className="border px-4 py-2 text-right">{subtotal.toFixed(2)}</td>
+                            <td className="border px-4 py-2 text-right text-red-600">{discount > 0 ? `-${discount.toFixed(2)}` : '0.00'}</td>
+                            <td className="border px-4 py-2 text-right font-semibold">{product.totalRevenue.toFixed(2)}</td>
+                            <td className="border px-4 py-2 text-right">{netRevenue.toFixed(2)}</td>
+                            <td className="border px-4 py-2 text-right">{vatRevenue.toFixed(2)}</td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
-                    <tr>
-                      <td className="border px-4 py-3" colSpan={2}>TOTAL</td>
-                      <td className="border px-4 py-3 text-right">{products.reduce((sum, p) => sum + p.totalSold, 0)}</td>
-                      <td className="border px-4 py-3 text-right">{products.reduce((sum, p) => sum + p.totalRevenue + (p.totalDiscount || 0), 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right text-red-600">{products.reduce((sum, p) => sum + (p.totalDiscount || 0), 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right text-blue-600">{products.reduce((sum, p) => sum + p.totalRevenue, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{products.reduce((sum, p) => sum + p.totalRevenue, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">0.00</td>
-                    </tr>
+                    {(() => {
+                      // Calculate totals from filtered sales
+                      const filteredSales = sales.filter(sale => {
+                        const saleDate = new Date(sale.date).toISOString().split('T')[0];
+                        const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                        const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                        return matchesStart && matchesEnd;
+                      });
+
+                      let totalQuantity = 0;
+                      let totalSubtotal = 0;
+                      let totalDiscount = 0;
+                      let totalRevenue = 0;
+
+                      filteredSales.forEach(sale => {
+                        const items = sale.items || [];
+                        const orderSubtotal = sale.subtotal || sale.total || 0;
+                        const orderDiscount = sale.discountAmount || 0;
+                        
+                        items.forEach((item: any) => {
+                          const quantity = item.quantity || 0;
+                          const price = item.price || 0;
+                          const itemSubtotal = quantity * price;
+                          
+                          // Calculate proportional discount for this item
+                          const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
+                          const itemTotal = itemSubtotal - itemDiscount;
+                          
+                          totalQuantity += quantity;
+                          totalSubtotal += itemSubtotal;
+                          totalDiscount += itemDiscount;
+                          totalRevenue += itemTotal;
+                        });
+                      });
+
+                      return (
+                        <tr>
+                          <td className="border px-4 py-3" colSpan={2}>TOTAL</td>
+                          <td className="border px-4 py-3 text-right">{totalQuantity}</td>
+                          <td className="border px-4 py-3 text-right">{totalSubtotal.toFixed(2)}</td>
+                          <td className="border px-4 py-3 text-right text-red-600">{totalDiscount.toFixed(2)}</td>
+                          <td className="border px-4 py-3 text-right text-blue-600">{totalRevenue.toFixed(2)}</td>
+                          <td className="border px-4 py-3 text-right">{totalRevenue.toFixed(2)}</td>
+                          <td className="border px-4 py-3 text-right">0.00</td>
+                        </tr>
+                      );
+                    })()}
                   </tfoot>
                 </table>
               </div>
@@ -2593,15 +2719,43 @@ const AdminAccountStatement: React.FC = () => {
                       className="border rounded px-2 py-1 text-sm"
                     />
                   </div>
-                  {(filterStartDate || filterEndDate) && (
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">Customer:</label>
+                    <select
+                      value={filterCustomer}
+                      onChange={(e) => setFilterCustomer(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    >
+                      <option value="">All Customers</option>
+                      {Array.from(new Set(sales.map(s => s.customer))).sort().map(customer => (
+                        <option key={customer} value={customer}>{customer}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">Product:</label>
+                    <select
+                      value={filterProduct}
+                      onChange={(e) => setFilterProduct(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    >
+                      <option value="">All Products</option>
+                      {products.map(product => (
+                        <option key={product.id} value={product.id}>{product.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  {(filterStartDate || filterEndDate || filterCustomer || filterProduct) && (
                     <button
                       onClick={() => {
                         setFilterStartDate('');
                         setFilterEndDate('');
+                        setFilterCustomer('');
+                        setFilterProduct('');
                       }}
                       className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm"
                     >
-                      Clear Dates
+                      Clear Filters
                     </button>
                   )}
                   <button
@@ -2640,12 +2794,14 @@ const AdminAccountStatement: React.FC = () => {
                   <tbody>
                     {(() => {
                       let runningBalance = 0;
-                      // Filter sales by date
+                      // Filter sales by date, customer, and product
                       const filteredSales = sales.filter(sale => {
                         const saleDate = new Date(sale.date).toISOString().split('T')[0];
                         const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                         const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                        return matchesStart && matchesEnd;
+                        const matchesCustomer = !filterCustomer || sale.customer === filterCustomer;
+                        const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: any) => item.productId === filterProduct));
+                        return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                       }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                       
                       return filteredSales.map(sale => {
@@ -2689,43 +2845,71 @@ const AdminAccountStatement: React.FC = () => {
                       <td className="px-3 py-3 text-right">
                         {sales.filter(s => {
                           const saleDate = new Date(s.date).toISOString().split('T')[0];
-                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                          const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                          const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                          const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
+                          const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                          return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                         }).reduce((sum, s) => sum + (s.subtotal || s.total), 0).toFixed(2)}
                       </td>
                       <td className="px-3 py-3 text-right text-red-600">
                         {sales.filter(s => {
                           const saleDate = new Date(s.date).toISOString().split('T')[0];
-                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                          const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                          const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                          const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
+                          const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                          return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                         }).reduce((sum, s) => sum + (s.discountAmount || 0), 0).toFixed(2)}
                       </td>
                       <td className="px-3 py-3 text-right text-blue-600">
                         {sales.filter(s => {
                           const saleDate = new Date(s.date).toISOString().split('T')[0];
-                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                          const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                          const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                          const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
+                          const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                          return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                         }).reduce((sum, s) => sum + s.total, 0).toFixed(2)}
                       </td>
                       <td className="px-3 py-3 text-right">
                         {sales.filter(s => {
                           const saleDate = new Date(s.date).toISOString().split('T')[0];
-                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                          const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                          const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                          const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
+                          const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                          return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                         }).reduce((sum, s) => sum + (s.total - (s.taxAmount || 0)), 0).toFixed(2)}
                       </td>
                       <td className="px-3 py-3 text-right">
                         {sales.filter(s => {
                           const saleDate = new Date(s.date).toISOString().split('T')[0];
-                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                          const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                          const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                          const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
+                          const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                          return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                         }).reduce((sum, s) => sum + (s.taxAmount || 0), 0).toFixed(2)}
                       </td>
                       <td className="px-3 py-3 text-right text-green-600">
                         {sales.filter(s => {
                           const saleDate = new Date(s.date).toISOString().split('T')[0];
-                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                          const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                          const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                          const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
+                          const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                          return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                         }).reduce((sum, s) => sum + s.amountPaid, 0).toFixed(2)}
                       </td>
                       <td className="px-3 py-3 text-right">
                         {sales.filter(s => {
                           const saleDate = new Date(s.date).toISOString().split('T')[0];
-                          return (!filterStartDate || saleDate >= filterStartDate) && (!filterEndDate || saleDate <= filterEndDate);
+                          const matchesStart = !filterStartDate || saleDate >= filterStartDate;
+                          const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
+                          const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
+                          const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                          return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                         }).reduce((sum, s) => sum + (s.total - s.amountPaid), 0).toFixed(2)}
                       </td>
                       <td className="px-3 py-3"></td>

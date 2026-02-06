@@ -21,6 +21,11 @@ import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
+// Helper to clean non-ASCII characters for PDF export
+const cleanTextForPDF = (text: string): string => {
+  return text.replace(/[^\x00-\x7F]/g, '?');
+};
+
 const STATUS_CONFIG: Record<ProductionBatchStatus, { label: string; color: string; icon: any }> = {
   planned: { label: 'Planned', color: 'bg-blue-100 text-blue-800', icon: Clock },
   in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800', icon: Factory },
@@ -900,7 +905,7 @@ const AdminProduction: React.FC = () => {
     
     const tableData = filteredBatches.map(batch => [
       batch.batchNumber,
-      batch.productName,
+      cleanTextForPDF(batch.productName),
       batch.quantity.toString(),
       batch.actualQuantity?.toString() || '-',
       batch.status.toUpperCase(),
