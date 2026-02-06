@@ -10,13 +10,14 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw } from 'lucide-react';
+import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign } from 'lucide-react';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { FinishedGoodsItem, StockTransaction, FinishedGoodsAdjustment } from '@/types/finishedGoods';
+import { FinishedGoodsItem, StockTransaction, FinishedGoodsAdjustment, MonthlyServiceCost } from '@/types/finishedGoods';
 import { logAction } from '@/lib/auditLog';
 import { Recipe, RawMaterial } from '@/types/inventory';
+import { Expense } from '@/types/financial';
 
 const AdminFinishedGoods: React.FC = () => {
   const { user } = useAuth();
@@ -40,9 +41,24 @@ const AdminFinishedGoods: React.FC = () => {
   });
   
   const [viewingHistory, setViewingHistory] = useState<FinishedGoodsItem | null>(null);
+  
+  // Service cost calculation state
+  const [showServiceCostDialog, setShowServiceCostDialog] = useState(false);
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [serviceCostCalculation, setServiceCostCalculation] = useState<{
+    totalExpenses: number;
+    totalProduction: number;
+    serviceRate: number;
+    productionUnit: string;
+    expensesByCategory: Record<string, number>;
+    productCount: number;
+  } | null>(null);
+  const [isCalculating, setIsCalculating] = useState(false);
+  const [monthlyServiceCosts, setMonthlyServiceCosts] = useState<MonthlyServiceCost[]>([]);
 
   useEffect(() => {
     fetchFinishedGoods();
+    fetchMonthlyServiceCosts();
   }, [user?.storeId]);
 
   useEffect(() => {
@@ -87,6 +103,309 @@ const AdminFinishedGoods: React.FC = () => {
       toast({ title: "Error", description: "Failed to load finished goods inventory", variant: "destructive" });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchMonthlyServiceCosts = async () => {
+    if (!user?.storeId) return;
+    
+    try {
+      const db = getFirestore();
+      const mscRef = collection(db, 'monthlyServiceCosts');
+      const q = query(mscRef, where('storeId', '==', user.storeId));
+      const snapshot = await getDocs(q);
+      
+      const costs = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as MonthlyServiceCost));
+      
+      setMonthlyServiceCosts(costs.sort((a, b) => b.month.localeCompare(a.month)));
+    } catch (error) {
+      console.error('Error fetching monthly service costs:', error);
+    }
+  };
+
+  const getMonthOptions = () => {
+    const months = [];
+    const now = new Date();
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      // Format as YYYY-MM without timezone conversion
+      const year = date.getFullYear();
+      const month = String(date.getMonth() + 1).padStart(2, '0');
+      const monthStr = `${year}-${month}`;
+      const label = date.toLocaleDateString('en-US', { year: 'numeric', month: 'long' });
+      months.push({ value: monthStr, label });
+    }
+    return months;
+  };
+
+  const calculateMonthlyServiceCost = async () => {
+    if (!user?.storeId || !selectedMonth) return;
+    
+    setIsCalculating(true);
+    try {
+      const db = getFirestore();
+      const [year, month] = selectedMonth.split('-');
+      const monthStart = `${selectedMonth}-01`;
+      
+      // Calculate end date: If current month, use today; otherwise use end of selected month
+      const today = new Date();
+      const isCurrentMonth = selectedMonth === today.toISOString().slice(0, 7);
+      const nextMonth = new Date(parseInt(year), parseInt(month), 1);
+      const monthEnd = isCurrentMonth 
+        ? today.toISOString().slice(0, 10)
+        : nextMonth.toISOString().slice(0, 10);
+      
+      console.log('📊 Service Cost Calculation Debug:', {
+        selectedMonth,
+        isCurrentMonth,
+        monthStart,
+        monthEnd,
+        today: today.toISOString().slice(0, 10),
+        todayFull: today.toISOString()
+      });
+      
+      // Fetch expenses from start of month until end date (today if current month)
+      const expensesRef = collection(db, 'expenses');
+      const expensesQuery = query(
+        expensesRef,
+        where('storeId', '==', user.storeId),
+        where('date', '>=', monthStart),
+        where('date', '<=', monthEnd)
+      );
+      const expensesSnapshot = await getDocs(expensesQuery);
+      const expenses = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
+      
+      console.log('💰 Expenses Found:', expenses.length, expenses.map(e => ({ date: e.date, amount: e.amount, category: e.category })));
+      
+      const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+      const expensesByCategory = expenses.reduce((acc, exp) => {
+        acc[exp.category] = (acc[exp.category] || 0) + exp.amount;
+        return acc;
+      }, {} as Record<string, number>);
+      
+      // Fetch finished goods produced from start of month until end date
+      const fgRef = collection(db, 'finishedGoodsInventory');
+      const fgQuery = query(
+        fgRef,
+        where('storeId', '==', user.storeId),
+        where('createdAt', '>=', `${monthStart}T00:00:00.000Z`),
+        where('createdAt', '<=', `${monthEnd}T23:59:59.999Z`)
+      );
+      const fgSnapshot = await getDocs(fgQuery);
+      const producedItems = fgSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FinishedGoodsItem & { id: string }));
+      
+      console.log('🏭 Production Found:', producedItems.length, producedItems.map(p => ({ name: p.productName, qty: p.quantityManufactured, created: p.createdAt })));
+      
+      const totalProduction = producedItems.reduce((sum, item) => sum + (item.quantityManufactured || 0), 0);
+      
+      if (totalProduction === 0) {
+        // Still show results even with no production - rate will be $0 or Infinity
+        setServiceCostCalculation({
+          totalExpenses,
+          totalProduction: 0,
+          serviceRate: 0,
+          productionUnit: 'units',
+          expensesByCategory,
+          productCount: 0
+        });
+        
+        toast({
+          title: "No Production Found",
+          description: `No finished goods were produced in ${getMonthOptions().find(m => m.value === selectedMonth)?.label || selectedMonth}. Service cost rate cannot be calculated.`,
+          variant: "destructive"
+        });
+        setIsCalculating(false);
+        return;
+      }
+      
+      // Calculate service cost rate
+      const serviceRate = totalProduction > 0 ? totalExpenses / totalProduction : 0;
+      
+      // Get most common unit from produced items
+      const unitCounts = producedItems.reduce((acc, item) => {
+        acc[item.unit] = (acc[item.unit] || 0) + 1;
+        return acc;
+      }, {} as Record<string, number>);
+      const productionUnit = Object.keys(unitCounts).sort((a, b) => unitCounts[b] - unitCounts[a])[0] || 'units';
+      
+      setServiceCostCalculation({
+        totalExpenses,
+        totalProduction,
+        serviceRate,
+        productionUnit,
+        expensesByCategory,
+        productCount: producedItems.length
+      });
+      
+      toast({
+        title: "Calculation Complete",
+        description: `Service cost rate: $${serviceRate.toFixed(4)} per ${productionUnit}`
+      });
+      
+    } catch (error) {
+      console.error('Error calculating service cost:', error);
+      toast({
+        title: "Error",
+        description: "Failed to calculate service cost",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  const applyServiceCostToProducts = async () => {
+    if (!user?.storeId || !selectedMonth || !serviceCostCalculation) return;
+    
+    setIsCalculating(true);
+    try {
+      const db = getFirestore();
+      const [year, month] = selectedMonth.split('-');
+      const monthStart = `${selectedMonth}-01`;
+      const nextMonth = new Date(parseInt(year), parseInt(month), 1);
+      const monthEnd = nextMonth.toISOString().slice(0, 10);
+      
+      // Fetch finished goods produced in that month
+      const fgRef = collection(db, 'finishedGoodsInventory');
+      const fgQuery = query(
+        fgRef,
+        where('storeId', '==', user.storeId),
+        where('createdAt', '>=', `${monthStart}T00:00:00.000Z`),
+        where('createdAt', '<', `${monthEnd}T00:00:00.000Z`)
+      );
+      const fgSnapshot = await getDocs(fgQuery);
+      
+      let updateCount = 0;
+      const updatePromises = fgSnapshot.docs.map(async (docSnapshot) => {
+        const item = { id: docSnapshot.id, ...docSnapshot.data() } as FinishedGoodsItem & { id: string };
+        const quantity = item.quantityManufactured || 0;
+        const serviceCostTotal = quantity * serviceCostCalculation.serviceRate;
+        
+        // Service cost is VIEW ONLY - does not affect actual costPrice or calculations
+        await updateDoc(doc(db, 'finishedGoodsInventory', docSnapshot.id), {
+          serviceCostCalculated: true,
+          serviceCostMonth: selectedMonth,
+          serviceCostRate: serviceCostCalculation.serviceRate,
+          serviceCostTotal: serviceCostTotal,
+          updatedAt: new Date().toISOString()
+        });
+        
+        updateCount++;
+      });
+      
+      await Promise.all(updatePromises);
+      
+      // Save to monthlyServiceCosts collection
+      const mscData: Omit<MonthlyServiceCost, 'id'> = {
+        month: selectedMonth,
+        totalExpenses: serviceCostCalculation.totalExpenses,
+        totalProductionQty: serviceCostCalculation.totalProduction,
+        totalProductionUnit: serviceCostCalculation.productionUnit,
+        ratePerUnit: serviceCostCalculation.serviceRate,
+        appliedToProducts: updateCount,
+        calculatedAt: new Date().toISOString(),
+        calculatedBy: user.id,
+        calculatedByName: user.name,
+        storeId: user.storeId,
+        breakdown: {
+          expensesByCategory: serviceCostCalculation.expensesByCategory,
+          productionByProduct: {}
+        }
+      };
+      
+      // Check if record already exists for this month
+      const existingQuery = query(
+        collection(db, 'monthlyServiceCosts'),
+        where('storeId', '==', user.storeId),
+        where('month', '==', selectedMonth)
+      );
+      const existingSnapshot = await getDocs(existingQuery);
+      
+      if (existingSnapshot.empty) {
+        await addDoc(collection(db, 'monthlyServiceCosts'), mscData);
+      } else {
+        // Update existing record
+        await updateDoc(doc(db, 'monthlyServiceCosts', existingSnapshot.docs[0].id), mscData);
+      }
+      
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'create',
+        'monthlyServiceCost',
+        selectedMonth,
+        { newValue: mscData },
+        user.storeId
+      );
+      
+      toast({
+        title: "Success",
+        description: `Service cost applied to ${updateCount} finished goods items`
+      });
+      
+      setShowServiceCostDialog(false);
+      setServiceCostCalculation(null);
+      fetchFinishedGoods();
+      fetchMonthlyServiceCosts();
+      
+    } catch (error) {
+      console.error('Error applying service cost:', error);
+      toast({
+        title: "Error",
+        description: "Failed to apply service cost",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCalculating(false);
+    }
+  };
+
+  const recalculateAllTotalValues = async () => {
+    if (!user?.storeId) return;
+    
+    const confirmed = window.confirm('Recalculate total values for all finished goods? This will fix any inconsistencies.');
+    if (!confirmed) return;
+    
+    setIsCalculating(true);
+    try {
+      const db = getFirestore();
+      let updateCount = 0;
+      
+      const updatePromises = finishedGoods.map(async (item) => {
+        const correctTotalValue = item.currentBalance * item.costPrice;
+        
+        // Only update if there's a discrepancy
+        if (Math.abs((item.totalValue || 0) - correctTotalValue) > 0.01) {
+          await updateDoc(doc(db, 'finishedGoodsInventory', item.id), {
+            totalValue: correctTotalValue,
+            updatedAt: new Date().toISOString()
+          });
+          updateCount++;
+        }
+      });
+      
+      await Promise.all(updatePromises);
+      
+      toast({
+        title: "Success",
+        description: `Recalculated ${updateCount} items`
+      });
+      
+      fetchFinishedGoods();
+      
+    } catch (error) {
+      console.error('Error recalculating:', error);
+      toast({
+        title: "Error",
+        description: "Failed to recalculate values",
+        variant: "destructive"
+      });
+    } finally {
+      setIsCalculating(false);
     }
   };
 
@@ -418,6 +737,52 @@ const AdminFinishedGoods: React.FC = () => {
           </Card>
         </div>
 
+        {/* Service Cost Calculation Section */}
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+              <div>
+                <CardTitle className="flex items-center gap-2">
+                  <Calculator className="h-5 w-5" />
+                  Monthly Service Cost Allocation
+                </CardTitle>
+                <CardDescription>
+                  Automatically allocate monthly expenses (labor, overhead) to finished goods
+                </CardDescription>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={recalculateAllTotalValues} variant="outline" size="sm" disabled={isCalculating}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Fix Values
+                </Button>
+                <Button onClick={() => setShowServiceCostDialog(true)} size="sm">
+                  <Calculator className="h-4 w-4 mr-2" />
+                  Calculate Service Cost
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+          
+          {monthlyServiceCosts.length > 0 && (
+            <CardContent>
+              <div className="text-sm">
+                <div className="font-medium mb-2">Recent Calculations:</div>
+                <div className="space-y-2">
+                  {monthlyServiceCosts.slice(0, 3).map((msc) => (
+                    <div key={msc.id} className="flex justify-between items-center p-2 bg-gray-50 rounded">
+                      <div>
+                        <span className="font-medium">{new Date(msc.month + '-01').toLocaleDateString('en-US', { year: 'numeric', month: 'long' })}</span>
+                        <span className="text-gray-600 ml-2">• Rate: ${msc.ratePerUnit.toFixed(4)}/{msc.totalProductionUnit}</span>
+                      </div>
+                      <Badge variant="outline">{msc.appliedToProducts} items</Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          )}
+        </Card>
+
         <Card className="mb-6">
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
@@ -498,6 +863,21 @@ const AdminFinishedGoods: React.FC = () => {
                       <span className="text-gray-600">Cost Price:</span>
                       <span>${(item.costPrice || 0).toFixed(2)}</span>
                     </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Service Cost:</span>
+                      {item.serviceCostCalculated ? (
+                        <div className="text-right">
+                          <div>${(item.serviceCostRate || 0).toFixed(4)}</div>
+                          {item.serviceCostMonth && (
+                            <Badge variant="secondary" className="text-xs mt-1">
+                              {item.serviceCostMonth}
+                            </Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge variant="outline">Not Calculated</Badge>
+                      )}
+                    </div>
                     <div className="flex justify-between text-sm font-semibold">
                       <span className="text-gray-600">Total Value:</span>
                       <span className="font-semibold">${(item.totalValue || 0).toFixed(2)}</span>
@@ -551,6 +931,7 @@ const AdminFinishedGoods: React.FC = () => {
                       <th className="text-right p-4 font-medium text-gray-600">Sold</th>
                       <th className="text-right p-4 font-medium text-gray-600">Current</th>
                       <th className="text-right p-4 font-medium text-gray-600">Cost Price</th>
+                      <th className="text-right p-4 font-medium text-gray-600">Service Cost</th>
                       <th className="text-right p-4 font-medium text-gray-600">Total Value</th>
                       <th className="text-right p-4 font-medium text-gray-600">Actions</th>
                     </tr>
@@ -573,6 +954,20 @@ const AdminFinishedGoods: React.FC = () => {
                         <td className="p-4 text-right text-red-600">{item.quantitySold}</td>
                         <td className="p-4 text-right font-semibold">{item.currentBalance}</td>
                         <td className="p-4 text-right">${(item.costPrice || 0).toFixed(2)}</td>
+                        <td className="p-4 text-right">
+                          {item.serviceCostCalculated ? (
+                            <div>
+                              <div className="font-medium">${(item.serviceCostRate || 0).toFixed(4)}</div>
+                              {item.serviceCostMonth && (
+                                <Badge variant="secondary" className="text-xs mt-1">
+                                  {item.serviceCostMonth}
+                                </Badge>
+                              )}
+                            </div>
+                          ) : (
+                            <Badge variant="outline">Not Calculated</Badge>
+                          )}
+                        </td>
                         <td className="p-4 text-right font-semibold">${(item.totalValue || 0).toFixed(2)}</td>
                         <td className="p-4 text-right">
                           <div className="flex justify-end gap-2">
@@ -814,6 +1209,97 @@ const AdminFinishedGoods: React.FC = () => {
           <DialogFooter>
             <Button onClick={() => setViewingHistory(null)}>Close</Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Service Cost Calculation Dialog */}
+      <Dialog open={showServiceCostDialog} onOpenChange={setShowServiceCostDialog}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Calculate Monthly Service Cost</DialogTitle>
+            <DialogDescription>
+              Allocate monthly expenses (salaries, utilities, overhead) to finished goods produced that month
+            </DialogDescription>
+          </DialogHeader>
+          
+          <div className="space-y-4">
+            <div>
+              <Label>Select Month</Label>
+              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent className="max-h-[300px] overflow-y-auto">
+                  {getMonthOptions().map(opt => (
+                    <SelectItem key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            
+            <Button 
+              onClick={calculateMonthlyServiceCost} 
+              disabled={isCalculating}
+              className="w-full"
+            >
+              {isCalculating ? 'Calculating...' : 'Calculate'}
+            </Button>
+            
+            {serviceCostCalculation && (
+              <div className="border rounded-lg p-4 space-y-3 bg-blue-50">
+                <div className="font-semibold text-lg">Calculation Results</div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <div className="text-sm text-gray-600">Total Expenses</div>
+                    <div className="text-xl font-bold">${serviceCostCalculation.totalExpenses.toFixed(2)}</div>
+                  </div>
+                  <div>
+                    <div className="text-sm text-gray-600">Total Production</div>
+                    <div className="text-xl font-bold">
+                      {serviceCostCalculation.totalProduction.toFixed(2)} {serviceCostCalculation.productionUnit}
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="pt-3 border-t">
+                  <div className="text-sm text-gray-600">Service Cost Rate</div>
+                  <div className="text-2xl font-bold text-green-600">
+                    ${serviceCostCalculation.serviceRate.toFixed(4)} per {serviceCostCalculation.productionUnit}
+                  </div>
+                </div>
+                
+                <div className="text-sm text-gray-600">
+                  Will be applied to {serviceCostCalculation.productCount} finished goods items
+                </div>
+                
+                {Object.keys(serviceCostCalculation.expensesByCategory).length > 0 && (
+                  <div className="pt-3 border-t">
+                    <div className="text-sm font-medium mb-2">Expense Breakdown:</div>
+                    <div className="space-y-1 text-sm">
+                      {Object.entries(serviceCostCalculation.expensesByCategory).map(([category, amount]) => (
+                        <div key={category} className="flex justify-between">
+                          <span className="capitalize">{category.replace('_', ' ')}</span>
+                          <span className="font-medium">${amount.toFixed(2)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                
+                <Button 
+                  onClick={applyServiceCostToProducts}
+                  disabled={isCalculating}
+                  className="w-full mt-4"
+                  variant="default"
+                >
+                  {isCalculating ? 'Applying...' : 'Apply to Products'}
+                </Button>
+              </div>
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </div>

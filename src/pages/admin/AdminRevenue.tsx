@@ -39,6 +39,7 @@ const AdminRevenue: React.FC = () => {
     if (user?.storeId) {
       fetchRevenueData();
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.storeId]);
 
   const fetchRevenueData = async () => {
@@ -105,14 +106,15 @@ const AdminRevenue: React.FC = () => {
         if (order.status === 'cancelled') return;
         
         const orderSubtotal = order.subtotal || 0;
-        const orderDiscount = order.discount || 0;
         const orderTotal = order.total || 0;
+        // Calculate discount from the difference (discount field doesn't exist in orders)
+        const orderDiscount = Math.max(0, orderSubtotal - orderTotal);
         
         // Calculate discount percentage for this order
         const discountPercentage = orderSubtotal > 0 ? orderDiscount / orderSubtotal : 0;
         
         const items = order.items || [];
-        items.forEach((item: any) => {
+        items.forEach((item: { productId: string; quantity: number; price: number }) => {
           const productId = item.productId;
           const quantity = item.quantity || 0;
           const price = item.price || 0;

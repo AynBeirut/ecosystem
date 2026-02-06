@@ -56,6 +56,12 @@ export interface FinishedGoodsItem {
   totalValue: number; // currentBalance * costPrice
   valuationMethod: ValuationMethod; // Default: FIFO
   
+  // Service cost allocation (calculated automatically from expenses)
+  serviceCostCalculated?: boolean;
+  serviceCostMonth?: string; // Format: '2026-01'
+  serviceCostRate?: number; // Rate per unit applied
+  serviceCostTotal?: number; // Total service cost allocated to this item
+  
   // Dual currency
   dualCurrency?: {
     costPrice: DualCurrencyValue;
@@ -112,4 +118,22 @@ export interface StockMovementSummary {
   closingStock: number;
   averageCost: number;
   totalValue: number;
+}
+
+export interface MonthlyServiceCost {
+  id?: string;
+  month: string; // Format: '2026-01'
+  totalExpenses: number;
+  totalProductionQty: number;
+  totalProductionUnit: string; // 'kg', 'pcs', etc - main unit
+  ratePerUnit: number;
+  appliedToProducts: number; // Count of finished goods items updated
+  calculatedAt: string;
+  calculatedBy: string;
+  calculatedByName: string;
+  storeId: string;
+  breakdown?: {
+    expensesByCategory: Record<string, number>;
+    productionByProduct: Record<string, { qty: number; unit: string }>;
+  };
 }

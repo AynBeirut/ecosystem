@@ -44,7 +44,6 @@ const AdminComposedProducts: React.FC = () => {
     name: '',
     category: '',
     icon: '📦',
-    serviceCost: '' as number | '',
     materials: [] as { rawMaterialId: string; quantity: number | string }[],
     sellingPrice: 0,
   });
@@ -125,8 +124,7 @@ const AdminComposedProducts: React.FC = () => {
       const qty = typeof material.quantity === 'number' ? material.quantity : (parseFloat(material.quantity as any) || 0);
       return sum + (raw.costPerUnit * qty);
     }, 0);
-    const service = typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0;
-    return materialCost + service;
+    return materialCost; // Service cost calculated separately from expenses
   };
 
   const calculateLineCost = (materialId: string, quantity: number | string): number => {
@@ -208,7 +206,7 @@ const AdminComposedProducts: React.FC = () => {
         icon: newProduct.icon,
         price: finalPrice,
         costPrice: totalCost,
-        serviceCost: typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0,
+        serviceCost: 0, // Always 0 - calculated automatically from expenses
         productType: 'composed' as const,
         inStock: true,
         stock: 0,
@@ -226,7 +224,7 @@ const AdminComposedProducts: React.FC = () => {
         recipeId: recipeRef.id,
         sellingPrice: finalPrice,
         costPrice: totalCost,
-        serviceCost: typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0,
+        serviceCost: 0, // Always 0 - calculated automatically from expenses
         category: newProduct.category,
         icon: newProduct.icon,
         storeId: user.storeId,
@@ -253,7 +251,6 @@ const AdminComposedProducts: React.FC = () => {
         name: '',
         category: '',
         icon: '📦',
-        serviceCost: '',
         materials: [],
         sellingPrice: 0,
       });
@@ -499,23 +496,6 @@ const AdminComposedProducts: React.FC = () => {
                   </p>
                 </div>
 
-                {/* Service Cost */}
-                <div>
-                  <Label htmlFor="serviceCost">Service Cost ($)</Label>
-                  <Input
-                    id="serviceCost"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
-                    onChange={(e) => setNewProduct(prev => ({ ...prev, serviceCost: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) }))}
-                    placeholder="0.00"
-                  />
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Labor/preparation cost
-                  </p>
-                </div>
-
                 {/* Raw Materials Section */}
                 <div>
                   <div className="flex items-center justify-between mb-2">
@@ -614,15 +594,13 @@ const AdminComposedProducts: React.FC = () => {
                       </span>
                     </div>
                     
-                    <div className="flex justify-between text-sm">
-                      <span>Service Cost</span>
-                      <span className="font-bold">${(typeof newProduct.serviceCost === 'number' ? newProduct.serviceCost : 0).toFixed(2)}</span>
-                    </div>
-                    
                     <div className="flex justify-between text-sm border-t pt-2">
-                      <span className="font-semibold">Total Cost</span>
+                      <span className="font-semibold">Total Cost (Materials Only)</span>
                       <span className="font-bold">${calculateTotalCost().toFixed(2)}</span>
                     </div>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Service cost (labor/overhead) is calculated monthly from actual expenses
+                    </p>
                     
                     <div className="flex justify-between text-sm">
                       <span>Suggested Price</span>
