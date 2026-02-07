@@ -444,12 +444,10 @@ const AdminProduction: React.FC = () => {
         return;
       }
       
-      // Calculate cost per unit
-      const recipeTotalCost = recipe.totalCost || 0;
+      // Calculate cost per unit (ONLY MATERIAL COSTS)
       const actualQty = batch.actualQuantity || batch.quantity;
-      const serviceCost = Math.max(0, recipeTotalCost - (totalMaterialCost / actualQty));
-      const totalCost = totalMaterialCost + (serviceCost * actualQty);
-      const costPerUnit = totalCost / actualQty;
+      const costPerUnit = totalMaterialCost / actualQty;
+      const totalCost = totalMaterialCost; // Only materials, service cost tracked separately
       
       // Update the production batch
       await updateDoc(doc(db, 'productionBatches', batch.id), {
@@ -682,13 +680,10 @@ const AdminProduction: React.FC = () => {
         if (!confirmed) return;
       }
       
-      // 4. Calculate total cost per unit (materials + service cost)
-      // recipeTotalCost is the total for the recipe's output quantity
-      // recipe.costPerUnit is the cost per single unit from the recipe
+      // 4. Calculate cost per unit (ONLY MATERIAL COSTS)
+      // Service cost is tracked separately via monthly allocation in Finished Goods
       const materialCostPerUnit = totalMaterialCost / actualQty;
-      const recipeCostPerUnit = recipe.costPerUnit || 0;
-      const serviceCostPerUnit = Math.max(0, recipeCostPerUnit - materialCostPerUnit);
-      const totalCostPerUnit = materialCostPerUnit + serviceCostPerUnit;
+      const totalCostPerUnit = materialCostPerUnit; // Only material costs
       
       // 5. Update or create finished goods entry
       const fgQuery = query(
@@ -1121,12 +1116,12 @@ const AdminProduction: React.FC = () => {
                             Complete
                           </Button>
                         )}
-                        {batch.status === 'completed' && (batch.materialsCost === 0 || !batch.materialsCost) && (
+                        {batch.status === 'completed' && (
                           <Button 
                             size="sm" 
                             variant="outline"
                             onClick={() => handleRecalculateBatchCost(batch)}
-                            title="Recalculate materials cost"
+                            title="Recalculate materials cost from raw materials"
                             className="text-blue-600"
                           >
                             <RefreshCw className="h-4 w-4 mr-1" />
