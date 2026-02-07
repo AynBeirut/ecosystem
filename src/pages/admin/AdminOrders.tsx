@@ -1480,10 +1480,10 @@ const AdminOrders: React.FC = () => {
                           variant="default"
                           size="sm"
                           onClick={() => {
-                            const remaining = (order.total || 0) - (order.amountPaid || 0);
+                            const remaining = Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100;
                             setPayingOrder(order);
                             setPaymentData({
-                              amountPaid: remaining,
+                              amountPaid: Math.max(0, remaining),
                               paymentDate: new Date().toISOString().split('T')[0],
                               paymentMethod: 'cash',
                               paymentNotes: '',
@@ -1529,7 +1529,7 @@ const AdminOrders: React.FC = () => {
                             <div>
                               <p className="text-sm text-gray-500">Amount Due</p>
                               <p className="font-bold text-lg text-red-600">
-                                ${((order.total || 0) - (order.amountPaid || 0)).toFixed(2)}
+                                ${(Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100).toFixed(2)}
                               </p>
                             </div>
                           )}
@@ -1761,7 +1761,7 @@ const AdminOrders: React.FC = () => {
                   <div className="col-span-2">
                     <p className="text-sm text-gray-500">Amount Due</p>
                     <p className="font-bold text-red-600">
-                      ${((payingOrder.total || 0) - (payingOrder.amountPaid || 0)).toFixed(2)}
+                      ${(Math.round(((payingOrder.total || 0) - (payingOrder.amountPaid || 0)) * 100) / 100).toFixed(2)}
                     </p>
                   </div>
                 </div>
@@ -1772,7 +1772,7 @@ const AdminOrders: React.FC = () => {
                     id="paymentAmount"
                     type="number"
                     min="0"
-                    max={(payingOrder.total || 0) - (payingOrder.amountPaid || 0)}
+                    max={Math.round(((payingOrder.total || 0) - (payingOrder.amountPaid || 0)) * 100) / 100}
                     step="0.01"
                     value={paymentData.amountPaid || ''}
                     onChange={(e) => setPaymentData({ ...paymentData, amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
