@@ -203,6 +203,14 @@ runningBalance += total - sale.amountPaid;
 ### High Priority
 1. ⏳ **Cash Collection Page** - Track payments sent to bank
 2. ⏳ **Order Editing** - Allow sellers to edit orders before delivery
+3. 🚧 **Premium/Pro Features** - NOT FINISHED YET
+   - Monthly subscription plans
+   - Yearly subscription plans
+   - Premium tier features and limitations
+   - Pro tier features and limitations
+   - Subscription management interface
+   - Payment processing for subscriptions
+   - Feature gating based on subscription tier
 
 ### Known Issues
 - Customer Balances may still show 0 if old orders lack `paymentStatus` field
@@ -313,7 +321,130 @@ git push
 - Features Enhanced: 4
 
 ## Last Deployment
-- Date: February 2, 2026
-- Commit: "Fix customer balances to only use paymentStatus"
-- Hash: 8810e68
+- Date: February 6, 2026
+- Commit: "feat: Implement automated service cost allocation system"
+- Hash: ed982f5
 - Status: ✅ Live in production
+
+---
+
+### 5. Automated Service Cost Allocation System (February 6, 2026)
+**Problem**: Manual service cost entry in composed products causing double-counting of expenses already tracked in expenses collection.
+
+**Solution**: 
+- Removed manual service cost input completely
+- Created automated monthly calculation system
+- Service cost displayed VIEW ONLY (doesn't affect costPrice or profit calculations)
+- Calculates from actual expenses and production data
+
+**Features**:
+1. **Monthly Calculation Dialog**
+   - Select month from dropdown (last 12 months)
+   - Calculates: Total Expenses ÷ Total Production = Rate per Unit
+   - Shows expense breakdown by category
+   - Shows production breakdown by product
+   - Current month uses partial dates (Feb 1-6), past months use full month
+
+2. **Service Cost Display**
+   - Added column to Finished Goods table showing rate and month badge
+   - Mobile view shows service cost in card display
+   - "Not Calculated" badge for items without service cost
+
+3. **Calculation History**
+   - Stores in `monthlyServiceCosts` collection
+   - Shows recent calculations in UI card
+   - Tracks who calculated and when
+
+4. **Fix Values Button**
+   - Recalculates totalValue = currentBalance × costPrice
+   - Fixes discrepancies (e.g., $2083.81 vs expected $2082.88)
+
+**Files Modified**:
+- `src/types/finishedGoods.ts`
+  - Added `MonthlyServiceCost` interface
+  - Added service cost fields to `FinishedGoodsItem`: `serviceCostCalculated`, `serviceCostMonth`, `serviceCostRate`, `serviceCostTotal`
+
+- `src/pages/admin/AdminComposedProducts.tsx`
+  - Line 120: `calculateTotalCost()` returns only material costs
+  - Lines 209, 227: Set `serviceCost: 0` in product creation
+  - Removed manual service cost input section (~20 lines)
+
+- `src/pages/admin/AdminFinishedGoods.tsx` (~350 lines added)
+  - Line 128-139: `getMonthOptions()` - generates last 12 months (FIXED timezone bug)
+  - Line 141-220: `calculateMonthlyServiceCost()` - main calculation with partial month support
+  - Line 233-318: `applyServiceCostToProducts()` - applies VIEW ONLY (doesn't update costPrice)
+  - Line 320-363: `recalculateAllTotalValues()` - fixes totalValue discrepancies
+  - Lines 715-732: Service cost card UI with recent calculations
+  - Lines 1188-1282: Service cost calculation dialog (scrollable month dropdown)
+  - Line 876: Added "Service Cost" column header
+  - Lines 894-907: Service cost cell display with rate and month badge
+  - Lines 783-798: Service cost in mobile card view
+
+**Bugs Fixed**:
+1. **Timezone Bug**: Month dropdown showing wrong month (February → January)
+   - Cause: `.toISOString()` converts to UTC causing date shift
+   - Fix: Manual date formatting `${year}-${month}` instead of `.toISOString().slice(0, 7)`
+
+2. **Zero Data Handling**: Dialog not updating when 0 production
+   - Cause: Function returning early with 0 data
+   - Fix: Set serviceCostCalculation state even with 0 values
+
+3. **Current Month Calculation**: Using full month instead of partial (Feb 1-6)
+   - Fix: Added `isCurrentMonth` detection, uses today as end date for current month
+
+**Firestore Indexes Created**:
+- `expenses`: storeId (Ascending) + date (Ascending)
+- `finishedGoodsInventory`: storeId (Ascending) + createdAt (Ascending)
+
+**Example Data** (January 2026):
+- Total Expenses: $4,400.00
+- Total Production: 1,679 kg
+- Service Cost Rate: $2.6206/kg
+- Items Updated: 26 products
+
+**Code Pattern**:
+```typescript
+// Calculate service cost
+const isCurrentMonth = selectedMonth === today.toISOString().slice(0, 7);
+const monthEnd = isCurrentMonth 
+  ? today.toISOString().slice(0, 10)
+  : nextMonth.toISOString().slice(0, 10);
+
+const expensesRef = collection(db, 'expenses');
+const expensesQuery = query(
+  expensesRef,
+  where('storeId', '==', user.storeId),
+  where('date', '>=', monthStart),
+  where('date', '<=', monthEnd)
+);
+
+// Apply VIEW ONLY (doesn't update costPrice)
+await updateDoc(doc(db, 'finishedGoodsInventory', docSnapshot.id), {
+  serviceCostCalculated: true,
+  serviceCostMonth: selectedMonth,
+  serviceCostRate: serviceCostCalculation.serviceRate,
+  serviceCostTotal: serviceCostTotal,
+  // NO UPDATE to costPrice or totalValue
+});
+```
+
+---
+
+### 6. Revenue Report Discount Fix (February 6, 2026)
+**Problem**: Revenue Report showing $2,231.73 instead of correct $1,726.83 (not applying customer discounts).
+
+**Root Cause**: Code was reading `order.discount` field which doesn't exist in orders collection. Discounts are calculated from `subtotal - total` difference.
+
+**Solution**:
+```typescript
+// Before (WRONG - field doesn't exist)
+const orderDiscount = order.discount || 0;
+
+// After (CORRECT - calculate from subtotal-total)
+const orderDiscount = Math.max(0, orderSubtotal - orderTotal);
+```
+
+**Files Modified**:
+- `src/pages/admin/AdminRevenue.tsx` (Line 107-111)
+
+**Validation**: Revenue Report now correctly shows $1,726.83 matching Account Statement after discounts applied.

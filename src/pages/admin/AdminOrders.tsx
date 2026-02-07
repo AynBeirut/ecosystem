@@ -19,7 +19,7 @@ import { ComposedProduct } from '@/types/product';
 import { Customer } from '@/types/customer';
 import { StaffMember } from '@/types/staff';
 import { StoreProfile } from '@/types/storeProfile';
-import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign, Edit3 } from 'lucide-react';
 import { logAction } from '@/lib/auditLog';
 import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
 import MobileHeader from '@/components/MobileHeader';
@@ -48,6 +48,7 @@ const AdminOrders: React.FC = () => {
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
+  const [editingOrder, setEditingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
   const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: any } | null>(null);
@@ -528,6 +529,140 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+  const handleEditOrder = (order: Order & { id: string }) => {
+    // Check if order is in an editable state
+    const editableStates = ['pending', 'confirmed', 'processing', 'ready', 'delivered'];
+    if (!editableStates.includes(order.status || '')) {
+      toast({ 
+        title: "Cannot Edit", 
+        description: "Only orders in Pending, Confirmed, Processing, Ready, or Delivered status can be edited", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // Check if payment has been recorded
+    if (order.paymentHistory && order.paymentHistory.length > 0) {
+      toast({ 
+        title: "Cannot Edit", 
+        description: "Cannot edit orders with payment records. Please void payments first.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (order.paymentStatus === 'paid' || order.amountPaid > 0) {
+      toast({ 
+        title: "Cannot Edit", 
+        description: "Cannot edit paid orders. Please void payments first.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    // Populate the form with existing order data
+    setNewOrder({
+      customerId: order.customerId || '',
+      customerName: order.customerName || '',
+      customerPhone: order.customerPhone || '',
+      customerEmail: order.customerEmail || '',
+      assignedSalesPerson: order.assignedSalesPerson || '',
+      salesPersonName: order.assignedSalesPersonName || '',
+      items: order.items || [],
+      taxType: order.taxType || 'none',
+      taxRate: order.taxRate || 0,
+      discountType: order.discountType || 'percentage',
+      discountValue: order.discountValue || 0,
+    });
+    setEditingOrder(order);
+  };
+
+  const handleUpdateOrder = async () => {
+    if (!user?.storeId || !editingOrder) return;
+
+    // Validation
+    if (!newOrder.customerId && (!newOrder.customerName || !newOrder.customerPhone)) {
+      toast({ title: "Error", description: "Please select or create a customer", variant: "destructive" });
+      return;
+    }
+
+    if (newOrder.items.length === 0) {
+      toast({ title: "Error", description: "Please add at least one item", variant: "destructive" });
+      return;
+    }
+
+    const allItemsValid = newOrder.items.every(item => item.productId && item.quantity > 0);
+    if (!allItemsValid) {
+      toast({ title: "Error", description: "All items must have a product and quantity", variant: "destructive" });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const totals = calculateOrderTotals(newOrder.items, newOrder.taxType, newOrder.taxRate, newOrder.discountType, newOrder.discountValue);
+
+      const orderData = {
+        customerName: newOrder.customerName,
+        customerPhone: newOrder.customerPhone,
+        customerEmail: newOrder.customerEmail || '',
+        customerId: newOrder.customerId,
+        assignedSalesPerson: newOrder.assignedSalesPerson || '',
+        assignedSalesPersonName: newOrder.salesPersonName || '',
+        items: newOrder.items,
+        subtotal: totals.subtotal || 0,
+        taxAmount: totals.taxAmount || 0,
+        discount: totals.discountAmount || 0,
+        total: totals.total || 0,
+        taxType: newOrder.taxType,
+        taxRate: newOrder.taxRate || 0,
+        discountType: newOrder.discountType,
+        discountValue: newOrder.discountValue || 0,
+        updatedAt: new Date().toISOString(),
+      };
+
+      const orderRef = doc(db, 'orders', editingOrder.id);
+      await updateDoc(orderRef, orderData);
+
+      // Update local state
+      const updatedOrder = { ...editingOrder, ...orderData };
+      setOrders(orders.map(o => o.id === editingOrder.id ? updatedOrder : o));
+
+      // Log the action
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'order',
+        editingOrder.id,
+        { 
+          oldValue: editingOrder,
+          newValue: orderData 
+        },
+        user.storeId
+      );
+
+      toast({ title: "Success", description: "Order updated successfully!" });
+      setEditingOrder(null);
+      setNewOrder({
+        customerId: '',
+        customerName: '',
+        customerPhone: '',
+        customerEmail: '',
+        assignedSalesPerson: '',
+        salesPersonName: '',
+        items: [],
+        taxType: 'none',
+        taxRate: 0,
+        discountType: 'percentage',
+        discountValue: 0,
+      });
+    } catch (error) {
+      console.error('Error updating order:', error);
+      toast({ title: "Error", description: "Failed to update order", variant: "destructive" });
+    }
+  };
+
   const handleDeleteOrder = async (orderId: string) => {
     if (!user?.storeId) return;
     
@@ -934,7 +1069,25 @@ const AdminOrders: React.FC = () => {
             {!isMobile && <BackButton />}
             <h1 className="text-2xl font-bold">Sales Orders</h1>
           </div>
-          <Dialog open={isCreatingOrder} onOpenChange={setIsCreatingOrder}>
+          <Dialog open={isCreatingOrder || !!editingOrder} onOpenChange={(open) => {
+            if (!open) {
+              setIsCreatingOrder(false);
+              setEditingOrder(null);
+              setNewOrder({
+                customerId: '',
+                customerName: '',
+                customerPhone: '',
+                customerEmail: '',
+                assignedSalesPerson: '',
+                salesPersonName: '',
+                items: [],
+                taxType: 'none',
+                taxRate: 0,
+                discountType: 'percentage',
+                discountValue: 0,
+              });
+            }
+          }}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -943,8 +1096,10 @@ const AdminOrders: React.FC = () => {
             </DialogTrigger>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Create New Order</DialogTitle>
-                <DialogDescription>Create a sales order for a customer</DialogDescription>
+                <DialogTitle>{editingOrder ? 'Edit Order' : 'Create New Order'}</DialogTitle>
+                <DialogDescription>
+                  {editingOrder ? `Edit order ${editingOrder.invoiceNumber || editingOrder.id.slice(0, 8)}` : 'Create a sales order for a customer'}
+                </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4">
                 <div className="grid grid-cols-2 gap-4">
@@ -1207,8 +1362,26 @@ const AdminOrders: React.FC = () => {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsCreatingOrder(false)}>Cancel</Button>
-                <Button onClick={handleCreateOrder}>Create Order</Button>
+                <Button variant="outline" onClick={() => {
+                  setIsCreatingOrder(false);
+                  setEditingOrder(null);
+                  setNewOrder({
+                    customerId: '',
+                    customerName: '',
+                    customerPhone: '',
+                    customerEmail: '',
+                    assignedSalesPerson: '',
+                    salesPersonName: '',
+                    items: [],
+                    taxType: 'none',
+                    taxRate: 0,
+                    discountType: 'percentage',
+                    discountValue: 0,
+                  });
+                }}>Cancel</Button>
+                <Button onClick={editingOrder ? handleUpdateOrder : handleCreateOrder}>
+                  {editingOrder ? 'Update Order' : 'Create Order'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -1260,6 +1433,18 @@ const AdminOrders: React.FC = () => {
                           ))}
                         </SelectContent>
                       </Select>
+                      {['pending', 'confirmed', 'processing', 'ready', 'delivered'].includes(order.status || '') && 
+                       !(order.paymentHistory && order.paymentHistory.length > 0) && 
+                       !(order.paymentStatus === 'paid' || (order.amountPaid || 0) > 0) && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => handleEditOrder(order)}
+                          title="Edit Order"
+                        >
+                          <Edit3 className="h-4 w-4" />
+                        </Button>
+                      )}
                       <Button
                         variant="outline"
                         size="icon"
