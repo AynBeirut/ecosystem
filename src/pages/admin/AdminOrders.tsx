@@ -52,6 +52,7 @@ const AdminOrders: React.FC = () => {
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
   const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: any } | null>(null);
+  const [voidingPayment, setVoidingPayment] = useState<(Order & { id: string }) | null>(null);
   const [paymentData, setPaymentData] = useState({
     amountPaid: 0,
     paymentDate: new Date().toISOString().split('T')[0],
@@ -689,6 +690,64 @@ const AdminOrders: React.FC = () => {
     } catch (error) {
       console.error('Error deleting order:', error);
       toast({ title: "Error", description: "Failed to delete order", variant: "destructive" });
+    }
+  };
+
+  const handleVoidPayments = async () => {
+    if (!voidingPayment || !user?.storeId) return;
+
+    try {
+      const db = getFirestore();
+      const orderRef = doc(db, 'orders', voidingPayment.id);
+
+      // Reset payment fields
+      await updateDoc(orderRef, {
+        paymentStatus: 'unpaid',
+        amountPaid: 0,
+        paymentDate: '',
+        paymentMethod: '',
+        paymentNotes: '',
+        paymentHistory: [],
+      });
+
+      const updatedOrder = {
+        ...voidingPayment,
+        paymentStatus: 'unpaid' as const,
+        amountPaid: 0,
+        paymentDate: '',
+        paymentMethod: '',
+        paymentNotes: '',
+        paymentHistory: [],
+      };
+
+      setOrders(orders.map(o => o.id === voidingPayment.id ? updatedOrder : o));
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'order_payment_void',
+        voidingPayment.id,
+        {
+          oldValue: {
+            amountPaid: voidingPayment.amountPaid,
+            paymentStatus: voidingPayment.paymentStatus,
+            paymentHistory: voidingPayment.paymentHistory
+          },
+          newValue: { amountPaid: 0, paymentStatus: 'unpaid', paymentHistory: [] }
+        },
+        user.storeId
+      );
+
+      setVoidingPayment(null);
+      toast({
+        title: "Success",
+        description: "All payments voided. You can now edit this order."
+      });
+    } catch (error) {
+      console.error('Error voiding payments:', error);
+      toast({ title: "Error", description: "Failed to void payments", variant: "destructive" });
     }
   };
 
@@ -1475,24 +1534,39 @@ const AdminOrders: React.FC = () => {
                       >
                         <Share2 className="h-4 w-4" />
                       </Button>
-                      {order.status !== 'cancelled' && (!order.paymentStatus || order.paymentStatus !== 'paid') && (
-                        <Button
-                          variant="default"
-                          size="sm"
-                          onClick={() => {
-                            const remaining = Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100;
-                            setPayingOrder(order);
-                            setPaymentData({
-                              amountPaid: Math.max(0, remaining),
-                              paymentDate: new Date().toISOString().split('T')[0],
-                              paymentMethod: 'cash',
-                              paymentNotes: '',
-                            });
-                          }}
-                        >
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          Record Payment
-                        </Button>
+                      {order.status !== 'cancelled' && (
+                        <>
+                          {(!order.paymentStatus || order.paymentStatus !== 'paid') && (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => {
+                                const remaining = Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100;
+                                setPayingOrder(order);
+                                setPaymentData({
+                                  amountPaid: Math.max(0, remaining),
+                                  paymentDate: new Date().toISOString().split('T')[0],
+                                  paymentMethod: 'cash',
+                                  paymentNotes: '',
+                                });
+                              }}
+                            >
+                              <DollarSign className="h-4 w-4 mr-1" />
+                              Record Payment
+                            </Button>
+                          )}
+                          {(order.paymentStatus === 'paid' || order.paymentStatus === 'partial' || (order.amountPaid || 0) > 0) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setVoidingPayment(order)}
+                              title="Void all payments to allow editing"
+                            >
+                              <Trash2 className="h-4 w-4 mr-1" />
+                              Void Payments
+                            </Button>
+                          )}
+                        </>
                       )}
                       {order.status === 'cancelled' && (
                         <Button
@@ -1821,6 +1895,45 @@ const AdminOrders: React.FC = () => {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setPayingOrder(null)}>Cancel</Button>
                 <Button onClick={handlePayOrder}>Record Payment</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Void Payment Confirmation Dialog */}
+        {voidingPayment && (
+          <Dialog open={!!voidingPayment} onOpenChange={() => setVoidingPayment(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Void All Payments?</DialogTitle>
+                <DialogDescription>
+                  Order: {voidingPayment.invoiceNumber || `#${voidingPayment.id.slice(0, 8)}`}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="bg-red-50 border border-red-200 rounded p-4">
+                  <p className="text-sm text-red-900 font-semibold mb-2">⚠️ Warning</p>
+                  <p className="text-sm text-red-800">
+                    This will remove all payment records from this order:
+                  </p>
+                  <ul className="mt-2 space-y-1 text-sm text-red-800">
+                    <li>• Total Paid: <strong>${(voidingPayment.amountPaid || 0).toFixed(2)}</strong></li>
+                    <li>• Payment History: <strong>{voidingPayment.paymentHistory?.length || 0} record(s)</strong></li>
+                    <li>• New Status: <strong>Unpaid</strong></li>
+                  </ul>
+                </div>
+                <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                  <p className="text-sm text-blue-900">
+                    ℹ️ After voiding, you can edit the order and re-record the correct payment amount.
+                  </p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setVoidingPayment(null)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleVoidPayments}>
+                  <Trash2 className="h-4 w-4 mr-1" />
+                  Void All Payments
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
