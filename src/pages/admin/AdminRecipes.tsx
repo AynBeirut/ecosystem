@@ -323,8 +323,8 @@ const AdminRecipes: React.FC = () => {
                     <Input
                       id="outputQuantity"
                       type="number"
-                      min="0.001"
-                      step="0.001"
+                      min="0.01"
+                      step="0.01"
                       value={newRecipe.outputQuantity === 0 ? '' : newRecipe.outputQuantity}
                       onChange={(e) => setNewRecipe({ ...newRecipe, outputQuantity: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 1) })}
                       placeholder="1.00"
@@ -559,8 +559,8 @@ const AdminRecipes: React.FC = () => {
                     <Input
                       id="edit-outputQuantity"
                       type="number"
-                      min="0.001"
-                      step="0.001"
+                      min="0.01"
+                      step="0.01"
                       value={editingRecipe.outputQuantity}
                       onChange={(e) => setEditingRecipe({ ...editingRecipe, outputQuantity: parseFloat(e.target.value) || 1 })}
                     />
