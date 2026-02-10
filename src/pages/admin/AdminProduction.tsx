@@ -369,7 +369,18 @@ const AdminProduction: React.FC = () => {
       const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as any;
       
       // Support both 'ingredients' and 'materials' field names
-      const recipeIngredients = recipe.ingredients || recipe.materials || [];
+      const recipeIngredients = Array.isArray(recipe.ingredients) 
+        ? recipe.ingredients 
+        : (Array.isArray(recipe.materials) ? recipe.materials : []);
+      
+      if (recipeIngredients.length === 0) {
+        toast({ 
+          title: "Error", 
+          description: "Recipe has no ingredients. Please edit the recipe to add ingredients.", 
+          variant: "destructive" 
+        });
+        return;
+      }
       
       // Get all purchases to find material costs
       const purchasesQuery = query(

@@ -76,7 +76,7 @@ const AdminRecipes: React.FC = () => {
       ...newRecipe,
       ingredients: [
         ...newRecipe.ingredients,
-        { rawMaterialId: '', quantity: 0, unit: 'kg' }
+        { rawMaterialId: '', quantity: '' as any, unit: 'kg' }
       ]
     });
   };
@@ -239,24 +239,27 @@ const AdminRecipes: React.FC = () => {
   };
 
   const addEditIngredient = (recipe: Recipe) => {
+    const currentIngredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
     setEditingRecipe({
       ...recipe,
       ingredients: [
-        ...recipe.ingredients,
-        { rawMaterialId: '', quantity: 0, unit: 'kg' }
+        ...currentIngredients,
+        { rawMaterialId: '', quantity: '' as any, unit: 'kg' }
       ]
     });
   };
 
   const removeEditIngredient = (recipe: Recipe, index: number) => {
+    const currentIngredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
     setEditingRecipe({
       ...recipe,
-      ingredients: recipe.ingredients.filter((_, i) => i !== index)
+      ingredients: currentIngredients.filter((_, i) => i !== index)
     });
   };
 
   const updateEditIngredient = (recipe: Recipe, index: number, field: keyof RecipeIngredient, value: any) => {
-    const updated = [...recipe.ingredients];
+    const currentIngredients = Array.isArray(recipe.ingredients) ? recipe.ingredients : [];
+    const updated = [...currentIngredients];
     updated[index] = { ...updated[index], [field]: value };
     setEditingRecipe({ ...recipe, ingredients: updated });
   };
@@ -610,8 +613,9 @@ const AdminRecipes: React.FC = () => {
                             type="number"
                             min="0"
                             step="0.01"
-                            value={ingredient.quantity}
-                            onChange={(e) => updateEditIngredient(editingRecipe, index, 'quantity', parseFloat(e.target.value) || 0)}
+                            value={ingredient.quantity === 0 ? '' : ingredient.quantity}
+                            onChange={(e) => updateEditIngredient(editingRecipe, index, 'quantity', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                            placeholder="0.00"
                           />
                         </div>
                         <div className="col-span-2">
