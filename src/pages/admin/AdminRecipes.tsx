@@ -332,12 +332,21 @@ const AdminRecipes: React.FC = () => {
                   </div>
                   <div>
                     <Label htmlFor="outputUnit">Output Unit</Label>
-                    <Input
-                      id="outputUnit"
+                    <Select
                       value={newRecipe.outputUnit}
-                      onChange={(e) => setNewRecipe({ ...newRecipe, outputUnit: e.target.value })}
-                      placeholder="e.g., piece, kg, batch"
-                    />
+                      onValueChange={(value) => setNewRecipe({ ...newRecipe, outputUnit: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="kg">kg</SelectItem>
+                        <SelectItem value="g">g</SelectItem>
+                        <SelectItem value="liter">liter</SelectItem>
+                        <SelectItem value="piece">piece</SelectItem>
+                        <SelectItem value="batch">batch</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -376,20 +385,33 @@ const AdminRecipes: React.FC = () => {
                         <div className="col-span-3">
                           <Label className="text-xs">Quantity</Label>
                           <Input
-                            type="number"
-                            min="0"
-                            step="0.001"
-                            value={ingredient.quantity === 0 ? '' : ingredient.quantity}
-                            onChange={(e) => updateIngredient(index, 'quantity', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                            type="text"
+                            inputMode="decimal"
+                            value={ingredient.quantity}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateIngredient(index, 'quantity', val === '' ? 0 : parseFloat(val) || val);
+                            }}
                             placeholder="0.00"
                           />
                         </div>
                         <div className="col-span-2">
                           <Label className="text-xs">Unit</Label>
-                          <Input
+                          <Select
                             value={ingredient.unit}
-                            onChange={(e) => updateIngredient(index, 'unit', e.target.value)}
-                          />
+                            onValueChange={(value) => updateIngredient(index, 'unit', value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="kg">kg</SelectItem>
+                              <SelectItem value="g">g</SelectItem>
+                              <SelectItem value="liter">liter</SelectItem>
+                              <SelectItem value="piece">piece</SelectItem>
+                              <SelectItem value="batch">batch</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="col-span-1">
                           <Label className="text-xs">Cost</Label>
@@ -567,11 +589,21 @@ const AdminRecipes: React.FC = () => {
                   </div>
                   <div>
                     <Label htmlFor="edit-outputUnit">Output Unit</Label>
-                    <Input
-                      id="edit-outputUnit"
+                    <Select
                       value={editingRecipe.outputUnit}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, outputUnit: e.target.value })}
-                    />
+                      onValueChange={(value) => setEditingRecipe({ ...editingRecipe, outputUnit: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="kg">kg</SelectItem>
+                        <SelectItem value="g">g</SelectItem>
+                        <SelectItem value="liter">liter</SelectItem>
+                        <SelectItem value="piece">piece</SelectItem>
+                        <SelectItem value="batch">batch</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
@@ -610,20 +642,33 @@ const AdminRecipes: React.FC = () => {
                         <div className="col-span-3">
                           <Label className="text-xs">Quantity</Label>
                           <Input
-                            type="number"
-                            min="0"
-                            step="0.001"
-                            value={ingredient.quantity === 0 ? '' : ingredient.quantity}
-                            onChange={(e) => updateEditIngredient(editingRecipe, index, 'quantity', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                            type="text"
+                            inputMode="decimal"
+                            value={ingredient.quantity}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              updateEditIngredient(editingRecipe, index, 'quantity', val === '' ? 0 : parseFloat(val) || val);
+                            }}
                             placeholder="0.00"
                           />
                         </div>
                         <div className="col-span-2">
                           <Label className="text-xs">Unit</Label>
-                          <Input
+                          <Select
                             value={ingredient.unit}
-                            onChange={(e) => updateEditIngredient(editingRecipe, index, 'unit', e.target.value)}
-                          />
+                            onValueChange={(value) => updateEditIngredient(editingRecipe, index, 'unit', value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="kg">kg</SelectItem>
+                              <SelectItem value="g">g</SelectItem>
+                              <SelectItem value="liter">liter</SelectItem>
+                              <SelectItem value="piece">piece</SelectItem>
+                              <SelectItem value="batch">batch</SelectItem>
+                            </SelectContent>
+                          </Select>
                         </div>
                         <div className="col-span-1">
                           <Label className="text-xs">Cost</Label>
