@@ -27,6 +27,7 @@ const AdminProducts: React.FC = () => {
   const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
+  const [recipes, setRecipes] = useState<any[]>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
@@ -43,7 +44,8 @@ const AdminProducts: React.FC = () => {
     imageFile: null as File | null,
     stock: '',
     productType: 'simple' as 'simple' | 'service' | 'composed',
-    serviceCost: ''
+    serviceCost: '',
+    recipeId: ''
   });
   // Load products from Firestore on mount and when user changes
   useEffect(() => {
@@ -70,6 +72,13 @@ const AdminProducts: React.FC = () => {
         }
       });
       setFinishedGoodsStock(stockMap);
+      
+      // Fetch recipes for composed products
+      const recipesRef = collection(db, 'recipes');
+      const recipesQuery = query(recipesRef, where('storeId', '==', user.storeId));
+      const recipesSnapshot = await getDocs(recipesQuery);
+      const recipesList = recipesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+      setRecipes(recipesList);
     };
     fetchProducts();
   }, [user?.storeId]);
@@ -163,14 +172,17 @@ const AdminProducts: React.FC = () => {
   const handleEditProduct = (product: Product) => {
     setEditingProduct(product);
     setNewProduct({
-      name: product.name,
-      description: product.description,
-      price: product.price.toString(),
-      category: product.category,
-      deliveryTime: product.deliveryTime,
-      image: product.image,
+      name: product.name || '',
+      description: product.description || '',
+      price: product.price?.toString() || '',
+      category: product.category || '',
+      deliveryTime: product.deliveryTime || '',
+      image: product.image || '',
       imageFile: null,
-      stock: typeof product.stock === 'number' ? product.stock.toString() : ''
+      stock: typeof product.stock === 'number' ? product.stock.toString() : '',
+      productType: product.productType || 'simple',
+      serviceCost: product.serviceCost?.toString() || '',
+      recipeId: product.recipeId || ''
     });
   };
 
@@ -179,6 +191,27 @@ const AdminProducts: React.FC = () => {
     if (!editingProduct || !newProduct.name || !newProduct.price) {
       toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
       return;
+    }
+    
+    // Check if recipe is changing for composed product
+    if (editingProduct.productType === 'composed' && newProduct.recipeId !== editingProduct.recipeId) {
+      // Check for active production batches
+      const batchesRef = collection(db, 'productionBatches');
+      const batchesQuery = query(batchesRef, 
+        where('storeId', '==', user.storeId),
+        where('productId', '==', editingProduct.id),
+        where('status', 'in', ['pending', 'in-progress'])
+      );
+      const batchesSnapshot = await getDocs(batchesQuery);
+      
+      if (!batchesSnapshot.empty) {
+        toast({ 
+          title: "Cannot Change Recipe", 
+          description: "This product has active production batches. Complete or cancel them first.", 
+          variant: "destructive" 
+        });
+        return;
+      }
     }
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
@@ -207,15 +240,40 @@ const AdminProducts: React.FC = () => {
         slug: productSlug,
         inStock: (newProduct.stock === '' || Number(newProduct.stock) > 0),
         stock: newProduct.stock === '' ? 0 : Number(newProduct.stock),
-        rating: editingProduct.rating
+        rating: editingProduct.rating,
+        recipeId: newProduct.recipeId || editingProduct.recipeId || null,
+        costPrice: editingProduct.productType === 'composed' && newProduct.recipeId 
+          ? (recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit || 0)
+          : (editingProduct.costPrice || 0)
       };
       const cleanUpdatedProduct = Object.fromEntries(
         Object.entries(updatedProduct).map(([k, v]) => [k, v === undefined ? null : v])
       );
   await updateDoc(doc(db, 'products', editingProduct.id), cleanUpdatedProduct);
+      
+      // Update composedProducts collection if this is a composed product
+      if (editingProduct.productType === 'composed' && newProduct.recipeId) {
+        const composedRef = collection(db, 'composedProducts');
+        const composedQuery = query(composedRef, 
+          where('storeId', '==', user.storeId),
+          where('productId', '==', editingProduct.id)
+        );
+        const composedSnapshot = await getDocs(composedQuery);
+        
+        if (!composedSnapshot.empty) {
+          const composedDoc = composedSnapshot.docs[0];
+          const recipe = recipes.find(r => r.id === newProduct.recipeId);
+          await updateDoc(doc(db, 'composedProducts', composedDoc.id), {
+            recipeId: newProduct.recipeId,
+            costPrice: recipe?.costPerUnit || 0,
+            updatedAt: new Date().toISOString()
+          });
+        }
+      }
+      
       setProducts(products.map(p => p.id === editingProduct.id ? { id: editingProduct.id, ...updatedProduct } : p));
       setEditingProduct(null);
-  setNewProduct({ name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '' });
+  setNewProduct({ name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '', productType: 'simple', serviceCost: '', recipeId: '' });
       toast({ title: "Success", description: "Product updated successfully!" });
     } catch (err) {
       toast({ title: "Error", description: "Failed to update product.", variant: "destructive" });
@@ -622,6 +680,34 @@ const AdminProducts: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+            
+            {editingProduct?.productType === 'composed' && (
+              <div>
+                <Label htmlFor="edit-recipeId">Recipe</Label>
+                <Select 
+                  value={newProduct.recipeId || ''} 
+                  onValueChange={(value) => {
+                    const recipe = recipes.find(r => r.id === value);
+                    setNewProduct(prev => ({ 
+                      ...prev, 
+                      recipeId: value,
+                      price: recipe?.costPerUnit ? (recipe.costPerUnit * 2.5).toFixed(2) : prev.price
+                    }));
+                  }}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select recipe" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {recipes.map(recipe => (
+                      <SelectItem key={recipe.id} value={recipe.id}>
+                        {recipe.name} (Cost: ${recipe.costPerUnit?.toFixed(2) || '0.00'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             
             <div>
               <Label htmlFor="edit-description">Description</Label>
