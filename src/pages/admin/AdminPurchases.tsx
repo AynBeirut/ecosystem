@@ -52,12 +52,53 @@ const AdminPurchases: React.FC = () => {
     supplierName: '',
     supplierContact: '',
     supplierEmail: '',
-    expectedDeliveryDate: '',
+    orderDate: new Date().toISOString().split('T')[0],
+    expectedDeliveryDate: new Date().toISOString().split('T')[0],
     notes: '',
     items: [] as PurchaseItem[],
     taxType: 'none' as 'none' | 'VAT' | 'TTC',
     taxRate: 0,
   });
+
+  // Load saved dates for supplier (expires after 7 days)
+  const loadSupplierDates = (supplierId: string) => {
+    if (!supplierId || !user?.storeId) return;
+    const key = `po_dates_${user.storeId}_${supplierId}`;
+    const saved = localStorage.getItem(key);
+    if (saved) {
+      try {
+        const { orderDate, expectedDeliveryDate, savedAt } = JSON.parse(saved);
+        const daysSince = (Date.now() - new Date(savedAt).getTime()) / (1000 * 60 * 60 * 24);
+        if (daysSince < 7) {
+          setNewPurchase(prev => ({ ...prev, orderDate, expectedDeliveryDate }));
+        } else {
+          localStorage.removeItem(key);
+        }
+      } catch (e) {
+        localStorage.removeItem(key);
+      }
+    }
+  };
+
+  // Save dates for supplier
+  const saveSupplierDates = (supplierId: string, orderDate: string, expectedDeliveryDate: string) => {
+    if (!supplierId || !user?.storeId) return;
+    const key = `po_dates_${user.storeId}_${supplierId}`;
+    localStorage.setItem(key, JSON.stringify({ orderDate, expectedDeliveryDate, savedAt: new Date().toISOString() }));
+  };
+
+  // Clear dates and reset to today
+  const clearDates = () => {
+    const today = new Date().toISOString().split('T')[0];
+    setNewPurchase(prev => ({ ...prev, orderDate: today, expectedDeliveryDate: today }));
+  };
+
+  // Load dates when supplier changes
+  useEffect(() => {
+    if (newPurchase.supplierId) {
+      loadSupplierDates(newPurchase.supplierId);
+    }
+  }, [newPurchase.supplierId]);
 
   const [isCreatingNewSupplier, setIsCreatingNewSupplier] = useState(false);
 
@@ -1162,7 +1203,7 @@ const AdminPurchases: React.FC = () => {
         poNumber: invoiceNumber,
         invoiceNumber,
         supplierId: newPurchase.supplierId,
-        orderDate: new Date().toISOString(),
+        orderDate: newPurchase.orderDate ? new Date(newPurchase.orderDate).toISOString() : new Date().toISOString(),
         expectedDeliveryDate: newPurchase.expectedDeliveryDate,
         status: 'draft' as const,
         items: normalizedItems,
@@ -1183,6 +1224,11 @@ const AdminPurchases: React.FC = () => {
       const docRef = await addDoc(collection(db, 'purchases'), purchaseData);
       setPurchases([{ id: docRef.id, ...purchaseData }, ...purchases]);
 
+      // Save dates for this supplier
+      if (newPurchase.supplierId) {
+        saveSupplierDates(newPurchase.supplierId, newPurchase.orderDate, newPurchase.expectedDeliveryDate);
+      }
+
       // Audit log
       await logAction(
         user.id,
@@ -1195,12 +1241,14 @@ const AdminPurchases: React.FC = () => {
         user.storeId
       );
 
+      const today = new Date().toISOString().split('T')[0];
       setNewPurchase({
         supplierId: '',
         supplierName: '',
         supplierContact: '',
         supplierEmail: '',
-        expectedDeliveryDate: '',
+        orderDate: today,
+        expectedDeliveryDate: today,
         notes: '',
         items: [],
         taxType: 'none',
@@ -1756,6 +1804,29 @@ const AdminPurchases: React.FC = () => {
                     )}
                   </div>
                   <div>
+                    <div className="flex items-center justify-between mb-1">
+                      <Label htmlFor="orderDate">Order Date</Label>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={clearDates}
+                        className="h-6 text-xs"
+                      >
+                        Reset to Today
+                      </Button>
+                    </div>
+                    <Input
+                      id="orderDate"
+                      type="date"
+                      value={newPurchase.orderDate}
+                      onChange={(e) => setNewPurchase(prev => ({ ...prev, orderDate: e.target.value }))}
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {newPurchase.supplierId && newPurchase.orderDate !== new Date().toISOString().split('T')[0] && 'Using saved date from last order'}
+                    </p>
+                  </div>
+                  <div>
                     <Label htmlFor="expectedDeliveryDate">Expected Delivery</Label>
                     <Input
                       id="expectedDeliveryDate"
@@ -1763,6 +1834,9 @@ const AdminPurchases: React.FC = () => {
                       value={newPurchase.expectedDeliveryDate}
                       onChange={(e) => setNewPurchase(prev => ({ ...prev, expectedDeliveryDate: e.target.value }))}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {newPurchase.supplierId && newPurchase.expectedDeliveryDate !== new Date().toISOString().split('T')[0] && 'Using saved date from last order'}
+                    </p>
                   </div>
                 </div>
 
