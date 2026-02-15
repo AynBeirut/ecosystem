@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
@@ -59,6 +59,11 @@ const AdminPurchases: React.FC = () => {
     taxType: 'none' as 'none' | 'VAT' | 'TTC',
     taxRate: 0,
   });
+
+  // Double-click prevention locks
+  const isAddingPurchaseRef = useRef(false);
+  const isReceivingRef = useRef(false);
+  const isPayingRef = useRef(false);
 
   // Load saved dates for supplier (expires after 7 days)
   const loadSupplierDates = (supplierId: string) => {
@@ -1175,10 +1180,18 @@ const AdminPurchases: React.FC = () => {
   };
 
   const handleAddPurchase = async () => {
+    if (isAddingPurchaseRef.current) {
+      console.log('⚠️ Add purchase operation already in progress');
+      return;
+    }
+
     if (!newPurchase.supplierId || newPurchase.items.length === 0 || !user?.storeId) {
       toast({ title: "Error", description: "Supplier and at least one item required", variant: "destructive" });
       return;
     }
+
+    isAddingPurchaseRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -1242,23 +1255,29 @@ const AdminPurchases: React.FC = () => {
       );
 
       const today = new Date().toISOString().split('T')[0];
-      setNewPurchase({
-        supplierId: '',
-        supplierName: '',
-        supplierContact: '',
-        supplierEmail: '',
-        orderDate: today,
-        expectedDeliveryDate: today,
-        notes: '',
-        items: [],
-        taxType: 'none',
-        taxRate: 0,
-      });
-      setIsAddingPurchase(false);
+      operationSucceeded = true;
       toast({ title: "Success", description: `Purchase order ${invoiceNumber} created!` });
     } catch (error) {
       console.error('Error adding purchase:', error);
       toast({ title: "Error", description: "Failed to create purchase order", variant: "destructive" });
+    } finally {
+      isAddingPurchaseRef.current = false;
+      
+      if (operationSucceeded) {
+        setNewPurchase({
+          supplierId: '',
+          supplierName: '',
+          supplierContact: '',
+          supplierEmail: '',
+          orderDate: today,
+          expectedDeliveryDate: today,
+          notes: '',
+          items: [],
+          taxType: 'none',
+          taxRate: 0,
+        });
+        setIsAddingPurchase(false);
+      }
     }
   };
 
@@ -1297,7 +1316,15 @@ const AdminPurchases: React.FC = () => {
   };
 
   const handleReceivePurchase = async () => {
+    if (isReceivingRef.current) {
+      console.log('⚠️ Receive operation already in progress');
+      return;
+    }
+
     if (!receivingPurchase || !user?.storeId) return;
+
+    isReceivingRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -1315,12 +1342,22 @@ const AdminPurchases: React.FC = () => {
       let updatedCount = 0;
       let createdCount = 0;
       
+      console.log('🔧 Starting stock update for purchase:', receivingPurchase.id);
+      console.log('📦 Items to process:', receivingPurchase.items.length);
+      
       for (const item of receivingPurchase.items) {
         const receivedQty = item.receivedQuantity || 0;
-        if (receivedQty <= 0) continue;
+        console.log(`Processing item: ${item.materialName}, receivedQty: ${receivedQty}`);
+        
+        if (receivedQty <= 0) {
+          console.log('⚠️ Skipping item with zero quantity');
+          continue;
+        }
         
         let material = rawMaterials.find(m => m.id === item.rawMaterialId);
         const itemUnitCost = item.unitCost || item.unitPrice || 0;
+        
+        console.log(`Material found:`, material ? `${material.name} (ID: ${material.id})` : 'NOT FOUND');
         
         // If material doesn't exist, create it
         if (!material) {
@@ -1371,7 +1408,7 @@ const AdminPurchases: React.FC = () => {
             newCostPerUnit = newStock > 0 ? totalValue / newStock : itemUnitCost;
           }
           
-          console.log(`Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)})`);
+          console.log(`✅ Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)})`);
           
           // Update stock and cost
           await updateDoc(materialRef, {
@@ -1380,9 +1417,13 @@ const AdminPurchases: React.FC = () => {
             unit: item.unit || material.unit, // Update unit if provided in purchase
             updatedAt: new Date().toISOString(),
           });
+          
+          console.log(`✅ Successfully updated ${material.name} stock to ${newStock}`);
           updatedCount++;
         }
       }
+      
+      console.log(`🎉 Stock update complete: ${updatedCount} updated, ${createdCount} created`);
 
       // Refetch raw materials to ensure sync
       const rawMaterialsRef = collection(db, 'rawMaterials');
@@ -1393,6 +1434,8 @@ const AdminPurchases: React.FC = () => {
         ...doc.data()
       } as RawMaterial));
       setRawMaterials(rawMaterialsList);
+      
+      console.log('📊 Refetched raw materials. Assets stock:', rawMaterialsList.find(m => m.name === 'assets')?.currentStock);
 
       // Refetch purchases to update UI
       const purchasesRef = collection(db, 'purchases');
@@ -1416,11 +1459,11 @@ const AdminPurchases: React.FC = () => {
         user.storeId
       );
 
-      setReceivingPurchase(null);
-      
       const successMessage = createdCount > 0 
         ? `Purchase received! ${updatedCount} material(s) updated, ${createdCount} new material(s) created.`
         : `Purchase received! ${updatedCount} material(s) stock updated.`;
+      
+      operationSucceeded = true;
       
       toast({ 
         title: "Success", 
@@ -1429,11 +1472,25 @@ const AdminPurchases: React.FC = () => {
     } catch (error) {
       console.error('Error receiving purchase:', error);
       toast({ title: "Error", description: "Failed to receive purchase order", variant: "destructive" });
+    } finally {
+      isReceivingRef.current = false;
+      
+      if (operationSucceeded) {
+        setReceivingPurchase(null);
+      }
     }
   };
 
   const handlePayPurchase = async () => {
+    if (isPayingRef.current) {
+      console.log('⚠️ Payment operation already in progress');
+      return;
+    }
+
     if (!payingPurchase || !user?.storeId) return;
+
+    isPayingRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -1499,13 +1556,7 @@ const AdminPurchases: React.FC = () => {
         user.storeId
       );
 
-      setPayingPurchase(null);
-      setPaymentData({
-        amountPaid: 0,
-        paymentDate: new Date().toISOString().split('T')[0],
-        paymentMethod: 'cash',
-        paymentNotes: '',
-      });
+      operationSucceeded = true;
 
       toast({ 
         title: "Success", 
@@ -1520,6 +1571,18 @@ const AdminPurchases: React.FC = () => {
     } catch (error) {
       console.error('Error recording payment:', error);
       toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
+    } finally {
+      isPayingRef.current = false;
+      
+      if (operationSucceeded) {
+        setPayingPurchase(null);
+        setPaymentData({
+          amountPaid: 0,
+          paymentDate: new Date().toISOString().split('T')[0],
+          paymentMethod: 'cash',
+          paymentNotes: '',
+        });
+      }
     }
   };
 

@@ -128,7 +128,8 @@ const AdminProducts: React.FC = () => {
         rating: 0,
         productType: newProduct.productType,
         isService: newProduct.productType === 'service',
-        serviceCost: newProduct.productType === 'service' && newProduct.serviceCost ? parseFloat(newProduct.serviceCost) : undefined
+        serviceCost: newProduct.productType === 'service' && newProduct.serviceCost ? parseFloat(newProduct.serviceCost) : undefined,
+        recipeId: newProduct.productType === 'composed' && newProduct.recipeId ? newProduct.recipeId : undefined
       };
       const cleanProductData = Object.fromEntries(
         Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])

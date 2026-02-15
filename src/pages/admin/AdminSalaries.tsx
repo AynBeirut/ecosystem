@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -25,6 +25,10 @@ const AdminSalaries: React.FC = () => {
   const [payments, setPayments] = useState<SalaryPayment[]>([]);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  
+  // Double-click prevention lock
+  const isProcessingPaymentRef = useRef(false);
+  
   const [newPayment, setNewPayment] = useState({
     staffId: '',
     baseSalary: 0,
@@ -61,10 +65,18 @@ const AdminSalaries: React.FC = () => {
   }, [user?.storeId]);
 
   const handleProcessPayment = async () => {
+    if (isProcessingPaymentRef.current) {
+      console.log('⚠️ Payment processing operation already in progress');
+      return;
+    }
+
     if (!newPayment.staffId || !user?.storeId) {
       toast({ title: "Error", description: "Please select a staff member", variant: "destructive" });
       return;
     }
+
+    isProcessingPaymentRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -98,19 +110,25 @@ const AdminSalaries: React.FC = () => {
         user.storeId
       );
 
-      setNewPayment({
-        staffId: '',
-        baseSalary: 0,
-        commissionAmount: 0,
-        bonus: 0,
-        deductions: 0,
-        notes: '',
-      });
-      setIsProcessingPayment(false);
+      operationSucceeded = true;
       toast({ title: "Success", description: "Salary payment processed successfully!" });
     } catch (error) {
       console.error('Error processing payment:', error);
       toast({ title: "Error", description: "Failed to process payment", variant: "destructive" });
+    } finally {
+      isProcessingPaymentRef.current = false;
+      
+      if (operationSucceeded) {
+        setNewPayment({
+          staffId: '',
+          baseSalary: 0,
+          commissionAmount: 0,
+          bonus: 0,
+          deductions: 0,
+          notes: '',
+        });
+        setIsProcessingPayment(false);
+      }
     }
   };
 

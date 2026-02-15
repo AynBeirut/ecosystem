@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -171,6 +171,11 @@ const AdminProduction: React.FC = () => {
   const [filterStatus, setFilterStatus] = useState<ProductionBatchStatus | 'all'>('all');
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
+  const [completingBatch, setCompletingBatch] = useState<ProductionBatch | null>(null);
+  const [completionQuantity, setCompletionQuantity] = useState<string>('');
+  const [isCompleting, setIsCompleting] = useState(false);
+  const isOperatingRef = useRef(false);
+  const isAddingBatchRef = useRef(false);
   const [newBatch, setNewBatch] = useState({
     productId: '',
     quantity: 0,
@@ -185,31 +190,26 @@ const AdminProduction: React.FC = () => {
       if (!user?.storeId) return;
       const db = getFirestore();
 
-      const productsRef = collection(db, 'composedProducts');
-      const productsQuery = query(productsRef, where('storeId', '==', user.storeId));
+      // Fetch composed products directly from products collection
+      const productsRef = collection(db, 'products');
+      const productsQuery = query(
+        productsRef, 
+        where('storeId', '==', user.storeId),
+        where('productType', '==', 'composed')
+      );
       const productsSnapshot = await getDocs(productsQuery);
-      
-      // Fetch product details for names
-      const allProductsRef = collection(db, 'products');
-      const allProductsQuery = query(allProductsRef, where('storeId', '==', user.storeId));
-      const allProductsSnapshot = await getDocs(allProductsQuery);
-      const productsMap = new Map();
-      allProductsSnapshot.docs.forEach(doc => {
-        productsMap.set(doc.id, doc.data());
-      });
-      console.log('Products map:', productsMap);
       
       const productsList: ComposedProduct[] = productsSnapshot.docs.map(doc => {
         const data = doc.data();
-        const productData = productsMap.get(data.productId);
-        console.log(`Product ${data.productId} -> name: ${productData?.name}`);
         return {
           id: doc.id,
+          productId: doc.id,
           ...data,
-          name: productData?.name || 'Unknown Product'
+          name: data.name || 'Unknown Product'
         } as ComposedProduct;
-      });
-      console.log('Loaded products for production:', productsList);
+      }).filter(p => p.recipeId); // Only show products with recipes
+      
+      console.log('Loaded composed products for production:', productsList);
       setProducts(productsList);
 
       // Fetch recipes
@@ -235,6 +235,11 @@ const AdminProduction: React.FC = () => {
   }, [user?.storeId]);
 
   const handleAddBatch = async () => {
+    if (isAddingBatchRef.current) {
+      console.log('⚠️ Add batch operation already in progress');
+      return;
+    }
+
     if (!newBatch.productId || newBatch.quantity <= 0 || !user?.storeId) {
       toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
       return;
@@ -245,6 +250,9 @@ const AdminProduction: React.FC = () => {
       toast({ title: "Error", description: "Product not found", variant: "destructive" });
       return;
     }
+
+    isAddingBatchRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -286,19 +294,25 @@ const AdminProduction: React.FC = () => {
         user.storeId
       );
 
-      setNewBatch({
-        productId: '',
-        quantity: 0,
-        scheduledDate: new Date().toISOString().split('T')[0],
-        estimatedCompletionDate: '',
-        priority: 'normal',
-        notes: '',
-      });
-      setIsAddingBatch(false);
+      operationSucceeded = true;
       toast({ title: "Success", description: "Production batch created successfully!" });
     } catch (error) {
       console.error('Error creating batch:', error);
       toast({ title: "Error", description: "Failed to create batch", variant: "destructive" });
+    } finally {
+      isAddingBatchRef.current = false;
+      
+      if (operationSucceeded) {
+        setNewBatch({
+          productId: '',
+          quantity: 0,
+          scheduledDate: new Date().toISOString().split('T')[0],
+          estimatedCompletionDate: '',
+          priority: 'normal',
+          notes: '',
+        });
+        setIsAddingBatch(false);
+      }
     }
   };
 
@@ -558,40 +572,58 @@ const AdminProduction: React.FC = () => {
 
   const handleCompleteProduction = async (batch: ProductionBatch) => {
     if (!user?.storeId) return;
-    const actualQuantity = prompt(`Enter actual quantity produced (planned: ${batch.quantity}):`, batch.quantity.toString());
-    if (!actualQuantity) return;
     
-    const actualQty = parseInt(actualQuantity);
-    if (actualQty <= 0) {
+    // Open dialog instead of prompt
+    setCompletingBatch(batch);
+    setCompletionQuantity(batch.quantity.toString());
+  };
+  
+  const executeCompleteProduction = async () => {
+    // Synchronous lock to prevent double execution
+    if (isOperatingRef.current) {
+      console.log('⚠️ Operation already in progress, ignoring click');
+      return;
+    }
+    if (!completingBatch || !user?.storeId || isCompleting) {
+      console.log('⚠️ Validation failed:', { completingBatch: !!completingBatch, storeId: !!user?.storeId, isCompleting });
+      return;
+    }
+    
+    const actualQty = parseInt(completionQuantity);
+    if (!actualQty || actualQty <= 0) {
       toast({ title: "Error", description: "Quantity must be greater than 0", variant: "destructive" });
       return;
     }
 
+    console.log('🔒 Locking operation');
+    isOperatingRef.current = true;
+    setIsCompleting(true);
+    let operationSucceeded = false;
+    
     try {
       const db = getFirestore();
       
-      // 1. Get the composed product and its recipe
-      const composedProductDoc = await getDoc(doc(db, 'composedProducts', batch.productId));
-      if (!composedProductDoc.exists()) {
-        toast({ title: "Error", description: "Composed product not found", variant: "destructive" });
+      // 1. Get the product and its recipe
+      const productDoc = await getDoc(doc(db, 'products', completingBatch.productId));
+      if (!productDoc.exists()) {
+        toast({ title: "Error", description: "Product not found", variant: "destructive" });
+        setIsCompleting(false);
         return;
       }
-      const composedProductData = composedProductDoc.data();
-      
-      // Fetch the actual product name
-      const productDoc = await getDoc(doc(db, 'products', composedProductData.productId));
-      const productName = productDoc.exists() ? productDoc.data()?.name : 'Unknown Product';
+      const productData = productDoc.data();
       
       const composedProduct = { 
-        id: composedProductDoc.id, 
-        ...composedProductData,
-        name: productName
+        id: productDoc.id,
+        productId: productDoc.id,
+        ...productData,
+        name: productData.name || 'Unknown Product'
       } as ComposedProduct;
       
       // 2. Get recipe details
       const recipeDoc = await getDoc(doc(db, 'recipes', composedProduct.recipeId || ''));
       if (!recipeDoc.exists()) {
         toast({ title: "Error", description: "Recipe not found", variant: "destructive" });
+        setIsCompleting(false);
         return;
       }
       const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as Recipe;
@@ -602,8 +634,8 @@ const AdminProduction: React.FC = () => {
       const zeroCostMaterials: string[] = [];
       
       console.log('🔧 Production Completion Started:', {
-        batchId: batch.id,
-        productId: batch.productId,
+        batchId: completingBatch.id,
+        productId: completingBatch.productId,
         actualQty,
         recipeIngredients: recipe.ingredients?.length || 0
       });
@@ -613,6 +645,18 @@ const AdminProduction: React.FC = () => {
           rawMaterialId: ingredient.rawMaterialId,
           quantityInRecipe: ingredient.quantity
         });
+        
+        // Skip ingredients with invalid or empty rawMaterialId
+        if (!ingredient.rawMaterialId || ingredient.rawMaterialId.trim() === '') {
+          console.warn('⚠️ Skipping ingredient with empty rawMaterialId');
+          continue;
+        }
+        
+        // Skip ingredients with zero or negative quantity
+        if (!ingredient.quantity || ingredient.quantity <= 0) {
+          console.warn('⚠️ Skipping ingredient with invalid quantity:', ingredient.quantity);
+          continue;
+        }
         
         const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId));
         if (!rawMaterialDoc.exists()) {
@@ -643,6 +687,7 @@ const AdminProduction: React.FC = () => {
             description: `Not enough ${rawMaterial.name}. Need: ${quantityNeeded}, Available: ${currentStock}`,
             variant: "destructive"
           });
+          setIsCompleting(false);
           return;
         }
         
@@ -666,7 +711,7 @@ const AdminProduction: React.FC = () => {
         console.log('✅ Stock reduced successfully for:', rawMaterial.name);
         
         materialsUsed.push({
-          materialId: ingredient.rawMaterialId,
+          rawMaterialId: ingredient.rawMaterialId,
           materialName: rawMaterial.name,
           quantityUsed: quantityNeeded,
           unitCost: rawMaterial.costPerUnit || 0,
@@ -688,7 +733,10 @@ const AdminProduction: React.FC = () => {
           `Please update material costs in Raw Materials page before completing production.\n\n` +
           `Do you still want to continue?`
         );
-        if (!confirmed) return;
+        if (!confirmed) {
+          setIsCompleting(false);
+          return;
+        }
       }
       
       // 4. Calculate cost per unit (ONLY MATERIAL COSTS)
@@ -700,13 +748,13 @@ const AdminProduction: React.FC = () => {
       const fgQuery = query(
         collection(db, 'finishedGoodsInventory'),
         where('storeId', '==', user.storeId),
-        where('composedProductId', '==', batch.productId)
+        where('productId', '==', completingBatch.productId)
       );
       const fgSnapshot = await getDocs(fgQuery);
       
       const batchDetails = {
-        batchId: batch.id,
-        batchNumber: `BATCH-${batch.id.slice(-6)}`,
+        batchId: completingBatch.id,
+        batchNumber: `BATCH-${completingBatch.id.slice(-6)}`,
         quantity: actualQty,
         costPerUnit: totalCostPerUnit,
         remainingQuantity: actualQty,
@@ -720,8 +768,8 @@ const AdminProduction: React.FC = () => {
         quantity: actualQty,
         unitCost: totalCostPerUnit,
         totalCost: totalCostPerUnit * actualQty,
-        referenceId: batch.id,
-        referenceNumber: `BATCH-${batch.id.slice(-6)}`,
+        referenceId: completingBatch.id,
+        referenceNumber: `BATCH-${completingBatch.id.slice(-6)}`,
         userId: user.id,
         userName: user.name,
         batchDetails,
@@ -758,8 +806,8 @@ const AdminProduction: React.FC = () => {
         const fgCode = `FG-${Date.now().toString().slice(-6)}`;
         const fgData: Omit<FinishedGoodsItem, 'id'> = {
           itemCode: fgCode,
-          productId: composedProduct.productId || '',
-          composedProductId: batch.productId,
+          productId: completingBatch.productId,
+          composedProductId: completingBatch.productId,
           recipeId: composedProduct.recipeId || '',
           description: composedProduct.name,
           productName: composedProduct.name,
@@ -770,7 +818,7 @@ const AdminProduction: React.FC = () => {
           quantityAdjusted: 0,
           currentBalance: actualQty,
           costPrice: totalCostPerUnit,
-          sellingPrice: composedProduct.sellingPrice || (totalCostPerUnit * 2.5),
+          sellingPrice: composedProduct.price || composedProduct.sellingPrice || (totalCostPerUnit * 2.5),
           totalValue: actualQty * totalCostPerUnit,
           valuationMethod: 'FIFO',
           transactions: [transaction],
@@ -784,26 +832,8 @@ const AdminProduction: React.FC = () => {
         await addDoc(collection(db, 'finishedGoodsInventory'), fgData);
       }
       
-      // 6. Reduce raw material inventory for materials used
-      for (const materialUsed of materialsUsed) {
-        const rawMaterialRef = doc(db, 'rawMaterials', materialUsed.rawMaterialId);
-        const rawMaterialDoc = await getDoc(rawMaterialRef);
-        
-        if (rawMaterialDoc.exists()) {
-          const rawMaterial = rawMaterialDoc.data();
-          const newStock = (rawMaterial.currentStock || 0) - materialUsed.quantityUsed;
-          const newValue = newStock * (rawMaterial.costPerUnit || 0);
-          
-          await updateDoc(rawMaterialRef, {
-            currentStock: Math.max(0, newStock),
-            totalValue: Math.max(0, newValue),
-            updatedAt: new Date().toISOString(),
-          });
-        }
-      }
-      
       // 7. Update production batch
-      const batchRef = doc(db, 'productionBatches', batch.id);
+      const batchRef = doc(db, 'productionBatches', completingBatch.id);
       const updateData = {
         status: 'completed' as ProductionBatchStatus,
         completionDate: new Date().toISOString(),
@@ -813,7 +843,7 @@ const AdminProduction: React.FC = () => {
         costPerUnit: totalCostPerUnit,
       };
       await updateDoc(batchRef, updateData);
-      setBatches(batches.map(b => b.id === batch.id ? { ...b, ...updateData } : b));
+      setBatches(batches.map(b => b.id === completingBatch.id ? { ...b, ...updateData } : b));
       
       // Log the action
       await logAction(
@@ -822,7 +852,7 @@ const AdminProduction: React.FC = () => {
         user.role,
         'update',
         'productionBatch',
-        batch.id,
+        completingBatch.id,
         {
           oldValue: { status: 'in_progress' },
           newValue: { status: 'completed', actualQuantity: actualQty, materialsUsed }
@@ -834,9 +864,25 @@ const AdminProduction: React.FC = () => {
         title: "Production Completed!", 
         description: `${actualQty} units of ${composedProduct.name} manufactured. Cost: $${totalCostPerUnit.toFixed(2)}/unit`,
       });
+      
+      console.log('✅ Production completed successfully, marking operationSucceeded = true');
+      operationSucceeded = true;
     } catch (error) {
       console.error('Error completing production:', error);
       toast({ title: "Error", description: "Failed to complete production", variant: "destructive" });
+    } finally {
+      console.log('🔓 Unlocking operation, operationSucceeded:', operationSucceeded);
+      isOperatingRef.current = false;
+      setIsCompleting(false);
+      
+      // Close dialog only if operation succeeded
+      if (operationSucceeded) {
+        console.log('✅ Closing dialog and resetting state');
+        setCompletingBatch(null);
+        setCompletionQuantity('');
+      } else {
+        console.log('❌ Operation failed, keeping dialog open');
+      }
     }
   };
 
@@ -1123,7 +1169,11 @@ const AdminProduction: React.FC = () => {
                           </Button>
                         )}
                         {batch.status === 'in_progress' && (
-                          <Button size="sm" onClick={() => handleCompleteProduction(batch)}>
+                          <Button 
+                            size="sm" 
+                            onClick={() => handleCompleteProduction(batch)}
+                            disabled={isCompleting}
+                          >
                             Complete
                           </Button>
                         )}
@@ -1214,6 +1264,56 @@ const AdminProduction: React.FC = () => {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditingBatch(null)}>Cancel</Button>
                 <Button onClick={handleUpdateBatch}>Update Batch</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {completingBatch && (
+          <Dialog open={!!completingBatch} onOpenChange={() => !isCompleting && setCompletingBatch(null)}>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Complete Production</DialogTitle>
+                <DialogDescription>
+                  Enter the actual quantity produced for {completingBatch.productName}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="actualQty">Actual Quantity Produced</Label>
+                  <Input
+                    id="actualQty"
+                    type="number"
+                    min="1"
+                    value={completionQuantity}
+                    onChange={(e) => setCompletionQuantity(e.target.value)}
+                    placeholder={`Planned: ${completingBatch.quantity}`}
+                    disabled={isCompleting}
+                  />
+                  <p className="text-sm text-gray-500">
+                    Planned quantity: {completingBatch.quantity}
+                  </p>
+                </div>
+                <div className="grid gap-2">
+                  <Label>Completion Date</Label>
+                  <p className="text-sm font-medium">{new Date().toLocaleDateString()}</p>
+                  <p className="text-xs text-gray-500">Auto-filled with current date</p>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setCompletingBatch(null)}
+                  disabled={isCompleting}
+                >
+                  Cancel
+                </Button>
+                <Button 
+                  onClick={executeCompleteProduction}
+                  disabled={isCompleting || !completionQuantity || parseInt(completionQuantity) <= 0}
+                >
+                  {isCompleting ? 'Completing...' : 'Complete Production'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

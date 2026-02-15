@@ -650,8 +650,8 @@ const AdminAccountStatement: React.FC = () => {
           }
           
           const total = order.totalAmount || order.total || 0;
-          const subtotal = order.subtotal || total; // Use total if no subtotal (no VAT applied)
-          const vat = order.vat || (total - subtotal);
+          const vat = order.taxAmount || order.vat || 0;
+          const net = total - vat; // Net = Total - VAT
           
           allTxns.push({
             date: order.createdAt || order.date || '',
@@ -659,7 +659,7 @@ const AdminAccountStatement: React.FC = () => {
             ref: order.invoiceNumber || order.orderNumber || doc.id.substring(0, 8),
             description: `Sales Inv.${order.invoiceNumber || doc.id.substring(0, 6)}`,
             debit: total,
-            net: subtotal,
+            net: net,
             vat: vat,
             credit: order.amountPaid || 0,
             data: order

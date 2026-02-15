@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
@@ -44,6 +44,10 @@ const Cart: React.FC = () => {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [hasSavedInfo, setHasSavedInfo] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+  
+  // Double-click prevention lock
+  const isCheckingOutRef = useRef(false);
+  
   const navigate = useNavigate();
 
   // Load saved delivery info from localStorage on mount
@@ -266,6 +270,11 @@ const Cart: React.FC = () => {
   };
 
   const handleCheckout = async () => {
+    if (isCheckingOutRef.current) {
+      toast.error('Checkout already in progress. Please wait...');
+      return;
+    }
+
     if (items.length === 0) {
       toast.error('Your cart is empty');
       return;
@@ -286,16 +295,27 @@ const Cart: React.FC = () => {
       return;
     }
     
+    isCheckingOutRef.current = true;
+    
     // Check stock for all items
     const db = getFirestore();
-    for (const item of items) {
-      const productRef = doc(db, 'products', item.product.id);
-      const productSnap = await getDoc(productRef);
-      if (!productSnap.exists() || !productSnap.data().inStock) {
-        toast.error(`Sorry, ${item.product.name} is out of stock.`);
-        return;
+    try {
+      for (const item of items) {
+        const productRef = doc(db, 'products', item.product.id);
+        const productSnap = await getDoc(productRef);
+        if (!productSnap.exists() || !productSnap.data().inStock) {
+          toast.error(`Sorry, ${item.product.name} is out of stock.`);
+          isCheckingOutRef.current = false;
+          return;
+        }
       }
+    } catch (stockError) {
+      console.error('Error checking stock:', stockError);
+      toast.error('Failed to verify stock availability');
+      isCheckingOutRef.current = false;
+      return;
     }
+    
     // Place order via server-side checkout to ensure atomic credits handling
     try {
       if (!user) {
@@ -366,8 +386,10 @@ const Cart: React.FC = () => {
       navigate('/orders/confirmation');
     } catch (err: unknown) {
       console.error('Checkout error', err);
-  const msg = err instanceof Error ? err.message : 'Failed to place order. Please try again.';
-  toast.error(msg);
+      const msg = err instanceof Error ? err.message : 'Failed to place order. Please try again.';
+      toast.error(msg);
+    } finally {
+      isCheckingOutRef.current = false;
     }
   };
 

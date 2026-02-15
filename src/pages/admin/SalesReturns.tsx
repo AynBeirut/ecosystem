@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -29,6 +29,10 @@ const SalesReturns: React.FC = () => {
   const [products, setProducts] = useState<any[]>([]);
   const [isCreatingReturn, setIsCreatingReturn] = useState(false);
   const [processingReturn, setProcessingReturn] = useState<SalesReturn | null>(null);
+  
+  // Double-click prevention locks
+  const isCreatingReturnRef = useRef(false);
+  const isProcessingReturnRef = useRef(false);
   
   const [newReturn, setNewReturn] = useState({
     orderId: '',
@@ -118,6 +122,11 @@ const SalesReturns: React.FC = () => {
   };
 
   const handleCreateReturn = async () => {
+    if (isCreatingReturnRef.current) {
+      console.log('⚠️ Create return operation already in progress');
+      return;
+    }
+
     if (!newReturn.orderId || !user?.storeId) {
       toast({ title: "Error", description: "Please select an order", variant: "destructive" });
       return;
@@ -151,6 +160,9 @@ const SalesReturns: React.FC = () => {
         return;
       }
     }
+
+    isCreatingReturnRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -198,17 +210,31 @@ const SalesReturns: React.FC = () => {
 
       await logAction(user.id, user.name, user.role, 'create', 'sales_return', docRef.id, { newValue: returnData }, user.storeId);
 
-      setNewReturn({ orderId: '', restockItems: true, notes: '', items: [] });
-      setIsCreatingReturn(false);
+      operationSucceeded = true;
       toast({ title: "Success", description: `Return ${returnNumber} created successfully!` });
     } catch (error) {
       console.error('Error creating return:', error);
       toast({ title: "Error", description: "Failed to create return", variant: "destructive" });
+    } finally {
+      isCreatingReturnRef.current = false;
+      
+      if (operationSucceeded) {
+        setNewReturn({ orderId: '', restockItems: true, notes: '', items: [] });
+        setIsCreatingReturn(false);
+      }
     }
   };
 
   const handleProcessReturn = async (returnId: string, newStatus: SalesReturn['status'], refundMethod?: string) => {
+    if (isProcessingReturnRef.current) {
+      console.log('⚠️ Process return operation already in progress');
+      return;
+    }
+
     if (!user?.storeId) return;
+
+    isProcessingReturnRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -323,11 +349,17 @@ const SalesReturns: React.FC = () => {
         setProducts(productsData);
       }
 
-      setProcessingReturn(null);
+      operationSucceeded = true;
       toast({ title: "Success", description: `Return ${newStatus}!` });
     } catch (error) {
       console.error('Error processing return:', error);
       toast({ title: "Error", description: "Failed to process return", variant: "destructive" });
+    } finally {
+      isProcessingReturnRef.current = false;
+      
+      if (operationSucceeded) {
+        setProcessingReturn(null);
+      }
     }
   };
 

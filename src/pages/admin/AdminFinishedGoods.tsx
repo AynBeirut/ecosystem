@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs, doc, updateDoc, addDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -55,6 +55,9 @@ const AdminFinishedGoods: React.FC = () => {
   } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [monthlyServiceCosts, setMonthlyServiceCosts] = useState<MonthlyServiceCost[]>([]);
+
+  // Double-click prevention lock
+  const isAdjustingStockRef = useRef(false);
 
   useEffect(() => {
     fetchFinishedGoods();
@@ -446,12 +449,20 @@ const AdminFinishedGoods: React.FC = () => {
   };
 
   const handleAdjustStock = async () => {
+    if (isAdjustingStockRef.current) {
+      console.log('⚠️ Stock adjustment operation already in progress');
+      return;
+    }
+
     if (!adjustingItem || !user?.storeId) return;
     
     if (adjustment.quantity <= 0) {
       toast({ title: "Error", description: "Please enter a valid quantity", variant: "destructive" });
       return;
     }
+
+    isAdjustingStockRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -492,12 +503,18 @@ const AdminFinishedGoods: React.FC = () => {
         newValue: { currentBalance: newBalance, adjustment: quantityChange }
       }, user.storeId);
       
+      operationSucceeded = true;
       toast({ title: "Success", description: "Stock adjusted successfully" });
-      setAdjustingItem(null);
-      fetchFinishedGoods();
     } catch (error) {
       console.error('Error adjusting stock:', error);
       toast({ title: "Error", description: "Failed to adjust stock", variant: "destructive" });
+    } finally {
+      isAdjustingStockRef.current = false;
+      
+      if (operationSucceeded) {
+        setAdjustingItem(null);
+        fetchFinishedGoods();
+      }
     }
   };
 

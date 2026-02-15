@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
@@ -78,6 +78,11 @@ const AdminOrders: React.FC = () => {
   const [salesPersonSearchOpen, setSalesPersonSearchOpen] = useState(false);
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
   const [isCreatingNewSalesPerson, setIsCreatingNewSalesPerson] = useState(false);
+
+  // Double-click prevention locks
+  const isCreatingOrderRef = useRef(false);
+  const isVoidingPaymentRef = useRef(false);
+  const isPayingOrderRef = useRef(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -333,6 +338,11 @@ const AdminOrders: React.FC = () => {
   };
 
   const handleCreateOrder = async () => {
+    if (isCreatingOrderRef.current) {
+      console.log('⚠️ Create order operation already in progress');
+      return;
+    }
+
     if (!newOrder.customerId || newOrder.items.length === 0 || !user?.storeId) {
       toast({ title: "Error", description: "Please select customer and add items", variant: "destructive" });
       return;
@@ -351,6 +361,9 @@ const AdminOrders: React.FC = () => {
       });
       return;
     }
+
+    isCreatingOrderRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -432,24 +445,30 @@ const AdminOrders: React.FC = () => {
         // Don't fail the order creation if logging fails
       }
 
-      setNewOrder({
-        customerId: '',
-        customerName: '',
-        customerPhone: '',
-        customerEmail: '',
-        assignedSalesPerson: '',
-        salesPersonName: '',
-        items: [],
-        taxType: 'none',
-        taxRate: 0,
-        discountType: 'percentage',
-        discountValue: 0,
-      });
-      setIsCreatingOrder(false);
+      operationSucceeded = true;
       toast({ title: "Success", description: `Order created! Invoice: ${invoiceNumber}` });
     } catch (error) {
       console.error('Error creating order:', error);
       toast({ title: "Error", description: "Failed to create order", variant: "destructive" });
+    } finally {
+      isCreatingOrderRef.current = false;
+      
+      if (operationSucceeded) {
+        setNewOrder({
+          customerId: '',
+          customerName: '',
+          customerPhone: '',
+          customerEmail: '',
+          assignedSalesPerson: '',
+          salesPersonName: '',
+          items: [],
+          taxType: 'none',
+          taxRate: 0,
+          discountType: 'percentage',
+          discountValue: 0,
+        });
+        setIsCreatingOrder(false);
+      }
     }
   };
 
@@ -694,7 +713,15 @@ const AdminOrders: React.FC = () => {
   };
 
   const handleVoidPayments = async () => {
+    if (isVoidingPaymentRef.current) {
+      console.log('⚠️ Void payment operation already in progress');
+      return;
+    }
+
     if (!voidingPayment || !user?.storeId) return;
+
+    isVoidingPaymentRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -740,7 +767,7 @@ const AdminOrders: React.FC = () => {
         user.storeId
       );
 
-      setVoidingPayment(null);
+      operationSucceeded = true;
       toast({
         title: "Success",
         description: "All payments voided. You can now edit this order."
@@ -748,11 +775,25 @@ const AdminOrders: React.FC = () => {
     } catch (error) {
       console.error('Error voiding payments:', error);
       toast({ title: "Error", description: "Failed to void payments", variant: "destructive" });
+    } finally {
+      isVoidingPaymentRef.current = false;
+      
+      if (operationSucceeded) {
+        setVoidingPayment(null);
+      }
     }
   };
 
   const handlePayOrder = async () => {
+    if (isPayingOrderRef.current) {
+      console.log('⚠️ Payment operation already in progress');
+      return;
+    }
+
     if (!payingOrder || !user?.storeId) return;
+
+    isPayingOrderRef.current = true;
+    let operationSucceeded = false;
 
     try {
       const db = getFirestore();
@@ -818,13 +859,7 @@ const AdminOrders: React.FC = () => {
         user.storeId
       );
 
-      setPayingOrder(null);
-      setPaymentData({
-        amountPaid: 0,
-        paymentDate: new Date().toISOString().split('T')[0],
-        paymentMethod: 'cash',
-        paymentNotes: '',
-      });
+      operationSucceeded = true;
 
       toast({ 
         title: "Success", 
@@ -836,6 +871,18 @@ const AdminOrders: React.FC = () => {
     } catch (error) {
       console.error('Error recording payment:', error);
       toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
+    } finally {
+      isPayingOrderRef.current = false;
+      
+      if (operationSucceeded) {
+        setPayingOrder(null);
+        setPaymentData({
+          amountPaid: 0,
+          paymentDate: new Date().toISOString().split('T')[0],
+          paymentMethod: 'cash',
+          paymentNotes: '',
+        });
+      }
     }
   };
 
