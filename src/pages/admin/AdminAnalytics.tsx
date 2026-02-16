@@ -94,11 +94,18 @@ const AdminAnalytics: React.FC = () => {
           
           // Process items for product and category sales
           const items = order.items || [];
+          const orderSubtotal = order.subtotal || order.total || 0;
+          const orderDiscount = order.discountAmount || 0;
+          
           items.forEach((item: any) => {
             const productId = item.productId;
             const quantity = item.quantity || 0;
             const price = item.price || 0;
-            const itemRevenue = quantity * price;
+            const itemSubtotal = quantity * price;
+            
+            // Apply proportional discount to get actual item revenue
+            const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
+            const itemRevenue = itemSubtotal - itemDiscount;
             
             // Get cost from finished goods (for composed products) or use a default
             const unitCost = finishedGoodsCosts[productId] || 0;
