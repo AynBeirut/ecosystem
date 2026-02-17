@@ -526,11 +526,64 @@ const AdminProduction: React.FC = () => {
   };
 
   const handleDeleteBatch = async (batch: ProductionBatch) => {
-    if (!confirm(`Delete production batch for "${batch.productName}"?`)) return;
     if (!user?.storeId) return;
+
+    // Enhanced confirmation for completed batches
+    const confirmMessage = batch.status === 'completed' 
+      ? `Delete completed production batch for "${batch.productName}"?\n\n⚠️ WARNING: This will also reverse the finished goods inventory created by this batch.\n\nActual Quantity: ${batch.actualQuantity || batch.quantity}\nThis action cannot be undone!`
+      : `Delete production batch for "${batch.productName}"?`;
+    
+    if (!confirm(confirmMessage)) return;
 
     try {
       const db = getFirestore();
+      
+      // If batch is completed, reverse the finished goods
+      if (batch.status === 'completed' && batch.actualQuantity) {
+        const fgQuery = query(
+          collection(db, 'finishedGoodsInventory'),
+          where('storeId', '==', user.storeId),
+          where('productId', '==', batch.productId)
+        );
+        const fgSnapshot = await getDocs(fgQuery);
+        
+        if (!fgSnapshot.empty) {
+          const fgDoc = fgSnapshot.docs[0];
+          const fgData = fgDoc.data();
+          
+          const newManufactured = (fgData.quantityManufactured || 0) - batch.actualQuantity;
+          const newBalance = (fgData.currentBalance || 0) - batch.actualQuantity;
+          
+          await updateDoc(fgDoc.ref, {
+            quantityManufactured: newManufactured,
+            currentBalance: newBalance,
+            totalValue: newBalance * (fgData.costPrice || 0),
+            updatedAt: new Date().toISOString()
+          });
+          
+          // Create reversal transaction
+          await addDoc(collection(db, 'finishedGoodsTransactions'), {
+            storeId: user.storeId,
+            productId: batch.productId,
+            productName: batch.productName,
+            type: 'production_batch_deletion',
+            quantity: -batch.actualQuantity,
+            relatedBatchId: batch.id,
+            createdAt: new Date().toISOString(),
+            createdBy: user.id,
+            createdByName: user.name
+          });
+          
+          console.log('✅ Reversed finished goods:', {
+            product: batch.productName,
+            quantityReversed: batch.actualQuantity,
+            newManufactured,
+            newBalance
+          });
+        }
+      }
+      
+      // Delete the production batch
       await deleteDoc(doc(db, 'productionBatches', batch.id));
       setBatches(batches.filter(b => b.id !== batch.id));
 
@@ -541,11 +594,18 @@ const AdminProduction: React.FC = () => {
         'delete',
         'productionBatch',
         batch.id,
-        { oldValue: batch },
+        { 
+          oldValue: batch,
+          reversedFinishedGoods: batch.status === 'completed' ? batch.actualQuantity : 0
+        },
         user.storeId
       );
 
-      toast({ title: "Success", description: "Production batch deleted successfully!" });
+      const message = batch.status === 'completed'
+        ? "Production batch deleted and finished goods reversed!"
+        : "Production batch deleted successfully!";
+      
+      toast({ title: "Success", description: message });
     } catch (error) {
       console.error('Error deleting batch:', error);
       toast({ title: "Error", description: "Failed to delete batch", variant: "destructive" });
