@@ -652,15 +652,22 @@ const AdminFinishedGoods: React.FC = () => {
       const db = getFirestore();
       const fgRef = doc(db, 'finishedGoodsInventory', editingItem.id);
       
-      await updateDoc(fgRef, {
-        costPrice: editingItem.costPrice,
-        currentBalance: editingItem.currentBalance,
-        quantitySold: editingItem.quantitySold,
-        quantityManufactured: editingItem.quantityManufactured,
-        reorderPoint: editingItem.reorderPoint,
-        totalValue: editingItem.currentBalance * editingItem.costPrice,
+      // Build update object, filtering out undefined values
+      const updateData: Record<string, any> = {
+        costPrice: editingItem.costPrice || 0,
+        currentBalance: editingItem.currentBalance || 0,
+        quantitySold: editingItem.quantitySold || 0,
+        quantityManufactured: editingItem.quantityManufactured || 0,
+        totalValue: (editingItem.currentBalance || 0) * (editingItem.costPrice || 0),
         lastUpdated: new Date().toISOString()
-      });
+      };
+      
+      // Only add reorderPoint if it has a value
+      if (editingItem.reorderPoint !== undefined && editingItem.reorderPoint !== null) {
+        updateData.reorderPoint = editingItem.reorderPoint;
+      }
+      
+      await updateDoc(fgRef, updateData);
 
       await logAction(
         user.id,
