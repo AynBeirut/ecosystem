@@ -1206,16 +1206,15 @@ const AdminFinishedGoods: React.FC = () => {
                             >
                               <RefreshCw className="h-4 w-4" />
                             </Button>
-                            {(item.currentBalance || 0) === 0 && (
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => handleDeleteItem(item)}
-                                title="Delete zero stock item"
-                              >
-                                  <Trash2 className="h-4 w-4 text-red-500" />
-                              </Button>
-                            )}
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => handleDeleteItem(item)}
+                              title="Delete finished goods item"
+                              className="text-red-500"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
                           </div>
                         </td>
                       </tr>
