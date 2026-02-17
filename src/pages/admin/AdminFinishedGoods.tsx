@@ -64,6 +64,9 @@ const AdminFinishedGoods: React.FC = () => {
   const [syncResults, setSyncResults] = useState<any>(null);
   const [integrityResults, setIntegrityResults] = useState<any>(null);
 
+  // Edit state for manual data correction
+  const [editingItem, setEditingItem] = useState<(FinishedGoodsItem & { id: string }) | null>(null);
+
   // Double-click prevention lock
   const isAdjustingStockRef = useRef(false);
 
@@ -639,6 +642,54 @@ const AdminFinishedGoods: React.FC = () => {
     return finishedGoods.filter(item => item.reorderPoint && item.currentBalance < item.reorderPoint).length;
   };
 
+  const handleEditItem = async () => {
+    if (!editingItem || !user?.storeId) {
+      toast.error("Item information not available");
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const fgRef = doc(db, 'finishedGoodsInventory', editingItem.id);
+      
+      await updateDoc(fgRef, {
+        costPrice: editingItem.costPrice,
+        currentBalance: editingItem.currentBalance,
+        quantitySold: editingItem.quantitySold,
+        quantityManufactured: editingItem.quantityManufactured,
+        reorderPoint: editingItem.reorderPoint,
+        totalValue: editingItem.currentBalance * editingItem.costPrice,
+        lastUpdated: new Date().toISOString()
+      });
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'finished_goods',
+        editingItem.id,
+        {
+          action: 'manual_edit',
+          updates: {
+            costPrice: editingItem.costPrice,
+            currentBalance: editingItem.currentBalance,
+            quantitySold: editingItem.quantitySold,
+            quantityManufactured: editingItem.quantityManufactured,
+            reorderPoint: editingItem.reorderPoint
+          }
+        }
+      );
+
+      toast.success("Item updated successfully");
+      setEditingItem(null);
+      fetchFinishedGoods();
+    } catch (error: any) {
+      console.error("Error updating item:", error);
+      toast.error(`Failed to update item: ${error.message}`);
+    }
+  };
+
   const handleSyncQuantities = async () => {
     if (!user?.storeId || !user?.id || !user?.name) {
       toast.error("User information not available");
@@ -1131,17 +1182,27 @@ const AdminFinishedGoods: React.FC = () => {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => setAdjustingItem(item)}
-                              title="Adjust Stock"
+                              onClick={() => setEditingItem(item)}
+                              title="Edit Details"
+                              className="text-blue-600"
                             >
                               <Edit className="h-4 w-4" />
                             </Button>
                             <Button
                               size="sm"
                               variant="ghost"
+                              onClick={() => setAdjustingItem(item)}
+                              title="Adjust Stock"
+                              className="text-purple-600"
+                            >
+                              <Package className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
                               onClick={() => handleRecalculateCost(item)}
                               title="Recalculate Cost from Recipe"
-                              className="text-blue-600"
+                              className="text-green-600"
                             >
                               <RefreshCw className="h-4 w-4" />
                             </Button>
@@ -1172,6 +1233,114 @@ const AdminFinishedGoods: React.FC = () => {
         )}
       </div>
 
+      {/* Edit Item Dialog */}
+      <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Edit Finished Goods Details</DialogTitle>
+            <DialogDescription>
+              Manually correct data for {editingItem?.itemCode} - {editingItem?.productName}
+            </DialogDescription>
+          </DialogHeader>
+          
+          {editingItem && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-costPrice">Cost Price ($)</Label>
+                  <Input
+                    id="edit-costPrice"
+                    type="number"
+                    step="0.01"
+                    value={editingItem.costPrice}
+                    onChange={(e) => setEditingItem({
+                      ...editingItem,
+                      costPrice: parseFloat(e.target.value) || 0
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-currentBalance">Current Balance</Label>
+                  <Input
+                    id="edit-currentBalance"
+                    type="number"
+                    step="0.01"
+                    value={editingItem.currentBalance}
+                    onChange={(e) => setEditingItem({
+                      ...editingItem,
+                      currentBalance: parseFloat(e.target.value) || 0
+                    })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-quantitySold">Quantity Sold</Label>
+                  <Input
+                    id="edit-quantitySold"
+                    type="number"
+                    step="0.01"
+                    value={editingItem.quantitySold || 0}
+                    onChange={(e) => setEditingItem({
+                      ...editingItem,
+                      quantitySold: parseFloat(e.target.value) || 0
+                    })}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-quantityManufactured">Quantity Manufactured</Label>
+                  <Input
+                    id="edit-quantityManufactured"
+                    type="number"
+                    step="0.01"
+                    value={editingItem.quantityManufactured || 0}
+                    onChange={(e) => setEditingItem({
+                      ...editingItem,
+                      quantityManufactured: parseFloat(e.target.value) || 0
+                    })}
+                  />
+                </div>
+              </div>
+
+              <div>
+                <Label htmlFor="edit-reorderPoint">Reorder Point</Label>
+                <Input
+                  id="edit-reorderPoint"
+                  type="number"
+                  step="0.01"
+                  value={editingItem.reorderPoint || 0}
+                  onChange={(e) => setEditingItem({
+                    ...editingItem,
+                    reorderPoint: parseFloat(e.target.value) || 0
+                  })}
+                />
+              </div>
+
+              <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                <p className="text-sm text-yellow-800">
+                  ⚠️ <strong>Warning:</strong> Manual edits will override calculated values. 
+                  Use with caution and document the reason for changes.
+                </p>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => setEditingItem(null)}
+                >
+                  Cancel
+                </Button>
+                <Button onClick={handleEditItem}>
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Adjust Stock Dialog */}
       <Dialog open={!!adjustingItem} onOpenChange={(open) => !open && setAdjustingItem(null)}>
         <DialogContent className="max-w-md">
           <DialogHeader>
