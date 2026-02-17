@@ -727,16 +727,13 @@ const AdminProduction: React.FC = () => {
       
       // Warn if materials have zero cost
       if (zeroCostMaterials.length > 0) {
-        const confirmed = window.confirm(
-          `WARNING: The following materials have zero cost:\n${zeroCostMaterials.join(', ')}\n\n` +
-          `This will result in $0.00 cost for the finished goods.\n\n` +
-          `Please update material costs in Raw Materials page before completing production.\n\n` +
-          `Do you still want to continue?`
-        );
-        if (!confirmed) {
-          setIsCompleting(false);
-          return;
-        }
+        toast({
+          title: "Cannot Complete Production",
+          description: `The following materials have zero cost: ${zeroCostMaterials.join(', ')}. Please update material costs in Raw Materials page before completing production.`,
+          variant: "destructive"
+        });
+        setIsCompleting(false);
+        return;
       }
       
       // 4. Calculate cost per unit (ONLY MATERIAL COSTS)

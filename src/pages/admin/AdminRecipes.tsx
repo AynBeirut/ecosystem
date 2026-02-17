@@ -100,9 +100,29 @@ const AdminRecipes: React.FC = () => {
       return;
     }
 
+    // Validate output quantity is not zero or negative
+    if (!newRecipe.outputQuantity || newRecipe.outputQuantity <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Output quantity must be greater than zero",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate ingredients have cost
+    const totalCost = calculateRecipeCost(newRecipe.ingredients);
+    if (totalCost <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Recipe total cost must be greater than zero. Please ensure all ingredients have valid costs.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const db = getFirestore();
-      const totalCost = calculateRecipeCost(newRecipe.ingredients);
       const costPerUnit = totalCost / newRecipe.outputQuantity;
 
       const recipeData = {
@@ -149,11 +169,31 @@ const AdminRecipes: React.FC = () => {
   const handleUpdateRecipe = async () => {
     if (!editingRecipe || !user?.storeId) return;
 
+    // Validate output quantity is not zero or negative
+    if (!editingRecipe.outputQuantity || editingRecipe.outputQuantity <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Output quantity must be greater than zero",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate ingredients have cost
+    const totalCost = calculateRecipeCost(editingRecipe.ingredients);
+    if (totalCost <= 0) {
+      toast({
+        title: "Validation Error",
+        description: "Recipe total cost must be greater than zero. Please ensure all ingredients have valid costs.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const db = getFirestore();
       const recipeRef = doc(db, 'recipes', editingRecipe.id);
 
-      const totalCost = calculateRecipeCost(editingRecipe.ingredients);
       const costPerUnit = totalCost / editingRecipe.outputQuantity;
 
       const updatedData = {
@@ -438,7 +478,11 @@ const AdminRecipes: React.FC = () => {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span>Cost Per Unit:</span>
-                        <span className="font-bold">${(calculateRecipeCost(newRecipe.ingredients) / newRecipe.outputQuantity).toFixed(2)}</span>
+                        <span className="font-bold">
+                          ${newRecipe.outputQuantity > 0 
+                            ? (calculateRecipeCost(newRecipe.ingredients) / newRecipe.outputQuantity).toFixed(2)
+                            : '0.00'}
+                        </span>
                       </div>
                     </div>
                   )}
@@ -695,7 +739,11 @@ const AdminRecipes: React.FC = () => {
                       </div>
                       <div className="flex justify-between text-sm">
                         <span>Cost Per Unit:</span>
-                        <span className="font-bold">${(calculateRecipeCost(editingRecipe.ingredients) / editingRecipe.outputQuantity).toFixed(2)}</span>
+                        <span className="font-bold">
+                          ${editingRecipe.outputQuantity > 0 
+                            ? (calculateRecipeCost(editingRecipe.ingredients) / editingRecipe.outputQuantity).toFixed(2)
+                            : '0.00'}
+                        </span>
                       </div>
                     </div>
                   )}

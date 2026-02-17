@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign } from 'lucide-react';
+import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign, Database, AlertCircle } from 'lucide-react';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -18,6 +18,7 @@ import { FinishedGoodsItem, StockTransaction, FinishedGoodsAdjustment, MonthlySe
 import { logAction } from '@/lib/auditLog';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { Expense } from '@/types/financial';
+import { syncFinishedGoodsSoldQuantities } from '@/lib/syncFinishedGoods';
 
 const AdminFinishedGoods: React.FC = () => {
   const { user } = useAuth();
@@ -55,6 +56,13 @@ const AdminFinishedGoods: React.FC = () => {
   } | null>(null);
   const [isCalculating, setIsCalculating] = useState(false);
   const [monthlyServiceCosts, setMonthlyServiceCosts] = useState<MonthlyServiceCost[]>([]);
+
+  // Sync and Integrity Check state
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isCheckingIntegrity, setIsCheckingIntegrity] = useState(false);
+  const [showSyncDialog, setShowSyncDialog] = useState(false);
+  const [syncResults, setSyncResults] = useState<any>(null);
+  const [integrityResults, setIntegrityResults] = useState<any>(null);
 
   // Double-click prevention lock
   const isAdjustingStockRef = useRef(false);
@@ -631,6 +639,112 @@ const AdminFinishedGoods: React.FC = () => {
     return finishedGoods.filter(item => item.reorderPoint && item.currentBalance < item.reorderPoint).length;
   };
 
+  const handleSyncQuantities = async () => {
+    if (!user?.storeId || !user?.id || !user?.name) {
+      toast.error("User information not available");
+      return;
+    }
+
+    setShowSyncDialog(true);
+  };
+
+  const confirmSync = async () => {
+    if (!user?.storeId || !user?.id || !user?.name) return;
+    
+    setIsSyncing(true);
+    setShowSyncDialog(false);
+    
+    try {
+      const result = await syncFinishedGoodsSoldQuantities(user.storeId, user.id, user.name);
+      
+      if (result.success) {
+        setSyncResults(result);
+        toast.success(`Sync complete! Updated ${result.productsUpdated} products`);
+      } else {
+        toast.error("Sync completed with errors. Check results for details.");
+        setSyncResults(result);
+      }
+    } catch (error: any) {
+      console.error("Sync error:", error);
+      toast.error(`Sync failed: ${error.message}`);
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleCheckIntegrity = async () => {
+    if (!user?.storeId) {
+      toast.error("Store information not available");
+      return;
+    }
+
+    setIsCheckingIntegrity(true);
+
+    try {
+      const db = getFirestore();
+      const ordersQuery = query(
+        collection(db, 'orders'),
+        where('storeId', '==', user.storeId)
+      );
+      const ordersSnapshot = await getDocs(ordersQuery);
+
+      // Calculate actual sold quantities from delivered/completed orders
+      const actualSoldQuantities = new Map<string, { quantity: number; name: string }>();
+      ordersSnapshot.forEach((orderDoc) => {
+        const order = orderDoc.data();
+        if (order.status === 'delivered' || order.status === 'completed') {
+          order.items?.forEach((item: any) => {
+            const key = item.productId || item.composedProductId;
+            if (key) {
+              const existing = actualSoldQuantities.get(key) || { quantity: 0, name: item.productName };
+              actualSoldQuantities.set(key, {
+                quantity: existing.quantity + (item.quantity || 0),
+                name: item.productName
+              });
+            }
+          });
+        }
+      });
+
+      // Compare with finished goods inventory
+      const fgQuery = query(
+        collection(db, 'finishedGoodsInventory'),
+        where('storeId', '==', user.storeId)
+      );
+      const fgSnapshot = await getDocs(fgQuery);
+
+      const mismatches: any[] = [];
+      fgSnapshot.forEach((fgDoc) => {
+        const fg = fgDoc.data();
+        const actual = actualSoldQuantities.get(fg.productId) || { quantity: 0, name: fg.productName };
+        const recorded = fg.quantitySold || 0;
+        
+        if (Math.abs(actual.quantity - recorded) > 0.001) {
+          mismatches.push({
+            productId: fg.productId,
+            productName: fg.productName,
+            recordedQuantity: recorded,
+            actualQuantity: actual.quantity,
+            difference: actual.quantity - recorded
+          });
+        }
+      });
+
+      setIntegrityResults(mismatches);
+      
+      if (mismatches.length === 0) {
+        toast.success("Data integrity check passed! All quantities are correct.");
+      } else {
+        toast.warning(`Found ${mismatches.length} mismatches. Click 'Check Data Integrity' to see details.`);
+      }
+    } catch (error: any) {
+      console.error("Integrity check error:", error);
+      toast.error(`Integrity check failed: ${error.message}`);
+    } finally {
+      setIsCheckingIntegrity(false);
+    }
+  };
+
   const createSampleData = async () => {
     if (!user?.storeId) return;
     
@@ -804,13 +918,31 @@ const AdminFinishedGoods: React.FC = () => {
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <CardTitle>Search & Filters</CardTitle>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {finishedGoods.length === 0 && (
                   <Button onClick={createSampleData} variant="default" size="sm">
                     <Plus className="h-4 w-4 mr-2" />
                     Add Sample Data
                   </Button>
                 )}
+                <Button 
+                  onClick={handleCheckIntegrity} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={isCheckingIntegrity}
+                >
+                  <AlertCircle className="h-4 w-4 mr-2" />
+                  {isCheckingIntegrity ? 'Checking...' : 'Check Data Integrity'}
+                </Button>
+                <Button 
+                  onClick={handleSyncQuantities} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={isSyncing}
+                >
+                  <Database className="h-4 w-4 mr-2" />
+                  {isSyncing ? 'Syncing...' : 'Sync Sold Quantities'}
+                </Button>
                 <Button onClick={exportToCSV} variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
@@ -1319,6 +1451,174 @@ const AdminFinishedGoods: React.FC = () => {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* Sync Confirmation Dialog */}
+      <Dialog open={showSyncDialog} onOpenChange={setShowSyncDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sync Sold Quantities</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-gray-600">
+              This will recalculate the "Quantity Sold" for all products based on actual delivered/completed orders.
+            </p>
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+              <p className="text-sm text-yellow-800 font-medium">⚠️ Warning:</p>
+              <p className="text-sm text-yellow-700 mt-1">
+                This operation will modify your database. Make sure you have a backup before proceeding.
+              </p>
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowSyncDialog(false)}>
+                Cancel
+              </Button>
+              <Button onClick={confirmSync}>
+                Proceed with Sync
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Sync Results Dialog */}
+      {syncResults && (
+        <Dialog open={!!syncResults} onOpenChange={() => setSyncResults(null)}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Sync Results</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                {syncResults.success ? (
+                  <Badge variant="default" className="bg-green-600">Success</Badge>
+                ) : (
+                  <Badge variant="destructive">Completed with Errors</Badge>
+                )}
+                <span className="text-sm text-gray-600">
+                  Updated {syncResults.productsUpdated} products
+                </span>
+              </div>
+
+              {syncResults.changes.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2">Changes Made:</h3>
+                  <div className="border rounded overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Product</th>
+                          <th className="px-3 py-2 text-right">Old Qty</th>
+                          <th className="px-3 py-2 text-right">New Qty</th>
+                          <th className="px-3 py-2 text-right">Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {syncResults.changes.map((change, idx) => (
+                          <tr key={idx} className="border-t">
+                            <td className="px-3 py-2">{change.productName}</td>
+                            <td className="px-3 py-2 text-right">{change.oldQuantitySold.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{change.newQuantitySold.toFixed(2)}</td>
+                            <td className={`px-3 py-2 text-right font-medium ${
+                              change.difference > 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {change.difference > 0 ? '+' : ''}{change.difference.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              {syncResults.errors.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-red-600">Errors:</h3>
+                  <div className="bg-red-50 border border-red-200 rounded p-3 space-y-1">
+                    {syncResults.errors.map((error, idx) => (
+                      <p key={idx} className="text-sm text-red-700">{error}</p>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button onClick={() => setSyncResults(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
+
+      {/* Integrity Check Results Dialog */}
+      {integrityResults && (
+        <Dialog open={!!integrityResults} onOpenChange={() => setIntegrityResults(null)}>
+          <DialogContent className="max-w-3xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Data Integrity Check Results</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              {integrityResults.length === 0 ? (
+                <div className="bg-green-50 border border-green-200 rounded p-4 text-center">
+                  <p className="text-green-800 font-medium">✓ All data is correct!</p>
+                  <p className="text-sm text-green-700 mt-1">
+                    No mismatches found between recorded and actual sold quantities.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                    <p className="text-sm text-yellow-800">
+                      Found {integrityResults.length} products with mismatched quantities.
+                    </p>
+                  </div>
+                  
+                  <div className="border rounded overflow-hidden">
+                    <table className="w-full text-sm">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-3 py-2 text-left">Product</th>
+                          <th className="px-3 py-2 text-right">Recorded</th>
+                          <th className="px-3 py-2 text-right">Actual</th>
+                          <th className="px-3 py-2 text-right">Difference</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {integrityResults.map((mismatch, idx) => (
+                          <tr key={idx} className="border-t">
+                            <td className="px-3 py-2">{mismatch.productName}</td>
+                            <td className="px-3 py-2 text-right">{mismatch.recordedQuantity.toFixed(2)}</td>
+                            <td className="px-3 py-2 text-right">{mismatch.actualQuantity.toFixed(2)}</td>
+                            <td className={`px-3 py-2 text-right font-medium ${
+                              mismatch.difference > 0 ? 'text-green-600' : 'text-red-600'
+                            }`}>
+                              {mismatch.difference > 0 ? '+' : ''}{mismatch.difference.toFixed(2)}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="bg-blue-50 border border-blue-200 rounded p-3">
+                    <p className="text-sm text-blue-800">
+                      💡 Tip: Use the "Sync Sold Quantities" button to fix these mismatches automatically.
+                    </p>
+                  </div>
+                </>
+              )}
+
+              <div className="flex justify-end">
+                <Button onClick={() => setIntegrityResults(null)}>
+                  Close
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 };

@@ -266,6 +266,53 @@ const SalesReturns: React.FC = () => {
           }
         }
 
+        // CRITICAL FIX: Reverse quantitySold in finished goods inventory
+        for (const item of returnDoc.items) {
+          // Find matching finished goods entry
+          const fgQuery = query(
+            collection(db, 'finishedGoodsInventory'),
+            where('storeId', '==', user.storeId)
+          );
+          const fgSnapshot = await getDocs(fgQuery);
+          
+          const matchingFG = fgSnapshot.docs.find(fgDoc => {
+            const data = fgDoc.data();
+            return data.productId === item.productId || data.composedProductId === item.productId;
+          });
+          
+          if (matchingFG) {
+            const fgData = matchingFG.data();
+            
+            // Reverse the sale: add back to balance, subtract from quantitySold
+            const newBalance = (fgData.currentBalance || 0) + item.quantity;
+            const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) - item.quantity);
+            const newTotalValue = newBalance * (fgData.costPrice || 0);
+            
+            // Create reversal transaction record
+            const reversalTransaction = {
+              id: `TXN-RETURN-${Date.now()}-${item.productId}`,
+              date: new Date().toISOString(),
+              actionType: 'adjustment' as const,
+              quantity: item.quantity, // Positive = adding back
+              unitCost: fgData.costPrice || 0,
+              totalCost: (fgData.costPrice || 0) * item.quantity,
+              reason: `Sales return: ${returnDoc.returnNumber} from order ${returnDoc.orderNumber}`,
+              referenceId: returnId,
+              referenceNumber: returnDoc.returnNumber,
+              userId: user.id,
+              userName: user.name,
+            };
+            
+            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
+              currentBalance: newBalance,
+              quantitySold: newQuantitySold,
+              totalValue: newTotalValue,
+              transactions: [...(fgData.transactions || []), reversalTransaction],
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+
         // Update order payment status if refund is processed
         try {
           const orderRef = doc(db, 'orders', returnDoc.orderId);

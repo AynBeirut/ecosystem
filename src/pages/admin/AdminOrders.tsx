@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc, runTransaction } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -244,24 +244,30 @@ const AdminOrders: React.FC = () => {
     const db = getFirestore();
     const profileRef = doc(db, 'storeProfiles', user.storeId);
     
-    // Fetch the latest store profile to ensure we have current data
-    const profileSnap = await getDoc(profileRef);
-    const currentProfile = profileSnap.exists() ? (profileSnap.data() as StoreProfile) : null;
-    
-    const prefix = currentProfile?.invoiceNumberPrefix || 'INV';
-    const lastNumber = currentProfile?.lastInvoiceNumber || 0;
-    const newNumber = lastNumber + 1;
-    const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
-    
-    // Update last invoice number in store profile
-    await updateDoc(profileRef, { lastInvoiceNumber: newNumber });
+    // CRITICAL FIX: Use Firestore transaction for atomic increment to prevent race conditions
+    const result = await runTransaction(db, async (transaction) => {
+      const profileSnap = await transaction.get(profileRef);
+      
+      if (!profileSnap.exists()) {
+        throw new Error('Store profile not found');
+      }
+      
+      const currentProfile = profileSnap.data() as StoreProfile;
+      const prefix = currentProfile?.invoiceNumberPrefix || 'INV';
+      const lastNumber = currentProfile?.lastInvoiceNumber || 0;
+      const newNumber = lastNumber + 1;
+      const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
+      
+      // Atomically update the invoice number
+      transaction.update(profileRef, { lastInvoiceNumber: newNumber });
+      
+      return { invoiceNumber, newProfile: { ...currentProfile, lastInvoiceNumber: newNumber } };
+    });
     
     // Update local state to keep UI in sync
-    if (currentProfile) {
-      setStoreProfile({ ...currentProfile, lastInvoiceNumber: newNumber });
-    }
+    setStoreProfile(result.newProfile);
     
-    return invoiceNumber;
+    return result.invoiceNumber;
   };
 
   const formatCurrency = (amount: number, showDual: boolean = true): string => {
@@ -484,8 +490,59 @@ const AdminOrders: React.FC = () => {
         return;
       }
       
+      // CRITICAL FIX: Handle status rollback from delivered/completed to earlier states
+      if ((order.status === 'delivered' || order.status === 'completed') && 
+          (newStatus !== 'delivered' && newStatus !== 'completed')) {
+        // Reversing status - need to restore finished goods
+        for (const item of order.items) {
+          const fgQuery = query(
+            collection(db, 'finishedGoodsInventory'),
+            where('storeId', '==', user.storeId)
+          );
+          const fgSnapshot = await getDocs(fgQuery);
+          
+          const matchingFG = fgSnapshot.docs.find(doc => {
+            const data = doc.data();
+            return data.productId === item.productId || data.composedProductId === item.productId;
+          });
+          
+          if (matchingFG) {
+            const fgData = matchingFG.data();
+            
+            // Reverse the deductions: add back to balance, subtract from quantitySold
+            const newBalance = (fgData.currentBalance || 0) + item.quantity;
+            const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) - item.quantity);
+            const newTotalValue = newBalance * (fgData.costPrice || 0);
+            
+            // Create reversal transaction record
+            const reversalTransaction = {
+              id: `TXN-ROLLBACK-${Date.now()}-${item.productId}`,
+              date: new Date().toISOString(),
+              actionType: 'adjustment' as const,
+              quantity: item.quantity, // Positive = adding back
+              unitCost: fgData.costPrice || 0,
+              totalCost: (fgData.costPrice || 0) * item.quantity,
+              reason: `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
+              referenceId: orderId,
+              referenceNumber: order.invoiceNumber || orderId,
+              userId: user.id,
+              userName: user.name,
+            };
+            
+            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
+              currentBalance: newBalance,
+              quantitySold: newQuantitySold,
+              totalValue: newTotalValue,
+              transactions: [...(fgData.transactions || []), reversalTransaction],
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+      
       // If marking as delivered/completed, deduct from finished goods inventory
-      if ((newStatus === 'delivered' || newStatus === 'completed') && order.status !== 'delivered' && order.status !== 'completed') {
+      if ((newStatus === 'delivered' || newStatus === 'completed') && 
+          order.status !== 'delivered' && order.status !== 'completed') {
         for (const item of order.items) {
           // Check if this product is a composed product (has finished goods entry)
           // Try both productId and composedProductId since they might be stored differently
@@ -621,6 +678,72 @@ const AdminOrders: React.FC = () => {
       const db = getFirestore();
       const totals = calculateOrderTotals(newOrder.items, newOrder.taxType, newOrder.taxRate, newOrder.discountType, newOrder.discountValue);
 
+      // CRITICAL FIX: Adjust finished goods if order is delivered/completed and items changed
+      if (editingOrder.status === 'delivered' || editingOrder.status === 'completed') {
+        // Calculate differences between old and new items
+        const oldItems = editingOrder.items || [];
+        const newItems = newOrder.items;
+
+        // Create maps for easy comparison
+        const oldItemsMap = new Map(oldItems.map(item => [item.productId, item.quantity]));
+        const newItemsMap = new Map(newItems.map(item => [item.productId, item.quantity]));
+
+        // Get all product IDs involved
+        const allProductIds = new Set([...oldItemsMap.keys(), ...newItemsMap.keys()]);
+
+        for (const productId of allProductIds) {
+          const oldQty = oldItemsMap.get(productId) || 0;
+          const newQty = newItemsMap.get(productId) || 0;
+          const diff = newQty - oldQty;
+
+          if (diff !== 0) {
+            // Find matching finished goods entry
+            const fgQuery = query(
+              collection(db, 'finishedGoodsInventory'),
+              where('storeId', '==', user.storeId)
+            );
+            const fgSnapshot = await getDocs(fgQuery);
+            
+            const matchingFG = fgSnapshot.docs.find(fgDoc => {
+              const data = fgDoc.data();
+              return data.productId === productId || data.composedProductId === productId;
+            });
+
+            if (matchingFG) {
+              const fgData = matchingFG.data();
+              
+              // Adjust quantities: if diff > 0 (increased), deduct more; if diff < 0 (decreased), add back
+              const newBalance = (fgData.currentBalance || 0) - diff;
+              const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) + diff);
+              const newTotalValue = newBalance * (fgData.costPrice || 0);
+              
+              // Create adjustment transaction
+              const adjustmentTransaction = {
+                id: `TXN-EDIT-${Date.now()}-${productId}`,
+                date: new Date().toISOString(),
+                actionType: 'adjustment' as const,
+                quantity: -diff, // Negative if adding more to sale, positive if reducing sale
+                unitCost: fgData.costPrice || 0,
+                totalCost: Math.abs(diff) * (fgData.costPrice || 0),
+                reason: `Order edit: ${editingOrder.invoiceNumber || editingOrder.id} quantity changed from ${oldQty} to ${newQty}`,
+                referenceId: editingOrder.id,
+                referenceNumber: editingOrder.invoiceNumber || editingOrder.id,
+                userId: user.id,
+                userName: user.name,
+              };
+              
+              await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
+                currentBalance: newBalance,
+                quantitySold: newQuantitySold,
+                totalValue: newTotalValue,
+                transactions: [...(fgData.transactions || []), adjustmentTransaction],
+                updatedAt: new Date().toISOString(),
+              });
+            }
+          }
+        }
+      }
+
       const orderData = {
         customerName: newOrder.customerName,
         customerPhone: newOrder.customerPhone,
@@ -691,6 +814,57 @@ const AdminOrders: React.FC = () => {
 
     try {
       const db = getFirestore();
+      
+      // CRITICAL FIX: Reverse finished goods deductions if order was delivered/completed
+      if (order.status === 'delivered' || order.status === 'completed') {
+        for (const item of order.items) {
+          // Find matching finished goods entry
+          const fgQuery = query(
+            collection(db, 'finishedGoodsInventory'),
+            where('storeId', '==', user.storeId)
+          );
+          const fgSnapshot = await getDocs(fgQuery);
+          
+          const matchingFG = fgSnapshot.docs.find(doc => {
+            const data = doc.data();
+            return data.productId === item.productId || data.composedProductId === item.productId;
+          });
+          
+          if (matchingFG) {
+            const fgData = matchingFG.data();
+            
+            // Reverse the deductions: add back to balance, subtract from quantitySold
+            const newBalance = (fgData.currentBalance || 0) + item.quantity;
+            const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) - item.quantity);
+            const newTotalValue = newBalance * (fgData.costPrice || 0);
+            
+            // Create reversal transaction record
+            const reversalTransaction = {
+              id: `TXN-REVERSE-${Date.now()}-${item.productId}`,
+              date: new Date().toISOString(),
+              actionType: 'adjustment' as const,
+              quantity: item.quantity, // Positive = adding back
+              unitCost: fgData.costPrice || 0,
+              totalCost: (fgData.costPrice || 0) * item.quantity,
+              reason: `Reversal: Order ${order.invoiceNumber || orderId} deleted`,
+              referenceId: orderId,
+              referenceNumber: order.invoiceNumber || orderId,
+              userId: user.id,
+              userName: user.name,
+            };
+            
+            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
+              currentBalance: newBalance,
+              quantitySold: newQuantitySold,
+              totalValue: newTotalValue,
+              transactions: [...(fgData.transactions || []), reversalTransaction],
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
+      
+      // Now delete the order
       await deleteDoc(doc(db, 'orders', orderId));
       setOrders(orders.filter(o => o.id !== orderId));
 
@@ -726,6 +900,55 @@ const AdminOrders: React.FC = () => {
     try {
       const db = getFirestore();
       const orderRef = doc(db, 'orders', voidingPayment.id);
+
+      // CRITICAL FIX: Reverse finished goods deductions if order was delivered/completed
+      if (voidingPayment.status === 'delivered' || voidingPayment.status === 'completed') {
+        for (const item of voidingPayment.items) {
+          // Find matching finished goods entry
+          const fgQuery = query(
+            collection(db, 'finishedGoodsInventory'),
+            where('storeId', '==', user.storeId)
+          );
+          const fgSnapshot = await getDocs(fgQuery);
+          
+          const matchingFG = fgSnapshot.docs.find(doc => {
+            const data = doc.data();
+            return data.productId === item.productId || data.composedProductId === item.productId;
+          });
+          
+          if (matchingFG) {
+            const fgData = matchingFG.data();
+            
+            // Reverse the deductions: add back to balance, subtract from quantitySold
+            const newBalance = (fgData.currentBalance || 0) + item.quantity;
+            const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) - item.quantity);
+            const newTotalValue = newBalance * (fgData.costPrice || 0);
+            
+            // Create reversal transaction record
+            const reversalTransaction = {
+              id: `TXN-VOID-${Date.now()}-${item.productId}`,
+              date: new Date().toISOString(),
+              actionType: 'adjustment' as const,
+              quantity: item.quantity, // Positive = adding back
+              unitCost: fgData.costPrice || 0,
+              totalCost: (fgData.costPrice || 0) * item.quantity,
+              reason: `Reversal: Payment voided for order ${voidingPayment.invoiceNumber || voidingPayment.id}`,
+              referenceId: voidingPayment.id,
+              referenceNumber: voidingPayment.invoiceNumber || voidingPayment.id,
+              userId: user.id,
+              userName: user.name,
+            };
+            
+            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
+              currentBalance: newBalance,
+              quantitySold: newQuantitySold,
+              totalValue: newTotalValue,
+              transactions: [...(fgData.transactions || []), reversalTransaction],
+              updatedAt: new Date().toISOString(),
+            });
+          }
+        }
+      }
 
       // Reset payment fields
       await updateDoc(orderRef, {
@@ -770,7 +993,7 @@ const AdminOrders: React.FC = () => {
       operationSucceeded = true;
       toast({
         title: "Success",
-        description: "All payments voided. You can now edit this order."
+        description: "All payments voided and inventory restored. You can now edit this order."
       });
     } catch (error) {
       console.error('Error voiding payments:', error);
