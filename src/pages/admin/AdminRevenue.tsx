@@ -49,32 +49,38 @@ const AdminRevenue: React.FC = () => {
     try {
       const db = getFirestore();
       
-      // Fetch all orders
+      // Fetch finished goods for quantity sold and cost data (SOURCE OF TRUTH after manual corrections)
+      const finishedGoodsQuery = query(
+        collection(db, 'finishedGoodsInventory'),
+        where('storeId', '==', user.storeId)
+      );
+      const finishedGoodsSnapshot = await getDocs(finishedGoodsQuery);
+      const finishedGoodsData: Record<string, {
+        quantitySold: number;
+        costPrice: number;
+        productName: string;
+      }> = {};
+      
+      finishedGoodsSnapshot.forEach(doc => {
+        const fg = doc.data();
+        const productId = fg.productId || fg.composedProductId;
+        if (productId) {
+          finishedGoodsData[productId] = {
+            quantitySold: fg.quantitySold || 0,
+            costPrice: fg.costPrice || 0,
+            productName: fg.productName || 'Unknown'
+          };
+        }
+      });
+      
+      // Fetch all orders for revenue calculation
       const ordersQuery = query(
         collection(db, 'orders'),
         where('storeId', '==', user.storeId)
       );
       const ordersSnapshot = await getDocs(ordersQuery);
       
-      // Fetch finished goods for cost data
-      const finishedGoodsQuery = query(
-        collection(db, 'finishedGoodsInventory'),
-        where('storeId', '==', user.storeId)
-      );
-      const finishedGoodsSnapshot = await getDocs(finishedGoodsQuery);
-      const finishedGoodsCosts: Record<string, number> = {};
-      
-      finishedGoodsSnapshot.forEach(doc => {
-        const fg = doc.data();
-        if (fg.productId) {
-          finishedGoodsCosts[fg.productId] = fg.costPrice || 0;
-        }
-        if (fg.composedProductId) {
-          finishedGoodsCosts[fg.composedProductId] = fg.costPrice || 0;
-        }
-      });
-      
-      // Fetch products for names and categories
+      // Fetch products for categories
       const productsQuery = query(
         collection(db, 'products'),
         where('storeId', '==', user.storeId)
@@ -90,14 +96,8 @@ const AdminRevenue: React.FC = () => {
         };
       });
       
-      // Calculate revenue per product
-      const productStats: Record<string, {
-        quantitySold: number;
-        revenue: number;
-        cost: number;
-        name: string;
-        category: string;
-      }> = {};
+      // Calculate revenue per product from orders
+      const productRevenueMap: Record<string, number> = {};
       
       ordersSnapshot.forEach(doc => {
         const order = doc.data();
@@ -107,10 +107,7 @@ const AdminRevenue: React.FC = () => {
         
         const orderSubtotal = order.subtotal || 0;
         const orderTotal = order.total || 0;
-        // Calculate discount from the difference (discount field doesn't exist in orders)
         const orderDiscount = Math.max(0, orderSubtotal - orderTotal);
-        
-        // Calculate discount percentage for this order
         const discountPercentage = orderSubtotal > 0 ? orderDiscount / orderSubtotal : 0;
         
         const items = order.items || [];
@@ -119,42 +116,29 @@ const AdminRevenue: React.FC = () => {
           const quantity = item.quantity || 0;
           const price = item.price || 0;
           const itemSubtotal = quantity * price;
-          // Apply the order's discount percentage to this item
           const itemDiscount = itemSubtotal * discountPercentage;
           const itemRevenue = itemSubtotal - itemDiscount;
           
-          // Get cost from finished goods
-          const unitCost = finishedGoodsCosts[productId] || 0;
-          const itemCost = quantity * unitCost;
-          
-          if (!productStats[productId]) {
-            productStats[productId] = {
-              quantitySold: 0,
-              revenue: 0,
-              cost: 0,
-              name: productsData[productId]?.name || 'Unknown Product',
-              category: productsData[productId]?.category || 'Other'
-            };
-          }
-          
-          productStats[productId].quantitySold += quantity;
-          productStats[productId].revenue += itemRevenue;
-          productStats[productId].cost += itemCost;
+          productRevenueMap[productId] = (productRevenueMap[productId] || 0) + itemRevenue;
         });
       });
       
-      // Convert to array and calculate profit
-      const revenueList: ProductRevenue[] = Object.entries(productStats).map(([productId, stats]) => {
-        const profit = stats.revenue - stats.cost;
-        const profitMargin = stats.revenue > 0 ? (profit / stats.revenue) * 100 : 0;
+      // Build final product revenue list using finished goods quantities (corrected by user)
+      const revenueList: ProductRevenue[] = Object.entries(finishedGoodsData).map(([productId, fgData]) => {
+        const revenue = productRevenueMap[productId] || 0;
+        const quantitySold = fgData.quantitySold; // Use finished goods quantity (manually corrected)
+        const unitCost = fgData.costPrice;
+        const totalCost = quantitySold * unitCost;
+        const profit = revenue - totalCost;
+        const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
         
         return {
           productId,
-          productName: stats.name,
-          category: stats.category,
-          quantitySold: stats.quantitySold,
-          revenue: stats.revenue,
-          cost: stats.cost,
+          productName: productsData[productId]?.name || fgData.productName,
+          category: productsData[productId]?.category || 'Other',
+          quantitySold, // From finished goods (user-corrected)
+          revenue,
+          cost: totalCost,
           profit,
           profitMargin
         };
