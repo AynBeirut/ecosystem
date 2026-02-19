@@ -1189,15 +1189,6 @@ const AdminFinishedGoods: React.FC = () => {
                             <Button
                               size="sm"
                               variant="ghost"
-                              onClick={() => setEditingItem(item)}
-                              title="Edit Details"
-                              className="text-blue-600"
-                            >
-                              <Edit className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
                               onClick={() => setAdjustingItem(item)}
                               title="Adjust Stock"
                               className="text-purple-600"
@@ -1212,15 +1203,6 @@ const AdminFinishedGoods: React.FC = () => {
                               className="text-green-600"
                             >
                               <RefreshCw className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleDeleteItem(item)}
-                              title="Delete finished goods item"
-                              className="text-red-500"
-                            >
-                              <Trash2 className="h-4 w-4" />
                             </Button>
                           </div>
                         </td>
