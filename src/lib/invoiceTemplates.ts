@@ -242,20 +242,13 @@ export const generateInvoiceHTML = (
               <div class="section-title">Bill To</div>
               <div class="detail-text">
                 <strong style="font-size: 17px; color: #0ea5e9;">${order.customerName || 'N/A'}</strong><br/>
+                ${order.customerTaxId ? `Tax ID: ${order.customerTaxId}<br/>` : ''}
                 ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
                 ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
                 ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
                 ${order.deliveryNotes ? `📝 ${order.deliveryNotes}<br/>` : ''}
               </div>
             </div>
-            ${order.assignedSalesPersonName ? `
-            <div class="payment-info">
-              <div class="section-title">Sales Representative</div>
-              <div class="detail-text">
-                <strong style="font-size: 17px; color: #0ea5e9;">${order.assignedSalesPersonName}</strong>
-              </div>
-            </div>
-            ` : ''}
           </div>
 
           <table>
@@ -322,6 +315,13 @@ export const generateInvoiceHTML = (
               </div>
               ` : ''}
             </div>
+          </div>
+          ` : ''}
+
+          ${order.assignedSalesPersonName ? `
+          <div style="margin-top: 30px; padding: 15px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+            <div style="font-size: 11px; color: #64748b; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Sales Representative</div>
+            <div style="font-size: 13px; color: #1e293b; font-weight: 500;">${order.assignedSalesPersonName}</div>
           </div>
           ` : ''}
 
@@ -520,20 +520,13 @@ export const generateInvoiceHTML = (
               <div class="section-title">Billed To</div>
               <div class="detail-text">
                 <strong style="font-size: 18px;">${order.customerName || 'N/A'}</strong><br/>
+                ${order.customerTaxId ? `Tax ID: ${order.customerTaxId}<br/>` : ''}
                 ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
                 ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
                 ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
                 ${order.deliveryNotes ? `📝 ${order.deliveryNotes}<br/>` : ''}
               </div>
             </div>
-            ${order.assignedSalesPersonName ? `
-            <div style="flex: 1;">
-              <div class="section-title">Sales Person</div>
-              <div class="detail-text">
-                <strong style="font-size: 18px;">${order.assignedSalesPersonName}</strong>
-              </div>
-            </div>
-            ` : ''}
           </div>
 
           <table>
@@ -583,6 +576,13 @@ export const generateInvoiceHTML = (
               <p><strong>Amount Paid:</strong> <span style="color: #10b981; font-weight: bold;">${formatCurrency(order.amountPaid || 0, true)}</span></p>
               ${order.paymentStatus !== 'paid' ? `<p><strong>Balance Due:</strong> <span style="color: #c41e3a; font-weight: bold;">${formatCurrency((order.total || 0) - (order.amountPaid || 0), true)}</span></p>` : ''}
             </div>
+          </div>
+          ` : ''}
+
+          ${order.assignedSalesPersonName ? `
+          <div style="margin-top: 30px; padding: 15px; background: #f5f5f5; border-radius: 5px; border-left: 4px solid #d4af37;">
+            <div style="font-size: 11px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px;">Sales Representative</div>
+            <div style="font-size: 13px; color: #2c2c2c; font-weight: 500;">${order.assignedSalesPersonName}</div>
           </div>
           ` : ''}
 
@@ -830,18 +830,13 @@ export const generateInvoiceHTML = (
               <h3>Customer Details</h3>
               <strong>${order.customerName || 'N/A'}</strong>
               <p>
-                ${order.customerPhone ? `� ${order.customerPhone}<br/>` : ''}
+                ${order.customerTaxId ? `Tax ID: ${order.customerTaxId}<br/>` : ''}
+                ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
                 ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
                 ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
                 ${order.deliveryNotes ? `📝 ${order.deliveryNotes}` : ''}
               </p>
             </div>
-            ${order.assignedSalesPersonName ? `
-            <div class="detail-box" style="background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-left-color: #9333ea;">
-              <h3 style="color: #9333ea;">Sales Representative</h3>
-              <strong>${order.assignedSalesPersonName}</strong>
-            </div>
-            ` : ''}
           </div>
 
           <table>
@@ -908,6 +903,13 @@ export const generateInvoiceHTML = (
               </div>
               ` : ''}
             </div>
+          </div>
+          ` : ''}
+
+          ${order.assignedSalesPersonName ? `
+          <div style="margin-top: 30px; padding: 15px; background: linear-gradient(135deg, #faf5ff 0%, #f3e8ff 100%); border-radius: 12px; border-left: 4px solid #9333ea;">
+            <div style="font-size: 11px; color: #9333ea; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; font-weight: 600;">Sales Representative</div>
+            <div style="font-size: 13px; color: #1a1a1a; font-weight: 500;">${order.assignedSalesPersonName}</div>
           </div>
           ` : ''}
 

@@ -16,6 +16,7 @@ export interface Order {
   customerName?: string
   customerPhone?: string
   customerEmail?: string
+  customerTaxId?: string
   deliveryAddress?: string
   deliveryCity?: string
   deliveryNotes?: string
