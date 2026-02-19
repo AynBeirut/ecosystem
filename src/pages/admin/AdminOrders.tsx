@@ -1242,11 +1242,27 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const handlePrintInvoice = (order: Order & { id: string }) => {
+  const handlePrintInvoice = async (order: Order & { id: string }) => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    const html = generateInvoiceHTMLTemplate(order, products, storeProfile, formatCurrency);
+    // If order doesn't have customerTaxId, fetch it from customer record
+    let enrichedOrder = order;
+    if (!order.customerTaxId && order.customerId) {
+      try {
+        const db = getFirestore();
+        const customerRef = doc(db, 'customers', order.customerId);
+        const customerSnap = await getDoc(customerRef);
+        if (customerSnap.exists()) {
+          const customerData = customerSnap.data();
+          enrichedOrder = { ...order, customerTaxId: customerData.taxId || '' };
+        }
+      } catch (error) {
+        console.error('Failed to fetch customer tax ID:', error);
+      }
+    }
+
+    const html = generateInvoiceHTMLTemplate(enrichedOrder, products, storeProfile, formatCurrency);
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.print();
@@ -1258,7 +1274,23 @@ const AdminOrders: React.FC = () => {
 
   const handleDownloadPDF = async (order: Order & { id: string }) => {
     try {
-      const html = generateInvoiceHTML(order);
+      // If order doesn't have customerTaxId, fetch it from customer record
+      let enrichedOrder = order;
+      if (!order.customerTaxId && order.customerId) {
+        try {
+          const db = getFirestore();
+          const customerRef = doc(db, 'customers', order.customerId);
+          const customerSnap = await getDoc(customerRef);
+          if (customerSnap.exists()) {
+            const customerData = customerSnap.data();
+            enrichedOrder = { ...order, customerTaxId: customerData.taxId || '' };
+          }
+        } catch (error) {
+          console.error('Failed to fetch customer tax ID:', error);
+        }
+      }
+
+      const html = generateInvoiceHTML(enrichedOrder);
       const container = document.createElement('div');
       container.innerHTML = html;
       container.style.position = 'absolute';
