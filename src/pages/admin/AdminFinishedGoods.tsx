@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign, Database, AlertCircle } from 'lucide-react';
+import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign, Database, AlertCircle, FileText } from 'lucide-react';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -19,6 +19,9 @@ import { logAction } from '@/lib/auditLog';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { Expense } from '@/types/financial';
 import { syncFinishedGoodsSoldQuantities } from '@/lib/syncFinishedGoods';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { cleanTextForPDF } from '@/lib/arabicPDF';
 
 const AdminFinishedGoods: React.FC = () => {
   const { user } = useAuth();
@@ -30,6 +33,8 @@ const AdminFinishedGoods: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterLowStock, setFilterLowStock] = useState(false);
+  const [filterStartDate, setFilterStartDate] = useState('');
+  const [filterEndDate, setFilterEndDate] = useState('');
   
   const [adjustingItem, setAdjustingItem] = useState<FinishedGoodsItem | null>(null);
   const [adjustment, setAdjustment] = useState<FinishedGoodsAdjustment>({
@@ -78,22 +83,38 @@ const AdminFinishedGoods: React.FC = () => {
   useEffect(() => {
     let filtered = finishedGoods;
     
+    // Filter by search term
     if (searchTerm) {
-      filtered = filtered.filter(item => 
+      filtered = filtered.filter(item =>
         item.itemCode.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.productName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.description.toLowerCase().includes(searchTerm.toLowerCase())
+        (item.description && item.description.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
     
+    // Filter by low stock
     if (filterLowStock) {
-      filtered = filtered.filter(item => 
-        item.reorderPoint && item.currentBalance < item.reorderPoint
-      );
+      filtered = filtered.filter(item => item.reorderPoint && item.currentBalance < item.reorderPoint);
+    }
+    
+    // Filter by date range (using createdAt field)
+    if (filterStartDate) {
+      filtered = filtered.filter(item => {
+        if (!item.createdAt) return true;
+        const itemDate = new Date(item.createdAt).toISOString().split('T')[0];
+        return itemDate >= filterStartDate;
+      });
+    }
+    if (filterEndDate) {
+      filtered = filtered.filter(item => {
+        if (!item.createdAt) return true;
+        const itemDate = new Date(item.createdAt).toISOString().split('T')[0];
+        return itemDate <= filterEndDate;
+      });
     }
     
     setFilteredGoods(filtered);
-  }, [searchTerm, filterLowStock, finishedGoods]);
+  }, [finishedGoods, searchTerm, filterLowStock, filterStartDate, filterEndDate]);
 
   const fetchFinishedGoods = async () => {
     if (!user?.storeId) return;
@@ -634,6 +655,72 @@ const AdminFinishedGoods: React.FC = () => {
     URL.revokeObjectURL(url);
   };
 
+  const exportToPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape orientation
+    
+    doc.setFontSize(18);
+    doc.setFont(undefined, 'bold');
+    doc.text('FINISHED GOODS INVENTORY REPORT', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont(undefined, 'normal');
+    const dateStr = new Date().toLocaleDateString();
+    doc.text(`Report Date: ${dateStr}`, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    
+    if (filterStartDate || filterEndDate) {
+      const rangeText = `Filtered Period: ${filterStartDate || 'Start'} to ${filterEndDate || 'End'}`;
+      doc.text(rangeText, doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
+    }
+    
+    const tableData = filteredGoods.map(item => [
+      cleanTextForPDF(item.itemCode),
+      cleanTextForPDF(item.productName),
+      (item.openingBalance || 0).toString(),
+      (item.quantityManufactured || 0).toString(),
+      (item.quantitySold || 0).toString(),
+      (item.quantityAdjusted || 0).toString(),
+      (item.currentBalance || 0).toString(),
+      cleanTextForPDF(item.unit || ''),
+      `$${(item.costPrice || 0).toFixed(2)}`,
+      `$${(item.sellingPrice || 0).toFixed(2)}`,
+      `$${(item.totalValue || 0).toFixed(2)}`,
+    ]);
+    
+    autoTable(doc, {
+      startY: filterStartDate || filterEndDate ? 32 : 28,
+      head: [['Item Code', 'Product', 'Opening', 'Manufactured', 'Sold', 'Adjusted', 'Current', 'Unit', 'Cost', 'Selling', 'Total Value']],
+      body: tableData,
+      theme: 'striped',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [59, 130, 246], fontStyle: 'bold' },
+      columnStyles: {
+        2: { halign: 'right' },
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+        8: { halign: 'right' },
+        9: { halign: 'right' },
+        10: { halign: 'right' },
+      },
+      foot: [[
+        '', 'TOTAL',
+        filteredGoods.reduce((sum, i) => sum + (i.openingBalance || 0), 0).toString(),
+        filteredGoods.reduce((sum, i) => sum + (i.quantityManufactured || 0), 0).toString(),
+        filteredGoods.reduce((sum, i) => sum + (i.quantitySold || 0), 0).toString(),
+        filteredGoods.reduce((sum, i) => sum + (i.quantityAdjusted || 0), 0).toString(),
+        filteredGoods.reduce((sum, i) => sum + (i.currentBalance || 0), 0).toString(),
+        '',
+        '',
+        '',
+        `$${getTotalValue().toFixed(2)}`
+      ]],
+      footStyles: { fillColor: [229, 231, 235], textColor: [0, 0, 0], fontStyle: 'bold' },
+    });
+    
+    doc.save(`finished-goods-inventory-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   const getTotalValue = () => {
     return filteredGoods.reduce((sum, item) => sum + item.totalValue, 0);
   };
@@ -1005,11 +1092,15 @@ const AdminFinishedGoods: React.FC = () => {
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
                 </Button>
+                <Button onClick={exportToPDF} variant="outline" size="sm">
+                  <FileText className="h-4 w-4 mr-2" />
+                  Export PDF
+                </Button>
               </div>
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="search">Search</Label>
                 <Input
@@ -1017,6 +1108,24 @@ const AdminFinishedGoods: React.FC = () => {
                   placeholder="Item code, product name, or description..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="startDate">From Date</Label>
+                <Input
+                  id="startDate"
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label htmlFor="endDate">To Date</Label>
+                <Input
+                  id="endDate"
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
                 />
               </div>
               <div className="flex items-end">

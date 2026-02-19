@@ -47,6 +47,7 @@ const AdminOrders: React.FC = () => {
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [editingOrder, setEditingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
@@ -1716,6 +1717,16 @@ const AdminOrders: React.FC = () => {
           </Dialog>
         </div>
 
+        {/* Search Bar */}
+        <div className="mb-4">
+          <Input
+            placeholder="Search by customer, invoice number, order ID, or status..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-md"
+          />
+        </div>
+
         <div className="grid gap-4">
           {loading ? (
             <Card>
@@ -1723,7 +1734,17 @@ const AdminOrders: React.FC = () => {
                 <p className="text-gray-500">Loading orders...</p>
               </CardContent>
             </Card>
-          ) : orders.length === 0 ? (
+          ) : orders.filter(order => {
+            if (!searchTerm) return true;
+            const search = searchTerm.toLowerCase();
+            return (
+              order.customerName.toLowerCase().includes(search) ||
+              (order.invoiceNumber && order.invoiceNumber.toLowerCase().includes(search)) ||
+              order.id.toLowerCase().includes(search) ||
+              (order.status && order.status.toLowerCase().includes(search)) ||
+              (order.assignedSalesPersonName && order.assignedSalesPersonName.toLowerCase().includes(search))
+            );
+          }).length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -1731,7 +1752,17 @@ const AdminOrders: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            orders.map((order) => (
+            orders.filter(order => {
+              if (!searchTerm) return true;
+              const search = searchTerm.toLowerCase();
+              return (
+                order.customerName.toLowerCase().includes(search) ||
+                (order.invoiceNumber && order.invoiceNumber.toLowerCase().includes(search)) ||
+                order.id.toLowerCase().includes(search) ||
+                (order.status && order.status.toLowerCase().includes(search)) ||
+                (order.assignedSalesPersonName && order.assignedSalesPersonName.toLowerCase().includes(search))
+              );
+            }).map((order) => (
               <Card key={order.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">

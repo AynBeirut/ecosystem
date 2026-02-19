@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Plus, Edit3, ChefHat, Minus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Recipe, RecipeIngredient, RawMaterial } from '@/types/inventory';
+import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -22,11 +23,14 @@ const AdminRecipes: React.FC = () => {
   const isMobile = useIsMobile();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
+  const [categories, setCategories] = useState<string[]>(['Uncategorized']);
   const [isAddingRecipe, setIsAddingRecipe] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState<Recipe | null>(null);
   const [newRecipe, setNewRecipe] = useState({
     name: '',
     description: '',
+    category: 'Uncategorized',
     outputQuantity: 1,
     outputUnit: 'piece',
     preparationTime: 30,
@@ -39,6 +43,15 @@ const AdminRecipes: React.FC = () => {
     const fetchData = async () => {
       if (!user?.storeId) return;
       const db = getFirestore();
+
+      // Fetch store profile for categories
+      const profileRef = doc(db, 'storeProfiles', user.storeId);
+      const profileSnap = await getDoc(profileRef);
+      if (profileSnap.exists()) {
+        const profileData = profileSnap.data() as StoreProfile;
+        setStoreProfile(profileData);
+        setCategories(profileData.productCategories || ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Uncategorized', 'Other']);
+      }
 
       // Fetch recipes
       const recipesRef = collection(db, 'recipes');
@@ -152,6 +165,7 @@ const AdminRecipes: React.FC = () => {
       setNewRecipe({
         name: '',
         description: '',
+        category: 'Uncategorized',
         outputQuantity: 1,
         outputUnit: 'piece',
         preparationTime: 30,
@@ -357,16 +371,50 @@ const AdminRecipes: React.FC = () => {
                     placeholder="Brief description of the recipe"
                   />
                 </div>
+                <div>
+                  <Label htmlFor="category">Category</Label>
+                  <Select
+                    value={newRecipe.category}
+                    onValueChange={(value) => setNewRecipe({ ...newRecipe, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(cat => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Categories can be managed in Store Profile settings
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="outputQuantity">Output Quantity *</Label>
                     <Input
                       id="outputQuantity"
-                      type="number"
-                      min="0.001"
-                      step="0.001"
+                      type="text"
+                      inputMode="decimal"
                       value={newRecipe.outputQuantity === 0 ? '' : newRecipe.outputQuantity}
-                      onChange={(e) => setNewRecipe({ ...newRecipe, outputQuantity: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 1) })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                          setNewRecipe({ ...newRecipe, outputQuantity: val === '' ? 0 : val });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const val = e.target.value;
+                        const num = parseFloat(val);
+                        if (!isNaN(num) && num > 0) {
+                          setNewRecipe({ ...newRecipe, outputQuantity: num });
+                        } else if (val === '') {
+                          setNewRecipe({ ...newRecipe, outputQuantity: 0 });
+                        }
+                      }}
                       placeholder="1.00"
                     />
                   </div>
@@ -430,7 +478,20 @@ const AdminRecipes: React.FC = () => {
                             value={ingredient.quantity}
                             onChange={(e) => {
                               const val = e.target.value;
-                              updateIngredient(index, 'quantity', val === '' ? 0 : parseFloat(val) || val);
+                              // Allow empty, numbers, and partial decimals during typing
+                              if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                updateIngredient(index, 'quantity', val);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Parse to number on blur for validation
+                              const val = e.target.value;
+                              const num = parseFloat(val);
+                              if (!isNaN(num) && num > 0) {
+                                updateIngredient(index, 'quantity', num);
+                              } else if (val === '') {
+                                updateIngredient(index, 'quantity', 0);
+                              }
                             }}
                             placeholder="0.00"
                           />
@@ -612,6 +673,27 @@ const AdminRecipes: React.FC = () => {
                   </div>
                 </div>
                 <div>
+                  <Label htmlFor="edit-category">Category</Label>
+                  <Select
+                    value={editingRecipe.category || 'Uncategorized'}
+                    onValueChange={(value) => setEditingRecipe({ ...editingRecipe, category: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select category" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {categories.map(cat => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Categories can be managed in Store Profile settings
+                  </p>
+                </div>
+                <div>
                   <Label htmlFor="edit-description">Description</Label>
                   <Input
                     id="edit-description"
@@ -624,11 +706,24 @@ const AdminRecipes: React.FC = () => {
                     <Label htmlFor="edit-outputQuantity">Output Quantity *</Label>
                     <Input
                       id="edit-outputQuantity"
-                      type="number"
-                      min="0.001"
-                      step="0.001"
+                      type="text"
+                      inputMode="decimal"
                       value={editingRecipe.outputQuantity}
-                      onChange={(e) => setEditingRecipe({ ...editingRecipe, outputQuantity: parseFloat(e.target.value) || 1 })}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                          setEditingRecipe({ ...editingRecipe, outputQuantity: val === '' ? 0 : val });
+                        }
+                      }}
+                      onBlur={(e) => {
+                        const val = e.target.value;
+                        const num = parseFloat(val);
+                        if (!isNaN(num) && num > 0) {
+                          setEditingRecipe({ ...editingRecipe, outputQuantity: num });
+                        } else if (val === '') {
+                          setEditingRecipe({ ...editingRecipe, outputQuantity: 0 });
+                        }
+                      }}
                     />
                   </div>
                   <div>
@@ -691,7 +786,20 @@ const AdminRecipes: React.FC = () => {
                             value={ingredient.quantity}
                             onChange={(e) => {
                               const val = e.target.value;
-                              updateEditIngredient(editingRecipe, index, 'quantity', val === '' ? 0 : parseFloat(val) || val);
+                              // Allow empty, numbers, and partial decimals during typing
+                              if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
+                                updateEditIngredient(editingRecipe, index, 'quantity', val);
+                              }
+                            }}
+                            onBlur={(e) => {
+                              // Parse to number on blur for validation
+                              const val = e.target.value;
+                              const num = parseFloat(val);
+                              if (!isNaN(num) && num > 0) {
+                                updateEditIngredient(editingRecipe, index, 'quantity', num);
+                              } else if (val === '') {
+                                updateEditIngredient(editingRecipe, index, 'quantity', 0);
+                              }
                             }}
                             placeholder="0.00"
                           />

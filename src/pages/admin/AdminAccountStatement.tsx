@@ -703,7 +703,7 @@ const AdminAccountStatement: React.FC = () => {
       }
       
       setDetailedStatement({
-        accountNo: id.substring(0, 8).toUpperCase(),
+        accountNo: generateNumericAccountNo(id),
         accountName: name,
         currency: 'US',
         asOfDate: new Date().toLocaleDateString('en-GB'),
@@ -718,6 +718,19 @@ const AdminAccountStatement: React.FC = () => {
     } catch (error) {
       console.error('Error generating detailed statement:', error);
     }
+  };
+
+  // Helper function to generate numeric account number from document ID
+  const generateNumericAccountNo = (id: string): string => {
+    // Convert string to numeric hash
+    let hash = 0;
+    for (let i = 0; i < id.length; i++) {
+      const char = id.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Ensure positive and pad to 10 digits
+    return Math.abs(hash).toString().padStart(10, '0');
   };
 
   const numberToWords = (num: number): string => {
