@@ -1128,7 +1128,7 @@ const AdminFinishedGoods: React.FC = () => {
                   onChange={(e) => setFilterEndDate(e.target.value)}
                 />
               </div>
-              <div className="flex items-end">
+              <div className="flex flex-col gap-2">
                 <label className="flex items-center space-x-2 cursor-pointer">
                   <input
                     type="checkbox"
@@ -1138,6 +1138,21 @@ const AdminFinishedGoods: React.FC = () => {
                   />
                   <span className="text-sm">Show low stock only</span>
                 </label>
+                {(searchTerm || filterStartDate || filterEndDate || filterLowStock) && (
+                  <Button
+                    onClick={() => {
+                      setSearchTerm('');
+                      setFilterStartDate('');
+                      setFilterEndDate('');
+                      setFilterLowStock(false);
+                    }}
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                  >
+                    Clear Filters
+                  </Button>
+                )}
               </div>
             </div>
           </CardContent>
