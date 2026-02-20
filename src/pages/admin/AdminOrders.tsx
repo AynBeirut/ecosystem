@@ -403,6 +403,8 @@ const AdminOrders: React.FC = () => {
         customerPhone: customer?.phone || '',
         customerEmail: customer?.email || '',
         customerTaxId: customer?.taxId || '',
+        deliveryAddress: customer?.address || '',
+        deliveryCity: customer?.city || '',
         invoiceNumber,
         items: itemsWithPrices,
         subtotal,
@@ -751,6 +753,8 @@ const AdminOrders: React.FC = () => {
         customerPhone: newOrder.customerPhone,
         customerEmail: newOrder.customerEmail || '',
         customerTaxId: customer?.taxId || '',
+        deliveryAddress: customer?.address || '',
+        deliveryCity: customer?.city || '',
         customerId: newOrder.customerId,
         assignedSalesPerson: newOrder.assignedSalesPerson || '',
         assignedSalesPersonName: newOrder.salesPersonName || '',
@@ -1246,19 +1250,25 @@ const AdminOrders: React.FC = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
-    // If order doesn't have customerTaxId, fetch it from customer record
+    // If order doesn't have customerTaxId or address, fetch it from customer record
     let enrichedOrder = order;
-    if (!order.customerTaxId && order.customerId) {
+    if ((!order.customerTaxId || !order.deliveryAddress) && order.customerId) {
       try {
         const db = getFirestore();
         const customerRef = doc(db, 'customers', order.customerId);
         const customerSnap = await getDoc(customerRef);
         if (customerSnap.exists()) {
           const customerData = customerSnap.data();
-          enrichedOrder = { ...order, customerTaxId: customerData.taxId || '' };
+          enrichedOrder = { 
+            ...order, 
+            customerTaxId: order.customerTaxId || customerData.taxId || '',
+            customerPhone: order.customerPhone || customerData.phone || '',
+            deliveryAddress: order.deliveryAddress || customerData.address || '',
+            deliveryCity: order.deliveryCity || customerData.city || ''
+          };
         }
       } catch (error) {
-        console.error('Failed to fetch customer tax ID:', error);
+        console.error('Failed to fetch customer data:', error);
       }
     }
 
@@ -1274,19 +1284,25 @@ const AdminOrders: React.FC = () => {
 
   const handleDownloadPDF = async (order: Order & { id: string }) => {
     try {
-      // If order doesn't have customerTaxId, fetch it from customer record
+      // If order doesn't have customerTaxId or address, fetch it from customer record
       let enrichedOrder = order;
-      if (!order.customerTaxId && order.customerId) {
+      if ((!order.customerTaxId || !order.deliveryAddress) && order.customerId) {
         try {
           const db = getFirestore();
           const customerRef = doc(db, 'customers', order.customerId);
           const customerSnap = await getDoc(customerRef);
           if (customerSnap.exists()) {
             const customerData = customerSnap.data();
-            enrichedOrder = { ...order, customerTaxId: customerData.taxId || '' };
+            enrichedOrder = { 
+              ...order, 
+              customerTaxId: order.customerTaxId || customerData.taxId || '',
+              customerPhone: order.customerPhone || customerData.phone || '',
+              deliveryAddress: order.deliveryAddress || customerData.address || '',
+              deliveryCity: order.deliveryCity || customerData.city || ''
+            };
           }
         } catch (error) {
-          console.error('Failed to fetch customer tax ID:', error);
+          console.error('Failed to fetch customer data:', error);
         }
       }
 

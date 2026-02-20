@@ -62,6 +62,10 @@ export interface Customer {
   name?: string
   email?: string
   phone?: string
+  address?: string
+  city?: string
+  country?: string
+  taxId?: string
   createdAt?: Date | string | number
   // CRM fields
   totalOrders?: number
