@@ -78,6 +78,8 @@ const AdminOrders: React.FC = () => {
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
   const [salesPersonSearchOpen, setSalesPersonSearchOpen] = useState(false);
   const [isCreatingNewCustomer, setIsCreatingNewCustomer] = useState(false);
+  const [useAutoDate, setUseAutoDate] = useState(true);
+  const [manualOrderDate, setManualOrderDate] = useState('');
   const [isCreatingNewSalesPerson, setIsCreatingNewSalesPerson] = useState(false);
 
   // Double-click prevention locks
@@ -420,7 +422,7 @@ const AdminOrders: React.FC = () => {
         amountPaid: 0,
         assignedSalesPerson: newOrder.assignedSalesPerson,
         assignedSalesPersonName: salesPerson?.name || '',
-        createdAt: new Date().toISOString(),
+        createdAt: useAutoDate ? new Date().toISOString() : (manualOrderDate ? new Date(manualOrderDate).toISOString() : new Date().toISOString()),
         createdBy: user.id,
       };
 
@@ -477,6 +479,8 @@ const AdminOrders: React.FC = () => {
           discountType: 'percentage',
           discountValue: 0,
         });
+        setUseAutoDate(true);
+        setManualOrderDate('');
         setIsCreatingOrder(false);
       }
     }
@@ -1482,7 +1486,7 @@ const AdminOrders: React.FC = () => {
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4">
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="customer">Customer *</Label>
                     {isCreatingNewCustomer ? (
@@ -1510,18 +1514,44 @@ const AdminOrders: React.FC = () => {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <Select value={newOrder.customerId} onValueChange={(value) => setNewOrder({ ...newOrder, customerId: value })}>
-                          <SelectTrigger>
-                            <SelectValue placeholder="Select customer" />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {customers.map(customer => (
-                              <SelectItem key={customer.id} value={customer.id}>
-                                {customer.name} - {customer.phone}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
+                        <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                          <PopoverTrigger asChild>
+                            <Button
+                              variant="outline"
+                              role="combobox"
+                              aria-expanded={customerSearchOpen}
+                              className="w-full justify-between"
+                            >
+                              {newOrder.customerId
+                                ? customers.find(c => c.id === newOrder.customerId)?.name
+                                : "Select customer..."}
+                              <User className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-full p-0">
+                            <Command>
+                              <CommandInput placeholder="Search customer..." />
+                              <CommandEmpty>No customer found.</CommandEmpty>
+                              <CommandGroup className="max-h-[200px] overflow-auto">
+                                {customers.map(customer => (
+                                  <CommandItem
+                                    key={customer.id}
+                                    value={`${customer.name} ${customer.phone}`}
+                                    onSelect={() => {
+                                      setNewOrder({ ...newOrder, customerId: customer.id });
+                                      setCustomerSearchOpen(false);
+                                    }}
+                                  >
+                                    <div className="flex flex-col">
+                                      <span className="font-medium">{customer.name}</span>
+                                      <span className="text-sm text-gray-500">{customer.phone}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            </Command>
+                          </PopoverContent>
+                        </Popover>
                         <Button
                           type="button"
                           variant="outline"
@@ -1538,26 +1568,77 @@ const AdminOrders: React.FC = () => {
                   <div>
                     <Label htmlFor="salesPerson">Sales Person</Label>
                     <div className="space-y-2">
-                      <Select value={newOrder.assignedSalesPerson} onValueChange={(value) => setNewOrder({ ...newOrder, assignedSalesPerson: value })}>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select sales person" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {salesStaff.length === 0 ? (
-                            <div className="p-2 text-sm text-gray-500">No sales people available</div>
-                          ) : (
-                            salesStaff.map(staff => (
-                              <SelectItem key={staff.id} value={staff.id}>
-                                {staff.name}
-                              </SelectItem>
-                            ))
-                          )}
-                        </SelectContent>
-                      </Select>
+                      <Popover open={salesPersonSearchOpen} onOpenChange={setSalesPersonSearchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button
+                            variant="outline"
+                            role="combobox"
+                            aria-expanded={salesPersonSearchOpen}
+                            className="w-full justify-between"
+                            disabled={salesStaff.length === 0}
+                          >
+                            {newOrder.assignedSalesPerson
+                              ? salesStaff.find(s => s.id === newOrder.assignedSalesPerson)?.name
+                              : "Select sales person..."}
+                            <User className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-full p-0">
+                          <Command>
+                            <CommandInput placeholder="Search sales person..." />
+                            <CommandEmpty>No sales person found.</CommandEmpty>
+                            <CommandGroup className="max-h-[200px] overflow-auto">
+                              {salesStaff.map(staff => (
+                                <CommandItem
+                                  key={staff.id}
+                                  value={staff.name}
+                                  onSelect={() => {
+                                    setNewOrder({ ...newOrder, assignedSalesPerson: staff.id });
+                                    setSalesPersonSearchOpen(false);
+                                  }}
+                                >
+                                  {staff.name}
+                                </CommandItem>
+                              ))}
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                       <p className="text-xs text-gray-500">
                         To add sales people, go to Sub-Accounts menu and create a new sales account
                       </p>
                     </div>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Order Date</Label>
+                  <div className="space-y-2">
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        id="useAutoDate"
+                        checked={useAutoDate}
+                        onChange={(e) => setUseAutoDate(e.target.checked)}
+                        className="rounded"
+                      />
+                      <Label htmlFor="useAutoDate" className="font-normal cursor-pointer">
+                        Use current date/time automatically
+                      </Label>
+                    </div>
+                    {!useAutoDate && (
+                      <Input
+                        type="datetime-local"
+                        value={manualOrderDate}
+                        onChange={(e) => setManualOrderDate(e.target.value)}
+                        className="w-full"
+                      />
+                    )}
+                    {useAutoDate && (
+                      <p className="text-sm text-gray-500">
+                        {new Date().toLocaleString()}
+                      </p>
+                    )}
                   </div>
                 </div>
 
