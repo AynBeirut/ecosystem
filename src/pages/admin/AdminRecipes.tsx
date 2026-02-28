@@ -181,10 +181,35 @@ const AdminRecipes: React.FC = () => {
   };
 
   const handleUpdateRecipe = async () => {
-    if (!editingRecipe || !user?.storeId) return;
+    console.log('handleUpdateRecipe called');
+    console.log('editingRecipe:', editingRecipe);
+    console.log('user:', user);
+    console.log('user.storeId:', user?.storeId);
 
+    if (!editingRecipe || !user?.storeId) {
+      console.log('Early return - missing editingRecipe or storeId');
+      if (!editingRecipe) {
+        toast({
+          title: "Error",
+          description: "No recipe selected for editing",
+          variant: "destructive"
+        });
+      }
+      if (!user?.storeId) {
+        toast({
+          title: "Error",
+          description: "Store ID not found. Please refresh and try again.",
+          variant: "destructive"
+        });
+      }
+      return;
+    }
+
+    console.log('Output quantity:', editingRecipe.outputQuantity);
+    
     // Validate output quantity is not zero or negative
     if (!editingRecipe.outputQuantity || editingRecipe.outputQuantity <= 0) {
+      console.log('Failed validation: output quantity');
       toast({
         title: "Validation Error",
         description: "Output quantity must be greater than zero",
@@ -195,7 +220,10 @@ const AdminRecipes: React.FC = () => {
 
     // Validate ingredients have cost
     const totalCost = calculateRecipeCost(editingRecipe.ingredients);
+    console.log('Total cost calculated:', totalCost);
+    
     if (totalCost <= 0) {
+      console.log('Failed validation: total cost');
       toast({
         title: "Validation Error",
         description: "Recipe total cost must be greater than zero. Please ensure all ingredients have valid costs.",
@@ -205,10 +233,12 @@ const AdminRecipes: React.FC = () => {
     }
 
     try {
+      console.log('Starting recipe update...');
       const db = getFirestore();
       const recipeRef = doc(db, 'recipes', editingRecipe.id);
 
       const costPerUnit = totalCost / editingRecipe.outputQuantity;
+      console.log('Cost per unit:', costPerUnit);
 
       const updatedData = {
         ...editingRecipe,
@@ -217,7 +247,10 @@ const AdminRecipes: React.FC = () => {
         updatedAt: new Date().toISOString(),
       };
 
+      console.log('Updating recipe with data:', updatedData);
       await updateDoc(recipeRef, updatedData);
+      console.log('Recipe updated in Firestore');
+      
       setRecipes(recipes.map(r => r.id === editingRecipe.id ? updatedData : r));
 
       // Audit log
@@ -233,6 +266,7 @@ const AdminRecipes: React.FC = () => {
         user.storeId
       );
 
+      console.log('Recipe update completed successfully');
       setEditingRecipe(null);
       toast({ title: "Success", description: "Recipe updated successfully!" });
     } catch (error) {
