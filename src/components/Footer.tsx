@@ -16,6 +16,9 @@ const Footer: React.FC = () => {
           AYN BEIRUT
         </a>
       </div>
+      <div className="text-xs text-gray-600">
+        Contact us: <a href="mailto:support@grabio.space" className="text-market-primary hover:underline">support@grabio.space</a>
+      </div>
       {!isHome && !isLogin && (
         <button
           onClick={() => navigate('/')}

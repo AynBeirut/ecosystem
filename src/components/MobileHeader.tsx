@@ -104,14 +104,14 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
                       <span>Favorites</span>
                     </Link>
                     
-                    <Link to="/orders" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
-                      <Package className="h-5 w-5" />
-                      <span>Order Tracking</span>
-                    </Link>
-                    
                     <Link to="/cart" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
                       <ShoppingCart className="h-5 w-5" />
                       <span>Cart</span>
+                    </Link>
+                    
+                    <Link to="/orders" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <Package className="h-5 w-5" />
+                      <span>Order Tracking</span>
                     </Link>
                     
                     <button 
@@ -125,6 +125,28 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
                 </div>
               ) : (
                 <div className="space-y-4 pt-4">
+                  <nav className="space-y-2 mb-4">
+                    <Link to="/" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <Home className="h-5 w-5" />
+                      <span>Home</span>
+                    </Link>
+                    
+                    <Link to="/favorites" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <Heart className="h-5 w-5" />
+                      <span>Favorites</span>
+                    </Link>
+                    
+                    <Link to="/cart" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <ShoppingCart className="h-5 w-5" />
+                      <span>Cart</span>
+                    </Link>
+                    
+                    <Link to="/track-order" className="flex items-center gap-3 p-3 rounded-md hover:bg-gray-100 transition">
+                      <Package className="h-5 w-5" />
+                      <span>Track Order</span>
+                    </Link>
+                  </nav>
+                  
                   <Link 
                     to="/login" 
                     className="flex items-center justify-center w-full p-2 bg-market-primary text-white rounded-md"

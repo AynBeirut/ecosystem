@@ -491,19 +491,6 @@ const AdminProducts: React.FC = () => {
           </div>
         </div>
 
-        {/* Extend My Store Button for storage upgrade */}
-        <div className="flex justify-center mt-8">
-          <Button
-            className="bg-market-primary text-white px-6 py-2 rounded-lg font-semibold shadow"
-            onClick={() => {
-              // Trigger payment flow for storage upgrade
-              window.location.href = '/upgrade-storage';
-            }}
-          >
-            Extend My Store (10GB for $5/month)
-          </Button>
-        </div>
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {products.map((product) => (
             <Card key={product.id}>

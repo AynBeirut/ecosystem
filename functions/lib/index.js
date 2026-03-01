@@ -36,11 +36,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.api = void 0;
+exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
 const cors_1 = __importDefault(require("cors"));
+// Initialize Firebase Admin first
 console.log('TOP-LEVEL LOG: Cloud Function module loaded');
 console.error('TOP-LEVEL ERROR: Cloud Function module loaded');
 try {
@@ -50,6 +51,19 @@ try {
 catch (e) {
     // ignore if already initialized
 }
+// Load environment variables (only for local development)
+if (process.env.NODE_ENV !== 'production') {
+    try {
+        require('dotenv').config();
+    }
+    catch (e) {
+        // dotenv not available or failed to load
+    }
+}
+// Import subscription and webhook handlers
+const subscription_1 = require("./api/subscription");
+const webhooks_1 = require("./api/webhooks");
+const checkout_1 = require("./api/checkout");
 const db = admin.firestore();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
@@ -72,6 +86,44 @@ app.get('/logtest', (req, res) => {
     console.error('LOGTEST endpoint hit (error)');
     res.json({ ok: true, message: 'Log test endpoint hit' });
 });
+// Health check endpoint
+app.get('/health', (req, res) => {
+    res.json({
+        status: 'ok',
+        message: 'Grabio API is running',
+        timestamp: new Date().toISOString(),
+        endpoints: [
+            '/checkout',
+            '/payment/checkout',
+            '/payment/callback',
+            '/subscription/trial',
+            '/subscription/subscribe',
+            '/subscription/cancel',
+            '/subscription/info',
+            '/webhook/whish'
+        ]
+    });
+});
+// Root endpoint
+app.get('/', (req, res) => {
+    res.json({
+        message: 'Grabio API',
+        version: '2.0.0',
+        status: 'operational',
+        features: ['Guest Checkout', 'Payment Processing', 'Subscriptions'],
+        docs: 'https://grabio.space'
+    });
+});
+// Subscription management endpoints
+app.post('/subscription/trial', subscription_1.startTrial);
+app.post('/subscription/subscribe', subscription_1.subscribe);
+app.post('/subscription/cancel', subscription_1.cancelSubscription);
+app.get('/subscription/info', subscription_1.getSubscriptionInfo);
+// Webhook endpoint for Whish payment gateway
+app.post('/webhook/whish', webhooks_1.handleWhishWebhook);
+// Checkout payment endpoints (using store owner's Whish Money account)
+app.post('/payment/checkout', checkout_1.processCheckout);
+app.get('/payment/callback', checkout_1.handleCheckoutCallback);
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp() {
     try {
@@ -90,31 +142,54 @@ app.post('/checkout', async (req, res) => {
         console.log('Request method:', req.method);
         console.log('Request headers:', req.headers);
         console.log('--- /checkout called ---');
+        const body = req.body;
+        const { items, deliveryInfo } = body || {};
+        // Auth token is OPTIONAL (supports guest checkout)
         const rawAuth = req.get('authorization');
         const authHeader = String(rawAuth || '');
         const token = authHeader.startsWith('Bearer ') ? authHeader.split(' ')[1] : null;
-        if (!token) {
-            console.error('Missing auth token');
-            return res.status(401).json({ error: 'Missing auth token' });
-        }
-        const decoded = await admin.auth().verifyIdToken(token);
-        const userId = decoded.uid;
-        // Fetch user record for name/phone/email
+        let userId = null;
         let customerName = '';
         let customerPhone = '';
         let customerEmail = '';
-        try {
-            const userRecord = await admin.auth().getUser(userId);
-            customerName = userRecord.displayName || userRecord.email || '';
-            customerPhone = userRecord.phoneNumber || '';
-            customerEmail = userRecord.email || '';
+        let isGuest = false;
+        if (token) {
+            // Registered user checkout
+            try {
+                const decoded = await admin.auth().verifyIdToken(token);
+                userId = decoded.uid;
+                // Fetch user record for name/phone/email
+                try {
+                    const userRecord = await admin.auth().getUser(userId);
+                    customerName = userRecord.displayName || userRecord.email || '';
+                    customerPhone = userRecord.phoneNumber || '';
+                    customerEmail = userRecord.email || '';
+                }
+                catch (e) {
+                    console.error('Failed to fetch user record', e);
+                }
+                console.log('Registered user checkout:', { userId, customerName, customerPhone, customerEmail });
+            }
+            catch (e) {
+                console.error('Invalid auth token', e);
+                return res.status(401).json({ error: 'Invalid auth token' });
+            }
         }
-        catch (e) {
-            console.error('Failed to fetch user record', e);
+        else {
+            // Guest checkout - use deliveryInfo for customer details
+            isGuest = true;
+            userId = `guest_${Date.now()}`; // Generate temporary guest ID
+            customerName = deliveryInfo?.name || 'Guest Customer';
+            customerPhone = deliveryInfo?.phone || '';
+            customerEmail = deliveryInfo?.email || '';
+            // Validate required guest info
+            if (!customerEmail || !customerPhone) {
+                return res.status(400).json({
+                    error: 'Guest checkout requires email and phone number'
+                });
+            }
+            console.log('Guest checkout:', { userId, customerName, customerPhone, customerEmail });
         }
-        console.log('User:', { userId, customerName, customerPhone, customerEmail });
-        const body = req.body;
-        const { items, deliveryInfo } = body || {};
         if (!Array.isArray(items) || items.length === 0) {
             console.error('No items in request');
             return res.status(400).json({ error: 'No items' });
@@ -161,14 +236,16 @@ app.post('/checkout', async (req, res) => {
                     }
                     const serverPrice = typeof pData.price === 'number' ? pData.price : 0;
                     const qty = it.quantity && it.quantity > 0 ? it.quantity : 1;
-                    if (typeof pData.stock === 'number' && pData.stock < qty) {
+                    // Only check stock quantity if stock tracking is enabled (stock > 0)
+                    // Products with stock=0 or null/undefined are made-to-order or services (no inventory tracking)
+                    if (typeof pData.stock === 'number' && pData.stock > 0 && pData.stock < qty) {
                         console.error('Insufficient stock for product:', it.productId);
                         throw new Error(`Insufficient stock for product: ${it.productId}`);
                     }
                     orderItems.push({ productId: it.productId, price: serverPrice, quantity: qty });
                     storeSubtotal += serverPrice * qty;
-                    // Prepare stock update
-                    if (typeof pData.stock === 'number') {
+                    // Prepare stock update - only if stock tracking is enabled
+                    if (typeof pData.stock === 'number' && pData.stock > 0) {
                         stockUpdates.push({
                             productId: it.productId,
                             newStock: pData.stock - qty
@@ -196,9 +273,9 @@ app.post('/checkout', async (req, res) => {
                 const lastNumber = orderData.storeProfile?.lastInvoiceNumber || 0;
                 const newNumber = lastNumber + 1;
                 const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
-                // Update store profile with new invoice number
+                // Update store profile with new invoice number (use set with merge to create if not exists)
                 const profileRef = db.doc(`storeProfiles/${orderData.storeId}`);
-                tx.update(profileRef, { lastInvoiceNumber: newNumber });
+                tx.set(profileRef, { lastInvoiceNumber: newNumber }, { merge: true });
                 const orderRef = db.collection('orders').doc();
                 tx.set(orderRef, {
                     storeId: orderData.storeId,
@@ -206,6 +283,7 @@ app.post('/checkout', async (req, res) => {
                     customerName,
                     customerPhone: deliveryInfo?.phone || customerPhone || '',
                     customerEmail: deliveryInfo?.email || customerEmail || '',
+                    isGuest, // Flag to indicate guest checkout
                     invoiceNumber,
                     items: orderData.orderItems,
                     subtotal: orderData.subtotal,
@@ -252,3 +330,6 @@ exports.api = functions.https.onRequest({
     cors: true,
     region: 'us-central1',
 }, app);
+// Export the scheduled subscription checker
+var checkSubscriptions_1 = require("./scheduled/checkSubscriptions");
+Object.defineProperty(exports, "checkSubscriptions", { enumerable: true, get: function () { return checkSubscriptions_1.checkSubscriptions; } });

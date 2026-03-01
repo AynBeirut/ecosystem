@@ -20,11 +20,9 @@ const AdminPayments: React.FC = () => {
 
   // Payment credentials state
   const [credentials, setCredentials] = useState({
-    wishPayId: '',
-    cardHolderName: '',
-    cardNumber: '',
-    cardExpiry: '',
-    cardCVC: ''
+    whishChannel: '',
+    whishSecret: '',
+    websiteUrl: ''
   });
   const [isSavingCreds, setIsSavingCreds] = useState(false);
 
@@ -38,11 +36,9 @@ const AdminPayments: React.FC = () => {
         if (credSnap.exists()) {
           const data = credSnap.data() as Record<string, unknown>;
           setCredentials({
-            wishPayId: (data.wishPayId as string) || '',
-            cardHolderName: (data.cardHolderName as string) || '',
-            cardNumber: (data.cardNumber as string) || '',
-            cardExpiry: (data.cardExpiry as string) || '',
-            cardCVC: (data.cardCVC as string) || ''
+            whishChannel: (data.whishChannel as string) || '',
+            whishSecret: (data.whishSecret as string) || '',
+            websiteUrl: (data.websiteUrl as string) || ''
           });
         }
       }
@@ -60,7 +56,11 @@ const AdminPayments: React.FC = () => {
       try {
         const credRef = doc(db, 'storeProfiles', user.id);
         await setDoc(credRef, credentials, { merge: true });
-        toast({ title: 'Payment Credentials Saved', description: 'Your WishPay and card details have been updated.' });
+        toast({ 
+          title: '✅ Payment Credentials Saved Successfully!', 
+          description: 'Your Whish Money credentials are now active. Customers can now pay through your merchant account.',
+          duration: 5000
+        });
       } catch (err) {
         toast({ title: 'Error', description: 'Failed to save payment credentials.', variant: 'destructive' });
       }
@@ -137,8 +137,9 @@ const AdminPayments: React.FC = () => {
         const settingsRef = doc(db, 'storeProfiles', user.id);
         await setDoc(settingsRef, { paymentFees: fees }, { merge: true });
         toast({
-          title: "Payment Settings Saved",
-          description: "Your payment processing fees have been updated."
+          title: "✅ Fee Settings Saved Successfully!",
+          description: "Your payment processing fees have been updated.",
+          duration: 4000
         });
       } catch (error) {
         toast({
@@ -291,66 +292,45 @@ const AdminPayments: React.FC = () => {
               <CardHeader>
                 <CardTitle>Payment Credentials</CardTitle>
                 <CardDescription>
-                  Enter your WishPay and card details to receive payments (only visible to you)
+                  Enter your Whish Money credentials to receive payments (only visible to you)
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div>
-                  <Label htmlFor="wishPayId">WishPay ID</Label>
+                  <Label htmlFor="whishChannel">Whish Money Channel ID</Label>
                   <Input
-                    id="wishPayId"
-                    name="wishPayId"
+                    id="whishChannel"
+                    name="whishChannel"
                     type="text"
-                    value={credentials.wishPayId}
+                    value={credentials.whishChannel}
                     onChange={handleCredsChange}
-                    placeholder="your-wishpay-id"
+                    placeholder="10198838"
                   />
+                  <p className="text-xs text-gray-500 mt-1">Your Whish Money merchant channel ID</p>
                 </div>
                 <div>
-                  <Label htmlFor="cardHolderName">Cardholder Name (Visa/MasterCard)</Label>
+                  <Label htmlFor="whishSecret">Whish Money Secret Key</Label>
                   <Input
-                    id="cardHolderName"
-                    name="cardHolderName"
-                    type="text"
-                    value={credentials.cardHolderName}
+                    id="whishSecret"
+                    name="whishSecret"
+                    type="password"
+                    value={credentials.whishSecret}
                     onChange={handleCredsChange}
-                    placeholder="Name on card"
+                    placeholder="Enter your secret key"
                   />
+                  <p className="text-xs text-gray-500 mt-1">Keep this secret! Used to process payments</p>
                 </div>
                 <div>
-                  <Label htmlFor="cardNumber">Card Number (Visa/MasterCard)</Label>
+                  <Label htmlFor="websiteUrl">Store Website URL</Label>
                   <Input
-                    id="cardNumber"
-                    name="cardNumber"
-                    type="text"
-                    value={credentials.cardNumber}
+                    id="websiteUrl"
+                    name="websiteUrl"
+                    type="url"
+                    value={credentials.websiteUrl}
                     onChange={handleCredsChange}
-                    placeholder="1234 5678 9012 3456"
+                    placeholder="https://grabio.space"
                   />
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <Label htmlFor="cardExpiry">Expiry</Label>
-                    <Input
-                      id="cardExpiry"
-                      name="cardExpiry"
-                      type="text"
-                      value={credentials.cardExpiry}
-                      onChange={handleCredsChange}
-                      placeholder="MM/YY"
-                    />
-                  </div>
-                  <div className="flex-1">
-                    <Label htmlFor="cardCVC">CVC</Label>
-                    <Input
-                      id="cardCVC"
-                      name="cardCVC"
-                      type="text"
-                      value={credentials.cardCVC}
-                      onChange={handleCredsChange}
-                      placeholder="123"
-                    />
-                  </div>
+                  <p className="text-xs text-gray-500 mt-1">Your store's public URL for payment redirects</p>
                 </div>
                 <Button onClick={handleSaveCreds} className="w-full" disabled={isSavingCreds}>
                   {isSavingCreds ? 'Saving...' : 'Save Payment Credentials'}
@@ -362,10 +342,15 @@ const AdminPayments: React.FC = () => {
               <CardHeader>
                 <CardTitle>Processing Fees</CardTitle>
                 <CardDescription>
-                  Configure processing fees for different payment methods
+                  Configure processing fees for different payment methods (Optional - for display purposes only)
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-md p-3 mb-4">
+                  <p className="text-sm text-blue-800">
+                    <strong>Note:</strong> Whish Money charges their own fees directly. These settings are for your reference/display only and don't affect actual charges.
+                  </p>
+                </div>
                 <div className="space-y-3">
                   <div>
                     <Label htmlFor="creditCardFee">Credit Card Fee (%)</Label>
@@ -377,6 +362,7 @@ const AdminPayments: React.FC = () => {
                       onChange={(e) => setFees({ ...fees, creditCardFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="2.9"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Typical: 2.9% (Visa, Mastercard, Amex)</p>
                   </div>
                   
                   <div>
@@ -389,6 +375,7 @@ const AdminPayments: React.FC = () => {
                       onChange={(e) => setFees({ ...fees, debitCardFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="1.5"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Typical: 1.5% (Usually lower than credit cards)</p>
                   </div>
                   
                   <div>
@@ -401,6 +388,7 @@ const AdminPayments: React.FC = () => {
                       onChange={(e) => setFees({ ...fees, paypalFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="3.5"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Typical: 3.5% (If you enable PayPal in the future)</p>
                   </div>
                   
                   <div>
@@ -413,6 +401,7 @@ const AdminPayments: React.FC = () => {
                       onChange={(e) => setFees({ ...fees, processingFee: e.target.value === '' ? 0 : e.target.value })}
                       placeholder="0.30"
                     />
+                    <p className="text-xs text-gray-500 mt-1">Typical: $0.30 per transaction (flat fee added to percentage)</p>
                   </div>
                 </div>
                 

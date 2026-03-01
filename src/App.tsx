@@ -27,6 +27,7 @@ import AdminAnalytics from "./pages/admin/AdminAnalytics";
 import AdminRevenue from "./pages/admin/AdminRevenue";
 import AdminOrders from "./pages/admin/AdminOrders";
 import OrderTracking from "./pages/OrderTracking";
+import GuestOrderTracking from "./pages/GuestOrderTracking";
 import DebugConsole from './components/DebugConsole';
 import Footer from './components/Footer';
 import OrderConfirmation from "./pages/OrderConfirmation";
@@ -54,6 +55,10 @@ import AdminBankReconciliation from "./pages/admin/AdminBankReconciliation";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminReturns from "./pages/admin/AdminReturns";
 import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
+import Subscription from "./pages/admin/Subscription";
+import PaymentSuccess from "./pages/payment/Success";
+import PaymentFailed from "./pages/payment/Failed";
+import Blocked from "./pages/Blocked";
 
 
       function App() {
@@ -81,14 +86,21 @@ import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
                         {/* Backward compatibility routes */}
                         <Route path="/store/id/:id" element={<StoreDetail />} />
                         <Route path="/product/id/:id" element={<ProductDetail />} />
+                        {/* Public routes (use localStorage, work for guests) */}
+                        <Route path="/cart" element={<Cart />} />
+                        <Route path="/favorites" element={<Favorites />} />
+                        <Route path="/track-order" element={<GuestOrderTracking />} />
                         {/* Protected routes */}
-                        <Route path="/cart" element={<ProtectedRoute><Cart /></ProtectedRoute>} />
-                        <Route path="/favorites" element={<ProtectedRoute><Favorites /></ProtectedRoute>} />
                         <Route path="/orders" element={<ProtectedRoute><OrderTracking /></ProtectedRoute>} />
                         <Route path="/orders/confirmation" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
                         <Route path="/upgrade" element={<ProtectedRoute><UpgradeToAdmin /></ProtectedRoute>} />
+                        {/* Payment Routes */}
+                        <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
+                        <Route path="/payment/failed" element={<ProtectedRoute><PaymentFailed /></ProtectedRoute>} />
+                        <Route path="/blocked" element={<ProtectedRoute><Blocked /></ProtectedRoute>} />
                         {/* Admin Routes */}
                         <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+                        <Route path="/subscription" element={<ProtectedRoute allowedRoles={['admin']}><Subscription /></ProtectedRoute>} />
                         <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                         {/* Sub-Account Routes */}
                         <Route path="/team/dashboard" element={<ProtectedRoute allowedRoles={['sub_account']}><SubAccountDashboard /></ProtectedRoute>} />

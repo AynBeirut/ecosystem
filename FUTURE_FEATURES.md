@@ -89,6 +89,44 @@
 
 ## 📦 CATALOG MANAGEMENT
 
+### Product & Service Types
+- [ ] **Normal Products**
+  - Standard inventory items
+  - Single SKU tracking
+  - Fixed pricing
+  
+- [ ] **Composed Products**
+  - Products made from multiple items/recipes
+  - Auto-calculate cost from ingredients
+  - Track component inventory
+  - Recipe management (already implemented ✅)
+  
+- [ ] **One-Time Services**
+  - Services sold once
+  - No inventory tracking
+  - Service duration/appointment
+  - Staff assignment
+  
+- [ ] **Monthly Renewable Services**
+  - Auto-renew monthly subscriptions
+  - Recurring billing
+  - Auto-reminder before renewal
+  - Cancel anytime option
+  - Subscription management
+  
+- [ ] **Yearly Renewable Services**
+  - Annual subscription plans
+  - Discounted vs monthly (10-20% off)
+  - Auto-renewal notifications
+  - Option to switch to monthly
+  - Multi-year prepayment discount
+
+**Priority:** HIGH  
+**Complexity:** MEDIUM  
+**Estimated Time:** 2-3 weeks
+
+---
+
 ### Product Import/Export
 - [ ] **Shopify Format Support**
   - Import Shopify CSV
@@ -176,6 +214,40 @@
 - [ ] Subscription/recurring payments
 - [ ] Payment reminder emails
 - [ ] Payment receipts (email/SMS)
+
+---
+
+## 💼 SUBSCRIPTION BILLING SYSTEM
+
+### Billing Infrastructure (Backend for Renewable Services)
+- [ ] **Subscription Engine**
+  - Automatic billing cycles (monthly/yearly)
+  - Renewal date tracking
+  - Payment retry logic (failed payments)
+  - Grace period configuration
+  - Suspension after failed payment
+  
+- [ ] **Customer Portal**
+  - View active subscriptions
+  - Upgrade/downgrade plans
+  - Pause subscription
+  - Cancel subscription
+  - Payment method management
+  - Invoice history
+  
+- [ ] **Admin Management**
+  - Subscription dashboard
+  - Manual renewal/cancellation
+  - Proration for plan changes
+  - Trial period configuration
+  - Subscription analytics
+  - Revenue reporting
+
+**Priority:** HIGH  
+**Complexity:** MEDIUM  
+**Estimated Time:** 2 weeks
+
+**Note:** This system powers the Monthly/Yearly renewable services in the product catalog.
 
 ---
 
@@ -317,6 +389,8 @@
 | Feature Category | Priority | Complexity | Time | Start After |
 |-----------------|----------|------------|------|-------------|
 | Payment Gateways | CRITICAL | HIGH | 2-3w | Core bugs fixed |
+| Product/Service Types | HIGH | MEDIUM | 2-3w | Parallel with payments |
+| Subscription Billing | HIGH | MEDIUM | 2w | Service types done |
 | SEO Basics | HIGH | MEDIUM | 1w | Payments done |
 | Meta Integration | HIGH | HIGH | 2-3w | SEO done |
 | Catalog Import/Export | HIGH | MEDIUM | 2w | Meta done |
@@ -336,28 +410,37 @@
 - Stabilize current features
 - Complete testing
 
-### **Phase 2: Payment Integration (Month 1)**
+### **Phase 2: Payment & Product Types (Month 1)**
 - Stripe integration
 - Local payment providers
+- Product/Service type system
+- Normal products, Composed products, Services
+- Renewable service types (monthly/yearly)
+
+### **Phase 3: Subscription Billing (Month 2)**
+- Auto-renewal system
+- Subscription management
+- Customer portal for subscriptions
 - Multi-currency support
 
-### **Phase 3: Marketing & SEO (Month 2)**
+### **Phase 4: Marketing & SEO (Month 3)**
 - SEO optimization
 - Meta/Facebook integration
 - Catalog export/import
-
-### **Phase 4: Store Enhancement (Month 3)**
-- Custom domains
-- Store templates
 - WhatsApp notifications
 
-### **Phase 5: Growth Features (Month 4-6)**
+### **Phase 5: Store Enhancement (Month 4)**
+- Custom domains
+- Store templates
 - Advanced analytics
+
+### **Phase 6: Growth Features (Month 5-6)**
 - Email marketing
 - Customer accounts
 - Reviews & ratings
+- Abandoned cart recovery
 
-### **Phase 6: Scale (Month 6+)**
+### **Phase 7: Scale (Month 6+)**
 - Multi-language
 - Mobile apps
 - API for third-party integrations
@@ -374,5 +457,5 @@
 
 ---
 
-**Last Updated:** February 14, 2026  
+**Last Updated:** February 28, 2026  
 **Next Review:** After core bugs are fixed

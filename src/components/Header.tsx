@@ -57,46 +57,43 @@ const Header: React.FC = () => {
 
           {/* Action Buttons */}
           <div className="flex items-center space-x-2">
+            {/* Favorites Link - Available to everyone (uses localStorage) */}
+            <Link 
+              to="/favorites"
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
+              aria-label="Favorites"
+            >
+              <Heart size={20} />
+              {favorites.length > 0 && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
+                  {favorites.length}
+                </Badge>
+              )}
+            </Link>
+
+            {/* Cart Link - Available to everyone (uses localStorage) */}
+            <Link 
+              to="/cart"
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
+              aria-label="Cart"
+            >
+              <ShoppingCart size={20} />
+              {items.length > 0 && (
+                <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
+                  {items.length}
+                </Badge>
+              )}
+            </Link>
+            
             {user ? (
               <>
-                {/* Credits feature removed */}
-                
-                {/* Favorites Link */}
-                <Link 
-                  to="/favorites"
-                  className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
-                  aria-label="Favorites"
-                >
-                  <Heart size={20} />
-                  {favorites.length > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
-                      {favorites.length}
-                    </Badge>
-                  )}
-                </Link>
-                
-
-                {/* Order Tracking Link */}
+                {/* Order Tracking Link - Only for logged-in users */}
                 <Link 
                   to="/orders"
                   className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
                   aria-label="Order Tracking"
                 >
                   <Package size={20} />
-                </Link>
-
-                {/* Cart Link */}
-                <Link 
-                  to="/cart"
-                  className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
-                  aria-label="Cart"
-                >
-                  <ShoppingCart size={20} />
-                  {items.length > 0 && (
-                    <Badge className="absolute -top-1 -right-1 h-5 w-5 flex items-center justify-center p-0 text-[10px]">
-                      {items.length}
-                    </Badge>
-                  )}
                 </Link>
                 
                 {/* User Menu */}
@@ -165,6 +162,10 @@ const Header: React.FC = () => {
               </>
             ) : (
               <>
+                {/* Guest Track Order Button */}
+                <Button asChild variant="ghost" size="sm">
+                  <Link to="/track-order">Track Order</Link>
+                </Button>
                 <Button asChild variant="outline" size="sm">
                   <Link to="/login">Sign in</Link>
                 </Button>

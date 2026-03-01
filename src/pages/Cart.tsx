@@ -35,6 +35,8 @@ const Cart: React.FC = () => {
     storeCredits: false
   });
   const [deliveryInfo, setDeliveryInfo] = useState({
+    name: '',
+    email: '',
     phone: '',
     address: '',
     city: '',
@@ -56,7 +58,7 @@ const Cart: React.FC = () => {
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
-        if (parsed.phone || parsed.address) {
+        if (parsed.phone || parsed.address || parsed.email || parsed.name) {
           setDeliveryInfo(prev => ({ ...prev, ...parsed }));
           setHasSavedInfo(true);
         }
@@ -280,20 +282,20 @@ const Cart: React.FC = () => {
       return;
     }
     
-    // Validate delivery info (required for all users, even guests)
+    // Validate delivery info for guest checkout (required for all users)
     if (!deliveryInfo.phone || !deliveryInfo.address) {
       toast.error('Please fill in your phone number and delivery address');
       return;
     }
     
-    // Check if user is logged in - if not, redirect to login
-    if (!user) {
-      toast.error('Please login or sign up to complete your order');
-      // Save current path to return after login
-      localStorage.setItem('redirectAfterLogin', '/cart');
-      navigate('/login');
+    // For guest checkout, email and name are also required
+    if (!user && (!deliveryInfo.email || !deliveryInfo.name)) {
+      toast.error('Please provide your name and email to continue');
       return;
     }
+    
+    // Save delivery info to localStorage for next time
+    localStorage.setItem('deliveryInfo', JSON.stringify(deliveryInfo));
     
     isCheckingOutRef.current = true;
     
@@ -316,12 +318,8 @@ const Cart: React.FC = () => {
       return;
     }
     
-    // Place order via server-side checkout to ensure atomic credits handling
+    // Place order via server-side checkout (supports both guest and registered users)
     try {
-      if (!user) {
-        toast.error('You must be logged in to place an order.');
-        return;
-      }
       const auth = getAuth();
       const currentUser = auth.currentUser;
       const idToken = currentUser ? await currentUser.getIdToken() : null;
@@ -343,12 +341,13 @@ const Cart: React.FC = () => {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          // Only include auth header if user is logged in (guest checkout doesn't need it)
           ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
         },
         body: JSON.stringify({ 
           items: checkoutItems, 
           shipping: null,
-          deliveryInfo: deliveryInfo
+          deliveryInfo: deliveryInfo // Now includes name, email, phone, address, etc.
         }),
       });
 
@@ -378,12 +377,70 @@ const Cart: React.FC = () => {
         toast.error('Checkout failed: ' + (body?.error || resp.statusText));
         return;
       }
-      // Success
-      toast.success('Order placed successfully!');
-      // Success
-      // Optionally handle server response details if needed
-      clearCart();
-      navigate('/orders/confirmation');
+
+      // Order created successfully - now create payment
+      const orderIds = body?.orderIds || [];
+      if (!orderIds || orderIds.length === 0) {
+        toast.error('Order created but no order ID returned');
+        return;
+      }
+
+      // Use the first order ID (assuming single-store cart for now)
+      const orderId = orderIds[0];
+      
+      // For cash on delivery, skip payment and show success
+      if (paymentMethod === 'cash') {
+        toast.success('Order placed successfully! The store will contact you soon.');
+        clearCart();
+        
+        // For guest users, redirect to tracking page with order ID; for logged-in users, go to orders
+        if (user) {
+          navigate('/orders');
+        } else {
+          // Redirect to guest order tracking with order ID pre-filled
+          navigate(`/track-order?orderId=${orderId}`);
+          toast.info('Save your Order ID to track your order: ' + orderId);
+        }
+        return;
+      }
+      
+      // Create payment for the order (only for online payment methods)
+      const paymentUrl = `${API_BASE.replace(/\/$/, '')}/payment/checkout`;
+      const paymentResp = await fetch(paymentUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({ orderId }),
+      });
+
+      let paymentBody: any = null;
+      const paymentContentType = paymentResp.headers.get('content-type') || '';
+      if (paymentContentType.includes('application/json')) {
+        try {
+          paymentBody = await paymentResp.json();
+        } catch (e) {
+          console.error('Failed to parse payment response', e);
+        }
+      }
+
+      if (!paymentResp.ok) {
+        toast.error('Payment initialization failed: ' + (paymentBody?.error || paymentResp.statusText));
+        return;
+      }
+
+      // Redirect to Whish Money payment page
+      const paymentPageUrl = paymentBody?.paymentUrl;
+      if (paymentPageUrl) {
+        toast.success('Redirecting to payment...');
+        // Clear cart before redirecting (order is already created)
+        clearCart();
+        // Redirect to payment
+        window.location.href = paymentPageUrl;
+      } else {
+        toast.error('Payment URL not received');
+      }
     } catch (err: unknown) {
       console.error('Checkout error', err);
       const msg = err instanceof Error ? err.message : 'Failed to place order. Please try again.';
@@ -627,6 +684,35 @@ const Cart: React.FC = () => {
                       </div>
                     )}
                     
+                    {/* Guest checkout fields - only show if not logged in */}
+                    {!user && (
+                      <>
+                        <div>
+                          <Label htmlFor="name">Full Name *</Label>
+                          <Input
+                            id="name"
+                            type="text"
+                            placeholder="Your full name"
+                            value={deliveryInfo.name}
+                            onChange={(e) => setDeliveryInfo({ ...deliveryInfo, name: e.target.value })}
+                            required
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="email">Email Address *</Label>
+                          <Input
+                            id="email"
+                            type="email"
+                            placeholder="your@email.com"
+                            value={deliveryInfo.email}
+                            onChange={(e) => setDeliveryInfo({ ...deliveryInfo, email: e.target.value })}
+                            required
+                          />
+                          <p className="text-xs text-gray-500 mt-1">We'll send your order confirmation here</p>
+                        </div>
+                      </>
+                    )}
+                    
                     <div>
                       <Label htmlFor="phone">Phone Number *</Label>
                       <Input
@@ -680,8 +766,13 @@ const Cart: React.FC = () => {
                     onClick={handleCheckout}
                     disabled={items.length === 0}
                   >
-                    {user ? 'Place Order' : 'Login to Place Order'}
+                    {user ? 'Place Order' : 'Place Order as Guest'}
                   </Button>
+                  {!user && (
+                    <p className="text-xs text-gray-500 mt-2 text-center w-full">
+                      Have an account? <a href="/login" className="text-blue-600 hover:underline">Sign in</a> to save your info
+                    </p>
+                  )}
                 </CardFooter>
               </Card>
             </div>
