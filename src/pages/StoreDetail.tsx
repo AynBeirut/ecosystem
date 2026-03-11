@@ -75,7 +75,7 @@ const StoreDetail: React.FC = () => {
       setIsLoading(true);
       try {
         const db = getFirestore();
-        let storeData: any = null;
+        let storeData: Record<string, unknown> | null = null;
         let docId: string = identifier;
         
         // Check if identifier is a slug or Firebase ID
@@ -147,10 +147,14 @@ const StoreDetail: React.FC = () => {
         const productsSnap = await getDocs(productsQuery);
         
         // Attach store information and calculate stock for composed products
-        const storeInfo = { id: docId, name: storeData.name, slug: storeData.slug };
+        const storeInfo = {
+          id: docId,
+          name: typeof storeData?.name === 'string' ? storeData.name : 'Unknown Store',
+          slug: typeof storeData?.slug === 'string' ? storeData.slug : undefined,
+        };
         const productsList = productsSnap.docs.map(doc => {
           const productData = doc.data();
-          let product: Product = { 
+          const product: Product = {
             id: doc.id, 
             ...productData,
             store: storeInfo 
@@ -160,8 +164,11 @@ const StoreDetail: React.FC = () => {
           if (product.productType === 'composed' && product.recipeId) {
             const recipe = recipesList.find(r => r.id === product.recipeId);
             const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
-            product.stock = availableStock;
-            product.inStock = availableStock > 0;
+            return {
+              ...product,
+              stock: availableStock,
+              inStock: availableStock > 0,
+            };
           }
 
           return product;
@@ -233,12 +240,162 @@ const StoreDetail: React.FC = () => {
     );
   }
 
+  const allowedTemplates = new Set(['default', 'modern', 'minimal', 'classic', 'vibrant', 'professional', 'artistic']);
+  const resolvedTemplate = typeof store.template === 'string' && allowedTemplates.has(store.template)
+    ? store.template
+    : 'modern';
+  const templateStyles: Record<string, {
+    pageBg: string;
+    heroBg: string;
+    headerCard: string;
+    sectionTitle: string;
+    card: string;
+    cardSoft: string;
+    mutedText: string;
+    link: string;
+    actionButton: string;
+    reviewCard: string;
+  }> = {
+    default: {
+      pageBg: 'bg-gray-50',
+      heroBg: 'bg-gradient-to-r from-gray-700 to-gray-900',
+      headerCard: 'bg-white border border-gray-100',
+      sectionTitle: 'text-gray-900',
+      card: 'bg-white',
+      cardSoft: 'bg-gray-50 border border-gray-200',
+      mutedText: 'text-gray-600',
+      link: 'text-gray-800 hover:text-gray-900',
+      actionButton: 'border-gray-300 text-gray-800 hover:bg-gray-100',
+      reviewCard: 'bg-white',
+    },
+    modern: {
+      pageBg: 'bg-gradient-to-b from-cyan-50 via-white to-indigo-50',
+      heroBg: 'bg-gradient-to-r from-cyan-500 via-sky-500 to-indigo-600',
+      headerCard: 'bg-white/90 backdrop-blur border border-cyan-100',
+      sectionTitle: 'text-cyan-900',
+      card: 'bg-white border border-cyan-100',
+      cardSoft: 'bg-cyan-50/70 border border-cyan-100',
+      mutedText: 'text-slate-600',
+      link: 'text-cyan-700 hover:text-cyan-900',
+      actionButton: 'border-cyan-300 text-cyan-800 hover:bg-cyan-50',
+      reviewCard: 'bg-white border border-cyan-100',
+    },
+    minimal: {
+      pageBg: 'bg-white',
+      heroBg: 'bg-gradient-to-r from-gray-700 to-gray-900',
+      headerCard: 'bg-white border border-gray-200 shadow-none',
+      sectionTitle: 'text-gray-800',
+      card: 'bg-white border border-gray-200 shadow-none',
+      cardSoft: 'bg-white border border-gray-200 shadow-none',
+      mutedText: 'text-gray-500',
+      link: 'text-gray-700 hover:text-gray-900',
+      actionButton: 'border-gray-300 text-gray-700 hover:bg-gray-50',
+      reviewCard: 'bg-white border border-gray-200 shadow-none',
+    },
+    classic: {
+      pageBg: 'bg-blue-50/40',
+      heroBg: 'bg-gradient-to-r from-blue-700 to-blue-900',
+      headerCard: 'bg-white border border-blue-200',
+      sectionTitle: 'text-blue-900',
+      card: 'bg-white border border-blue-100',
+      cardSoft: 'bg-blue-50/70 border border-blue-200',
+      mutedText: 'text-blue-700',
+      link: 'text-blue-700 hover:text-blue-900',
+      actionButton: 'border-blue-300 text-blue-800 hover:bg-blue-50',
+      reviewCard: 'bg-white border border-blue-100',
+    },
+    vibrant: {
+      pageBg: 'bg-gradient-to-br from-orange-50 via-pink-50 to-violet-100',
+      heroBg: 'bg-gradient-to-r from-orange-500 via-pink-500 to-violet-600',
+      headerCard: 'bg-white/95 border border-orange-200',
+      sectionTitle: 'text-fuchsia-900',
+      card: 'bg-white border border-pink-200',
+      cardSoft: 'bg-gradient-to-r from-orange-50 to-pink-50 border border-pink-200',
+      mutedText: 'text-fuchsia-700',
+      link: 'text-fuchsia-700 hover:text-fuchsia-900',
+      actionButton: 'border-fuchsia-300 text-fuchsia-800 hover:bg-fuchsia-50',
+      reviewCard: 'bg-white border border-violet-200',
+    },
+    professional: {
+      pageBg: 'bg-slate-100',
+      heroBg: 'bg-gradient-to-r from-slate-700 to-slate-900',
+      headerCard: 'bg-white border border-slate-300',
+      sectionTitle: 'text-slate-900',
+      card: 'bg-white border border-slate-200',
+      cardSoft: 'bg-slate-50 border border-slate-300',
+      mutedText: 'text-slate-600',
+      link: 'text-slate-700 hover:text-slate-900',
+      actionButton: 'border-slate-400 text-slate-800 hover:bg-slate-100',
+      reviewCard: 'bg-white border border-slate-200',
+    },
+    artistic: {
+      pageBg: 'bg-gradient-to-tr from-violet-100 via-rose-50 to-amber-50',
+      heroBg: 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-amber-500',
+      headerCard: 'bg-white/90 border border-violet-200',
+      sectionTitle: 'text-violet-900',
+      card: 'bg-white border border-rose-200',
+      cardSoft: 'bg-gradient-to-r from-violet-50 to-rose-50 border border-violet-200',
+      mutedText: 'text-violet-700',
+      link: 'text-violet-700 hover:text-violet-900',
+      actionButton: 'border-violet-300 text-violet-800 hover:bg-violet-50',
+      reviewCard: 'bg-white border border-fuchsia-200',
+    },
+  };
+  const currentTheme = templateStyles[resolvedTemplate] || templateStyles.modern;
+  const backgroundImage = typeof store.storeBackgroundImage === 'string' ? store.storeBackgroundImage : '';
+  const carouselImages = Array.isArray(store.carouselImages)
+    ? store.carouselImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+    : [];
+  const galleryImages = Array.isArray(store.galleryImages)
+    ? store.galleryImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+    : [];
+  const aboutUs = typeof store.aboutUs === 'string' ? store.aboutUs.trim() : '';
+  const mission = typeof store.mission === 'string' ? store.mission.trim() : '';
+  const vision = typeof store.vision === 'string' ? store.vision.trim() : '';
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className={`min-h-screen ${currentTheme.pageBg}`}>
       <Header />
       <main className="container mx-auto px-4 py-6">
+        {backgroundImage && (
+          <div className="relative rounded-lg overflow-hidden shadow-sm mb-6">
+            <img src={backgroundImage} alt={`${store.name} background`} className="w-full h-64 md:h-80 object-cover" />
+            <div className="absolute inset-0 bg-black/30 flex items-end">
+              <div className="p-6 text-white">
+                <h2 className="text-2xl md:text-3xl font-bold">{store.name}</h2>
+                {store.slogan && <p className="text-sm md:text-base opacity-90 mt-1">{store.slogan}</p>}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!backgroundImage && (
+          <div className={`rounded-lg shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+            <div className="p-6 md:p-8">
+              <h2 className="text-2xl md:text-3xl font-bold">{store.name}</h2>
+              <p className="text-sm md:text-base opacity-90 mt-2">{store.slogan || store.description}</p>
+            </div>
+          </div>
+        )}
+
+        {carouselImages.length > 0 && (
+          <div className="mb-8">
+            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Featured</h2>
+            <div className="flex gap-4 overflow-x-auto pb-2">
+              {carouselImages.map((url, index) => (
+                <img
+                  key={`${url}-${index}`}
+                  src={url}
+                  alt={`Featured slide ${index + 1}`}
+                  className="h-52 md:h-64 w-[85%] md:w-[45%] shrink-0 rounded-lg object-cover border"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Store Header */}
-        <div className="bg-white rounded-lg shadow-sm p-6 mb-6">
+        <div className={`rounded-lg shadow-sm p-6 mb-6 ${currentTheme.headerCard}`}>
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
             <img 
               src={store.logo} 
@@ -246,19 +403,19 @@ const StoreDetail: React.FC = () => {
               className="h-32 w-32 object-cover rounded-full border-4 border-white shadow-sm"
             />
             <div className="flex-1 text-center md:text-left">
-              <h1 className="text-3xl font-bold mb-2">{store.name}</h1>
+              <h1 className={`text-3xl font-bold mb-2 ${currentTheme.sectionTitle}`}>{store.name}</h1>
               <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
                 {avgRating !== null ? (
                   <div className="flex items-center text-yellow-500">
                     <Star size={16} className="mr-2" />
                     <span className="font-semibold">{avgRating.toFixed(1)}</span>
-                    <span className="text-sm text-gray-600 ml-2">({reviews.length} reviews)</span>
+                    <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>({reviews.length} reviews)</span>
                   </div>
                 ) : (
-                  <div className="text-sm text-gray-500">No ratings yet</div>
+                  <div className={`text-sm ${currentTheme.mutedText}`}>No ratings yet</div>
                 )}
                 <div className="ml-4">
-                  <Button size="sm" variant={isFollowing ? 'ghost' : 'outline'} onClick={async () => {
+                  <Button size="sm" variant={isFollowing ? 'ghost' : 'outline'} className={currentTheme.actionButton} onClick={async () => {
                     if (!user) { toast('Please sign in to follow stores'); return; }
                     try {
                       if (isFollowing) await unfollowStore(store.id); else await followStore(store.id);
@@ -277,32 +434,32 @@ const StoreDetail: React.FC = () => {
                 </div>
               </div>
               {store.slogan && (
-                <p className="text-lg text-gray-600 italic mb-4">"{store.slogan}"</p>
+                <p className={`text-lg italic mb-4 ${currentTheme.mutedText}`}>"{store.slogan}"</p>
               )}
-              <p className="text-gray-700 mb-4">{store.description}</p>
+              <p className={`mb-4 ${currentTheme.mutedText}`}>{store.description}</p>
               
               <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                <div className="flex items-center text-gray-600">
+                <div className={`flex items-center ${currentTheme.mutedText}`}>
                   <MapPin size={18} className="mr-2" />
                   {store.location}
                 </div>
                 
                 {store.website && (
-                  <a href={store.website} target="_blank" rel="noopener noreferrer" className="flex items-center text-market-primary hover:underline">
+                  <a href={store.website} target="_blank" rel="noopener noreferrer" className={`flex items-center hover:underline ${currentTheme.link}`}>
                     <Globe size={18} className="mr-2" />
                     Website
                   </a>
                 )}
                 
                 {store.contactInfo?.phone && (
-                  <div className="flex items-center text-gray-600">
+                  <div className={`flex items-center ${currentTheme.mutedText}`}>
                     <Phone size={18} className="mr-2" />
                     {store.contactInfo.phone}
                   </div>
                 )}
                 
                 {store.contactInfo?.email && (
-                  <div className="flex items-center text-gray-600">
+                  <div className={`flex items-center ${currentTheme.mutedText}`}>
                     <Mail size={18} className="mr-2" />
                     {store.contactInfo.email}
                   </div>
@@ -311,17 +468,17 @@ const StoreDetail: React.FC = () => {
               
               <div className="flex mt-4 justify-center md:justify-start gap-3">
                 {store.socialLinks?.facebook && (
-                  <a href={store.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-800" title="Facebook">
+                  <a href={store.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className={currentTheme.link} title="Facebook">
                     <Facebook size={22} />
                   </a>
                 )}
                 {store.socialLinks?.instagram && (
-                  <a href={store.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className="text-pink-600 hover:text-pink-800" title="Instagram">
+                  <a href={store.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className={currentTheme.link} title="Instagram">
                     <Instagram size={22} />
                   </a>
                 )}
                 {store.socialLinks?.twitter && (
-                  <a href={store.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:text-blue-600" title="Twitter">
+                  <a href={store.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className={currentTheme.link} title="Twitter">
                     <Twitter size={22} />
                   </a>
                 )}
@@ -331,13 +488,46 @@ const StoreDetail: React.FC = () => {
         </div>
         
         {/* Announcements */}
-        {announcements.length > 0 && (
+        {(aboutUs || mission || vision) && (
           <div className="mb-8">
-            <h2 className="text-xl font-semibold mb-4">Announcements</h2>
+            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>About Us</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {aboutUs && (
+                <Card className={currentTheme.cardSoft}>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold mb-2">Who We Are</h3>
+                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText}`}>{aboutUs}</p>
+                  </CardContent>
+                </Card>
+              )}
+              {mission && (
+                <Card className={currentTheme.cardSoft}>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold mb-2">Mission</h3>
+                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText}`}>{mission}</p>
+                  </CardContent>
+                </Card>
+              )}
+              {vision && (
+                <Card className={currentTheme.cardSoft}>
+                  <CardContent className="p-4">
+                    <h3 className="font-semibold mb-2">Vision</h3>
+                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText}`}>{vision}</p>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Announcements */}
+        {announcements.length > 0 && (
+          <div className={`mb-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
+            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Announcements</h2>
             <div className="space-y-4">
               {announcements.map((announcement) => (
-                <Alert key={announcement.id} className="bg-market-primary/10 border-market-primary">
-                  <AlertTitle className="text-market-primary">{announcement.title}</AlertTitle>
+                <Alert key={announcement.id} className={currentTheme.card}>
+                  <AlertTitle className={currentTheme.sectionTitle}>{announcement.title}</AlertTitle>
                   <AlertDescription>
                     {announcement.message}
                   </AlertDescription>
@@ -348,8 +538,8 @@ const StoreDetail: React.FC = () => {
         )}
         
         {/* Products */}
-        <div>
-          <h2 className="text-xl font-semibold mb-4">Products</h2>
+        <div className={`rounded-lg p-4 ${currentTheme.cardSoft}`}>
+          <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Products</h2>
           {products.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {products.map((product) => (
@@ -357,7 +547,7 @@ const StoreDetail: React.FC = () => {
               ))}
             </div>
           ) : (
-            <Card>
+            <Card className={currentTheme.card}>
               <CardContent className="flex items-center justify-center h-40">
                 <p className="text-gray-500">This store doesn't have any products yet.</p>
               </CardContent>
@@ -365,21 +555,43 @@ const StoreDetail: React.FC = () => {
           )}
         </div>
 
+        {galleryImages.length > 0 && (
+          <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
+            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Gallery</h2>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              {galleryImages.map((url, index) => (
+                <img
+                  key={`${url}-${index}`}
+                  src={url}
+                  alt={`Store gallery ${index + 1}`}
+                  className="w-full h-36 md:h-44 rounded-lg object-cover border"
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
         {/* Reviews */}
-        <div className="mt-8">
-          <h2 className="text-xl font-semibold mb-4">Reviews</h2>
+        <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
+          <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
           {reviews.length > 0 ? (
             <div className="space-y-4">
               {reviews.map(r => (
-                <div key={r.id} className="p-4 bg-white rounded shadow-sm">
+                <div key={r.id} className={`p-4 rounded shadow-sm ${currentTheme.reviewCard}`}>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="font-semibold">{r.userName || 'Anonymous'}</div>
                       <div className="text-yellow-500 flex items-center">{Array.from({length: r.rating}).map((_,i)=>(<Star key={i} size={14}/>))}</div>
                     </div>
-                    <div className="text-sm text-gray-400">{new Date(r.createdAt).toLocaleDateString()}</div>
+                    <div className={`text-sm ${currentTheme.mutedText}`}>
+                      {(() => {
+                        if (!r.createdAt) return 'Recently';
+                        const date = new Date(String(r.createdAt));
+                        return Number.isNaN(date.getTime()) ? 'Recently' : date.toLocaleDateString();
+                      })()}
+                    </div>
                   </div>
-                  {r.comment && <p className="mt-2 text-gray-700">{r.comment}</p>}
+                  {r.comment && <p className={`mt-2 ${currentTheme.mutedText}`}>{r.comment}</p>}
                   {user && user.id === r.userId && (
                     <div className="mt-3 flex gap-2">
                       <Button size="sm" variant="outline" onClick={() => {
@@ -427,10 +639,10 @@ const StoreDetail: React.FC = () => {
               ))}
             </div>
             ) : (
-            <div className="text-gray-500">No reviews yet. Be the first to review this store.</div>
+            <div className={currentTheme.mutedText}>No reviews yet. Be the first to review this store.</div>
           )}
 
-          <div className="mt-6 bg-white p-4 rounded shadow-sm">
+          <div className={`mt-6 p-4 rounded shadow-sm ${currentTheme.card}`}>
             <h3 className="font-semibold mb-2">Write a review</h3>
             {!user ? (
               <div className="text-gray-600">Please sign in to leave a review.</div>

@@ -1,5 +1,17 @@
 # Conversation History - Session Summary
 
+## 🚀 Start Here (New Conversation Prompt)
+
+Use this as the first message in the next chat:
+
+1. Continue from **March 9, 2026 Financial Integrity Hardening + Adversarial Stress Session** in this file.
+2. Keep changes **local only** unless I explicitly request deployment.
+3. Priority is financial correctness: preserve delivered-only canonical scope and quarantine invalid financial rows.
+4. First next task: harden `exportAllToExcel` and `exportAllToPDF` in `AdminAccountStatement.tsx` with the same sanitization/quarantine pattern.
+5. After edits, run targeted financial tests + build, then provide a concise risk/status report.
+
+---
+
 ## Date: January 31 - February 6, 2026
 
 ---
@@ -448,3 +460,105 @@ const orderDiscount = Math.max(0, orderSubtotal - orderTotal);
 - `src/pages/admin/AdminRevenue.tsx` (Line 107-111)
 
 **Validation**: Revenue Report now correctly shows $1,726.83 matching Account Statement after discounts applied.
+
+---
+
+### 7. Financial Integrity Hardening + Adversarial Stress Session (March 9, 2026)
+
+**Goal**: Stress the app with malformed financial data, identify where reports can break, then harden key financial paths so bad rows are quarantined instead of poisoning totals.
+
+#### What Was Implemented
+
+1) **Order save-time financial validation (create + edit)**
+- Added strict financial guards in `AdminOrders.tsx`:
+  - Blocks non-numeric, negative, and inconsistent totals
+  - Enforces: total ≈ subtotal - discountAmount + taxAmount
+  - Normalizes saved financial fields
+- Kept compatibility by writing both:
+  - `discountAmount` (canonical)
+  - `discount` (legacy alias)
+- Ensured edited items persist with price snapshot before recalculation.
+
+2) **Checkout path hardening (functions)**
+- Added equivalent validation in `functions/src/index.ts` for `/checkout` order creation.
+- Added canonical tax/discount fields to checkout-created orders to align schema with admin-created orders.
+
+3) **Report-side quarantine hardening**
+- `AdminAccountStatement.tsx`:
+  - Sales fetch now skips invalid/non-finite/negative financial rows
+  - Product summary allocation guards non-finite values and quarantines invalid rows
+  - Added visible counters:
+    - Quarantined invalid sales (summary card)
+    - Quarantined product rows (product tab)
+- `AdminRevenue.tsx`:
+  - Revenue allocation now sanitizes totals/subtotals/items
+  - Invalid orders are quarantined and counted in UI
+
+4) **Dashboard hardening**
+- `AdminDashboard.tsx` revenue card now ignores invalid delivered order totals and shows `Quarantined orders` count.
+
+5) **Export hardening (all major statements)**
+- In `AdminAccountStatement.tsx`, added export sanitization + quarantine note for:
+  - Sales (Excel + PDF)
+  - Customers (Excel + PDF)
+  - Suppliers (Excel + PDF)
+  - Purchases (Excel + PDF)
+  - Expenses (Excel + PDF)
+- Invalid rows are skipped and export includes: `Quarantined invalid rows: N`.
+
+---
+
+#### Stress Test Work Performed
+
+1) **Baseline checks**
+- Root build: ✅ passes
+- Functions build: ✅ passes
+- Financial-critical tests:
+  - `orderCalculations.test.ts` ✅
+  - `systemIntegration.test.ts` ✅
+
+2) **Adversarial synthetic stress (120k randomized orders)**
+- Injected malformed patterns (NaN/Infinity/negative totals, subtotal/discount mismatches, missing prices/keys).
+- Result (before report-side quarantine):
+  - Many malformed delivered rows failed financial invariants
+  - Product/Revenue aggregations could become NaN if corrupted persisted data was present
+
+3) **Real data audit script**
+- Script: `scripts/auditRevenueMismatch.cjs`
+- Confirmed historical mismatch source from inconsistent order fields on specific invoices.
+- Exact allocation logic aligns product totals with dashboard/sales totals.
+
+---
+
+#### Key Files Modified in This Session
+
+- `src/pages/admin/AdminOrders.tsx`
+- `functions/src/index.ts`
+- `src/pages/admin/AdminAccountStatement.tsx`
+- `src/pages/admin/AdminRevenue.tsx`
+- `src/pages/admin/AdminDashboard.tsx`
+
+---
+
+#### Current Status (End of Session)
+
+- ✅ Core financial save paths hardened
+- ✅ Reporting paths hardened against invalid persisted values
+- ✅ Dashboard revenue aggregation hardened
+- ✅ Export payloads hardened with quarantine reporting
+- ✅ Builds/tests pass for targeted financial suites
+- ⚠ Existing global lint/type debt remains (pre-existing, not fully addressed in this pass)
+
+---
+
+#### Important Notes for Next Conversation
+
+1) **No deployment requested in this session**
+- Work was kept local as requested.
+
+2) **If you continue hardening**
+- Next logical step: apply sanitization to combined exports (`exportAllToExcel` / `exportAllToPDF`) and any remaining analytics pages that aggregate `order.total` directly.
+
+3) **If you want stricter guarantees**
+- Add backend-side schema validation/rules enforcement to reject malformed writes from non-admin paths.
+

@@ -104,7 +104,7 @@
 - [ ] **One-Time Services**
   - Services sold once
   - No inventory tracking
-  - Service duration/appointment
+  - Service duration/appointment  
   - Staff assignment
   
 - [ ] **Monthly Renewable Services**

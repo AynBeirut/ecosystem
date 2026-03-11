@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Order, OrderItem } from '@/types/order';
+import { Order, OrderItem, PaymentRecord } from '@/types/order';
 import { ComposedProduct } from '@/types/product';
 import { Customer } from '@/types/customer';
 import { StaffMember } from '@/types/staff';
@@ -25,6 +25,7 @@ import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoic
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
@@ -36,13 +37,54 @@ const ORDER_STATUSES = [
   { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
 ];
 
+interface ProductForOrder {
+  id: string;
+  name?: string;
+  price?: number;
+  sellingPrice?: number;
+  stock?: number;
+  [key: string]: unknown;
+}
+
+interface InventoryTransaction {
+  idempotencyKey?: string;
+}
+
+interface FinishedGoodDoc {
+  data: () => { productId?: string; composedProductId?: string };
+}
+
+interface RecipeIngredientLite {
+  rawMaterialId?: string;
+  quantity?: number;
+}
+
+interface RecipeLite {
+  ingredients?: RecipeIngredientLite[];
+}
+
+interface SubAccountSales {
+  id: string;
+  name: string;
+  email?: string;
+  role?: string;
+  status?: string;
+}
+
+interface FirestoreTimestampLike {
+  toDate?: () => Date;
+  seconds?: number;
+}
+
+type OrderItemUpdateValue = string | number | 'percentage' | 'fixed';
+
 const AdminOrders: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   
   const [orders, setOrders] = useState<(Order & { id: string })[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<ProductForOrder[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
@@ -52,7 +94,7 @@ const AdminOrders: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
   const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
-  const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: any } | null>(null);
+  const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: PaymentRecord } | null>(null);
   const [voidingPayment, setVoidingPayment] = useState<(Order & { id: string }) | null>(null);
   const [paymentData, setPaymentData] = useState({
     amountPaid: 0,
@@ -86,6 +128,129 @@ const AdminOrders: React.FC = () => {
   const isCreatingOrderRef = useRef(false);
   const isVoidingPaymentRef = useRef(false);
   const isPayingOrderRef = useRef(false);
+
+  const hasInventoryEvent = (transactions: InventoryTransaction[], idempotencyKey: string) => {
+    return (transactions || []).some((tx: InventoryTransaction) => tx?.idempotencyKey === idempotencyKey);
+  };
+
+  const buildInventoryEventKey = (kind: string, orderId: string, productId: string, meta = '') => {
+    return [kind, orderId, productId, meta].join(':');
+  };
+
+  const findMatchingFinishedGood = (docs: FinishedGoodDoc[], orderItemProductId: string) => {
+    return docs.find((fgDoc: FinishedGoodDoc) => {
+      const data = fgDoc.data();
+      return data.productId === orderItemProductId || data.composedProductId === orderItemProductId;
+    });
+  };
+
+  const applyRawMaterialStockFromOrder = async (
+    db: ReturnType<typeof getFirestore>,
+    order: Order & { id: string },
+    mode: 'consume' | 'restore'
+  ) => {
+    const recipeCache = new Map<string, RecipeLite | null>();
+    const materialDeltas = new Map<string, number>();
+
+    for (const item of order.items || []) {
+      const productId = resolveOrderItemProductKey(item);
+      if (!productId) continue;
+
+      const quantity = Number(item.quantity || 0);
+      if (!Number.isFinite(quantity) || quantity <= 0) continue;
+
+      const product = products.find((p) => p.id === productId) as (ProductForOrder & { recipeId?: string }) | undefined;
+      const recipeId = typeof product?.recipeId === 'string' ? product.recipeId : '';
+      if (!recipeId) continue;
+
+      let recipe = recipeCache.get(recipeId);
+      if (recipe === undefined) {
+        const recipeSnap = await getDoc(doc(db, 'recipes', recipeId));
+        recipe = recipeSnap.exists() ? (recipeSnap.data() as RecipeLite) : null;
+        recipeCache.set(recipeId, recipe);
+      }
+
+      if (!recipe || !Array.isArray(recipe.ingredients)) continue;
+
+      for (const ingredient of recipe.ingredients) {
+        const rawMaterialId = typeof ingredient.rawMaterialId === 'string' ? ingredient.rawMaterialId : '';
+        const ingredientQty = Number(ingredient.quantity || 0);
+        if (!rawMaterialId || !Number.isFinite(ingredientQty) || ingredientQty <= 0) continue;
+
+        const signedDelta = mode === 'consume'
+          ? ingredientQty * quantity
+          : -ingredientQty * quantity;
+
+        materialDeltas.set(rawMaterialId, (materialDeltas.get(rawMaterialId) || 0) + signedDelta);
+      }
+    }
+
+    for (const [rawMaterialId, delta] of materialDeltas.entries()) {
+      const rawMaterialRef = doc(db, 'rawMaterials', rawMaterialId);
+      const rawMaterialSnap = await getDoc(rawMaterialRef);
+      if (!rawMaterialSnap.exists()) continue;
+
+      const rawMaterialData = rawMaterialSnap.data() as { currentStock?: number };
+      const currentStock = Number(rawMaterialData.currentStock || 0);
+      const nextStock = Math.max(0, currentStock - delta);
+
+      await updateDoc(rawMaterialRef, {
+        currentStock: nextStock,
+        updatedAt: new Date().toISOString(),
+      });
+    }
+  };
+
+  const roundMoney = (value: number) => Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+
+  const sanitizeRate = (value: number) => {
+    if (!Number.isFinite(value) || value < 0) return 0;
+    return value;
+  };
+
+  const validateFinancials = (totals: {
+    subtotal: number;
+    discountAmount: number;
+    taxAmount: number;
+    total: number;
+  }) => {
+    const subtotal = roundMoney(totals.subtotal || 0);
+    const discountAmount = roundMoney(totals.discountAmount || 0);
+    const taxAmount = roundMoney(totals.taxAmount || 0);
+    const total = roundMoney(totals.total || 0);
+
+    if (![subtotal, discountAmount, taxAmount, total].every(Number.isFinite)) {
+      return { valid: false, message: 'Order financial values are invalid (non-numeric).' };
+    }
+
+    if (subtotal < 0 || discountAmount < 0 || taxAmount < 0 || total < 0) {
+      return { valid: false, message: 'Order financial values cannot be negative.' };
+    }
+
+    const netBeforeTax = roundMoney(subtotal - discountAmount);
+    if (netBeforeTax < 0) {
+      return { valid: false, message: 'Discount cannot exceed subtotal.' };
+    }
+
+    const expectedTotal = roundMoney(netBeforeTax + taxAmount);
+    const diff = Math.abs(expectedTotal - total);
+    if (diff > 0.01) {
+      return {
+        valid: false,
+        message: `Order totals mismatch. Expected ${expectedTotal.toFixed(2)} but got ${total.toFixed(2)}.`,
+      };
+    }
+
+    return {
+      valid: true,
+      normalized: {
+        subtotal,
+        discountAmount,
+        taxAmount,
+        total: expectedTotal,
+      },
+    };
+  };
 
   useEffect(() => {
     const fetchData = async () => {
@@ -128,9 +293,9 @@ const AdminOrders: React.FC = () => {
         const ordersWithDates = (ordersData as (Order & { id: string })[]).map(order => {
           let createdAt = order.createdAt;
           if (createdAt && typeof createdAt === 'object' && 'toDate' in createdAt) {
-            createdAt = (createdAt as any).toDate();
+            createdAt = (createdAt as FirestoreTimestampLike).toDate?.();
           } else if (createdAt && typeof createdAt === 'object' && 'seconds' in createdAt) {
-            createdAt = new Date((createdAt as any).seconds * 1000);
+            createdAt = new Date(((createdAt as FirestoreTimestampLike).seconds || 0) * 1000);
           }
           return { ...order, createdAt };
         });
@@ -164,7 +329,7 @@ const AdminOrders: React.FC = () => {
         
         // Combine staff members with role 'sales_person' and sub-accounts with role 'sales'
         const staffSalesPeople = (staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active');
-        const subAccountSalesPeople = (subAccountsData as any[])
+        const subAccountSalesPeople = (subAccountsData as SubAccountSales[])
           .filter(s => s.role === 'sales' && s.status === 'active')
           .map(s => ({
             id: s.id,
@@ -187,7 +352,7 @@ const AdminOrders: React.FC = () => {
       }
     };
     fetchData();
-  }, [user?.storeId, toast]);
+  }, [user, toast]);
 
   const calculateOrderTotals = (items: OrderItem[], taxType: string, taxRate: number, discountType: string, discountValue: number) => {
     // Calculate raw subtotal (before any discounts)
@@ -378,13 +543,28 @@ const AdminOrders: React.FC = () => {
       const db = getFirestore();
       const customer = customers.find(c => c.id === newOrder.customerId);
       const salesPerson = salesStaff.find(s => s.id === newOrder.assignedSalesPerson);
-      const { subtotal, discountAmount, taxAmount, total } = calculateOrderTotals(
+      const totals = calculateOrderTotals(
         newOrder.items,
         newOrder.taxType,
-        newOrder.taxRate,
+        sanitizeRate(newOrder.taxRate),
         newOrder.discountType,
-        newOrder.discountValue
+        sanitizeRate(newOrder.discountValue)
       );
+
+      const financialCheck = validateFinancials({
+        subtotal: totals.subtotal,
+        discountAmount: totals.discountAmount,
+        taxAmount: totals.taxAmount,
+        total: totals.total,
+      });
+      if (!financialCheck.valid || !financialCheck.normalized) {
+        toast({
+          title: 'Invalid Order Financials',
+          description: financialCheck.message,
+          variant: 'destructive',
+        });
+        return;
+      }
 
       // Generate custom invoice number
       const invoiceNumber = await generateInvoiceNumber();
@@ -409,14 +589,15 @@ const AdminOrders: React.FC = () => {
         deliveryCity: customer?.city || '',
         invoiceNumber,
         items: itemsWithPrices,
-        subtotal,
+        subtotal: financialCheck.normalized.subtotal,
         taxType: newOrder.taxType,
-        taxRate: newOrder.taxRate,
-        taxAmount,
+        taxRate: sanitizeRate(newOrder.taxRate),
+        taxAmount: financialCheck.normalized.taxAmount,
         discountType: newOrder.discountType,
-        discountValue: newOrder.discountValue,
-        discountAmount,
-        total,
+        discountValue: sanitizeRate(newOrder.discountValue),
+        discountAmount: financialCheck.normalized.discountAmount,
+        discount: financialCheck.normalized.discountAmount,
+        total: financialCheck.normalized.total,
         status: 'pending',
         paymentStatus: 'unpaid' as const,
         amountPaid: 0,
@@ -438,7 +619,7 @@ const AdminOrders: React.FC = () => {
           const customerRef = doc(db, 'customers', customer.id);
           await updateDoc(customerRef, {
             totalOrders: (customer.totalOrders || 0) + 1,
-            lifetimeValue: (customer.lifetimeValue || 0) + total,
+            lifetimeValue: (customer.lifetimeValue || 0) + financialCheck.normalized.total,
             lastOrderDate: new Date().toISOString(),
           });
           console.log('Customer stats updated successfully');
@@ -498,24 +679,27 @@ const AdminOrders: React.FC = () => {
         return;
       }
       
-      // CRITICAL FIX: Handle status rollback from delivered/completed to earlier states
-      if ((order.status === 'delivered' || order.status === 'completed') && 
-          (newStatus !== 'delivered' && newStatus !== 'completed')) {
+      // Handle rollback from counted sale state to non-sale state
+      if (isCountedSaleStatus(order.status) && !isCountedSaleStatus(newStatus)) {
         // Reversing status - need to restore finished goods
+        const fgQuery = query(
+          collection(db, 'finishedGoodsInventory'),
+          where('storeId', '==', user.storeId)
+        );
+        const fgSnapshot = await getDocs(fgQuery);
+
         for (const item of order.items) {
-          const fgQuery = query(
-            collection(db, 'finishedGoodsInventory'),
-            where('storeId', '==', user.storeId)
-          );
-          const fgSnapshot = await getDocs(fgQuery);
-          
-          const matchingFG = fgSnapshot.docs.find(doc => {
-            const data = doc.data();
-            return data.productId === item.productId || data.composedProductId === item.productId;
-          });
+          const itemProductId = resolveOrderItemProductKey(item);
+          if (!itemProductId) continue;
+
+          const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
             const fgData = matchingFG.data();
+            const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `${order.status}->${newStatus}`);
+            if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
+              continue;
+            }
             
             // Reverse the deductions: add back to balance, subtract from quantitySold
             const newBalance = (fgData.currentBalance || 0) + item.quantity;
@@ -535,6 +719,7 @@ const AdminOrders: React.FC = () => {
               referenceNumber: order.invoiceNumber || orderId,
               userId: user.id,
               userName: user.name,
+              idempotencyKey,
             };
             
             await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
@@ -546,28 +731,30 @@ const AdminOrders: React.FC = () => {
             });
           }
         }
+
+        await applyRawMaterialStockFromOrder(db, order, 'restore');
       }
       
-      // If marking as delivered/completed, deduct from finished goods inventory
-      if ((newStatus === 'delivered' || newStatus === 'completed') && 
-          order.status !== 'delivered' && order.status !== 'completed') {
+      // If marking as delivered, deduct from finished goods inventory
+      if (isCountedSaleStatus(newStatus) && !isCountedSaleStatus(order.status)) {
+        const fgQuery = query(
+          collection(db, 'finishedGoodsInventory'),
+          where('storeId', '==', user.storeId)
+        );
+        const fgSnapshot = await getDocs(fgQuery);
+
         for (const item of order.items) {
-          // Check if this product is a composed product (has finished goods entry)
-          // Try both productId and composedProductId since they might be stored differently
-          const fgQuery = query(
-            collection(db, 'finishedGoodsInventory'),
-            where('storeId', '==', user.storeId)
-          );
-          const fgSnapshot = await getDocs(fgQuery);
-          
-          // Find matching finished goods by productId or composedProductId
-          const matchingFG = fgSnapshot.docs.find(doc => {
-            const data = doc.data();
-            return data.productId === item.productId || data.composedProductId === item.productId;
-          });
+          const itemProductId = resolveOrderItemProductKey(item);
+          if (!itemProductId) continue;
+
+          const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
             const fgData = matchingFG.data();
+            const idempotencyKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `${order.status}->${newStatus}`);
+            if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
+              continue;
+            }
             
             const newBalance = Math.max(0, (fgData.currentBalance || 0) - item.quantity);
             const newQuantitySold = (fgData.quantitySold || 0) + item.quantity;
@@ -586,6 +773,7 @@ const AdminOrders: React.FC = () => {
               referenceNumber: order.invoiceNumber || order.id,
               userId: user.id,
               userName: user.name,
+              idempotencyKey,
             };
             
             await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
@@ -597,6 +785,8 @@ const AdminOrders: React.FC = () => {
             });
           }
         }
+
+        await applyRawMaterialStockFromOrder(db, order, 'consume');
       }
       
       await updateDoc(orderRef, { status: newStatus, updatedAt: new Date().toISOString() });
@@ -684,10 +874,41 @@ const AdminOrders: React.FC = () => {
 
     try {
       const db = getFirestore();
-      const totals = calculateOrderTotals(newOrder.items, newOrder.taxType, newOrder.taxRate, newOrder.discountType, newOrder.discountValue);
+      const customer = customers.find(c => c.id === newOrder.customerId);
+      const salesPerson = salesStaff.find(s => s.id === newOrder.assignedSalesPerson);
+      const itemsWithPrices = newOrder.items.map(item => {
+        const product = products.find(p => p.id === item.productId);
+        return {
+          ...item,
+          price: product?.sellingPrice || product?.price || item.price || 0
+        };
+      });
 
-      // CRITICAL FIX: Adjust finished goods if order is delivered/completed and items changed
-      if (editingOrder.status === 'delivered' || editingOrder.status === 'completed') {
+      const totals = calculateOrderTotals(
+        itemsWithPrices,
+        newOrder.taxType,
+        sanitizeRate(newOrder.taxRate),
+        newOrder.discountType,
+        sanitizeRate(newOrder.discountValue)
+      );
+
+      const financialCheck = validateFinancials({
+        subtotal: totals.subtotal,
+        discountAmount: totals.discountAmount,
+        taxAmount: totals.taxAmount,
+        total: totals.total,
+      });
+      if (!financialCheck.valid || !financialCheck.normalized) {
+        toast({
+          title: 'Invalid Order Financials',
+          description: financialCheck.message,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      // Adjust finished goods if order is in counted sale state and items changed
+      if (isCountedSaleStatus(editingOrder.status)) {
         // Calculate differences between old and new items
         const oldItems = editingOrder.items || [];
         const newItems = newOrder.items;
@@ -699,26 +920,26 @@ const AdminOrders: React.FC = () => {
         // Get all product IDs involved
         const allProductIds = new Set([...oldItemsMap.keys(), ...newItemsMap.keys()]);
 
+        const fgQuery = query(
+          collection(db, 'finishedGoodsInventory'),
+          where('storeId', '==', user.storeId)
+        );
+        const fgSnapshot = await getDocs(fgQuery);
+
         for (const productId of allProductIds) {
           const oldQty = oldItemsMap.get(productId) || 0;
           const newQty = newItemsMap.get(productId) || 0;
           const diff = newQty - oldQty;
 
           if (diff !== 0) {
-            // Find matching finished goods entry
-            const fgQuery = query(
-              collection(db, 'finishedGoodsInventory'),
-              where('storeId', '==', user.storeId)
-            );
-            const fgSnapshot = await getDocs(fgQuery);
-            
-            const matchingFG = fgSnapshot.docs.find(fgDoc => {
-              const data = fgDoc.data();
-              return data.productId === productId || data.composedProductId === productId;
-            });
+            const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, productId);
 
             if (matchingFG) {
               const fgData = matchingFG.data();
+              const idempotencyKey = buildInventoryEventKey('order-edit', editingOrder.id, productId, `${oldQty}->${newQty}`);
+              if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
+                continue;
+              }
               
               // Adjust quantities: if diff > 0 (increased), deduct more; if diff < 0 (decreased), add back
               const newBalance = (fgData.currentBalance || 0) - diff;
@@ -738,6 +959,7 @@ const AdminOrders: React.FC = () => {
                 referenceNumber: editingOrder.invoiceNumber || editingOrder.id,
                 userId: user.id,
                 userName: user.name,
+                idempotencyKey,
               };
               
               await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
@@ -761,16 +983,17 @@ const AdminOrders: React.FC = () => {
         deliveryCity: customer?.city || '',
         customerId: newOrder.customerId,
         assignedSalesPerson: newOrder.assignedSalesPerson || '',
-        assignedSalesPersonName: newOrder.salesPersonName || '',
-        items: newOrder.items,
-        subtotal: totals.subtotal || 0,
-        taxAmount: totals.taxAmount || 0,
-        discount: totals.discountAmount || 0,
-        total: totals.total || 0,
+        assignedSalesPersonName: salesPerson?.name || newOrder.salesPersonName || '',
+        items: itemsWithPrices,
+        subtotal: financialCheck.normalized.subtotal,
+        taxAmount: financialCheck.normalized.taxAmount,
+        discountAmount: financialCheck.normalized.discountAmount,
+        discount: financialCheck.normalized.discountAmount,
+        total: financialCheck.normalized.total,
         taxType: newOrder.taxType,
-        taxRate: newOrder.taxRate || 0,
+        taxRate: sanitizeRate(newOrder.taxRate),
         discountType: newOrder.discountType,
-        discountValue: newOrder.discountValue || 0,
+        discountValue: sanitizeRate(newOrder.discountValue),
         updatedAt: new Date().toISOString(),
       };
 
@@ -826,23 +1049,26 @@ const AdminOrders: React.FC = () => {
     try {
       const db = getFirestore();
       
-      // CRITICAL FIX: Reverse finished goods deductions if order was delivered/completed
-      if (order.status === 'delivered' || order.status === 'completed') {
+      // Reverse finished goods deductions if order is in counted sale state
+      if (isCountedSaleStatus(order.status)) {
+        const fgQuery = query(
+          collection(db, 'finishedGoodsInventory'),
+          where('storeId', '==', user.storeId)
+        );
+        const fgSnapshot = await getDocs(fgQuery);
+
         for (const item of order.items) {
-          // Find matching finished goods entry
-          const fgQuery = query(
-            collection(db, 'finishedGoodsInventory'),
-            where('storeId', '==', user.storeId)
-          );
-          const fgSnapshot = await getDocs(fgQuery);
-          
-          const matchingFG = fgSnapshot.docs.find(doc => {
-            const data = doc.data();
-            return data.productId === item.productId || data.composedProductId === item.productId;
-          });
+          const itemProductId = resolveOrderItemProductKey(item);
+          if (!itemProductId) continue;
+
+          const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
             const fgData = matchingFG.data();
+            const idempotencyKey = buildInventoryEventKey('order-delete', orderId, itemProductId, order.status || 'unknown');
+            if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
+              continue;
+            }
             
             // Reverse the deductions: add back to balance, subtract from quantitySold
             const newBalance = (fgData.currentBalance || 0) + item.quantity;
@@ -862,6 +1088,7 @@ const AdminOrders: React.FC = () => {
               referenceNumber: order.invoiceNumber || orderId,
               userId: user.id,
               userName: user.name,
+              idempotencyKey,
             };
             
             await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
@@ -912,23 +1139,30 @@ const AdminOrders: React.FC = () => {
       const db = getFirestore();
       const orderRef = doc(db, 'orders', voidingPayment.id);
 
-      // CRITICAL FIX: Reverse finished goods deductions if order was delivered/completed
-      if (voidingPayment.status === 'delivered' || voidingPayment.status === 'completed') {
+      const shouldRestoreStock = isCountedSaleStatus(voidingPayment.status)
+        ? window.confirm('Restore stock while voiding this payment? Choose Cancel to void payment only (no inventory change).')
+        : false;
+
+      // Reverse finished goods deductions only when confirmed by user
+      if (shouldRestoreStock) {
+        const fgQuery = query(
+          collection(db, 'finishedGoodsInventory'),
+          where('storeId', '==', user.storeId)
+        );
+        const fgSnapshot = await getDocs(fgQuery);
+
         for (const item of voidingPayment.items) {
-          // Find matching finished goods entry
-          const fgQuery = query(
-            collection(db, 'finishedGoodsInventory'),
-            where('storeId', '==', user.storeId)
-          );
-          const fgSnapshot = await getDocs(fgQuery);
-          
-          const matchingFG = fgSnapshot.docs.find(doc => {
-            const data = doc.data();
-            return data.productId === item.productId || data.composedProductId === item.productId;
-          });
+          const itemProductId = resolveOrderItemProductKey(item);
+          if (!itemProductId) continue;
+
+          const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
             const fgData = matchingFG.data();
+            const idempotencyKey = buildInventoryEventKey('payment-void', voidingPayment.id, itemProductId, voidingPayment.status || 'unknown');
+            if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
+              continue;
+            }
             
             // Reverse the deductions: add back to balance, subtract from quantitySold
             const newBalance = (fgData.currentBalance || 0) + item.quantity;
@@ -948,6 +1182,7 @@ const AdminOrders: React.FC = () => {
               referenceNumber: voidingPayment.invoiceNumber || voidingPayment.id,
               userId: user.id,
               userName: user.name,
+              idempotencyKey,
             };
             
             await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
@@ -969,6 +1204,7 @@ const AdminOrders: React.FC = () => {
         paymentMethod: '',
         paymentNotes: '',
         paymentHistory: [],
+        paymentVoidStockRestored: shouldRestoreStock,
       });
 
       const updatedOrder = {
@@ -1120,7 +1356,7 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const generatePaymentVoucherHTML = (order: Order & { id: string }, payment: any) => {
+  const generatePaymentVoucherHTML = (order: Order & { id: string }, payment: PaymentRecord) => {
     return `
       <div class="voucher-container" style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 30px;">
@@ -1194,7 +1430,7 @@ const AdminOrders: React.FC = () => {
     `;
   };
 
-  const downloadPaymentVoucher = async (order: Order & { id: string }, payment: any) => {
+  const downloadPaymentVoucher = async (order: Order & { id: string }, payment: PaymentRecord) => {
     try {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = generatePaymentVoucherHTML(order, payment);
@@ -1220,7 +1456,7 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const printPaymentVoucher = (order: Order & { id: string }, payment: any) => {
+  const printPaymentVoucher = (order: Order & { id: string }, payment: PaymentRecord) => {
     const printWindow = window.open('', '', 'height=600,width=800');
     if (printWindow) {
       printWindow.document.write('<html><head><title>Payment Receipt</title></head><body>');
@@ -1235,7 +1471,7 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const sharePaymentVoucher = async (order: Order & { id: string }, payment: any) => {
+  const sharePaymentVoucher = async (order: Order & { id: string }, payment: PaymentRecord) => {
     if (navigator.share) {
       try {
         await navigator.share({
@@ -1405,7 +1641,7 @@ const AdminOrders: React.FC = () => {
     });
   };
 
-  const updateOrderItem = (index: number, field: keyof OrderItem, value: any) => {
+  const updateOrderItem = (index: number, field: keyof OrderItem, value: OrderItemUpdateValue) => {
     const updatedItems = [...newOrder.items];
     updatedItems[index] = { ...updatedItems[index], [field]: value };
     setNewOrder({ ...newOrder, items: updatedItems });
@@ -1424,7 +1660,22 @@ const AdminOrders: React.FC = () => {
   };
 
   const getPaymentBadge = (order: Order & { id: string }) => {
-    const paymentStatus = order.paymentStatus || 'unpaid';
+    const normalizedPaymentStatus = (() => {
+      const rawStatus = String(order.paymentStatus || '').toLowerCase();
+      if (rawStatus === 'paid' || rawStatus === 'completed') return 'paid';
+      if (rawStatus === 'partial') return 'partial';
+      if (rawStatus === 'failed') return 'unpaid';
+
+      const total = Number(order.total || 0);
+      const paid = Number(order.amountPaid || 0);
+      if (Number.isFinite(total) && Number.isFinite(paid) && total > 0) {
+        if (paid >= total) return 'paid';
+        if (paid > 0) return 'partial';
+      }
+
+      return 'unpaid';
+    })();
+
     const variants: Record<string, { color: string; label: string }> = {
       paid: { color: 'bg-green-100 text-green-800', label: 'Paid' },
       partial: { color: 'bg-yellow-100 text-yellow-800', label: 'Partial' },
@@ -1434,10 +1685,12 @@ const AdminOrders: React.FC = () => {
     if (order.status === 'cancelled') {
       return null;
     }
+
+    const paymentVariant = variants[normalizedPaymentStatus] || variants.unpaid;
     
     return (
-      <Badge className={variants[paymentStatus].color}>
-        {variants[paymentStatus].label}
+      <Badge className={paymentVariant.color}>
+        {paymentVariant.label}
       </Badge>
     );
   };
@@ -1742,7 +1995,7 @@ const AdminOrders: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Tax Type</Label>
-                    <Select value={newOrder.taxType} onValueChange={(value: any) => setNewOrder({ ...newOrder, taxType: value })}>
+                    <Select value={newOrder.taxType} onValueChange={(value: 'none' | 'VAT' | 'TTC') => setNewOrder({ ...newOrder, taxType: value })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>
@@ -1772,7 +2025,7 @@ const AdminOrders: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Discount Type</Label>
-                    <Select value={newOrder.discountType} onValueChange={(value: any) => setNewOrder({ ...newOrder, discountType: value })}>
+                    <Select value={newOrder.discountType} onValueChange={(value: 'percentage' | 'fixed') => setNewOrder({ ...newOrder, discountType: value })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>

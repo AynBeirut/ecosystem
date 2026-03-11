@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
@@ -18,6 +18,27 @@ import { useAuth } from '@/context/useAuth';
 import { Label } from '@/components/ui/label';
 import { PaymentMethod } from '@/types/product';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+
+type StorePaymentMethods = {
+  creditCard: boolean;
+  debitCard: boolean;
+  paypal: boolean;
+  applePay: boolean;
+  googlePay: boolean;
+  bankTransfer: boolean;
+  cashOnDelivery: boolean;
+  storeCredits: boolean;
+};
+
+type CheckoutApiResponse = {
+  error?: string;
+  orderIds?: string[];
+};
+
+type PaymentInitResponse = {
+  error?: string;
+  paymentUrl?: string;
+};
 
 const Cart: React.FC = () => {
   const { items, updateQuantity, removeFromCart, clearCart, subtotal } = useCart();
@@ -51,6 +72,8 @@ const Cart: React.FC = () => {
   const isCheckingOutRef = useRef(false);
   
   const navigate = useNavigate();
+  const location = useLocation();
+  const stripeHandledRef = useRef<string | null>(null);
 
   // Load saved delivery info from localStorage on mount
   useEffect(() => {
@@ -107,7 +130,7 @@ const Cart: React.FC = () => {
       if (storeIds.length === 0) return;
       
       const db = getFirestore();
-      const storePaymentSettings: any[] = [];
+      const storePaymentSettings: StorePaymentMethods[] = [];
       
       // Fetch payment settings for each store
       for (const storeId of storeIds) {
@@ -203,6 +226,85 @@ const Cart: React.FC = () => {
       localStorage.setItem('deliveryInfo', JSON.stringify(deliveryInfo));
     }
   }, [deliveryInfo]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const stripeState = params.get('stripe');
+    const orderId = params.get('orderId');
+    const sessionId = params.get('session_id');
+
+    if (!stripeState || !orderId) {
+      return;
+    }
+
+    const token = `${stripeState}:${orderId}:${sessionId || ''}`;
+    if (stripeHandledRef.current === token) {
+      return;
+    }
+    stripeHandledRef.current = token;
+
+    const clearStripeQuery = () => {
+      navigate('/cart', { replace: true });
+    };
+
+    if (stripeState === 'cancel') {
+      toast.error('Stripe payment was canceled. You can try again.');
+      clearStripeQuery();
+      return;
+    }
+
+    if (stripeState !== 'success' || !sessionId) {
+      toast.error('Invalid Stripe return parameters.');
+      clearStripeQuery();
+      return;
+    }
+
+    const confirmStripe = async () => {
+      try {
+        const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        const idToken = currentUser ? await currentUser.getIdToken() : null;
+
+        const response = await fetch(`${API_BASE.replace(/\/$/, '')}/payment/stripe/confirm`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+          body: JSON.stringify({ sessionId, orderId }),
+        });
+
+        let payload: { error?: string; success?: boolean } | null = null;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          console.error('Failed to parse Stripe confirm response', error);
+        }
+
+        if (!response.ok || !payload?.success) {
+          toast.error(payload?.error || 'Stripe payment confirmation failed.');
+          clearStripeQuery();
+          return;
+        }
+
+        toast.success('Payment completed successfully.');
+        clearCart();
+
+        if (user) {
+          navigate('/orders');
+        } else {
+          navigate(`/track-order?orderId=${orderId}`);
+        }
+      } catch (error) {
+        console.error('Stripe confirmation error', error);
+        toast.error('Failed to verify Stripe payment. Please contact support if charged.');
+        clearStripeQuery();
+      }
+    };
+
+    void confirmStripe();
+  }, [location.search, navigate, clearCart, user]);
 
   const handleClearSavedInfo = () => {
     localStorage.removeItem('deliveryInfo');
@@ -327,7 +429,7 @@ const Cart: React.FC = () => {
       // Use an env-configurable API base so production can point to the deployed
       // Cloud Function URL (set VITE_API_BASE) while development uses '/api' and
       // the Vite proxy to the local functions emulator.
-      const API_BASE = (import.meta.env as any).VITE_API_BASE ?? '/api';
+      const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
       const url = `${API_BASE.replace(/\/$/, '')}/checkout`;
 
       // Transform cart items to the format expected by the backend
@@ -353,7 +455,7 @@ const Cart: React.FC = () => {
 
       // Be defensive: the server might return HTML (index.html) when the
       // endpoint is wrong; avoid throwing on resp.json() for non-JSON bodies.
-      let body: any = null;
+      let body: CheckoutApiResponse | null = null;
       const contentType = resp.headers.get('content-type') || '';
       if (contentType.includes('application/json')) {
         try {
@@ -405,17 +507,20 @@ const Cart: React.FC = () => {
       }
       
       // Create payment for the order (only for online payment methods)
-      const paymentUrl = `${API_BASE.replace(/\/$/, '')}/payment/checkout`;
+      const useStripeForCards = paymentMethod === 'visa' || paymentMethod === 'mastercard';
+      const paymentUrl = useStripeForCards
+        ? `${API_BASE.replace(/\/$/, '')}/payment/stripe/checkout`
+        : `${API_BASE.replace(/\/$/, '')}/payment/checkout`;
       const paymentResp = await fetch(paymentUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
         },
-        body: JSON.stringify({ orderId }),
+        body: JSON.stringify({ orderId, paymentMethod }),
       });
 
-      let paymentBody: any = null;
+      let paymentBody: PaymentInitResponse | null = null;
       const paymentContentType = paymentResp.headers.get('content-type') || '';
       if (paymentContentType.includes('application/json')) {
         try {
@@ -430,10 +535,10 @@ const Cart: React.FC = () => {
         return;
       }
 
-      // Redirect to Whish Money payment page
+      // Redirect to payment page (Stripe for cards, Whish for other online methods)
       const paymentPageUrl = paymentBody?.paymentUrl;
       if (paymentPageUrl) {
-        toast.success('Redirecting to payment...');
+        toast.success(useStripeForCards ? 'Redirecting to Stripe...' : 'Redirecting to payment...');
         // Clear cart before redirecting (order is already created)
         clearCart();
         // Redirect to payment

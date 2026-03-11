@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import { Request, Response } from 'express';
 import axios from 'axios';
+import { activateRecurringServiceSubscriptionsFromOrder } from '../services/orderSubscriptions';
 
 const db = admin.firestore();
 
@@ -306,12 +307,17 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
 
     if (statusCheck.status && statusCheck.collectStatus === 'success') {
       // Payment confirmed - update order status to paid
+      const total = Number(orderData?.total || 0);
       await orderRef.update({
         status: 'paid',
-        paymentStatus: 'completed',
+        paymentStatus: 'paid',
+        amountPaid: Number.isFinite(total) ? total : 0,
+        paymentDate: new Date().toISOString(),
         paidAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
+
+      await activateRecurringServiceSubscriptionsFromOrder(String(orderId));
 
       // Redirect to success page
       return res.redirect(`https://grabio.space/${storeSlug}?order=success&orderId=${orderId}`);

@@ -9,11 +9,9 @@ import autoTable from 'jspdf-autotable';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { isCountedSaleStatus, isDateInRange, resolveOrderItemProductKey } from '@/lib/salesRules';
 
-// Helper to clean non-ASCII characters for PDF export
-const cleanTextForPDF = (text: string): string => {
-  return text.replace(/[^\x00-\x7F]/g, '?');
-};
+const cleanTextForPDF = (text: string): string => text.replace(/[^\u0020-\u007E]/g, '?');
 
 interface ProductRevenue {
   productId: string;
@@ -31,9 +29,15 @@ const AdminRevenue: React.FC = () => {
   const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [productRevenues, setProductRevenues] = useState<ProductRevenue[]>([]);
+  const [quarantinedOrdersCount, setQuarantinedOrdersCount] = useState(0);
   const [filterStartDate, setFilterStartDate] = useState('');
   const [filterEndDate, setFilterEndDate] = useState('');
   const [filterCategory, setFilterCategory] = useState('');
+
+  const toFiniteNumber = (value: unknown, fallback = 0): number => {
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
 
   useEffect(() => {
     if (user?.storeId) {
@@ -44,12 +48,11 @@ const AdminRevenue: React.FC = () => {
 
   const fetchRevenueData = async () => {
     if (!user?.storeId) return;
-    
+
     setLoading(true);
     try {
       const db = getFirestore();
-      
-      // Fetch finished goods for quantity sold and cost data (SOURCE OF TRUTH after manual corrections)
+
       const finishedGoodsQuery = query(
         collection(db, 'finishedGoodsInventory'),
         where('storeId', '==', user.storeId)
@@ -60,7 +63,7 @@ const AdminRevenue: React.FC = () => {
         costPrice: number;
         productName: string;
       }> = {};
-      
+
       finishedGoodsSnapshot.forEach(doc => {
         const fg = doc.data();
         const productId = fg.productId || fg.composedProductId;
@@ -72,82 +75,123 @@ const AdminRevenue: React.FC = () => {
           };
         }
       });
-      
-      // Fetch all orders for revenue calculation
+
       const ordersQuery = query(
         collection(db, 'orders'),
         where('storeId', '==', user.storeId)
       );
       const ordersSnapshot = await getDocs(ordersQuery);
-      
-      // Fetch products for categories
+
       const productsQuery = query(
         collection(db, 'products'),
         where('storeId', '==', user.storeId)
       );
       const productsSnapshot = await getDocs(productsQuery);
-      const productsData: Record<string, { name: string; category: string }> = {};
-      
+      const productsData: Record<string, { name: string; category: string; costPrice: number; serviceCost: number }> = {};
       productsSnapshot.forEach(doc => {
         const product = doc.data();
         productsData[doc.id] = {
           name: product.name || 'Unknown Product',
-          category: product.category || 'Other'
+          category: product.category || 'Other',
+          costPrice: toFiniteNumber(product.costPrice, 0),
+          serviceCost: toFiniteNumber(product.serviceCost, 0)
         };
       });
-      
-      // Calculate revenue per product from orders
+
       const productRevenueMap: Record<string, number> = {};
-      
+      const orderQuantityMap: Record<string, number> = {};
+      let quarantinedOrders = 0;
+
       ordersSnapshot.forEach(doc => {
         const order = doc.data();
-        
-        // Skip cancelled orders
-        if (order.status === 'cancelled') return;
-        
-        const orderSubtotal = order.subtotal || 0;
-        const orderTotal = order.total || 0;
-        const orderDiscount = Math.max(0, orderSubtotal - orderTotal);
-        const discountPercentage = orderSubtotal > 0 ? orderDiscount / orderSubtotal : 0;
-        
-        const items = order.items || [];
-        items.forEach((item: { productId: string; quantity: number; price: number }) => {
-          const productId = item.productId;
-          const quantity = item.quantity || 0;
-          const price = item.price || 0;
-          const itemSubtotal = quantity * price;
-          const itemDiscount = itemSubtotal * discountPercentage;
-          const itemRevenue = itemSubtotal - itemDiscount;
-          
+        if (!isCountedSaleStatus(order.status)) return;
+        if (!isDateInRange(order.createdAt || order.timestamp, filterStartDate, filterEndDate)) return;
+
+        const orderTotal = toFiniteNumber(order.total, Number.NaN);
+        if (!Number.isFinite(orderTotal) || orderTotal < 0) {
+          quarantinedOrders += 1;
+          return;
+        }
+
+        const items = Array.isArray(order.items) ? order.items : [];
+        const itemBaseSubtotals = items.map((item: { quantity: number; price: number }) => {
+          const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+          const price = Math.max(0, toFiniteNumber(item.price, 0));
+          return quantity * price;
+        });
+        const computedSubtotal = itemBaseSubtotals.reduce((sum: number, value: number) => sum + value, 0);
+        const fallbackSubtotal = Math.max(0, toFiniteNumber(order.subtotal ?? order.total, 0));
+        const baseSubtotal = computedSubtotal > 0 ? computedSubtotal : fallbackSubtotal;
+
+        if (!Number.isFinite(baseSubtotal) || baseSubtotal < 0) {
+          quarantinedOrders += 1;
+          return;
+        }
+
+        let allocatedSoFar = 0;
+        items.forEach((item: { productId: string; composedProductId?: string; id?: string; quantity: number; price: number }, index: number) => {
+          const productId = resolveOrderItemProductKey(item);
+          if (!productId) return;
+
+          const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+          const itemSubtotal = Math.max(0, toFiniteNumber(itemBaseSubtotals[index], 0));
+          let itemRevenue = 0;
+
+          if (baseSubtotal > 0) {
+            itemRevenue = (itemSubtotal / baseSubtotal) * orderTotal;
+          } else if (items.length > 0) {
+            itemRevenue = orderTotal / items.length;
+          }
+
+          if (index === items.length - 1) {
+            itemRevenue = orderTotal - allocatedSoFar;
+          } else {
+            allocatedSoFar += itemRevenue;
+          }
+
+          if (!Number.isFinite(itemRevenue)) {
+            quarantinedOrders += 1;
+            return;
+          }
+
           productRevenueMap[productId] = (productRevenueMap[productId] || 0) + itemRevenue;
+          orderQuantityMap[productId] = (orderQuantityMap[productId] || 0) + quantity;
         });
       });
-      
-      // Build final product revenue list using finished goods quantities (corrected by user)
-      const revenueList: ProductRevenue[] = Object.entries(finishedGoodsData).map(([productId, fgData]) => {
-        const revenue = productRevenueMap[productId] || 0;
-        const quantitySold = fgData.quantitySold; // Use finished goods quantity (manually corrected)
-        const unitCost = fgData.costPrice;
+
+      const allProductIds = new Set<string>([
+        ...Object.keys(productRevenueMap),
+        ...Object.keys(orderQuantityMap)
+      ]);
+
+      const revenueList: ProductRevenue[] = Array.from(allProductIds).map((productId) => {
+        const fgData = finishedGoodsData[productId];
+        const revenue = toFiniteNumber(productRevenueMap[productId], 0);
+        const quantitySold = Math.max(0, toFiniteNumber(orderQuantityMap[productId], 0));
+        const productCost = toFiniteNumber(productsData[productId]?.costPrice ?? 0, 0);
+        const serviceCost = toFiniteNumber(productsData[productId]?.serviceCost ?? 0, 0);
+        const inventoryCost = toFiniteNumber(fgData?.costPrice ?? 0, 0);
+        const unitCost = Math.max(0, inventoryCost || productCost || serviceCost);
         const totalCost = quantitySold * unitCost;
         const profit = revenue - totalCost;
-        const profitMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
-        
+        const rawMargin = revenue > 0 ? (profit / revenue) * 100 : 0;
+        const profitMargin = Number.isFinite(rawMargin) ? rawMargin : 0;
+
         return {
           productId,
-          productName: productsData[productId]?.name || fgData.productName,
+          productName: productsData[productId]?.name || fgData?.productName || 'Unknown Product',
           category: productsData[productId]?.category || 'Other',
-          quantitySold, // From finished goods (user-corrected)
+          quantitySold,
           revenue,
           cost: totalCost,
           profit,
           profitMargin
         };
       });
-      
-      // Sort by revenue descending
+
       revenueList.sort((a, b) => b.revenue - a.revenue);
-      
       setProductRevenues(revenueList);
+      setQuarantinedOrdersCount(quarantinedOrders);
     } catch (error) {
       console.error('Error fetching revenue data:', error);
     } finally {
@@ -156,10 +200,7 @@ const AdminRevenue: React.FC = () => {
   };
 
   const getFilteredRevenues = () => {
-    return productRevenues.filter(item => {
-      const matchesCategory = !filterCategory || item.category === filterCategory;
-      return matchesCategory;
-    });
+    return productRevenues.filter(item => !filterCategory || item.category === filterCategory);
   };
 
   const exportToExcel = () => {
@@ -173,7 +214,7 @@ const AdminRevenue: React.FC = () => {
       'Profit': item.profit.toFixed(2),
       'Profit Margin %': item.profitMargin.toFixed(2)
     }));
-    
+
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Revenue Report');
@@ -183,13 +224,13 @@ const AdminRevenue: React.FC = () => {
   const exportToPDF = () => {
     const filtered = getFilteredRevenues();
     const doc = new jsPDF();
-    
+
     doc.setFontSize(18);
     doc.text('REVENUE & PROFIT REPORT', 105, 15, { align: 'center' });
-    
+
     doc.setFontSize(8);
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString()}`, 105, 22, { align: 'center' });
-    
+
     const tableData = filtered.map(item => [
       cleanTextForPDF(item.productName),
       cleanTextForPDF(item.category),
@@ -199,13 +240,12 @@ const AdminRevenue: React.FC = () => {
       `$${item.profit.toFixed(2)}`,
       `${item.profitMargin.toFixed(1)}%`
     ]);
-    
-    // Add totals row
+
     const totalRevenue = filtered.reduce((sum, item) => sum + item.revenue, 0);
     const totalCost = filtered.reduce((sum, item) => sum + item.cost, 0);
     const totalProfit = filtered.reduce((sum, item) => sum + item.profit, 0);
     const avgMargin = totalRevenue > 0 ? (totalProfit / totalRevenue) * 100 : 0;
-    
+
     tableData.push([
       'TOTAL',
       '',
@@ -215,7 +255,7 @@ const AdminRevenue: React.FC = () => {
       `$${totalProfit.toFixed(2)}`,
       `${avgMargin.toFixed(1)}%`
     ]);
-    
+
     autoTable(doc, {
       startY: 28,
       head: [['Product', 'Category', 'Qty Sold', 'Revenue', 'Cost', 'Profit', 'Margin %']],
@@ -225,7 +265,7 @@ const AdminRevenue: React.FC = () => {
       headStyles: { fillColor: [66, 66, 66], textColor: 255, fontStyle: 'bold' },
       footStyles: { fillColor: [240, 240, 240], fontStyle: 'bold' }
     });
-    
+
     doc.save(`revenue_report_${new Date().toISOString().split('T')[0]}.pdf`);
   };
 
@@ -259,10 +299,14 @@ const AdminRevenue: React.FC = () => {
           <div>
             <h1 className="text-2xl md:text-3xl font-bold">Revenue & Profit Report</h1>
             <p className="text-gray-600 text-sm md:text-base mt-1">Product-level profitability analysis</p>
+            {quarantinedOrdersCount > 0 && (
+              <p className="text-orange-600 text-sm mt-1">
+                Quarantined invalid orders: {quarantinedOrdersCount}
+              </p>
+            )}
           </div>
         </div>
 
-        {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <Card>
             <CardHeader className="pb-3">
@@ -294,10 +338,29 @@ const AdminRevenue: React.FC = () => {
           </Card>
         </div>
 
-        {/* Filters and Export */}
         <Card className="mb-6">
           <CardContent className="pt-6">
             <div className="flex flex-wrap gap-4 items-end">
+              <div className="flex-1 min-w-[150px]">
+                <label className="block text-sm font-medium mb-2">From Date</label>
+                <input
+                  type="date"
+                  value={filterStartDate}
+                  onChange={(e) => setFilterStartDate(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+
+              <div className="flex-1 min-w-[150px]">
+                <label className="block text-sm font-medium mb-2">To Date</label>
+                <input
+                  type="date"
+                  value={filterEndDate}
+                  onChange={(e) => setFilterEndDate(e.target.value)}
+                  className="w-full border rounded px-3 py-2"
+                />
+              </div>
+
               <div className="flex-1 min-w-[200px]">
                 <label className="block text-sm font-medium mb-2">Category</label>
                 <select
@@ -311,16 +374,28 @@ const AdminRevenue: React.FC = () => {
                   ))}
                 </select>
               </div>
-              
-              {filterCategory && (
+
+              <button
+                onClick={fetchRevenueData}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+              >
+                Apply Filters
+              </button>
+
+              {(filterCategory || filterStartDate || filterEndDate) && (
                 <button
-                  onClick={() => setFilterCategory('')}
+                  onClick={() => {
+                    setFilterCategory('');
+                    setFilterStartDate('');
+                    setFilterEndDate('');
+                    setTimeout(() => fetchRevenueData(), 100);
+                  }}
                   className="px-4 py-2 bg-gray-200 hover:bg-gray-300 rounded"
                 >
-                  Clear Filter
+                  Clear All
                 </button>
               )}
-              
+
               <div className="flex gap-2 ml-auto">
                 <button
                   onClick={exportToExcel}
@@ -341,7 +416,6 @@ const AdminRevenue: React.FC = () => {
           </CardContent>
         </Card>
 
-        {/* Revenue Table */}
         <Card>
           <CardHeader>
             <CardTitle>Product Revenue & Profit</CardTitle>

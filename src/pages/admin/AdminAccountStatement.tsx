@@ -3,12 +3,36 @@ import { getFirestore, collection, query, where, getDocs } from 'firebase/firest
 import { useAuth } from '@/context/useAuth';
 import { FileDown, Download, ArrowLeft } from 'lucide-react';
 import { exportToCSV } from '@/lib/exportUtils';
-import jsPDF from 'jspdf';
+import { jsPDF } from 'jspdf';
 import { useNavigate } from 'react-router-dom';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { initArabicPDF, writeText, cleanTextForPDF } from '@/lib/arabicPDF';
+import { isCountedSaleStatus, isDateInRange, normalizeDateString, resolveOrderItemProductKey } from '@/lib/salesRules';
+
+interface StatementLineItem {
+  productId?: string;
+  productName?: string;
+  category?: string;
+  quantity?: number;
+  price?: number;
+  [key: string]: unknown;
+}
+
+interface StatementTxn {
+  date: string | number | Date;
+  type: string;
+  ref: string;
+  description: string;
+  debit: number;
+  net: number;
+  vat: number;
+  credit: number;
+  data: Record<string, unknown>;
+}
+
+type CsvRow = Record<string, string | number>;
 
 interface CustomerBalance {
   id: string;
@@ -42,7 +66,8 @@ interface PurchaseRecord {
   amount: number;
   amountPaid: number;
   status: string;
-  items: any[];
+  items: Record<string, unknown>[];
+  taxAmount?: number;
   invoiceNumber?: string;
 }
 
@@ -52,6 +77,7 @@ interface ExpenseRecord {
   category: string;
   description: string;
   amount: number;
+  taxAmount?: number;
   paymentMethod?: string;
   reference?: string;
 }
@@ -68,7 +94,17 @@ interface SalesRecord {
   taxAmount?: number;
   status: string;
   paymentStatus?: string;
-  items?: any[];
+  items?: StatementLineItem[];
+}
+
+interface CashCollectionRecord {
+  id: string;
+  collectionDate: string;
+  bankAccount: string;
+  depositReference: string;
+  totalAmount: number;
+  ordersCount: number;
+  notes?: string;
 }
 
 interface DetailedTransaction {
@@ -98,7 +134,7 @@ const AdminAccountStatement: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales' | 'cashCollections'>('customers');
   const [loading, setLoading] = useState(true);
   
   const [customers, setCustomers] = useState<CustomerBalance[]>([]);
@@ -107,10 +143,13 @@ const AdminAccountStatement: React.FC = () => {
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
   const [expenses, setExpenses] = useState<ExpenseRecord[]>([]);
   const [sales, setSales] = useState<SalesRecord[]>([]);
+  const [cashCollections, setCashCollections] = useState<CashCollectionRecord[]>([]);
   
   const [totalExpenses, setTotalExpenses] = useState(0);
   const [totalPurchases, setTotalPurchases] = useState(0);
   const [totalSales, setTotalSales] = useState(0);
+  const [totalCashDeposited, setTotalCashDeposited] = useState(0);
+  const [quarantinedSalesCount, setQuarantinedSalesCount] = useState(0);
   const [customerBalances, setCustomerBalances] = useState(0);
   const [netBalance, setNetBalance] = useState(0);
   
@@ -123,12 +162,30 @@ const AdminAccountStatement: React.FC = () => {
   const [filterCustomer, setFilterCustomer] = useState('');
   const [filterProduct, setFilterProduct] = useState('');
 
+  const toFiniteNumber = (value: unknown, fallback = 0): number => {
+    const parsed = typeof value === 'number' ? value : Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  };
+
+  const toNonEmptyString = (value: unknown, fallback = 'N/A'): string => {
+    if (typeof value !== 'string') return fallback;
+    const trimmed = value.trim();
+    return trimmed.length > 0 ? trimmed : fallback;
+  };
+
+  const toDateLabel = (value: unknown): string => {
+    const parsed = new Date(String(value || ''));
+    if (Number.isNaN(parsed.getTime())) return 'N/A';
+    return parsed.toLocaleDateString('en-GB');
+  };
+
   useEffect(() => {
     if (user?.storeId) {
       fetchAllData();
     } else {
       setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.storeId]);
 
   const fetchAllData = async () => {
@@ -140,7 +197,8 @@ const AdminAccountStatement: React.FC = () => {
         fetchProducts(),
         fetchPurchases(),
         fetchExpenses(),
-        fetchSales()
+        fetchSales(),
+        fetchCashCollections()
       ]);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -162,6 +220,9 @@ const AdminAccountStatement: React.FC = () => {
       
       ordersSnapshot.forEach(doc => {
         const order = doc.data();
+        if (!isCountedSaleStatus(order.status)) {
+          return;
+        }
         const customerId = order.customerId || 'Walk-in';
         const customerName = order.customerName || 'Walk-in Customer';
         const total = order.total || 0;
@@ -325,17 +386,18 @@ const AdminAccountStatement: React.FC = () => {
         });
       });
       
-      // Add orders data
+      // Add orders data (delivered only)
       ordersSnapshot.forEach(doc => {
         const order = doc.data();
+        if (!isCountedSaleStatus(order.status)) return;
         const items = order.items || [];
         
         // Calculate discount per item proportionally
         const orderSubtotal = order.subtotal || order.total || 0;
         const orderDiscount = order.discountAmount || 0;
         
-        items.forEach((item: any) => {
-          const productId = item.productId || item.id;
+        items.forEach((item: StatementLineItem) => {
+          const productId = resolveOrderItemProductKey(item);
           if (productId && productMap.has(productId)) {
             const product = productMap.get(productId)!;
             const quantity = item.quantity || 0;
@@ -476,46 +538,209 @@ const AdminAccountStatement: React.FC = () => {
       
       const salesList: SalesRecord[] = [];
       let total = 0;
+      let quarantinedCount = 0;
       
       ordersSnapshot.forEach(doc => {
         const order = doc.data();
         
-        // Skip cancelled orders
-        if (order.status === 'cancelled') {
+        // Count only delivered sales for consistency across reports
+        if (!isCountedSaleStatus(order.status)) {
           return;
         }
         
         let dateStr = 'N/A';
         if (order.createdAt) {
-          if (typeof order.createdAt === 'string') {
-            dateStr = order.createdAt.split('T')[0];
-          } else if (order.createdAt.toDate) {
-            dateStr = order.createdAt.toDate().toLocaleDateString();
-          }
+          dateStr = normalizeDateString(order.createdAt) || dateStr;
         }
+
+        const orderTotal = toFiniteNumber(order.total, Number.NaN);
+        const orderSubtotal = toFiniteNumber(order.subtotal ?? order.total, Number.NaN);
+        const discountAmount = toFiniteNumber(order.discountAmount ?? order.discount ?? 0, Number.NaN);
+        const taxAmount = toFiniteNumber(order.taxAmount ?? 0, Number.NaN);
+
+        if (
+          !Number.isFinite(orderTotal) ||
+          !Number.isFinite(orderSubtotal) ||
+          !Number.isFinite(discountAmount) ||
+          !Number.isFinite(taxAmount) ||
+          orderTotal < 0 ||
+          orderSubtotal < 0 ||
+          discountAmount < 0 ||
+          taxAmount < 0
+        ) {
+          quarantinedCount += 1;
+          return;
+        }
+
+        const amountPaid = toFiniteNumber(order.amountPaid, 0);
         
         salesList.push({
           id: doc.id,
           date: dateStr,
           customer: order.customerName || 'Walk-in Customer',
           invoiceNumber: order.invoiceNumber,
-          total: order.total || 0,
-          subtotal: order.subtotal || order.total || 0,
-          discountAmount: order.discountAmount || 0,
-          amountPaid: order.paymentStatus === 'paid' ? (order.total || 0) : (order.amountPaid || 0),
-          taxAmount: order.taxAmount || 0,
+          total: orderTotal,
+          subtotal: orderSubtotal,
+          discountAmount,
+          amountPaid: order.paymentStatus === 'paid' ? orderTotal : amountPaid,
+          taxAmount,
           status: order.status || 'pending',
           paymentStatus: order.paymentStatus || 'unpaid',
-          items: order.items || []
+          items: Array.isArray(order.items) ? order.items : []
         });
-        total += order.total || 0;
+        total += orderTotal;
       });
       
       setSales(salesList);
       setTotalSales(total);
+      setQuarantinedSalesCount(quarantinedCount);
     } catch (error) {
       console.error('Error fetching sales:', error);
     }
+  };
+
+  const fetchCashCollections = async () => {
+    try {
+      const db = getFirestore();
+      const collectionsQuery = query(
+        collection(db, 'cashCollections'),
+        where('storeId', '==', user?.storeId)
+      );
+      const collectionsSnapshot = await getDocs(collectionsQuery);
+
+      const list: CashCollectionRecord[] = [];
+      let total = 0;
+
+      collectionsSnapshot.forEach(doc => {
+        const entry = doc.data();
+        const amount = toFiniteNumber(entry.totalAmount, Number.NaN);
+        const ordersCount = toFiniteNumber(entry.ordersCount, 0);
+
+        if (!Number.isFinite(amount) || amount < 0) {
+          return;
+        }
+
+        const date =
+          typeof entry.collectionDate === 'string'
+            ? entry.collectionDate
+            : normalizeDateString(entry.collectionDate) || 'N/A';
+
+        list.push({
+          id: doc.id,
+          collectionDate: date,
+          bankAccount: toNonEmptyString(entry.bankAccount, 'N/A'),
+          depositReference: toNonEmptyString(entry.depositReference, 'N/A'),
+          totalAmount: amount,
+          ordersCount: Math.max(0, Math.floor(ordersCount)),
+          notes: typeof entry.notes === 'string' ? entry.notes : undefined,
+        });
+
+        total += amount;
+      });
+
+      list.sort((a, b) => new Date(b.collectionDate).getTime() - new Date(a.collectionDate).getTime());
+      setCashCollections(list);
+      setTotalCashDeposited(total);
+    } catch (error) {
+      console.error('Error fetching cash collections:', error);
+    }
+  };
+
+  const getFilteredProductSummaries = () => {
+    const filteredSales = sales.filter(sale => {
+      const matchesDate = isDateInRange(sale.date, filterStartDate, filterEndDate);
+      return matchesDate;
+    });
+
+    const filteredProductMap = new Map<string, ProductSummary>();
+
+    products.forEach(product => {
+      filteredProductMap.set(product.id, {
+        id: product.id,
+        name: product.name,
+        category: product.category,
+        totalSold: 0,
+        totalRevenue: 0,
+        totalDiscount: 0
+      });
+    });
+
+    let quarantinedCount = 0;
+
+    filteredSales.forEach(sale => {
+      const items = sale.items || [];
+      const orderTotal = toFiniteNumber(sale.total, Number.NaN);
+      if (!Number.isFinite(orderTotal) || orderTotal < 0) {
+        quarantinedCount += 1;
+        return;
+      }
+
+      const itemSubtotals = items.map((item: StatementLineItem) => {
+        const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+        const price = Math.max(0, toFiniteNumber(item.price, 0));
+        return quantity * price;
+      });
+      const computedSubtotal = itemSubtotals.reduce((sum: number, value: number) => sum + value, 0);
+      const fallbackSubtotal = Math.max(0, toFiniteNumber(sale.subtotal ?? sale.total, 0));
+      const baseSubtotal = computedSubtotal > 0 ? computedSubtotal : fallbackSubtotal;
+
+      if (!Number.isFinite(baseSubtotal) || baseSubtotal < 0) {
+        quarantinedCount += 1;
+        return;
+      }
+
+      let allocatedSoFar = 0;
+
+      items.forEach((item: StatementLineItem, index: number) => {
+        const productId = resolveOrderItemProductKey(item);
+        if (!productId) return;
+
+        if (!filteredProductMap.has(productId)) {
+          filteredProductMap.set(productId, {
+            id: productId,
+            name: item.productName || 'Unknown Product',
+            category: item.category || 'Other',
+            totalSold: 0,
+            totalRevenue: 0,
+            totalDiscount: 0
+          });
+        }
+
+        const product = filteredProductMap.get(productId)!;
+        const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+        const itemSubtotal = Math.max(0, toFiniteNumber(itemSubtotals[index], 0));
+
+        let itemRevenue = 0;
+        if (baseSubtotal > 0) {
+          itemRevenue = (itemSubtotal / baseSubtotal) * orderTotal;
+        } else if (items.length > 0) {
+          itemRevenue = orderTotal / items.length;
+        }
+
+        // Ensure allocation sums exactly to order total
+        if (index === items.length - 1) {
+          itemRevenue = orderTotal - allocatedSoFar;
+        } else {
+          allocatedSoFar += itemRevenue;
+        }
+
+        if (!Number.isFinite(itemRevenue)) {
+          quarantinedCount += 1;
+          return;
+        }
+
+        const itemDiscount = itemSubtotal - itemRevenue;
+
+        product.totalSold += quantity;
+        product.totalRevenue += itemRevenue;
+        product.totalDiscount = (product.totalDiscount || 0) + itemDiscount;
+      });
+    });
+
+    return {
+      summaries: Array.from(filteredProductMap.values()).filter(p => p.totalSold > 0),
+      quarantinedSales: quarantinedCount,
+    };
   };
 
   useEffect(() => {
@@ -551,7 +776,7 @@ const AdminAccountStatement: React.FC = () => {
         const returnsSnap = await getDocs(returnsQuery);
         
         // Collect all transactions
-        const allTxns: any[] = [];
+        const allTxns: StatementTxn[] = [];
         
         // First collect all valid purchase IDs
         const validPurchaseIds = new Set<string>();
@@ -639,7 +864,7 @@ const AdminAccountStatement: React.FC = () => {
         const returnsSnap = await getDocs(returnsQuery);
         
         // Collect all transactions
-        const allTxns: any[] = [];
+        const allTxns: StatementTxn[] = [];
         
         ordersSnap.forEach(doc => {
           const order = doc.data();
@@ -905,7 +1130,24 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const exportCustomersToExcel = () => {
-    const data: any[] = [];
+    const data: CsvRow[] = [];
+    let quarantinedExportRows = 0;
+
+    const validCustomers = customers.map((customer) => {
+      const totalPurchases = toFiniteNumber(customer.totalPurchases, Number.NaN);
+      const totalPayments = toFiniteNumber(customer.totalPayments, Number.NaN);
+      const balance = toFiniteNumber(customer.balance, Number.NaN);
+      if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        name: toNonEmptyString(customer.name, 'Unknown Customer'),
+        totalPurchases,
+        totalPayments,
+        balance,
+      };
+    }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
     
     // Add header rows
     data.push({ 'Customer Name': 'CUSTOMER BALANCES STATEMENT', 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
@@ -921,7 +1163,7 @@ const AdminAccountStatement: React.FC = () => {
     data.push({ 'Customer Name': 'Customer Name', 'Total Purchases': 'Total Purchases', 'Total Payments': 'Total Payments', 'Balance': 'Balance' });
     
     // Add customer data
-    customers.forEach(c => {
+    validCustomers.forEach(c => {
       data.push({
         'Customer Name': c.name,
         'Total Purchases': c.totalPurchases.toFixed(2),
@@ -934,9 +1176,15 @@ const AdminAccountStatement: React.FC = () => {
     data.push({ 'Customer Name': '', 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
     
     // Add total row
-    const totalPurchases = customers.reduce((sum, c) => sum + c.totalPurchases, 0);
-    const totalPayments = customers.reduce((sum, c) => sum + c.totalPayments, 0);
-    const totalBalance = customers.reduce((sum, c) => sum + c.balance, 0);
+    const totalPurchases = validCustomers.reduce((sum, c) => sum + c.totalPurchases, 0);
+    const totalPayments = validCustomers.reduce((sum, c) => sum + c.totalPayments, 0);
+    const totalBalance = validCustomers.reduce((sum, c) => sum + c.balance, 0);
+
+    if (quarantinedExportRows > 0) {
+      data.push({ 'Customer Name': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
+      data.push({ 'Customer Name': '', 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
+    }
+
     data.push({
       'Customer Name': 'TOTAL',
       'Total Purchases': totalPurchases.toFixed(2),
@@ -948,7 +1196,24 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const exportSuppliersToExcel = () => {
-    const data: any[] = [];
+    const data: CsvRow[] = [];
+    let quarantinedExportRows = 0;
+
+    const validSuppliers = suppliers.map((supplier) => {
+      const totalPurchases = toFiniteNumber(supplier.totalPurchases, Number.NaN);
+      const totalPayments = toFiniteNumber(supplier.totalPayments, Number.NaN);
+      const balance = toFiniteNumber(supplier.balance, Number.NaN);
+      if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        name: toNonEmptyString(supplier.name, 'Unknown Supplier'),
+        totalPurchases,
+        totalPayments,
+        balance,
+      };
+    }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
     
     // Add header rows
     data.push({ 'Supplier Name': 'SUPPLIER BALANCES STATEMENT', 'Total Purchases': '', 'Total Payments': '', 'Balance Due': '' });
@@ -964,7 +1229,7 @@ const AdminAccountStatement: React.FC = () => {
     data.push({ 'Supplier Name': 'Supplier Name', 'Total Purchases': 'Total Purchases', 'Total Payments': 'Total Payments', 'Balance Due': 'Balance Due' });
     
     // Add supplier data
-    suppliers.forEach(s => {
+    validSuppliers.forEach(s => {
       data.push({
         'Supplier Name': s.name,
         'Total Purchases': s.totalPurchases.toFixed(2),
@@ -977,9 +1242,15 @@ const AdminAccountStatement: React.FC = () => {
     data.push({ 'Supplier Name': '', 'Total Purchases': '', 'Total Payments': '', 'Balance Due': '' });
     
     // Add total row
-    const totalPurchases = suppliers.reduce((sum, s) => sum + s.totalPurchases, 0);
-    const totalPayments = suppliers.reduce((sum, s) => sum + s.totalPayments, 0);
-    const totalBalance = suppliers.reduce((sum, s) => sum + s.balance, 0);
+    const totalPurchases = validSuppliers.reduce((sum, s) => sum + s.totalPurchases, 0);
+    const totalPayments = validSuppliers.reduce((sum, s) => sum + s.totalPayments, 0);
+    const totalBalance = validSuppliers.reduce((sum, s) => sum + s.balance, 0);
+
+    if (quarantinedExportRows > 0) {
+      data.push({ 'Supplier Name': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Total Purchases': '', 'Total Payments': '', 'Balance Due': '' });
+      data.push({ 'Supplier Name': '', 'Total Purchases': '', 'Total Payments': '', 'Balance Due': '' });
+    }
+
     data.push({
       'Supplier Name': 'TOTAL',
       'Total Purchases': totalPurchases.toFixed(2),
@@ -991,7 +1262,8 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const exportProductsToExcel = () => {
-    const data: any[] = [];
+    const { summaries: filteredProducts } = getFilteredProductSummaries();
+    const data: CsvRow[] = [];
     
     // Add header rows
     data.push({ 'Product Name': 'PRODUCTS SUMMARY REPORT', 'Category': '', 'Total Sold': '', 'Total Revenue': '' });
@@ -1004,12 +1276,12 @@ const AdminAccountStatement: React.FC = () => {
     data.push({ 'Product Name': '', 'Category': '', 'Total Sold': '', 'Total Revenue': '' });
     
     // Group products by category
-    const groupedProducts = products.reduce((acc, p) => {
+    const groupedProducts = filteredProducts.reduce((acc, p) => {
       const category = p.category || 'Uncategorized';
       if (!acc[category]) acc[category] = [];
       acc[category].push(p);
       return acc;
-    }, {} as Record<string, typeof products>);
+    }, {} as Record<string, typeof filteredProducts>);
     
     // Sort categories alphabetically
     const sortedCategories = Object.keys(groupedProducts).sort();
@@ -1066,7 +1338,22 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const exportPurchasesToExcel = () => {
-    const data: any[] = [];
+    const data: CsvRow[] = [];
+    let quarantinedExportRows = 0;
+
+    const validPurchases = purchases.map((purchase) => {
+      const amount = toFiniteNumber(purchase.amount, Number.NaN);
+      if (!Number.isFinite(amount) || amount < 0) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        date: toDateLabel(purchase.date),
+        supplier: toNonEmptyString(purchase.supplier, 'Unknown Supplier'),
+        amount,
+        status: toNonEmptyString(purchase.status, 'unknown'),
+      };
+    }).filter(Boolean) as Array<{ date: string; supplier: string; amount: number; status: string }>;
     
     // Add header rows
     data.push({ 'Date': 'PURCHASE HISTORY REPORT', 'Supplier': '', 'Amount': '', 'Status': '' });
@@ -1079,12 +1366,12 @@ const AdminAccountStatement: React.FC = () => {
     data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
     
     // Group purchases by supplier
-    const groupedPurchases = purchases.reduce((acc, p) => {
+    const groupedPurchases = validPurchases.reduce((acc, p) => {
       const supplier = p.supplier || 'Unknown Supplier';
       if (!acc[supplier]) acc[supplier] = [];
       acc[supplier].push(p);
       return acc;
-    }, {} as Record<string, typeof purchases>);
+    }, {} as Record<string, typeof validPurchases>);
     
     const sortedSuppliers = Object.keys(groupedPurchases).sort();
     
@@ -1122,6 +1409,10 @@ const AdminAccountStatement: React.FC = () => {
     
     // Grand total
     data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
+    if (quarantinedExportRows > 0) {
+      data.push({ 'Date': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Supplier': '', 'Amount': '', 'Status': '' });
+      data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
+    }
     data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
     data.push({
       'Date': '',
@@ -1134,7 +1425,22 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const exportExpensesToExcel = () => {
-    const data: any[] = [];
+    const data: CsvRow[] = [];
+    let quarantinedExportRows = 0;
+
+    const validExpenses = expenses.map((expense) => {
+      const amount = toFiniteNumber(expense.amount, Number.NaN);
+      if (!Number.isFinite(amount) || amount < 0) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        date: toDateLabel(expense.date),
+        category: toNonEmptyString(expense.category, 'Uncategorized'),
+        description: toNonEmptyString(expense.description, 'N/A'),
+        amount,
+      };
+    }).filter(Boolean) as Array<{ date: string; category: string; description: string; amount: number }>;
     
     // Add header rows
     data.push({ 'Date': 'EXPENSE HISTORY REPORT', 'Category': '', 'Description': '', 'Amount': '' });
@@ -1147,12 +1453,12 @@ const AdminAccountStatement: React.FC = () => {
     data.push({ 'Date': '', 'Category': '', 'Description': '', 'Amount': '' });
     
     // Group expenses by category
-    const groupedExpenses = expenses.reduce((acc, e) => {
+    const groupedExpenses = validExpenses.reduce((acc, e) => {
       const category = e.category || 'Uncategorized';
       if (!acc[category]) acc[category] = [];
       acc[category].push(e);
       return acc;
-    }, {} as Record<string, typeof expenses>);
+    }, {} as Record<string, typeof validExpenses>);
     
     const sortedCategories = Object.keys(groupedExpenses).sort();
     
@@ -1190,6 +1496,10 @@ const AdminAccountStatement: React.FC = () => {
     
     // Grand total
     data.push({ 'Date': '', 'Category': '', 'Description': '', 'Amount': '' });
+    if (quarantinedExportRows > 0) {
+      data.push({ 'Date': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Category': '', 'Description': '', 'Amount': '' });
+      data.push({ 'Date': '', 'Category': '', 'Description': '', 'Amount': '' });
+    }
     data.push({ 'Date': '', 'Category': '', 'Description': '', 'Amount': '' });
     data.push({
       'Date': '',
@@ -1206,128 +1516,169 @@ const AdminAccountStatement: React.FC = () => {
       const saleDate = new Date(sale.date).toISOString().split('T')[0];
       const matchesStart = !filterStartDate || saleDate >= filterStartDate;
       const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-      return matchesStart && matchesEnd;
-    });
+      const matchesCustomer = !filterCustomer || sale.customer === filterCustomer;
+      const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: StatementLineItem) => item.productId === filterProduct));
+      return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
+    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    // Add header rows with title and date range
-    const data: any[] = [];
-    data.push({ 'Date': 'SALES HISTORY REPORT', 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
+    let quarantinedExportRows = 0;
+
+    const processedRows = filteredSales.map((sale) => {
+      let subtotal: number;
+      let discount: number;
+      let debit: number;
+      let vat: number;
+      let net: number;
+      let credit: number;
+      let balance: number;
+
+      if (filterProduct && sale.items) {
+        const orderSubtotal = toFiniteNumber(sale.subtotal ?? sale.total, Number.NaN);
+        const orderDiscount = toFiniteNumber(sale.discountAmount ?? 0, Number.NaN);
+        const orderTotal = toFiniteNumber(sale.total, Number.NaN);
+        const orderVat = toFiniteNumber(sale.taxAmount ?? 0, Number.NaN);
+        const orderPaid = toFiniteNumber(sale.amountPaid, Number.NaN);
+
+        if (!Number.isFinite(orderSubtotal) || !Number.isFinite(orderDiscount) || !Number.isFinite(orderTotal) || !Number.isFinite(orderVat) || !Number.isFinite(orderPaid)) {
+          quarantinedExportRows += 1;
+          return null;
+        }
+
+        subtotal = 0;
+        sale.items.forEach((item: StatementLineItem) => {
+          if (item.productId === filterProduct) {
+            const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+            const price = Math.max(0, toFiniteNumber(item.price, 0));
+            subtotal += quantity * price;
+          }
+        });
+
+        discount = orderSubtotal > 0 ? (subtotal / orderSubtotal) * orderDiscount : 0;
+        debit = subtotal - discount;
+        vat = (orderTotal > 0 && orderVat > 0) ? (debit / (orderTotal - orderVat)) * orderVat : 0;
+        net = debit - vat;
+        credit = orderTotal > 0 ? (debit / orderTotal) * orderPaid : 0;
+        balance = debit - credit;
+      } else {
+        subtotal = toFiniteNumber(sale.subtotal ?? sale.total, Number.NaN);
+        discount = toFiniteNumber(sale.discountAmount ?? 0, Number.NaN);
+        debit = toFiniteNumber(sale.total, Number.NaN);
+        vat = toFiniteNumber(sale.taxAmount ?? 0, Number.NaN);
+        credit = toFiniteNumber(sale.amountPaid, Number.NaN);
+        net = debit - vat;
+        balance = debit - credit;
+
+        if (!Number.isFinite(subtotal) || !Number.isFinite(discount) || !Number.isFinite(debit) || !Number.isFinite(vat) || !Number.isFinite(credit)) {
+          quarantinedExportRows += 1;
+          return null;
+        }
+      }
+
+      return {
+        date: new Date(sale.date).toLocaleDateString('en-GB'),
+        ref: sale.invoiceNumber || '-',
+        description: sale.customer,
+        subtotal,
+        discount,
+        debit,
+        net,
+        vat,
+        credit,
+        balance,
+        status: sale.paymentStatus || 'unpaid',
+      };
+    }).filter(Boolean) as Array<{
+      date: string;
+      ref: string;
+      description: string;
+      subtotal: number;
+      discount: number;
+      debit: number;
+      net: number;
+      vat: number;
+      credit: number;
+      balance: number;
+      status: string;
+    }>;
+
+    const totals = processedRows.reduce((acc, row) => {
+      acc.subtotal += row.subtotal;
+      acc.discount += row.discount;
+      acc.debit += row.debit;
+      acc.net += row.net;
+      acc.vat += row.vat;
+      acc.credit += row.credit;
+      acc.balance += row.balance;
+      return acc;
+    }, { subtotal: 0, discount: 0, debit: 0, net: 0, vat: 0, credit: 0, balance: 0 });
+
+    const data: CsvRow[] = [];
+    data.push({ 'Date': 'SALES HISTORY REPORT', 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
     if (filterStartDate || filterEndDate) {
       const startDisplay = filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning';
       const endDisplay = filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present';
-      data.push({ 'Date': `Period from ${startDisplay} to ${endDisplay}`, 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
+      data.push({ 'Date': `Period from ${startDisplay} to ${endDisplay}`, 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
     }
-    data.push({ 'Date': `Generated: ${new Date().toLocaleDateString('en-GB')}`, 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
-    data.push({ 'Date': '', 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
-    
-    // Group sales by customer
-    const groupedSales = filteredSales.reduce((acc, s) => {
-      const customer = s.customer || 'Unknown Customer';
-      if (!acc[customer]) acc[customer] = [];
-      acc[customer].push(s);
-      return acc;
-    }, {} as Record<string, typeof filteredSales>);
-    
-    const sortedCustomers = Object.keys(groupedSales).sort();
-    
-    let grandTotalSubtotal = 0;
-    let grandTotalDiscount = 0;
-    let grandTotalAmount = 0;
-    let grandTotalPaid = 0;
-    let grandTotalBalance = 0;
-    
-    sortedCustomers.forEach(customer => {
-      // Customer header
-      data.push({ 'Date': '', 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
-      data.push({ 'Date': `CLIENT: ${customer.toUpperCase()}`, 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
-      data.push({ 'Date': 'Date', 'Invoice': 'Invoice#', 'Customer': 'Customer', 'Subtotal': 'Subtotal', 'Discount': 'Discount', 'Total': 'Total Sales', 'Paid': 'Paid', 'Balance': 'Balance', 'Status': 'Status' });
-      
-      let customerSubtotal = 0;
-      let customerDiscount = 0;
-      let customerTotal = 0;
-      let customerPaid = 0;
-      let customerBalance = 0;
-      
-      groupedSales[customer].forEach(s => {
-        // Calculate filtered product amounts if applicable
-        let saleSubtotal, saleDiscount, saleTotal, salePaid, saleBalance;
-        if (filterProduct && s.items) {
-          const orderSubtotal = s.subtotal || s.total || 0;
-          const orderDiscount = s.discountAmount || 0;
-          let itemSubtotal = 0;
-          s.items.forEach((item: any) => {
-            if (item.productId === filterProduct) {
-              itemSubtotal += (item.quantity || 0) * (item.price || 0);
-            }
-          });
-          saleDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-          saleSubtotal = itemSubtotal;
-          saleTotal = itemSubtotal - saleDiscount;
-          salePaid = (s.total > 0) ? (saleTotal / s.total) * s.amountPaid : 0;
-          saleBalance = saleTotal - salePaid;
-        } else {
-          saleSubtotal = s.subtotal || s.total;
-          saleDiscount = s.discountAmount || 0;
-          saleTotal = s.total;
-          salePaid = s.amountPaid;
-          saleBalance = s.total - s.amountPaid;
-        }
-        
-        data.push({
-          'Date': new Date(s.date).toLocaleDateString('en-GB'),
-          'Invoice': s.invoiceNumber || '-',
-          'Customer': s.customer,
-          'Subtotal': saleSubtotal.toFixed(2),
-          'Discount': saleDiscount.toFixed(2),
-          'Total': saleTotal.toFixed(2),
-          'Paid': salePaid.toFixed(2),
-          'Balance': saleBalance.toFixed(2),
-          'Status': s.paymentStatus || 'unpaid'
-        });
-        
-        customerSubtotal += saleSubtotal;
-        customerDiscount += saleDiscount;
-        customerTotal += saleTotal;
-        customerPaid += salePaid;
-        customerBalance += saleBalance;
-      });
-      
-      // Customer subtotal
-      data.push({ 'Date': '', 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
-      data.push({
-        'Date': '',
-        'Invoice': '',
-        'Customer': `SUBTOTAL - ${customer}`,
-        'Subtotal': customerSubtotal.toFixed(2),
-        'Discount': customerDiscount.toFixed(2),
-        'Total': customerTotal.toFixed(2),
-        'Paid': customerPaid.toFixed(2),
-        'Balance': customerBalance.toFixed(2),
-        'Status': ''
-      });
-      
-      grandTotalSubtotal += customerSubtotal;
-      grandTotalDiscount += customerDiscount;
-      grandTotalAmount += customerTotal;
-      grandTotalPaid += customerPaid;
-      grandTotalBalance += customerBalance;
-    });
-    
-    // Grand total
-    data.push({ 'Date': '', 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
-    data.push({ 'Date': '', 'Invoice': '', 'Customer': '', 'Subtotal': '', 'Discount': '', 'Total': '', 'Paid': '', 'Balance': '', 'Status': '' });
+    if (filterCustomer) {
+      data.push({ 'Date': `Customer: ${filterCustomer}`, 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+    }
+    if (filterProduct) {
+      const productName = products.find((p) => p.id === filterProduct)?.name || filterProduct;
+      data.push({ 'Date': `Product: ${productName}`, 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+    }
+    data.push({ 'Date': `Generated: ${new Date().toLocaleDateString('en-GB')}`, 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+    data.push({ 'Date': '', 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+
     data.push({
-      'Date': '',
-      'Invoice': '',
-      'Customer': 'GRAND TOTAL',
-      'Subtotal': grandTotalSubtotal.toFixed(2),
-      'Discount': grandTotalDiscount.toFixed(2),
-      'Total': grandTotalAmount.toFixed(2),
-      'Paid': grandTotalPaid.toFixed(2),
-      'Balance': grandTotalBalance.toFixed(2),
-      'Status': ''
+      'Date': 'Date',
+      'Ref.': 'Ref.',
+      'Description': 'Description',
+      'Subtotal': 'Subtotal',
+      'Discount': 'Discount',
+      'Debit': 'Debit',
+      'Net': 'Net',
+      'VAT': 'VAT',
+      'Credit': 'Credit',
+      'Balance': 'Balance',
+      'Status': 'Status',
     });
-    
+
+    processedRows.forEach((row) => {
+      data.push({
+        'Date': row.date,
+        'Ref.': row.ref,
+        'Description': row.description,
+        'Subtotal': row.subtotal.toFixed(2),
+        'Discount': row.discount > 0 ? `-${row.discount.toFixed(2)}` : '0.00',
+        'Debit': row.debit.toFixed(2),
+        'Net': row.net.toFixed(2),
+        'VAT': row.vat.toFixed(2),
+        'Credit': row.credit.toFixed(2),
+        'Balance': row.balance.toFixed(2),
+        'Status': row.status,
+      });
+    });
+
+    data.push({ 'Date': '', 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+    data.push({
+      'Date': 'TOTAL',
+      'Ref.': '',
+      'Description': '',
+      'Subtotal': totals.subtotal.toFixed(2),
+      'Discount': totals.discount.toFixed(2),
+      'Debit': totals.debit.toFixed(2),
+      'Net': totals.net.toFixed(2),
+      'VAT': totals.vat.toFixed(2),
+      'Credit': totals.credit.toFixed(2),
+      'Balance': totals.balance.toFixed(2),
+      'Status': '',
+    });
+
+    if (quarantinedExportRows > 0) {
+      data.push({ 'Date': '', 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+      data.push({ 'Date': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Ref.': '', 'Description': '', 'Subtotal': '', 'Discount': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+    }
+
     exportToCSV(data, 'sales_history.csv');
   };
 
@@ -1337,168 +1688,237 @@ const AdminAccountStatement: React.FC = () => {
       const matchesStart = !filterStartDate || saleDate >= filterStartDate;
       const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
       const matchesCustomer = !filterCustomer || sale.customer === filterCustomer;
-      const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: any) => item.productId === filterProduct));
+      const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: StatementLineItem) => item.productId === filterProduct));
       return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-    });
+    }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-    const doc = new jsPDF('p', 'mm', 'a4');
-    
-    // Try to use a unicode-friendly font, fallback to helvetica
-    try {
-      doc.setFont('helvetica');
-    } catch (e) {
-      console.warn('Font setting failed:', e);
-    }
-    
-    doc.setFontSize(16);
+    let quarantinedExportRows = 0;
+
+    const processedRows = filteredSales.map((sale) => {
+      let subtotal: number;
+      let discount: number;
+      let debit: number;
+      let vat: number;
+      let net: number;
+      let credit: number;
+      let balance: number;
+
+      if (filterProduct && sale.items) {
+        const orderSubtotal = toFiniteNumber(sale.subtotal ?? sale.total, Number.NaN);
+        const orderDiscount = toFiniteNumber(sale.discountAmount ?? 0, Number.NaN);
+        const orderTotal = toFiniteNumber(sale.total, Number.NaN);
+        const orderVat = toFiniteNumber(sale.taxAmount ?? 0, Number.NaN);
+        const orderPaid = toFiniteNumber(sale.amountPaid, Number.NaN);
+
+        if (!Number.isFinite(orderSubtotal) || !Number.isFinite(orderDiscount) || !Number.isFinite(orderTotal) || !Number.isFinite(orderVat) || !Number.isFinite(orderPaid)) {
+          quarantinedExportRows += 1;
+          return null;
+        }
+
+        subtotal = 0;
+        sale.items.forEach((item: StatementLineItem) => {
+          if (item.productId === filterProduct) {
+            const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
+            const price = Math.max(0, toFiniteNumber(item.price, 0));
+            subtotal += quantity * price;
+          }
+        });
+
+        discount = orderSubtotal > 0 ? (subtotal / orderSubtotal) * orderDiscount : 0;
+        debit = subtotal - discount;
+        vat = (orderTotal > 0 && orderVat > 0) ? (debit / (orderTotal - orderVat)) * orderVat : 0;
+        net = debit - vat;
+        credit = orderTotal > 0 ? (debit / orderTotal) * orderPaid : 0;
+        balance = debit - credit;
+      } else {
+        subtotal = toFiniteNumber(sale.subtotal ?? sale.total, Number.NaN);
+        discount = toFiniteNumber(sale.discountAmount ?? 0, Number.NaN);
+        debit = toFiniteNumber(sale.total, Number.NaN);
+        vat = toFiniteNumber(sale.taxAmount ?? 0, Number.NaN);
+        credit = toFiniteNumber(sale.amountPaid, Number.NaN);
+        net = debit - vat;
+        balance = debit - credit;
+
+        if (!Number.isFinite(subtotal) || !Number.isFinite(discount) || !Number.isFinite(debit) || !Number.isFinite(vat) || !Number.isFinite(credit)) {
+          quarantinedExportRows += 1;
+          return null;
+        }
+      }
+
+      return {
+        date: toDateLabel(sale.date),
+        ref: sale.invoiceNumber || '-',
+        description: toNonEmptyString(sale.customer, 'Walk-in Customer'),
+        subtotal,
+        discount,
+        debit,
+        net,
+        vat,
+        credit,
+        balance,
+        status: sale.paymentStatus || 'unpaid',
+      };
+    }).filter(Boolean) as Array<{
+      date: string;
+      ref: string;
+      description: string;
+      subtotal: number;
+      discount: number;
+      debit: number;
+      net: number;
+      vat: number;
+      credit: number;
+      balance: number;
+      status: string;
+    }>;
+
+    const totals = processedRows.reduce((acc, row) => {
+      acc.subtotal += row.subtotal;
+      acc.discount += row.discount;
+      acc.debit += row.debit;
+      acc.net += row.net;
+      acc.vat += row.vat;
+      acc.credit += row.credit;
+      acc.balance += row.balance;
+      return acc;
+    }, { subtotal: 0, discount: 0, debit: 0, net: 0, vat: 0, credit: 0, balance: 0 });
+
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+    let y = 14;
+
+    doc.setFontSize(15);
     doc.setFont(undefined, 'bold');
-    doc.text('SALES HISTORY REPORT', 105, 15, { align: 'center' });
-    doc.setFontSize(9);
+    doc.text('SALES HISTORY REPORT', pageWidth / 2, y, { align: 'center' });
+    y += 6;
+
+    doc.setFontSize(8);
     doc.setFont(undefined, 'normal');
     if (filterStartDate || filterEndDate) {
       const startDisplay = filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning';
       const endDisplay = filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present';
-      doc.text(`Period from ${startDisplay} to ${endDisplay}`, 105, 22, { align: 'center' });
+      doc.text(`Period from ${startDisplay} to ${endDisplay}`, pageWidth / 2, y, { align: 'center' });
+      y += 4;
     }
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 105, 27, { align: 'center' });
-    
-    // Group sales by customer
-    const groupedSales = filteredSales.reduce((acc, s) => {
-      const customer = s.customer || 'Unknown Customer';
-      if (!acc[customer]) acc[customer] = [];
-      acc[customer].push(s);
-      return acc;
-    }, {} as Record<string, typeof filteredSales>);
-    
-    const sortedCustomers = Object.keys(groupedSales).sort();
-    
-    let y = 35;
-    let grandTotalDiscount = 0;
-    let grandTotal = 0;
-    let grandTotalPaid = 0;
-    let grandTotalBalance = 0;
-    
-    sortedCustomers.forEach((customer, idx) => {
-      if (idx > 0 && y > 240) {
-        doc.addPage();
-        y = 20;
-      }
-      
-      // Customer header - clean up Arabic text for PDF
-      if (y > 35) y += 5;
-      doc.setFontSize(10);
+    if (filterCustomer) {
+      doc.text(`Customer: ${cleanTextForPDF(filterCustomer)}`, pageWidth / 2, y, { align: 'center' });
+      y += 4;
+    }
+    if (filterProduct) {
+      const productName = products.find((p) => p.id === filterProduct)?.name || filterProduct;
+      doc.text(`Product: ${cleanTextForPDF(productName)}`, pageWidth / 2, y, { align: 'center' });
+      y += 4;
+    }
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, pageWidth / 2, y, { align: 'center' });
+    y += 8;
+
+    const col = {
+      date: 8,
+      ref: 26,
+      desc: 43,
+      subtotal: 120,
+      discount: 138,
+      debit: 156,
+      net: 174,
+      vat: 190,
+      credit: 209,
+      balance: 228,
+      status: 250,
+    };
+
+    const drawHeader = () => {
+      doc.setFontSize(7.5);
       doc.setFont(undefined, 'bold');
-      // Remove or replace non-Latin characters for PDF compatibility
-      const cleanCustomerName = customer.replace(/[^\x00-\x7F]/g, '?');
-      doc.text(`CLIENT: ${cleanCustomerName.toUpperCase()}`, 14, y);
-      y += 5;
-      
-      // Column headers
-      doc.setFontSize(8);
-      doc.setFont(undefined, 'bold');
-      doc.text('Date', 14, y);
-      doc.text('Invoice', 35, y);
-      doc.text('Discount', 85, y, { align: 'right' });
-      doc.text('Total', 115, y, { align: 'right' });
-      doc.text('Paid', 145, y, { align: 'right' });
-      doc.text('Balance', 175, y, { align: 'right' });
-      doc.text('Status', 200, y, { align: 'right' });
+      doc.text('Date', col.date, y);
+      doc.text('Ref.', col.ref, y);
+      doc.text('Description', col.desc, y);
+      doc.text('Subtotal', col.subtotal, y, { align: 'right' });
+      doc.text('Discount', col.discount, y, { align: 'right' });
+      doc.text('Debit', col.debit, y, { align: 'right' });
+      doc.text('Net', col.net, y, { align: 'right' });
+      doc.text('VAT', col.vat, y, { align: 'right' });
+      doc.text('Credit', col.credit, y, { align: 'right' });
+      doc.text('Balance', col.balance, y, { align: 'right' });
+      doc.text('Status', col.status, y, { align: 'right' });
       y += 2;
-      doc.line(14, y, 200, y);
+      doc.line(8, y, 288, y);
       y += 4;
-      
-      let customerDiscount = 0;
-      let customerTotal = 0;
-      let customerPaid = 0;
-      let customerBalance = 0;
-      
-      doc.setFontSize(7);
       doc.setFont(undefined, 'normal');
-      groupedSales[customer].forEach(sale => {
-        if (y > 270) {
-          doc.addPage();
-          y = 20;
-        }
-        
-        // Calculate filtered product amounts if applicable
-        let saleDiscount, saleTotal, salePaid, saleBalance;
-        if (filterProduct && sale.items) {
-          const orderSubtotal = sale.subtotal || sale.total || 0;
-          const orderDiscount = sale.discountAmount || 0;
-          let itemSubtotal = 0;
-          sale.items.forEach((item: any) => {
-            if (item.productId === filterProduct) {
-              itemSubtotal += (item.quantity || 0) * (item.price || 0);
-            }
-          });
-          saleDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-          saleTotal = itemSubtotal - saleDiscount;
-          salePaid = (sale.total > 0) ? (saleTotal / sale.total) * sale.amountPaid : 0;
-          saleBalance = saleTotal - salePaid;
-        } else {
-          saleDiscount = sale.discountAmount || 0;
-          saleTotal = sale.total;
-          salePaid = sale.amountPaid;
-          saleBalance = sale.total - sale.amountPaid;
-        }
-        
-        doc.text(new Date(sale.date).toLocaleDateString('en-GB'), 14, y);
-        doc.text(sale.invoiceNumber || '-', 35, y);
-        doc.text(`$${saleDiscount.toFixed(2)}`, 85, y, { align: 'right' });
-        doc.text(`$${saleTotal.toFixed(2)}`, 115, y, { align: 'right' });
-        doc.text(`$${salePaid.toFixed(2)}`, 145, y, { align: 'right' });
-        doc.text(`$${saleBalance.toFixed(2)}`, 175, y, { align: 'right' });
-        doc.text((sale.paymentStatus || 'unpaid').substring(0, 8), 200, y, { align: 'right' });
-        y += 5;
-        
-        customerDiscount += saleDiscount;
-        customerTotal += saleTotal;
-        customerPaid += salePaid;
-        customerBalance += saleBalance;
-      });
-      
-      // Customer subtotal
-      y += 1;
-      doc.line(14, y, 200, y);
-      y += 4;
-      doc.setFontSize(8);
-      doc.setFont(undefined, 'bold');
-      const cleanSubtotal = customer.replace(/[^\x00-\x7F]/g, '?');
-      doc.text(`SUBTOTAL - ${cleanSubtotal}`, 14, y);
-      doc.text(`$${customerDiscount.toFixed(2)}`, 85, y, { align: 'right' });
-      doc.text(`$${customerTotal.toFixed(2)}`, 115, y, { align: 'right' });
-      doc.text(`$${customerPaid.toFixed(2)}`, 145, y, { align: 'right' });
-      doc.text(`$${customerBalance.toFixed(2)}`, 175, y, { align: 'right' });
-      y += 7;
-      
-      grandTotalDiscount += customerDiscount;
-      grandTotal += customerTotal;
-      grandTotalPaid += customerPaid;
-      grandTotalBalance += customerBalance;
+      doc.setFontSize(7);
+    };
+
+    drawHeader();
+
+    processedRows.forEach((row) => {
+      if (y > 195) {
+        doc.addPage();
+        y = 14;
+        drawHeader();
+      }
+
+      doc.text(row.date, col.date, y);
+      doc.text(cleanTextForPDF(row.ref).substring(0, 12), col.ref, y);
+      doc.text(cleanTextForPDF(row.description).substring(0, 32), col.desc, y);
+      doc.text(row.subtotal.toFixed(2), col.subtotal, y, { align: 'right' });
+      doc.text(row.discount > 0 ? `-${row.discount.toFixed(2)}` : '0.00', col.discount, y, { align: 'right' });
+      doc.text(row.debit.toFixed(2), col.debit, y, { align: 'right' });
+      doc.text(row.net.toFixed(2), col.net, y, { align: 'right' });
+      doc.text(row.vat.toFixed(2), col.vat, y, { align: 'right' });
+      doc.text(row.credit.toFixed(2), col.credit, y, { align: 'right' });
+      doc.text(row.balance.toFixed(2), col.balance, y, { align: 'right' });
+      doc.text(row.status.substring(0, 10), col.status, y, { align: 'right' });
+      y += 4.5;
     });
-    
-    // Grand total
-    if (y > 250) {
+
+    if (y > 195) {
       doc.addPage();
-      y = 20;
+      y = 14;
+      drawHeader();
     }
-    y += 2;
-    doc.line(14, y, 200, y);
-    doc.line(14, y + 1, 200, y + 1);
-    y += 5;
-    doc.setFontSize(9);
+
+    y += 1;
+    doc.line(8, y, 288, y);
+    y += 4;
     doc.setFont(undefined, 'bold');
-    doc.text('GRAND TOTAL', 14, y);
-    doc.text(`$${grandTotalDiscount.toFixed(2)}`, 85, y, { align: 'right' });
-    doc.text(`$${grandTotal.toFixed(2)}`, 115, y, { align: 'right' });
-    doc.text(`$${grandTotalPaid.toFixed(2)}`, 145, y, { align: 'right' });
-    doc.text(`$${grandTotalBalance.toFixed(2)}`, 175, y, { align: 'right' });
-    
+    doc.setFontSize(8);
+    doc.text('TOTAL', col.date, y);
+    doc.text(totals.subtotal.toFixed(2), col.subtotal, y, { align: 'right' });
+    doc.text(totals.discount.toFixed(2), col.discount, y, { align: 'right' });
+    doc.text(totals.debit.toFixed(2), col.debit, y, { align: 'right' });
+    doc.text(totals.net.toFixed(2), col.net, y, { align: 'right' });
+    doc.text(totals.vat.toFixed(2), col.vat, y, { align: 'right' });
+    doc.text(totals.credit.toFixed(2), col.credit, y, { align: 'right' });
+    doc.text(totals.balance.toFixed(2), col.balance, y, { align: 'right' });
+
+    if (quarantinedExportRows > 0) {
+      y += 6;
+      doc.setFont(undefined, 'normal');
+      doc.setFontSize(7.5);
+      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, col.date, y);
+    }
+
     doc.save('sales_history.pdf');
   };
 
   const exportCustomersToPDF = async () => {
     const doc = new jsPDF();
+    let quarantinedExportRows = 0;
+
+    const validCustomers = customers.map((customer) => {
+      const totalPurchases = toFiniteNumber(customer.totalPurchases, Number.NaN);
+      const totalPayments = toFiniteNumber(customer.totalPayments, Number.NaN);
+      const balance = toFiniteNumber(customer.balance, Number.NaN);
+      if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        name: toNonEmptyString(customer.name, 'Unknown Customer'),
+        totalPurchases,
+        totalPayments,
+        balance,
+      };
+    }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
     
     // Initialize Arabic font support
     await initArabicPDF(doc);
@@ -1526,7 +1946,7 @@ const AdminAccountStatement: React.FC = () => {
     y += 7;
     
     doc.setFontSize(10);
-    customers.forEach(customer => {
+    validCustomers.forEach(customer => {
       if (y > 270) {
         doc.addPage();
         y = 20;
@@ -1547,18 +1967,42 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text('TOTAL', 20, y);
-    const totalPurchases = customers.reduce((sum, c) => sum + c.totalPurchases, 0);
-    const totalPayments = customers.reduce((sum, c) => sum + c.totalPayments, 0);
-    const totalBalance = customers.reduce((sum, c) => sum + c.balance, 0);
+    const totalPurchases = validCustomers.reduce((sum, c) => sum + c.totalPurchases, 0);
+    const totalPayments = validCustomers.reduce((sum, c) => sum + c.totalPayments, 0);
+    const totalBalance = validCustomers.reduce((sum, c) => sum + c.balance, 0);
     doc.text(`$${totalPurchases.toFixed(2)}`, 90, y);
     doc.text(`$${totalPayments.toFixed(2)}`, 130, y);
     doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
+
+    if (quarantinedExportRows > 0) {
+      y += 7;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
+    }
     
     doc.save('customers_statement.pdf');
   };
 
   const exportSuppliersToPDF = () => {
     const doc = new jsPDF();
+    let quarantinedExportRows = 0;
+
+    const validSuppliers = suppliers.map((supplier) => {
+      const totalPurchases = toFiniteNumber(supplier.totalPurchases, Number.NaN);
+      const totalPayments = toFiniteNumber(supplier.totalPayments, Number.NaN);
+      const balance = toFiniteNumber(supplier.balance, Number.NaN);
+      if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        name: toNonEmptyString(supplier.name, 'Unknown Supplier'),
+        totalPurchases,
+        totalPayments,
+        balance,
+      };
+    }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text('SUPPLIER BALANCES STATEMENT', 105, 15, { align: 'center' });
@@ -1582,7 +2026,7 @@ const AdminAccountStatement: React.FC = () => {
     y += 7;
     
     doc.setFontSize(10);
-    suppliers.forEach(supplier => {
+    validSuppliers.forEach(supplier => {
       if (y > 270) {
         doc.addPage();
         y = 20;
@@ -1602,17 +2046,25 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFontSize(12);
     doc.setFont(undefined, 'bold');
     doc.text('TOTAL', 20, y);
-    const totalPurchases = suppliers.reduce((sum, s) => sum + s.totalPurchases, 0);
-    const totalPayments = suppliers.reduce((sum, s) => sum + s.totalPayments, 0);
-    const totalBalance = suppliers.reduce((sum, s) => sum + s.balance, 0);
+    const totalPurchases = validSuppliers.reduce((sum, s) => sum + s.totalPurchases, 0);
+    const totalPayments = validSuppliers.reduce((sum, s) => sum + s.totalPayments, 0);
+    const totalBalance = validSuppliers.reduce((sum, s) => sum + s.balance, 0);
     doc.text(`$${totalPurchases.toFixed(2)}`, 90, y);
     doc.text(`$${totalPayments.toFixed(2)}`, 130, y);
     doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
+
+    if (quarantinedExportRows > 0) {
+      y += 7;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
+    }
     
     doc.save('suppliers_statement.pdf');
   };
 
   const exportProductsToPDF = () => {
+    const { summaries: filteredProducts } = getFilteredProductSummaries();
     const doc = new jsPDF();
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
@@ -1627,12 +2079,12 @@ const AdminAccountStatement: React.FC = () => {
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 105, 27, { align: 'center' });
     
     // Group products by category
-    const groupedProducts = products.reduce((acc, p) => {
+    const groupedProducts = filteredProducts.reduce((acc, p) => {
       const category = p.category || 'Uncategorized';
       if (!acc[category]) acc[category] = [];
       acc[category].push(p);
       return acc;
-    }, {} as Record<string, typeof products>);
+    }, {} as Record<string, typeof filteredProducts>);
     
     const sortedCategories = Object.keys(groupedProducts).sort();
     
@@ -1721,6 +2173,21 @@ const AdminAccountStatement: React.FC = () => {
 
   const exportPurchasesToPDF = () => {
     const doc = new jsPDF();
+    let quarantinedExportRows = 0;
+
+    const validPurchases = purchases.map((purchase) => {
+      const amount = toFiniteNumber(purchase.amount, Number.NaN);
+      if (!Number.isFinite(amount) || amount < 0) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        date: toDateLabel(purchase.date),
+        supplier: toNonEmptyString(purchase.supplier, 'Unknown Supplier'),
+        amount,
+        status: toNonEmptyString(purchase.status, 'unknown'),
+      };
+    }).filter(Boolean) as Array<{ date: string; supplier: string; amount: number; status: string }>;
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text('PURCHASE HISTORY REPORT', 105, 15, { align: 'center' });
@@ -1734,12 +2201,12 @@ const AdminAccountStatement: React.FC = () => {
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 105, 27, { align: 'center' });
     
     // Group purchases by supplier
-    const groupedPurchases = purchases.reduce((acc, p) => {
+    const groupedPurchases = validPurchases.reduce((acc, p) => {
       const supplier = p.supplier || 'Unknown Supplier';
       if (!acc[supplier]) acc[supplier] = [];
       acc[supplier].push(p);
       return acc;
-    }, {} as Record<string, typeof purchases>);
+    }, {} as Record<string, typeof validPurchases>);
     
     const sortedSuppliers = Object.keys(groupedPurchases).sort();
     
@@ -1817,12 +2284,34 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFont(undefined, 'bold');
     doc.text('GRAND TOTAL', 60, y);
     doc.text(`$${grandTotal.toFixed(2)}`, 140, y, { align: 'right' });
+
+    if (quarantinedExportRows > 0) {
+      y += 7;
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
+    }
     
     doc.save('purchases_statement.pdf');
   };
 
   const exportExpensesToPDF = () => {
     const doc = new jsPDF();
+    let quarantinedExportRows = 0;
+
+    const validExpenses = expenses.map((expense) => {
+      const amount = toFiniteNumber(expense.amount, Number.NaN);
+      if (!Number.isFinite(amount) || amount < 0) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        date: toDateLabel(expense.date),
+        category: toNonEmptyString(expense.category, 'Uncategorized'),
+        description: toNonEmptyString(expense.description, 'N/A'),
+        amount,
+      };
+    }).filter(Boolean) as Array<{ date: string; category: string; description: string; amount: number }>;
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text('EXPENSE HISTORY REPORT', 105, 15, { align: 'center' });
@@ -1836,12 +2325,12 @@ const AdminAccountStatement: React.FC = () => {
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 105, 27, { align: 'center' });
     
     // Group expenses by category
-    const groupedExpenses = expenses.reduce((acc, e) => {
+    const groupedExpenses = validExpenses.reduce((acc, e) => {
       const category = e.category || 'Uncategorized';
       if (!acc[category]) acc[category] = [];
       acc[category].push(e);
       return acc;
-    }, {} as Record<string, typeof expenses>);
+    }, {} as Record<string, typeof validExpenses>);
     
     const sortedCategories = Object.keys(groupedExpenses).sort();
     
@@ -1919,16 +2408,44 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFont(undefined, 'bold');
     doc.text('GRAND TOTAL', 90, y);
     doc.text(`$${grandTotal.toFixed(2)}`, 170, y, { align: 'right' });
+
+    if (quarantinedExportRows > 0) {
+      y += 7;
+      doc.setFontSize(8);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
+    }
     
     doc.save('expenses_statement.pdf');
   };
 
   const exportAllToExcel = () => {
-    const data = [
+    let quarantinedExportRows = 0;
+
+    const validCashCollections = cashCollections.map((entry) => {
+      const amount = toFiniteNumber(entry.totalAmount, Number.NaN);
+      const ordersCount = toFiniteNumber(entry.ordersCount, Number.NaN);
+
+      if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(ordersCount) || ordersCount < 0) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+
+      return {
+        date: toDateLabel(entry.collectionDate),
+        bankAccount: toNonEmptyString(entry.bankAccount, 'N/A'),
+        reference: toNonEmptyString(entry.depositReference, 'N/A'),
+        ordersCount: Math.floor(ordersCount),
+        amount,
+      };
+    }).filter(Boolean) as Array<{ date: string; bankAccount: string; reference: string; ordersCount: number; amount: number }>;
+
+    const data: CsvRow[] = [
       { Section: 'Summary', Item: 'Total Expenses', Value: `$${totalExpenses.toFixed(2)}` },
       { Section: 'Summary', Item: 'Total Purchases', Value: `$${totalPurchases.toFixed(2)}` },
       { Section: 'Summary', Item: 'Customer Balances', Value: `$${customerBalances.toFixed(2)}` },
       { Section: 'Summary', Item: 'Supplier Balances', Value: `$${suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}` },
+      { Section: 'Summary', Item: 'Cash Deposited', Value: `$${totalCashDeposited.toFixed(2)}` },
       { Section: 'Summary', Item: 'Net Balance', Value: `$${netBalance.toFixed(2)}` },
       { Section: '', Item: '', Value: '' },
       { Section: 'Customers', Item: 'Name', Value: 'Balance' },
@@ -1945,11 +2462,43 @@ const AdminAccountStatement: React.FC = () => {
       { Section: '', Item: '', Value: '' },
       { Section: 'Expenses', Item: 'Category', Value: 'Amount' },
       ...expenses.map(e => ({ Section: 'Expenses', Item: e.category, Value: `$${e.amount.toFixed(2)}` })),
+      { Section: '', Item: '', Value: '' },
+      { Section: 'Cash Collections', Item: 'Bank / Ref', Value: 'Amount' },
+      ...validCashCollections.map(c => ({
+        Section: 'Cash Collections',
+        Item: `${c.date} • ${c.bankAccount} • ${c.reference} (${c.ordersCount} orders)`,
+        Value: `$${c.amount.toFixed(2)}`,
+      })),
     ];
+
+    if (quarantinedExportRows > 0) {
+      data.push({ Section: 'Notes', Item: `Quarantined invalid rows: ${quarantinedExportRows}`, Value: '' });
+    }
+
     exportToCSV(data, 'complete_account_statement.csv');
   };
 
   const exportAllToPDF = () => {
+    let quarantinedExportRows = 0;
+
+    const validCashCollections = cashCollections.map((entry) => {
+      const amount = toFiniteNumber(entry.totalAmount, Number.NaN);
+      const ordersCount = toFiniteNumber(entry.ordersCount, Number.NaN);
+
+      if (!Number.isFinite(amount) || amount < 0 || !Number.isFinite(ordersCount) || ordersCount < 0) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+
+      return {
+        date: toDateLabel(entry.collectionDate),
+        bankAccount: toNonEmptyString(entry.bankAccount, 'N/A'),
+        reference: toNonEmptyString(entry.depositReference, 'N/A'),
+        ordersCount: Math.floor(ordersCount),
+        amount,
+      };
+    }).filter(Boolean) as Array<{ date: string; bankAccount: string; reference: string; ordersCount: number; amount: number }>;
+
     const doc = new jsPDF();
     
     doc.setFontSize(20);
@@ -1970,6 +2519,8 @@ const AdminAccountStatement: React.FC = () => {
     doc.text(`Customer Balances: $${customerBalances.toFixed(2)}`, 20, y);
     y += 8;
     doc.text(`Supplier Balances: $${suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}`, 20, y);
+    y += 8;
+    doc.text(`Cash Deposited: $${totalCashDeposited.toFixed(2)}`, 20, y);
     y += 8;
     doc.text(`Net Balance: $${netBalance.toFixed(2)}`, 20, y);
     
@@ -2009,6 +2560,31 @@ const AdminAccountStatement: React.FC = () => {
       doc.text(`${cleanName}: $${product.totalRevenue.toFixed(2)}`, 25, y);
       y += 6;
     });
+
+    y += 8;
+    if (y > 250) {
+      doc.addPage();
+      y = 20;
+    }
+    doc.setFontSize(14);
+    doc.text('Recent Cash Collections', 20, y);
+    y += 8;
+    doc.setFontSize(10);
+    validCashCollections.slice(0, 5).forEach(entry => {
+      if (y > 280) {
+        doc.addPage();
+        y = 20;
+      }
+      const line = `${entry.date} • ${cleanTextForPDF(entry.bankAccount)} • ${cleanTextForPDF(entry.reference)} (${entry.ordersCount} orders): $${entry.amount.toFixed(2)}`;
+      doc.text(line, 25, y);
+      y += 6;
+    });
+
+    if (quarantinedExportRows > 0) {
+      y += 4;
+      doc.setFontSize(9);
+      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
+    }
     
     doc.save('account_statement.pdf');
   };
@@ -2025,6 +2601,18 @@ const AdminAccountStatement: React.FC = () => {
       </div>
     );
   }
+
+  const { summaries: filteredProductSummaries, quarantinedSales: quarantinedProductSalesCount } = getFilteredProductSummaries();
+  const productSummaryTotals = filteredProductSummaries.reduce((acc, product) => {
+    const discount = product.totalDiscount || 0;
+    const subtotal = product.totalRevenue + discount;
+
+    acc.quantity += product.totalSold;
+    acc.subtotal += subtotal;
+    acc.discount += discount;
+    acc.revenue += product.totalRevenue;
+    return acc;
+  }, { quantity: 0, subtotal: 0, discount: 0, revenue: 0 });
 
   return (
     <div className="min-h-screen bg-background">
@@ -2061,10 +2649,15 @@ const AdminAccountStatement: React.FC = () => {
       </div>
         )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-600">Total Sales</div>
           <div className="text-2xl font-bold text-blue-600">${totalSales.toFixed(2)}</div>
+          {quarantinedSalesCount > 0 && (
+            <div className="text-xs text-orange-600 mt-1">
+              Quarantined invalid sales: {quarantinedSalesCount}
+            </div>
+          )}
         </div>
         <div className="bg-white p-4 rounded shadow">
           <div className="text-sm text-gray-600">Total Purchases</div>
@@ -2083,6 +2676,10 @@ const AdminAccountStatement: React.FC = () => {
           <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
             ${netBalance.toFixed(2)}
           </div>
+        </div>
+        <div className="bg-white p-4 rounded shadow">
+          <div className="text-sm text-gray-600">Cash Deposited</div>
+          <div className="text-2xl font-bold text-emerald-600">${totalCashDeposited.toFixed(2)}</div>
         </div>
       </div>
 
@@ -2148,6 +2745,16 @@ const AdminAccountStatement: React.FC = () => {
               }`}
             >
               Sales ({sales.length})
+            </button>
+            <button
+              onClick={() => setActiveTab('cashCollections')}
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
+                activeTab === 'cashCollections'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Cash Collections ({cashCollections.length})
             </button>
           </div>
         </div>
@@ -2361,6 +2968,11 @@ const AdminAccountStatement: React.FC = () => {
             <div>
               <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Product Summary</h2>
+                {quarantinedProductSalesCount > 0 && (
+                  <div className="text-sm text-orange-600 font-medium">
+                    Quarantined rows: {quarantinedProductSalesCount}
+                  </div>
+                )}
                 <div className="flex gap-2 flex-wrap items-center">
                   <div className="flex gap-2 items-center">
                     <label className="text-sm text-gray-600">From:</label>
@@ -2419,125 +3031,36 @@ const AdminAccountStatement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(() => {
-                      // Filter sales by date and recalculate product summary
-                      const filteredSales = sales.filter(sale => {
-                        const saleDate = new Date(sale.date).toISOString().split('T')[0];
-                        const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                        const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                        return matchesStart && matchesEnd;
-                      });
-
-                      // Recalculate product totals from filtered sales
-                      const filteredProductMap = new Map<string, ProductSummary>();
-                      
-                      // Initialize all products with zero values
-                      products.forEach(product => {
-                        filteredProductMap.set(product.id, {
-                          id: product.id,
-                          name: product.name,
-                          category: product.category,
-                          totalSold: 0,
-                          totalRevenue: 0,
-                          totalDiscount: 0
-                        });
-                      });
-
-                      // Calculate from filtered sales
-                      filteredSales.forEach(sale => {
-                        const items = sale.items || [];
-                        const orderSubtotal = sale.subtotal || sale.total || 0;
-                        const orderDiscount = sale.discountAmount || 0;
-                        
-                        items.forEach((item: any) => {
-                          const productId = item.productId || item.id;
-                          if (productId && filteredProductMap.has(productId)) {
-                            const product = filteredProductMap.get(productId)!;
-                            const quantity = item.quantity || 0;
-                            const price = item.price || 0;
-                            const itemSubtotal = quantity * price;
-                            
-                            // Calculate proportional discount for this item
-                            const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                            const itemTotal = itemSubtotal - itemDiscount;
-                            
-                            product.totalSold += quantity;
-                            product.totalRevenue += itemTotal;
-                            product.totalDiscount += itemDiscount;
-                          }
-                        });
-                      });
-
-                      const filteredProducts = Array.from(filteredProductMap.values()).filter(p => p.totalSold > 0);
-
-                      return filteredProducts.map(product => {
-                        const discount = product.totalDiscount || 0;
-                        const subtotal = product.totalRevenue + discount;
-                        const netRevenue = product.totalRevenue;
-                        const vatRevenue = 0; // No automatic VAT calculation
-                        return (
-                          <tr key={product.id} className="border-b hover:bg-gray-50">
-                            <td className="border px-4 py-2">{product.name}</td>
-                            <td className="border px-4 py-2">{product.category}</td>
-                            <td className="border px-4 py-2 text-right">{product.totalSold}</td>
-                            <td className="border px-4 py-2 text-right">{subtotal.toFixed(2)}</td>
-                            <td className="border px-4 py-2 text-right text-red-600">{discount > 0 ? `-${discount.toFixed(2)}` : '0.00'}</td>
-                            <td className="border px-4 py-2 text-right font-semibold">{product.totalRevenue.toFixed(2)}</td>
-                            <td className="border px-4 py-2 text-right">{netRevenue.toFixed(2)}</td>
-                            <td className="border px-4 py-2 text-right">{vatRevenue.toFixed(2)}</td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                  <tfoot className="bg-gray-100 font-bold">
-                    {(() => {
-                      // Calculate totals from filtered sales
-                      const filteredSales = sales.filter(sale => {
-                        const saleDate = new Date(sale.date).toISOString().split('T')[0];
-                        const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                        const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                        return matchesStart && matchesEnd;
-                      });
-
-                      let totalQuantity = 0;
-                      let totalSubtotal = 0;
-                      let totalDiscount = 0;
-                      let totalRevenue = 0;
-
-                      filteredSales.forEach(sale => {
-                        const items = sale.items || [];
-                        const orderSubtotal = sale.subtotal || sale.total || 0;
-                        const orderDiscount = sale.discountAmount || 0;
-                        
-                        items.forEach((item: any) => {
-                          const quantity = item.quantity || 0;
-                          const price = item.price || 0;
-                          const itemSubtotal = quantity * price;
-                          
-                          // Calculate proportional discount for this item
-                          const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                          const itemTotal = itemSubtotal - itemDiscount;
-                          
-                          totalQuantity += quantity;
-                          totalSubtotal += itemSubtotal;
-                          totalDiscount += itemDiscount;
-                          totalRevenue += itemTotal;
-                        });
-                      });
+                    {filteredProductSummaries.map(product => {
+                      const discount = product.totalDiscount || 0;
+                      const subtotal = product.totalRevenue + discount;
+                      const netRevenue = product.totalRevenue;
+                      const vatRevenue = 0;
 
                       return (
-                        <tr>
-                          <td className="border px-4 py-3" colSpan={2}>TOTAL</td>
-                          <td className="border px-4 py-3 text-right">{totalQuantity}</td>
-                          <td className="border px-4 py-3 text-right">{totalSubtotal.toFixed(2)}</td>
-                          <td className="border px-4 py-3 text-right text-red-600">{totalDiscount.toFixed(2)}</td>
-                          <td className="border px-4 py-3 text-right text-blue-600">{totalRevenue.toFixed(2)}</td>
-                          <td className="border px-4 py-3 text-right">{totalRevenue.toFixed(2)}</td>
-                          <td className="border px-4 py-3 text-right">0.00</td>
+                        <tr key={product.id} className="border-b hover:bg-gray-50">
+                          <td className="border px-4 py-2">{product.name}</td>
+                          <td className="border px-4 py-2">{product.category}</td>
+                          <td className="border px-4 py-2 text-right">{product.totalSold}</td>
+                          <td className="border px-4 py-2 text-right">{subtotal.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right text-red-600">{discount > 0 ? `-${discount.toFixed(2)}` : '0.00'}</td>
+                          <td className="border px-4 py-2 text-right font-semibold">{product.totalRevenue.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{netRevenue.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{vatRevenue.toFixed(2)}</td>
                         </tr>
                       );
-                    })()}
+                    })}
+                  </tbody>
+                  <tfoot className="bg-gray-100 font-bold">
+                    <tr>
+                      <td className="border px-4 py-3" colSpan={2}>TOTAL</td>
+                      <td className="border px-4 py-3 text-right">{productSummaryTotals.quantity}</td>
+                      <td className="border px-4 py-3 text-right">{productSummaryTotals.subtotal.toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right text-red-600">{productSummaryTotals.discount.toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right text-blue-600">{productSummaryTotals.revenue.toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">{productSummaryTotals.revenue.toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">0.00</td>
+                    </tr>
                   </tfoot>
                 </table>
               </div>
@@ -2611,7 +3134,7 @@ const AdminAccountStatement: React.FC = () => {
                       let runningBalance = 0;
                       return purchases.map(purchase => {
                         const total = purchase.amount;
-                        const vat = (purchase as any).taxAmount || 0;
+                        const vat = purchase.taxAmount || 0;
                         const net = total - vat;
                         runningBalance += total - purchase.amountPaid;
                         return (
@@ -2721,7 +3244,7 @@ const AdminAccountStatement: React.FC = () => {
                       let runningBalance = 0;
                       return expenses.map(expense => {
                         const total = expense.amount;
-                        const vat = (expense as any).taxAmount || 0;
+                        const vat = expense.taxAmount || 0;
                         const net = total - vat;
                         runningBalance += total;
                         return (
@@ -2853,14 +3376,14 @@ const AdminAccountStatement: React.FC = () => {
                   </thead>
                   <tbody>
                     {(() => {
-                      let runningBalance = 0;
+                      const runningBalance = 0;
                       // Filter sales by date, customer, and product
                       const filteredSales = sales.filter(sale => {
                         const saleDate = new Date(sale.date).toISOString().split('T')[0];
                         const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                         const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                         const matchesCustomer = !filterCustomer || sale.customer === filterCustomer;
-                        const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: any) => item.productId === filterProduct));
+                        const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: StatementLineItem) => item.productId === filterProduct));
                         return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                       }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
                       
@@ -2874,7 +3397,7 @@ const AdminAccountStatement: React.FC = () => {
                           const orderDiscount = sale.discountAmount || 0;
                           
                           subtotal = 0;
-                          sale.items.forEach((item: any) => {
+                          sale.items.forEach((item: StatementLineItem) => {
                             if (item.productId === filterProduct) {
                               const itemSubtotal = (item.quantity || 0) * (item.price || 0);
                               subtotal += itemSubtotal;
@@ -2939,12 +3462,12 @@ const AdminAccountStatement: React.FC = () => {
                             const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                             const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                             const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
                             return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                           }).reduce((sum, s) => {
                             if (filterProduct && s.items) {
                               let itemSubtotal = 0;
-                              s.items.forEach((item: any) => {
+                              s.items.forEach((item: StatementLineItem) => {
                                 if (item.productId === filterProduct) {
                                   itemSubtotal += (item.quantity || 0) * (item.price || 0);
                                 }
@@ -2962,14 +3485,14 @@ const AdminAccountStatement: React.FC = () => {
                             const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                             const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                             const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
                             return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                           }).reduce((sum, s) => {
                             if (filterProduct && s.items) {
                               const orderSubtotal = s.subtotal || s.total || 0;
                               const orderDiscount = s.discountAmount || 0;
                               let itemSubtotal = 0;
-                              s.items.forEach((item: any) => {
+                              s.items.forEach((item: StatementLineItem) => {
                                 if (item.productId === filterProduct) {
                                   itemSubtotal += (item.quantity || 0) * (item.price || 0);
                                 }
@@ -2988,14 +3511,14 @@ const AdminAccountStatement: React.FC = () => {
                             const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                             const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                             const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
                             return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                           }).reduce((sum, s) => {
                             if (filterProduct && s.items) {
                               const orderSubtotal = s.subtotal || s.total || 0;
                               const orderDiscount = s.discountAmount || 0;
                               let itemSubtotal = 0;
-                              s.items.forEach((item: any) => {
+                              s.items.forEach((item: StatementLineItem) => {
                                 if (item.productId === filterProduct) {
                                   itemSubtotal += (item.quantity || 0) * (item.price || 0);
                                 }
@@ -3014,7 +3537,7 @@ const AdminAccountStatement: React.FC = () => {
                             const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                             const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                             const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
                             return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                           }).reduce((sum, s) => {
                             if (filterProduct && s.items) {
@@ -3022,7 +3545,7 @@ const AdminAccountStatement: React.FC = () => {
                               const orderDiscount = s.discountAmount || 0;
                               const orderVat = s.taxAmount || 0;
                               let itemSubtotal = 0;
-                              s.items.forEach((item: any) => {
+                              s.items.forEach((item: StatementLineItem) => {
                                 if (item.productId === filterProduct) {
                                   itemSubtotal += (item.quantity || 0) * (item.price || 0);
                                 }
@@ -3043,7 +3566,7 @@ const AdminAccountStatement: React.FC = () => {
                             const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                             const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                             const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
                             return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                           }).reduce((sum, s) => {
                             if (filterProduct && s.items) {
@@ -3051,7 +3574,7 @@ const AdminAccountStatement: React.FC = () => {
                               const orderDiscount = s.discountAmount || 0;
                               const orderVat = s.taxAmount || 0;
                               let itemSubtotal = 0;
-                              s.items.forEach((item: any) => {
+                              s.items.forEach((item: StatementLineItem) => {
                                 if (item.productId === filterProduct) {
                                   itemSubtotal += (item.quantity || 0) * (item.price || 0);
                                 }
@@ -3072,14 +3595,14 @@ const AdminAccountStatement: React.FC = () => {
                             const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                             const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                             const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
                             return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                           }).reduce((sum, s) => {
                             if (filterProduct && s.items) {
                               const orderSubtotal = s.subtotal || s.total || 0;
                               const orderDiscount = s.discountAmount || 0;
                               let itemSubtotal = 0;
-                              s.items.forEach((item: any) => {
+                              s.items.forEach((item: StatementLineItem) => {
                                 if (item.productId === filterProduct) {
                                   itemSubtotal += (item.quantity || 0) * (item.price || 0);
                                 }
@@ -3100,14 +3623,14 @@ const AdminAccountStatement: React.FC = () => {
                             const matchesStart = !filterStartDate || saleDate >= filterStartDate;
                             const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
                             const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: any) => item.productId === filterProduct));
+                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
                             return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
                           }).reduce((sum, s) => {
                             if (filterProduct && s.items) {
                               const orderSubtotal = s.subtotal || s.total || 0;
                               const orderDiscount = s.discountAmount || 0;
                               let itemSubtotal = 0;
-                              s.items.forEach((item: any) => {
+                              s.items.forEach((item: StatementLineItem) => {
                                 if (item.productId === filterProduct) {
                                   itemSubtotal += (item.quantity || 0) * (item.price || 0);
                                 }
@@ -3122,6 +3645,52 @@ const AdminAccountStatement: React.FC = () => {
                         })()}
                       </td>
                       <td className="px-3 py-3"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'cashCollections' && (
+            <div>
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
+                <h2 className="text-xl font-semibold">Cash Collection History</h2>
+                <div className="text-sm text-gray-600">
+                  Total Deposited: <span className="font-semibold text-emerald-600">${totalCashDeposited.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div className="overflow-x-auto -mx-6 px-6">
+                <table className="min-w-full border-collapse">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Collection Date</th>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Bank Account</th>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Deposit Ref.</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Orders</th>
+                      <th className="border px-4 py-2 text-right whitespace-nowrap">Amount</th>
+                      <th className="border px-4 py-2 text-left whitespace-nowrap">Notes</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {cashCollections.map((entry) => (
+                      <tr key={entry.id} className="border-b hover:bg-gray-50">
+                        <td className="border px-4 py-2">{toDateLabel(entry.collectionDate)}</td>
+                        <td className="border px-4 py-2">{entry.bankAccount}</td>
+                        <td className="border px-4 py-2">{entry.depositReference}</td>
+                        <td className="border px-4 py-2 text-right">{entry.ordersCount}</td>
+                        <td className="border px-4 py-2 text-right font-semibold text-emerald-600">{entry.totalAmount.toFixed(2)}</td>
+                        <td className="border px-4 py-2">{entry.notes || '-'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="bg-gray-100 font-bold">
+                    <tr>
+                      <td className="border px-4 py-3" colSpan={3}>TOTAL</td>
+                      <td className="border px-4 py-3 text-right">{cashCollections.reduce((sum, e) => sum + e.ordersCount, 0)}</td>
+                      <td className="border px-4 py-3 text-right text-emerald-600">{totalCashDeposited.toFixed(2)}</td>
+                      <td className="border px-4 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>

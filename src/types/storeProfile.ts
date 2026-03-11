@@ -5,6 +5,9 @@ export interface StoreProfile {
   location: string;
   website: string;
   slogan: string;
+  aboutUs?: string;
+  mission?: string;
+  vision?: string;
   phone: string;
   email: string;
   facebook: string;
@@ -53,6 +56,10 @@ export interface StoreProfile {
   invoiceNumberPrefix?: string; // Default: "INV"
   lastInvoiceNumber?: number; // Last used invoice number
   invoiceTemplate?: 'modern' | 'classic' | 'vibrant'; // Invoice design template
+  template?: 'default' | 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic'; // Storefront template
+  storeBackgroundImage?: string;
+  carouselImages?: string[];
+  galleryImages?: string[];
   // Product settings
   productCategories?: string[]; // Categories for composed products
   priceMultiplier?: number; // Default price multiplier for composed products (default: 2.5)

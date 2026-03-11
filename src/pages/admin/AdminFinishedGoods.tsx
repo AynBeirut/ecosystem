@@ -19,6 +19,7 @@ import { logAction } from '@/lib/auditLog';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { Expense } from '@/types/financial';
 import { syncFinishedGoodsSoldQuantities } from '@/lib/syncFinishedGoods';
+import { isCountedSaleStatus, resolveFinishedGoodsProductKey, resolveOrderItemProductKey } from '@/lib/salesRules';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { cleanTextForPDF } from '@/lib/arabicPDF';
@@ -800,15 +801,54 @@ const AdminFinishedGoods: React.FC = () => {
     setShowSyncDialog(false);
     
     try {
-      const result = await syncFinishedGoodsSoldQuantities(user.storeId, user.id, user.name);
-      
-      if (result.success) {
-        setSyncResults(result);
-        toast.success(`Sync complete! Updated ${result.productsUpdated} products`);
-      } else {
-        toast.error("Sync completed with errors. Check results for details.");
-        setSyncResults(result);
+      // Step 1: Dry run only
+      const dryRunResult = await syncFinishedGoodsSoldQuantities(user.storeId, user.id, user.name, {
+        dryRun: true,
+        createBackup: false,
+      });
+
+      setSyncResults(dryRunResult);
+
+      if (!dryRunResult.success) {
+        toast.error('Dry run failed. No data was changed.');
+        return;
       }
+
+      if (dryRunResult.productsUpdated === 0) {
+        toast.success('Safe check complete. No discrepancies found.');
+        await fetchFinishedGoods();
+        return;
+      }
+
+      const applyConfirmed = window.confirm(
+        `Dry run found ${dryRunResult.productsUpdated} product(s) to update.\n` +
+        'A backup snapshot will be created before write.\n\n' +
+        'Apply reconciliation now?'
+      );
+
+      if (!applyConfirmed) {
+        toast('Dry run completed. No changes applied.');
+        return;
+      }
+
+      // Step 2: Apply with backup
+      const applyResult = await syncFinishedGoodsSoldQuantities(user.storeId, user.id, user.name, {
+        dryRun: false,
+        createBackup: true,
+      });
+
+      setSyncResults(applyResult);
+
+      if (applyResult.success) {
+        toast.success(
+          `Reconciliation complete! Updated ${applyResult.productsUpdated} products` +
+          (applyResult.backupId ? ` (Backup: ${applyResult.backupId})` : '')
+        );
+      } else {
+        toast.error('Reconciliation completed with errors. Check results for details.');
+      }
+
+      await fetchFinishedGoods();
     } catch (error: any) {
       console.error("Sync error:", error);
       toast.error(`Sync failed: ${error.message}`);
@@ -837,9 +877,9 @@ const AdminFinishedGoods: React.FC = () => {
       const actualSoldQuantities = new Map<string, { quantity: number; name: string }>();
       ordersSnapshot.forEach((orderDoc) => {
         const order = orderDoc.data();
-        if (order.status === 'delivered' || order.status === 'completed') {
+        if (isCountedSaleStatus(order.status)) {
           order.items?.forEach((item: any) => {
-            const key = item.productId || item.composedProductId;
+            const key = resolveOrderItemProductKey(item);
             if (key) {
               const existing = actualSoldQuantities.get(key) || { quantity: 0, name: item.productName };
               actualSoldQuantities.set(key, {
@@ -861,12 +901,13 @@ const AdminFinishedGoods: React.FC = () => {
       const mismatches: any[] = [];
       fgSnapshot.forEach((fgDoc) => {
         const fg = fgDoc.data();
-        const actual = actualSoldQuantities.get(fg.productId) || { quantity: 0, name: fg.productName };
+        const productKey = resolveFinishedGoodsProductKey(fg);
+        const actual = actualSoldQuantities.get(productKey) || { quantity: 0, name: fg.productName };
         const recorded = fg.quantitySold || 0;
         
         if (Math.abs(actual.quantity - recorded) > 0.001) {
           mismatches.push({
-            productId: fg.productId,
+            productId: productKey,
             productName: fg.productName,
             recordedQuantity: recorded,
             actualQuantity: actual.quantity,
@@ -885,6 +926,105 @@ const AdminFinishedGoods: React.FC = () => {
     } catch (error: any) {
       console.error("Integrity check error:", error);
       toast.error(`Integrity check failed: ${error.message}`);
+    } finally {
+      setIsCheckingIntegrity(false);
+    }
+  };
+
+  const handleFixRecipeLinks = async () => {
+    if (!user?.storeId) {
+      toast({ title: "Error", description: "Store information not available", variant: "destructive" });
+      return;
+    }
+
+    const confirmed = window.confirm('Fix broken recipe links? This will update finished goods with correct recipe IDs and costs.');
+    if (!confirmed) return;
+
+    setIsCheckingIntegrity(true);
+
+    try {
+      const db = getFirestore();
+      
+      // Get all recipes for this store
+      const recipesQuery = query(
+        collection(db, 'recipes'),
+        where('storeId', '==', user.storeId)
+      );
+      const recipesSnapshot = await getDocs(recipesQuery);
+      
+      // Map recipes by product name (removing date prefix)
+      const recipesByName = new Map<string, any>();
+      recipesSnapshot.forEach((recipeDoc) => {
+        const recipe = { id: recipeDoc.id, ...recipeDoc.data() };
+        // Remove date prefix like "10Feb26 " from recipe name
+        const baseName = recipe.name.replace(/^\d+\w+\d+\s+/, '');
+        recipesByName.set(baseName, recipe);
+      });
+
+      // Get all finished goods for this store
+      const fgQuery = query(
+        collection(db, 'finishedGoodsInventory'),
+        where('storeId', '==', user.storeId)
+      );
+      const fgSnapshot = await getDocs(fgQuery);
+
+      let fixedCount = 0;
+      const fixes = [];
+
+      // Check each finished good
+      for (const fgDoc of fgSnapshot.docs) {
+        const fg = fgDoc.data();
+        const productName = fg.productName;
+        let needsFix = false;
+        let correctRecipe = null;
+
+        // Check if recipeId exists and is valid
+        if (fg.recipeId) {
+          const recipeDoc = await getDoc(doc(db, 'recipes', fg.recipeId));
+          if (!recipeDoc.exists()) {
+            needsFix = true;
+          }
+        } else {
+          needsFix = true;
+        }
+
+        // Find matching recipe by product name
+        if (needsFix) {
+          correctRecipe = recipesByName.get(productName);
+          if (correctRecipe) {
+            // Update finished good with correct recipe ID and cost
+            await updateDoc(doc(db, 'finishedGoodsInventory', fgDoc.id), {
+              recipeId: correctRecipe.id,
+              costPrice: correctRecipe.costPerUnit || 0,
+              updatedAt: new Date().toISOString()
+            });
+
+            fixes.push({
+              productName,
+              oldRecipeId: fg.recipeId || 'MISSING',
+              newRecipeId: correctRecipe.id,
+              oldCost: fg.costPrice || 0,
+              newCost: correctRecipe.costPerUnit || 0
+            });
+
+            fixedCount++;
+          }
+        }
+      }
+
+      if (fixedCount === 0) {
+        toast({ title: "Success", description: "All recipe links are valid! No fixes needed." });
+      } else {
+        console.log('Fixed recipe links:', fixes);
+        toast({ 
+          title: "Success", 
+          description: ` Fixed ${fixedCount} broken recipe link(s). Costs updated.`
+        });
+        await fetchFinishedGoods(); // Refresh the list
+      }
+    } catch (error: any) {
+      console.error("Fix recipe links error:", error);
+      toast({ title: "Error", description: `Failed to fix recipe links: ${error.message}`, variant: "destructive" });
     } finally {
       setIsCheckingIntegrity(false);
     }
@@ -1078,6 +1218,15 @@ const AdminFinishedGoods: React.FC = () => {
                 >
                   <AlertCircle className="h-4 w-4 mr-2" />
                   {isCheckingIntegrity ? 'Checking...' : 'Check Data Integrity'}
+                </Button>
+                <Button 
+                  onClick={handleFixRecipeLinks} 
+                  variant="outline" 
+                  size="sm"
+                  disabled={isCheckingIntegrity}
+                >
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Fix Recipe Links
                 </Button>
                 <Button 
                   onClick={handleSyncQuantities} 

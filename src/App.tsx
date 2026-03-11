@@ -52,6 +52,7 @@ import AdminInventory from "./pages/admin/AdminInventory";
 import AdminProduction from "./pages/admin/AdminProduction";
 import AdminAccountStatement from "./pages/admin/AdminAccountStatement";
 import AdminBankReconciliation from "./pages/admin/AdminBankReconciliation";
+import AdminServiceRenewals from "./pages/admin/AdminServiceRenewals";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminReturns from "./pages/admin/AdminReturns";
 import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
@@ -138,7 +139,9 @@ import Blocked from "./pages/Blocked";
                         <Route path="/admin/expenses" element={<ProtectedRoute allowedRoles={['admin']}><AdminExpenses /></ProtectedRoute>} />
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} />
                         <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']}><AdminAccountStatement /></ProtectedRoute>} />
+                        <Route path="/admin/cash-collection" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
                         <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
+                        <Route path="/admin/service-renewals" element={<ProtectedRoute allowedRoles={['admin']}><AdminServiceRenewals /></ProtectedRoute>} />
                         <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
                         {/* CRM */}
                         <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />

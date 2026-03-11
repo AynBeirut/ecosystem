@@ -4,6 +4,121 @@ import { sendExpiringReminderEmail, sendGracePeriodEmail } from '../services/ema
 
 const db = admin.firestore();
 
+interface ServiceSubscriptionRecord {
+  id?: string;
+  serviceId?: string;
+  serviceName?: string;
+  customerId?: string;
+  customerName?: string;
+  storeId?: string;
+  paymentType?: 'monthly' | 'yearly';
+  price?: number;
+  nextBillingDate?: string;
+  renewalReminderDays?: number;
+  status?: string;
+  lastReminderForBillingDate?: string;
+  lastChargeForBillingDate?: string;
+}
+
+function asDate(value: unknown): Date | null {
+  if (!value) return null;
+  const date = new Date(String(value));
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function nextServiceBillingDate(fromDate: Date, billingType: 'monthly' | 'yearly'): string {
+  const next = new Date(fromDate);
+  if (billingType === 'monthly') {
+    next.setMonth(next.getMonth() + 1);
+  } else {
+    next.setFullYear(next.getFullYear() + 1);
+  }
+  return next.toISOString();
+}
+
+async function processServiceRenewals(now: Date): Promise<{ reminders: number; charges: number }> {
+  const subscriptionsRef = db.collection('serviceSubscriptions');
+  const activeSubscriptions = await subscriptionsRef.where('status', '==', 'active').get();
+
+  let reminderCount = 0;
+  let chargeCount = 0;
+
+  for (const subscriptionDoc of activeSubscriptions.docs) {
+    const subscription = { id: subscriptionDoc.id, ...(subscriptionDoc.data() as ServiceSubscriptionRecord) };
+    const nextBillingDate = asDate(subscription.nextBillingDate);
+    const paymentType = subscription.paymentType;
+
+    if (!nextBillingDate || (paymentType !== 'monthly' && paymentType !== 'yearly')) {
+      continue;
+    }
+
+    const msUntilBilling = nextBillingDate.getTime() - now.getTime();
+    const daysUntilBilling = Math.ceil(msUntilBilling / (24 * 60 * 60 * 1000));
+    const reminderDays = Math.max(1, Number(subscription.renewalReminderDays || (paymentType === 'monthly' ? 7 : 30)));
+    const billingKey = nextBillingDate.toISOString();
+
+    if (daysUntilBilling > 0 && daysUntilBilling <= reminderDays && subscription.lastReminderForBillingDate !== billingKey) {
+      await db.collection('serviceRenewalReminders').add({
+        subscriptionId: subscriptionDoc.id,
+        storeId: subscription.storeId || '',
+        customerId: subscription.customerId || '',
+        customerName: subscription.customerName || '',
+        serviceId: subscription.serviceId || '',
+        serviceName: subscription.serviceName || 'Service',
+        nextBillingDate: billingKey,
+        daysUntilBilling,
+        amount: Number(subscription.price || 0),
+        status: 'queued',
+        createdAt: now.toISOString(),
+      });
+
+      await subscriptionDoc.ref.update({
+        lastReminderForBillingDate: billingKey,
+        lastReminderSentAt: now.toISOString(),
+        updatedAt: now.toISOString(),
+      });
+
+      reminderCount += 1;
+    }
+
+    if (daysUntilBilling <= 0 && subscription.lastChargeForBillingDate !== billingKey) {
+      const chargeId = `${subscriptionDoc.id}_${billingKey.slice(0, 10)}`;
+      const chargeRef = db.collection('serviceRenewalCharges').doc(chargeId);
+
+      await chargeRef.set(
+        {
+          subscriptionId: subscriptionDoc.id,
+          storeId: subscription.storeId || '',
+          customerId: subscription.customerId || '',
+          customerName: subscription.customerName || '',
+          serviceId: subscription.serviceId || '',
+          serviceName: subscription.serviceName || 'Service',
+          paymentType,
+          amount: Number(subscription.price || 0),
+          dueDate: billingKey,
+          status: 'pending',
+          nextCycleDate: nextServiceBillingDate(nextBillingDate, paymentType),
+          createdAt: now.toISOString(),
+          updatedAt: now.toISOString(),
+        },
+        { merge: true }
+      );
+
+      await subscriptionDoc.ref.update({
+        status: 'payment_due',
+        billingStatus: 'payment_due',
+        paymentDueSince: now.toISOString(),
+        lastChargeForBillingDate: billingKey,
+        updatedAt: now.toISOString(),
+      });
+
+      chargeCount += 1;
+    }
+  }
+
+  return { reminders: reminderCount, charges: chargeCount };
+}
+
 /**
  * Check subscriptions daily at 9 AM UTC
  * Scheduled to run every day at 09:00
@@ -30,6 +145,8 @@ export const checkSubscriptions = functions.onSchedule(
       let gracePeriodWarnings = 0;
       let expiredBlocked = 0;
       let dataDeleted = 0;
+
+      const serviceRenewalSummary = await processServiceRenewals(now);
       
       for (const storeDoc of allStores.docs) {
         const store = storeDoc.data();
@@ -136,6 +253,8 @@ export const checkSubscriptions = functions.onSchedule(
       console.log(`   Grace period warnings: ${gracePeriodWarnings}`);
       console.log(`   Accounts blocked: ${expiredBlocked}`);
       console.log(`   Data deleted: ${dataDeleted}`);
+      console.log(`   Service renewal reminders queued: ${serviceRenewalSummary.reminders}`);
+      console.log(`   Service renewal charges created: ${serviceRenewalSummary.charges}`);
       console.log('✅ Subscription check complete\n');
       
     } catch (error) {

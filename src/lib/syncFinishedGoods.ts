@@ -5,11 +5,14 @@
  * Fixes data corruption from deleted orders, voided payments, etc.
  */
 
-import { getFirestore, collection, query, where, getDocs, doc, updateDoc, writeBatch } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, doc, writeBatch, addDoc } from 'firebase/firestore';
+import { isCountedSaleStatus, resolveFinishedGoodsProductKey, resolveOrderItemProductKey } from '@/lib/salesRules';
 
 interface SyncResult {
   success: boolean;
+  dryRun: boolean;
   productsUpdated: number;
+  backupId?: string;
   changes: Array<{
     productId: string;
     productName: string;
@@ -20,17 +23,31 @@ interface SyncResult {
   errors: string[];
 }
 
-export async function syncFinishedGoodsSoldQuantities(storeId: string, userId: string, userName: string): Promise<SyncResult> {
+interface SyncOptions {
+  dryRun?: boolean;
+  createBackup?: boolean;
+}
+
+export async function syncFinishedGoodsSoldQuantities(
+  storeId: string,
+  userId: string,
+  userName: string,
+  options: SyncOptions = {}
+): Promise<SyncResult> {
   const db = getFirestore();
+  const dryRun = options.dryRun ?? false;
+  const createBackup = options.createBackup ?? !dryRun;
+
   const result: SyncResult = {
     success: false,
+    dryRun,
     productsUpdated: 0,
     changes: [],
     errors: [],
   };
 
   try {
-    console.log('🔄 Starting sync of sold quantities...');
+    console.log(`🔄 Starting ${dryRun ? 'DRY RUN' : 'APPLY'} sync of sold quantities...`);
 
     // Step 1: Get all delivered/completed orders
     const ordersQuery = query(
@@ -45,10 +62,11 @@ export async function syncFinishedGoodsSoldQuantities(storeId: string, userId: s
     ordersSnapshot.forEach((orderDoc) => {
       const order = orderDoc.data();
       
-      // Only count delivered or completed orders
-      if (order.status === 'delivered' || order.status === 'completed') {
+      // Count only canonical sale statuses
+      if (isCountedSaleStatus(order.status)) {
         order.items?.forEach((item: { productId?: string; composedProductId?: string; productName?: string; quantity?: number }) => {
-          const productId = item.productId;
+          const productId = resolveOrderItemProductKey(item);
+          if (!productId) return;
           const current = actualSoldQuantities.get(productId) || { quantity: 0, productName: item.productName || 'Unknown' };
           current.quantity += item.quantity || 0;
           actualSoldQuantities.set(productId, current);
@@ -67,13 +85,25 @@ export async function syncFinishedGoodsSoldQuantities(storeId: string, userId: s
 
     console.log(`🏭 Found ${fgSnapshot.size} finished goods entries`);
 
-    // Step 4: Update each finished goods entry
-    const batch = writeBatch(db);
-    let batchCount = 0;
+    // Step 4: Prepare pending changes
+    const pendingChanges: Array<{
+      fgDocId: string;
+      productId: string;
+      productName: string;
+      oldQuantitySold: number;
+      newQuantitySold: number;
+      difference: number;
+      oldCurrentBalance: number;
+      newCurrentBalance: number;
+      oldTotalValue: number;
+      newTotalValue: number;
+      oldTransactionsLength: number;
+      syncTransaction: any;
+    }> = [];
 
     for (const fgDoc of fgSnapshot.docs) {
       const fgData = fgDoc.data();
-      const productId = fgData.productId || fgData.composedProductId;
+      const productId = resolveFinishedGoodsProductKey(fgData);
       
       if (!productId) continue;
 
@@ -102,13 +132,19 @@ export async function syncFinishedGoodsSoldQuantities(storeId: string, userId: s
           userName: userName,
         };
 
-        batch.update(doc(db, 'finishedGoodsInventory', fgDoc.id), {
-          quantitySold: actualQuantitySold,
-          currentBalance: newBalance,
-          totalValue: newTotalValue,
-          transactions: [...(fgData.transactions || []), syncTransaction],
-          lastSyncDate: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
+        pendingChanges.push({
+          fgDocId: fgDoc.id,
+          productId,
+          productName: fgData.productName || fgData.name || actualData?.productName || 'Unknown',
+          oldQuantitySold: currentQuantitySold,
+          newQuantitySold: actualQuantitySold,
+          difference,
+          oldCurrentBalance: fgData.currentBalance || 0,
+          newCurrentBalance: newBalance,
+          oldTotalValue: fgData.totalValue || 0,
+          newTotalValue: newTotalValue,
+          oldTransactionsLength: (fgData.transactions || []).length,
+          syncTransaction,
         });
 
         result.changes.push({
@@ -118,19 +154,71 @@ export async function syncFinishedGoodsSoldQuantities(storeId: string, userId: s
           newQuantitySold: actualQuantitySold,
           difference,
         });
-
-        batchCount++;
-
-        // Firebase batches have a limit of 500 operations
-        if (batchCount >= 500) {
-          await batch.commit();
-          console.log(`  ✓ Committed batch of ${batchCount} updates`);
-          batchCount = 0;
-        }
       }
     }
 
-    // Commit remaining updates
+    if (dryRun) {
+      result.productsUpdated = result.changes.length;
+      result.success = true;
+      console.log(`\n✅ Dry run complete. Pending updates: ${result.productsUpdated}`);
+      return result;
+    }
+
+    // Step 5: Create backup snapshot before any write
+    if (createBackup && pendingChanges.length > 0) {
+      const backupRef = await addDoc(collection(db, 'auditLogs'), {
+        storeId,
+        createdAt: new Date().toISOString(),
+        action: 'backup',
+        entityType: 'finished_goods_sync',
+        entityId: `sync-${new Date().toISOString()}`,
+        userId,
+        userName,
+        reason: 'Safe reconciliation before quantity sync',
+        totalChanges: pendingChanges.length,
+        snapshot: pendingChanges.map(change => ({
+          fgDocId: change.fgDocId,
+          productId: change.productId,
+          productName: change.productName,
+          oldQuantitySold: change.oldQuantitySold,
+          oldCurrentBalance: change.oldCurrentBalance,
+          oldTotalValue: change.oldTotalValue,
+          oldTransactionsLength: change.oldTransactionsLength,
+        })),
+      });
+      result.backupId = backupRef.id;
+      console.log(`💾 Backup created: ${backupRef.id}`);
+    }
+
+    // Step 6: Apply pending changes in batches
+    let batch = writeBatch(db);
+    let batchCount = 0;
+    const nowIso = new Date().toISOString();
+
+    for (const change of pendingChanges) {
+      const fgDocRef = doc(db, 'finishedGoodsInventory', change.fgDocId);
+      const fgCurrentSnap = fgSnapshot.docs.find(d => d.id === change.fgDocId);
+      const fgCurrentData = fgCurrentSnap?.data() || {};
+
+      batch.update(fgDocRef, {
+        quantitySold: change.newQuantitySold,
+        currentBalance: change.newCurrentBalance,
+        totalValue: change.newTotalValue,
+        transactions: [...(fgCurrentData.transactions || []), change.syncTransaction],
+        lastSyncDate: nowIso,
+        updatedAt: nowIso,
+      });
+
+      batchCount++;
+
+      if (batchCount >= 500) {
+        await batch.commit();
+        console.log(`  ✓ Committed batch of ${batchCount} updates`);
+        batch = writeBatch(db);
+        batchCount = 0;
+      }
+    }
+
     if (batchCount > 0) {
       await batch.commit();
       console.log(`  ✓ Committed final batch of ${batchCount} updates`);

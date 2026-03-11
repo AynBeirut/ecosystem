@@ -24,6 +24,9 @@ const defaultProfile: StoreProfile = {
   location: '',
   website: '',
   slogan: '',
+  aboutUs: '',
+  mission: '',
+  vision: '',
   phone: '',
   email: '',
   facebook: '',
@@ -442,6 +445,40 @@ const AdminProfile: React.FC = () => {
                   placeholder="Tell customers what makes your store special"
                   rows={4}
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="aboutUs">About Us (Optional)</Label>
+                <Textarea
+                  id="aboutUs"
+                  value={formData.aboutUs || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, aboutUs: e.target.value }))}
+                  placeholder="Share your store story and what you stand for"
+                  rows={4}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="mission">Mission (Optional)</Label>
+                  <Textarea
+                    id="mission"
+                    value={formData.mission || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, mission: e.target.value }))}
+                    placeholder="What is your mission?"
+                    rows={3}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="vision">Vision (Optional)</Label>
+                  <Textarea
+                    id="vision"
+                    value={formData.vision || ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, vision: e.target.value }))}
+                    placeholder="What is your long-term vision?"
+                    rows={3}
+                  />
+                </div>
               </div>
               
               <div>

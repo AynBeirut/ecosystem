@@ -41,6 +41,7 @@ const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
 const cors_1 = __importDefault(require("cors"));
+const dotenv_1 = __importDefault(require("dotenv"));
 // Initialize Firebase Admin first
 console.log('TOP-LEVEL LOG: Cloud Function module loaded');
 console.error('TOP-LEVEL ERROR: Cloud Function module loaded');
@@ -54,7 +55,7 @@ catch (e) {
 // Load environment variables (only for local development)
 if (process.env.NODE_ENV !== 'production') {
     try {
-        require('dotenv').config();
+        dotenv_1.default.config();
     }
     catch (e) {
         // dotenv not available or failed to load
@@ -64,9 +65,11 @@ if (process.env.NODE_ENV !== 'production') {
 const subscription_1 = require("./api/subscription");
 const webhooks_1 = require("./api/webhooks");
 const checkout_1 = require("./api/checkout");
+const stripeCheckout_1 = require("./api/stripeCheckout");
 const db = admin.firestore();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
+app.post('/webhook/stripe', express_1.default.raw({ type: 'application/json' }), stripeCheckout_1.handleStripeWebhook);
 app.use(express_1.default.json());
 // Global request logger
 app.use((req, res, next) => {
@@ -95,6 +98,9 @@ app.get('/health', (req, res) => {
         endpoints: [
             '/checkout',
             '/payment/checkout',
+            '/payment/stripe/checkout',
+            '/payment/stripe/confirm',
+            '/webhook/stripe',
             '/payment/callback',
             '/subscription/trial',
             '/subscription/subscribe',
@@ -123,6 +129,8 @@ app.get('/subscription/info', subscription_1.getSubscriptionInfo);
 app.post('/webhook/whish', webhooks_1.handleWhishWebhook);
 // Checkout payment endpoints (using store owner's Whish Money account)
 app.post('/payment/checkout', checkout_1.processCheckout);
+app.post('/payment/stripe/checkout', stripeCheckout_1.createStripeCheckoutSession);
+app.post('/payment/stripe/confirm', stripeCheckout_1.confirmStripeCheckoutSession);
 app.get('/payment/callback', checkout_1.handleCheckoutCallback);
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp() {
@@ -135,6 +143,29 @@ function getServerTimestamp() {
     catch (e) {
         return new Date();
     }
+}
+function roundMoney(value) {
+    return Math.round((Number(value) + Number.EPSILON) * 100) / 100;
+}
+function validateFinancials(subtotalRaw, discountAmountRaw, taxAmountRaw, totalRaw) {
+    const subtotal = roundMoney(subtotalRaw || 0);
+    const discountAmount = roundMoney(discountAmountRaw || 0);
+    const taxAmount = roundMoney(taxAmountRaw || 0);
+    const total = roundMoney(totalRaw || 0);
+    if (![subtotal, discountAmount, taxAmount, total].every(Number.isFinite)) {
+        return { valid: false, message: 'Invalid non-numeric financial values' };
+    }
+    if (subtotal < 0 || discountAmount < 0 || taxAmount < 0 || total < 0) {
+        return { valid: false, message: 'Negative financial values are not allowed' };
+    }
+    const expectedTotal = roundMoney(subtotal - discountAmount + taxAmount);
+    if (Math.abs(expectedTotal - total) > 0.01) {
+        return {
+            valid: false,
+            message: `Financial totals mismatch: expected ${expectedTotal.toFixed(2)}, got ${total.toFixed(2)}`,
+        };
+    }
+    return { valid: true, subtotal, discountAmount, taxAmount, total: expectedTotal };
 }
 app.post('/checkout', async (req, res) => {
     try {
@@ -208,8 +239,9 @@ app.post('/checkout', async (req, res) => {
         }
         console.log('Items by store:', itemsByStore);
         let ordersCreated = 0;
-        let orderIds = [];
+        const orderIds = [];
         await db.runTransaction(async (tx) => {
+            const transaction = tx;
             // PHASE 1: ALL READS FIRST (Firestore requirement)
             const ordersToCreate = [];
             const stockUpdates = [];
@@ -224,7 +256,7 @@ app.post('/checkout', async (req, res) => {
                         throw new Error('Invalid item');
                     }
                     const productRef = db.doc(`products/${it.productId}`);
-                    const productSnap = await tx.get(productRef);
+                    const productSnap = await transaction.get(productRef);
                     if (!productSnap.exists) {
                         console.error('Product not found:', it.productId);
                         throw new Error(`Product not found: ${it.productId}`);
@@ -254,14 +286,22 @@ app.post('/checkout', async (req, res) => {
                 }
                 // Read store profile
                 const profileRef = db.doc(`storeProfiles/${storeId}`);
-                const profileSnap = await tx.get(profileRef);
+                const profileSnap = await transaction.get(profileRef);
                 const storeProfile = profileSnap.exists ? profileSnap.data() : undefined;
+                const discountAmount = 0;
+                const taxAmount = 0;
                 const totalAfterDiscount = storeSubtotal;
+                const financialCheck = validateFinancials(storeSubtotal, discountAmount, taxAmount, totalAfterDiscount);
+                if (!financialCheck.valid) {
+                    throw new Error(`Invalid order financials for store ${storeId}: ${financialCheck.message}`);
+                }
                 ordersToCreate.push({
                     storeId,
                     orderItems,
-                    subtotal: storeSubtotal,
-                    total: totalAfterDiscount,
+                    subtotal: financialCheck.subtotal,
+                    discountAmount: financialCheck.discountAmount,
+                    taxAmount: financialCheck.taxAmount,
+                    total: financialCheck.total,
                     storeProfile,
                 });
                 console.log('Prepared order for store:', storeId, 'with items:', orderItems);
@@ -275,9 +315,9 @@ app.post('/checkout', async (req, res) => {
                 const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
                 // Update store profile with new invoice number (use set with merge to create if not exists)
                 const profileRef = db.doc(`storeProfiles/${orderData.storeId}`);
-                tx.set(profileRef, { lastInvoiceNumber: newNumber }, { merge: true });
+                transaction.set(profileRef, { lastInvoiceNumber: newNumber }, { merge: true });
                 const orderRef = db.collection('orders').doc();
-                tx.set(orderRef, {
+                transaction.set(orderRef, {
                     storeId: orderData.storeId,
                     customerId: userId,
                     customerName,
@@ -287,7 +327,13 @@ app.post('/checkout', async (req, res) => {
                     invoiceNumber,
                     items: orderData.orderItems,
                     subtotal: orderData.subtotal,
-                    discount: 0,
+                    taxType: 'none',
+                    taxRate: 0,
+                    taxAmount: orderData.taxAmount,
+                    discountType: 'fixed',
+                    discountValue: orderData.discountAmount,
+                    discountAmount: orderData.discountAmount,
+                    discount: orderData.discountAmount,
                     total: orderData.total,
                     status: 'pending',
                     deliveryAddress: deliveryInfo?.address || '',
@@ -315,7 +361,7 @@ app.post('/checkout', async (req, res) => {
             // Update stock for all products
             for (const update of stockUpdates) {
                 const productRef = db.doc(`products/${update.productId}`);
-                tx.update(productRef, { stock: update.newStock });
+                transaction.update(productRef, { stock: update.newStock });
             }
         });
         console.log('Orders created:', orderIds);

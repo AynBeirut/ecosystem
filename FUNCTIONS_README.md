@@ -56,6 +56,42 @@ Orders created: [ ... ]
 - All requests (including preflight) are logged and handled.
 - Make sure your frontend uses the correct API base URL (see `VITE_API_BASE`).
 
+## Stripe MVP (Card Payments)
+
+The API now includes Stripe card checkout endpoints:
+
+- `POST /payment/stripe/checkout` → creates a Stripe Checkout Session for an existing order.
+- `POST /payment/stripe/confirm` → verifies the returned Stripe session and marks the order as paid.
+
+Required environment variables for the `functions` runtime:
+
+- `STRIPE_SECRET_KEY` (required)
+- `STRIPE_WEBHOOK_SECRET` (required for signed webhook verification)
+- `FRONTEND_BASE_URL` (optional, defaults to `https://grabio.space`)
+
+Example local `.env` (inside `functions/`):
+
+```env
+STRIPE_SECRET_KEY=sk_test_xxx
+STRIPE_WEBHOOK_SECRET=whsec_xxx
+FRONTEND_BASE_URL=http://localhost:5173
+```
+
+Webhook endpoint:
+
+- `POST /webhook/stripe` (expects Stripe-signed raw JSON payload)
+
+## Recurring Service Renewal Job
+
+The daily scheduler (`checkSubscriptions`) now also processes recurring service subscriptions:
+
+- Reads active documents from `serviceSubscriptions`
+- Queues reminder records in `serviceRenewalReminders` before due date
+- Creates due renewal charge records in `serviceRenewalCharges`
+- Marks subscription status as `payment_due` once a due charge is created
+
+This keeps renewal generation idempotent using per-cycle keys stored on each subscription record.
+
 ## For further debugging
 
 - Use the Cloud Functions > Logs Explorer in the Firebase Console.

@@ -25,6 +25,7 @@ import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { isCountedSaleStatus } from '@/lib/salesRules';
 
 type RecentEvent = {
   type: 'product' | 'order' | 'announcement';
@@ -57,6 +58,7 @@ const AdminDashboard: React.FC = () => {
   const [productCount, setProductCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
   const [revenue, setRevenue] = useState(0);
+  const [quarantinedRevenueOrders, setQuarantinedRevenueOrders] = useState(0);
   const [usdToLbpRate, setUsdToLbpRate] = useState<number | null>(null);
   const [rateFetchedAt, setRateFetchedAt] = useState<number | null>(null);
   const [editingRate, setEditingRate] = useState(false);
@@ -93,6 +95,7 @@ const AdminDashboard: React.FC = () => {
         setProductCount(0);
         setOrderCount(0);
         setRevenue(0);
+        setQuarantinedRevenueOrders(0);
         setCustomerCount(0);
         setRecentEvents([]);
         return;
@@ -132,13 +135,21 @@ const AdminDashboard: React.FC = () => {
         setOrderCount(ordersSnap.size);
         // Revenue and customers
         let totalRevenue = 0;
+        let invalidRevenueRows = 0;
         const customerSet = new Set();
         ordersSnap.forEach(doc => {
           const data = doc.data();
-          totalRevenue += data.total || 0;
+          if (!isCountedSaleStatus(data.status)) return;
+          const orderTotal = typeof data.total === 'number' ? data.total : Number(data.total);
+          if (!Number.isFinite(orderTotal) || orderTotal < 0) {
+            invalidRevenueRows += 1;
+            return;
+          }
+          totalRevenue += orderTotal;
           if (data.customerId) customerSet.add(data.customerId);
         });
         setRevenue(totalRevenue);
+        setQuarantinedRevenueOrders(invalidRevenueRows);
         // Fetch USD->LBP rate in background (non-blocking)
         // Only fetch global rate if store doesn't provide its own rate
         if (!profileSnap.exists() || !profileSnap.data()?.usdToLbpRate) {
@@ -196,7 +207,7 @@ const AdminDashboard: React.FC = () => {
       }
     };
     fetchStats();
-  }, [user?.id, user?.storeId]);
+  }, [user]);
 
   // credits toggle removed
 
@@ -345,6 +356,22 @@ const AdminDashboard: React.FC = () => {
                 </Link>
               </li>
             )}
+            {user?.role === 'admin' && (
+              <li>
+                <Link to="/admin/cash-collection" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <DollarSign className="h-5 w-5 mr-3" />
+                  <span>Cash Collection</span>
+                </Link>
+              </li>
+            )}
+            {user?.role === 'admin' && (
+              <li>
+                <Link to="/admin/service-renewals" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <Clock className="h-5 w-5 mr-3" />
+                  <span>Service Renewals</span>
+                </Link>
+              </li>
+            )}
             {canManageDeliveries && (
               <li>
                 <Link to="/admin/delivery" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
@@ -474,6 +501,9 @@ const AdminDashboard: React.FC = () => {
                   <div>
                     <div className="text-sm text-gray-500">Revenue</div>
                     <div className="text-2xl font-semibold text-gray-900">${revenue.toFixed(2)}</div>
+                    {quarantinedRevenueOrders > 0 && (
+                      <div className="text-xs text-orange-600">Quarantined orders: {quarantinedRevenueOrders}</div>
+                    )}
                     {usdToLbpRate ? (
                       <div className="text-xs text-gray-500">≈ {formatLbp(revenue, usdToLbpRate)} <span className="ml-2">{rateFetchedAt ? `(rate updated ${new Date(rateFetchedAt).toLocaleTimeString()})` : ''}</span></div>
                     ) : (
@@ -635,6 +665,24 @@ const AdminDashboard: React.FC = () => {
                       <FileText className="h-4 w-4" />
                     </div>
                     <span className="text-sm font-medium">Account Statement</span>
+                  </Link>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link to="/admin/cash-collection" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-emerald-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
+                      <DollarSign className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">Cash Collection</span>
+                  </Link>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link to="/admin/service-renewals" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-blue-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700">
+                      <Clock className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">Service Renewals</span>
                   </Link>
                 )}
 

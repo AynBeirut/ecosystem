@@ -3,43 +3,47 @@ import BackButton from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Palette, Eye, Check } from 'lucide-react';
+import { Palette, Eye, Check, Upload, Trash2, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { storage } from '@/lib/firebase';
 import { useAuth } from '@/context/useAuth';
+import { getActualStoreId } from '@/lib/storeUtils';
+
+type TemplateId = 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic';
+
+type TemplateDefinition = {
+  id: TemplateId;
+  name: string;
+  description: string;
+  colors: string[];
+  features: string[];
+  isPremium: boolean;
+};
 
 const AdminTemplates: React.FC = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { user } = useAuth();
+  const storeId = getActualStoreId(user);
   const db = getFirestore();
-  const [selectedTemplate, setSelectedTemplate] = useState('modern');
+  const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>('modern');
+  const [previewTemplate, setPreviewTemplate] = useState<TemplateId>('modern');
+  const [backgroundImage, setBackgroundImage] = useState('');
+  const [carouselImages, setCarouselImages] = useState<string[]>([]);
+  const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [uploadingSection, setUploadingSection] = useState<'background' | 'carousel' | 'gallery' | null>(null);
+  const [draggingItem, setDraggingItem] = useState<{ mode: 'carousel' | 'gallery'; index: number } | null>(null);
 
-  // Load selected template from Firestore on mount
-  useEffect(() => {
-    const fetchTemplate = async () => {
-      if (user?.id) {
-        const profileRef = doc(db, 'storeProfiles', user.id);
-        const profileSnap = await getDoc(profileRef);
-        if (profileSnap.exists()) {
-          const data = profileSnap.data();
-          if (data.template) setSelectedTemplate(data.template);
-        }
-      }
-    };
-    fetchTemplate();
-    // eslint-disable-next-line
-  }, [user?.id]);
-
-  const templates = [
+  const templates: TemplateDefinition[] = [
     {
       id: 'modern',
       name: 'Modern',
       description: 'Clean, contemporary design with bold typography and spacious layouts',
-      preview: 'https://placehold.co/400x300/38B2AC/fff?text=Modern+Template',
       colors: ['#38B2AC', '#2C5282', '#ED8936'],
       features: ['Responsive Design', 'Dark Mode', 'Animation Effects'],
       isPremium: false
@@ -48,7 +52,6 @@ const AdminTemplates: React.FC = () => {
       id: 'minimal',
       name: 'Minimal',
       description: 'Simple, elegant design focusing on content and whitespace',
-      preview: 'https://placehold.co/400x300/718096/fff?text=Minimal+Template',
       colors: ['#718096', '#2D3748', '#E2E8F0'],
       features: ['Clean Layout', 'Typography Focus', 'Fast Loading'],
       isPremium: false
@@ -57,7 +60,6 @@ const AdminTemplates: React.FC = () => {
       id: 'classic',
       name: 'Classic',
       description: 'Traditional design with proven usability and timeless appeal',
-      preview: 'https://placehold.co/400x300/2C5282/fff?text=Classic+Template',
       colors: ['#2C5282', '#3182CE', '#63B3ED'],
       features: ['Traditional Layout', 'High Contrast', 'Easy Navigation'],
       isPremium: false
@@ -66,7 +68,6 @@ const AdminTemplates: React.FC = () => {
       id: 'vibrant',
       name: 'Vibrant',
       description: 'Energetic design with bold colors and dynamic elements',
-      preview: 'https://placehold.co/400x300/ED8936/fff?text=Vibrant+Template',
       colors: ['#ED8936', '#F56565', '#9F7AEA'],
       features: ['Bold Colors', 'Dynamic Layout', 'Interactive Elements'],
       isPremium: true
@@ -75,7 +76,6 @@ const AdminTemplates: React.FC = () => {
       id: 'professional',
       name: 'Professional',
       description: 'Corporate-style design perfect for business and B2B stores',
-      preview: 'https://placehold.co/400x300/2D3748/fff?text=Professional+Template',
       colors: ['#2D3748', '#4A5568', '#718096'],
       features: ['Corporate Style', 'Trust Elements', 'Formal Layout'],
       isPremium: true
@@ -84,17 +84,47 @@ const AdminTemplates: React.FC = () => {
       id: 'artistic',
       name: 'Artistic',
       description: 'Creative design with unique layouts and artistic elements',
-      preview: 'https://placehold.co/400x300/9F7AEA/fff?text=Artistic+Template',
       colors: ['#9F7AEA', '#ED64A6', '#F6AD55'],
       features: ['Creative Layout', 'Artistic Elements', 'Unique Design'],
       isPremium: true
     }
   ];
 
-  const handleSelectTemplate = async (templateId: string) => {
+  // Load selected template from Firestore on mount
+  useEffect(() => {
+    const fetchTemplate = async () => {
+      if (storeId) {
+        const profileRef = doc(db, 'storeProfiles', storeId);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          const data = profileSnap.data();
+          if (data.template && templates.some((t) => t.id === data.template)) {
+            setSelectedTemplate(data.template as TemplateId);
+            setPreviewTemplate(data.template as TemplateId);
+          }
+          setBackgroundImage(typeof data.storeBackgroundImage === 'string' ? data.storeBackgroundImage : '');
+          setCarouselImages(Array.isArray(data.carouselImages) ? data.carouselImages.filter((url: unknown) => typeof url === 'string') : []);
+          setGalleryImages(Array.isArray(data.galleryImages) ? data.galleryImages.filter((url: unknown) => typeof url === 'string') : []);
+        }
+      }
+    };
+    fetchTemplate();
+    // eslint-disable-next-line
+  }, [storeId]);
+
+  const previewStyles: Record<TemplateId, { shell: string; header: string; block: string; title: string }> = {
+    modern: { shell: 'bg-gradient-to-b from-cyan-50 to-indigo-50', header: 'bg-white/90 border-cyan-200', block: 'bg-white border-cyan-100', title: 'text-cyan-800' },
+    minimal: { shell: 'bg-white', header: 'bg-white border-gray-200', block: 'bg-white border-gray-200', title: 'text-gray-800' },
+    classic: { shell: 'bg-blue-50/50', header: 'bg-white border-blue-300', block: 'bg-white border-blue-200', title: 'text-blue-900' },
+    vibrant: { shell: 'bg-gradient-to-br from-orange-50 via-pink-50 to-violet-100', header: 'bg-white border-orange-200', block: 'bg-white border-pink-200', title: 'text-fuchsia-900' },
+    professional: { shell: 'bg-slate-100', header: 'bg-white border-slate-300', block: 'bg-white border-slate-200', title: 'text-slate-900' },
+    artistic: { shell: 'bg-gradient-to-tr from-violet-100 to-amber-50', header: 'bg-white border-violet-200', block: 'bg-white border-rose-200', title: 'text-violet-900' },
+  };
+
+  const handleSelectTemplate = async (templateId: TemplateId) => {
     setSelectedTemplate(templateId);
-    if (user?.id) {
-      const profileRef = doc(db, 'storeProfiles', user.id);
+    if (storeId) {
+      const profileRef = doc(db, 'storeProfiles', storeId);
       await setDoc(profileRef, { template: templateId }, { merge: true });
     }
     toast({
@@ -103,11 +133,122 @@ const AdminTemplates: React.FC = () => {
     });
   };
 
-  const handlePreview = (templateId: string) => {
-    toast({
-      title: "Preview Mode",
-      description: `Opening preview for ${templates.find(t => t.id === templateId)?.name} template.`
-    });
+  const handlePreview = (templateId: TemplateId) => {
+    setPreviewTemplate(templateId);
+  };
+
+  const saveMediaSettings = async (next: { backgroundImage?: string; carouselImages?: string[]; galleryImages?: string[] }) => {
+    if (!storeId) return;
+    const profileRef = doc(db, 'storeProfiles', storeId);
+    await setDoc(profileRef, {
+      ...(next.backgroundImage !== undefined ? { storeBackgroundImage: next.backgroundImage } : {}),
+      ...(next.carouselImages !== undefined ? { carouselImages: next.carouselImages } : {}),
+      ...(next.galleryImages !== undefined ? { galleryImages: next.galleryImages } : {}),
+    }, { merge: true });
+  };
+
+  const uploadSingleImage = async (file: File, folder: 'background' | 'carousel' | 'gallery') => {
+    const safeFileName = encodeURIComponent(file.name);
+    const path = `store-media/${storeId || 'unknown'}/${folder}/${Date.now()}_${safeFileName}`;
+    const imageRef = ref(storage, path);
+    await uploadBytes(imageRef, file);
+    return getDownloadURL(imageRef);
+  };
+
+  const handleBackgroundUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || !storeId) return;
+
+    setUploadingSection('background');
+    try {
+      const url = await uploadSingleImage(file, 'background');
+      setBackgroundImage(url);
+      await saveMediaSettings({ backgroundImage: url });
+      toast({ title: 'Background Updated', description: 'Store background image uploaded successfully.' });
+    } catch (error) {
+      toast({ title: 'Upload Failed', description: 'Could not upload background image.', variant: 'destructive' });
+      console.error('Background upload failed', error);
+    } finally {
+      setUploadingSection(null);
+    }
+  };
+
+  const handleMultiUpload = async (event: React.ChangeEvent<HTMLInputElement>, mode: 'carousel' | 'gallery') => {
+    const files = Array.from(event.target.files || []);
+    event.target.value = '';
+    if (files.length === 0 || !storeId) return;
+
+    setUploadingSection(mode);
+    try {
+      const uploadedUrls = await Promise.all(files.map((file) => uploadSingleImage(file, mode)));
+
+      if (mode === 'carousel') {
+        const next = [...carouselImages, ...uploadedUrls].slice(0, 12);
+        setCarouselImages(next);
+        await saveMediaSettings({ carouselImages: next });
+      } else {
+        const next = [...galleryImages, ...uploadedUrls].slice(0, 24);
+        setGalleryImages(next);
+        await saveMediaSettings({ galleryImages: next });
+      }
+
+      toast({ title: 'Images Uploaded', description: `${uploadedUrls.length} image(s) uploaded to ${mode}.` });
+    } catch (error) {
+      toast({ title: 'Upload Failed', description: `Could not upload ${mode} images.`, variant: 'destructive' });
+      console.error(`${mode} upload failed`, error);
+    } finally {
+      setUploadingSection(null);
+    }
+  };
+
+  const removeImageAt = async (mode: 'carousel' | 'gallery', index: number) => {
+    const source = mode === 'carousel' ? carouselImages : galleryImages;
+    const next = source.filter((_, i) => i !== index);
+
+    if (mode === 'carousel') {
+      setCarouselImages(next);
+      await saveMediaSettings({ carouselImages: next });
+    } else {
+      setGalleryImages(next);
+      await saveMediaSettings({ galleryImages: next });
+    }
+  };
+
+  const reorderImages = async (mode: 'carousel' | 'gallery', sourceIndex: number, targetIndex: number) => {
+    const source = mode === 'carousel' ? carouselImages : galleryImages;
+    if (sourceIndex === targetIndex || sourceIndex < 0 || targetIndex < 0 || sourceIndex >= source.length || targetIndex >= source.length) {
+      return;
+    }
+
+    const next = [...source];
+    const [moved] = next.splice(sourceIndex, 1);
+    next.splice(targetIndex, 0, moved);
+
+    if (mode === 'carousel') {
+      setCarouselImages(next);
+      await saveMediaSettings({ carouselImages: next });
+    } else {
+      setGalleryImages(next);
+      await saveMediaSettings({ galleryImages: next });
+    }
+  };
+
+  const handleDragStart = (mode: 'carousel' | 'gallery', index: number) => {
+    setDraggingItem({ mode, index });
+  };
+
+  const handleDrop = async (mode: 'carousel' | 'gallery', targetIndex: number) => {
+    if (!draggingItem || draggingItem.mode !== mode) {
+      setDraggingItem(null);
+      return;
+    }
+    await reorderImages(mode, draggingItem.index, targetIndex);
+    setDraggingItem(null);
+  };
+
+  const moveImageByStep = async (mode: 'carousel' | 'gallery', index: number, step: -1 | 1) => {
+    await reorderImages(mode, index, index + step);
   };
 
   return (
@@ -123,6 +264,37 @@ const AdminTemplates: React.FC = () => {
           </h1>
           <p className="text-muted-foreground">Choose a template that best represents your brand and style</p>
         </div>
+
+        <Card className="mb-6">
+          <CardHeader>
+            <CardTitle>Live Preview</CardTitle>
+            <CardDescription>
+              This is how your storefront theme style will look for the selected preview template.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className={`rounded-lg border p-4 ${previewStyles[previewTemplate].shell}`}>
+              <div className={`rounded-md border p-3 mb-3 ${previewStyles[previewTemplate].header}`}>
+                <div className={`font-semibold ${previewStyles[previewTemplate].title}`}>Store Header</div>
+                <div className="text-sm text-muted-foreground">Brand, slogan, and contact details area</div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className={`rounded-md border p-3 ${previewStyles[previewTemplate].block}`}>
+                  <div className="text-sm font-medium">Product Card</div>
+                  <div className="text-xs text-muted-foreground">Image • Name • Price</div>
+                </div>
+                <div className={`rounded-md border p-3 ${previewStyles[previewTemplate].block}`}>
+                  <div className="text-sm font-medium">Announcement</div>
+                  <div className="text-xs text-muted-foreground">Important store update block</div>
+                </div>
+                <div className={`rounded-md border p-3 ${previewStyles[previewTemplate].block}`}>
+                  <div className="text-sm font-medium">Review Card</div>
+                  <div className="text-xs text-muted-foreground">Rating and customer feedback</div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {templates.map((template) => (
@@ -142,21 +314,17 @@ const AdminTemplates: React.FC = () => {
                 </div>
               )}
 
-              <div className="aspect-video relative overflow-hidden">
-                <img 
-                  src={template.preview} 
-                  alt={`${template.name} template preview`}
-                  className="w-full h-full object-cover"
-                />
-                <div className="absolute inset-0 bg-black/20 opacity-0 hover:opacity-100 transition-opacity flex items-center justify-center">
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => handlePreview(template.id)}
-                  >
-                    <Eye className="h-4 w-4 mr-2" />
-                    Preview
-                  </Button>
+              <div className={`aspect-video relative overflow-hidden p-3 ${previewStyles[template.id].shell}`}>
+                <div className={`rounded-md border p-2 mb-2 ${previewStyles[template.id].header}`}>
+                  <div className={`text-xs font-semibold ${previewStyles[template.id].title}`}>{template.name} Header</div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <div className={`rounded-md border p-2 ${previewStyles[template.id].block}`}>
+                    <div className="text-[10px] font-medium">Products</div>
+                  </div>
+                  <div className={`rounded-md border p-2 ${previewStyles[template.id].block}`}>
+                    <div className="text-[10px] font-medium">Reviews</div>
+                  </div>
                 </div>
               </div>
 
@@ -179,6 +347,7 @@ const AdminTemplates: React.FC = () => {
                           key={index}
                           className="w-6 h-6 rounded-full border-2 border-white shadow-sm template-color"
                           data-color={color}
+                          style={{ backgroundColor: color }}
                         />
                       ))}
                     </div>
@@ -230,30 +399,176 @@ const AdminTemplates: React.FC = () => {
           <CardHeader>
             <CardTitle>Template Customization</CardTitle>
             <CardDescription>
-              Advanced customization options for your selected template
+              Shopify-style storefront media controls
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary mb-2">6</div>
-                <div className="text-sm text-muted-foreground">Available Templates</div>
+            <div className="space-y-8">
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">Store Background Image</h4>
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" className="hidden" onChange={handleBackgroundUpload} />
+                    <span className="inline-flex items-center gap-2 px-3 py-2 border rounded-md text-sm hover:bg-muted">
+                      <Upload className="h-4 w-4" />
+                      {uploadingSection === 'background' ? 'Uploading...' : 'Upload'}
+                    </span>
+                  </label>
+                </div>
+                {backgroundImage ? (
+                  <div className="relative">
+                    <img src={backgroundImage} alt="Store background" className="w-full h-48 object-cover rounded-lg border" />
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-2 right-2"
+                      onClick={async () => {
+                        setBackgroundImage('');
+                        await saveMediaSettings({ backgroundImage: '' });
+                      }}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="h-24 rounded-lg border border-dashed flex items-center justify-center text-sm text-muted-foreground">
+                    No background image uploaded
+                  </div>
+                )}
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary mb-2">3</div>
-                <div className="text-sm text-muted-foreground">Premium Templates</div>
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">Homepage Carousel Images</h4>
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleMultiUpload(e, 'carousel')} />
+                    <span className="inline-flex items-center gap-2 px-3 py-2 border rounded-md text-sm hover:bg-muted">
+                      <Upload className="h-4 w-4" />
+                      {uploadingSection === 'carousel' ? 'Uploading...' : 'Add Images'}
+                    </span>
+                  </label>
+                </div>
+                {carouselImages.length === 0 ? (
+                  <div className="h-24 rounded-lg border border-dashed flex items-center justify-center text-sm text-muted-foreground">
+                    No carousel images yet
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {carouselImages.map((url, index) => (
+                      <div
+                        key={`${url}-${index}`}
+                        className={`relative ${draggingItem?.mode === 'carousel' && draggingItem.index === index ? 'opacity-60 ring-2 ring-primary rounded-md' : ''}`}
+                        draggable
+                        onDragStart={() => handleDragStart('carousel', index)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => void handleDrop('carousel', index)}
+                        onDragEnd={() => setDraggingItem(null)}
+                      >
+                        <img src={url} alt={`Carousel ${index + 1}`} className="w-full h-24 rounded-md object-cover border" />
+                        <div className="absolute bottom-1 left-1 text-[10px] bg-black/70 text-white px-1.5 py-0.5 rounded">
+                          #{index + 1}
+                        </div>
+                        {isMobile && (
+                          <div className="absolute top-1 left-1 flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => void moveImageByStep('carousel', index, -1)}
+                              disabled={index === 0}
+                              className="bg-black/70 text-white rounded-full p-1 disabled:opacity-40"
+                              aria-label="Move image earlier"
+                            >
+                              <ChevronLeft className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void moveImageByStep('carousel', index, 1)}
+                              disabled={index === carouselImages.length - 1}
+                              className="bg-black/70 text-white rounded-full p-1 disabled:opacity-40"
+                              aria-label="Move image later"
+                            >
+                              <ChevronRight className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeImageAt('carousel', index)}
+                          className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary mb-2">∞</div>
-                <div className="text-sm text-muted-foreground">Customization Options</div>
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-semibold">Store Gallery Images</h4>
+                  <label className="cursor-pointer">
+                    <input type="file" accept="image/*" multiple className="hidden" onChange={(e) => handleMultiUpload(e, 'gallery')} />
+                    <span className="inline-flex items-center gap-2 px-3 py-2 border rounded-md text-sm hover:bg-muted">
+                      <Upload className="h-4 w-4" />
+                      {uploadingSection === 'gallery' ? 'Uploading...' : 'Add Images'}
+                    </span>
+                  </label>
+                </div>
+                {galleryImages.length === 0 ? (
+                  <div className="h-24 rounded-lg border border-dashed flex items-center justify-center text-sm text-muted-foreground">
+                    No gallery images yet
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                    {galleryImages.map((url, index) => (
+                      <div
+                        key={`${url}-${index}`}
+                        className={`relative ${draggingItem?.mode === 'gallery' && draggingItem.index === index ? 'opacity-60 ring-2 ring-primary rounded-md' : ''}`}
+                        draggable
+                        onDragStart={() => handleDragStart('gallery', index)}
+                        onDragOver={(event) => event.preventDefault()}
+                        onDrop={() => void handleDrop('gallery', index)}
+                        onDragEnd={() => setDraggingItem(null)}
+                      >
+                        <img src={url} alt={`Gallery ${index + 1}`} className="w-full h-24 rounded-md object-cover border" />
+                        <div className="absolute bottom-1 left-1 text-[10px] bg-black/70 text-white px-1.5 py-0.5 rounded">
+                          #{index + 1}
+                        </div>
+                        {isMobile && (
+                          <div className="absolute top-1 left-1 flex gap-1">
+                            <button
+                              type="button"
+                              onClick={() => void moveImageByStep('gallery', index, -1)}
+                              disabled={index === 0}
+                              className="bg-black/70 text-white rounded-full p-1 disabled:opacity-40"
+                              aria-label="Move image earlier"
+                            >
+                              <ChevronLeft className="h-3 w-3" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => void moveImageByStep('gallery', index, 1)}
+                              disabled={index === galleryImages.length - 1}
+                              className="bg-black/70 text-white rounded-full p-1 disabled:opacity-40"
+                              aria-label="Move image later"
+                            >
+                              <ChevronRight className="h-3 w-3" />
+                            </button>
+                          </div>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => removeImageAt('gallery', index)}
+                          className="absolute top-1 right-1 bg-black/70 text-white rounded-full p-1"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
-            </div>
-            
-            <div className="mt-6 p-4 bg-muted rounded-lg">
-              <h4 className="font-medium mb-2">Coming Soon: Advanced Customization</h4>
-              <p className="text-sm text-muted-foreground">
-                Soon you'll be able to customize colors, fonts, layouts, and more to create a truly unique store design.
-              </p>
             </div>
           </CardContent>
         </Card>

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Plus, Edit3, Package, AlertCircle } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
-import { Product } from '@/types/product';
+import { Product, ProductType, ServiceBillingType } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import MobileHeader from '@/components/MobileHeader';
@@ -27,7 +27,7 @@ const AdminProducts: React.FC = () => {
   const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
-  const [recipes, setRecipes] = useState<any[]>([]);
+  const [recipes, setRecipes] = useState<Array<{ id: string; name?: string; costPerUnit?: number }>>([]);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
@@ -43,10 +43,25 @@ const AdminProducts: React.FC = () => {
     image: '',
     imageFile: null as File | null,
     stock: '',
-    productType: 'simple' as 'simple' | 'service' | 'composed',
+    productType: 'simple' as ProductType,
     serviceCost: '',
+    serviceDuration: '',
+    serviceBillingType: 'one-time' as ServiceBillingType,
+    renewalReminderDays: '',
     recipeId: ''
   });
+
+  const getStockPayload = (productType: ProductType, rawStock: string | number) => {
+    if (productType === 'service') {
+      return { stock: 0, inStock: true };
+    }
+
+    const numericStock = rawStock === '' ? 0 : Number(rawStock);
+    return {
+      stock: numericStock,
+      inStock: numericStock > 0,
+    };
+  };
   // Load products from Firestore on mount and when user changes
   useEffect(() => {
     const db = getFirestore();
@@ -123,12 +138,20 @@ const AdminProducts: React.FC = () => {
         image: imageUrl || `https://placehold.co/400x300/38B2AC/fff?text=${encodeURIComponent(newProduct.name)}`,
         storeId: user?.storeId || '',
         slug: productSlug,
-        inStock: (newProduct.stock === '' || Number(newProduct.stock) > 0),
-        stock: newProduct.stock === '' ? 0 : Number(newProduct.stock),
+        ...getStockPayload(newProduct.productType, newProduct.stock),
         rating: 0,
         productType: newProduct.productType,
         isService: newProduct.productType === 'service',
         serviceCost: newProduct.productType === 'service' && newProduct.serviceCost ? parseFloat(newProduct.serviceCost) : undefined,
+        serviceDuration: newProduct.productType === 'service' && newProduct.serviceDuration
+          ? Number(newProduct.serviceDuration)
+          : undefined,
+        serviceBillingType: newProduct.productType === 'service'
+          ? newProduct.serviceBillingType
+          : undefined,
+        renewalReminderDays: newProduct.productType === 'service' && newProduct.serviceBillingType !== 'one-time' && newProduct.renewalReminderDays
+          ? Number(newProduct.renewalReminderDays)
+          : undefined,
         recipeId: newProduct.productType === 'composed' && newProduct.recipeId ? newProduct.recipeId : undefined
       };
       const cleanProductData = Object.fromEntries(
@@ -143,7 +166,10 @@ const AdminProducts: React.FC = () => {
       const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
       setProducts(productsList);
       
-    setNewProduct({ name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '', productType: 'simple', serviceCost: '' });
+    setNewProduct({
+      name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '',
+      productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: ''
+    });
       setIsAddingProduct(false);
       toast({ title: "Success", description: "Product added successfully!" });
     } catch (err) {
@@ -183,6 +209,9 @@ const AdminProducts: React.FC = () => {
       stock: typeof product.stock === 'number' ? product.stock.toString() : '',
       productType: product.productType || 'simple',
       serviceCost: product.serviceCost?.toString() || '',
+      serviceDuration: product.serviceDuration?.toString() || '',
+      serviceBillingType: product.serviceBillingType || 'one-time',
+      renewalReminderDays: product.renewalReminderDays?.toString() || '',
       recipeId: product.recipeId || ''
     });
   };
@@ -195,7 +224,7 @@ const AdminProducts: React.FC = () => {
     }
     
     // Check if recipe is changing for composed product
-    if (editingProduct.productType === 'composed' && newProduct.recipeId !== editingProduct.recipeId) {
+    if (newProduct.productType === 'composed' && newProduct.recipeId !== editingProduct.recipeId) {
       // Check for active production batches
       const batchesRef = collection(db, 'productionBatches');
       const batchesQuery = query(batchesRef, 
@@ -239,13 +268,22 @@ const AdminProducts: React.FC = () => {
         image: imageUrl || editingProduct.image,
         storeId: editingProduct.storeId,
         slug: productSlug,
-        inStock: (newProduct.stock === '' || Number(newProduct.stock) > 0),
-        stock: newProduct.stock === '' ? 0 : Number(newProduct.stock),
+        ...getStockPayload(newProduct.productType, newProduct.stock),
         rating: editingProduct.rating,
-        recipeId: newProduct.recipeId || editingProduct.recipeId || null,
-        costPrice: editingProduct.productType === 'composed' && newProduct.recipeId 
+        productType: newProduct.productType,
+        isService: newProduct.productType === 'service',
+        serviceCost: newProduct.productType === 'service' && newProduct.serviceCost ? Number(newProduct.serviceCost) : null,
+        serviceDuration: newProduct.productType === 'service' && newProduct.serviceDuration ? Number(newProduct.serviceDuration) : null,
+        serviceBillingType: newProduct.productType === 'service' ? newProduct.serviceBillingType : null,
+        renewalReminderDays: newProduct.productType === 'service' && newProduct.serviceBillingType !== 'one-time' && newProduct.renewalReminderDays
+          ? Number(newProduct.renewalReminderDays)
+          : null,
+        recipeId: newProduct.productType === 'composed'
+          ? (newProduct.recipeId || editingProduct.recipeId || null)
+          : null,
+        costPrice: newProduct.productType === 'composed' && newProduct.recipeId 
           ? (recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit || 0)
-          : (editingProduct.costPrice || 0)
+          : (newProduct.productType === 'composed' ? (editingProduct.costPrice || 0) : null)
       };
       const cleanUpdatedProduct = Object.fromEntries(
         Object.entries(updatedProduct).map(([k, v]) => [k, v === undefined ? null : v])
@@ -253,7 +291,7 @@ const AdminProducts: React.FC = () => {
   await updateDoc(doc(db, 'products', editingProduct.id), cleanUpdatedProduct);
       
       // Update composedProducts collection if this is a composed product
-      if (editingProduct.productType === 'composed' && newProduct.recipeId) {
+      if (newProduct.productType === 'composed' && newProduct.recipeId) {
         const composedRef = collection(db, 'composedProducts');
         const composedQuery = query(composedRef, 
           where('storeId', '==', user.storeId),
@@ -274,7 +312,10 @@ const AdminProducts: React.FC = () => {
       
       setProducts(products.map(p => p.id === editingProduct.id ? { id: editingProduct.id, ...updatedProduct } : p));
       setEditingProduct(null);
-  setNewProduct({ name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '', productType: 'simple', serviceCost: '', recipeId: '' });
+  setNewProduct({
+    name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '',
+    productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: ''
+  });
       toast({ title: "Success", description: "Product updated successfully!" });
     } catch (err) {
       toast({ title: "Error", description: "Failed to update product.", variant: "destructive" });
@@ -394,7 +435,7 @@ const AdminProducts: React.FC = () => {
                     <Label htmlFor="productType">Product Type *</Label>
                     <Select
                       value={newProduct.productType}
-                      onValueChange={(value: any) => setNewProduct(prev => ({ ...prev, productType: value }))}
+                      onValueChange={(value: ProductType) => setNewProduct(prev => ({ ...prev, productType: value }))}
                     >
                       <SelectTrigger>
                         <SelectValue />
@@ -408,16 +449,58 @@ const AdminProducts: React.FC = () => {
                   </div>
 
                   {newProduct.productType === 'service' && (
-                    <div>
-                      <Label htmlFor="serviceCost">Service Cost</Label>
-                      <Input
-                        id="serviceCost"
-                        type="number"
-                        step="0.01"
-                        value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
-                        onChange={(e) => setNewProduct(prev => ({ ...prev, serviceCost: e.target.value === '' ? 0 : e.target.value }))}
-                        placeholder="0.00"
-                      />
+                    <div className="space-y-3">
+                      <div>
+                        <Label htmlFor="serviceCost">Service Cost</Label>
+                        <Input
+                          id="serviceCost"
+                          type="number"
+                          step="0.01"
+                          value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, serviceCost: e.target.value === '' ? 0 : e.target.value }))}
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="serviceDuration">Service Duration (minutes)</Label>
+                        <Input
+                          id="serviceDuration"
+                          type="number"
+                          min="1"
+                          value={newProduct.serviceDuration === 0 || newProduct.serviceDuration === '' ? '' : newProduct.serviceDuration}
+                          onChange={(e) => setNewProduct(prev => ({ ...prev, serviceDuration: e.target.value === '' ? 0 : e.target.value }))}
+                          placeholder="60"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="serviceBillingType">Service Billing Type</Label>
+                        <Select
+                          value={newProduct.serviceBillingType}
+                          onValueChange={(value: ServiceBillingType) => setNewProduct(prev => ({ ...prev, serviceBillingType: value }))}
+                        >
+                          <SelectTrigger id="serviceBillingType">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="one-time">One-Time Service</SelectItem>
+                            <SelectItem value="monthly">Monthly Renewable Service</SelectItem>
+                            <SelectItem value="yearly">Yearly Renewable Service</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      {newProduct.serviceBillingType !== 'one-time' && (
+                        <div>
+                          <Label htmlFor="renewalReminderDays">Renewal Reminder (days before)</Label>
+                          <Input
+                            id="renewalReminderDays"
+                            type="number"
+                            min="1"
+                            value={newProduct.renewalReminderDays === 0 || newProduct.renewalReminderDays === '' ? '' : newProduct.renewalReminderDays}
+                            onChange={(e) => setNewProduct(prev => ({ ...prev, renewalReminderDays: e.target.value === '' ? 0 : e.target.value }))}
+                            placeholder="7"
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
 
@@ -509,7 +592,13 @@ const AdminProducts: React.FC = () => {
                       product.productType === 'composed' ? 'outline' : 
                       'secondary'
                     }>
-                      {product.productType === 'service' ? 'Service' : 
+                      {product.productType === 'service'
+                        ? (product.serviceBillingType === 'monthly'
+                            ? 'Service • Monthly'
+                            : product.serviceBillingType === 'yearly'
+                              ? 'Service • Yearly'
+                              : 'Service • One-Time')
+                        : 
                        product.productType === 'composed' ? 'Composed' : 
                        'Item'}
                     </Badge>
@@ -668,8 +757,81 @@ const AdminProducts: React.FC = () => {
                 </SelectContent>
               </Select>
             </div>
+
+            <div>
+              <Label htmlFor="edit-productType">Product Type *</Label>
+              <Select
+                value={newProduct.productType}
+                onValueChange={(value: ProductType) => setNewProduct(prev => ({ ...prev, productType: value }))}
+              >
+                <SelectTrigger id="edit-productType">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="simple">Simple Item - Buy & Sell with Stock</SelectItem>
+                  <SelectItem value="service">Service - No Stock, Has Cost</SelectItem>
+                  <SelectItem value="composed">Composed Product - Use Recipes Page</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {newProduct.productType === 'service' && (
+              <div className="space-y-3">
+                <div>
+                  <Label htmlFor="edit-serviceCost">Service Cost</Label>
+                  <Input
+                    id="edit-serviceCost"
+                    type="number"
+                    step="0.01"
+                    value={newProduct.serviceCost === 0 || newProduct.serviceCost === '' ? '' : newProduct.serviceCost}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, serviceCost: e.target.value === '' ? 0 : e.target.value }))}
+                    placeholder="0.00"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-serviceDuration">Service Duration (minutes)</Label>
+                  <Input
+                    id="edit-serviceDuration"
+                    type="number"
+                    min="1"
+                    value={newProduct.serviceDuration === 0 || newProduct.serviceDuration === '' ? '' : newProduct.serviceDuration}
+                    onChange={(e) => setNewProduct(prev => ({ ...prev, serviceDuration: e.target.value === '' ? 0 : e.target.value }))}
+                    placeholder="60"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-serviceBillingType">Service Billing Type</Label>
+                  <Select
+                    value={newProduct.serviceBillingType}
+                    onValueChange={(value: ServiceBillingType) => setNewProduct(prev => ({ ...prev, serviceBillingType: value }))}
+                  >
+                    <SelectTrigger id="edit-serviceBillingType">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="one-time">One-Time Service</SelectItem>
+                      <SelectItem value="monthly">Monthly Renewable Service</SelectItem>
+                      <SelectItem value="yearly">Yearly Renewable Service</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                {newProduct.serviceBillingType !== 'one-time' && (
+                  <div>
+                    <Label htmlFor="edit-renewalReminderDays">Renewal Reminder (days before)</Label>
+                    <Input
+                      id="edit-renewalReminderDays"
+                      type="number"
+                      min="1"
+                      value={newProduct.renewalReminderDays === 0 || newProduct.renewalReminderDays === '' ? '' : newProduct.renewalReminderDays}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, renewalReminderDays: e.target.value === '' ? 0 : e.target.value }))}
+                      placeholder="7"
+                    />
+                  </div>
+                )}
+              </div>
+            )}
             
-            {editingProduct?.productType === 'composed' && (
+            {newProduct.productType === 'composed' && (
               <div>
                 <Label htmlFor="edit-recipeId">Recipe</Label>
                 <Select 
@@ -717,17 +879,19 @@ const AdminProducts: React.FC = () => {
                 placeholder="e.g., 3-5 days"
               />
             </div>
-            <div>
-              <Label htmlFor="edit-stock">Stock Quantity</Label>
-              <Input
-                id="edit-stock"
-                type="number"
-                min="0"
-                value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
-                onChange={e => setNewProduct(prev => ({ ...prev, stock: e.target.value === '' ? 0 : e.target.value }))}
-                placeholder="0"
-              />
-            </div>
+            {newProduct.productType !== 'service' && (
+              <div>
+                <Label htmlFor="edit-stock">Stock Quantity</Label>
+                <Input
+                  id="edit-stock"
+                  type="number"
+                  min="0"
+                  value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
+                  onChange={e => setNewProduct(prev => ({ ...prev, stock: e.target.value === '' ? 0 : e.target.value }))}
+                  placeholder="0"
+                />
+              </div>
+            )}
             
             <div>
               <Label htmlFor="edit-image">Image URL</Label>

@@ -77,6 +77,16 @@ const AdminRawMaterials: React.FC = () => {
       return;
     }
 
+    // Validate cost per unit
+    if (!newMaterial.costPerUnit || newMaterial.costPerUnit <= 0) {
+      toast({ 
+        title: "Error", 
+        description: "Cost per unit must be greater than zero. Please enter the material cost.", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
     try {
       const db = getFirestore();
       const storePrefix = user.storeId.substring(0, 5).toUpperCase();
@@ -140,6 +150,16 @@ const AdminRawMaterials: React.FC = () => {
 
   const handleUpdateMaterial = async () => {
     if (!editingMaterial || !user?.storeId) return;
+
+    // Validate cost per unit
+    if (!editingMaterial.costPerUnit || editingMaterial.costPerUnit <= 0) {
+      toast({ 
+        title: "Error", 
+        description: "Cost per unit must be greater than zero. Please enter the material cost.", 
+        variant: "destructive" 
+      });
+      return;
+    }
 
     try {
       const db = getFirestore();
@@ -332,16 +352,18 @@ const AdminRawMaterials: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="costPerUnit">Cost Per Unit</Label>
+                    <Label htmlFor="costPerUnit">Cost Per Unit *</Label>
                     <Input
                       id="costPerUnit"
                       type="number"
-                      min="0"
+                      min="0.01"
                       step="0.01"
                       value={newMaterial.costPerUnit === 0 ? '' : newMaterial.costPerUnit}
                       onChange={(e) => setNewMaterial({ ...newMaterial, costPerUnit: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
-                      placeholder="0.00"
+                      placeholder="e.g., 2.50"
+                      required
                     />
+                    <p className="text-xs text-gray-500 mt-1">Required for recipe costing</p>
                   </div>
                   <div>
                     <Label htmlFor="preferredSupplier">Preferred Supplier</Label>
@@ -584,16 +606,18 @@ const AdminRawMaterials: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-costPerUnit">Cost Per Unit</Label>
+                    <Label htmlFor="edit-costPerUnit">Cost Per Unit *</Label>
                     <Input
                       id="edit-costPerUnit"
                       type="number"
-                      min="0"
+                      min="0.01"
                       step="0.01"
                       value={editingMaterial.costPerUnit === 0 ? '' : editingMaterial.costPerUnit}
                       onChange={(e) => setEditingMaterial({ ...editingMaterial, costPerUnit: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
-                      placeholder="0.00"
+                      placeholder="e.g., 2.50"
+                      required
                     />
+                    <p className="text-xs text-gray-500 mt-1">Required for recipe costing</p>
                   </div>
                   <div>
                     <Label htmlFor="edit-preferredSupplier">Preferred Supplier</Label>

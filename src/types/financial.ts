@@ -100,6 +100,28 @@ export interface BankTransaction {
   matchedPurchaseId?: string;
 }
 
+export interface CashCollectionAllocation {
+  orderId: string;
+  invoiceNumber: string;
+  customerName: string;
+  amount: number;
+}
+
+export interface CashCollectionRecord {
+  id: string;
+  storeId: string;
+  collectionDate: string;
+  bankAccount: string;
+  depositReference: string;
+  notes?: string;
+  totalAmount: number;
+  ordersCount: number;
+  allocations: CashCollectionAllocation[];
+  createdById: string;
+  createdByName: string;
+  createdAt?: Date | string | number;
+}
+
 export interface AuditLog {
   id: string;
   timestamp: string;
@@ -109,8 +131,8 @@ export interface AuditLog {
   action: 'create' | 'update' | 'delete' | 'approve' | 'reject';
   entityType: string;
   entityId: string;
-  oldValue?: any;
-  newValue?: any;
+  oldValue?: unknown;
+  newValue?: unknown;
   ipAddress?: string;
   userAgent?: string;
   storeId: string;

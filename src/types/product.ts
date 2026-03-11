@@ -1,4 +1,5 @@
 export type ProductType = 'simple' | 'service' | 'composed';
+export type ServiceBillingType = 'one-time' | 'monthly' | 'yearly';
 
 export type Product = {
   id: string;
@@ -20,7 +21,10 @@ export type Product = {
   margin?: number; // Profit margin percentage
   taxIncluded?: boolean; // Whether price includes tax
   // Service-specific fields
+  serviceCost?: number;
   serviceDuration?: number; // Duration in minutes
+  serviceBillingType?: ServiceBillingType;
+  renewalReminderDays?: number;
   serviceProviderId?: string; // Staff member providing service
   // Composed product fields
   recipeId?: string; // Link to recipe for composed products
@@ -45,7 +49,13 @@ export type Store = {
     email?: string;
   };
   slogan?: string;
-  template: 'default' | 'modern' | 'minimal';
+  aboutUs?: string;
+  mission?: string;
+  vision?: string;
+  template: 'default' | 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic';
+  storeBackgroundImage?: string;
+  carouselImages?: string[];
+  galleryImages?: string[];
   ownerId: string;
   isPremium: boolean;
   subscriptionStatus?: 'active' | 'canceled' | 'past_due';

@@ -208,11 +208,42 @@ const AdminRecipes: React.FC = () => {
     console.log('Output quantity:', editingRecipe.outputQuantity);
     
     // Validate output quantity is not zero or negative
-    if (!editingRecipe.outputQuantity || editingRecipe.outputQuantity <= 0) {
-      console.log('Failed validation: output quantity');
+    const outputQty = parseFloat(String(editingRecipe.outputQuantity));
+    if (!outputQty || isNaN(outputQty) || outputQty <= 0) {
+      console.log('Failed validation: output quantity', editingRecipe.outputQuantity);
       toast({
         title: "Validation Error",
         description: "Output quantity must be greater than zero",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Validate ingredients
+    if (!editingRecipe.ingredients || editingRecipe.ingredients.length === 0) {
+      console.log('Failed validation: no ingredients');
+      toast({
+        title: "Validation Error",
+        description: "Recipe must have at least one ingredient",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    // Check for invalid ingredients
+    const invalidIngredients = editingRecipe.ingredients.filter(ing => {
+      if (!ing.rawMaterialId) return true;
+      const material = rawMaterials.find(m => m.id === ing.rawMaterialId);
+      if (!material) return true;
+      if (!ing.quantity || parseFloat(String(ing.quantity)) <= 0) return true;
+      return false;
+    });
+
+    if (invalidIngredients.length > 0) {
+      console.log('Failed validation: invalid ingredients', invalidIngredients);
+      toast({
+        title: "Validation Error",
+        description: "Some ingredients are missing material, quantity, or the material no longer exists. Please fix or remove them.",
         variant: "destructive"
       });
       return;
@@ -223,10 +254,19 @@ const AdminRecipes: React.FC = () => {
     console.log('Total cost calculated:', totalCost);
     
     if (totalCost <= 0) {
-      console.log('Failed validation: total cost');
+      console.log('Failed validation: total cost is zero');
+      
+      // Check which ingredients have zero cost
+      const zeroCostIngredients = editingRecipe.ingredients.map(ing => {
+        const material = rawMaterials.find(m => m.id === ing.rawMaterialId);
+        return { material: material?.name, cost: material?.costPerUnit };
+      }).filter(x => !x.cost || x.cost === 0);
+      
+      console.log('Ingredients with zero cost:', zeroCostIngredients);
+      
       toast({
         title: "Validation Error",
-        description: "Recipe total cost must be greater than zero. Please ensure all ingredients have valid costs.",
+        description: `Recipe total cost is zero. Please ensure all raw materials have a cost per unit set. Materials with zero cost: ${zeroCostIngredients.map(x => x.material).join(', ')}`,
         variant: "destructive"
       });
       return;
@@ -237,21 +277,26 @@ const AdminRecipes: React.FC = () => {
       const db = getFirestore();
       const recipeRef = doc(db, 'recipes', editingRecipe.id);
 
-      const costPerUnit = totalCost / editingRecipe.outputQuantity;
+      const costPerUnit = totalCost / outputQty;
       console.log('Cost per unit:', costPerUnit);
 
-      const updatedData = {
-        ...editingRecipe,
+      // Extract only data fields (exclude 'id' which is the document ID)
+      const { id: _, ...recipeData } = editingRecipe;
+      const updateData = {
+        ...recipeData,
+        outputQuantity: outputQty, // Use the validated number
         totalCost,
         costPerUnit,
         updatedAt: new Date().toISOString(),
       };
 
-      console.log('Updating recipe with data:', updatedData);
-      await updateDoc(recipeRef, updatedData);
+      console.log('Updating recipe with data:', updateData);
+      await updateDoc(recipeRef, updateData);
       console.log('Recipe updated in Firestore');
       
-      setRecipes(recipes.map(r => r.id === editingRecipe.id ? updatedData : r));
+      // Update local state with full object including ID
+      const updatedRecipe = { ...editingRecipe, ...updateData };
+      setRecipes(recipes.map(r => r.id === editingRecipe.id ? updatedRecipe : r));
 
       // Audit log
       const oldRecipe = recipes.find(r => r.id === editingRecipe.id);
@@ -262,7 +307,7 @@ const AdminRecipes: React.FC = () => {
         'update',
         'recipe',
         editingRecipe.id,
-        { oldValue: oldRecipe, newValue: updatedData },
+        { oldValue: oldRecipe, newValue: updatedRecipe },
         user.storeId
       );
 
@@ -624,7 +669,15 @@ const AdminRecipes: React.FC = () => {
                       <Button
                         variant="outline"
                         size="sm"
-                        onClick={() => setEditingRecipe(recipe)}
+                        onClick={() => setEditingRecipe({
+                          ...recipe,
+                          // Ensure default values for fields that might be missing
+                          outputQuantity: recipe.outputQuantity || 1,
+                          outputUnit: recipe.outputUnit || 'piece',
+                          ingredients: recipe.ingredients || [],
+                          category: recipe.category || 'Uncategorized',
+                          preparationTime: recipe.preparationTime || 0,
+                        })}
                       >
                         <Edit3 className="h-4 w-4" />
                       </Button>
@@ -742,7 +795,7 @@ const AdminRecipes: React.FC = () => {
                       id="edit-outputQuantity"
                       type="text"
                       inputMode="decimal"
-                      value={editingRecipe.outputQuantity}
+                      value={editingRecipe.outputQuantity ?? ''}
                       onChange={(e) => {
                         const val = e.target.value;
                         if (val === '' || /^[0-9]*\.?[0-9]*$/.test(val)) {
@@ -755,9 +808,10 @@ const AdminRecipes: React.FC = () => {
                         if (!isNaN(num) && num > 0) {
                           setEditingRecipe({ ...editingRecipe, outputQuantity: num });
                         } else if (val === '') {
-                          setEditingRecipe({ ...editingRecipe, outputQuantity: 0 });
+                          setEditingRecipe({ ...editingRecipe, outputQuantity: 1 });
                         }
                       }}
+                      placeholder="1"
                     />
                   </div>
                   <div>
