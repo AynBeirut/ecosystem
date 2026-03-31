@@ -16,12 +16,35 @@ export interface StoreProfile {
   logo: string;
   status: 'online' | 'offline'; // Store visibility status
   // Subscription & Add-ons
-  subscriptionTier?: 'premium' | 'pro'; // Default premium (without composed), pro (with composed)
-  addOns?: string[]; // ['pos', 'storage'] - Active add-ons
+  subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium'; // premium kept for backward compatibility
+  addOns?: string[] | Record<string, unknown>; // ['domainPackage', 'whatsappBusiness'] or object map
+  addOnsMeta?: {
+    domainPackage?: boolean;
+    whatsappBusiness?: boolean;
+    manufacturingBom?: boolean;
+    extraStorageBlocks?: number;
+  };
   subscriptionStatus?: 'trial' | 'active' | 'grace' | 'expired' | 'blocked'; // Subscription status
   subscriptionPlan?: 'monthly' | 'yearly'; // Billing cycle
   subscriptionEndsAt?: string; // ISO 8601 date when subscription expires
   hasUsedTrial?: boolean; // Whether user has used trial before
+  trialStartedAt?: string;
+  trialEndsAt?: string;
+  trial_start_date?: string;
+  trial_end_date?: string;
+  trialGraceDays?: number;
+  trialGraceEndsAt?: string;
+  productLimit?: number;
+  storageLimitMb?: number;
+  storage_limit_mb?: number;
+  monthlyOperationsLimit?: number | null;
+  monthly_operations_limit?: number | null;
+  monthlyOperationsCount?: number;
+  monthly_operations_count?: number;
+  revenueSharePercentage?: number;
+  revenue_share_percentage?: number;
+  allowsComposedProducts?: boolean;
+  allowsManufacturing?: boolean;
   isLegacyUser?: boolean; // Legacy users get 1 year free
   legacyExpiresAt?: string; // When legacy access expires (Feb 28, 2027)
   gracePeriodStartedAt?: string; // When grace period started (7 days)

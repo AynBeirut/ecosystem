@@ -166,7 +166,22 @@ interface DeliveryInfo {
 
 interface StoreProfile {
   usdToLbpRate?: number;
+  subscriptionTier?: string;
+  monthlyOperationsLimit?: number;
+  operationsUsedThisMonth?: number;
+  monthlyOperationsUsed?: number;
+  operationsUsageMonth?: string;
   [key: string]: unknown;
+}
+
+function normalizeSubscriptionTier(rawTier: unknown): 'trial' | 'starter' | 'pro' | 'business' {
+  if (typeof rawTier !== 'string') return 'starter';
+  const tier = rawTier.toLowerCase();
+  if (tier === 'premium') return 'starter';
+  if (tier === 'trial' || tier === 'starter' || tier === 'pro' || tier === 'business') {
+    return tier;
+  }
+  return 'starter';
 }
 
 app.post('/checkout', async (req: Request, res: Response) => {
@@ -266,6 +281,12 @@ app.post('/checkout', async (req: Request, res: Response) => {
         taxAmount: number;
         total: number;
         storeProfile?: StoreProfile;
+        trialOperationUpdate?: {
+          operationsUsageMonth: string;
+          operationsUsedThisMonth: number;
+          monthlyOperationsUsed: number;
+          updatedAt: string;
+        };
       }> = [];
       
       const stockUpdates: Array<{ productId: string; newStock: number }> = [];
@@ -319,6 +340,36 @@ app.post('/checkout', async (req: Request, res: Response) => {
         const profileSnap = await transaction.get(profileRef);
         const storeProfile = profileSnap.exists ? (profileSnap.data() as StoreProfile) : undefined;
 
+        let trialOperationUpdate: {
+          operationsUsageMonth: string;
+          operationsUsedThisMonth: number;
+          monthlyOperationsUsed: number;
+          updatedAt: string;
+        } | undefined;
+
+        const tier = normalizeSubscriptionTier(storeProfile?.subscriptionTier);
+        if (tier === 'trial') {
+          const nowIso = new Date().toISOString();
+          const monthKey = nowIso.slice(0, 7);
+          const usageMonth = typeof storeProfile?.operationsUsageMonth === 'string' ? storeProfile.operationsUsageMonth : '';
+          const currentUsedRaw = Number(storeProfile?.operationsUsedThisMonth ?? storeProfile?.monthlyOperationsUsed ?? 0);
+          const currentUsed = usageMonth === monthKey && Number.isFinite(currentUsedRaw) ? currentUsedRaw : 0;
+          const monthlyLimitRaw = Number(storeProfile?.monthlyOperationsLimit ?? 200);
+          const monthlyLimit = Number.isFinite(monthlyLimitRaw) && monthlyLimitRaw > 0 ? monthlyLimitRaw : 200;
+          const nextUsed = currentUsed + 1;
+
+          if (nextUsed > monthlyLimit) {
+            throw new Error(`Trial operation limit reached for store ${storeId}. Upgrade plan to continue.`);
+          }
+
+          trialOperationUpdate = {
+            operationsUsageMonth: monthKey,
+            operationsUsedThisMonth: nextUsed,
+            monthlyOperationsUsed: nextUsed,
+            updatedAt: nowIso,
+          };
+        }
+
         const discountAmount = 0;
         const taxAmount = 0;
         const totalAfterDiscount = storeSubtotal;
@@ -336,6 +387,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           taxAmount: financialCheck.taxAmount,
           total: financialCheck.total,
           storeProfile,
+          trialOperationUpdate,
         });
         
         console.log('Prepared order for store:', storeId, 'with items:', orderItems);
@@ -351,7 +403,14 @@ app.post('/checkout', async (req: Request, res: Response) => {
         
         // Update store profile with new invoice number (use set with merge to create if not exists)
         const profileRef = db.doc(`storeProfiles/${orderData.storeId}`);
-        transaction.set(profileRef, { lastInvoiceNumber: newNumber }, { merge: true });
+        transaction.set(
+          profileRef,
+          {
+            lastInvoiceNumber: newNumber,
+            ...(orderData.trialOperationUpdate || {}),
+          },
+          { merge: true }
+        );
         
         const orderRef = db.collection('orders').doc();
         transaction.set(orderRef, {

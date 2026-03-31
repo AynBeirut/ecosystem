@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
-import { Package, AlertTriangle, History, Download, Plus, Edit, TrendingUp, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign, Database, AlertCircle, FileText } from 'lucide-react';
+import { Package, AlertTriangle, History, Download, Edit, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign, AlertCircle, FileText } from 'lucide-react';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -40,9 +40,9 @@ const AdminFinishedGoods: React.FC = () => {
   const [adjustingItem, setAdjustingItem] = useState<FinishedGoodsItem | null>(null);
   const [adjustment, setAdjustment] = useState<FinishedGoodsAdjustment>({
     finishedGoodsId: '',
-    adjustmentType: 'increase',
+    adjustmentType: 'decrease',
     quantity: 0,
-    reason: 'count_correction',
+    reason: 'damage',
     reasonNotes: '',
     newBalance: 0,
   });
@@ -69,6 +69,7 @@ const AdminFinishedGoods: React.FC = () => {
   const [showSyncDialog, setShowSyncDialog] = useState(false);
   const [syncResults, setSyncResults] = useState<any>(null);
   const [integrityResults, setIntegrityResults] = useState<any>(null);
+
 
   // Edit state for manual data correction
   const [editingItem, setEditingItem] = useState<(FinishedGoodsItem & { id: string }) | null>(null);
@@ -494,6 +495,25 @@ const AdminFinishedGoods: React.FC = () => {
       return;
     }
 
+    const allowedReasons = new Set(['damage', 'production_damage']);
+    if (!allowedReasons.has(adjustment.reason)) {
+      toast({
+        title: "Error",
+        description: "Stock adjustment is allowed only for material damage or production damage.",
+        variant: "destructive"
+      });
+      return;
+    }
+
+    if (!adjustment.reasonNotes?.trim()) {
+      toast({
+        title: "Error",
+        description: "Please add notes to document the damage reason.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     isAdjustingStockRef.current = true;
     let operationSucceeded = false;
 
@@ -501,9 +521,7 @@ const AdminFinishedGoods: React.FC = () => {
       const db = getFirestore();
       const fgRef = doc(db, 'finishedGoodsInventory', adjustingItem.id);
       
-      const quantityChange = adjustment.adjustmentType === 'increase' 
-        ? adjustment.quantity 
-        : -adjustment.quantity;
+      const quantityChange = -Math.abs(adjustment.quantity);
       
       const newBalance = adjustingItem.currentBalance + quantityChange;
       
@@ -546,6 +564,14 @@ const AdminFinishedGoods: React.FC = () => {
       
       if (operationSucceeded) {
         setAdjustingItem(null);
+        setAdjustment({
+          finishedGoodsId: '',
+          adjustmentType: 'decrease',
+          quantity: 0,
+          reason: 'damage',
+          reasonNotes: '',
+          newBalance: 0,
+        });
         fetchFinishedGoods();
       }
     }
@@ -937,28 +963,28 @@ const AdminFinishedGoods: React.FC = () => {
       return;
     }
 
-    const confirmed = window.confirm('Fix broken recipe links? This will update finished goods with correct recipe IDs and costs.');
+    const confirmed = window.confirm('Align finished goods recipe links to each product\'s currently linked recipe?');
     if (!confirmed) return;
 
     setIsCheckingIntegrity(true);
 
     try {
       const db = getFirestore();
-      
-      // Get all recipes for this store
-      const recipesQuery = query(
-        collection(db, 'recipes'),
+
+      // Get products for this store and map productId -> recipeId
+      const productsQuery = query(
+        collection(db, 'products'),
         where('storeId', '==', user.storeId)
       );
-      const recipesSnapshot = await getDocs(recipesQuery);
-      
-      // Map recipes by product name (removing date prefix)
-      const recipesByName = new Map<string, any>();
-      recipesSnapshot.forEach((recipeDoc) => {
-        const recipe = { id: recipeDoc.id, ...recipeDoc.data() };
-        // Remove date prefix like "10Feb26 " from recipe name
-        const baseName = recipe.name.replace(/^\d+\w+\d+\s+/, '');
-        recipesByName.set(baseName, recipe);
+      const productsSnapshot = await getDocs(productsQuery);
+
+      const productRecipeMap = new Map<string, string>();
+      productsSnapshot.forEach((productDoc) => {
+        const product = productDoc.data();
+        const recipeId = typeof product.recipeId === 'string' ? product.recipeId : '';
+        if (recipeId) {
+          productRecipeMap.set(productDoc.id, recipeId);
+        }
       });
 
       // Get all finished goods for this store
@@ -970,55 +996,46 @@ const AdminFinishedGoods: React.FC = () => {
 
       let fixedCount = 0;
       const fixes = [];
+      let skippedCount = 0;
 
-      // Check each finished good
+      // Align each finished good recipeId with product.recipeId
       for (const fgDoc of fgSnapshot.docs) {
         const fg = fgDoc.data();
-        const productName = fg.productName;
-        let needsFix = false;
-        let correctRecipe = null;
-
-        // Check if recipeId exists and is valid
-        if (fg.recipeId) {
-          const recipeDoc = await getDoc(doc(db, 'recipes', fg.recipeId));
-          if (!recipeDoc.exists()) {
-            needsFix = true;
-          }
-        } else {
-          needsFix = true;
+        const fgProductId = resolveFinishedGoodsProductKey(fg);
+        if (!fgProductId) {
+          skippedCount++;
+          continue;
         }
 
-        // Find matching recipe by product name
-        if (needsFix) {
-          correctRecipe = recipesByName.get(productName);
-          if (correctRecipe) {
-            // Update finished good with correct recipe ID and cost
-            await updateDoc(doc(db, 'finishedGoodsInventory', fgDoc.id), {
-              recipeId: correctRecipe.id,
-              costPrice: correctRecipe.costPerUnit || 0,
-              updatedAt: new Date().toISOString()
-            });
+        const targetRecipeId = productRecipeMap.get(fgProductId);
+        if (!targetRecipeId) {
+          skippedCount++;
+          continue;
+        }
 
-            fixes.push({
-              productName,
-              oldRecipeId: fg.recipeId || 'MISSING',
-              newRecipeId: correctRecipe.id,
-              oldCost: fg.costPrice || 0,
-              newCost: correctRecipe.costPerUnit || 0
-            });
+        if (fg.recipeId !== targetRecipeId) {
+          await updateDoc(doc(db, 'finishedGoodsInventory', fgDoc.id), {
+            recipeId: targetRecipeId,
+            updatedAt: new Date().toISOString()
+          });
 
-            fixedCount++;
-          }
+          fixes.push({
+            productName: fg.productName || fgProductId,
+            oldRecipeId: fg.recipeId || 'MISSING',
+            newRecipeId: targetRecipeId,
+          });
+
+          fixedCount++;
         }
       }
 
       if (fixedCount === 0) {
-        toast({ title: "Success", description: "All recipe links are valid! No fixes needed." });
+        toast({ title: "Success", description: "All recipe links already aligned with products." });
       } else {
         console.log('Fixed recipe links:', fixes);
         toast({ 
           title: "Success", 
-          description: ` Fixed ${fixedCount} broken recipe link(s). Costs updated.`
+          description: `Aligned ${fixedCount} recipe link(s) with product mapping.${skippedCount > 0 ? ` Skipped ${skippedCount} item(s) without product recipe.` : ''}`
         });
         await fetchFinishedGoods(); // Refresh the list
       }
@@ -1027,72 +1044,6 @@ const AdminFinishedGoods: React.FC = () => {
       toast({ title: "Error", description: `Failed to fix recipe links: ${error.message}`, variant: "destructive" });
     } finally {
       setIsCheckingIntegrity(false);
-    }
-  };
-
-  const createSampleData = async () => {
-    if (!user?.storeId) return;
-    
-    try {
-      const db = getFirestore();
-      const fgRef = collection(db, 'finishedGoodsInventory');
-      
-      const sampleItem: Omit<FinishedGoodsItem, 'id'> = {
-        itemCode: 'FG-001',
-        productId: 'sample-product',
-        productName: 'Sample Finished Product',
-        description: 'This is a test finished goods item',
-        unit: 'pcs',
-        openingBalance: 0,
-        quantityManufactured: 100,
-        quantitySold: 0,
-        quantityAdjusted: 0,
-        currentBalance: 100,
-        reorderPoint: 20,
-        costPrice: 25.50,
-        sellingPrice: 45.00,
-        totalValue: 2550.00,
-        valuationMethod: 'FIFO',
-        batchQueue: [{
-          batchId: 'BATCH-001',
-          batchNumber: 'B-2026-001',
-          quantity: 100,
-          remainingQuantity: 100,
-          costPerUnit: 25.50,
-          productionDate: new Date().toISOString()
-        }],
-        transactions: [{
-          id: 'TXN-001',
-          date: new Date().toISOString(),
-          actionType: 'manufactured',
-          quantity: 100,
-          unitCost: 25.50,
-          totalCost: 2550.00,
-          reason: 'Initial production batch',
-          referenceId: 'BATCH-001',
-          referenceNumber: 'B-2026-001',
-          userId: user.id,
-          userName: user.name,
-          batchDetails: {
-            batchId: 'BATCH-001',
-            batchNumber: 'B-2026-001',
-            costPerUnit: 25.50,
-            remainingQuantity: 100
-          }
-        }],
-        storeId: user.storeId,
-        createdBy: user.id,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      };
-      
-      await addDoc(fgRef, sampleItem);
-      
-      toast({ title: "Success", description: "Sample finished goods item created!" });
-      fetchFinishedGoods();
-    } catch (error) {
-      console.error('Error creating sample data:', error);
-      toast({ title: "Error", description: "Failed to create sample data", variant: "destructive" });
     }
   };
 
@@ -1167,10 +1118,6 @@ const AdminFinishedGoods: React.FC = () => {
                 </CardDescription>
               </div>
               <div className="flex gap-2">
-                <Button onClick={recalculateAllTotalValues} variant="outline" size="sm" disabled={isCalculating}>
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Fix Values
-                </Button>
                 <Button onClick={() => setShowServiceCostDialog(true)} size="sm">
                   <Calculator className="h-4 w-4 mr-2" />
                   Calculate Service Cost
@@ -1204,39 +1151,6 @@ const AdminFinishedGoods: React.FC = () => {
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <CardTitle>Search & Filters</CardTitle>
               <div className="flex flex-wrap gap-2">
-                {finishedGoods.length === 0 && (
-                  <Button onClick={createSampleData} variant="default" size="sm">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Sample Data
-                  </Button>
-                )}
-                <Button 
-                  onClick={handleCheckIntegrity} 
-                  variant="outline" 
-                  size="sm"
-                  disabled={isCheckingIntegrity}
-                >
-                  <AlertCircle className="h-4 w-4 mr-2" />
-                  {isCheckingIntegrity ? 'Checking...' : 'Check Data Integrity'}
-                </Button>
-                <Button 
-                  onClick={handleFixRecipeLinks} 
-                  variant="outline" 
-                  size="sm"
-                  disabled={isCheckingIntegrity}
-                >
-                  <RefreshCw className="h-4 w-4 mr-2" />
-                  Fix Recipe Links
-                </Button>
-                <Button 
-                  onClick={handleSyncQuantities} 
-                  variant="outline" 
-                  size="sm"
-                  disabled={isSyncing}
-                >
-                  <Database className="h-4 w-4 mr-2" />
-                  {isSyncing ? 'Syncing...' : 'Sync Sold Quantities'}
-                </Button>
                 <Button onClick={exportToCSV} variant="outline" size="sm">
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
@@ -1249,6 +1163,7 @@ const AdminFinishedGoods: React.FC = () => {
             </div>
           </CardHeader>
           <CardContent>
+
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <Label htmlFor="search">Search</Label>
@@ -1382,16 +1297,7 @@ const AdminFinishedGoods: React.FC = () => {
                       <Edit className="h-4 w-4 mr-1" />
                       Adjust
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleRecalculateCost(item)}
-                      className="flex-1 text-blue-600"
-                      title="Recalculate Cost from Recipe"
-                    >
-                      <RefreshCw className="h-4 w-4 mr-1" />
-                      Recalc
-                    </Button>
+
                   </div>
                 </CardContent>
               </Card>
@@ -1468,15 +1374,7 @@ const AdminFinishedGoods: React.FC = () => {
                             >
                               <Package className="h-4 w-4" />
                             </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => handleRecalculateCost(item)}
-                              title="Recalculate Cost from Recipe"
-                              className="text-green-600"
-                            >
-                              <RefreshCw className="h-4 w-4" />
-                            </Button>
+
                           </div>
                         </td>
                       </tr>
@@ -1612,6 +1510,9 @@ const AdminFinishedGoods: React.FC = () => {
           </DialogHeader>
 
           <div className="space-y-4">
+            <div className="bg-yellow-50 border border-yellow-200 rounded p-3 text-sm text-yellow-800">
+              Adjustment is restricted to damage only (material damage or production damage). This action always decreases stock.
+            </div>
             <div>
               <Label>Current Balance</Label>
               <div className="text-2xl font-bold">{adjustingItem?.currentBalance} {adjustingItem?.unit}</div>
@@ -1620,32 +1521,11 @@ const AdminFinishedGoods: React.FC = () => {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <Label>Adjustment Type</Label>
-                <Select
-                  value={adjustment.adjustmentType}
-                  onValueChange={(value: 'increase' | 'decrease') => 
-                    setAdjustment({ ...adjustment, adjustmentType: value })
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="increase">
-                      <div className="flex items-center">
-                        <TrendingUp className="h-4 w-4 mr-2 text-green-600" />
-                        Increase
-                      </div>
-                    </SelectItem>
-                    <SelectItem value="decrease">
-                      <div className="flex items-center">
-                        <TrendingDown className="h-4 w-4 mr-2 text-red-600" />
-                        Decrease
-                      </div>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
+                <div className="h-10 px-3 border rounded-md bg-gray-50 text-gray-700 flex items-center">
+                  <TrendingDown className="h-4 w-4 mr-2 text-red-600" />
+                  Decrease (Damage Only)
+                </div>
               </div>
-
               <div>
                 <Label>Quantity</Label>
                 <Input
@@ -1667,11 +1547,8 @@ const AdminFinishedGoods: React.FC = () => {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="damage">Damage</SelectItem>
-                  <SelectItem value="theft">Theft</SelectItem>
-                  <SelectItem value="count_correction">Count Correction</SelectItem>
-                  <SelectItem value="expired">Expired</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  <SelectItem value="damage">Material Damage</SelectItem>
+                  <SelectItem value="production_damage">Production Damage</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -1690,9 +1567,7 @@ const AdminFinishedGoods: React.FC = () => {
               <div className="text-sm text-gray-600 mb-1">New Balance</div>
               <div className="text-2xl font-bold">
                 {adjustingItem && (
-                  adjustment.adjustmentType === 'increase'
-                    ? adjustingItem.currentBalance + adjustment.quantity
-                    : adjustingItem.currentBalance - adjustment.quantity
+                  adjustingItem.currentBalance - adjustment.quantity
                 )} {adjustingItem?.unit}
               </div>
             </div>

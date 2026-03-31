@@ -97,7 +97,7 @@ export interface FinishedGoodsAdjustment {
   finishedGoodsId: string;
   adjustmentType: 'increase' | 'decrease';
   quantity: number;
-  reason: 'damage' | 'theft' | 'count_correction' | 'expired' | 'other';
+  reason: 'damage' | 'production_damage';
   reasonNotes?: string;
   newBalance: number;
 }

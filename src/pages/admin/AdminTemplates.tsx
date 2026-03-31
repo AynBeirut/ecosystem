@@ -13,6 +13,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
+import { assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
 
 type TemplateId = 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic';
 
@@ -148,10 +149,16 @@ const AdminTemplates: React.FC = () => {
   };
 
   const uploadSingleImage = async (file: File, folder: 'background' | 'carousel' | 'gallery') => {
+    if (storeId) {
+      await assertCanUploadBytes(db, storeId, file.size);
+    }
     const safeFileName = encodeURIComponent(file.name);
     const path = `store-media/${storeId || 'unknown'}/${folder}/${Date.now()}_${safeFileName}`;
     const imageRef = ref(storage, path);
     await uploadBytes(imageRef, file);
+    if (storeId) {
+      await trackStorageUsageAfterUpload(db, storeId, file.size);
+    }
     return getDownloadURL(imageRef);
   };
 

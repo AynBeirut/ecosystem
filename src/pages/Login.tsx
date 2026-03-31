@@ -7,15 +7,12 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/context/useAuth';
-import AccountTypeSelection from '@/components/AccountTypeSelection';
-import { Capacitor } from '@capacitor/core';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [showAccountTypeSelection, setShowAccountTypeSelection] = useState(false);
-  const { login, googleLogin, upgradeToAdmin, user, isLoading } = useAuth();
+  const { login, googleLogin, user, isLoading } = useAuth();
   const navigate = useNavigate();
 
   // Redirect if already logged in
@@ -52,36 +49,6 @@ const Login: React.FC = () => {
     setIsSubmitting(true);
     try {
       await googleLogin();
-      // After successful login, we'll ask about account type
-      setShowAccountTypeSelection(true);
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
-
-  const handleAccountTypeSelection = async (type: 'user' | 'admin') => {
-    setIsSubmitting(true);
-    console.log('[Login] handleAccountTypeSelection called with:', type);
-    try {
-      if (type === 'admin') {
-        // Upgrade to admin with free trial
-        await upgradeToAdmin();
-        console.log('[Login] Upgraded to admin, redirecting to /admin');
-        navigate('/admin', { replace: true });
-      } else {
-        // Continue as regular user - check for redirect
-        const redirectPath = localStorage.getItem('redirectAfterLogin');
-        if (redirectPath) {
-          localStorage.removeItem('redirectAfterLogin');
-          console.log('[Login] Continuing as regular user, redirecting to', redirectPath);
-          navigate(redirectPath, { replace: true });
-        } else {
-          console.log('[Login] Continuing as regular user, redirecting to /');
-          navigate('/', { replace: true });
-        }
-      }
-    } catch (e) {
-      console.error('[Login] Error in handleAccountTypeSelection:', e);
     } finally {
       setIsSubmitting(false);
     }
@@ -94,28 +61,6 @@ const Login: React.FC = () => {
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-market-primary mx-auto mb-4"></div>
           <p className="text-gray-600">Checking authentication...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (showAccountTypeSelection) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12">
-        <div className="w-full max-w-4xl space-y-8">
-          <div className="text-center">
-            <h1 className="text-4xl font-bold text-market-primary">Market Space</h1>
-            <p className="mt-2 text-gray-600">Your one-stop market space - by AYN BEIRUT</p>
-          </div>
-          
-          <Card>
-            <CardContent className="pt-6">
-              <AccountTypeSelection 
-                onSelect={handleAccountTypeSelection} 
-                isLoading={isSubmitting} 
-              />
-            </CardContent>
-          </Card>
         </div>
       </div>
     );

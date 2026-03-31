@@ -69,7 +69,7 @@ async function handleTrialSuccess(
     }
 
     const data = storeSnap.data();
-    const tier = data?.pendingTrialTier || 'pro';
+    const tier = data?.pendingTrialTier || 'trial';
 
     // Activate trial
     await activateTrial(userId, externalId, tier);
@@ -105,7 +105,7 @@ async function handleSubscriptionSuccess(
     }
 
     const data = storeSnap.data();
-    const tier = data?.pendingSubscriptionTier || 'pro';
+    const tier = data?.pendingSubscriptionTier || 'starter';
     const billing = data?.pendingSubscriptionBilling || 'monthly';
     const addOns = data?.pendingSubscriptionAddOns || {};
     const amount = data?.pendingSubscriptionAmount || 0;

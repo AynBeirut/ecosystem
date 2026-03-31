@@ -13,6 +13,8 @@ import { useToast } from '@/hooks/use-toast';
 import { Recipe, RecipeIngredient, RawMaterial } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
+import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
+import { getActualStoreId } from '@/lib/storeUtils';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -45,12 +47,20 @@ const AdminRecipes: React.FC = () => {
       const db = getFirestore();
 
       // Fetch store profile for categories
-      const profileRef = doc(db, 'storeProfiles', user.storeId);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
+      const profileDocIds = Array.from(new Set([
+        getActualStoreId(user),
+        user.storeId,
+        user.id,
+      ].filter(Boolean)));
+
+      for (const profileDocId of profileDocIds) {
+        const profileSnap = await getDoc(doc(db, 'storeProfiles', profileDocId));
+        if (!profileSnap.exists()) continue;
+
         const profileData = profileSnap.data() as StoreProfile;
         setStoreProfile(profileData);
         setCategories(profileData.productCategories || ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Uncategorized', 'Other']);
+        break;
       }
 
       // Fetch recipes
@@ -136,6 +146,7 @@ const AdminRecipes: React.FC = () => {
 
     try {
       const db = getFirestore();
+      await enforceAndConsumeTrialOperation(db, user.storeId, 'recipe');
       const costPerUnit = totalCost / newRecipe.outputQuantity;
 
       const recipeData = {
@@ -274,6 +285,11 @@ const AdminRecipes: React.FC = () => {
 
     try {
       console.log('Starting recipe update...');
+      const shouldContinue = window.confirm(
+        'This update applies from the beginning for this recipe. For changes only from now, create a new recipe and link the product to it. Continue?'
+      );
+      if (!shouldContinue) return;
+
       const db = getFirestore();
       const recipeRef = doc(db, 'recipes', editingRecipe.id);
 
@@ -703,11 +719,11 @@ const AdminRecipes: React.FC = () => {
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Total Cost</p>
-                      <p className="font-bold text-lg">${(recipe.totalCost || 0).toFixed(2)}</p>
+                      <p className="font-bold text-lg">${calculateRecipeCost(recipe.ingredients).toFixed(2)}</p>
                     </div>
                     <div>
                       <p className="text-sm text-gray-500">Cost Per Unit</p>
-                      <p className="font-bold text-lg">${(recipe.costPerUnit || 0).toFixed(2)}</p>
+                      <p className="font-bold text-lg">${recipe.outputQuantity ? (calculateRecipeCost(recipe.ingredients) / recipe.outputQuantity).toFixed(2) : '0.00'}</p>
                     </div>
                   </div>
                   <div>
@@ -739,6 +755,9 @@ const AdminRecipes: React.FC = () => {
                 <DialogDescription>Update recipe details and ingredients</DialogDescription>
               </DialogHeader>
               <div className="grid gap-4">
+                <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                  Editing a recipe applies to this recipe from the beginning. If you need changes only from now, create a new recipe and then update the product to use the new recipe.
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="edit-name">Recipe Name *</Label>
@@ -957,7 +976,7 @@ const AdminRecipes: React.FC = () => {
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditingRecipe(null)}>Cancel</Button>
-                <Button onClick={handleUpdateRecipe}>Update Recipe</Button>
+                <Button onClick={handleUpdateRecipe}>Update Recipe (From Beginning)</Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

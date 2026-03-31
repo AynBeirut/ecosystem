@@ -167,6 +167,17 @@ function validateFinancials(subtotalRaw, discountAmountRaw, taxAmountRaw, totalR
     }
     return { valid: true, subtotal, discountAmount, taxAmount, total: expectedTotal };
 }
+function normalizeSubscriptionTier(rawTier) {
+    if (typeof rawTier !== 'string')
+        return 'starter';
+    const tier = rawTier.toLowerCase();
+    if (tier === 'premium')
+        return 'starter';
+    if (tier === 'trial' || tier === 'starter' || tier === 'pro' || tier === 'business') {
+        return tier;
+    }
+    return 'starter';
+}
 app.post('/checkout', async (req, res) => {
     try {
         console.log('CHECKOUT FUNCTION TRIGGERED');
@@ -288,6 +299,27 @@ app.post('/checkout', async (req, res) => {
                 const profileRef = db.doc(`storeProfiles/${storeId}`);
                 const profileSnap = await transaction.get(profileRef);
                 const storeProfile = profileSnap.exists ? profileSnap.data() : undefined;
+                let trialOperationUpdate;
+                const tier = normalizeSubscriptionTier(storeProfile?.subscriptionTier);
+                if (tier === 'trial') {
+                    const nowIso = new Date().toISOString();
+                    const monthKey = nowIso.slice(0, 7);
+                    const usageMonth = typeof storeProfile?.operationsUsageMonth === 'string' ? storeProfile.operationsUsageMonth : '';
+                    const currentUsedRaw = Number(storeProfile?.operationsUsedThisMonth ?? storeProfile?.monthlyOperationsUsed ?? 0);
+                    const currentUsed = usageMonth === monthKey && Number.isFinite(currentUsedRaw) ? currentUsedRaw : 0;
+                    const monthlyLimitRaw = Number(storeProfile?.monthlyOperationsLimit ?? 200);
+                    const monthlyLimit = Number.isFinite(monthlyLimitRaw) && monthlyLimitRaw > 0 ? monthlyLimitRaw : 200;
+                    const nextUsed = currentUsed + 1;
+                    if (nextUsed > monthlyLimit) {
+                        throw new Error(`Trial operation limit reached for store ${storeId}. Upgrade plan to continue.`);
+                    }
+                    trialOperationUpdate = {
+                        operationsUsageMonth: monthKey,
+                        operationsUsedThisMonth: nextUsed,
+                        monthlyOperationsUsed: nextUsed,
+                        updatedAt: nowIso,
+                    };
+                }
                 const discountAmount = 0;
                 const taxAmount = 0;
                 const totalAfterDiscount = storeSubtotal;
@@ -303,6 +335,7 @@ app.post('/checkout', async (req, res) => {
                     taxAmount: financialCheck.taxAmount,
                     total: financialCheck.total,
                     storeProfile,
+                    trialOperationUpdate,
                 });
                 console.log('Prepared order for store:', storeId, 'with items:', orderItems);
             }
@@ -315,7 +348,10 @@ app.post('/checkout', async (req, res) => {
                 const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
                 // Update store profile with new invoice number (use set with merge to create if not exists)
                 const profileRef = db.doc(`storeProfiles/${orderData.storeId}`);
-                transaction.set(profileRef, { lastInvoiceNumber: newNumber }, { merge: true });
+                transaction.set(profileRef, {
+                    lastInvoiceNumber: newNumber,
+                    ...(orderData.trialOperationUpdate || {}),
+                }, { merge: true });
                 const orderRef = db.collection('orders').doc();
                 transaction.set(orderRef, {
                     storeId: orderData.storeId,

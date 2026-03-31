@@ -4,6 +4,7 @@ import { useAuth } from '@/context/useAuth';
 import { FileDown, Download, ArrowLeft } from 'lucide-react';
 import { exportToCSV } from '@/lib/exportUtils';
 import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useNavigate } from 'react-router-dom';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -69,6 +70,20 @@ interface PurchaseRecord {
   items: Record<string, unknown>[];
   taxAmount?: number;
   invoiceNumber?: string;
+}
+
+interface PurchaseStatementRow {
+  id: string;
+  dateLabel: string;
+  sortDate: string;
+  ref: string;
+  description: string;
+  debit: number;
+  net: number;
+  vat: number;
+  credit: number;
+  balance: number;
+  status: string;
 }
 
 interface ExpenseRecord {
@@ -177,6 +192,48 @@ const AdminAccountStatement: React.FC = () => {
     const parsed = new Date(String(value || ''));
     if (Number.isNaN(parsed.getTime())) return 'N/A';
     return parsed.toLocaleDateString('en-GB');
+  };
+
+  const buildPurchaseStatementRows = (sourcePurchases: PurchaseRecord[]): PurchaseStatementRow[] => {
+    const filtered = sourcePurchases
+      .filter((purchase) => isDateInRange(purchase.date, filterStartDate, filterEndDate))
+      .map((purchase) => {
+        const sortDate = normalizeDateString(purchase.date);
+        return {
+          purchase,
+          sortDate,
+        };
+      })
+      .sort((a, b) => {
+        if (a.sortDate && b.sortDate) return a.sortDate.localeCompare(b.sortDate);
+        if (a.sortDate) return -1;
+        if (b.sortDate) return 1;
+        return 0;
+      });
+
+    let runningBalance = 0;
+
+    return filtered.map(({ purchase, sortDate }) => {
+      const debit = toFiniteNumber(purchase.amount, 0);
+      const vat = toFiniteNumber(purchase.taxAmount, 0);
+      const net = debit - vat;
+      const credit = toFiniteNumber(purchase.amountPaid, 0);
+      runningBalance += debit - credit;
+
+      return {
+        id: purchase.id,
+        dateLabel: sortDate ? new Date(`${sortDate}T00:00:00`).toLocaleDateString('en-GB') : 'N/A',
+        sortDate,
+        ref: toNonEmptyString(purchase.invoiceNumber, '-'),
+        description: `${toNonEmptyString(purchase.supplier, 'Unknown Supplier')} - ${Array.isArray(purchase.items) ? purchase.items.length : 0} item(s)`,
+        debit,
+        net,
+        vat,
+        credit,
+        balance: runningBalance,
+        status: toNonEmptyString(purchase.status, 'unknown'),
+      };
+    });
   };
 
   useEffect(() => {
@@ -450,22 +507,19 @@ const AdminAccountStatement: React.FC = () => {
       
       purchasesSnapshot.forEach(doc => {
         const purchase = doc.data();
-        let dateStr = 'N/A';
-        if (purchase.date) {
-          dateStr = purchase.date;
-        } else if (purchase.createdAt) {
-          if (typeof purchase.createdAt === 'string') {
-            dateStr = purchase.createdAt;
-          } else if (purchase.createdAt.toDate) {
-            dateStr = purchase.createdAt.toDate().toLocaleDateString();
-          }
+        let dateStr = normalizeDateString(purchase.date);
+        if (!dateStr && purchase.createdAt) {
+          dateStr = normalizeDateString(purchase.createdAt);
+        }
+        if (!dateStr && purchase.receivedDate) {
+          dateStr = normalizeDateString(purchase.receivedDate);
         }
         
         const supplierName = suppliersData.get(purchase.supplierId) || purchase.supplierName || 'Unknown';
         
         purchasesList.push({
           id: doc.id,
-          date: dateStr,
+          date: dateStr || '',
           supplier: supplierName,
           amount: purchase.totalCost || purchase.total || 0,
           amountPaid: purchase.amountPaid || purchase.paid || 0,
@@ -1338,90 +1392,54 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const exportPurchasesToExcel = () => {
-    const data: CsvRow[] = [];
-    let quarantinedExportRows = 0;
+    const rows = buildPurchaseStatementRows(purchases);
+    const totals = rows.reduce((acc, row) => {
+      acc.debit += row.debit;
+      acc.net += row.net;
+      acc.vat += row.vat;
+      acc.credit += row.credit;
+      return acc;
+    }, { debit: 0, net: 0, vat: 0, credit: 0 });
 
-    const validPurchases = purchases.map((purchase) => {
-      const amount = toFiniteNumber(purchase.amount, Number.NaN);
-      if (!Number.isFinite(amount) || amount < 0) {
-        quarantinedExportRows += 1;
-        return null;
-      }
-      return {
-        date: toDateLabel(purchase.date),
-        supplier: toNonEmptyString(purchase.supplier, 'Unknown Supplier'),
-        amount,
-        status: toNonEmptyString(purchase.status, 'unknown'),
-      };
-    }).filter(Boolean) as Array<{ date: string; supplier: string; amount: number; status: string }>;
-    
-    // Add header rows
-    data.push({ 'Date': 'PURCHASE HISTORY REPORT', 'Supplier': '', 'Amount': '', 'Status': '' });
+    const data: CsvRow[] = [];
+    data.push({ 'Date': 'PURCHASE HISTORY REPORT', 'Ref.': '', 'Description': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
     if (filterStartDate || filterEndDate) {
       const startDisplay = filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning';
       const endDisplay = filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present';
-      data.push({ 'Date': `Period from ${startDisplay} to ${endDisplay}`, 'Supplier': '', 'Amount': '', 'Status': '' });
+      data.push({ 'Date': `Period from ${startDisplay} to ${endDisplay}`, 'Ref.': '', 'Description': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
     }
-    data.push({ 'Date': `Generated: ${new Date().toLocaleDateString('en-GB')}`, 'Supplier': '', 'Amount': '', 'Status': '' });
-    data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
-    
-    // Group purchases by supplier
-    const groupedPurchases = validPurchases.reduce((acc, p) => {
-      const supplier = p.supplier || 'Unknown Supplier';
-      if (!acc[supplier]) acc[supplier] = [];
-      acc[supplier].push(p);
-      return acc;
-    }, {} as Record<string, typeof validPurchases>);
-    
-    const sortedSuppliers = Object.keys(groupedPurchases).sort();
-    
-    let grandTotal = 0;
-    
-    sortedSuppliers.forEach(supplier => {
-      // Supplier header
-      data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
-      data.push({ 'Date': `SUPPLIER: ${supplier.toUpperCase()}`, 'Supplier': '', 'Amount': '', 'Status': '' });
-      data.push({ 'Date': 'Date', 'Supplier': 'Supplier', 'Amount': 'Amount', 'Status': 'Status' });
-      
-      let supplierTotal = 0;
-      
-      groupedPurchases[supplier].forEach(p => {
-        data.push({
-          'Date': p.date,
-          'Supplier': p.supplier,
-          'Amount': p.amount.toFixed(2),
-          'Status': p.status
-        });
-        supplierTotal += p.amount;
-      });
-      
-      // Supplier subtotal
-      data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
+    data.push({ 'Date': `Generated: ${new Date().toLocaleDateString('en-GB')}`, 'Ref.': '', 'Description': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+    data.push({ 'Date': '', 'Ref.': '', 'Description': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
+    data.push({ 'Date': 'Date', 'Ref.': 'Ref.', 'Description': 'Description', 'Debit': 'Debit', 'Net': 'Net', 'VAT': 'VAT', 'Credit': 'Credit', 'Balance': 'Balance', 'Status': 'Status' });
+
+    rows.forEach((row) => {
       data.push({
-        'Date': '',
-        'Supplier': `SUBTOTAL - ${supplier}`,
-        'Amount': supplierTotal.toFixed(2),
-        'Status': ''
+        'Date': row.dateLabel,
+        'Ref.': row.ref,
+        'Description': row.description,
+        'Debit': row.debit.toFixed(2),
+        'Net': row.net.toFixed(2),
+        'VAT': row.vat.toFixed(2),
+        'Credit': row.credit.toFixed(2),
+        'Balance': row.balance.toFixed(2),
+        'Status': row.status,
       });
-      
-      grandTotal += supplierTotal;
     });
-    
-    // Grand total
-    data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
-    if (quarantinedExportRows > 0) {
-      data.push({ 'Date': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Supplier': '', 'Amount': '', 'Status': '' });
-      data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
-    }
-    data.push({ 'Date': '', 'Supplier': '', 'Amount': '', 'Status': '' });
+
+    data.push({ 'Date': '', 'Ref.': '', 'Description': '', 'Debit': '', 'Net': '', 'VAT': '', 'Credit': '', 'Balance': '', 'Status': '' });
     data.push({
-      'Date': '',
-      'Supplier': 'GRAND TOTAL',
-      'Amount': grandTotal.toFixed(2),
-      'Status': ''
+      'Date': 'TOTAL',
+      'Ref.': '',
+      'Description': '',
+      'Debit': totals.debit.toFixed(2),
+      'Net': totals.net.toFixed(2),
+      'VAT': totals.vat.toFixed(2),
+      'Credit': totals.credit.toFixed(2),
+      'Balance': rows.length > 0 ? rows[rows.length - 1].balance.toFixed(2) : '0.00',
+      'Status': '',
     });
-    
-    exportToCSV(data, 'purchases_statement.csv');
+
+    exportToCSV(data, 'purchases_history.csv');
   };
 
   const exportExpensesToExcel = () => {
@@ -2172,127 +2190,72 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const exportPurchasesToPDF = () => {
-    const doc = new jsPDF();
-    let quarantinedExportRows = 0;
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const rows = buildPurchaseStatementRows(purchases);
 
-    const validPurchases = purchases.map((purchase) => {
-      const amount = toFiniteNumber(purchase.amount, Number.NaN);
-      if (!Number.isFinite(amount) || amount < 0) {
-        quarantinedExportRows += 1;
-        return null;
-      }
-      return {
-        date: toDateLabel(purchase.date),
-        supplier: toNonEmptyString(purchase.supplier, 'Unknown Supplier'),
-        amount,
-        status: toNonEmptyString(purchase.status, 'unknown'),
-      };
-    }).filter(Boolean) as Array<{ date: string; supplier: string; amount: number; status: string }>;
+    const totalDebit = rows.reduce((sum, row) => sum + row.debit, 0);
+    const totalNet = rows.reduce((sum, row) => sum + row.net, 0);
+    const totalVat = rows.reduce((sum, row) => sum + row.vat, 0);
+    const totalCredit = rows.reduce((sum, row) => sum + row.credit, 0);
+    const closingBalance = rows.length > 0 ? rows[rows.length - 1].balance : 0;
+
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
-    doc.text('PURCHASE HISTORY REPORT', 105, 15, { align: 'center' });
+    doc.text('PURCHASE HISTORY REPORT', 148, 14, { align: 'center' });
     doc.setFontSize(9);
     doc.setFont(undefined, 'normal');
     if (filterStartDate || filterEndDate) {
       const startDisplay = filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning';
       const endDisplay = filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present';
-      doc.text(`Period from ${startDisplay} to ${endDisplay}`, 105, 22, { align: 'center' });
+      doc.text(`Period from ${startDisplay} to ${endDisplay}`, 148, 20, { align: 'center' });
     }
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 105, 27, { align: 'center' });
-    
-    // Group purchases by supplier
-    const groupedPurchases = validPurchases.reduce((acc, p) => {
-      const supplier = p.supplier || 'Unknown Supplier';
-      if (!acc[supplier]) acc[supplier] = [];
-      acc[supplier].push(p);
-      return acc;
-    }, {} as Record<string, typeof validPurchases>);
-    
-    const sortedSuppliers = Object.keys(groupedPurchases).sort();
-    
-    let y = 35;
-    let grandTotal = 0;
-    
-    sortedSuppliers.forEach((supplier, idx) => {
-      if (idx > 0 && y > 250) {
-        doc.addPage();
-        y = 20;
-      }
-      
-      // Supplier header
-      if (y > 35) y += 5;
-      doc.setFontSize(10);
-      doc.setFont(undefined, 'bold');
-      const cleanSupplierHeader = cleanTextForPDF(supplier);
-      doc.text(`SUPPLIER: ${cleanSupplierHeader.toUpperCase()}`, 20, y);
-      y += 5;
-      
-      // Column headers
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'bold');
-      doc.text('Date', 20, y);
-      doc.text('Supplier', 60, y);
-      doc.text('Amount', 140, y, { align: 'right' });
-      doc.text('Status', 180, y);
-      y += 2;
-      doc.line(20, y, 180, y);
-      y += 5;
-      
-      let supplierTotal = 0;
-      
-      doc.setFontSize(8);
-      doc.setFont(undefined, 'normal');
-      groupedPurchases[supplier].forEach(purchase => {
-        if (y > 270) {
-          doc.addPage();
-          y = 20;
-        }
-        doc.text(new Date(purchase.date).toLocaleDateString('en-GB'), 20, y);
-        const cleanSupplierName = cleanTextForPDF(purchase.supplier).substring(0, 25);
-        doc.text(cleanSupplierName, 60, y);
-        doc.text(`$${purchase.amount.toFixed(2)}`, 140, y, { align: 'right' });
-        doc.text(purchase.status.substring(0, 10), 180, y);
-        y += 5;
-        
-        supplierTotal += purchase.amount;
-      });
-      
-      // Supplier subtotal
-      y += 1;
-      doc.line(20, y, 180, y);
-      y += 4;
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'bold');
-      const cleanSubtotal = cleanTextForPDF(supplier);
-      doc.text(`SUBTOTAL - ${cleanSubtotal}`, 60, y);
-      doc.text(`$${supplierTotal.toFixed(2)}`, 140, y, { align: 'right' });
-      y += 7;
-      
-      grandTotal += supplierTotal;
-    });
-    
-    // Grand total
-    if (y > 250) {
-      doc.addPage();
-      y = 20;
-    }
-    y += 2;
-    doc.line(20, y, 180, y);
-    doc.line(20, y + 1, 180, y + 1);
-    y += 5;
-    doc.setFontSize(10);
-    doc.setFont(undefined, 'bold');
-    doc.text('GRAND TOTAL', 60, y);
-    doc.text(`$${grandTotal.toFixed(2)}`, 140, y, { align: 'right' });
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 148, 25, { align: 'center' });
 
-    if (quarantinedExportRows > 0) {
-      y += 7;
-      doc.setFontSize(8);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
-    }
-    
-    doc.save('purchases_statement.pdf');
+    autoTable(doc, {
+      startY: 30,
+      head: [['Date', 'Ref.', 'Description', 'Debit', 'Net', 'VAT', 'Credit', 'Balance', 'Status']],
+      body: rows.map((row) => [
+        row.dateLabel,
+        row.ref,
+        cleanTextForPDF(row.description),
+        row.debit.toFixed(2),
+        row.net.toFixed(2),
+        row.vat.toFixed(2),
+        row.credit.toFixed(2),
+        row.balance.toFixed(2),
+        row.status,
+      ]),
+      foot: [[
+        'TOTAL',
+        '',
+        '',
+        totalDebit.toFixed(2),
+        totalNet.toFixed(2),
+        totalVat.toFixed(2),
+        totalCredit.toFixed(2),
+        closingBalance.toFixed(2),
+        '',
+      ]],
+      theme: 'striped',
+      styles: { fontSize: 8, cellPadding: 2 },
+      headStyles: { fillColor: [59, 130, 246], textColor: 255, fontStyle: 'bold' },
+      footStyles: { fillColor: [229, 231, 235], textColor: 0, fontStyle: 'bold' },
+      columnStyles: {
+        3: { halign: 'right' },
+        4: { halign: 'right' },
+        5: { halign: 'right' },
+        6: { halign: 'right' },
+        7: { halign: 'right' },
+      },
+      didDrawPage: (data) => {
+        const pageNumber = doc.getNumberOfPages();
+        const pageSize = doc.internal.pageSize;
+        doc.setFontSize(8);
+        doc.text(`Page ${pageNumber}`, pageSize.getWidth() - 20, pageSize.getHeight() - 8, { align: 'right' });
+      },
+    });
+
+    doc.save('purchases_history.pdf');
   };
 
   const exportExpensesToPDF = () => {
@@ -3069,6 +3032,22 @@ const AdminAccountStatement: React.FC = () => {
 
           {activeTab === 'purchases' && (
             <div>
+              {(() => {
+                const purchaseRows = buildPurchaseStatementRows(purchases);
+                const totals = purchaseRows.reduce((acc, row) => {
+                  acc.debit += row.debit;
+                  acc.net += row.net;
+                  acc.vat += row.vat;
+                  acc.credit += row.credit;
+                  return acc;
+                }, { debit: 0, net: 0, vat: 0, credit: 0 });
+
+                const closingBalance = purchaseRows.length > 0
+                  ? purchaseRows[purchaseRows.length - 1].balance
+                  : 0;
+
+                return (
+              <>
               <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Purchase History</h2>
                 <div className="flex gap-2 flex-wrap items-center">
@@ -3130,50 +3109,44 @@ const AdminAccountStatement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {(() => {
-                      let runningBalance = 0;
-                      return purchases.map(purchase => {
-                        const total = purchase.amount;
-                        const vat = purchase.taxAmount || 0;
-                        const net = total - vat;
-                        runningBalance += total - purchase.amountPaid;
-                        return (
-                          <tr key={purchase.id} className="border-b hover:bg-gray-50 text-sm">
-                            <td className="px-3 py-2">{new Date(purchase.date).toLocaleDateString('en-GB')}</td>
-                            <td className="px-3 py-2">{purchase.invoiceNumber || '-'}</td>
-                            <td className="px-3 py-2">{purchase.supplier} - {purchase.items.length} item(s)</td>
-                            <td className="px-3 py-2 text-right font-semibold">{total.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right">{net.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right">{vat.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right text-green-600">{purchase.amountPaid.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{runningBalance.toFixed(2)}</td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-1 rounded text-xs ${
-                                purchase.status === 'received' ? 'bg-green-100 text-green-800' : 
-                                purchase.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                                'bg-yellow-100 text-yellow-800'
-                              }`}>
-                                {purchase.status}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
+                    {purchaseRows.map((row) => (
+                      <tr key={row.id} className="border-b hover:bg-gray-50 text-sm">
+                        <td className="px-3 py-2">{row.dateLabel}</td>
+                        <td className="px-3 py-2">{row.ref}</td>
+                        <td className="px-3 py-2">{row.description}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{row.debit.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">{row.net.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right">{row.vat.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right text-green-600">{row.credit.toFixed(2)}</td>
+                        <td className="px-3 py-2 text-right font-semibold">{row.balance.toFixed(2)}</td>
+                        <td className="px-3 py-2">
+                          <span className={`px-2 py-1 rounded text-xs ${
+                            row.status === 'received' ? 'bg-green-100 text-green-800' :
+                            row.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
+                            'bg-yellow-100 text-yellow-800'
+                          }`}>
+                            {row.status}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
                       <td className="px-3 py-3" colSpan={3}>TOTAL</td>
-                      <td className="px-3 py-3 text-right text-blue-600">{purchases.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + p.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">0.00</td>
-                      <td className="px-3 py-3 text-right text-green-600">{purchases.reduce((sum, p) => sum + p.amountPaid, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{purchases.reduce((sum, p) => sum + (p.amount - p.amountPaid), 0).toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right text-blue-600">{totals.debit.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{totals.net.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{totals.vat.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right text-green-600">{totals.credit.toFixed(2)}</td>
+                      <td className="px-3 py-3 text-right">{closingBalance.toFixed(2)}</td>
                       <td className="px-3 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
               </div>
+              </>
+                );
+              })()}
             </div>
           )}
 

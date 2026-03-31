@@ -16,6 +16,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
+import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -262,17 +263,45 @@ const AdminPurchases: React.FC = () => {
     const storeEmail = storeProfile?.email || '';
     const storeTaxNumber = storeProfile?.taxNumber || '';
     const poNum = purchase.invoiceNumber || purchase.poNumber || purchase.purchaseOrderNumber || purchase.id.slice(0, 8).toUpperCase();
+    const subtotalFromItems = purchase.items?.reduce((sum, item) => {
+      const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
+      const price = typeof item.unitPrice === 'number'
+        ? item.unitPrice
+        : (typeof item.unitCost === 'number' ? item.unitCost : (parseFloat((item as any).unitPrice || item.unitCost as any) || 0));
+      return sum + (qty * price);
+    }, 0) || 0;
+    const subtotal = typeof purchase.subtotal === 'number' ? purchase.subtotal : subtotalFromItems;
+    const totalAmount = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
+    const taxAmountRaw = typeof purchase.taxAmount === 'number'
+      ? purchase.taxAmount
+      : (typeof (purchase as any).vat === 'number' ? (purchase as any).vat : 0);
+    const taxAmount = taxAmountRaw > 0 ? taxAmountRaw : Math.max(0, totalAmount - subtotal);
+    const hasTax = taxAmount > 0.0001;
+    const taxType = (purchase as any).taxType || (hasTax ? 'VAT' : 'none');
+    const taxRate = (typeof (purchase as any).taxRate === 'number' && (purchase as any).taxRate > 0)
+      ? (purchase as any).taxRate
+      : (hasTax && subtotal > 0 ? (taxAmount / subtotal) * 100 : 0);
+    const taxLabel = taxType === 'none' ? 'VAT' : taxType;
+    const taxMultiplier = hasTax && subtotal > 0 ? (1 + (taxAmount / subtotal)) : 1;
     
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     const itemsHtml = purchase.items?.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
-      const lineTotal = item.quantity * item.unitPrice;
+      const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
+      const unitPrice = typeof item.unitPrice === 'number'
+        ? item.unitPrice
+        : (typeof item.unitCost === 'number' ? item.unitCost : (parseFloat((item as any).unitPrice || item.unitCost as any) || 0));
+      const unitPriceWithTax = unitPrice * taxMultiplier;
+      const lineTotalWithTax = qty * unitPriceWithTax;
       return `
         <tr>
           <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">${material?.name || 'Material'}</td>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(item.unitPrice, true)}</td>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(lineTotal, true)}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${qty}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">
+            ${formatCurrency(hasTax ? unitPriceWithTax : unitPrice, true)}
+            ${hasTax ? `<div style="font-size: 11px; color: #6b7280;">incl. ${taxLabel}</div>` : ''}
+          </td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">${formatCurrency(hasTax ? lineTotalWithTax : (qty * unitPrice), true)}</td>
         </tr>
       `;
     }).join('');
@@ -453,8 +482,8 @@ const AdminPurchases: React.FC = () => {
                 <tr>
                   <th>Item Description</th>
                   <th style="text-align: center; width: 100px;">Qty</th>
-                  <th style="text-align: right; width: 150px;">Unit Price</th>
-                  <th style="text-align: right; width: 150px;">Amount</th>
+                  <th style="text-align: right; width: 150px;">${hasTax ? 'Unit Price (Incl. Tax)' : 'Unit Price'}</th>
+                  <th style="text-align: right; width: 150px;">${hasTax ? 'Amount (Incl. Tax)' : 'Amount'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -463,7 +492,9 @@ const AdminPurchases: React.FC = () => {
             </table>
 
             <div class="totals">
-              <div class="grand-total">TOTAL: ${formatCurrency(purchase.totalCost || purchase.totalAmount || purchase.total || 0, true)}</div>
+              <div style="font-size: 14px; color: #64748b; margin-bottom: 8px;">Subtotal: ${formatCurrency(subtotal, true)}</div>
+              ${hasTax ? `<div style="font-size: 14px; color: #64748b; margin-bottom: 8px;">${taxLabel}${taxRate > 0 ? ` (${taxRate.toFixed(2)}%)` : ''}: ${formatCurrency(taxAmount, true)}</div>` : ''}
+              <div class="grand-total">TOTAL: ${formatCurrency(totalAmount, true)}</div>
             </div>
 
             ${purchase.notes ? `
@@ -689,8 +720,8 @@ const AdminPurchases: React.FC = () => {
                 <tr>
                   <th>Description</th>
                   <th style="text-align: center; width: 100px;">Quantity</th>
-                  <th style="text-align: right; width: 150px;">Unit Price</th>
-                  <th style="text-align: right; width: 150px;">Total</th>
+                  <th style="text-align: right; width: 150px;">${hasTax ? 'Unit Price (Incl. Tax)' : 'Unit Price'}</th>
+                  <th style="text-align: right; width: 150px;">${hasTax ? 'Total (Incl. Tax)' : 'Total'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -699,7 +730,9 @@ const AdminPurchases: React.FC = () => {
             </table>
 
             <div class="totals">
-              <div class="grand-total">AMOUNT: ${formatCurrency(purchase.totalCost || purchase.totalAmount || purchase.total || 0, true)}</div>
+              <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Subtotal: ${formatCurrency(subtotal, true)}</div>
+              ${hasTax ? `<div style="font-size: 14px; color: #666; margin-bottom: 8px;">${taxLabel}${taxRate > 0 ? ` (${taxRate.toFixed(2)}%)` : ''}: ${formatCurrency(taxAmount, true)}</div>` : ''}
+              <div class="grand-total">AMOUNT: ${formatCurrency(totalAmount, true)}</div>
             </div>
 
             ${purchase.notes ? `
@@ -954,8 +987,8 @@ const AdminPurchases: React.FC = () => {
                 <tr>
                   <th>Product Description</th>
                   <th style="text-align: center; width: 100px;">Qty</th>
-                  <th style="text-align: right; width: 150px;">Price</th>
-                  <th style="text-align: right; width: 150px;">Total</th>
+                  <th style="text-align: right; width: 150px;">${hasTax ? 'Price (Incl. Tax)' : 'Price'}</th>
+                  <th style="text-align: right; width: 150px;">${hasTax ? 'Total (Incl. Tax)' : 'Total'}</th>
                 </tr>
               </thead>
               <tbody>
@@ -964,7 +997,9 @@ const AdminPurchases: React.FC = () => {
             </table>
 
             <div class="totals">
-              <div class="grand-total">TOTAL AMOUNT: ${formatCurrency(purchase.totalCost || purchase.totalAmount || purchase.total || 0, true)}</div>
+              <div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">Subtotal: ${formatCurrency(subtotal, true)}</div>
+              ${hasTax ? `<div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">${taxLabel}${taxRate > 0 ? ` (${taxRate.toFixed(2)}%)` : ''}: ${formatCurrency(taxAmount, true)}</div>` : ''}
+              <div class="grand-total">TOTAL AMOUNT: ${formatCurrency(totalAmount, true)}</div>
             </div>
 
             ${purchase.notes ? `
@@ -1195,6 +1230,7 @@ const AdminPurchases: React.FC = () => {
 
     try {
       const db = getFirestore();
+      await enforceAndConsumeTrialOperation(db, user.storeId, 'purchase');
       const invoiceNumber = await generatePONumber();
       
       // Ensure all numeric values are properly converted
@@ -1338,6 +1374,28 @@ const AdminPurchases: React.FC = () => {
         updatedAt: new Date().toISOString(),
       });
 
+      const purchaseWithTax = receivingPurchase as Purchase & {
+        taxType?: 'none' | 'VAT' | 'TTC';
+        taxRate?: number;
+        taxAmount?: number;
+        vat?: number;
+        subtotal?: number;
+      };
+
+      const purchaseTaxType = purchaseWithTax.taxType || 'none';
+      const purchaseSubtotal = Number(purchaseWithTax.subtotal || 0);
+      const purchaseTaxAmount = Number(purchaseWithTax.taxAmount || purchaseWithTax.vat || 0);
+      const derivedTaxRate = Number(purchaseWithTax.taxRate || (purchaseSubtotal > 0 ? (purchaseTaxAmount / purchaseSubtotal) * 100 : 0));
+      const purchaseTaxRate = Number.isFinite(derivedTaxRate) && derivedTaxRate > 0 ? derivedTaxRate : 0;
+      const shouldAddVatToUnitCost = purchaseTaxType === 'VAT' && purchaseTaxRate > 0;
+      const round4 = (value: number) => Math.round((value + Number.EPSILON) * 10000) / 10000;
+
+      const getEffectiveUnitCost = (baseUnitCost: number) => {
+        if (!Number.isFinite(baseUnitCost) || baseUnitCost <= 0) return 0;
+        if (!shouldAddVatToUnitCost) return round4(baseUnitCost);
+        return round4(baseUnitCost * (1 + (purchaseTaxRate / 100)));
+      };
+
       // Update raw material stock levels and costs
       let updatedCount = 0;
       let createdCount = 0;
@@ -1355,7 +1413,8 @@ const AdminPurchases: React.FC = () => {
         }
         
         let material = rawMaterials.find(m => m.id === item.rawMaterialId);
-        const itemUnitCost = item.unitCost || item.unitPrice || 0;
+        const baseItemUnitCost = Number(item.unitCost || item.unitPrice || 0);
+        const itemUnitCost = getEffectiveUnitCost(baseItemUnitCost);
         
         console.log(`Material found:`, material ? `${material.name} (ID: ${material.id})` : 'NOT FOUND');
         
@@ -1405,10 +1464,12 @@ const AdminPurchases: React.FC = () => {
           if (material.currentStock === 0) {
             newCostPerUnit = itemUnitCost;
           } else {
-            newCostPerUnit = newStock > 0 ? totalValue / newStock : itemUnitCost;
+            newCostPerUnit = newStock > 0 ? (totalValue / newStock) : itemUnitCost;
           }
+
+          newCostPerUnit = round4(newCostPerUnit);
           
-          console.log(`✅ Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Item Cost: ${itemUnitCost.toFixed(4)})`);
+          console.log(`✅ Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Base Item Cost: ${baseItemUnitCost.toFixed(4)}, Effective Item Cost: ${itemUnitCost.toFixed(4)}, TaxType: ${purchaseTaxType}, TaxRate: ${purchaseTaxRate.toFixed(2)}%)`);
           
           // Update stock and cost
           await updateDoc(materialRef, {

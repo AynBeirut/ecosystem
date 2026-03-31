@@ -4,43 +4,166 @@ import { initiatePayment } from '../services/whishPayment';
 
 const db = admin.firestore();
 
+type SubscriptionTier = 'trial' | 'starter' | 'pro' | 'business';
+type PaidTier = Exclude<SubscriptionTier, 'trial'>;
+type Billing = 'monthly' | 'yearly';
+
 interface SubscriptionPlan {
-  tier: 'premium' | 'pro';
-  billing: 'monthly' | 'yearly';
+  tier: SubscriptionTier;
+  billing: Billing;
   addOns?: {
-    storage?: boolean;
-    customDomainHosting?: boolean;
+    domainPackage?: boolean;
+    whatsappBusiness?: boolean;
+    extraStorageBlocks?: number;
   };
 }
 
 const PRICING = {
-  trial: 100, // $1.00 in cents
-  premium: {
-    monthly: 1000, // $10.00
-    yearly: 10000 // $100.00 (17% savings)
+  starter: {
+    monthly: 1000,
+    yearly: 10000,
   },
   pro: {
-    monthly: 2000, // $20.00
-    yearly: 20000 // $200.00 (17% savings - should be $240)
+    monthly: 2000,
+    yearly: 20000,
+  },
+  business: {
+    monthly: 3000,
+    yearly: 30000,
   },
   addOns: {
-    storage: {
-      monthly: 500, // $5.00
-      yearly: 5000 // $50.00
+    domainPackage: {
+      monthly: 1500,
+      yearly: 15000,
     },
-    customDomainHosting: {
+    whatsappBusiness: {
       monthly: 1000, // $10.00
-      yearly: 10000 // $100.00
-    }
-  }
+      yearly: 10000,
+    },
+    extraStoragePer5Gb: {
+      monthly: 200,
+      yearly: 2400,
+    },
+  },
 };
 
+const PLAN_LIMITS: Record<SubscriptionTier, {
+  productLimit: number;
+  storageLimitMb: number;
+  operationsPerMonth: number | null;
+  revenueSharePercentage: number;
+  allowsComposed: boolean;
+  allowsManufacturing: boolean;
+}> = {
+  trial: {
+    productLimit: 10,
+    storageLimitMb: 500,
+    operationsPerMonth: 30,
+    revenueSharePercentage: 20,
+    allowsComposed: false,
+    allowsManufacturing: false,
+  },
+  starter: {
+    productLimit: 8,
+    storageLimitMb: 5120,
+    operationsPerMonth: null,
+    revenueSharePercentage: 0,
+    allowsComposed: true,
+    allowsManufacturing: false,
+  },
+  pro: {
+    productLimit: 20,
+    storageLimitMb: 10240,
+    operationsPerMonth: null,
+    revenueSharePercentage: 0,
+    allowsComposed: true,
+    allowsManufacturing: true,
+  },
+  business: {
+    productLimit: 50,
+    storageLimitMb: 20480,
+    operationsPerMonth: null,
+    revenueSharePercentage: 0,
+    allowsComposed: true,
+    allowsManufacturing: true,
+  },
+};
+
+const TRIAL_DURATION_MONTHS = 3;
+const TRIAL_GRACE_DAYS = 15;
+
+function normalizeTier(tier?: string): SubscriptionTier {
+  if (!tier) return 'starter';
+  if (tier === 'premium') return 'starter';
+  if (tier === 'trial' || tier === 'starter' || tier === 'pro' || tier === 'business') {
+    return tier;
+  }
+  return 'starter';
+}
+
+function normalizePaidTier(tier?: string): PaidTier {
+  const normalizedTier = normalizeTier(tier);
+  if (normalizedTier === 'trial') return 'starter';
+  return normalizedTier;
+}
+
+function normalizeAddOns(addOns: unknown): {
+  domainPackage: boolean;
+  whatsappBusiness: boolean;
+  extraStorageBlocks: number;
+} {
+  if (Array.isArray(addOns)) {
+    return {
+      domainPackage: addOns.includes('domainPackage') || addOns.includes('customDomainHosting'),
+      whatsappBusiness: addOns.includes('whatsappBusiness'),
+      extraStorageBlocks: addOns.includes('extraStorage') || addOns.includes('storage') ? 1 : 0,
+    };
+  }
+
+  const value = (addOns && typeof addOns === 'object' ? addOns : {}) as Record<string, unknown>;
+
+  return {
+    domainPackage: Boolean(value.domainPackage || value.customDomainHosting),
+    whatsappBusiness: Boolean(value.whatsappBusiness),
+    extraStorageBlocks: Math.max(0, Number(value.extraStorageBlocks || (value.storage ? 1 : 0) || 0)),
+  };
+}
+
+function getAddOnArray(addOns: ReturnType<typeof normalizeAddOns>): string[] {
+  const result: string[] = [];
+  if (addOns.domainPackage) result.push('domainPackage');
+  if (addOns.whatsappBusiness) result.push('whatsappBusiness');
+  if (addOns.extraStorageBlocks > 0) result.push('extraStorage');
+  return result;
+}
+
+function calculateAmount(tier: PaidTier, billing: Billing, addOnsInput: unknown): { amount: number; description: string; addOns: ReturnType<typeof normalizeAddOns> } {
+  const addOns = normalizeAddOns(addOnsInput);
+  let amount = PRICING[tier][billing];
+  let description = `Grabio ${tier.toUpperCase()} - ${billing}`;
+
+  if (addOns.domainPackage) {
+    amount += PRICING.addOns.domainPackage[billing];
+    description += ' + Domain Package';
+  }
+  if (addOns.whatsappBusiness) {
+    amount += PRICING.addOns.whatsappBusiness[billing];
+    description += ' + WhatsApp Business';
+  }
+  if (addOns.extraStorageBlocks > 0) {
+    amount += addOns.extraStorageBlocks * PRICING.addOns.extraStoragePer5Gb[billing];
+    description += ` + ${addOns.extraStorageBlocks}x Extra Storage`; 
+  }
+
+  return { amount, description, addOns };
+}
+
 /**
- * Start $1 trial subscription
+ * Start trial subscription
  */
 export async function startTrial(req: Request, res: Response) {
   try {
-    const { userId, email, name, tier } = req.body;
+    const { userId, email } = req.body;
 
     if (!userId || !email) {
       return res.status(400).json({ error: 'Missing required fields' });
@@ -59,35 +182,16 @@ export async function startTrial(req: Request, res: Response) {
       return res.status(400).json({ error: 'Legacy users do not need trial - already have 1 year free' });
     }
 
-    // Initialize payment with Whish
-    const externalId = Date.now(); // Unique numeric ID for this transaction
-    const payment = await initiatePayment({
-      amount: PRICING.trial,
-      currency: 'USD',
-      invoice: `Grabio Trial - 1 Month for $${PRICING.trial}`,
-      externalId,
-      successCallbackUrl: `https://us-central1-market-flow-7b074.cloudfunctions.net/api/webhook/whish?externalId=${externalId}&type=trial&userId=${userId}`,
-      failureCallbackUrl: `https://us-central1-market-flow-7b074.cloudfunctions.net/api/webhook/whish?externalId=${externalId}&type=trial&userId=${userId}&status=failed`,
-      successRedirectUrl: `https://market-flow-7b074.web.app/payment/success?type=trial`,
-      failureRedirectUrl: `https://market-flow-7b074.web.app/payment/failed?type=trial`
-    });
-
-    if (!payment.status || !payment.data?.collectUrl) {
-      return res.status(500).json({ error: payment.error || 'Payment initialization failed' });
-    }
-
-    // Store pending trial with externalId
-    await storeRef.set({
-      pendingTrialPaymentId: externalId.toString(),
-      pendingTrialExternalId: externalId,
-      pendingTrialTier: tier || 'pro',
-      updatedAt: new Date().toISOString()
-    }, { merge: true });
+    const activationId = `TRIAL_${Date.now()}`;
+    await activateTrial(userId, activationId, 'trial');
 
     res.json({
       success: true,
-      paymentUrl: payment.data.collectUrl,
-      externalId
+      activated: true,
+      tier: 'trial',
+      trialMonths: TRIAL_DURATION_MONTHS,
+      trialGraceDays: TRIAL_GRACE_DAYS,
+      cardVerificationRequired: true,
     });
   } catch (error: any) {
     console.error('Start trial error:', error);
@@ -106,18 +210,11 @@ export async function subscribe(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    const normalizedTier = normalizePaidTier(tier);
+    const normalizedBilling: Billing = billing === 'yearly' ? 'yearly' : 'monthly';
+
     // Calculate total amount
-    let amount = (PRICING as any)[tier][billing];
-    let description = `Grabio ${tier.toUpperCase()} - ${billing}`;
-    
-    if (addOns?.storage) {
-      amount += (PRICING.addOns.storage as any)[billing];
-      description += ' + Extra Storage';
-    }
-    if (addOns?.customDomainHosting) {
-      amount += (PRICING.addOns.customDomainHosting as any)[billing];
-      description += ' + Custom Domain Hosting';
-    }
+    const { amount, description, addOns: normalizedAddOns } = calculateAmount(normalizedTier, normalizedBilling, addOns);
 
     // Initialize payment with Whish
     const externalId = Date.now(); // Unique numeric ID for this transaction
@@ -141,9 +238,9 @@ export async function subscribe(req: Request, res: Response) {
     await storeRef.set({
       pendingSubscriptionPaymentId: externalId.toString(),
       pendingSubscriptionExternalId: externalId,
-      pendingSubscriptionTier: tier,
-      pendingSubscriptionBilling: billing,
-      pendingSubscriptionAddOns: addOns || {},
+      pendingSubscriptionTier: normalizedTier,
+      pendingSubscriptionBilling: normalizedBilling,
+      pendingSubscriptionAddOns: normalizedAddOns,
       pendingSubscriptionAmount: amount,
       updatedAt: new Date().toISOString()
     }, { merge: true });
@@ -165,31 +262,56 @@ export async function subscribe(req: Request, res: Response) {
  */
 export async function activateTrial(userId: string, paymentId: string, tier: string) {
   const storeRef = db.collection('storeProfiles').doc(userId);
+  const normalizedTier: SubscriptionTier = 'trial';
+  const trialAmount = 0;
+  const limits = PLAN_LIMITS.trial;
   
   const trialEndsAt = new Date();
-  trialEndsAt.setMonth(trialEndsAt.getMonth() + 1); // 1 month trial
+  trialEndsAt.setMonth(trialEndsAt.getMonth() + TRIAL_DURATION_MONTHS);
+
+  const trialGraceEndsAt = new Date(trialEndsAt);
+  trialGraceEndsAt.setDate(trialGraceEndsAt.getDate() + TRIAL_GRACE_DAYS);
 
   await storeRef.set({
     subscriptionStatus: 'trial',
-    subscriptionTier: tier,
+    subscriptionTier: normalizedTier,
+    subscriptionPlan: 'monthly',
     isTrialUser: true,
     hasUsedTrial: true,
     trialStartedAt: new Date().toISOString(),
     trialEndsAt: trialEndsAt.toISOString(),
+    trial_start_date: new Date().toISOString(),
+    trial_end_date: trialEndsAt.toISOString(),
+    trialGraceEndsAt: trialGraceEndsAt.toISOString(),
+    trialGraceDays: TRIAL_GRACE_DAYS,
     subscriptionEndsAt: trialEndsAt.toISOString(),
+    nextBillingDate: trialEndsAt.toISOString(),
     lastPaymentDate: new Date().toISOString(),
-    lastPaymentAmount: 1,
+    lastPaymentAmount: trialAmount,
     trialPaymentId: paymentId,
+    productLimit: limits.productLimit,
+    storageLimitMb: limits.storageLimitMb,
+    storage_limit_mb: limits.storageLimitMb,
+    monthlyOperationsLimit: limits.operationsPerMonth,
+    monthly_operations_limit: limits.operationsPerMonth,
+    monthlyOperationsCount: 0,
+    monthly_operations_count: 0,
+    revenueSharePercentage: limits.revenueSharePercentage,
+    revenue_share_percentage: limits.revenueSharePercentage,
+    allowsComposedProducts: limits.allowsComposed,
+    allowsManufacturing: limits.allowsManufacturing,
+    requiresCardVerification: true,
     billingHistory: admin.firestore.FieldValue.arrayUnion({
       date: new Date().toISOString(),
-      amount: 1,
+      amount: trialAmount,
       plan: 'monthly',
-      tier,
+      tier: normalizedTier,
       status: 'success',
       transactionId: paymentId,
-      description: 'Trial - 1 month for $1'
+      description: 'Trial plan - up to 3 months, 20% revenue share'
     }),
     pendingTrialPaymentId: admin.firestore.FieldValue.delete(),
+    pendingTrialExternalId: admin.firestore.FieldValue.delete(),
     pendingTrialTier: admin.firestore.FieldValue.delete(),
     updatedAt: new Date().toISOString()
   }, { merge: true });
@@ -204,11 +326,14 @@ export async function activateSubscription(
   userId: string,
   paymentId: string,
   tier: string,
-  billing: 'monthly' | 'yearly',
+  billing: Billing,
   addOns: any,
   amount: number
 ) {
   const storeRef = db.collection('storeProfiles').doc(userId);
+  const normalizedTier = normalizePaidTier(tier);
+  const normalizedAddOns = normalizeAddOns(addOns);
+  const limits = PLAN_LIMITS[normalizedTier];
   
   const subscriptionEndsAt = new Date();
   if (billing === 'monthly') {
@@ -219,24 +344,41 @@ export async function activateSubscription(
 
   await storeRef.set({
     subscriptionStatus: 'active',
-    subscriptionTier: tier,
+    subscriptionTier: normalizedTier,
     subscriptionPlan: billing,
     subscriptionStartedAt: new Date().toISOString(),
     subscriptionEndsAt: subscriptionEndsAt.toISOString(),
     nextBillingDate: subscriptionEndsAt.toISOString(),
     lastPaymentDate: new Date().toISOString(),
     lastPaymentAmount: amount / 100, // Store in dollars
-    addOns,
+    addOns: getAddOnArray(normalizedAddOns),
+    addOnsMeta: normalizedAddOns,
+    productLimit: limits.productLimit,
+    storageLimitMb: limits.storageLimitMb,
+    storage_limit_mb: limits.storageLimitMb,
+    monthlyOperationsLimit: limits.operationsPerMonth,
+    monthly_operations_limit: limits.operationsPerMonth,
+    revenueSharePercentage: limits.revenueSharePercentage,
+    revenue_share_percentage: limits.revenueSharePercentage,
+    allowsComposedProducts: limits.allowsComposed,
+    allowsManufacturing: limits.allowsManufacturing,
+    trialStartedAt: admin.firestore.FieldValue.delete(),
+    trialEndsAt: admin.firestore.FieldValue.delete(),
+    trial_start_date: admin.firestore.FieldValue.delete(),
+    trial_end_date: admin.firestore.FieldValue.delete(),
+    trialGraceEndsAt: admin.firestore.FieldValue.delete(),
+    trialGraceDays: admin.firestore.FieldValue.delete(),
     billingHistory: admin.firestore.FieldValue.arrayUnion({
       date: new Date().toISOString(),
       amount: amount / 100,
       plan: billing,
-      tier,
+      tier: normalizedTier,
       status: 'success',
       transactionId: paymentId,
-      description: `${tier.toUpperCase()} - ${billing}`
+      description: `${normalizedTier.toUpperCase()} - ${billing}`
     }),
     pendingSubscriptionPaymentId: admin.firestore.FieldValue.delete(),
+    pendingSubscriptionExternalId: admin.firestore.FieldValue.delete(),
     pendingSubscriptionTier: admin.firestore.FieldValue.delete(),
     pendingSubscriptionBilling: admin.firestore.FieldValue.delete(),
     pendingSubscriptionAddOns: admin.firestore.FieldValue.delete(),
@@ -244,7 +386,7 @@ export async function activateSubscription(
     updatedAt: new Date().toISOString()
   }, { merge: true });
 
-  console.log(`Subscription activated for user ${userId}: ${tier} ${billing}`);
+  console.log(`Subscription activated for user ${userId}: ${normalizedTier} ${billing}`);
 }
 
 /**
@@ -296,7 +438,16 @@ export async function cancelSubscription(req: Request, res: Response) {
  */
 export async function getSubscriptionInfo(req: Request, res: Response) {
   try {
-    const userId = req.query.userId as string;
+    let userId = req.query.userId as string | undefined;
+
+    if (!userId) {
+      const authHeader = req.get('authorization') || '';
+      const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      if (token) {
+        const decoded = await admin.auth().verifyIdToken(token);
+        userId = decoded.uid;
+      }
+    }
 
     if (!userId) {
       return res.status(400).json({ error: 'Missing userId' });
@@ -315,13 +466,20 @@ export async function getSubscriptionInfo(req: Request, res: Response) {
       success: true,
       subscription: {
         status: data?.subscriptionStatus || 'inactive',
-        tier: data?.subscriptionTier,
+        tier: normalizeTier(data?.subscriptionTier),
         plan: data?.subscriptionPlan,
         isLegacyUser: data?.isLegacyUser || false,
         isTrial: data?.isTrialUser || false,
         expiresAt: data?.subscriptionEndsAt,
         nextBillingDate: data?.nextBillingDate,
-        addOns: data?.addOns || {},
+        addOns: data?.addOns || [],
+        addOnsMeta: data?.addOnsMeta || {},
+        limits: {
+          productLimit: data?.productLimit,
+          storageLimitMb: data?.storageLimitMb,
+          monthlyOperationsLimit: data?.monthlyOperationsLimit,
+          revenueSharePercentage: data?.revenueSharePercentage,
+        },
         billingHistory: data?.billingHistory || []
       }
     });

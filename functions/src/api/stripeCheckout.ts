@@ -2,6 +2,8 @@ import * as admin from 'firebase-admin';
 import { Request, Response } from 'express';
 import Stripe from 'stripe';
 import { activateRecurringServiceSubscriptionsFromOrder } from '../services/orderSubscriptions';
+import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
+import { applyTrialRevenueShareIfNeeded } from '../services/subscriptionEnforcement';
 
 const db = admin.firestore();
 
@@ -32,6 +34,16 @@ async function markOrderPaidFromStripeSession(orderId: string, session: Stripe.C
 
   const orderData = orderSnap.data();
   if (orderData?.paymentStatus === 'paid') {
+    try {
+      await applyPaidOrderInventoryDeduction(normalizedOrderId, 'stripe');
+    } catch (inventoryError) {
+      console.error('Failed to verify finished goods deduction for already-paid Stripe order:', inventoryError);
+    }
+    try {
+      await applyTrialRevenueShareIfNeeded(normalizedOrderId, 'stripe');
+    } catch (revenueShareError) {
+      console.error('Failed to verify trial revenue-share for already-paid Stripe order:', revenueShareError);
+    }
     await activateRecurringServiceSubscriptionsFromOrder(normalizedOrderId);
     return;
   }
@@ -47,6 +59,18 @@ async function markOrderPaidFromStripeSession(orderId: string, session: Stripe.C
     stripePaymentIntentId: typeof session.payment_intent === 'string' ? session.payment_intent : null,
     updatedAt: new Date().toISOString(),
   });
+
+  try {
+    await applyPaidOrderInventoryDeduction(normalizedOrderId, 'stripe');
+  } catch (inventoryError) {
+    console.error('Failed to deduct finished goods after Stripe payment confirmation:', inventoryError);
+  }
+
+  try {
+    await applyTrialRevenueShareIfNeeded(normalizedOrderId, 'stripe');
+  } catch (revenueShareError) {
+    console.error('Failed to apply trial revenue-share after Stripe payment confirmation:', revenueShareError);
+  }
 
   await activateRecurringServiceSubscriptionsFromOrder(normalizedOrderId);
 }

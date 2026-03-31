@@ -17,6 +17,8 @@ import { StoreProfile } from '@/types/storeProfile';
 import { hasComposedAccess } from '@/lib/subscriptionHelper';
 import { logAction } from '@/lib/auditLog';
 import { calculateAvailableStock, getComposedStockStatus } from '@/lib/composedProductStock';
+import { getActualStoreId } from '@/lib/storeUtils';
+import { assertCanCreateProduct } from '@/lib/subscriptionEnforcement';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -105,13 +107,21 @@ const AdminComposedProducts: React.FC = () => {
       setFinishedGoods(finishedGoodsList);
 
       // Fetch store profile for subscription check, categories and price multiplier
-      const profileRef = doc(db, 'storeProfiles', user.storeId);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
+      const profileDocIds = Array.from(new Set([
+        getActualStoreId(user),
+        user.storeId,
+        user.id,
+      ].filter(Boolean)));
+
+      for (const profileDocId of profileDocIds) {
+        const profileSnap = await getDoc(doc(db, 'storeProfiles', profileDocId));
+        if (!profileSnap.exists()) continue;
+
         const profileData = profileSnap.data() as StoreProfile;
         setStoreProfile(profileData);
         setCategories(profileData.productCategories || ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other']);
         setPriceMultiplier(profileData.priceMultiplier || 2.5);
+        break;
       }
     };
     fetchData();
@@ -173,6 +183,8 @@ const AdminComposedProducts: React.FC = () => {
 
     try {
       const db = getFirestore();
+
+      await assertCanCreateProduct(db, user.storeId, 'composed');
       
       // Normalize materials
       const normalizedMaterials = newProduct.materials.map(m => ({
@@ -284,6 +296,7 @@ const AdminComposedProducts: React.FC = () => {
       // Update related product
       const mainProductRef = doc(db, 'products', editingProduct.productId);
       await updateDoc(mainProductRef, {
+        recipeId: editingProduct.recipeId,
         costPrice: updatedData.costPrice,
         price: updatedData.sellingPrice,
         margin: editingProduct.markupPercentage,
@@ -646,7 +659,7 @@ const AdminComposedProducts: React.FC = () => {
                   Composed Products and Services are available exclusively in the Pro plan.
                   Upgrade now to create products from recipes, manage recurring services, and access the POS system.
                 </p>
-                <Button onClick={() => window.location.href = '/upgrade'} className="bg-amber-600 hover:bg-amber-700" size="lg">
+                <Button onClick={() => window.location.href = '/subscription'} className="bg-amber-600 hover:bg-amber-700" size="lg">
                   <span className="mr-2">🚀</span> Upgrade to Pro
                 </Button>
               </div>
@@ -815,6 +828,9 @@ const AdminComposedProducts: React.FC = () => {
                       ))}
                     </SelectContent>
                   </Select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    For changes starting from now, create a new recipe and select it here for this product.
+                  </p>
                 </div>
                 <div>
                   <Label htmlFor="edit-markupPercentage">Markup Percentage</Label>

@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => ({
     mode === 'development' &&
     componentTagger(),
     VitePWA({
+      injectRegister: false,
       registerType: 'autoUpdate',
       workbox: {
         cleanupOutdatedCaches: true,

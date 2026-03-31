@@ -163,7 +163,7 @@ export const checkSubscriptions = functions.onSchedule(
         
         // Check if subscription expires in 30 days (for legacy users expiring Feb 2027)
         if (expiresAt <= in30Days && expiresAt > in7Days && !store.reminder30DaysSent) {
-          await sendExpiringReminderEmail(store.email || '', 30, store.subscriptionTier || 'pro');
+          await sendExpiringReminderEmail(store.email || '', 30, store.subscriptionTier || 'starter');
           await storesRef.doc(storeId).update({
             reminder30DaysSent: true,
             updatedAt: new Date().toISOString()
@@ -174,7 +174,7 @@ export const checkSubscriptions = functions.onSchedule(
         
         // Check if subscription expires in 7 days
         if (expiresAt <= in7Days && expiresAt > in3Days && !store.reminder7DaysSent) {
-          await sendExpiringReminderEmail(store.email || '', 7, store.subscriptionTier || 'pro');
+          await sendExpiringReminderEmail(store.email || '', 7, store.subscriptionTier || 'starter');
           await storesRef.doc(storeId).update({
             reminder7DaysSent: true,
             updatedAt: new Date().toISOString()
@@ -185,7 +185,7 @@ export const checkSubscriptions = functions.onSchedule(
         
         // Check if subscription expires in 3 days
         if (expiresAt <= in3Days && expiresAt > now && !store.reminder3DaysSent) {
-          await sendExpiringReminderEmail(store.email || '', 3, store.subscriptionTier || 'pro');
+          await sendExpiringReminderEmail(store.email || '', 3, store.subscriptionTier || 'starter');
           await storesRef.doc(storeId).update({
             reminder3DaysSent: true,
             updatedAt: new Date().toISOString()

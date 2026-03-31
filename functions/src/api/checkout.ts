@@ -2,6 +2,8 @@ import * as admin from 'firebase-admin';
 import { Request, Response } from 'express';
 import axios from 'axios';
 import { activateRecurringServiceSubscriptionsFromOrder } from '../services/orderSubscriptions';
+import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
+import { applyTrialRevenueShareIfNeeded } from '../services/subscriptionEnforcement';
 
 const db = admin.firestore();
 
@@ -316,6 +318,18 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
         paidAt: new Date().toISOString(),
         updatedAt: new Date().toISOString()
       });
+
+      try {
+        await applyPaidOrderInventoryDeduction(String(orderId), 'whish');
+      } catch (inventoryError) {
+        console.error('Failed to deduct finished goods after Whish payment confirmation:', inventoryError);
+      }
+
+      try {
+        await applyTrialRevenueShareIfNeeded(String(orderId), 'whish');
+      } catch (revenueShareError) {
+        console.error('Failed to apply trial revenue-share after Whish payment confirmation:', revenueShareError);
+      }
 
       await activateRecurringServiceSubscriptionsFromOrder(String(orderId));
 

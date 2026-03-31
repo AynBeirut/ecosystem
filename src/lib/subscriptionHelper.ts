@@ -10,17 +10,32 @@ export const hasComposedAccess = (storeProfile: StoreProfile | null | undefined)
   
   // If subscriptionTier is not set (old accounts), default to 'pro' for backward compatibility
   if (!storeProfile.subscriptionTier) return true;
-  
-  // Only 'pro' tier has access to composed products/services
-  return storeProfile.subscriptionTier === 'pro';
+
+  const tier = storeProfile.subscriptionTier;
+  if (tier === 'premium') return true; // legacy premium behaved like full access
+
+  // Trial cannot use composed products; Starter/Pro/Business can
+  return tier !== 'trial';
 };
 
 /**
  * Check if store has specific add-on
  */
-export const hasAddOn = (storeProfile: StoreProfile | null | undefined, addOn: 'pos' | 'storage'): boolean => {
+export const hasAddOn = (
+  storeProfile: StoreProfile | null | undefined,
+  addOn: 'domainPackage' | 'whatsappBusiness' | 'manufacturingBom' | 'extraStorage'
+): boolean => {
   if (!storeProfile || !storeProfile.addOns) return false;
-  return storeProfile.addOns.includes(addOn);
+
+  if (Array.isArray(storeProfile.addOns)) {
+    return storeProfile.addOns.includes(addOn);
+  }
+
+  if (addOn === 'extraStorage') {
+    return Number((storeProfile.addOns as Record<string, unknown>).extraStorageBlocks || 0) > 0;
+  }
+
+  return Boolean((storeProfile.addOns as Record<string, unknown>)[addOn]);
 };
 
 /**
@@ -31,6 +46,18 @@ export const getSubscriptionTierName = (storeProfile: StoreProfile | null | unde
   
   // For backward compatibility, treat undefined as 'pro'
   if (!storeProfile.subscriptionTier) return 'Pro';
-  
-  return storeProfile.subscriptionTier === 'pro' ? 'Pro' : 'Premium';
+
+  switch (storeProfile.subscriptionTier) {
+    case 'trial':
+      return 'Trial';
+    case 'starter':
+    case 'premium':
+      return 'Starter';
+    case 'pro':
+      return 'Pro';
+    case 'business':
+      return 'Business';
+    default:
+      return 'Pro';
+  }
 };

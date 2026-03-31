@@ -16,10 +16,25 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { generateUniqueSlug } from '@/lib/slugify';
+import { assertCanCreateProduct, assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
+
+const DEFAULT_PRODUCT_CATEGORIES = [
+  'Electronics',
+  'Outdoor Gear',
+  'Home & Decor',
+  'Clothing',
+  'Digital Product',
+  'Books',
+  'Beauty & Health',
+  'Toys & Games',
+  'Sports',
+  'Food & Beverage',
+  'Other',
+];
 
 const AdminProducts: React.FC = () => {
   const { user } = useAuth();
@@ -28,6 +43,7 @@ const AdminProducts: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
   const [recipes, setRecipes] = useState<Array<{ id: string; name?: string; costPerUnit?: number }>>([]);
+  const [categories, setCategories] = useState<string[]>(DEFAULT_PRODUCT_CATEGORIES);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
@@ -67,6 +83,30 @@ const AdminProducts: React.FC = () => {
     const db = getFirestore();
     const fetchProducts = async () => {
       if (!user?.storeId) return setProducts([]);
+
+      // Fetch categories from store profile (storeId first, then user.id fallback)
+      try {
+        const profileDocIds = Array.from(new Set([user.storeId, user.id].filter(Boolean)));
+        let loadedCategories: string[] = [];
+
+        for (const profileDocId of profileDocIds) {
+          const profileSnap = await getDoc(doc(db, 'storeProfiles', profileDocId));
+          if (!profileSnap.exists()) continue;
+
+          const profileData = profileSnap.data() as { productCategories?: string[] };
+          if (Array.isArray(profileData.productCategories) && profileData.productCategories.length > 0) {
+            loadedCategories = profileData.productCategories
+              .map((category) => (typeof category === 'string' ? category.trim() : ''))
+              .filter((category) => category.length > 0);
+            if (loadedCategories.length > 0) break;
+          }
+        }
+
+        setCategories(loadedCategories.length > 0 ? loadedCategories : DEFAULT_PRODUCT_CATEGORIES);
+      } catch (error) {
+        console.warn('Failed to load profile categories for products, using defaults:', error);
+        setCategories(DEFAULT_PRODUCT_CATEGORIES);
+      }
       
       // Fetch products
       const productsRef = collection(db, 'products');
@@ -96,7 +136,12 @@ const AdminProducts: React.FC = () => {
       setRecipes(recipesList);
     };
     fetchProducts();
-  }, [user?.storeId]);
+  }, [user?.storeId, user?.id]);
+
+  const categoryOptions = Array.from(new Set([
+    ...categories,
+    ...(newProduct.category ? [newProduct.category] : []),
+  ].map((category) => (typeof category === 'string' ? category.trim() : '')).filter((category) => category.length > 0)));
   const handleAddProduct = async () => {
     const db = getFirestore();
     if (!newProduct.name || !newProduct.price) {
@@ -112,13 +157,27 @@ const AdminProducts: React.FC = () => {
       console.warn("Attempted to add product but user.storeId is missing! User:", user);
       return;
     }
+
+    try {
+      await assertCanCreateProduct(db, user.storeId, newProduct.productType);
+    } catch (error) {
+      toast({
+        title: 'Plan Limit Reached',
+        description: error instanceof Error ? error.message : 'Your current plan does not allow adding this product.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
+        await assertCanUploadBytes(db, user.storeId, newProduct.imageFile.size);
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
         await uploadBytes(imageRef, newProduct.imageFile);
         imageUrl = await getDownloadURL(imageRef);
+        await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
       } catch (error) {
         console.error('Image upload failed:', error);
         toast({ title: "Error", description: `Image upload failed: ${error.message || 'Unknown error'}`, variant: "destructive" });
@@ -243,13 +302,33 @@ const AdminProducts: React.FC = () => {
         return;
       }
     }
+
+    if (editingProduct.productType !== 'composed' && newProduct.productType === 'composed' && user?.storeId) {
+      try {
+        await assertCanCreateProduct(db, user.storeId, 'composed');
+      } catch (error) {
+        toast({
+          title: 'Plan Limit Reached',
+          description: error instanceof Error ? error.message : 'Your current plan does not allow switching to composed products.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
+        if (user?.storeId) {
+          await assertCanUploadBytes(db, user.storeId, newProduct.imageFile.size);
+        }
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
         await uploadBytes(imageRef, newProduct.imageFile);
         imageUrl = await getDownloadURL(imageRef);
+        if (user?.storeId) {
+          await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
+        }
       } catch {
         toast({ title: "Error", description: "Image upload failed.", variant: "destructive" });
         return;
@@ -395,17 +474,9 @@ const AdminProducts: React.FC = () => {
                         <SelectValue placeholder="Select category" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Electronics">Electronics</SelectItem>
-                        <SelectItem value="Outdoor Gear">Outdoor Gear</SelectItem>
-                        <SelectItem value="Home & Decor">Home & Decor</SelectItem>
-                        <SelectItem value="Clothing">Clothing</SelectItem>
-                        <SelectItem value="Digital Product">Digital Product</SelectItem>
-                        <SelectItem value="Books">Books</SelectItem>
-                        <SelectItem value="Beauty & Health">Beauty & Health</SelectItem>
-                        <SelectItem value="Toys & Games">Toys & Games</SelectItem>
-                        <SelectItem value="Sports">Sports</SelectItem>
-                        <SelectItem value="Food & Beverage">Food & Beverage</SelectItem>
-                        <SelectItem value="Other">Other</SelectItem>
+                        {categoryOptions.map((category) => (
+                          <SelectItem key={category} value={category}>{category}</SelectItem>
+                        ))}
                       </SelectContent>
                     </Select>
                   </div>
@@ -749,11 +820,9 @@ const AdminProducts: React.FC = () => {
                   <SelectValue placeholder="Select category" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="Electronics">Electronics</SelectItem>
-                  <SelectItem value="Outdoor Gear">Outdoor Gear</SelectItem>
-                  <SelectItem value="Home & Decor">Home & Decor</SelectItem>
-                  <SelectItem value="Clothing">Clothing</SelectItem>
-                  <SelectItem value="Other">Other</SelectItem>
+                  {categoryOptions.map((category) => (
+                    <SelectItem key={category} value={category}>{category}</SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

@@ -372,6 +372,14 @@ const AdminDashboard: React.FC = () => {
                 </Link>
               </li>
             )}
+            {user?.role === 'admin' && (
+              <li>
+                <Link to="/admin/audit-logs" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                  <FileText className="h-5 w-5 mr-3" />
+                  <span>System Logs</span>
+                </Link>
+              </li>
+            )}
             {canManageDeliveries && (
               <li>
                 <Link to="/admin/delivery" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
@@ -683,6 +691,15 @@ const AdminDashboard: React.FC = () => {
                       <Clock className="h-4 w-4" />
                     </div>
                     <span className="text-sm font-medium">Service Renewals</span>
+                  </Link>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link to="/admin/audit-logs" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-slate-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700">
+                      <FileText className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">System Logs</span>
                   </Link>
                 )}
 

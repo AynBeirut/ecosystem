@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, writeBatch, increment, runTransaction } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,6 +32,9 @@ const STATUS_CONFIG: Record<ProductionBatchStatus, { label: string; color: strin
   completed: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle },
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: AlertCircle },
 };
+
+const PRODUCTION_COMPLETION_LOCKDOWN = false;
+const PRODUCTION_COMPLETION_LOCKDOWN_REASON = 'Temporarily disabled during raw-material integrity audit.';
 
 // Move ProductionForm outside to prevent re-creation on every render
 const ProductionForm: React.FC<{ 
@@ -114,36 +117,9 @@ const ProductionForm: React.FC<{
         />
       </div>
       {isEdit && (
-        <>
-          <div>
-            <Label htmlFor="status">Status</Label>
-            <Select
-              value={(batch as ProductionBatch).status}
-              onValueChange={(value: ProductionBatchStatus) => onChange({ status: value })}
-            >
-              <SelectTrigger id="status">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="planned">Planned</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="completed">Completed</SelectItem>
-                <SelectItem value="cancelled">Cancelled</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div>
-            <Label htmlFor="actualQuantity">Actual Quantity</Label>
-            <Input
-              id="actualQuantity"
-              type="number"
-              min="0"
-              value={(batch as ProductionBatch).actualQuantity === 0 ? '' : (batch as ProductionBatch).actualQuantity}
-              onChange={(e) => onChange({ actualQuantity: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
-              placeholder="0"
-            />
-          </div>
-        </>
+        <div className="col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+          Status and actual quantity are controlled by Start/Complete actions to protect raw-material integrity.
+        </div>
       )}
       <div className="col-span-2">
         <Label htmlFor="notes">Notes</Label>
@@ -327,15 +303,11 @@ const AdminProduction: React.FC = () => {
         scheduledDate: editingBatch.scheduledDate,
         estimatedCompletionDate: editingBatch.estimatedCompletionDate,
         priority: editingBatch.priority,
-        status: editingBatch.status,
-        actualQuantity: editingBatch.actualQuantity,
-        startDate: editingBatch.startDate,
-        completionDate: editingBatch.completionDate,
         notes: editingBatch.notes,
       };
 
       await updateDoc(batchRef, updateData);
-      setBatches(batches.map(b => b.id === editingBatch.id ? editingBatch : b));
+      setBatches(batches.map(b => b.id === editingBatch.id ? { ...b, ...updateData } : b));
 
       await logAction(
         user.id,
@@ -381,6 +353,8 @@ const AdminProduction: React.FC = () => {
         return;
       }
       const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as any;
+      const recipeOutputQty = Number(recipe.outputQuantity || recipe.yieldQuantity || 1);
+      const safeRecipeOutputQty = recipeOutputQty > 0 ? recipeOutputQty : 1;
       
       // Support both 'ingredients' and 'materials' field names
       const recipeIngredients = Array.isArray(recipe.ingredients) 
@@ -455,7 +429,7 @@ const AdminProduction: React.FC = () => {
           }
         }
         
-        const quantityNeeded = ingredient.quantity * (batch.actualQuantity || batch.quantity);
+        const quantityNeeded = (ingredient.quantity * (batch.actualQuantity || batch.quantity)) / safeRecipeOutputQty;
         const materialCost = materialCostPerUnit * quantityNeeded;
         totalMaterialCost += materialCost;
       }
@@ -538,8 +512,55 @@ const AdminProduction: React.FC = () => {
     try {
       const db = getFirestore();
       
-      // If batch is completed, reverse the finished goods
+      // If batch is completed, reverse finished goods and restore raw materials
       if (batch.status === 'completed' && batch.actualQuantity) {
+        const nowIso = new Date().toISOString();
+        const commitBatch = writeBatch(db);
+        let restoredRawMaterialsCount = 0;
+
+        let materialsToRestore = Array.isArray((batch as any).materialsUsed)
+          ? ((batch as any).materialsUsed as Array<{ rawMaterialId?: string; quantityUsed?: number }>).map((item) => ({
+              rawMaterialId: String(item.rawMaterialId || '').trim(),
+              quantityUsed: Number(item.quantityUsed || 0),
+            })).filter((item) => item.rawMaterialId.length > 0 && item.quantityUsed > 0)
+          : [];
+
+        if (materialsToRestore.length === 0 && batch.recipeId) {
+          const recipeSnap = await getDoc(doc(db, 'recipes', batch.recipeId));
+          if (recipeSnap.exists()) {
+            const recipeData = recipeSnap.data() as any;
+            const recipeIngredients = Array.isArray(recipeData.ingredients)
+              ? recipeData.ingredients
+              : (Array.isArray(recipeData.materials) ? recipeData.materials : []);
+            const recipeOutputQty = Number(recipeData.outputQuantity || recipeData.yieldQuantity || 1);
+            const safeRecipeOutputQty = recipeOutputQty > 0 ? recipeOutputQty : 1;
+            const actualQty = Number(batch.actualQuantity || batch.quantity || 0);
+
+            const aggregatedUsage = new Map<string, number>();
+            for (const ingredient of recipeIngredients) {
+              const rawMaterialId = String(ingredient?.rawMaterialId || '').trim();
+              const ingredientQty = Number(ingredient?.quantity || 0);
+              if (!rawMaterialId || ingredientQty <= 0 || actualQty <= 0) continue;
+
+              const quantityUsed = (ingredientQty * actualQty) / safeRecipeOutputQty;
+              aggregatedUsage.set(rawMaterialId, Number((aggregatedUsage.get(rawMaterialId) || 0) + quantityUsed));
+            }
+
+            materialsToRestore = Array.from(aggregatedUsage.entries()).map(([rawMaterialId, quantityUsed]) => ({
+              rawMaterialId,
+              quantityUsed,
+            }));
+          }
+        }
+
+        for (const material of materialsToRestore) {
+          commitBatch.update(doc(db, 'rawMaterials', material.rawMaterialId), {
+            currentStock: increment(material.quantityUsed),
+            updatedAt: nowIso,
+          });
+          restoredRawMaterialsCount += 1;
+        }
+
         const fgQuery = query(
           collection(db, 'finishedGoodsInventory'),
           where('storeId', '==', user.storeId),
@@ -551,25 +572,26 @@ const AdminProduction: React.FC = () => {
           const fgDoc = fgSnapshot.docs[0];
           const fgData = fgDoc.data();
           
-          const newManufactured = (fgData.quantityManufactured || 0) - batch.actualQuantity;
-          const newBalance = (fgData.currentBalance || 0) - batch.actualQuantity;
-          
-          await updateDoc(fgDoc.ref, {
+          const newManufactured = Math.max(0, (fgData.quantityManufactured || 0) - batch.actualQuantity);
+          const newBalance = Math.max(0, (fgData.currentBalance || 0) - batch.actualQuantity);
+
+          commitBatch.update(fgDoc.ref, {
             quantityManufactured: newManufactured,
             currentBalance: newBalance,
             totalValue: newBalance * (fgData.costPrice || 0),
-            updatedAt: new Date().toISOString()
+            updatedAt: nowIso
           });
-          
+
           // Create reversal transaction
-          await addDoc(collection(db, 'finishedGoodsTransactions'), {
+          const fgTxnRef = doc(collection(db, 'finishedGoodsTransactions'));
+          commitBatch.set(fgTxnRef, {
             storeId: user.storeId,
             productId: batch.productId,
             productName: batch.productName,
             type: 'production_batch_deletion',
             quantity: -batch.actualQuantity,
             relatedBatchId: batch.id,
-            createdAt: new Date().toISOString(),
+            createdAt: nowIso,
             createdBy: user.id,
             createdByName: user.name
           });
@@ -581,6 +603,29 @@ const AdminProduction: React.FC = () => {
             newBalance
           });
         }
+
+        commitBatch.delete(doc(db, 'productionBatches', batch.id));
+        await commitBatch.commit();
+
+        setBatches(batches.filter(b => b.id !== batch.id));
+
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'delete',
+          'productionBatch',
+          batch.id,
+          {
+            oldValue: batch,
+            reversedFinishedGoods: batch.actualQuantity,
+            restoredRawMaterials: restoredRawMaterialsCount,
+          },
+          user.storeId
+        );
+
+        toast({ title: "Success", description: "Production batch deleted, finished goods reversed, and raw materials restored!" });
+        return;
       }
       
       // Delete the production batch
@@ -632,6 +677,15 @@ const AdminProduction: React.FC = () => {
 
   const handleCompleteProduction = async (batch: ProductionBatch) => {
     if (!user?.storeId) return;
+
+    if (PRODUCTION_COMPLETION_LOCKDOWN) {
+      toast({
+        title: 'Production completion disabled',
+        description: PRODUCTION_COMPLETION_LOCKDOWN_REASON,
+        variant: 'destructive',
+      });
+      return;
+    }
     
     // Open dialog instead of prompt
     setCompletingBatch(batch);
@@ -639,6 +693,15 @@ const AdminProduction: React.FC = () => {
   };
   
   const executeCompleteProduction = async () => {
+    if (PRODUCTION_COMPLETION_LOCKDOWN) {
+      toast({
+        title: 'Production completion disabled',
+        description: PRODUCTION_COMPLETION_LOCKDOWN_REASON,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     // Synchronous lock to prevent double execution
     if (isOperatingRef.current) {
       console.log('⚠️ Operation already in progress, ignoring click');
@@ -662,48 +725,135 @@ const AdminProduction: React.FC = () => {
     
     try {
       const db = getFirestore();
-      
-      // 1. Get the product and its recipe
-      const productDoc = await getDoc(doc(db, 'products', completingBatch.productId));
-      if (!productDoc.exists()) {
-        toast({ title: "Error", description: "Product not found", variant: "destructive" });
+
+      const latestBatchRef = doc(db, 'productionBatches', completingBatch.id);
+      const latestBatchSnap = await getDoc(latestBatchRef);
+      if (!latestBatchSnap.exists()) {
+        toast({ title: "Error", description: "Batch no longer exists", variant: "destructive" });
         setIsCompleting(false);
         return;
       }
-      const productData = productDoc.data();
+
+      const latestBatchData = latestBatchSnap.data() as ProductionBatch;
+      if (latestBatchData.status === 'completed') {
+        toast({ title: "Already Completed", description: "This batch was already completed and stock was already applied." });
+        setCompletingBatch(null);
+        setCompletionQuantity('');
+        setIsCompleting(false);
+        return;
+      }
+
+      const effectiveBatch = {
+        ...completingBatch,
+        ...latestBatchData,
+        id: completingBatch.id,
+      } as ProductionBatch;
+      
+      // 1. Resolve product ID and get product document
+      const candidateProductIds = Array.from(new Set([
+        effectiveBatch.composedProductId,
+        effectiveBatch.productId,
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)));
+
+      let productDoc = null as any;
+      let resolvedProductId = candidateProductIds[0] || '';
+
+      for (const candidateId of candidateProductIds) {
+        const candidateDoc = await getDoc(doc(db, 'products', candidateId));
+        if (candidateDoc.exists()) {
+          productDoc = candidateDoc;
+          resolvedProductId = candidateId;
+          break;
+        }
+      }
+
+      if (!productDoc) {
+        const localProduct = products.find((p) =>
+          candidateProductIds.includes(p.id) ||
+          (typeof p.productId === 'string' && candidateProductIds.includes(p.productId))
+        );
+
+        if (localProduct?.id) {
+          const fallbackDoc = await getDoc(doc(db, 'products', localProduct.id));
+          if (fallbackDoc.exists()) {
+            productDoc = fallbackDoc;
+            resolvedProductId = localProduct.id;
+          }
+        }
+
+        if (!resolvedProductId && localProduct?.id) {
+          resolvedProductId = localProduct.id;
+        }
+      }
+
+      if (!productDoc || !productDoc.exists()) {
+        console.warn('⚠️ Product lookup fallback used for completion', {
+          batchId: completingBatch.id,
+          productId: effectiveBatch.productId,
+          composedProductId: effectiveBatch.composedProductId,
+          candidates: candidateProductIds,
+          resolvedProductId,
+        });
+      }
+      const productData = productDoc?.exists() ? productDoc.data() : {};
       
       const composedProduct = { 
-        id: productDoc.id,
-        productId: productDoc.id,
+        id: productDoc?.id || resolvedProductId,
+        productId: productDoc?.id || resolvedProductId,
         ...productData,
-        name: productData.name || 'Unknown Product'
+        name: productData.name || completingBatch.productName || 'Unknown Product'
       } as ComposedProduct;
       
       // 2. Get recipe details
-      const recipeDoc = await getDoc(doc(db, 'recipes', composedProduct.recipeId || ''));
+      const resolvedRecipeId = composedProduct.recipeId || effectiveBatch.recipeId || '';
+      if (!resolvedRecipeId) {
+        console.error('❌ Recipe ID missing for completion', {
+          batchId: completingBatch.id,
+          resolvedProductId,
+          productIdFromBatch: effectiveBatch.productId,
+          composedProductIdFromBatch: effectiveBatch.composedProductId,
+          recipeIdFromBatch: effectiveBatch.recipeId,
+        });
+        toast({ title: "Error", description: "Recipe not found", variant: "destructive" });
+        setIsCompleting(false);
+        return;
+      }
+      const recipeDoc = await getDoc(doc(db, 'recipes', resolvedRecipeId));
       if (!recipeDoc.exists()) {
+        console.error('❌ Recipe lookup failed for completion', {
+          batchId: completingBatch.id,
+          resolvedProductId,
+          recipeIdFromProduct: composedProduct.recipeId,
+          recipeIdFromBatch: effectiveBatch.recipeId,
+          resolvedRecipeId,
+        });
         toast({ title: "Error", description: "Recipe not found", variant: "destructive" });
         setIsCompleting(false);
         return;
       }
       const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as Recipe;
+      const recipeOutputQty = Number((recipe as any).outputQuantity || (recipe as any).yieldQuantity || 1);
+      const safeRecipeOutputQty = recipeOutputQty > 0 ? recipeOutputQty : 1;
       
       // 3. Calculate material costs and reduce raw materials stock
       let totalMaterialCost = 0;
       const materialsUsed = [];
       const zeroCostMaterials: string[] = [];
+      const rawMaterialUsageMap = new Map<string, number>();
       
       console.log('🔧 Production Completion Started:', {
         batchId: completingBatch.id,
-        productId: completingBatch.productId,
+        productId: resolvedProductId,
         actualQty,
-        recipeIngredients: recipe.ingredients?.length || 0
+        recipeIngredients: recipe.ingredients?.length || 0,
+        recipeOutputQty: safeRecipeOutputQty,
       });
       
       for (const ingredient of recipe.ingredients || []) {
         console.log('📦 Processing ingredient:', {
           rawMaterialId: ingredient.rawMaterialId,
-          quantityInRecipe: ingredient.quantity
+          quantityInRecipe: ingredient.quantity,
+          normalizedByOutput: safeRecipeOutputQty,
         });
         
         // Skip ingredients with invalid or empty rawMaterialId
@@ -725,8 +875,10 @@ const AdminProduction: React.FC = () => {
         }
         
         const rawMaterial = { id: rawMaterialDoc.id, ...rawMaterialDoc.data() } as RawMaterial;
-        const quantityNeeded = ingredient.quantity * actualQty;
+        const quantityNeeded = (ingredient.quantity * actualQty) / safeRecipeOutputQty;
         const currentStock = rawMaterial.currentStock || 0;
+        const alreadyPlannedUsage = rawMaterialUsageMap.get(ingredient.rawMaterialId) || 0;
+        const totalPlannedUsage = alreadyPlannedUsage + quantityNeeded;
         
         console.log('📊 Material details:', {
           name: rawMaterial.name,
@@ -741,10 +893,10 @@ const AdminProduction: React.FC = () => {
         }
         
         // Check if enough stock
-        if (currentStock < quantityNeeded) {
+        if (currentStock < totalPlannedUsage) {
           toast({
             title: "Insufficient Stock",
-            description: `Not enough ${rawMaterial.name}. Need: ${quantityNeeded}, Available: ${currentStock}`,
+            description: `Not enough ${rawMaterial.name}. Need: ${totalPlannedUsage}, Available: ${currentStock}`,
             variant: "destructive"
           });
           setIsCompleting(false);
@@ -760,15 +912,12 @@ const AdminProduction: React.FC = () => {
           material: rawMaterial.name,
           from: currentStock,
           reducing: quantityNeeded,
-          to: currentStock - quantityNeeded
+          to: currentStock - totalPlannedUsage
         });
-        
-        await updateDoc(doc(db, 'rawMaterials', ingredient.rawMaterialId), {
-          currentStock: currentStock - quantityNeeded,
-          updatedAt: new Date().toISOString(),
-        });
-        
-        console.log('✅ Stock reduced successfully for:', rawMaterial.name);
+
+        rawMaterialUsageMap.set(ingredient.rawMaterialId, totalPlannedUsage);
+
+        console.log('✅ Stock reduction prepared for commit:', rawMaterial.name);
         
         materialsUsed.push({
           rawMaterialId: ingredient.rawMaterialId,
@@ -805,7 +954,7 @@ const AdminProduction: React.FC = () => {
       const fgQuery = query(
         collection(db, 'finishedGoodsInventory'),
         where('storeId', '==', user.storeId),
-        where('productId', '==', completingBatch.productId)
+        where('productId', '==', resolvedProductId)
       );
       const fgSnapshot = await getDocs(fgQuery);
       
@@ -831,75 +980,100 @@ const AdminProduction: React.FC = () => {
         userName: user.name,
         batchDetails,
       };
-      
-      if (!fgSnapshot.empty) {
-        // Update existing finished goods
-        const fgDoc = fgSnapshot.docs[0];
-        const fgData = fgDoc.data() as FinishedGoodsItem;
-        
-        // Calculate weighted average cost
-        const oldQty = fgData.currentBalance || 0;
-        const oldCost = fgData.costPrice || 0;
-        const newQty = actualQty;
-        const newCost = totalCostPerUnit;
-        const totalQty = oldQty + newQty;
-        
-        // Weighted average: (oldQty * oldCost + newQty * newCost) / totalQty
-        const weightedAvgCost = totalQty > 0 
-          ? ((oldQty * oldCost) + (newQty * newCost)) / totalQty 
-          : newCost;
-        
-        await updateDoc(doc(db, 'finishedGoodsInventory', fgDoc.id), {
-          currentBalance: totalQty,
-          quantityManufactured: (fgData.quantityManufactured || 0) + actualQty,
-          transactions: [...(fgData.transactions || []), transaction],
-          batchQueue: [...(fgData.batchQueue || []), batchDetails],
-          costPrice: weightedAvgCost, // Use weighted average cost
-          totalValue: totalQty * weightedAvgCost,
-          updatedAt: new Date().toISOString(),
+
+      const nowIso = new Date().toISOString();
+      const commitBatch = writeBatch(db);
+
+      // Queue raw material stock updates
+      for (const [rawMaterialId, quantityUsed] of rawMaterialUsageMap.entries()) {
+        commitBatch.update(doc(db, 'rawMaterials', rawMaterialId), {
+          currentStock: increment(-quantityUsed),
+          updatedAt: nowIso,
         });
-      } else {
-        // Create new finished goods entry
-        const fgCode = `FG-${Date.now().toString().slice(-6)}`;
-        const fgData: Omit<FinishedGoodsItem, 'id'> = {
-          itemCode: fgCode,
-          productId: completingBatch.productId,
-          composedProductId: completingBatch.productId,
-          recipeId: composedProduct.recipeId || '',
-          description: composedProduct.name,
-          productName: composedProduct.name,
-          unit: 'units',
-          openingBalance: 0,
-          quantityManufactured: actualQty,
-          quantitySold: 0,
-          quantityAdjusted: 0,
-          currentBalance: actualQty,
-          costPrice: totalCostPerUnit,
-          sellingPrice: composedProduct.price || composedProduct.sellingPrice || (totalCostPerUnit * 2.5),
-          totalValue: actualQty * totalCostPerUnit,
-          valuationMethod: 'FIFO',
-          transactions: [transaction],
-          batchQueue: [batchDetails],
-          storeId: user.storeId,
-          createdBy: user.id,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        };
-        
-        await addDoc(collection(db, 'finishedGoodsInventory'), fgData);
       }
       
+      // Capture FG doc identity before committing batch; actual write happens
+      // in a runTransaction AFTER commit so concurrent order-delivery writes
+      // don't cause stale-overwrite data drift.
+      const isNewFGDoc = fgSnapshot.empty;
+      const existingFGDocId = isNewFGDoc ? null : fgSnapshot.docs[0].id;
+
       // 7. Update production batch
       const batchRef = doc(db, 'productionBatches', completingBatch.id);
       const updateData = {
         status: 'completed' as ProductionBatchStatus,
-        completionDate: new Date().toISOString(),
+        completionDate: nowIso,
         actualQuantity: actualQty,
+        productId: resolvedProductId,
+        composedProductId: resolvedProductId,
+        recipeId: resolvedRecipeId,
         materialsCost: totalMaterialCost,
         totalCost: totalCostPerUnit * actualQty,
         costPerUnit: totalCostPerUnit,
+        materialsUsed,
       };
-      await updateDoc(batchRef, updateData);
+      commitBatch.update(batchRef, updateData);
+
+      // Commit all writes atomically (raw materials + production batch record)
+      await commitBatch.commit();
+
+      // Atomically update finished goods AFTER the raw-materials batch.
+      // runTransaction provides optimistic-locking retry so concurrent
+      // order-delivery ops never silently overwrite each other.
+      const round3Prod = (n: number) => Math.round(n * 1000) / 1000;
+      await runTransaction(db, async (tx) => {
+        if (!isNewFGDoc && existingFGDocId) {
+          const fgRef = doc(db, 'finishedGoodsInventory', existingFGDocId);
+          const freshSnap = await tx.get(fgRef);
+          if (!freshSnap.exists()) return;
+          const fresh = freshSnap.data() as FinishedGoodsItem;
+          const freshOldQty = fresh.currentBalance || 0;
+          const freshOldCost = fresh.costPrice || 0;
+          const freshTotalQty = round3Prod(freshOldQty + actualQty);
+          const freshWeightedAvg = freshTotalQty > 0
+            ? ((freshOldQty * freshOldCost) + (actualQty * totalCostPerUnit)) / freshTotalQty
+            : totalCostPerUnit;
+          tx.update(fgRef, {
+            currentBalance: freshTotalQty,
+            quantityManufactured: round3Prod((fresh.quantityManufactured || 0) + actualQty),
+            transactions: [...(fresh.transactions || []), transaction],
+            batchQueue: [...(fresh.batchQueue || []), batchDetails],
+            costPrice: Math.round(freshWeightedAvg * 10000) / 10000,
+            totalValue: round3Prod(freshTotalQty * freshWeightedAvg),
+            updatedAt: nowIso,
+          });
+        } else {
+          // First-ever production for this product — create the FG document
+          const fgCode = `FG-${Date.now().toString().slice(-6)}`;
+          const newFgRef = doc(collection(db, 'finishedGoodsInventory'));
+          const newFgData: Omit<FinishedGoodsItem, 'id'> = {
+            itemCode: fgCode,
+            productId: resolvedProductId,
+            composedProductId: resolvedProductId,
+            recipeId: resolvedRecipeId,
+            description: composedProduct.name,
+            productName: composedProduct.name,
+            unit: 'units',
+            openingBalance: 0,
+            quantityManufactured: actualQty,
+            quantitySold: 0,
+            quantityAdjusted: 0,
+            currentBalance: actualQty,
+            costPrice: totalCostPerUnit,
+            sellingPrice: composedProduct.price || composedProduct.sellingPrice || (totalCostPerUnit * 2.5),
+            totalValue: round3Prod(actualQty * totalCostPerUnit),
+            valuationMethod: 'FIFO',
+            transactions: [transaction],
+            batchQueue: [batchDetails],
+            storeId: user.storeId,
+            createdBy: user.id,
+            createdAt: nowIso,
+            updatedAt: nowIso,
+          };
+          tx.set(newFgRef, newFgData);
+        }
+      });
+
       setBatches(batches.map(b => b.id === completingBatch.id ? { ...b, ...updateData } : b));
       
       // Log the action
@@ -1120,6 +1294,15 @@ const AdminProduction: React.FC = () => {
           </Card>
         </div>
 
+        {PRODUCTION_COMPLETION_LOCKDOWN && (
+          <Card className="mb-4 border-red-300 bg-red-50">
+            <CardContent className="pt-4">
+              <p className="text-sm font-medium text-red-700">⚠️ Production completion is temporarily disabled.</p>
+              <p className="text-xs text-red-600 mt-1">{PRODUCTION_COMPLETION_LOCKDOWN_REASON}</p>
+            </CardContent>
+          </Card>
+        )}
+
         <div className="mb-4 flex gap-4 flex-wrap">
           <Select value={filterStatus} onValueChange={(value: ProductionBatchStatus | 'all') => setFilterStatus(value)}>
             <SelectTrigger className="w-48">
@@ -1229,7 +1412,7 @@ const AdminProduction: React.FC = () => {
                           <Button 
                             size="sm" 
                             onClick={() => handleCompleteProduction(batch)}
-                            disabled={isCompleting}
+                            disabled={isCompleting || PRODUCTION_COMPLETION_LOCKDOWN}
                           >
                             Complete
                           </Button>
@@ -1357,7 +1540,7 @@ const AdminProduction: React.FC = () => {
                 </Button>
                 <Button 
                   onClick={executeCompleteProduction}
-                  disabled={isCompleting || !completionQuantity || parseInt(completionQuantity) <= 0}
+                  disabled={isCompleting || PRODUCTION_COMPLETION_LOCKDOWN || !completionQuantity || parseInt(completionQuantity) <= 0}
                 >
                   {isCompleting ? 'Completing...' : 'Complete Production'}
                 </Button>

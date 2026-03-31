@@ -98,7 +98,6 @@ export async function syncFinishedGoodsSoldQuantities(
       oldTotalValue: number;
       newTotalValue: number;
       oldTransactionsLength: number;
-      syncTransaction: any;
     }> = [];
 
     for (const fgDoc of fgSnapshot.docs) {
@@ -117,21 +116,6 @@ export async function syncFinishedGoodsSoldQuantities(
         const newBalance = (fgData.currentBalance || 0) + difference;
         const newTotalValue = newBalance * (fgData.costPrice || 0);
 
-        // Create sync transaction record
-        const syncTransaction = {
-          id: `TXN-SYNC-${Date.now()}-${productId}`,
-          date: new Date().toISOString(),
-          actionType: 'adjustment' as const,
-          quantity: difference, // Positive = adding back, negative = reducing further
-          unitCost: fgData.costPrice || 0,
-          totalCost: Math.abs(difference) * (fgData.costPrice || 0),
-          reason: `Data sync: Recalculated from orders. Was ${currentQuantitySold}, should be ${actualQuantitySold}`,
-          referenceId: 'SYNC',
-          referenceNumber: `SYNC-${new Date().toISOString().slice(0, 10)}`,
-          userId: userId,
-          userName: userName,
-        };
-
         pendingChanges.push({
           fgDocId: fgDoc.id,
           productId,
@@ -144,7 +128,6 @@ export async function syncFinishedGoodsSoldQuantities(
           oldTotalValue: fgData.totalValue || 0,
           newTotalValue: newTotalValue,
           oldTransactionsLength: (fgData.transactions || []).length,
-          syncTransaction,
         });
 
         result.changes.push({
@@ -204,8 +187,14 @@ export async function syncFinishedGoodsSoldQuantities(
         quantitySold: change.newQuantitySold,
         currentBalance: change.newCurrentBalance,
         totalValue: change.newTotalValue,
-        transactions: [...(fgCurrentData.transactions || []), change.syncTransaction],
         lastSyncDate: nowIso,
+        syncMetadata: {
+          previousQuantitySold: change.oldQuantitySold,
+          syncedQuantitySold: change.newQuantitySold,
+          syncedBy: userId,
+          syncedByName: userName,
+          syncedAt: nowIso,
+        },
         updatedAt: nowIso,
       });
 

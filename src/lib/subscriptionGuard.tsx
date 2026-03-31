@@ -16,7 +16,7 @@ export function checkSubscriptionAccess(storeProfile: StoreProfile | null | unde
     return {
       allowed: false,
       message: 'Store profile not found',
-      redirectTo: '/upgrade-to-admin',
+      redirectTo: '/subscription',
     };
   }
 
@@ -76,7 +76,7 @@ export function checkSubscriptionAccess(storeProfile: StoreProfile | null | unde
       allowed: false,
       status: 'expired',
       message: 'Your subscription has expired. Please renew to continue using admin features.',
-      redirectTo: '/upgrade-to-admin',
+      redirectTo: '/subscription',
     };
   }
 
@@ -105,7 +105,7 @@ export function checkSubscriptionAccess(storeProfile: StoreProfile | null | unde
   return {
     allowed: false,
     message: 'No active subscription found. Please subscribe to access admin features.',
-    redirectTo: '/upgrade-to-admin',
+    redirectTo: '/subscription',
   };
 }
 

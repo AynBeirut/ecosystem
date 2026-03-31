@@ -26,6 +26,7 @@ import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
+import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
@@ -37,6 +38,8 @@ const ORDER_STATUSES = [
   { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
 ];
 
+const ENABLE_ORDER_RAW_MATERIAL_DEDUCTION = false;
+
 interface ProductForOrder {
   id: string;
   name?: string;
@@ -47,6 +50,10 @@ interface ProductForOrder {
 }
 
 interface InventoryTransaction {
+  idempotencyKey?: string;
+}
+
+interface ProductStockTransaction {
   idempotencyKey?: string;
 }
 
@@ -141,6 +148,66 @@ const AdminOrders: React.FC = () => {
     return docs.find((fgDoc: FinishedGoodDoc) => {
       const data = fgDoc.data();
       return data.productId === orderItemProductId || data.composedProductId === orderItemProductId;
+    });
+  };
+
+  const applySimpleProductStockChange = async (
+    db: ReturnType<typeof getFirestore>,
+    productId: string,
+    quantity: number,
+    mode: 'consume' | 'restore',
+    idempotencyKey: string,
+    reason: string,
+    referenceId: string,
+    referenceNumber: string
+  ) => {
+    if (!productId || quantity <= 0 || !user?.id) return;
+
+    const productRef = doc(db, 'products', productId);
+    const productSnap = await getDoc(productRef);
+    if (!productSnap.exists()) return;
+
+    const productData = productSnap.data() as {
+      productType?: string;
+      stock?: number;
+      inStock?: boolean;
+      stockTransactions?: ProductStockTransaction[];
+      name?: string;
+    };
+
+    const productType = productData.productType;
+    const isSimpleProduct = !productType || productType === 'simple';
+    if (!isSimpleProduct) return;
+
+    const transactions = Array.isArray(productData.stockTransactions) ? productData.stockTransactions : [];
+    const alreadyApplied = transactions.some((tx: ProductStockTransaction) => tx?.idempotencyKey === idempotencyKey);
+    if (alreadyApplied) return;
+
+    const currentStock = Number(productData.stock || 0);
+    const safeCurrentStock = Number.isFinite(currentStock) ? currentStock : 0;
+    const newStock = mode === 'consume'
+      ? Math.max(0, safeCurrentStock - quantity)
+      : safeCurrentStock + quantity;
+
+    const nowIso = new Date().toISOString();
+    const stockTransaction = {
+      id: `SIMPLE-STOCK-${Date.now()}-${productId}`,
+      date: nowIso,
+      actionType: mode === 'consume' ? 'sold' : 'return',
+      quantity: mode === 'consume' ? -quantity : quantity,
+      reason,
+      referenceId,
+      referenceNumber,
+      userId: user.id,
+      userName: user.name,
+      idempotencyKey,
+    };
+
+    await updateDoc(productRef, {
+      stock: newStock,
+      inStock: newStock > 0,
+      stockTransactions: [...transactions, stockTransaction],
+      updatedAt: nowIso,
     });
   };
 
@@ -541,6 +608,7 @@ const AdminOrders: React.FC = () => {
 
     try {
       const db = getFirestore();
+      await enforceAndConsumeTrialOperation(db, user.storeId, 'invoice');
       const customer = customers.find(c => c.id === newOrder.customerId);
       const salesPerson = salesStaff.find(s => s.id === newOrder.assignedSalesPerson);
       const totals = calculateOrderTotals(
@@ -667,6 +735,41 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+  // Round to 3 decimal places to eliminate float drift (e.g. 226.48000000000002)
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
+
+  // Atomic read-calculate-write for finishedGoodsInventory using Firestore runTransaction.
+  // This prevents race conditions and float drift caused by non-atomic read→calc→write.
+  const updateFGInventoryAtomic = async (
+    db: ReturnType<typeof getFirestore>,
+    fgDocId: string,
+    idempotencyKey: string,
+    buildUpdate: (fgData: Record<string, unknown>) => {
+      currentBalance: number;
+      quantitySold: number;
+      totalValue: number;
+      transaction: Record<string, unknown>;
+    } | null
+  ) => {
+    const fgRef = doc(db, 'finishedGoodsInventory', fgDocId);
+    await runTransaction(db, async (tx) => {
+      const snap = await tx.get(fgRef);
+      if (!snap.exists()) return;
+      const fgData = snap.data() as Record<string, unknown>;
+      // Idempotency check inside the transaction for safety
+      if (hasInventoryEvent((fgData.transactions as InventoryTransaction[]) || [], idempotencyKey)) return;
+      const update = buildUpdate(fgData);
+      if (!update) return;
+      tx.update(fgRef, {
+        currentBalance: round3(update.currentBalance),
+        quantitySold: round3(update.quantitySold),
+        totalValue: round3(update.totalValue),
+        transactions: [...((fgData.transactions as unknown[]) || []), update.transaction],
+        updatedAt: new Date().toISOString(),
+      });
+    });
+  };
+
   const handleStatusChange = async (orderId: string, newStatus: string) => {
     if (!user?.storeId) return;
     try {
@@ -688,51 +791,57 @@ const AdminOrders: React.FC = () => {
         );
         const fgSnapshot = await getDocs(fgQuery);
 
-        for (const item of order.items) {
+        for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
+          const item = order.items[lineIdx];
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
+
+          const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `${order.status}->${newStatus}:line${lineIdx}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
-            const fgData = matchingFG.data();
-            const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `${order.status}->${newStatus}`);
-            if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
-              continue;
-            }
-            
-            // Reverse the deductions: add back to balance, subtract from quantitySold
-            const newBalance = (fgData.currentBalance || 0) + item.quantity;
-            const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) - item.quantity);
-            const newTotalValue = newBalance * (fgData.costPrice || 0);
-            
-            // Create reversal transaction record
-            const reversalTransaction = {
-              id: `TXN-ROLLBACK-${Date.now()}-${item.productId}`,
-              date: new Date().toISOString(),
-              actionType: 'adjustment' as const,
-              quantity: item.quantity, // Positive = adding back
-              unitCost: fgData.costPrice || 0,
-              totalCost: (fgData.costPrice || 0) * item.quantity,
-              reason: `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
-              referenceId: orderId,
-              referenceNumber: order.invoiceNumber || orderId,
-              userId: user.id,
-              userName: user.name,
-              idempotencyKey,
-            };
-            
-            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
-              currentBalance: newBalance,
-              quantitySold: newQuantitySold,
-              totalValue: newTotalValue,
-              transactions: [...(fgData.transactions || []), reversalTransaction],
-              updatedAt: new Date().toISOString(),
+            await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
+              const qty = item.quantity;
+              const cost = (fgData.costPrice as number) || 0;
+              const newBalance = round3(((fgData.currentBalance as number) || 0) + qty);
+              return {
+                currentBalance: newBalance,
+                quantitySold: round3(Math.max(0, ((fgData.quantitySold as number) || 0) - qty)),
+                totalValue: round3(newBalance * cost),
+                transaction: {
+                  id: `TXN-ROLLBACK-${Date.now()}-${item.productId}`,
+                  date: new Date().toISOString(),
+                  actionType: 'return',
+                  quantity: qty,
+                  unitCost: cost,
+                  totalCost: round3(cost * qty),
+                  reason: `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
+                  referenceId: orderId,
+                  referenceNumber: order.invoiceNumber || orderId,
+                  userId: user.id,
+                  userName: user.name,
+                  idempotencyKey,
+                },
+              };
             });
+          } else {
+            await applySimpleProductStockChange(
+              db,
+              itemProductId,
+              Number(item.quantity || 0),
+              'restore',
+              idempotencyKey,
+              `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
+              orderId,
+              order.invoiceNumber || orderId,
+            );
           }
         }
 
-        await applyRawMaterialStockFromOrder(db, order, 'restore');
+        if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
+          await applyRawMaterialStockFromOrder(db, order, 'restore');
+        }
       }
       
       // If marking as delivered, deduct from finished goods inventory
@@ -743,50 +852,57 @@ const AdminOrders: React.FC = () => {
         );
         const fgSnapshot = await getDocs(fgQuery);
 
-        for (const item of order.items) {
+        for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
+          const item = order.items[lineIdx];
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
+
+          const idempotencyKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `${order.status}->${newStatus}:line${lineIdx}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
-            const fgData = matchingFG.data();
-            const idempotencyKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `${order.status}->${newStatus}`);
-            if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
-              continue;
-            }
-            
-            const newBalance = Math.max(0, (fgData.currentBalance || 0) - item.quantity);
-            const newQuantitySold = (fgData.quantitySold || 0) + item.quantity;
-            const newTotalValue = newBalance * (fgData.costPrice || 0);
-            
-            // Create transaction record
-            const transaction = {
-              id: `TXN-${Date.now()}-${item.productId}`,
-              date: new Date().toISOString(),
-              actionType: 'sold' as const,
-              quantity: -item.quantity,
-              unitCost: fgData.costPrice || 0,
-              totalCost: (fgData.costPrice || 0) * item.quantity,
-              reason: `Sale from order ${order.invoiceNumber || order.id}`,
-              referenceId: orderId,
-              referenceNumber: order.invoiceNumber || order.id,
-              userId: user.id,
-              userName: user.name,
-              idempotencyKey,
-            };
-            
-            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
-              currentBalance: newBalance,
-              quantitySold: newQuantitySold,
-              totalValue: newTotalValue,
-              transactions: [...(fgData.transactions || []), transaction],
-              updatedAt: new Date().toISOString(),
+            await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
+              const qty = item.quantity;
+              const cost = (fgData.costPrice as number) || 0;
+              const newBalance = round3(Math.max(0, ((fgData.currentBalance as number) || 0) - qty));
+              return {
+                currentBalance: newBalance,
+                quantitySold: round3(((fgData.quantitySold as number) || 0) + qty),
+                totalValue: round3(newBalance * cost),
+                transaction: {
+                  id: `TXN-${Date.now()}-${item.productId}`,
+                  date: new Date().toISOString(),
+                  actionType: 'sold',
+                  quantity: -qty,
+                  unitCost: cost,
+                  totalCost: round3(cost * qty),
+                  reason: `Sale from order ${order.invoiceNumber || order.id}`,
+                  referenceId: orderId,
+                  referenceNumber: order.invoiceNumber || order.id,
+                  userId: user.id,
+                  userName: user.name,
+                  idempotencyKey,
+                },
+              };
             });
+          } else {
+            await applySimpleProductStockChange(
+              db,
+              itemProductId,
+              Number(item.quantity || 0),
+              'consume',
+              idempotencyKey,
+              `Sale from order ${order.invoiceNumber || order.id}`,
+              orderId,
+              order.invoiceNumber || order.id,
+            );
           }
         }
 
-        await applyRawMaterialStockFromOrder(db, order, 'consume');
+        if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
+          await applyRawMaterialStockFromOrder(db, order, 'consume');
+        }
       }
       
       await updateDoc(orderRef, { status: newStatus, updatedAt: new Date().toISOString() });
@@ -913,9 +1029,11 @@ const AdminOrders: React.FC = () => {
         const oldItems = editingOrder.items || [];
         const newItems = newOrder.items;
 
-        // Create maps for easy comparison
-        const oldItemsMap = new Map(oldItems.map(item => [item.productId, item.quantity]));
-        const newItemsMap = new Map(newItems.map(item => [item.productId, item.quantity]));
+        // Create maps for easy comparison - sum quantities for duplicate product lines
+        const oldItemsMap = new Map<string, number>();
+        for (const item of oldItems) { const k = resolveOrderItemProductKey(item); oldItemsMap.set(k, (oldItemsMap.get(k) || 0) + (item.quantity || 0)); }
+        const newItemsMap = new Map<string, number>();
+        for (const item of newItems) { const k = resolveOrderItemProductKey(item); newItemsMap.set(k, (newItemsMap.get(k) || 0) + (item.quantity || 0)); }
 
         // Get all product IDs involved
         const allProductIds = new Set([...oldItemsMap.keys(), ...newItemsMap.keys()]);
@@ -933,44 +1051,55 @@ const AdminOrders: React.FC = () => {
 
           if (diff !== 0) {
             const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, productId);
+            const idempotencyKey = buildInventoryEventKey('order-edit', editingOrder.id, productId, `${oldQty}->${newQty}`);
 
             if (matchingFG) {
-              const fgData = matchingFG.data();
-              const idempotencyKey = buildInventoryEventKey('order-edit', editingOrder.id, productId, `${oldQty}->${newQty}`);
-              if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
-                continue;
-              }
-              
-              // Adjust quantities: if diff > 0 (increased), deduct more; if diff < 0 (decreased), add back
-              const newBalance = (fgData.currentBalance || 0) - diff;
-              const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) + diff);
-              const newTotalValue = newBalance * (fgData.costPrice || 0);
-              
-              // Create adjustment transaction
-              const adjustmentTransaction = {
-                id: `TXN-EDIT-${Date.now()}-${productId}`,
-                date: new Date().toISOString(),
-                actionType: 'adjustment' as const,
-                quantity: -diff, // Negative if adding more to sale, positive if reducing sale
-                unitCost: fgData.costPrice || 0,
-                totalCost: Math.abs(diff) * (fgData.costPrice || 0),
-                reason: `Order edit: ${editingOrder.invoiceNumber || editingOrder.id} quantity changed from ${oldQty} to ${newQty}`,
-                referenceId: editingOrder.id,
-                referenceNumber: editingOrder.invoiceNumber || editingOrder.id,
-                userId: user.id,
-                userName: user.name,
-                idempotencyKey,
-              };
-              
-              await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
-                currentBalance: newBalance,
-                quantitySold: newQuantitySold,
-                totalValue: newTotalValue,
-                transactions: [...(fgData.transactions || []), adjustmentTransaction],
-                updatedAt: new Date().toISOString(),
+              await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
+                const cost = (fgData.costPrice as number) || 0;
+                const newBalance = round3(((fgData.currentBalance as number) || 0) - diff);
+                return {
+                  currentBalance: newBalance,
+                  quantitySold: round3(Math.max(0, ((fgData.quantitySold as number) || 0) + diff)),
+                  totalValue: round3(newBalance * cost),
+                  transaction: {
+                    id: `TXN-EDIT-${Date.now()}-${productId}`,
+                    date: new Date().toISOString(),
+                    actionType: diff > 0 ? 'sold' : 'return',
+                    quantity: -diff,
+                    unitCost: cost,
+                    totalCost: round3(Math.abs(diff) * cost),
+                    reason: `Order edit: ${editingOrder.invoiceNumber || editingOrder.id} quantity changed from ${oldQty} to ${newQty}`,
+                    referenceId: editingOrder.id,
+                    referenceNumber: editingOrder.invoiceNumber || editingOrder.id,
+                    userId: user.id,
+                    userName: user.name,
+                    idempotencyKey,
+                  },
+                };
               });
+            } else {
+              await applySimpleProductStockChange(
+                db,
+                productId,
+                Math.abs(diff),
+                diff > 0 ? 'consume' : 'restore',
+                idempotencyKey,
+                `Order edit: ${editingOrder.invoiceNumber || editingOrder.id} quantity changed from ${oldQty} to ${newQty}`,
+                editingOrder.id,
+                editingOrder.invoiceNumber || editingOrder.id,
+              );
             }
           }
+        }
+
+        const editedOrderForRawMaterials = {
+          ...editingOrder,
+          items: itemsWithPrices,
+        } as Order & { id: string };
+
+        if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
+          await applyRawMaterialStockFromOrder(db, editingOrder, 'restore');
+          await applyRawMaterialStockFromOrder(db, editedOrderForRawMaterials, 'consume');
         }
       }
 
@@ -1057,48 +1186,56 @@ const AdminOrders: React.FC = () => {
         );
         const fgSnapshot = await getDocs(fgQuery);
 
-        for (const item of order.items) {
+        for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
+          const item = order.items[lineIdx];
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
+
+          const idempotencyKey = buildInventoryEventKey('order-delete', orderId, itemProductId, `${order.status || 'unknown'}:line${lineIdx}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
-            const fgData = matchingFG.data();
-            const idempotencyKey = buildInventoryEventKey('order-delete', orderId, itemProductId, order.status || 'unknown');
-            if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
-              continue;
-            }
-            
-            // Reverse the deductions: add back to balance, subtract from quantitySold
-            const newBalance = (fgData.currentBalance || 0) + item.quantity;
-            const newQuantitySold = Math.max(0, (fgData.quantitySold || 0) - item.quantity);
-            const newTotalValue = newBalance * (fgData.costPrice || 0);
-            
-            // Create reversal transaction record
-            const reversalTransaction = {
-              id: `TXN-REVERSE-${Date.now()}-${item.productId}`,
-              date: new Date().toISOString(),
-              actionType: 'adjustment' as const,
-              quantity: item.quantity, // Positive = adding back
-              unitCost: fgData.costPrice || 0,
-              totalCost: (fgData.costPrice || 0) * item.quantity,
-              reason: `Reversal: Order ${order.invoiceNumber || orderId} deleted`,
-              referenceId: orderId,
-              referenceNumber: order.invoiceNumber || orderId,
-              userId: user.id,
-              userName: user.name,
-              idempotencyKey,
-            };
-            
-            await updateDoc(doc(db, 'finishedGoodsInventory', matchingFG.id), {
-              currentBalance: newBalance,
-              quantitySold: newQuantitySold,
-              totalValue: newTotalValue,
-              transactions: [...(fgData.transactions || []), reversalTransaction],
-              updatedAt: new Date().toISOString(),
+            await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
+              const qty = item.quantity;
+              const cost = (fgData.costPrice as number) || 0;
+              const newBalance = round3(((fgData.currentBalance as number) || 0) + qty);
+              return {
+                currentBalance: newBalance,
+                quantitySold: round3(Math.max(0, ((fgData.quantitySold as number) || 0) - qty)),
+                totalValue: round3(newBalance * cost),
+                transaction: {
+                  id: `TXN-REVERSE-${Date.now()}-${item.productId}`,
+                  date: new Date().toISOString(),
+                  actionType: 'return',
+                  quantity: qty,
+                  unitCost: cost,
+                  totalCost: round3(cost * qty),
+                  reason: `Reversal: Order ${order.invoiceNumber || orderId} deleted`,
+                  referenceId: orderId,
+                  referenceNumber: order.invoiceNumber || orderId,
+                  userId: user.id,
+                  userName: user.name,
+                  idempotencyKey,
+                },
+              };
             });
+          } else {
+            await applySimpleProductStockChange(
+              db,
+              itemProductId,
+              Number(item.quantity || 0),
+              'restore',
+              idempotencyKey,
+              `Reversal: Order ${order.invoiceNumber || orderId} deleted`,
+              orderId,
+              order.invoiceNumber || orderId,
+            );
           }
+        }
+
+        if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
+          await applyRawMaterialStockFromOrder(db, order, 'restore');
         }
       }
       
@@ -1151,15 +1288,17 @@ const AdminOrders: React.FC = () => {
         );
         const fgSnapshot = await getDocs(fgQuery);
 
-        for (const item of voidingPayment.items) {
+        for (let lineIdx = 0; lineIdx < voidingPayment.items.length; lineIdx++) {
+          const item = voidingPayment.items[lineIdx];
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
+
+          const idempotencyKey = buildInventoryEventKey('payment-void', voidingPayment.id, itemProductId, `${voidingPayment.status || 'unknown'}:line${lineIdx}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
             const fgData = matchingFG.data();
-            const idempotencyKey = buildInventoryEventKey('payment-void', voidingPayment.id, itemProductId, voidingPayment.status || 'unknown');
             if (hasInventoryEvent(fgData.transactions || [], idempotencyKey)) {
               continue;
             }
@@ -1173,7 +1312,7 @@ const AdminOrders: React.FC = () => {
             const reversalTransaction = {
               id: `TXN-VOID-${Date.now()}-${item.productId}`,
               date: new Date().toISOString(),
-              actionType: 'adjustment' as const,
+              actionType: 'return' as const,
               quantity: item.quantity, // Positive = adding back
               unitCost: fgData.costPrice || 0,
               totalCost: (fgData.costPrice || 0) * item.quantity,
@@ -1192,7 +1331,22 @@ const AdminOrders: React.FC = () => {
               transactions: [...(fgData.transactions || []), reversalTransaction],
               updatedAt: new Date().toISOString(),
             });
+          } else {
+            await applySimpleProductStockChange(
+              db,
+              itemProductId,
+              Number(item.quantity || 0),
+              'restore',
+              idempotencyKey,
+              `Reversal: Payment voided for order ${voidingPayment.invoiceNumber || voidingPayment.id}`,
+              voidingPayment.id,
+              voidingPayment.invoiceNumber || voidingPayment.id,
+            );
           }
+        }
+
+        if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
+          await applyRawMaterialStockFromOrder(db, voidingPayment, 'restore');
         }
       }
 

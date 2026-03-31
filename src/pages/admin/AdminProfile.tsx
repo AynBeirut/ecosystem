@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { Button } from '@/components/ui/button';
@@ -40,6 +41,7 @@ const defaultProfile: StoreProfile = {
 
 const AdminProfile: React.FC = () => {
   const { user, setUser } = useAuth();
+  const navigate = useNavigate();
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const db = getFirestore();
@@ -266,17 +268,18 @@ const AdminProfile: React.FC = () => {
                 <div className="text-2xl font-bold mb-1">{getSubscriptionTierName(formData)}</div>
                 <div className="text-sm text-gray-600">
                   {hasComposedAccess(formData) ? (
-                    <span className="text-green-600">✓ Includes Composed Products & POS System</span>
+                    <span className="text-green-600">✓ Includes manufacturing, production, finished goods, raw materials and POS</span>
                   ) : (
                     <span className="text-amber-600">Basic features only</span>
                   )}
                 </div>
               </div>
               <Button 
+                type="button"
                 variant={hasComposedAccess(formData) ? "outline" : "default"}
-                onClick={() => window.location.href = '/upgrade'}
+                onClick={() => navigate('/subscription')}
               >
-                {hasComposedAccess(formData) ? 'Manage Plan' : 'Upgrade to Pro'}
+                {hasComposedAccess(formData) ? 'Manage Plan' : 'Choose Plan'}
               </Button>
             </div>
           </CardContent>
