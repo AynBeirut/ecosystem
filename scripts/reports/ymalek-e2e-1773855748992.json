@@ -1,0 +1,316 @@
+{
+  "testRunId": "ymalek-e2e-1773855748992",
+  "storeId": "test-ymalek-e2e-1773855748992",
+  "status": "PASS",
+  "matrix": [
+    {
+      "scenario": "Scenario 1 - Purchase + Production + Sales",
+      "status": "PASS",
+      "failedChecks": 0
+    },
+    {
+      "scenario": "Scenario 2 - Edit Delivered + Void Payment + Idempotency",
+      "status": "PASS",
+      "failedChecks": 0
+    }
+  ],
+  "scenario1": {
+    "scenario": {
+      "purchases": 2,
+      "productions": 2,
+      "salesOrders": 2
+    },
+    "sales": {
+      "ordersCount": 2,
+      "totalUnits": 26,
+      "grossRevenue": 390,
+      "saleResults": [
+        {
+          "orderId": "olPWJLULyuEhjMU3YY77",
+          "result": {
+            "updated": 1,
+            "skippedAlreadyApplied": 0,
+            "missingMatches": 0
+          }
+        },
+        {
+          "orderId": "99IacBvUx70DbJiHqFws",
+          "result": {
+            "updated": 1,
+            "skippedAlreadyApplied": 0,
+            "missingMatches": 0
+          }
+        }
+      ]
+    },
+    "expected": {
+      "raw": {
+        "2RGf5FfS4gbUWjumchVf": {
+          "name": "14 GSM 2PLY 80CM",
+          "stock": 427.75,
+          "cost": 1.58187
+        },
+        "5x3NcT32kA93zwMoBTw1": {
+          "name": "External Bag with Hand 40*110",
+          "stock": 47.8,
+          "cost": 2.02
+        },
+        "L3fZ7mmknpdRHabgD6Is": {
+          "name": "500g Facial INTERNAL Bag",
+          "stock": 146.15,
+          "cost": 2.701037
+        }
+      },
+      "finishedGoods": {
+        "manufactured": 55,
+        "sold": 26,
+        "balance": 29,
+        "costPrice": 8.091681,
+        "totalValue": 234.658749
+      }
+    },
+    "actual": {
+      "raw": {
+        "2RGf5FfS4gbUWjumchVf": {
+          "name": "14 GSM 2PLY 80CM",
+          "stock": 427.75,
+          "cost": 1.58187
+        },
+        "5x3NcT32kA93zwMoBTw1": {
+          "name": "External Bag with Hand 40*110",
+          "stock": 47.8,
+          "cost": 2.02
+        },
+        "L3fZ7mmknpdRHabgD6Is": {
+          "name": "500g Facial INTERNAL Bag",
+          "stock": 146.15,
+          "cost": 2.701037
+        }
+      },
+      "finishedGoods": {
+        "manufactured": 55,
+        "sold": 26,
+        "balance": 29,
+        "costPrice": 8.091681,
+        "totalValue": 234.658749,
+        "transactionsCount": 4
+      }
+    },
+    "checks": [
+      {
+        "type": "rawStock",
+        "id": "2RGf5FfS4gbUWjumchVf",
+        "name": "14 GSM 2PLY 80CM",
+        "expected": 427.75,
+        "actual": 427.75,
+        "pass": true
+      },
+      {
+        "type": "rawCost",
+        "id": "2RGf5FfS4gbUWjumchVf",
+        "name": "14 GSM 2PLY 80CM",
+        "expected": 1.58187,
+        "actual": 1.58187,
+        "pass": true
+      },
+      {
+        "type": "rawStock",
+        "id": "5x3NcT32kA93zwMoBTw1",
+        "name": "External Bag with Hand 40*110",
+        "expected": 47.8,
+        "actual": 47.8,
+        "pass": true
+      },
+      {
+        "type": "rawCost",
+        "id": "5x3NcT32kA93zwMoBTw1",
+        "name": "External Bag with Hand 40*110",
+        "expected": 2.02,
+        "actual": 2.02,
+        "pass": true
+      },
+      {
+        "type": "rawStock",
+        "id": "L3fZ7mmknpdRHabgD6Is",
+        "name": "500g Facial INTERNAL Bag",
+        "expected": 146.15,
+        "actual": 146.15,
+        "pass": true
+      },
+      {
+        "type": "rawCost",
+        "id": "L3fZ7mmknpdRHabgD6Is",
+        "name": "500g Facial INTERNAL Bag",
+        "expected": 2.701037,
+        "actual": 2.701037,
+        "pass": true
+      },
+      {
+        "type": "fgManufactured",
+        "expected": 55,
+        "actual": 55,
+        "pass": true
+      },
+      {
+        "type": "fgSold",
+        "expected": 26,
+        "actual": 26,
+        "pass": true
+      },
+      {
+        "type": "fgBalance",
+        "expected": 29,
+        "actual": 29,
+        "pass": true
+      },
+      {
+        "type": "fgTotalValue",
+        "expected": 234.658749,
+        "actual": 234.658749,
+        "pass": true
+      }
+    ],
+    "failedChecks": []
+  },
+  "scenario2": {
+    "edgeOrder": {
+      "orderId": "jLyYugUoKIp7D4acRQnC",
+      "firstApplyResult": {
+        "updated": 1,
+        "skippedAlreadyApplied": 0,
+        "missingMatches": 0
+      },
+      "secondApplyResult": {
+        "updated": 0,
+        "skippedAlreadyApplied": 1,
+        "missingMatches": 0
+      },
+      "quantityOriginal": 8,
+      "quantityEdited": 5
+    },
+    "beforeEdge": {
+      "raw": {
+        "2RGf5FfS4gbUWjumchVf": {
+          "name": "14 GSM 2PLY 80CM",
+          "stock": 427.75,
+          "cost": 1.58187
+        },
+        "5x3NcT32kA93zwMoBTw1": {
+          "name": "External Bag with Hand 40*110",
+          "stock": 47.8,
+          "cost": 2.02
+        },
+        "L3fZ7mmknpdRHabgD6Is": {
+          "name": "500g Facial INTERNAL Bag",
+          "stock": 146.15,
+          "cost": 2.701037
+        }
+      },
+      "fg": {
+        "manufactured": 55,
+        "sold": 26,
+        "balance": 29,
+        "costPrice": 8.091681,
+        "totalValue": 234.658749,
+        "transactionsCount": 4
+      }
+    },
+    "afterEdge": {
+      "raw": {
+        "2RGf5FfS4gbUWjumchVf": {
+          "name": "14 GSM 2PLY 80CM",
+          "stock": 427.75,
+          "cost": 1.58187
+        },
+        "5x3NcT32kA93zwMoBTw1": {
+          "name": "External Bag with Hand 40*110",
+          "stock": 47.8,
+          "cost": 2.02
+        },
+        "L3fZ7mmknpdRHabgD6Is": {
+          "name": "500g Facial INTERNAL Bag",
+          "stock": 146.15,
+          "cost": 2.701037
+        }
+      },
+      "finishedGoods": {
+        "manufactured": 55,
+        "sold": 26,
+        "balance": 29,
+        "costPrice": 8.091681,
+        "totalValue": 234.658749,
+        "transactionsCount": 7
+      }
+    },
+    "checks": [
+      {
+        "type": "edgeRawStockUnchanged",
+        "id": "2RGf5FfS4gbUWjumchVf",
+        "expected": 427.75,
+        "actual": 427.75,
+        "pass": true
+      },
+      {
+        "type": "edgeRawCostUnchanged",
+        "id": "2RGf5FfS4gbUWjumchVf",
+        "expected": 1.58187,
+        "actual": 1.58187,
+        "pass": true
+      },
+      {
+        "type": "edgeRawStockUnchanged",
+        "id": "5x3NcT32kA93zwMoBTw1",
+        "expected": 47.8,
+        "actual": 47.8,
+        "pass": true
+      },
+      {
+        "type": "edgeRawCostUnchanged",
+        "id": "5x3NcT32kA93zwMoBTw1",
+        "expected": 2.02,
+        "actual": 2.02,
+        "pass": true
+      },
+      {
+        "type": "edgeRawStockUnchanged",
+        "id": "L3fZ7mmknpdRHabgD6Is",
+        "expected": 146.15,
+        "actual": 146.15,
+        "pass": true
+      },
+      {
+        "type": "edgeRawCostUnchanged",
+        "id": "L3fZ7mmknpdRHabgD6Is",
+        "expected": 2.701037,
+        "actual": 2.701037,
+        "pass": true
+      },
+      {
+        "type": "edgeFgSoldRestored",
+        "expected": 26,
+        "actual": 26,
+        "pass": true
+      },
+      {
+        "type": "edgeFgBalanceRestored",
+        "expected": 29,
+        "actual": 29,
+        "pass": true
+      },
+      {
+        "type": "edgeFgTotalValueRestored",
+        "expected": 234.658749,
+        "actual": 234.658749,
+        "pass": true
+      },
+      {
+        "type": "edgeIdempotencySecondRun",
+        "expected": "updated=0, skippedAlreadyApplied=1",
+        "actual": "updated=0, skippedAlreadyApplied=1",
+        "pass": true
+      }
+    ],
+    "failedChecks": []
+  },
+  "note": "PASS means base operations are numerically consistent and edge-case rollback/edit/idempotency keeps inventory consistent."
+}

@@ -1,0 +1,49 @@
+{
+  "testRunId": "ymalek-sim-1773854432778",
+  "storeId": "test-ymalek-sim-1773854432778",
+  "status": "PASS",
+  "operations": {
+    "createdBatches": [
+      "Uxn0IEuBBNyYay96FfpL",
+      "z7lMxzgMDjsKUZ3OLNNY"
+    ],
+    "completedBatch": "z7lMxzgMDjsKUZ3OLNNY",
+    "deletedBatch": "z7lMxzgMDjsKUZ3OLNNY"
+  },
+  "driftReport": [
+    {
+      "rawMaterialId": "bOLEhG5oiS4GaPP8CzTP",
+      "materialName": "14 GSM 2PLY 80CM",
+      "before": 600,
+      "afterCompletion": 491.1,
+      "afterDelete": 600,
+      "netDriftAfterDelete": 0
+    },
+    {
+      "rawMaterialId": "Sh3z40ov4EBLhF9ziY3N",
+      "materialName": "External Bag with Hand 40*110",
+      "before": 22.5,
+      "afterCompletion": 21.62,
+      "afterDelete": 22.5,
+      "netDriftAfterDelete": 0
+    },
+    {
+      "rawMaterialId": "HA0NgBAPp7F4gUmRtS0a",
+      "materialName": "500g Facial INTERNAL Bag",
+      "before": 120,
+      "afterCompletion": 118.46,
+      "afterDelete": 120,
+      "netDriftAfterDelete": 0
+    },
+    {
+      "rawMaterialId": "QO3PacByaR8EpnxuAza3",
+      "materialName": "External Bag with Hand 40x90",
+      "before": 46.717,
+      "afterCompletion": 46.717,
+      "afterDelete": 46.717,
+      "netDriftAfterDelete": 0
+    }
+  ],
+  "nonZeroDrift": [],
+  "note": "PASS means raw-material stock returned to initial values after complete + delete replay."
+}

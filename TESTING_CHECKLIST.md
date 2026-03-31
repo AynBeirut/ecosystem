@@ -63,6 +63,39 @@
 - Verify the production goes to "completed" status
 - Check if materials have stock available
 
+### 6. ✅ Scoped Raw-Material Reconciliation Script - READY
+**Issue:** Need safe recalculation for ingredient(s) added later (example: bags)  
+**Status:** Implemented in `scripts/reconcileRawMaterialStock.cjs`  
+**Run Steps (Dry-run then Apply):**
+1. Get store and bag raw material IDs
+2. Run scoped dry-run:
+   ```bash
+   node scripts/reconcileRawMaterialStock.cjs \
+     --storeId <STORE_ID> \
+     --before <ISO_BEFORE> \
+     --after first-production \
+     --materials <BAG_ID_1,BAG_ID_2>
+   ```
+3. Verify output includes only bag IDs/materials
+4. Run apply with same scope:
+   ```bash
+   node scripts/reconcileRawMaterialStock.cjs \
+     --storeId <STORE_ID> \
+     --before <ISO_BEFORE> \
+     --after first-production \
+     --materials <BAG_ID_1,BAG_ID_2> \
+     --apply
+   ```
+5. Optional force rerun for already-marked orders:
+   ```bash
+   node scripts/reconcileRawMaterialStock.cjs \
+     --storeId <STORE_ID> \
+     --before <ISO_BEFORE> \
+     --after first-production \
+     --materials <BAG_ID_1,BAG_ID_2> \
+     --force --apply
+   ```
+
 ---
 
 ## Recently Fixed Features
