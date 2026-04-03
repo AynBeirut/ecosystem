@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, runTransaction } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -1449,37 +1449,40 @@ const AdminPurchases: React.FC = () => {
           
           createdCount++;
         } else {
-          // Update existing material
+          // Update existing material — use runTransaction for fresh Firestore read
+          // to prevent stale in-memory state from overwriting concurrent corrections
           const materialRef = doc(db, 'rawMaterials', item.rawMaterialId);
-          const newStock = material.currentStock + receivedQty;
-          
-          // Calculate weighted average cost
-          const currentValue = material.currentStock * (material.costPerUnit || 0);
-          const newValue = receivedQty * itemUnitCost;
-          const totalValue = currentValue + newValue;
-          
-          // If this is the first stock (material.currentStock was 0), use the item unit cost directly
-          // Otherwise use weighted average
-          let newCostPerUnit: number;
-          if (material.currentStock === 0) {
-            newCostPerUnit = itemUnitCost;
-          } else {
-            newCostPerUnit = newStock > 0 ? (totalValue / newStock) : itemUnitCost;
-          }
+          await runTransaction(db, async (tx) => {
+            const freshSnap = await tx.get(materialRef);
+            if (!freshSnap.exists()) return;
+            const freshData = freshSnap.data() as { currentStock?: number; costPerUnit?: number; unit?: string };
+            const freshStock = Number(freshData.currentStock || 0);
+            const freshCost = Number(freshData.costPerUnit || 0);
+            const newStock = freshStock + receivedQty;
 
-          newCostPerUnit = round4(newCostPerUnit);
-          
-          console.log(`✅ Updating ${material.name}: Stock ${material.currentStock} + ${receivedQty} = ${newStock}, Cost ${(material.costPerUnit || 0).toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Base Item Cost: ${baseItemUnitCost.toFixed(4)}, Effective Item Cost: ${itemUnitCost.toFixed(4)}, TaxType: ${purchaseTaxType}, TaxRate: ${purchaseTaxRate.toFixed(2)}%)`);
-          
-          // Update stock and cost
-          await updateDoc(materialRef, {
-            currentStock: newStock,
-            costPerUnit: newCostPerUnit,
-            unit: item.unit || material.unit, // Update unit if provided in purchase
-            updatedAt: new Date().toISOString(),
+            // Weighted average cost using fresh values
+            const currentValue = freshStock * freshCost;
+            const newValue = receivedQty * itemUnitCost;
+            const totalValue = currentValue + newValue;
+            let newCostPerUnit: number;
+            if (freshStock === 0) {
+              newCostPerUnit = itemUnitCost;
+            } else {
+              newCostPerUnit = newStock > 0 ? (totalValue / newStock) : itemUnitCost;
+            }
+            newCostPerUnit = round4(newCostPerUnit);
+
+            console.log(`✅ Updating ${material.name}: Stock ${freshStock} + ${receivedQty} = ${newStock}, Cost ${freshCost.toFixed(4)} → ${newCostPerUnit.toFixed(4)} (Base Item Cost: ${baseItemUnitCost.toFixed(4)}, Effective Item Cost: ${itemUnitCost.toFixed(4)}, TaxType: ${purchaseTaxType}, TaxRate: ${purchaseTaxRate.toFixed(2)}%)`);
+
+            tx.update(materialRef, {
+              currentStock: newStock,
+              costPerUnit: newCostPerUnit,
+              unit: item.unit || freshData.unit,
+              updatedAt: new Date().toISOString(),
+            });
           });
-          
-          console.log(`✅ Successfully updated ${material.name} stock to ${newStock}`);
+
+          console.log(`✅ Successfully updated ${material.name} stock (+${receivedQty})`);
           updatedCount++;
         }
       }

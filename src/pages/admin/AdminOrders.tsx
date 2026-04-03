@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
-import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc, runTransaction } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
@@ -254,15 +254,9 @@ const AdminOrders: React.FC = () => {
 
     for (const [rawMaterialId, delta] of materialDeltas.entries()) {
       const rawMaterialRef = doc(db, 'rawMaterials', rawMaterialId);
-      const rawMaterialSnap = await getDoc(rawMaterialRef);
-      if (!rawMaterialSnap.exists()) continue;
-
-      const rawMaterialData = rawMaterialSnap.data() as { currentStock?: number };
-      const currentStock = Number(rawMaterialData.currentStock || 0);
-      const nextStock = Math.max(0, currentStock - delta);
-
+      // Use increment() to avoid stale-read race conditions — never write an absolute value
       await updateDoc(rawMaterialRef, {
-        currentStock: nextStock,
+        currentStock: increment(-delta),
         updatedAt: new Date().toISOString(),
       });
     }
