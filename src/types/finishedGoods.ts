@@ -85,6 +85,12 @@ export interface FinishedGoodsItem {
   location?: string;
   warehouse?: string;
   
+  // Expiry tracking
+  expiryTracking?: boolean;
+  expiryDate?: string;
+  expiryAlertDays?: number; // days before expiry to alert (default 30)
+  expiryNotifiedAt?: string; // ISO date of last expiry notification sent
+
   // Metadata
   storeId: string;
   createdBy: string;

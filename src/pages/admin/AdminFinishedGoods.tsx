@@ -23,6 +23,8 @@ import { isCountedSaleStatus, resolveFinishedGoodsProductKey, resolveOrderItemPr
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { cleanTextForPDF } from '@/lib/arabicPDF';
+import { Switch } from '@/components/ui/switch';
+import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 
 const AdminFinishedGoods: React.FC = () => {
   const { user } = useAuth();
@@ -773,7 +775,10 @@ const AdminFinishedGoods: React.FC = () => {
         quantitySold: editingItem.quantitySold || 0,
         quantityManufactured: editingItem.quantityManufactured || 0,
         totalValue: (editingItem.currentBalance || 0) * (editingItem.costPrice || 0),
-        lastUpdated: new Date().toISOString()
+        lastUpdated: new Date().toISOString(),
+        expiryTracking: editingItem.expiryTracking || false,
+        expiryDate: editingItem.expiryDate || null,
+        expiryAlertDays: editingItem.expiryAlertDays ?? 30,
       };
       
       // Only add reorderPoint if it has a value
@@ -1238,6 +1243,14 @@ const AdminFinishedGoods: React.FC = () => {
                         Low Stock
                       </Badge>
                     )}
+                    {item.expiryTracking && item.expiryDate && hasExpired(item) && (
+                      <Badge variant="destructive" className="ml-2">Expired</Badge>
+                    )}
+                    {item.expiryTracking && item.expiryDate && isExpiringSoon(item) && (
+                      <Badge className="ml-2 bg-orange-500 text-white hover:bg-orange-600">
+                        Expires in {getDaysUntilExpiry(item.expiryDate)}d
+                      </Badge>
+                    )}
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -1329,6 +1342,14 @@ const AdminFinishedGoods: React.FC = () => {
                           <div className="font-medium">{item.itemCode}</div>
                           {item.reorderPoint && item.currentBalance < item.reorderPoint && (
                             <Badge variant="destructive" className="mt-1">Low Stock</Badge>
+                          )}
+                          {item.expiryTracking && item.expiryDate && hasExpired(item) && (
+                            <Badge variant="destructive" className="mt-1">Expired</Badge>
+                          )}
+                          {item.expiryTracking && item.expiryDate && isExpiringSoon(item) && (
+                            <Badge className="mt-1 bg-orange-500 text-white hover:bg-orange-600">
+                              Expires in {getDaysUntilExpiry(item.expiryDate)}d
+                            </Badge>
                           )}
                         </td>
                         <td className="p-4">
@@ -1474,6 +1495,42 @@ const AdminFinishedGoods: React.FC = () => {
                     reorderPoint: parseFloat(e.target.value) || 0
                   })}
                 />
+              </div>
+
+              {/* Expiry Tracking */}
+              <div className="space-y-3 border rounded-md p-3">
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="fg-edit-expiryTracking"
+                    checked={!!editingItem.expiryTracking}
+                    onCheckedChange={(checked) => setEditingItem({ ...editingItem, expiryTracking: checked })}
+                  />
+                  <Label htmlFor="fg-edit-expiryTracking">Enable Expiry Tracking</Label>
+                </div>
+                {editingItem.expiryTracking && (
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <Label htmlFor="fg-edit-expiryDate">Expiry Date</Label>
+                      <Input
+                        id="fg-edit-expiryDate"
+                        type="date"
+                        value={editingItem.expiryDate || ''}
+                        onChange={(e) => setEditingItem({ ...editingItem, expiryDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="fg-edit-expiryAlertDays">Alert Before (days)</Label>
+                      <Input
+                        id="fg-edit-expiryAlertDays"
+                        type="number"
+                        min="1"
+                        value={editingItem.expiryAlertDays ?? 30}
+                        onChange={(e) => setEditingItem({ ...editingItem, expiryAlertDays: parseInt(e.target.value) || 30 })}
+                        placeholder="30"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="bg-yellow-50 border border-yellow-200 rounded p-3">

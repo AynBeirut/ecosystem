@@ -5,12 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2, Factory, ChefHat } from 'lucide-react';
+import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2, Factory, ChefHat, Clock } from 'lucide-react';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import SwipeableLayout from '@/components/SwipeableLayout';
+import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 
 const AdminInventory: React.FC = () => {
   const { user } = useAuth();
@@ -24,6 +25,11 @@ const AdminInventory: React.FC = () => {
     rawMaterials: { count: 0, totalValue: 0, lowStock: 0 },
     finishedGoods: { count: 0, totalValue: 0, lowStock: 0 }
   });
+  const [expiryStats, setExpiryStats] = useState<{
+    expired: number;
+    expiringSoon: number;
+    items: { name: string; type: string; expiryDate: string; daysLeft: number }[];
+  }>({ expired: 0, expiringSoon: 0, items: [] });
 
   useEffect(() => {
     const fetchInventoryStats = async () => {
@@ -93,6 +99,53 @@ const AdminInventory: React.FC = () => {
           composedProducts: { count: composedCount, totalValue: composedValue },
           rawMaterials: { count: rawCount, totalValue: rawValue, lowStock: rawLowStock },
           finishedGoods: { count: fgCount, totalValue: fgValue, lowStock: fgLowStock }
+        });
+
+        // Expiry stats — scan all items with expiryTracking on
+        const expiryItems: { name: string; type: string; expiryDate: string; daysLeft: number }[] = [];
+        let expiredCount = 0, expiringSoonCount = 0;
+
+        rawSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.expiryTracking && d.expiryDate) {
+            const daysLeft = getDaysUntilExpiry(d.expiryDate);
+            const item = { name: d.name || d.sku || 'Unknown', type: 'Raw Material', expiryDate: d.expiryDate, daysLeft };
+            if (daysLeft < 0) { expiredCount++; expiryItems.push(item); }
+            else if (daysLeft <= (d.expiryAlertDays ?? 30)) { expiringSoonCount++; expiryItems.push(item); }
+          }
+        });
+        simpleSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.expiryTracking && d.expiryDate) {
+            const daysLeft = getDaysUntilExpiry(d.expiryDate);
+            const item = { name: d.name || 'Unknown', type: 'Product', expiryDate: d.expiryDate, daysLeft };
+            if (daysLeft < 0) { expiredCount++; expiryItems.push(item); }
+            else if (daysLeft <= (d.expiryAlertDays ?? 30)) { expiringSoonCount++; expiryItems.push(item); }
+          }
+        });
+        composedSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.expiryTracking && d.expiryDate) {
+            const daysLeft = getDaysUntilExpiry(d.expiryDate);
+            const item = { name: d.name || 'Unknown', type: 'Composed', expiryDate: d.expiryDate, daysLeft };
+            if (daysLeft < 0) { expiredCount++; expiryItems.push(item); }
+            else if (daysLeft <= (d.expiryAlertDays ?? 30)) { expiringSoonCount++; expiryItems.push(item); }
+          }
+        });
+        fgSnap.forEach(doc => {
+          const d = doc.data();
+          if (d.expiryTracking && d.expiryDate) {
+            const daysLeft = getDaysUntilExpiry(d.expiryDate);
+            const item = { name: d.productName || d.itemCode || 'Unknown', type: 'Finished Good', expiryDate: d.expiryDate, daysLeft };
+            if (daysLeft < 0) { expiredCount++; expiryItems.push(item); }
+            else if (daysLeft <= (d.expiryAlertDays ?? 30)) { expiringSoonCount++; expiryItems.push(item); }
+          }
+        });
+
+        setExpiryStats({
+          expired: expiredCount,
+          expiringSoon: expiringSoonCount,
+          items: expiryItems.sort((a, b) => a.daysLeft - b.daysLeft),
         });
 
       } catch (error) {
@@ -289,15 +342,41 @@ const AdminInventory: React.FC = () => {
               <p className="text-xs text-muted-foreground">Items need reordering</p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium flex items-center gap-2">
+                <Clock className="h-4 w-4 text-red-500" />
+                Expiry Alerts
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-baseline gap-2">
+                {expiryStats.expired > 0 && (
+                  <span className="text-2xl font-bold text-red-600">{expiryStats.expired} expired</span>
+                )}
+                {expiryStats.expiringSoon > 0 && (
+                  <span className="text-xl font-bold text-orange-500">{expiryStats.expiringSoon} soon</span>
+                )}
+                {expiryStats.expired === 0 && expiryStats.expiringSoon === 0 && (
+                  <span className="text-2xl font-bold text-green-600">0</span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">Items expiring or expired</p>
+            </CardContent>
+          </Card>
         </div>
 
         {/* Detailed Tabs */}
         <Tabs defaultValue="simple" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="simple">Simple Items</TabsTrigger>
             <TabsTrigger value="services">Services</TabsTrigger>
             <TabsTrigger value="raw">Raw Materials</TabsTrigger>
             <TabsTrigger value="finished">Finished Goods</TabsTrigger>
+            <TabsTrigger value="expiry" className={expiryStats.expired > 0 ? 'text-red-600' : expiryStats.expiringSoon > 0 ? 'text-orange-500' : ''}>
+              Expiry {(expiryStats.expired + expiryStats.expiringSoon) > 0 && `(${expiryStats.expired + expiryStats.expiringSoon})`}
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="simple">
@@ -410,6 +489,44 @@ const AdminInventory: React.FC = () => {
                     Manage Finished Goods
                   </Button>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="expiry">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Clock className="h-5 w-5" />
+                  Expiring Items
+                </CardTitle>
+                <CardDescription>
+                  {expiryStats.expired} expired · {expiryStats.expiringSoon} expiring soon
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {expiryStats.items.length === 0 ? (
+                  <p className="text-sm text-muted-foreground py-4 text-center">No items expiring or expired.</p>
+                ) : (
+                  <div className="space-y-2">
+                    {expiryStats.items.map((item, i) => (
+                      <div key={i} className="flex items-center justify-between p-2 rounded-md border">
+                        <div>
+                          <span className="font-medium">{item.name}</span>
+                          <span className="ml-2 text-xs text-muted-foreground">{item.type}</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">{item.expiryDate}</span>
+                          {item.daysLeft < 0 ? (
+                            <Badge variant="destructive">Expired {Math.abs(item.daysLeft)}d ago</Badge>
+                          ) : (
+                            <Badge className="bg-orange-500 text-white hover:bg-orange-600">Expires in {item.daysLeft}d</Badge>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
           </TabsContent>

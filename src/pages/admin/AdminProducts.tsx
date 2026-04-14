@@ -21,6 +21,7 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { generateUniqueSlug } from '@/lib/slugify';
 import { assertCanCreateProduct, assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
+import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 
 const DEFAULT_PRODUCT_CATEGORIES = [
   'Electronics',
@@ -45,6 +46,7 @@ const AdminProducts: React.FC = () => {
   const [recipes, setRecipes] = useState<Array<{ id: string; name?: string; costPerUnit?: number }>>([]);
   const [categories, setCategories] = useState<string[]>(DEFAULT_PRODUCT_CATEGORIES);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
   // Check if user has permission to manage inventory
@@ -64,7 +66,10 @@ const AdminProducts: React.FC = () => {
     serviceDuration: '',
     serviceBillingType: 'one-time' as ServiceBillingType,
     renewalReminderDays: '',
-    recipeId: ''
+    recipeId: '',
+    expiryTracking: false,
+    expiryDate: '',
+    expiryAlertDays: 30,
   });
 
   const getStockPayload = (productType: ProductType, rawStock: string | number) => {
@@ -143,9 +148,12 @@ const AdminProducts: React.FC = () => {
     ...(newProduct.category ? [newProduct.category] : []),
   ].map((category) => (typeof category === 'string' ? category.trim() : '')).filter((category) => category.length > 0)));
   const handleAddProduct = async () => {
+    if (isSaving) return;
+    setIsSaving(true);
     const db = getFirestore();
     if (!newProduct.name || !newProduct.price) {
       toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
+      setIsSaving(false);
       return;
     }
     if (!user?.storeId) {
@@ -155,6 +163,7 @@ const AdminProducts: React.FC = () => {
         variant: "destructive"
       });
       console.warn("Attempted to add product but user.storeId is missing! User:", user);
+      setIsSaving(false);
       return;
     }
 
@@ -166,9 +175,11 @@ const AdminProducts: React.FC = () => {
         description: error instanceof Error ? error.message : 'Your current plan does not allow adding this product.',
         variant: 'destructive',
       });
+      setIsSaving(false);
       return;
     }
 
+    setIsSaving(true);
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
@@ -181,6 +192,7 @@ const AdminProducts: React.FC = () => {
       } catch (error) {
         console.error('Image upload failed:', error);
         toast({ title: "Error", description: `Image upload failed: ${error.message || 'Unknown error'}`, variant: "destructive" });
+        setIsSaving(false);
         return;
       }
     }
@@ -197,7 +209,7 @@ const AdminProducts: React.FC = () => {
         image: imageUrl || `https://placehold.co/400x300/38B2AC/fff?text=${encodeURIComponent(newProduct.name)}`,
         storeId: user?.storeId || '',
         slug: productSlug,
-        ...getStockPayload(newProduct.productType, newProduct.stock),
+        ...getStockPayload(newProduct.productType, 0),
         rating: 0,
         productType: newProduct.productType,
         isService: newProduct.productType === 'service',
@@ -211,7 +223,10 @@ const AdminProducts: React.FC = () => {
         renewalReminderDays: newProduct.productType === 'service' && newProduct.serviceBillingType !== 'one-time' && newProduct.renewalReminderDays
           ? Number(newProduct.renewalReminderDays)
           : undefined,
-        recipeId: newProduct.productType === 'composed' && newProduct.recipeId ? newProduct.recipeId : undefined
+        recipeId: newProduct.productType === 'composed' && newProduct.recipeId ? newProduct.recipeId : undefined,
+        expiryTracking: newProduct.productType !== 'service' ? newProduct.expiryTracking : undefined,
+        expiryDate: newProduct.productType !== 'service' && newProduct.expiryTracking && newProduct.expiryDate ? newProduct.expiryDate : undefined,
+        expiryAlertDays: newProduct.productType !== 'service' && newProduct.expiryTracking ? newProduct.expiryAlertDays : undefined,
       };
       const cleanProductData = Object.fromEntries(
         Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])
@@ -227,13 +242,16 @@ const AdminProducts: React.FC = () => {
       
     setNewProduct({
       name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '',
-      productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: ''
+      productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: '',
+      expiryTracking: false, expiryDate: '', expiryAlertDays: 30,
     });
       setIsAddingProduct(false);
       toast({ title: "Success", description: "Product added successfully!" });
     } catch (err) {
       console.error('Failed to add product:', err);
       toast({ title: "Error", description: `Failed to add product: ${err.message || 'Unknown error'}`, variant: "destructive" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -271,11 +289,15 @@ const AdminProducts: React.FC = () => {
       serviceDuration: product.serviceDuration?.toString() || '',
       serviceBillingType: product.serviceBillingType || 'one-time',
       renewalReminderDays: product.renewalReminderDays?.toString() || '',
-      recipeId: product.recipeId || ''
+      recipeId: product.recipeId || '',
+      expiryTracking: product.expiryTracking || false,
+      expiryDate: product.expiryDate || '',
+      expiryAlertDays: product.expiryAlertDays ?? 30,
     });
   };
 
   const handleUpdateProduct = async () => {
+    if (isSaving) return;
     const db = getFirestore();
     if (!editingProduct || !newProduct.name || !newProduct.price) {
       toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
@@ -316,6 +338,7 @@ const AdminProducts: React.FC = () => {
       }
     }
 
+    setIsSaving(true);
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
@@ -362,7 +385,10 @@ const AdminProducts: React.FC = () => {
           : null,
         costPrice: newProduct.productType === 'composed' && newProduct.recipeId 
           ? (recipes.find(r => r.id === newProduct.recipeId)?.costPerUnit || 0)
-          : (newProduct.productType === 'composed' ? (editingProduct.costPrice || 0) : null)
+          : (newProduct.productType === 'composed' ? (editingProduct.costPrice || 0) : null),
+        expiryTracking: newProduct.productType !== 'service' ? newProduct.expiryTracking : undefined,
+        expiryDate: newProduct.productType !== 'service' && newProduct.expiryTracking && newProduct.expiryDate ? newProduct.expiryDate : undefined,
+        expiryAlertDays: newProduct.productType !== 'service' && newProduct.expiryTracking ? newProduct.expiryAlertDays : undefined,
       };
       const cleanUpdatedProduct = Object.fromEntries(
         Object.entries(updatedProduct).map(([k, v]) => [k, v === undefined ? null : v])
@@ -393,11 +419,14 @@ const AdminProducts: React.FC = () => {
       setEditingProduct(null);
   setNewProduct({
     name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '',
-    productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: ''
+    productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: '',
+    expiryTracking: false, expiryDate: '', expiryAlertDays: 30,
   });
       toast({ title: "Success", description: "Product updated successfully!" });
     } catch (err) {
       toast({ title: "Error", description: "Failed to update product.", variant: "destructive" });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -584,17 +613,42 @@ const AdminProducts: React.FC = () => {
                     </Alert>
                   )}
 
+
+
                   {newProduct.productType !== 'service' && (
-                  <div>
-                    <Label htmlFor="stock">Stock Quantity</Label>
-                    <Input
-                      id="stock"
-                      type="number"
-                      min="0"
-                      value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
-                      onChange={e => setNewProduct(prev => ({ ...prev, stock: e.target.value === '' ? 0 : e.target.value }))}
-                      placeholder="0"
-                    />
+                  <div className="space-y-3 border rounded-md p-3">
+                    <div className="flex items-center space-x-2">
+                      <Switch
+                        id="expiryTracking"
+                        checked={newProduct.expiryTracking}
+                        onCheckedChange={(checked) => setNewProduct(prev => ({ ...prev, expiryTracking: checked }))}
+                      />
+                      <Label htmlFor="expiryTracking">Enable Expiry Tracking</Label>
+                    </div>
+                    {newProduct.expiryTracking && (
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <Label htmlFor="expiryDate">Expiry Date</Label>
+                          <Input
+                            id="expiryDate"
+                            type="date"
+                            value={newProduct.expiryDate}
+                            onChange={(e) => setNewProduct(prev => ({ ...prev, expiryDate: e.target.value }))}
+                          />
+                        </div>
+                        <div>
+                          <Label htmlFor="expiryAlertDays">Alert Before (days)</Label>
+                          <Input
+                            id="expiryAlertDays"
+                            type="number"
+                            min="1"
+                            value={newProduct.expiryAlertDays}
+                            onChange={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: parseInt(e.target.value) || 30 }))}
+                            placeholder="30"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                   )}
                   
@@ -635,8 +689,8 @@ const AdminProducts: React.FC = () => {
                   <Button variant="outline" onClick={() => setIsAddingProduct(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleAddProduct}>
-                    Add Product
+                  <Button onClick={handleAddProduct} disabled={isSaving}>
+                    {isSaving ? 'Saving...' : 'Add Product'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
@@ -673,6 +727,14 @@ const AdminProducts: React.FC = () => {
                        product.productType === 'composed' ? 'Composed' : 
                        'Item'}
                     </Badge>
+                    {product.expiryTracking && product.expiryDate && hasExpired(product) && (
+                      <Badge variant="destructive">Expired</Badge>
+                    )}
+                    {product.expiryTracking && product.expiryDate && isExpiringSoon(product) && (
+                      <Badge className="bg-orange-500 text-white hover:bg-orange-600">
+                        Expires in {getDaysUntilExpiry(product.expiryDate)}d
+                      </Badge>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -961,6 +1023,43 @@ const AdminProducts: React.FC = () => {
                 />
               </div>
             )}
+
+            {newProduct.productType !== 'service' && (
+            <div className="space-y-3 border rounded-md p-3">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="edit-expiryTracking"
+                  checked={newProduct.expiryTracking}
+                  onCheckedChange={(checked) => setNewProduct(prev => ({ ...prev, expiryTracking: checked }))}
+                />
+                <Label htmlFor="edit-expiryTracking">Enable Expiry Tracking</Label>
+              </div>
+              {newProduct.expiryTracking && (
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <Label htmlFor="edit-expiryDate">Expiry Date</Label>
+                    <Input
+                      id="edit-expiryDate"
+                      type="date"
+                      value={newProduct.expiryDate}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, expiryDate: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="edit-expiryAlertDays">Alert Before (days)</Label>
+                    <Input
+                      id="edit-expiryAlertDays"
+                      type="number"
+                      min="1"
+                      value={newProduct.expiryAlertDays}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: parseInt(e.target.value) || 30 }))}
+                      placeholder="30"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+            )}
             
             <div>
               <Label htmlFor="edit-image">Image URL</Label>
@@ -977,8 +1076,8 @@ const AdminProducts: React.FC = () => {
             <Button variant="outline" onClick={() => setEditingProduct(null)}>
               Cancel
             </Button>
-            <Button onClick={handleUpdateProduct}>
-              Update Product
+            <Button onClick={handleUpdateProduct} disabled={isSaving}>
+              {isSaving ? 'Saving...' : 'Update Product'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -18,6 +18,7 @@ import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
+import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 
 const AdminRawMaterials: React.FC = () => {
   const { user } = useAuth();
@@ -39,6 +40,7 @@ const AdminRawMaterials: React.FC = () => {
     storageLocation: '',
     expiryTracking: false,
     expiryDate: '',
+    expiryAlertDays: 30,
     warrantyPeriod: 0,
   });
 
@@ -138,6 +140,7 @@ const AdminRawMaterials: React.FC = () => {
         storageLocation: '',
         expiryTracking: false,
         expiryDate: '',
+        expiryAlertDays: 30,
         warrantyPeriod: 0,
       });
       setIsAddingMaterial(false);
@@ -413,6 +416,17 @@ const AdminRawMaterials: React.FC = () => {
                       />
                     </div>
                     <div>
+                      <Label htmlFor="expiryAlertDays">Alert Before Expiry (days)</Label>
+                      <Input
+                        id="expiryAlertDays"
+                        type="number"
+                        min="1"
+                        value={newMaterial.expiryAlertDays === 30 && newMaterial.expiryAlertDays ? newMaterial.expiryAlertDays : (newMaterial.expiryAlertDays || '')}
+                        onChange={(e) => setNewMaterial({ ...newMaterial, expiryAlertDays: e.target.value === '' ? 30 : (parseInt(e.target.value) || 30) })}
+                        placeholder="30"
+                      />
+                    </div>
+                    <div>
                       <Label htmlFor="warrantyPeriod">Warranty Period (days)</Label>
                       <Input
                         id="warrantyPeriod"
@@ -480,6 +494,14 @@ const AdminRawMaterials: React.FC = () => {
                           )}
                           {isReorderNeeded && !isLowStock && (
                             <Badge variant="secondary">Reorder</Badge>
+                          )}
+                          {material.expiryTracking && material.expiryDate && hasExpired(material) && (
+                            <Badge variant="destructive">Expired</Badge>
+                          )}
+                          {material.expiryTracking && material.expiryDate && isExpiringSoon(material) && (
+                            <Badge className="bg-orange-500 text-white hover:bg-orange-600">
+                              Expires in {getDaysUntilExpiry(material.expiryDate)}d
+                            </Badge>
                           )}
                         </CardTitle>
                         <CardDescription>SKU: {material.sku} | Barcode: {material.barcode}</CardDescription>
@@ -646,6 +668,50 @@ const AdminRawMaterials: React.FC = () => {
                     onChange={(e) => setEditingMaterial({ ...editingMaterial, storageLocation: e.target.value })}
                   />
                 </div>
+                {/* Expiry Tracking */}
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="edit-expiryTracking"
+                    checked={!!editingMaterial.expiryTracking}
+                    onCheckedChange={(checked) => setEditingMaterial({ ...editingMaterial, expiryTracking: checked })}
+                  />
+                  <Label htmlFor="edit-expiryTracking">Enable Expiry Tracking</Label>
+                </div>
+                {editingMaterial.expiryTracking && (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="edit-expiryDate">Expiry Date</Label>
+                      <Input
+                        id="edit-expiryDate"
+                        type="date"
+                        value={editingMaterial.expiryDate || ''}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, expiryDate: e.target.value })}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-expiryAlertDays">Alert Before Expiry (days)</Label>
+                      <Input
+                        id="edit-expiryAlertDays"
+                        type="number"
+                        min="1"
+                        value={editingMaterial.expiryAlertDays ?? 30}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, expiryAlertDays: parseInt(e.target.value) || 30 })}
+                        placeholder="30"
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="edit-warrantyPeriod">Warranty Period (days)</Label>
+                      <Input
+                        id="edit-warrantyPeriod"
+                        type="number"
+                        min="0"
+                        value={editingMaterial.warrantyPeriod === 0 ? '' : (editingMaterial.warrantyPeriod || '')}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, warrantyPeriod: e.target.value === '' ? 0 : (parseInt(e.target.value) || 0) })}
+                        placeholder="0"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditingMaterial(null)}>Cancel</Button>

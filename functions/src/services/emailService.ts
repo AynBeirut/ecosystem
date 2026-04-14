@@ -331,3 +331,66 @@ export async function sendGracePeriodEmail(
   
   await sendEmail(template);
 }
+
+/**
+ * Send expiry alert email to store owner listing expiring / expired stock items
+ */
+export async function sendExpiryAlertEmail(
+  email: string,
+  storeName: string,
+  items: { name: string; type: string; expiryDate: string; daysLeft: number }[]
+): Promise<void> {
+  const expiredItems = items.filter(i => i.daysLeft < 0);
+  const expiringSoonItems = items.filter(i => i.daysLeft >= 0);
+
+  const buildRow = (item: { name: string; type: string; expiryDate: string; daysLeft: number }) => {
+    const status = item.daysLeft < 0
+      ? `<span style="color:#dc2626;font-weight:bold;">EXPIRED ${Math.abs(item.daysLeft)}d ago</span>`
+      : `<span style="color:#ea580c;font-weight:bold;">Expires in ${item.daysLeft}d</span>`;
+    return `
+      <tr style="border-bottom:1px solid #e5e7eb;">
+        <td style="padding:8px 12px;">${item.name}</td>
+        <td style="padding:8px 12px;color:#6b7280;">${item.type}</td>
+        <td style="padding:8px 12px;">${item.expiryDate}</td>
+        <td style="padding:8px 12px;">${status}</td>
+      </tr>`;
+  };
+
+  const template: EmailTemplate = {
+    to: email,
+    subject: `Stock Expiry Alert - ${expiredItems.length} expired, ${expiringSoonItems.length} expiring soon`,
+    html: `
+      <html>
+        <body style="font-family:Arial,sans-serif;line-height:1.6;color:#333;max-width:600px;margin:0 auto;padding:20px;">
+          <div style="background:#dc2626;color:white;padding:20px;border-radius:8px 8px 0 0;text-align:center;">
+            <h1 style="margin:0;font-size:24px;">Stock Expiry Alert</h1>
+            <p style="margin:8px 0 0;">${storeName}</p>
+          </div>
+          <div style="background:#fafafa;padding:20px;border:1px solid #e5e7eb;">
+            <p>Hi,</p>
+            <p>The following stock items in your store <strong>${storeName}</strong> require attention:</p>
+            ${expiredItems.length > 0 ? `<p style="color:#dc2626;font-weight:bold;">${expiredItems.length} item(s) have already EXPIRED.</p>` : ''}
+            ${expiringSoonItems.length > 0 ? `<p style="color:#ea580c;font-weight:bold;">${expiringSoonItems.length} item(s) are expiring soon.</p>` : ''}
+            <table style="width:100%;border-collapse:collapse;margin-top:16px;">
+              <thead>
+                <tr style="background:#f3f4f6;">
+                  <th style="padding:8px 12px;text-align:left;">Item</th>
+                  <th style="padding:8px 12px;text-align:left;">Type</th>
+                  <th style="padding:8px 12px;text-align:left;">Expiry Date</th>
+                  <th style="padding:8px 12px;text-align:left;">Status</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${items.map(buildRow).join('')}
+              </tbody>
+            </table>
+            <p style="margin-top:24px;">Please log in to your Grabio dashboard to take action on these items.</p>
+            <p style="color:#6b7280;font-size:12px;margin-top:32px;">This is an automated daily notification from Grabio.</p>
+          </div>
+        </body>
+      </html>
+    `,
+  };
+
+  await sendEmail(template);
+}

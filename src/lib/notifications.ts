@@ -1,0 +1,68 @@
+import { getMessaging, getToken, isSupported } from 'firebase/messaging';
+import { getFirestore, doc, setDoc } from 'firebase/firestore';
+import { initializeApp, getApps } from 'firebase/app';
+
+// Re-use the already-initialized Firebase app
+let _messaging: ReturnType<typeof getMessaging> | null = null;
+
+function getFirebaseMessaging() {
+  if (_messaging) return _messaging;
+  // Use the first (and only) initialized app
+  const apps = getApps();
+  if (apps.length === 0) throw new Error('Firebase app not initialized');
+  _messaging = getMessaging(apps[0]);
+  return _messaging;
+}
+
+/**
+ * Requests notification permission and returns the FCM token.
+ * Returns null if permission is denied or FCM is not supported.
+ */
+export async function requestNotificationPermission(): Promise<string | null> {
+  try {
+    const supported = await isSupported();
+    if (!supported) {
+      console.log('FCM not supported in this browser.');
+      return null;
+    }
+
+    const permission = await Notification.requestPermission();
+    if (permission !== 'granted') {
+      console.log('Notification permission denied.');
+      return null;
+    }
+
+    // Register firebase-messaging-sw.js as the service worker for FCM
+    const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+
+    const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+    if (!vapidKey) {
+      console.warn('VITE_FIREBASE_VAPID_KEY not set. FCM push notifications will not work until this is configured.');
+      return null;
+    }
+
+    const messaging = getFirebaseMessaging();
+    const token = await getToken(messaging, { vapidKey, serviceWorkerRegistration: registration });
+    return token || null;
+  } catch (error) {
+    console.error('Error requesting notification permission:', error);
+    return null;
+  }
+}
+
+/**
+ * Saves an FCM token to Firestore under users/{userId}/fcmTokens/{token}.
+ * Uses the token itself as the document ID for easy deduplication.
+ */
+export async function saveFcmToken(userId: string, token: string): Promise<void> {
+  try {
+    const db = getFirestore();
+    await setDoc(
+      doc(db, 'users', userId, 'fcmTokens', token),
+      { token, createdAt: new Date().toISOString() },
+      { merge: true }
+    );
+  } catch (error) {
+    console.error('Error saving FCM token:', error);
+  }
+}

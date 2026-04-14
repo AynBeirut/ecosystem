@@ -480,3 +480,5 @@ export const api = functions.https.onRequest(
 
 // Export the scheduled subscription checker
 export { checkSubscriptions } from './scheduled/checkSubscriptions';
+// Export the scheduled expiry stock checker
+export { checkExpiringStock } from './scheduled/checkExpiringStock';

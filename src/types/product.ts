@@ -28,6 +28,11 @@ export type Product = {
   serviceProviderId?: string; // Staff member providing service
   // Composed product fields
   recipeId?: string; // Link to recipe for composed products
+  // Expiry tracking
+  expiryTracking?: boolean;
+  expiryDate?: string;
+  expiryAlertDays?: number; // days before expiry to alert (default 30)
+  expiryNotifiedAt?: string; // ISO date of last expiry notification sent
 };
 
 export type Store = {

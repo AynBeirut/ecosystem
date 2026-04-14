@@ -26,6 +26,7 @@ import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus } from '@/lib/salesRules';
+import { requestNotificationPermission, saveFcmToken } from '@/lib/notifications';
 
 type RecentEvent = {
   type: 'product' | 'order' | 'announcement';
@@ -84,6 +85,18 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     document.title = user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard';
   }, [user?.role]);
+
+  // Request FCM push notification permission and save token for store owners
+  useEffect(() => {
+    if (!user?.id || !user?.storeId) return;
+    // Only request for admin and sub_account roles (not regular customers)
+    if (user.role !== 'admin' && user.role !== 'sub_account') return;
+    requestNotificationPermission()
+      .then(token => { if (token && user.id) saveFcmToken(user.id, token); })
+      .catch(err => console.warn('FCM setup failed:', err));
+  // Run once per session when user is known
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [user?.id]);
 
   // Mount/unmount instrumentation removed after verification.
 

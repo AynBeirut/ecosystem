@@ -42,6 +42,8 @@ export interface RawMaterial {
   storageLocation?: string;
   expiryTracking: boolean;
   expiryDate?: string;
+  expiryAlertDays?: number; // days before expiry to alert (default 30)
+  expiryNotifiedAt?: string; // ISO date of last expiry notification sent
   warrantyPeriod?: number; // days
   warrantyStartDate?: string;
   storeId: string;
