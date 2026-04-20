@@ -1,5 +1,5 @@
 import React from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 
 const Footer: React.FC = () => {
   const navigate = useNavigate();
@@ -16,8 +16,10 @@ const Footer: React.FC = () => {
           AYN BEIRUT
         </a>
       </div>
-      <div className="text-xs text-gray-600">
-        Contact us: <a href="mailto:support@grabio.space" className="text-market-primary hover:underline">support@grabio.space</a>
+      <div className="text-xs text-gray-600 flex items-center gap-2">
+        <Link to="/contact" className="text-market-primary hover:underline font-medium">Contact Us</Link>
+        <span className="text-gray-400">·</span>
+        <a href="mailto:support@grabio.space" className="text-market-primary hover:underline">support@grabio.space</a>
       </div>
       {!isHome && !isLogin && (
         <button

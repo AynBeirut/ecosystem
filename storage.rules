@@ -1,0 +1,32 @@
+rules_version = '2';
+service firebase.storage {
+  match /b/{bucket}/o {
+
+    // Product images — authenticated store owners can upload to their own store path
+    // Path: products/images/{storeId}/{filename}
+    match /products/images/{storeId}/{filename} {
+      // Anyone can read product images (public store images)
+      allow read: if true;
+      // Only authenticated users can upload, and only to their own storeId path
+      allow write: if request.auth != null
+        && request.auth.uid == storeId
+        && request.resource.size < 10 * 1024 * 1024  // 10 MB max
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Store logos and banners
+    // Path: stores/{storeId}/{filename}
+    match /stores/{storeId}/{filename} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.auth.uid == storeId
+        && request.resource.size < 10 * 1024 * 1024
+        && request.resource.contentType.matches('image/.*');
+    }
+
+    // Deny everything else by default
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}

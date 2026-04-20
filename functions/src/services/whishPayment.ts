@@ -1,13 +1,29 @@
 import axios from 'axios';
 
 const WHISH_CONFIG = {
-  channel: '10198838',
-  secret: '009ca52d70e54fe0971b9143fe3e2b3a',
-  websiteUrl: 'aynbeirut.com',
-  baseUrl: 'https://api.whish.money/itel-service/api', // Production
-  // sandboxUrl: 'https://api.sandbox.whish.money/itel-service/api', // For testing
+  channel: process.env.WHISH_CHANNEL || '10198838',
+  secret: process.env.WHISH_SECRET || '009ca52d70e54fe0971b9143fe3e2b3a',
+  defaultWebsiteUrl: process.env.WHISH_WEBSITE_URL || 'grabio.space', // Default domain; overridden per-request
+  baseUrl: process.env.WHISH_BASE_URL || 'https://api.sandbox.whish.money/itel-service/api', // Sandbox — switch to production when confirmed
+  // baseUrl: 'https://api.whish.money/itel-service/api', // Production (confirm URL with Steven before enabling)
+  // allowedDomains: both grabio.space and aynbeirut.com are registered with Whish Money channel 10198838
   userAgent: 'Whish/1.0 (https://whish.money; support@whish.money)'
 };
+
+/** Allowed merchant domains — both should be registered with Whish (ask Steven to whitelist both) */
+const ALLOWED_WHISH_DOMAINS = ['grabio.space', 'aynbeirut.com'];
+
+/** Extract a clean hostname from an origin/referer value, defaulting to grabio.space */
+export function resolveWebsiteUrl(origin?: string): string {
+  if (!origin) return WHISH_CONFIG.defaultWebsiteUrl;
+  try {
+    const url = new URL(origin.startsWith('http') ? origin : `https://${origin}`);
+    const host = url.hostname.replace(/^www\./, '');
+    return ALLOWED_WHISH_DOMAINS.includes(host) ? host : WHISH_CONFIG.defaultWebsiteUrl;
+  } catch {
+    return WHISH_CONFIG.defaultWebsiteUrl;
+  }
+}
 
 export interface WhishPaymentRequest {
   amount: number; // In USD (e.g., 10.00 for $10)
@@ -18,6 +34,7 @@ export interface WhishPaymentRequest {
   failureCallbackUrl: string; // GET callback for failure
   successRedirectUrl: string; // Redirect user after success
   failureRedirectUrl: string; // Redirect user after failure
+  websiteUrl?: string; // Optional: override domain (grabio.space or aynbeirut.com)
 }
 
 export interface WhishPaymentResponse {
@@ -75,7 +92,7 @@ export async function initiatePayment(
           'Content-Type': 'application/json',
           'channel': WHISH_CONFIG.channel,
           'secret': WHISH_CONFIG.secret,
-          'websiteUrl': WHISH_CONFIG.websiteUrl,
+          'websiteUrl': request.websiteUrl || WHISH_CONFIG.defaultWebsiteUrl,
           'User-Agent': WHISH_CONFIG.userAgent
         },
         timeout: 30000 // 30 second timeout
@@ -129,7 +146,7 @@ export async function checkPaymentStatus(
           'Content-Type': 'application/json',
           'channel': WHISH_CONFIG.channel,
           'secret': WHISH_CONFIG.secret,
-          'websiteUrl': WHISH_CONFIG.websiteUrl,
+          'websiteUrl': WHISH_CONFIG.defaultWebsiteUrl,
           'User-Agent': WHISH_CONFIG.userAgent
         },
         timeout: 30000
@@ -159,7 +176,7 @@ export async function getBalance(currency: 'USD' | 'LBP' = 'USD'): Promise<numbe
         headers: {
           'channel': WHISH_CONFIG.channel,
           'secret': WHISH_CONFIG.secret,
-          'websiteUrl': WHISH_CONFIG.websiteUrl,
+          'websiteUrl': WHISH_CONFIG.defaultWebsiteUrl,
           'User-Agent': WHISH_CONFIG.userAgent
         },
         timeout: 30000

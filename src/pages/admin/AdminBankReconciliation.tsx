@@ -35,6 +35,9 @@ const AdminBankReconciliation: React.FC = () => {
   const [depositReference, setDepositReference] = useState('');
   const [notes, setNotes] = useState('');
 
+  const [filterFrom, setFilterFrom] = useState('');
+  const [filterTo, setFilterTo] = useState('');
+
   const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -170,6 +173,16 @@ const AdminBankReconciliation: React.FC = () => {
       .reduce((sum, order) => sum + getCashPaidForOrder(order), 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders]);
+
+  const filteredCollections = useMemo(() => {
+    return collections.filter((entry) => {
+      const d = entry.collectionDate;
+      if (!d) return true;
+      if (filterFrom && d < filterFrom) return false;
+      if (filterTo && d > filterTo) return false;
+      return true;
+    });
+  }, [collections, filterFrom, filterTo]);
 
   const totalDeposited = collections.reduce((sum, entry) => sum + toFiniteNumber(entry.totalAmount, 0), 0);
   const undepositedCash = Math.max(0, totalCashReceived - totalDeposited);
@@ -405,34 +418,79 @@ const AdminBankReconciliation: React.FC = () => {
         </div>
 
         <div className="bg-white border rounded p-4">
-          <h2 className="text-lg font-semibold mb-3">Recent Cash Collections</h2>
-          {collections.length === 0 ? (
-            <div className="text-sm text-gray-600">No cash collections recorded yet.</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="min-w-full text-sm">
-                <thead className="bg-gray-50">
-                  <tr>
-                    <th className="px-3 py-2 text-left">Date</th>
-                    <th className="px-3 py-2 text-left">Bank</th>
-                    <th className="px-3 py-2 text-left">Reference</th>
-                    <th className="px-3 py-2 text-right">Orders</th>
-                    <th className="px-3 py-2 text-right">Amount</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {collections.slice(0, 15).map((entry) => (
-                    <tr key={entry.id} className="border-t">
-                      <td className="px-3 py-2">{toDisplayDate(entry.collectionDate)}</td>
-                      <td className="px-3 py-2">{entry.bankAccount || '-'}</td>
-                      <td className="px-3 py-2">{entry.depositReference || '-'}</td>
-                      <td className="px-3 py-2 text-right">{entry.ordersCount || 0}</td>
-                      <td className="px-3 py-2 text-right font-semibold">${toFiniteNumber(entry.totalAmount, 0).toFixed(2)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="flex flex-wrap items-end gap-4 mb-4">
+            <h2 className="text-lg font-semibold">Cash Collections</h2>
+            <div className="flex flex-wrap gap-3 ml-auto items-end">
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">From</label>
+                <input
+                  type="date"
+                  value={filterFrom}
+                  onChange={(e) => setFilterFrom(e.target.value)}
+                  className="border rounded px-2 py-1 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-gray-500 mb-1">To</label>
+                <input
+                  type="date"
+                  value={filterTo}
+                  onChange={(e) => setFilterTo(e.target.value)}
+                  className="border rounded px-2 py-1 text-sm"
+                />
+              </div>
+              {(filterFrom || filterTo) && (
+                <button
+                  onClick={() => { setFilterFrom(''); setFilterTo(''); }}
+                  className="px-3 py-1 border rounded text-sm hover:bg-gray-50 text-gray-600"
+                >
+                  Clear
+                </button>
+              )}
             </div>
+          </div>
+          {filteredCollections.length === 0 ? (
+            <div className="text-sm text-gray-600">No cash collections found{(filterFrom || filterTo) ? ' for selected date range' : ''}.</div>
+          ) : (
+            <>
+              <div className="overflow-x-auto">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left">Date</th>
+                      <th className="px-3 py-2 text-left">Bank</th>
+                      <th className="px-3 py-2 text-left">Reference</th>
+                      <th className="px-3 py-2 text-right">Orders</th>
+                      <th className="px-3 py-2 text-right">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredCollections.map((entry) => (
+                      <tr key={entry.id} className="border-t">
+                        <td className="px-3 py-2">{toDisplayDate(entry.collectionDate)}</td>
+                        <td className="px-3 py-2">{entry.bankAccount || '-'}</td>
+                        <td className="px-3 py-2">{entry.depositReference || '-'}</td>
+                        <td className="px-3 py-2 text-right">{entry.ordersCount || 0}</td>
+                        <td className="px-3 py-2 text-right font-semibold">${toFiniteNumber(entry.totalAmount, 0).toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t-2 border-gray-300 bg-gray-50">
+                    <tr>
+                      <td colSpan={3} className="px-3 py-2 font-semibold text-sm">
+                        {(filterFrom || filterTo) ? 'Filtered Total' : 'Total'} ({filteredCollections.length} entries)
+                      </td>
+                      <td className="px-3 py-2 text-right font-semibold">
+                        {filteredCollections.reduce((s, e) => s + (e.ordersCount || 0), 0)}
+                      </td>
+                      <td className="px-3 py-2 text-right font-bold text-blue-600">
+                        ${filteredCollections.reduce((s, e) => s + toFiniteNumber(e.totalAmount, 0), 0).toFixed(2)}
+                      </td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+            </>
           )}
         </div>
       </div>

@@ -1525,7 +1525,8 @@ const AdminFinishedGoods: React.FC = () => {
                         type="number"
                         min="1"
                         value={editingItem.expiryAlertDays ?? 30}
-                        onChange={(e) => setEditingItem({ ...editingItem, expiryAlertDays: parseInt(e.target.value) || 30 })}
+                        onChange={(e) => setEditingItem({ ...editingItem, expiryAlertDays: e.target.value === '' ? '' as any : parseInt(e.target.value) })}
+                        onBlur={(e) => setEditingItem({ ...editingItem, expiryAlertDays: parseInt(e.target.value) || 30 })}
                         placeholder="30"
                       />
                     </div>

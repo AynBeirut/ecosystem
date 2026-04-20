@@ -1,3 +1,17 @@
+export interface StorePage {
+  id: string;
+  name: string;
+  order: number;
+  image?: string;
+  content?: string;
+}
+
+export interface StoreTemplateColors {
+  primary: string;
+  secondary: string;
+  accent: string;
+}
+
 export interface StoreProfile {
   name: string;
   slug?: string; // URL-friendly store identifier (e.g., 'tech-gadgets')
@@ -83,6 +97,12 @@ export interface StoreProfile {
   storeBackgroundImage?: string;
   carouselImages?: string[];
   galleryImages?: string[];
+  customPages?: StorePage[];
+  templateColors?: StoreTemplateColors;
+  whatsappBusiness?: string; // WhatsApp Business number (international format, digits only)
+  proEmail?: string;         // Email address to receive Contact Us messages
+  customDomain?: string;     // Custom domain (e.g. "shop.client.com")
+  customDomainStatus?: 'pending' | 'active' | 'error'; // Status of custom domain verification
   // Product settings
   productCategories?: string[]; // Categories for composed products
   priceMultiplier?: number; // Default price multiplier for composed products (default: 2.5)

@@ -1,8 +1,15 @@
 import * as admin from 'firebase-admin';
 import { Request, Response } from 'express';
-import { initiatePayment } from '../services/whishPayment';
+import { initiatePayment, resolveWebsiteUrl } from '../services/whishPayment';
+import Stripe from 'stripe';
 
 const db = admin.firestore();
+
+const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
+const FRONTEND_BASE_URL = (process.env.FRONTEND_BASE_URL || 'https://grabio.space').replace(/\/$/, '');
+const stripe = STRIPE_SECRET_KEY
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' as any })
+  : null;
 
 type SubscriptionTier = 'trial' | 'starter' | 'pro' | 'business';
 type PaidTier = Exclude<SubscriptionTier, 'trial'>;
@@ -173,12 +180,12 @@ export async function startTrial(req: Request, res: Response) {
     const storeRef = db.collection('storeProfiles').doc(userId);
     const storeSnap = await storeRef.get();
     
-    if (storeSnap.exists() && storeSnap.data()?.hasUsedTrial) {
+    if (storeSnap.exists && storeSnap.data()?.hasUsedTrial) {
       return res.status(400).json({ error: 'Trial already used' });
     }
 
     // Check if legacy user
-    if (storeSnap.exists() && storeSnap.data()?.isLegacyUser) {
+    if (storeSnap.exists && storeSnap.data()?.isLegacyUser) {
       return res.status(400).json({ error: 'Legacy users do not need trial - already have 1 year free' });
     }
 
@@ -216,17 +223,22 @@ export async function subscribe(req: Request, res: Response) {
     // Calculate total amount
     const { amount, description, addOns: normalizedAddOns } = calculateAmount(normalizedTier, normalizedBilling, addOns);
 
-    // Initialize payment with Whish
+    // Initialize payment with Whish — detect which merchant domain the request came from
+    const websiteUrl = resolveWebsiteUrl(req.headers.origin as string | undefined);
+    const frontendBase = websiteUrl === 'aynbeirut.com'
+      ? 'https://aynbeirut.com'
+      : 'https://grabio.space';
     const externalId = Date.now(); // Unique numeric ID for this transaction
     const payment = await initiatePayment({
       amount,
       currency: 'USD',
       invoice: description,
       externalId,
+      websiteUrl,
       successCallbackUrl: `https://us-central1-market-flow-7b074.cloudfunctions.net/api/webhook/whish?externalId=${externalId}&type=subscription&userId=${userId}`,
       failureCallbackUrl: `https://us-central1-market-flow-7b074.cloudfunctions.net/api/webhook/whish?externalId=${externalId}&type=subscription&userId=${userId}&status=failed`,
-      successRedirectUrl: `https://market-flow-7b074.web.app/payment/success?type=subscription`,
-      failureRedirectUrl: `https://market-flow-7b074.web.app/payment/failed?type=subscription`
+      successRedirectUrl: `${frontendBase}/payment/success?type=subscription`,
+      failureRedirectUrl: `${frontendBase}/payment/failed?type=subscription`
     });
 
     if (!payment.status || !payment.data?.collectUrl) {
@@ -403,7 +415,7 @@ export async function cancelSubscription(req: Request, res: Response) {
     const storeRef = db.collection('storeProfiles').doc(userId);
     const storeSnap = await storeRef.get();
 
-    if (!storeSnap.exists()) {
+    if (!storeSnap.exists) {
       return res.status(404).json({ error: 'Store not found' });
     }
 
@@ -456,8 +468,29 @@ export async function getSubscriptionInfo(req: Request, res: Response) {
     const storeRef = db.collection('storeProfiles').doc(userId);
     const storeSnap = await storeRef.get();
 
-    if (!storeSnap.exists()) {
-      return res.status(404).json({ error: 'Store not found' });
+    if (!storeSnap.exists) {
+      // New user with no store profile — return default inactive subscription
+      return res.json({
+        success: true,
+        subscription: {
+          status: 'inactive',
+          tier: 'trial',
+          plan: null,
+          isLegacyUser: false,
+          isTrial: false,
+          expiresAt: null,
+          nextBillingDate: null,
+          addOns: [],
+          addOnsMeta: {},
+          limits: {
+            productLimit: null,
+            storageLimitMb: null,
+            monthlyOperationsLimit: null,
+            revenueSharePercentage: null,
+          },
+          billingHistory: []
+        }
+      });
     }
 
     const data = storeSnap.data();
@@ -485,6 +518,71 @@ export async function getSubscriptionInfo(req: Request, res: Response) {
     });
   } catch (error: any) {
     console.error('Get subscription info error:', error);
+    res.status(500).json({ error: error.message });
+  }
+}
+
+/**
+ * Subscribe via Stripe (card payment)
+ */
+export async function subscribeStripe(req: Request, res: Response) {
+  if (!stripe) {
+    return res.status(503).json({ error: 'Card payments not configured' });
+  }
+
+  try {
+    const { userId, email, name, tier, billing, addOns } = req.body;
+
+    if (!userId || !email || !tier || !billing) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    const normalizedTier = normalizePaidTier(tier);
+    const normalizedBilling: Billing = billing === 'yearly' ? 'yearly' : 'monthly';
+    const { amount, description, addOns: normalizedAddOns } = calculateAmount(normalizedTier, normalizedBilling, addOns);
+
+    // Amount is stored in cents-equivalent (e.g. 1000 = $10.00)
+    const amountInCents = amount * 100;
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      payment_method_types: ['card'],
+      customer_email: email,
+      line_items: [
+        {
+          price_data: {
+            currency: 'usd',
+            unit_amount: amountInCents,
+            product_data: { name: description },
+          },
+          quantity: 1,
+        },
+      ],
+      metadata: {
+        type: 'subscription',
+        userId,
+        tier: normalizedTier,
+        billing: normalizedBilling,
+      },
+      success_url: `${FRONTEND_BASE_URL}/payment/success?type=subscription&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${FRONTEND_BASE_URL}/admin/subscription`,
+    });
+
+    // Store pending subscription so webhook can activate it
+    const storeRef = db.collection('storeProfiles').doc(userId);
+    await storeRef.set({
+      pendingSubscriptionPaymentId: session.id,
+      pendingSubscriptionExternalId: session.id,
+      pendingSubscriptionTier: normalizedTier,
+      pendingSubscriptionBilling: normalizedBilling,
+      pendingSubscriptionAddOns: normalizedAddOns,
+      pendingSubscriptionAmount: amount,
+      updatedAt: new Date().toISOString(),
+    }, { merge: true });
+
+    res.json({ success: true, paymentUrl: session.url, amount });
+  } catch (error: any) {
+    console.error('Subscribe Stripe error:', error);
     res.status(500).json({ error: error.message });
   }
 }

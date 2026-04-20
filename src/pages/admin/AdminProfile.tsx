@@ -10,12 +10,12 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil } from 'lucide-react';
+import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil, ImagePlus, Palette, GripVertical, ChevronUp, ChevronDown, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { StoreProfile } from '../../types/storeProfile';
+import { StoreProfile, StorePage } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
 
@@ -85,6 +85,9 @@ const AdminProfile: React.FC = () => {
   const [slugSuggestions, setSlugSuggestions] = useState<string[]>([]);
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
   const [slugAvailable, setSlugAvailable] = useState(false);
+  const [newPageName, setNewPageName] = useState<string>('');
+  const [isRegisteringDomain, setIsRegisteringDomain] = useState(false);
+  const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -98,6 +101,96 @@ const AdminProfile: React.FC = () => {
       };
       reader.readAsDataURL(file);
     }
+  };
+
+  // Banner / carousel image helpers
+  const handleAddCarouselImages = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files || []);
+    files.forEach(file => {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setFormData(prev => ({
+          ...prev,
+          carouselImages: [...(prev.carouselImages || []), result],
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+    // Reset input so same file can be added again if needed
+    event.target.value = '';
+  };
+
+  const handleRemoveCarouselImage = (index: number) => {
+    setFormData(prev => ({
+      ...prev,
+      carouselImages: (prev.carouselImages || []).filter((_, i) => i !== index),
+    }));
+  };
+
+  // Custom page helpers
+  const handleAddPage = () => {
+    const name = newPageName.trim();
+    if (!name) return;
+    const pages = formData.customPages || [];
+    const newPage: StorePage = {
+      id: `page-${Date.now()}`,
+      name,
+      order: pages.length,
+    };
+    setFormData(prev => ({ ...prev, customPages: [...(prev.customPages || []), newPage] }));
+    setNewPageName('');
+  };
+
+  const handleRemovePage = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customPages: (prev.customPages || []).filter(p => p.id !== id).map((p, i) => ({ ...p, order: i })),
+    }));
+  };
+
+  const handleMovePage = (index: number, direction: 'up' | 'down') => {
+    const pages = [...(formData.customPages || [])];
+    const target = direction === 'up' ? index - 1 : index + 1;
+    if (target < 0 || target >= pages.length) return;
+    [pages[index], pages[target]] = [pages[target], pages[index]];
+    setFormData(prev => ({ ...prev, customPages: pages.map((p, i) => ({ ...p, order: i })) }));
+  };
+
+  const handlePageNameChange = (id: string, name: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customPages: (prev.customPages || []).map(p => p.id === id ? { ...p, name } : p),
+    }));
+  };
+
+  const handlePageContentChange = (id: string, content: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customPages: (prev.customPages || []).map(p => p.id === id ? { ...p, content } : p),
+    }));
+  };
+
+  const handlePageImageChange = (id: string, event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const result = e.target?.result as string;
+      setFormData(prev => ({
+        ...prev,
+        customPages: (prev.customPages || []).map(p => p.id === id ? { ...p, image: result } : p),
+      }));
+    };
+    reader.readAsDataURL(file);
+    event.target.value = '';
+  };
+
+  const handleRemovePageImage = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      customPages: (prev.customPages || []).map(p => p.id === id ? { ...p, image: undefined } : p),
+    }));
   };
 
   const handleAddCategory = () => {
@@ -512,6 +605,7 @@ const AdminProfile: React.FC = () => {
                   <Input
                     id="email"
                     type="email"
+                    autoComplete="email"
                     value={formData.email}
                     onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
                     placeholder="contact@yourstore.com"
@@ -523,11 +617,26 @@ const AdminProfile: React.FC = () => {
                   <Input
                     id="phone"
                     type="tel"
+                    autoComplete="tel"
                     value={formData.phone}
                     onChange={(e) => setFormData(prev => ({ ...prev, phone: e.target.value }))}
                     placeholder="(555) 123-4567"
                   />
                 </div>
+              </div>
+
+              <div>
+                <Label htmlFor="proEmail">Pro Email <span className="text-xs text-muted-foreground ml-1">(receives Contact Us messages)</span></Label>
+                <Input
+                  id="proEmail"
+                  name="proEmail"
+                  type="email"
+                  autoComplete="off"
+                  value={formData.proEmail || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, proEmail: e.target.value }))}
+                  placeholder="orders@yourstore.com"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Messages from the store Contact Us page will be forwarded to this email.</p>
               </div>
             </CardContent>
           </Card>
@@ -546,6 +655,7 @@ const AdminProfile: React.FC = () => {
                 <Input
                   id="facebook"
                   type="url"
+                  autoComplete="off"
                   value={formData.facebook}
                   onChange={(e) => setFormData(prev => ({ ...prev, facebook: e.target.value }))}
                   placeholder="https://facebook.com/yourstore"
@@ -557,6 +667,7 @@ const AdminProfile: React.FC = () => {
                 <Input
                   id="instagram"
                   type="url"
+                  autoComplete="off"
                   value={formData.instagram}
                   onChange={(e) => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
                   placeholder="https://instagram.com/yourstore"
@@ -568,10 +679,28 @@ const AdminProfile: React.FC = () => {
                 <Input
                   id="twitter"
                   type="url"
+                  autoComplete="off"
                   value={formData.twitter}
                   onChange={(e) => setFormData(prev => ({ ...prev, twitter: e.target.value }))}
                   placeholder="https://twitter.com/yourstore"
                 />
+              </div>
+
+              <div>
+                <Label htmlFor="whatsappBusiness" className="flex items-center gap-2">
+                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-green-500"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                  WhatsApp Business Number
+                </Label>
+                <Input
+                  id="whatsappBusiness"
+                  name="whatsappBusiness"
+                  type="tel"
+                  autoComplete="off"
+                  value={formData.whatsappBusiness || ''}
+                  onChange={(e) => setFormData(prev => ({ ...prev, whatsappBusiness: e.target.value.replace(/[^0-9+]/g, '') }))}
+                  placeholder="+9611234567 (international format)"
+                />
+                <p className="text-xs text-muted-foreground mt-1">Customers can order directly via WhatsApp from the product page.</p>
               </div>
             </CardContent>
           </Card>
@@ -742,6 +871,263 @@ const AdminProfile: React.FC = () => {
                 <p className="text-xs text-muted-foreground mt-2">
                   These categories will be available when creating composed products
                 </p>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Banner / Carousel Images */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><ImagePlus className="h-5 w-5" />Banner Images</CardTitle>
+              <CardDescription>Upload header/banner images for your store carousel (background image + carousel)</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <Label htmlFor="carousel-upload" className="cursor-pointer">
+                <div className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors w-fit">
+                  <Upload className="h-4 w-4" />
+                  <span>Add Images</span>
+                </div>
+                <Input id="carousel-upload" type="file" accept="image/*" multiple onChange={handleAddCarouselImages} className="hidden" />
+              </Label>
+              {(formData.carouselImages || []).length > 0 ? (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {(formData.carouselImages || []).map((url, idx) => (
+                    <div key={idx} className="relative group rounded-lg overflow-hidden border h-28">
+                      <img src={url} alt={`Banner ${idx + 1}`} className="w-full h-full object-cover" />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveCarouselImage(idx)}
+                        className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1 rounded">{idx + 1}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No banner images uploaded yet.</p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Custom Pages */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><GripVertical className="h-5 w-5" />Store Pages</CardTitle>
+              <CardDescription>Create custom pages for your store. "About Us" (page 2) and "Products" (page 3) are built-in.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {(formData.customPages || []).map((page, idx) => (
+                <div key={page.id} className="border rounded-lg p-4 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <div className="flex flex-col gap-0.5">
+                      <button type="button" onClick={() => handleMovePage(idx, 'up')} disabled={idx === 0} className="hover:bg-accent rounded p-0.5 disabled:opacity-30"><ChevronUp className="h-3 w-3" /></button>
+                      <button type="button" onClick={() => handleMovePage(idx, 'down')} disabled={idx === (formData.customPages || []).length - 1} className="hover:bg-accent rounded p-0.5 disabled:opacity-30"><ChevronDown className="h-3 w-3" /></button>
+                    </div>
+                    <Input
+                      id={`page-name-${page.id}`}
+                      name={`page-name-${page.id}`}
+                      autoComplete="off"
+                      aria-label="Page name"
+                      value={page.name}
+                      onChange={e => handlePageNameChange(page.id, e.target.value)}
+                      placeholder="Page name"
+                      className="flex-1"
+                    />
+                    <button type="button" onClick={() => handleRemovePage(page.id)} className="hover:bg-destructive/20 rounded p-1">
+                      <X className="h-4 w-4 text-destructive" />
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div>
+                      <span className="text-xs text-muted-foreground mb-1 block">Page Image</span>
+                      {page.image ? (
+                        <div className="relative group rounded-lg overflow-hidden border h-28">
+                          <img src={page.image} alt={page.name} className="w-full h-full object-cover" />
+                          <button
+                            type="button"
+                            onClick={() => handleRemovePageImage(page.id)}
+                            className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                          >
+                            <X className="h-3 w-3" />
+                          </button>
+                        </div>
+                      ) : (
+                        <Label htmlFor={`page-img-${page.id}`} className="cursor-pointer">
+                          <div className="flex items-center gap-2 border-2 border-dashed rounded-lg h-28 justify-center hover:bg-muted/50 transition-colors text-muted-foreground text-sm">
+                            <ImagePlus className="h-5 w-5" />Upload Image
+                          </div>
+                          <Input id={`page-img-${page.id}`} type="file" accept="image/*" onChange={e => handlePageImageChange(page.id, e)} className="hidden" />
+                        </Label>
+                      )}
+                    </div>
+                    <div>
+                      <Label htmlFor={`page-content-${page.id}`} className="text-xs text-muted-foreground mb-1 block">Page Content</Label>
+                      <Textarea
+                        id={`page-content-${page.id}`}
+                        name={`page-content-${page.id}`}
+                        autoComplete="off"
+                        value={page.content || ''}
+                        onChange={e => handlePageContentChange(page.id, e.target.value)}
+                        placeholder="Write the content for this page..."
+                        rows={4}
+                        className="resize-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+              ))}
+              <div className="flex gap-2">
+                <Input
+                  id="new-page-name"
+                  name="new-page-name"
+                  autoComplete="off"
+                  aria-label="New page name"
+                  value={newPageName}
+                  onChange={e => setNewPageName(e.target.value)}
+                  placeholder="New page name (e.g. Gallery, Contact)"
+                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddPage())}
+                />
+                <Button type="button" variant="outline" onClick={handleAddPage} disabled={!newPageName.trim()}>
+                  <Plus className="h-4 w-4 mr-1" />Add Page
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Template Colors */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" />Template Colors</CardTitle>
+              <CardDescription>Customize the colors of your store page template</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                {([
+                  { key: 'primary', label: 'Primary Color', defaultVal: '#0ea5e9' },
+                  { key: 'secondary', label: 'Secondary Color', defaultVal: '#6366f1' },
+                  { key: 'accent', label: 'Accent Color', defaultVal: '#f97316' },
+                ] as const).map(({ key, label, defaultVal }) => (
+                  <div key={key} className="space-y-2">
+                    <Label htmlFor={`color-${key}`}>{label}</Label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        id={`color-${key}`}
+                        name={`color-${key}`}
+                        type="color"
+                        autoComplete="off"
+                        value={formData.templateColors?.[key] || defaultVal}
+                        onChange={e => setFormData(prev => ({
+                          ...prev,
+                          templateColors: {
+                            primary: prev.templateColors?.primary || '#0ea5e9',
+                            secondary: prev.templateColors?.secondary || '#6366f1',
+                            accent: prev.templateColors?.accent || '#f97316',
+                            [key]: e.target.value,
+                          },
+                        }))}
+                        className="h-10 w-10 rounded cursor-pointer border"
+                      />
+                      <Label htmlFor={`color-hex-${key}`} className="sr-only">{label} hex value</Label>
+                      <Input
+                        id={`color-hex-${key}`}
+                        name={`color-hex-${key}`}
+                        autoComplete="off"
+                        value={formData.templateColors?.[key] || defaultVal}
+                        onChange={e => setFormData(prev => ({
+                          ...prev,
+                          templateColors: {
+                            primary: prev.templateColors?.primary || '#0ea5e9',
+                            secondary: prev.templateColors?.secondary || '#6366f1',
+                            accent: prev.templateColors?.accent || '#f97316',
+                            [key]: e.target.value,
+                          },
+                        }))}
+                        placeholder={defaultVal}
+                        className="font-mono text-sm"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Custom Domain */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" />Custom Domain</CardTitle>
+              <CardDescription>Point your own domain (e.g. shop.yourbrand.com) to your store.</CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="customDomain">Domain Name</Label>
+                <Input
+                  id="customDomain"
+                  name="customDomain"
+                  autoComplete="off"
+                  placeholder="shop.yourbrand.com"
+                  value={formData.customDomain || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, customDomain: e.target.value.trim().toLowerCase() }))}
+                />
+                <p className="text-xs text-muted-foreground">Enter without https:// (e.g. <code>shop.yourbrand.com</code>)</p>
+              </div>
+
+              {formData.customDomain && (
+                <div className="rounded-lg border bg-muted/50 p-4 space-y-3">
+                  <p className="text-sm font-medium">DNS Setup Instructions</p>
+                  <p className="text-sm text-muted-foreground">
+                    Add the following record to your domain's DNS settings:
+                  </p>
+                  <div className="font-mono text-xs bg-background border rounded p-3 space-y-1">
+                    <div className="grid grid-cols-3 gap-2 text-muted-foreground font-sans text-xs uppercase mb-1">
+                      <span>Type</span><span>Name</span><span>Value</span>
+                    </div>
+                    <div className="grid grid-cols-3 gap-2">
+                      <span>CNAME</span>
+                      <span>{formData.customDomain.includes('.') && formData.customDomain.split('.').length > 2 ? formData.customDomain.split('.')[0] : '@'}</span>
+                      <span>market-flow-7b074.web.app</span>
+                    </div>
+                  </div>
+                  <p className="text-xs text-muted-foreground">DNS changes may take up to 24 hours to propagate.</p>
+                </div>
+              )}
+
+              <div className="flex items-center gap-3">
+                {formData.customDomainStatus === 'active' && <Badge className="bg-green-100 text-green-800">Active</Badge>}
+                {formData.customDomainStatus === 'pending' && <Badge variant="secondary">Pending Verification</Badge>}
+                {formData.customDomainStatus === 'error' && <Badge variant="destructive">Error</Badge>}
+                {formData.customDomain && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={isRegisteringDomain}
+                    onClick={async () => {
+                      setIsRegisteringDomain(true);
+                      try {
+                        const storeId = getActualStoreId(user!);
+                        const res = await fetch(`${API_URL}/domain/register`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ storeId, customDomain: formData.customDomain }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.message || 'Registration failed');
+                        setFormData(prev => ({ ...prev, customDomainStatus: 'pending' }));
+                        toast({ title: 'Domain submitted', description: 'Status is pending — check back after DNS propagates.' });
+                      } catch (err) {
+                        const msg = err instanceof Error ? err.message : 'Unknown error';
+                        toast({ title: 'Registration failed', description: msg, variant: 'destructive' });
+                      } finally {
+                        setIsRegisteringDomain(false);
+                      }
+                    }}
+                  >
+                    {isRegisteringDomain ? 'Submitting...' : 'Register Domain'}
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>

@@ -183,6 +183,46 @@ export const checkExpiringStock = functions.onSchedule(
       }
 
       console.log(`✅ Expiry check done. Emails sent: ${emailsSent}`);
+
+      // ── Low stock check ──────────────────────────────────────────────────────
+      // Send FCM push if a simple product's stock is at or below its lowStockThreshold (default 5)
+      try {
+        const lowStockSnap = await db.collection('products')
+          .where('productType', '==', 'simple')
+          .where('inStock', '==', true)
+          .get();
+
+        const lowByStore: Record<string, string[]> = {};
+        lowStockSnap.forEach((docSnap: FirebaseFirestore.QueryDocumentSnapshot) => {
+          const d = docSnap.data();
+          const stock: number = d.stock ?? 0;
+          const threshold: number = d.lowStockThreshold ?? 5;
+          if (stock <= threshold && d.storeId) {
+            if (!lowByStore[d.storeId]) lowByStore[d.storeId] = [];
+            lowByStore[d.storeId].push(d.name as string || docSnap.id);
+          }
+        });
+
+        for (const [storeId, productNames] of Object.entries(lowByStore)) {
+          const ownerSnap = await db.collection('users').where('storeId', '==', storeId).limit(1).get();
+          if (ownerSnap.empty) continue;
+          const ownerId = ownerSnap.docs[0].id;
+          const fcmSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
+          const tokens = fcmSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id).filter(Boolean);
+          if (tokens.length === 0) continue;
+          await admin.messaging().sendEachForMulticast({
+            tokens,
+            notification: {
+              title: '📦 Low Stock Alert',
+              body: `${productNames.length} product${productNames.length > 1 ? 's are' : ' is'} running low`,
+            },
+            data: { storeId, type: 'low_stock', products: productNames.slice(0, 5).join(',') },
+          });
+        }
+      } catch (lowStockErr) {
+        console.warn('Low stock FCM check failed:', lowStockErr);
+      }
+      // ────────────────────────────────────────────────────────────────────────
     } catch (error) {
       console.error('❌ Expiry stock check failed:', error);
     }

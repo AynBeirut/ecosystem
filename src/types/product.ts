@@ -61,8 +61,15 @@ export type Store = {
   storeBackgroundImage?: string;
   carouselImages?: string[];
   galleryImages?: string[];
+  customPages?: Array<{ id: string; name: string; order: number; image?: string; content?: string }>;
+  templateColors?: { primary: string; secondary: string; accent: string };
+  whatsappBusiness?: string;
+  proEmail?: string;
+  customDomain?: string;
+  customDomainStatus?: 'pending' | 'active' | 'error';
   ownerId: string;
   isPremium: boolean;
+  subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
   subscriptionStatus?: 'active' | 'canceled' | 'past_due';
   status?: 'online' | 'offline';
   // Aggregated rating (denormalized) — optional

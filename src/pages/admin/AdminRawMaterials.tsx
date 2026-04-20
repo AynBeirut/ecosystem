@@ -695,7 +695,8 @@ const AdminRawMaterials: React.FC = () => {
                         type="number"
                         min="1"
                         value={editingMaterial.expiryAlertDays ?? 30}
-                        onChange={(e) => setEditingMaterial({ ...editingMaterial, expiryAlertDays: parseInt(e.target.value) || 30 })}
+                        onChange={(e) => setEditingMaterial({ ...editingMaterial, expiryAlertDays: e.target.value === '' ? '' as any : parseInt(e.target.value) })}
+                        onBlur={(e) => setEditingMaterial({ ...editingMaterial, expiryAlertDays: parseInt(e.target.value) || 30 })}
                         placeholder="30"
                       />
                     </div>

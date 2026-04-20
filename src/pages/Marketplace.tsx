@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
+import SEOHead from '@/components/SEOHead';
 // import { PRODUCTS } from '@/data/mockData';
 import ProductCard from '@/components/ProductCard';
 import StoreCard from '@/components/StoreCard';
@@ -129,6 +130,11 @@ const Marketplace: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col">
+      <SEOHead
+        title="Market Space"
+        description="Discover and shop from local stores in Lebanon. Browse thousands of products and support local businesses on Grabio."
+        url="https://grabio.space/"
+      />
       {!isMobile ? <Header /> : <MobileHeader title="Market Space" showBackButton={false} />}
       <main className="container mx-auto px-3 md:px-4 py-3 md:py-6 flex-1">
         <div className="flex flex-col md:flex-row justify-between items-start gap-3 md:gap-4 mb-3 md:mb-6">

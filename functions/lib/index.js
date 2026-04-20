@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkSubscriptions = exports.api = void 0;
+exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -66,6 +66,10 @@ const subscription_1 = require("./api/subscription");
 const webhooks_1 = require("./api/webhooks");
 const checkout_1 = require("./api/checkout");
 const stripeCheckout_1 = require("./api/stripeCheckout");
+const contact_1 = require("./api/contact");
+const domain_1 = require("./api/domain");
+const sitemap_1 = require("./api/sitemap");
+const marketing_1 = require("./api/marketing");
 const db = admin.firestore();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
@@ -123,6 +127,7 @@ app.get('/', (req, res) => {
 // Subscription management endpoints
 app.post('/subscription/trial', subscription_1.startTrial);
 app.post('/subscription/subscribe', subscription_1.subscribe);
+app.post('/subscription/subscribe-stripe', subscription_1.subscribeStripe);
 app.post('/subscription/cancel', subscription_1.cancelSubscription);
 app.get('/subscription/info', subscription_1.getSubscriptionInfo);
 // Webhook endpoint for Whish payment gateway
@@ -132,6 +137,18 @@ app.post('/payment/checkout', checkout_1.processCheckout);
 app.post('/payment/stripe/checkout', stripeCheckout_1.createStripeCheckoutSession);
 app.post('/payment/stripe/confirm', stripeCheckout_1.confirmStripeCheckoutSession);
 app.get('/payment/callback', checkout_1.handleCheckoutCallback);
+// Contact Us email endpoint
+app.post('/contact/send', contact_1.sendContactEmail);
+// Custom domain management
+app.post('/domain/register', domain_1.registerCustomDomain);
+// Sitemap for SEO
+app.get('/sitemap.xml', sitemap_1.getSitemap);
+// Email marketing
+app.post('/marketing/subscribe', marketing_1.subscribeToStore);
+app.post('/marketing/unsubscribe', marketing_1.unsubscribeFromStore);
+app.get('/marketing/subscribers', marketing_1.listSubscribers);
+app.post('/marketing/send-campaign', marketing_1.sendCampaign);
+app.get('/marketing/campaigns', marketing_1.listCampaigns);
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp() {
     try {
@@ -401,6 +418,34 @@ app.post('/checkout', async (req, res) => {
             }
         });
         console.log('Orders created:', orderIds);
+        // Send FCM push notification to each store owner for their new order(s)
+        // Fire-and-forget: don't block the checkout response on notification success
+        (async () => {
+            try {
+                const storeIds = [...new Set(Object.keys(itemsByStore))];
+                for (const storeId of storeIds) {
+                    const ownerSnap = await db.collection('users').where('storeId', '==', storeId).limit(1).get();
+                    if (ownerSnap.empty)
+                        continue;
+                    const ownerId = ownerSnap.docs[0].id;
+                    const fcmSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
+                    const tokens = fcmSnap.docs.map((d) => d.id).filter(Boolean);
+                    if (tokens.length === 0)
+                        continue;
+                    await admin.messaging().sendEachForMulticast({
+                        tokens,
+                        notification: {
+                            title: '🛒 New Order Received',
+                            body: `${customerName || 'A customer'} just placed an order`,
+                        },
+                        data: { storeId, type: 'new_order', orderId: orderIds[0] || '' },
+                    });
+                }
+            }
+            catch (fcmErr) {
+                console.warn('FCM new-order notification failed:', fcmErr);
+            }
+        })();
         return res.json({ ok: true, ordersCreated, orderIds });
     }
     catch (err) {
@@ -415,3 +460,6 @@ exports.api = functions.https.onRequest({
 // Export the scheduled subscription checker
 var checkSubscriptions_1 = require("./scheduled/checkSubscriptions");
 Object.defineProperty(exports, "checkSubscriptions", { enumerable: true, get: function () { return checkSubscriptions_1.checkSubscriptions; } });
+// Export the scheduled expiry stock checker
+var checkExpiringStock_1 = require("./scheduled/checkExpiringStock");
+Object.defineProperty(exports, "checkExpiringStock", { enumerable: true, get: function () { return checkExpiringStock_1.checkExpiringStock; } });

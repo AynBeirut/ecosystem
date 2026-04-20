@@ -59,6 +59,11 @@ service cloud.firestore {
         // Allow read by owner; adjust if you want public visibility
         allow read: if request.auth != null && request.auth.uid == userId;
       }
+
+      // FCM push notification tokens — only the owning user can read/write
+      match /fcmTokens/{token} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
 
     // Store reviews: validated creation, public reads, owner-only edits/deletes
@@ -158,6 +163,24 @@ service cloud.firestore {
     // Audit Logs: read-only for owners, write allowed for authenticated users
     match /auditLogs/{logId} {
       allow read, write: if request.auth != null;
+    }
+
+    // Contact messages: anyone can submit, only admins (server-side) can read
+    match /contactMessages/{msgId} {
+      allow create: if request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.message is string;
+      allow read, update, delete: if false;
+    }
+
+    // Store contact messages: anyone can submit, store owner can read
+    match /storeContactMessages/{msgId} {
+      allow create: if request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.message is string
+        && request.resource.data.storeId is string;
+      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
+      allow update, delete: if false;
     }
 
     // Customers (CRM): only store owners can manage

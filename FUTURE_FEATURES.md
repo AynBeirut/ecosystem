@@ -3,6 +3,47 @@
 
 ---
 
+## 💬 WHATSAPP BUSINESS API (Paid Add-on — $10/mo)
+
+> **NOT the same as the free "Order via WhatsApp" wa.me link already implemented.**
+> The wa.me link is included in all paid plans at no extra cost.
+> This section describes the full WhatsApp Business API integration — a separate, future paid add-on.
+
+### What It Is
+- Uses the **WhatsApp Business API** (not the consumer WhatsApp app)
+- Requires the store owner to have an approved **Meta Business account**
+- Requires an approved **BSP (Business Solution Provider)** such as Twilio, 360dialog, or WATI
+- Per-message costs apply on top of the monthly add-on fee (Meta pricing)
+
+### Planned Features
+- [ ] Automated order confirmation messages sent via WhatsApp
+- [ ] Abandoned cart recovery notifications
+- [ ] Delivery status updates via WhatsApp
+- [ ] WhatsApp chat widget on storefront
+- [ ] Broadcast campaigns to opted-in customers
+- [ ] WhatsApp product catalog sync
+- [ ] Chatbot / auto-reply flows
+
+### What Is Already Live (Free, All Paid Plans)
+- ✅ "Order via WhatsApp" button on product cards and cart
+- ✅ Pre-formatted order message sent via `wa.me` link
+- ✅ No API, no backend, no BSP required
+- ✅ Hidden on Trial plan (revenue share enforcement)
+
+### Implementation Notes (When Ready)
+- Choose a BSP: recommend **360dialog** (cheapest) or **Twilio** for reliability
+- Store owner registers their own phone number with Meta
+- Grabio stores the BSP API key per store in Firestore (encrypted)
+- Webhook endpoint needed for incoming messages
+- Template messages must be pre-approved by Meta before sending
+- Billing: Grabio charges $10/mo add-on + passes through Meta per-message costs
+
+**Priority:** LOW (post-launch)
+**Complexity:** HIGH
+**Estimated Time:** 3-4 weeks
+
+---
+
 ## 🌐 DOMAIN & HOSTING
 
 ### Custom Domain Support

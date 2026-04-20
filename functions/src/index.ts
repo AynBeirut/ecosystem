@@ -23,10 +23,14 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Import subscription and webhook handlers
-import { startTrial, subscribe, cancelSubscription, getSubscriptionInfo } from './api/subscription';
+import { startTrial, subscribe, subscribeStripe, cancelSubscription, getSubscriptionInfo } from './api/subscription';
 import { handleWhishWebhook } from './api/webhooks';
 import { processCheckout, handleCheckoutCallback } from './api/checkout';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
+import { sendContactEmail } from './api/contact';
+import { registerCustomDomain } from './api/domain';
+import { getSitemap } from './api/sitemap';
+import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
 const db = admin.firestore();
 
 const app = express();
@@ -88,6 +92,7 @@ app.get('/', (req, res) => {
 // Subscription management endpoints
 app.post('/subscription/trial', startTrial);
 app.post('/subscription/subscribe', subscribe);
+app.post('/subscription/subscribe-stripe', subscribeStripe);
 app.post('/subscription/cancel', cancelSubscription);
 app.get('/subscription/info', getSubscriptionInfo);
 
@@ -99,6 +104,22 @@ app.post('/payment/checkout', processCheckout);
 app.post('/payment/stripe/checkout', createStripeCheckoutSession);
 app.post('/payment/stripe/confirm', confirmStripeCheckoutSession);
 app.get('/payment/callback', handleCheckoutCallback);
+
+// Contact Us email endpoint
+app.post('/contact/send', sendContactEmail);
+
+// Custom domain management
+app.post('/domain/register', registerCustomDomain);
+
+// Sitemap for SEO
+app.get('/sitemap.xml', getSitemap);
+
+// Email marketing
+app.post('/marketing/subscribe', subscribeToStore);
+app.post('/marketing/unsubscribe', unsubscribeFromStore);
+app.get('/marketing/subscribers', listSubscribers);
+app.post('/marketing/send-campaign', sendCampaign);
+app.get('/marketing/campaigns', listCampaigns);
 
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp(): FirebaseFirestore.FieldValue | FirebaseFirestore.Timestamp | Date {
@@ -463,6 +484,33 @@ app.post('/checkout', async (req: Request, res: Response) => {
     });
 
     console.log('Orders created:', orderIds);
+
+    // Send FCM push notification to each store owner for their new order(s)
+    // Fire-and-forget: don't block the checkout response on notification success
+    (async () => {
+      try {
+        const storeIds = [...new Set(Object.keys(itemsByStore))];
+        for (const storeId of storeIds) {
+          const ownerSnap = await db.collection('users').where('storeId', '==', storeId).limit(1).get();
+          if (ownerSnap.empty) continue;
+          const ownerId = ownerSnap.docs[0].id;
+          const fcmSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
+          const tokens = fcmSnap.docs.map((d: any) => d.id).filter(Boolean);
+          if (tokens.length === 0) continue;
+          await admin.messaging().sendEachForMulticast({
+            tokens,
+            notification: {
+              title: '🛒 New Order Received',
+              body: `${customerName || 'A customer'} just placed an order`,
+            },
+            data: { storeId, type: 'new_order', orderId: orderIds[0] || '' },
+          });
+        }
+      } catch (fcmErr) {
+        console.warn('FCM new-order notification failed:', fcmErr);
+      }
+    })();
+
     return res.json({ ok: true, ordersCreated, orderIds });
   } catch (err) {
     console.error('Checkout failed', err);

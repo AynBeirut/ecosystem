@@ -643,7 +643,8 @@ const AdminProducts: React.FC = () => {
                             type="number"
                             min="1"
                             value={newProduct.expiryAlertDays}
-                            onChange={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: parseInt(e.target.value) || 30 }))}
+                            onChange={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: e.target.value === '' ? '' as any : parseInt(e.target.value) }))}
+                            onBlur={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: parseInt(e.target.value) || 30 }))}
                             placeholder="30"
                           />
                         </div>
@@ -1052,7 +1053,8 @@ const AdminProducts: React.FC = () => {
                       type="number"
                       min="1"
                       value={newProduct.expiryAlertDays}
-                      onChange={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: parseInt(e.target.value) || 30 }))}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: e.target.value === '' ? '' as any : parseInt(e.target.value) }))}
+                      onBlur={(e) => setNewProduct(prev => ({ ...prev, expiryAlertDays: parseInt(e.target.value) || 30 }))}
                       placeholder="30"
                     />
                   </div>

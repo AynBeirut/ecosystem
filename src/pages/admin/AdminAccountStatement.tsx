@@ -283,8 +283,10 @@ const AdminAccountStatement: React.FC = () => {
         const customerId = order.customerId || 'Walk-in';
         const customerName = order.customerName || 'Walk-in Customer';
         const total = order.total || 0;
-        // Use the actual amount paid (handles partial payments)
-        const paid = order.paymentStatus === 'paid' ? total : (order.amountPaid || 0);
+        // Use the actual amount paid (handles partial payments and overpayments)
+        const paid = order.paymentStatus === 'paid'
+          ? Math.max(total, toFiniteNumber(order.amountPaid, 0))
+          : toFiniteNumber(order.amountPaid, 0);
         
         if (!customerMap.has(customerId)) {
           customerMap.set(customerId, {
@@ -350,7 +352,9 @@ const AdminAccountStatement: React.FC = () => {
         const supplierId = purchase.supplierId || 'unknown';
         const supplierName = suppliersData.get(supplierId) || purchase.supplierName || 'Unknown Supplier';
         const total = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
-        const paid = purchase.amountPaid || purchase.paid || 0;
+        const paid = purchase.paymentStatus === 'paid'
+          ? Math.max(total, toFiniteNumber(purchase.amountPaid || purchase.paid, 0))
+          : toFiniteNumber(purchase.amountPaid || purchase.paid, 0);
         
         if (!supplierMap.has(supplierId)) {
           supplierMap.set(supplierId, {
@@ -636,7 +640,7 @@ const AdminAccountStatement: React.FC = () => {
           total: orderTotal,
           subtotal: orderSubtotal,
           discountAmount,
-          amountPaid: order.paymentStatus === 'paid' ? orderTotal : amountPaid,
+          amountPaid: order.paymentStatus === 'paid' ? Math.max(orderTotal, amountPaid) : amountPaid,
           taxAmount,
           status: order.status || 'pending',
           paymentStatus: order.paymentStatus || 'unpaid',
@@ -849,7 +853,7 @@ const AdminAccountStatement: React.FC = () => {
             type: 'purchase',
             ref: purchase.invoiceNumber || doc.id.substring(0, 8),
             description: `Pur.Inv.${purchase.invoiceNumber || doc.id.substring(0, 6)}`,
-            debit: purchase.amountPaid || 0,  // Payment reduces the balance (debit)
+            debit: purchase.paymentStatus === 'paid' ? Math.max(total, toFiniteNumber(purchase.amountPaid, 0)) : toFiniteNumber(purchase.amountPaid, 0),  // Payment reduces the balance (debit)
             net: subtotal,
             vat: vat,
             credit: total,  // Purchase increases what we owe (credit)
@@ -940,7 +944,7 @@ const AdminAccountStatement: React.FC = () => {
             debit: total,
             net: net,
             vat: vat,
-            credit: order.amountPaid || 0,
+            credit: order.paymentStatus === 'paid' ? Math.max(total, toFiniteNumber(order.amountPaid, 0)) : toFiniteNumber(order.amountPaid, 0),
             data: order
           });
         });
@@ -1700,7 +1704,7 @@ const AdminAccountStatement: React.FC = () => {
     exportToCSV(data, 'sales_history.csv');
   };
 
-  const exportSalesToPDF = () => {
+  const exportSalesToPDF = async () => {
     const filteredSales = sales.filter(sale => {
       const saleDate = new Date(sale.date).toISOString().split('T')[0];
       const matchesStart = !filterStartDate || saleDate >= filterStartDate;
@@ -1802,6 +1806,7 @@ const AdminAccountStatement: React.FC = () => {
     }, { subtotal: 0, discount: 0, debit: 0, net: 0, vat: 0, credit: 0, balance: 0 });
 
     const doc = new jsPDF('l', 'mm', 'a4');
+    await initArabicPDF(doc);
     const pageWidth = doc.internal.pageSize.getWidth();
     let y = 14;
 
@@ -1819,12 +1824,12 @@ const AdminAccountStatement: React.FC = () => {
       y += 4;
     }
     if (filterCustomer) {
-      doc.text(`Customer: ${cleanTextForPDF(filterCustomer)}`, pageWidth / 2, y, { align: 'center' });
+      writeText(doc, `Customer: ${filterCustomer}`, pageWidth / 2, y, { align: 'center' });
       y += 4;
     }
     if (filterProduct) {
       const productName = products.find((p) => p.id === filterProduct)?.name || filterProduct;
-      doc.text(`Product: ${cleanTextForPDF(productName)}`, pageWidth / 2, y, { align: 'center' });
+      writeText(doc, `Product: ${productName}`, pageWidth / 2, y, { align: 'center' });
       y += 4;
     }
     doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, pageWidth / 2, y, { align: 'center' });
@@ -1875,8 +1880,8 @@ const AdminAccountStatement: React.FC = () => {
       }
 
       doc.text(row.date, col.date, y);
-      doc.text(cleanTextForPDF(row.ref).substring(0, 12), col.ref, y);
-      doc.text(cleanTextForPDF(row.description).substring(0, 32), col.desc, y);
+      writeText(doc, row.ref.substring(0, 12), col.ref, y);
+      writeText(doc, row.description.substring(0, 32), col.desc, y);
       doc.text(row.subtotal.toFixed(2), col.subtotal, y, { align: 'right' });
       doc.text(row.discount > 0 ? `-${row.discount.toFixed(2)}` : '0.00', col.discount, y, { align: 'right' });
       doc.text(row.debit.toFixed(2), col.debit, y, { align: 'right' });

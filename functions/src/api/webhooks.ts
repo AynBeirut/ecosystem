@@ -63,7 +63,7 @@ async function handleTrialSuccess(
     const storeRef = db.collection('storeProfiles').doc(userId);
     const storeSnap = await storeRef.get();
     
-    if (!storeSnap.exists()) {
+    if (!storeSnap.exists) {
       console.error('Store not found:', userId);
       return;
     }
@@ -99,7 +99,7 @@ async function handleSubscriptionSuccess(
     const storeRef = db.collection('storeProfiles').doc(userId);
     const storeSnap = await storeRef.get();
     
-    if (!storeSnap.exists()) {
+    if (!storeSnap.exists) {
       console.error('Store not found:', userId);
       return;
     }

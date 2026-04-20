@@ -32,8 +32,21 @@ export async function requestNotificationPermission(): Promise<string | null> {
       return null;
     }
 
-    // Register firebase-messaging-sw.js as the service worker for FCM
+    // Register firebase-messaging-sw.js and wait until it is active
     const registration = await navigator.serviceWorker.register('/firebase-messaging-sw.js');
+
+    // Wait for the SW to become active (installing → waiting → active)
+    await new Promise<void>((resolve) => {
+      if (registration.active) { resolve(); return; }
+      const sw = registration.installing || registration.waiting;
+      if (!sw) { resolve(); return; }
+      sw.addEventListener('statechange', function handler() {
+        if (sw.state === 'activated') {
+          sw.removeEventListener('statechange', handler);
+          resolve();
+        }
+      });
+    });
 
     const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
     if (!vapidKey) {

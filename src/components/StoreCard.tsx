@@ -3,7 +3,7 @@ import React from 'react';
 import { Link } from 'react-router-dom';
 import { Store } from '@/types/product';
 import { Card, CardContent, CardFooter } from '@/components/ui/card';
-import { MapPin } from 'lucide-react';
+import { MapPin, Star } from 'lucide-react';
 import { getFirestore, collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { useEffect, useState } from 'react';
 import { useAuth } from '@/context/useAuth';
@@ -31,7 +31,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ store }) => {
   }, [store.id]);
 
   return (
-    <Link to={`/store/${store.slug || store.id}`}>
+    <Link to={`/${store.slug || store.id}`}>
       <Card className="h-full overflow-hidden card-hover">
         <div className="p-4 flex items-center justify-center bg-gray-50">
           <img 
@@ -49,6 +49,13 @@ const StoreCard: React.FC<StoreCardProps> = ({ store }) => {
             <MapPin size={14} className="mr-1" />
             {store.location}
           </div>
+          {store.rating !== undefined && store.ratingCount ? (
+            <div className="flex items-center justify-center gap-1 text-xs text-yellow-500 mb-2">
+              <Star size={13} fill="currentColor" />
+              <span className="font-medium">{store.rating.toFixed(1)}</span>
+              <span className="text-gray-400">({store.ratingCount})</span>
+            </div>
+          ) : null}
           <p className="text-sm text-gray-600 text-center line-clamp-2">
             {store.description}
           </p>

@@ -21,6 +21,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 type Billing = 'monthly' | 'yearly';
 type SubscriptionTier = 'trial' | 'starter' | 'pro' | 'business';
@@ -231,6 +238,7 @@ export default function Subscription() {
   const [showMobileCompare, setShowMobileCompare] = useState(false);
   const [planSelections, setPlanSelections] = useState<Record<PaidTier, AddOnSelection>>(getDefaultSelectionByTier('starter'));
   const [addOnExtraStorageBlocks, setAddOnExtraStorageBlocks] = useState(1);
+  const [pendingPayment, setPendingPayment] = useState<{ tier: PaidTier; billing: Billing; addOns: Record<string, unknown>; label: string } | null>(null);
   const firebaseAuth = getAuth();
 
   const loadSubscriptionInfo = useCallback(async () => {
@@ -341,7 +349,8 @@ export default function Subscription() {
     }
   };
 
-  const handleSubscribe = async (
+  // Opens the payment method picker dialog instead of going straight to a provider
+  const openPaymentDialog = (
     tier: PaidTier,
     billing: Billing,
     addOns: {
@@ -350,9 +359,30 @@ export default function Subscription() {
       extraStorageBlocks?: number;
     } = {}
   ) => {
+    const total = (() => {
+      const base = PRICING[tier][billing];
+      let t = base;
+      if (addOns.domainPackage) t += PRICING.addOns.domainPackage[billing];
+      if (addOns.whatsappBusiness) t += PRICING.addOns.whatsappBusiness[billing];
+      if ((addOns.extraStorageBlocks ?? 0) > 0)
+        t += (addOns.extraStorageBlocks ?? 0) * PRICING.addOns.extraStoragePer5Gb[billing];
+      return t;
+    })();
+    setPendingPayment({
+      tier,
+      billing,
+      addOns: addOns as Record<string, unknown>,
+      label: `${PLAN_LABELS[tier]} – ${billing === 'monthly' ? 'Monthly' : 'Yearly'} ($${total})`,
+    });
+  };
+
+  const handleSubscribeWhish = async () => {
+    if (!pendingPayment) return;
+    const { tier, billing, addOns } = pendingPayment;
     const currentUser = firebaseAuth.currentUser;
     if (!currentUser) return;
 
+    setPendingPayment(null);
     try {
       setProcessingPayment(true);
       const token = await currentUser.getIdToken();
@@ -380,16 +410,63 @@ export default function Subscription() {
       }
 
       const data = await response.json();
-      
-      // Redirect to payment page
       if (data.paymentUrl) {
         window.location.href = data.paymentUrl;
       }
     } catch (error) {
-      console.error('Error subscribing:', error);
+      console.error('Error subscribing (Whish):', error);
       toast({
         title: 'Error',
         description: error instanceof Error ? error.message : 'Failed to subscribe',
+        variant: 'destructive',
+      });
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
+
+  const handleSubscribeStripe = async () => {
+    if (!pendingPayment) return;
+    const { tier, billing, addOns } = pendingPayment;
+    const currentUser = firebaseAuth.currentUser;
+    if (!currentUser) return;
+
+    setPendingPayment(null);
+    try {
+      setProcessingPayment(true);
+      const token = await currentUser.getIdToken();
+      const apiUrl = getSubscriptionApiBase();
+      
+      const response = await fetch(`${apiUrl}/subscription/subscribe-stripe`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          tier,
+          billing,
+          addOns,
+          email: user?.email,
+          userId: user?.id,
+          name: user?.name,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to start card payment');
+      }
+
+      const data = await response.json();
+      if (data.paymentUrl) {
+        window.location.href = data.paymentUrl;
+      }
+    } catch (error) {
+      console.error('Error subscribing (Stripe):', error);
+      toast({
+        title: 'Error',
+        description: error instanceof Error ? error.message : 'Failed to start card payment',
         variant: 'destructive',
       });
     } finally {
@@ -751,7 +828,7 @@ export default function Subscription() {
                               checked={planSelections[paidTier].whatsappBusiness}
                               onCheckedChange={(checked) => updatePlanSelection(paidTier, { whatsappBusiness: Boolean(checked) })}
                             />
-                            <span>WhatsApp Business</span>
+                            <span>WhatsApp Business API <span className="text-xs text-amber-600">(Coming Soon)</span></span>
                           </div>
                           <span>$10/mo</span>
                         </label>
@@ -787,7 +864,7 @@ export default function Subscription() {
                     ) : (
                       <>
                         <Button
-                          onClick={() => handleSubscribe(paidTier, 'monthly', getCheckoutAddOns(paidTier))}
+                          onClick={() => openPaymentDialog(paidTier, 'monthly', getCheckoutAddOns(paidTier))}
                           disabled={processingPayment}
                           variant="outline"
                           className="w-full"
@@ -795,7 +872,7 @@ export default function Subscription() {
                           {plan.cta} Monthly (${calculatePlanTotal(paidTier, 'monthly')})
                         </Button>
                         <Button
-                          onClick={() => handleSubscribe(paidTier, 'yearly', getCheckoutAddOns(paidTier))}
+                          onClick={() => openPaymentDialog(paidTier, 'yearly', getCheckoutAddOns(paidTier))}
                           disabled={processingPayment}
                           className="w-full"
                         >
@@ -926,7 +1003,7 @@ export default function Subscription() {
               </div>
               <div className="space-y-2">
                 <Button
-                  onClick={() => handleSubscribe((activeTier as PaidTier) || 'starter', 'monthly', { domainPackage: true })}
+                  onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'monthly', { domainPackage: true })}
                   disabled={processingPayment || !canManageAddOns}
                   variant="outline"
                   className="w-full"
@@ -934,7 +1011,7 @@ export default function Subscription() {
                   Add Monthly ($15/mo)
                 </Button>
                 <Button
-                  onClick={() => handleSubscribe((activeTier as PaidTier) || 'starter', 'yearly', { domainPackage: true })}
+                  onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'yearly', { domainPackage: true })}
                   disabled={processingPayment || !canManageAddOns}
                   className="w-full"
                 >
@@ -948,13 +1025,16 @@ export default function Subscription() {
 
             <div className="border-2 rounded-lg p-6 hover:border-primary transition-colors">
               <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-lg">WhatsApp Business</h3>
-                {activeAddOns.includes('whatsappBusiness') && (
+                <h3 className="font-semibold text-lg">WhatsApp Business API</h3>
+                {activeAddOns.includes('whatsappBusiness') ? (
                   <Badge variant="default">Active</Badge>
+                ) : (
+                  <Badge variant="secondary">Coming Soon</Badge>
                 )}
               </div>
-              <p className="text-sm text-gray-600 mb-1">Notifications, chat widget, campaigns, and abandoned cart recovery via WhatsApp</p>
-              <p className="text-xs text-gray-500 mb-4">Essential for MENA market with high message open rates</p>
+              <p className="text-sm text-gray-600 mb-1">Automated notifications, chatbot, campaigns, and abandoned cart recovery via WhatsApp Business API</p>
+              <p className="text-xs text-gray-500 mb-1">Requires a Meta Business account + approved BSP (e.g. Twilio, 360dialog). Enables real automation and catalog syncing.</p>
+              <p className="text-xs text-amber-600 font-medium mb-4">⚠ This feature is not yet available. Reserve your spot — billing starts when it launches.</p>
               <div className="text-2xl font-bold mb-4">
                 ${PRICING.addOns.whatsappBusiness.monthly}<span className="text-base text-gray-600">/month</span>
               </div>
@@ -963,7 +1043,7 @@ export default function Subscription() {
               </div>
               <div className="space-y-2">
                 <Button
-                  onClick={() => handleSubscribe((activeTier as PaidTier) || 'starter', 'monthly', { whatsappBusiness: true })}
+                  onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'monthly', { whatsappBusiness: true })}
                   disabled={processingPayment || !hasActiveSubscription}
                   variant="outline"
                   className="w-full"
@@ -971,7 +1051,7 @@ export default function Subscription() {
                   Add Monthly ($10/mo)
                 </Button>
                 <Button
-                  onClick={() => handleSubscribe((activeTier as PaidTier) || 'starter', 'yearly', { whatsappBusiness: true })}
+                  onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'yearly', { whatsappBusiness: true })}
                   disabled={processingPayment || !hasActiveSubscription}
                   className="w-full"
                 >
@@ -1004,7 +1084,7 @@ export default function Subscription() {
                 <p className="text-xs text-gray-500 mt-1">Estimated monthly add-on total: ${addOnExtraStorageBlocks * PRICING.addOns.extraStoragePer5Gb.monthly}</p>
               </div>
               <Button
-                onClick={() => handleSubscribe((activeTier as PaidTier) || 'starter', 'monthly', { extraStorageBlocks: addOnExtraStorageBlocks })}
+                onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'monthly', { extraStorageBlocks: addOnExtraStorageBlocks })}
                 disabled={processingPayment || !canManageAddOns}
                 className="w-full"
               >
@@ -1094,6 +1174,49 @@ export default function Subscription() {
           </CardContent>
         </Card>
       )}
+
+      {/* Payment method picker dialog */}
+      <Dialog open={!!pendingPayment} onOpenChange={(open) => { if (!open) setPendingPayment(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Choose Payment Method</DialogTitle>
+            <DialogDescription>
+              {pendingPayment?.label}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <button
+              onClick={handleSubscribeWhish}
+              disabled={processingPayment}
+              className="flex items-center gap-4 border-2 rounded-lg p-4 hover:border-primary hover:bg-primary/5 transition-colors text-left w-full disabled:opacity-50"
+            >
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-orange-100 flex items-center justify-center">
+                <span className="text-orange-600 font-bold text-sm">W</span>
+              </div>
+              <div>
+                <p className="font-semibold">Whish Money</p>
+                <p className="text-sm text-gray-500">Pay with your Whish wallet or phone</p>
+              </div>
+            </button>
+
+            <button
+              onClick={handleSubscribeStripe}
+              disabled={processingPayment}
+              className="flex items-center gap-4 border-2 rounded-lg p-4 hover:border-primary hover:bg-primary/5 transition-colors text-left w-full disabled:opacity-50"
+            >
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
+                </svg>
+              </div>
+              <div>
+                <p className="font-semibold">Credit / Debit Card</p>
+                <p className="text-sm text-gray-500">Visa, Mastercard, or any card via Stripe</p>
+              </div>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

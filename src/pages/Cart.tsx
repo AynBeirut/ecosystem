@@ -18,6 +18,8 @@ import { useAuth } from '@/context/useAuth';
 import { Label } from '@/components/ui/label';
 import { PaymentMethod } from '@/types/product';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
+import { pixelAddToCart, pixelPurchase } from '@/lib/metaPixel';
 
 type StorePaymentMethods = {
   creditCard: boolean;
@@ -67,6 +69,7 @@ const Cart: React.FC = () => {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [hasSavedInfo, setHasSavedInfo] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+  const [whatsappStoreInfo, setWhatsappStoreInfo] = useState<{ number: string; name: string; currency?: string } | null>(null);
   
   // Double-click prevention lock
   const isCheckingOutRef = useRef(false);
@@ -121,6 +124,34 @@ const Cart: React.FC = () => {
     if (items.length > 0) {
       fetchExchangeRates();
     }
+  }, [items]);
+
+  // Fetch WhatsApp store info — only when cart has items from a single store
+  useEffect(() => {
+    const storeIds = [...new Set(items.map(item => item.product.storeId))];
+    if (storeIds.length !== 1) {
+      setWhatsappStoreInfo(null);
+      return;
+    }
+    const fetchWhatsApp = async () => {
+      try {
+        const db = getFirestore();
+        const storeDoc = await getDoc(doc(db, 'storeProfiles', storeIds[0]));
+        if (storeDoc.exists()) {
+          const data = storeDoc.data() as StoreProfile;
+          if (data.whatsappBusiness && data.subscriptionTier !== 'trial') {
+            setWhatsappStoreInfo({ number: data.whatsappBusiness, name: data.name, currency: data.mainCurrency });
+          } else {
+            setWhatsappStoreInfo(null);
+          }
+        } else {
+          setWhatsappStoreInfo(null);
+        }
+      } catch {
+        setWhatsappStoreInfo(null);
+      }
+    };
+    fetchWhatsApp();
   }, [items]);
 
   // Fetch available payment methods from all stores in cart
@@ -493,6 +524,7 @@ const Cart: React.FC = () => {
       // For cash on delivery, skip payment and show success
       if (paymentMethod === 'cash') {
         toast.success('Order placed successfully! The store will contact you soon.');
+        pixelPurchase({ value: subtotal, contentIds: items.map(i => i.product.id) });
         clearCart();
         
         // For guest users, redirect to tracking page with order ID; for logged-in users, go to orders
@@ -866,18 +898,40 @@ const Cart: React.FC = () => {
                   </div>
                 </CardContent>
                 <CardFooter>
-                  <Button 
-                    className="w-full"
-                    onClick={handleCheckout}
-                    disabled={items.length === 0}
-                  >
-                    {user ? 'Place Order' : 'Place Order as Guest'}
-                  </Button>
-                  {!user && (
-                    <p className="text-xs text-gray-500 mt-2 text-center w-full">
-                      Have an account? <a href="/login" className="text-blue-600 hover:underline">Sign in</a> to save your info
-                    </p>
-                  )}
+                  <div className="flex flex-col w-full gap-3">
+                    <Button 
+                      className="w-full"
+                      onClick={handleCheckout}
+                      disabled={items.length === 0}
+                    >
+                      {user ? 'Place Order' : 'Place Order as Guest'}
+                    </Button>
+                    {whatsappStoreInfo && (() => {
+                      const waUrl = buildWhatsAppOrderURL(
+                        items.map(item => ({ name: item.product.name, qty: item.quantity, price: item.product.price })),
+                        { storeName: whatsappStoreInfo.name, whatsappNumber: whatsappStoreInfo.number, currency: whatsappStoreInfo.currency }
+                      );
+                      return waUrl ? (
+                        <a
+                          href={waUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white bg-[#25D366] hover:bg-[#1ebe5d] transition-colors"
+                        >
+                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.113.549 4.098 1.51 5.823L0 24l6.335-1.49A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.802 9.802 0 01-5.002-1.373l-.358-.213-3.758.884.944-3.653-.234-.374A9.788 9.788 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+                          </svg>
+                          Order via WhatsApp
+                        </a>
+                      ) : null;
+                    })()}
+                    {!user && (
+                      <p className="text-xs text-gray-500 text-center w-full">
+                        Have an account? <a href="/login" className="text-blue-600 hover:underline">Sign in</a> to save your info
+                      </p>
+                    )}
+                  </div>
                 </CardFooter>
               </Card>
             </div>

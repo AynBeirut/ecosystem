@@ -1,15 +1,171 @@
-# 🚀 Subscription System Deployment Checklist
-
-## ✅ Code Complete (100%)
-- [x] Backend API endpoints
-- [x] Payment gateway integration
-- [x] Frontend UI pages
-- [x] Migration scripts
-- [x] Documentation
+# 🚀 Master Build & Deployment Checklist
+**Last Updated:** April 18, 2026
 
 ---
 
-## 🔧 Required Setup (Before Going Live)
+## ✅ ALREADY LIVE
+
+- [x] Core platform (stores, products, orders)
+- [x] Whish Money sandbox integration
+- [x] Stripe integration
+- [x] Guest checkout + multi-currency
+- [x] Subscription system (Trial/Starter/Pro/Business)
+- [x] Admin dashboard + all management pages
+- [x] Friendly URLs (`/nipco`, `/store/nipco`)
+- [x] Custom domain support
+- [x] Contact Us (platform + per-store) via SMTP
+- [x] Order via WhatsApp (wa.me, all paid plans)
+- [x] WhatsApp hidden on Trial (revenue share enforcement)
+- [x] Push notifications (FCM)
+- [x] Store page: carousel, About, custom pages, reviews
+- [x] websiteUrl updated: aynbeirut.com → grabio.space *(done today)*
+
+---
+
+## 🔴 PHASE 1 — No external accounts needed (start now)
+
+### SEO: Meta Tags + Open Graph
+- [ ] Add `<title>`, `<meta description>` per page
+- [ ] Open Graph tags (`og:title`, `og:description`, `og:image`, `og:url`)
+- [ ] Twitter Card tags
+- [ ] Dynamic tags on store pages (store name, logo, description)
+- [ ] Dynamic tags on product pages (product name, image, price)
+- **File:** `src/components/SEOHead.tsx` (new component using react-helmet-async)
+
+### SEO: Sitemap + robots.txt
+- [ ] Generate `sitemap.xml` with all store slugs + product slugs
+- [ ] Update `public/robots.txt` to reference sitemap
+- [ ] Cloud Function `GET /sitemap.xml` that builds dynamically from Firestore
+- **File:** `functions/src/api/sitemap.ts` (new)
+
+### SEO: Schema.org Structured Data
+- [ ] `LocalBusiness` schema on store pages
+- [ ] `Product` schema on product pages (name, price, availability, image)
+- [ ] `BreadcrumbList` schema on product pages
+- **File:** injected via `SEOHead.tsx`
+
+### Google Analytics 4
+- [ ] Create GA4 property at analytics.google.com
+- [ ] Add Measurement ID (`G-XXXXXXXXXX`) to `.env` as `VITE_GA4_ID`
+- [ ] Install `react-ga4` or use `gtag.js`
+- [ ] Track: page views, add to cart, checkout start, purchase, store view
+- **File:** `src/lib/analytics.ts` (new)
+
+### Customer Reviews Public UI
+- [ ] Reviews already stored in `storeReviews` Firestore collection ✅
+- [ ] Reviews displayed on `StoreDetail.tsx` already ✅
+- [ ] **Missing:** Public product-level reviews (if needed)
+- [ ] **Missing:** Review moderation in Admin panel
+- [ ] **Missing:** Star rating shown on StoreCard in marketplace
+- **Files:** `src/pages/StoreDetail.tsx`, `src/components/StoreCard.tsx`
+
+---
+
+## 🟠 PHASE 2 — Need external accounts/keys
+
+### SendGrid Email Marketing
+- [ ] Sign up: https://sendgrid.com (free tier: 100 emails/day)
+- [ ] Verify domain `grabio.space` in SendGrid
+- [ ] Get API key → add to Firebase env: `SMTP_HOST`, `SMTP_USER`, `SMTP_PASS` already set via nodemailer *(email already works via grabio.space SMTP)*
+- [ ] **Marketing campaigns:** Build Admin UI for sending newsletters to customer list
+- [ ] Store customer emails in `storeProfiles/{id}/subscribers` subcollection
+- [ ] Cloud Function `POST /marketing/send-campaign`
+- **Note:** Transactional email (order confirm, subscription) already works ✅
+
+### Meta Pixel
+- [ ] Create Facebook App at developers.facebook.com
+- [ ] Get Pixel ID → add as `VITE_META_PIXEL_ID`
+- [ ] Install `react-facebook-pixel`
+- [ ] Track: PageView, ViewContent (product), AddToCart, Purchase
+- **File:** `src/lib/metaPixel.ts` (new)
+
+### Meta Catalog / Instagram Shopping
+- [ ] Requires Meta Business Manager + Commerce Account approval
+- [ ] Cloud Function `GET /meta-catalog.xml` — generates product feed XML
+- [ ] Submit feed URL to Meta Commerce Manager
+- [ ] **Estimated time after pixel:** 1–2 weeks for approval + setup
+- **File:** `functions/src/api/metaCatalog.ts` (new)
+
+---
+
+## 🟡 PHASE 3 — Security & Compliance
+
+### 2FA for Admin Accounts
+- [ ] Enable Firebase Auth MFA (TOTP) in Firebase Console
+- [ ] Add 2FA enrollment step in AdminProfile or first-login flow
+- [ ] Show QR code for Google Authenticator
+- **File:** `src/pages/admin/AdminProfile.tsx` + Firebase Auth MFA SDK
+
+### GDPR: Cookie Consent Banner
+- [ ] Simple banner on first visit (localStorage flag)
+- [ ] Accept / Decline / Settings options
+- [ ] Block GA4 + Meta Pixel until accepted
+- **File:** `src/components/CookieConsent.tsx` (new)
+
+### GDPR: Data Export & Right to Delete
+- [ ] Cloud Function `POST /gdpr/export` — returns all user data as JSON
+- [ ] Cloud Function `POST /gdpr/delete` — removes all user data from Firestore
+- [ ] Admin UI + customer-facing request form
+- **File:** `functions/src/api/gdpr.ts` (new)
+
+---
+
+## 🔴 WHISH MONEY — Production Go-Live
+
+### Status: ⚠️ Still on SANDBOX
+
+**Contact:** Steven Ayoub — s.ayoub@whish.money
+**Last email:** Feb 19, 2026 — gave sandbox credentials + API docs
+
+**What we already have:**
+- Channel: `10198838`
+- Secret: `009ca52d70e54fe0971b9143fe3e2b3a`
+- Sandbox URL: `https://api.sandbox.whish.money/itel-service/api` ✅ (in code)
+- Production URL (commented out): `https://api.whish.money/itel-service/api` *(needs confirmation)*
+- websiteUrl: updated to `grabio.space` ✅
+
+**Reply email to send Steven (see below) — ask for:**
+- [ ] Confirm production API URL is `https://api.whish.money/itel-service/api`
+- [ ] Update `websiteUrl` from `aynbeirut.com` to `grabio.space` on their side
+- [ ] Confirm our webhook URL: `https://us-central1-market-flow-7b074.cloudfunctions.net/api/webhook/whish`
+- [ ] Get test/production channel credentials for `grabio.space`
+
+**To switch to production** (one line change in `whishPayment.ts`):
+```typescript
+// Change:
+baseUrl: process.env.WHISH_BASE_URL || 'https://api.sandbox.whish.money/itel-service/api',
+// To:
+baseUrl: process.env.WHISH_BASE_URL || 'https://api.whish.money/itel-service/api',
+```
+
+---
+
+## ⚪ PHASE 4 — Mobile App (Multi-week project)
+
+### React Native / Expo App
+- [ ] `npx create-expo-app grabio-mobile` — scaffold today
+- [ ] Bottom tab navigation (Marketplace, Cart, Orders, Profile)
+- [ ] Firebase Auth (Google + email/password)
+- [ ] Reuse same Firestore + Functions backend
+- [ ] Push notifications via FCM (already implemented on backend)
+- [ ] App Store + Google Play submission
+- **Realistic timeline:** 6–10 weeks full app
+- **Today's goal:** Scaffold + Auth screen only
+
+---
+
+## 📋 QUICK REFERENCE — Env Variables Needed
+
+| Variable | Where | Status |
+|----------|-------|--------|
+| `SMTP_HOST` | Firebase Functions | ✅ Set (mail.grabio.space) |
+| `SMTP_USER` | Firebase Functions | ✅ Set |
+| `SMTP_PASS` | Firebase Functions | ✅ Set |
+| `WHISH_BASE_URL` | Firebase Functions | ⚠️ Using sandbox |
+| `VITE_GA4_ID` | .env frontend | ❌ Not set |
+| `VITE_META_PIXEL_ID` | .env frontend | ❌ Not set |
+| `VITE_API_URL` | .env frontend | ✅ Set |
+
 
 ### 1. Whish Money API Configuration
 **Status:** ⚠️ REQUIRED - Using placeholder URL

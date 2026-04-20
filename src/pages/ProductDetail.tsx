@@ -2,6 +2,8 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import SEOHead from '@/components/SEOHead';
+import { pixelViewContent } from '@/lib/metaPixel';
 import { Product, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
@@ -147,6 +149,12 @@ const ProductDetail: React.FC = () => {
   const handleAddToCart = () => {
     if (product) {
       addToCart(product, quantity);
+      pixelViewContent({
+        contentId: product.id,
+        contentName: product.name,
+        value: product.price,
+        currency: 'USD',
+      });
     }
   };
 
@@ -219,6 +227,18 @@ const ProductDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <SEOHead
+        title={product.name}
+        description={product.description || `Buy ${product.name} from ${store?.name || 'a local store'} on Grabio`}
+        image={product.image}
+        url={store?.slug
+          ? `https://grabio.space/${store.slug}/product/${product.slug || product.id}`
+          : `https://grabio.space/product/id/${product.id}`
+        }
+        type="product"
+        price={product.price}
+        currency={store ? undefined : 'USD'}
+      />
       <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">

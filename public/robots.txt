@@ -12,3 +12,5 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+Sitemap: https://us-central1-market-flow-7b074.cloudfunctions.net/api/sitemap.xml

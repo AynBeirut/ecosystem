@@ -1,9 +1,12 @@
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, runTransaction, orderBy, serverTimestamp } from 'firebase/firestore';
+import SEOHead from '@/components/SEOHead';
 import { auth as firebaseAuth } from '@/lib/firebase';
 import { useAuth } from '@/context/useAuth';
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 import { toast } from '@/components/ui/sonner';
 import { pushDebugLog } from '@/lib/debugLogger';
 import { StoreReview } from '@/types/product';
@@ -17,6 +20,78 @@ import ProductCard from '@/components/ProductCard';
 import { MapPin, Globe, Facebook, Instagram, Twitter, Phone, Mail } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+
+// ── Store-level contact form (sends message to storeContactMessages/{storeId}/messages) ──
+const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { cardSoft: string; sectionTitle: string; mutedText: string } }> = ({ storeId, storeName, theme }) => {
+  const [form, setForm] = useState({ name: '', email: '', message: '' });
+  const [sending, setSending] = useState(false);
+  const [done, setDone] = useState(false);
+  const [err, setErr] = useState('');
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSending(true);
+    setErr('');
+    try {
+      const res = await fetch(`${API_URL}/contact/send`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ...form, subject: `Message from ${form.name}`, storeId }),
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error((data as { error?: string }).error || 'Failed to send');
+      }
+      setDone(true);
+      setForm({ name: '', email: '', message: '' });
+    } catch {
+      setErr('Failed to send. Please try again.');
+    } finally {
+      setSending(false);
+    }
+  };
+
+  return (
+    <Card className={theme.cardSoft}>
+      <CardContent className="p-6">
+        <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>Send a Message</h3>
+        {done ? (
+          <div className="flex flex-col items-center py-8 gap-3 text-center">
+            <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            <p className={`font-medium ${theme.sectionTitle}`}>Message Sent!</p>
+            <p className={`text-sm ${theme.mutedText}`}>The store will get back to you soon.</p>
+            <button onClick={() => setDone(false)} className={`text-xs underline mt-1 ${theme.mutedText}`}>Send another</button>
+          </div>
+        ) : (
+          <form onSubmit={handleSubmit} className="space-y-3">
+            <div className="space-y-1">
+              <Label htmlFor="sc-name">Your Name *</Label>
+              <Input id="sc-name" name="name" autoComplete="name" placeholder="Your name" value={form.name} onChange={handleChange} required />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="sc-email">Email Address *</Label>
+              <Input id="sc-email" name="email" type="email" autoComplete="email" placeholder="you@example.com" value={form.email} onChange={handleChange} required />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="sc-message">Message *</Label>
+              <Textarea id="sc-message" name="message" autoComplete="off" placeholder="Write your message..." rows={5} value={form.message} onChange={handleChange} required className="resize-none" />
+            </div>
+            {err && <p className="text-sm text-red-500">{err}</p>}
+            <div className="flex justify-end">
+              <Button type="submit" disabled={sending}>{sending ? 'Sending...' : 'Send Message'}</Button>
+            </div>
+          </form>
+        )}
+      </CardContent>
+    </Card>
+  );
+};
 
 const StoreDetail: React.FC = () => {
   const { id, slug } = useParams<{ id?: string; slug?: string }>();
@@ -39,6 +114,31 @@ const StoreDetail: React.FC = () => {
   const isFollowing = !!user?.following?.includes(storeId || '');
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Banner carousel state (must be here — before any early returns)
+  const [bannerIndex, setBannerIndex] = useState(0);
+  const bannerTimer = useRef<ReturnType<typeof setInterval> | null>(null);
+  // Read More modal state
+  const [readMoreContent, setReadMoreContent] = useState<{ title: string; text: string } | null>(null);
+  // Page navigation state
+  const [activePage, setActivePage] = useState<string>('home');
+
+  // Derive banner images safely (store may be null before load)
+  const bannerImagesCount = React.useMemo(() => {
+    if (!store) return 0;
+    const bg = typeof store.storeBackgroundImage === 'string' && store.storeBackgroundImage ? 1 : 0;
+    const carousel = Array.isArray(store.carouselImages) ? store.carouselImages.filter((u): u is string => typeof u === 'string' && u.trim().length > 0).length : 0;
+    return bg + carousel;
+  }, [store]);
+
+  // Auto-advance carousel — must be before early returns
+  useEffect(() => {
+    if (bannerImagesCount <= 1) return;
+    bannerTimer.current = setInterval(() => {
+      setBannerIndex(i => (i + 1) % bannerImagesCount);
+    }, 4000);
+    return () => { if (bannerTimer.current) clearInterval(bannerTimer.current); };
+  }, [bannerImagesCount]);
 
   // Fetch reviews helper (declared early so effects can call it)
   const fetchReviews = useCallback(async () => {
@@ -78,28 +178,17 @@ const StoreDetail: React.FC = () => {
         let storeData: Record<string, unknown> | null = null;
         let docId: string = identifier;
         
-        // Check if identifier is a slug or Firebase ID
-        // Slugs: lowercase, hyphens, no uppercase (e.g., "johns-coffee-shop")
-        // Firebase IDs: mixed case, no hyphens, 20-28 chars (e.g., "1HfsBr45XYM5SkaaazWegmyqGpA3")
-        const isSlug = identifier.includes('-') && !/[A-Z0-9]{10,}/.test(identifier);
+        // Always try slug lookup first (works for any slug format — no hyphen required)
+        const storesRef = collection(db, 'storeProfiles');
+        const slugQuery = query(storesRef, where('slug', '==', identifier));
+        const slugSnap = await getDocs(slugQuery);
         
-        if (isSlug) {
-          // Search by slug
-          const storesRef = collection(db, 'storeProfiles');
-          const slugQuery = query(storesRef, where('slug', '==', identifier));
-          const slugSnap = await getDocs(slugQuery);
-          
-          if (!slugSnap.empty) {
-            docId = slugSnap.docs[0].id;
-            storeData = slugSnap.docs[0].data();
-            setStoreId(docId);
-          } else {
-            setError('Store not found');
-            setIsLoading(false);
-            return;
-          }
+        if (!slugSnap.empty) {
+          docId = slugSnap.docs[0].id;
+          storeData = slugSnap.docs[0].data();
+          setStoreId(docId);
         } else {
-          // Direct ID lookup (backward compatibility)
+          // Fall back to direct document ID lookup (backward compat with old ID-based links)
           const storeRef = doc(db, 'storeProfiles', identifier);
           const storeSnap = await getDoc(storeRef);
           
@@ -113,9 +202,9 @@ const StoreDetail: React.FC = () => {
           docId = identifier;
           setStoreId(docId);
           
-          // Redirect to slug URL if store has a slug
+          // Redirect to short slug URL if store has a slug
           if (storeData.slug) {
-            navigate(`/store/${storeData.slug}`, { replace: true });
+            navigate(`/${storeData.slug}`, { replace: true });
             return;
           }
         }
@@ -353,43 +442,106 @@ const StoreDetail: React.FC = () => {
   const mission = typeof store.mission === 'string' ? store.mission.trim() : '';
   const vision = typeof store.vision === 'string' ? store.vision.trim() : '';
 
+  // Merge backgroundImage + carouselImages into one unified banner list
+  const bannerImages = [
+    ...(backgroundImage ? [backgroundImage] : []),
+    ...carouselImages,
+  ];
+
+  const goToBanner = (idx: number) => {
+    setBannerIndex(idx);
+    if (bannerTimer.current) clearInterval(bannerTimer.current);
+    bannerTimer.current = setInterval(() => {
+      setBannerIndex(i => (i + 1) % bannerImages.length);
+    }, 4000);
+  };
+
+  const tColors = store.templateColors;
+  const colorStyle = tColors ? {
+    '--store-primary': tColors.primary,
+    '--store-secondary': tColors.secondary,
+    '--store-accent': tColors.accent,
+  } as React.CSSProperties : {};
+
   return (
-    <div className={`min-h-screen ${currentTheme.pageBg}`}>
+    <div className={`min-h-screen ${currentTheme.pageBg}`} style={colorStyle}>
+      {store && (
+        <SEOHead
+          title={store.name}
+          description={store.description || store.slogan || `Shop at ${store.name} on Grabio`}
+          image={store.logo}
+          url={`https://grabio.space/${store.slug || storeId}`}
+        />
+      )}
+      {/* Read More Modal */}
+      {readMoreContent && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4"
+          onClick={() => setReadMoreContent(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-6 py-4 border-b">
+              <h2 className="text-xl font-bold">{readMoreContent.title}</h2>
+              <button onClick={() => setReadMoreContent(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            </div>
+            <div className="overflow-y-auto px-6 py-4">
+              <p className="text-sm whitespace-pre-line text-gray-700 leading-relaxed">{readMoreContent.text}</p>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Header />
       <main className="container mx-auto px-4 py-6">
-        {backgroundImage && (
-          <div className="relative rounded-lg overflow-hidden shadow-sm mb-6">
-            <img src={backgroundImage} alt={`${store.name} background`} className="w-full h-64 md:h-80 object-cover" />
-            <div className="absolute inset-0 bg-black/30 flex items-end">
+        {/* Hero Banner — image carousel OR gradient fallback */}
+        {bannerImages.length > 0 ? (
+          <div className="relative rounded-xl overflow-hidden shadow-md mb-6 h-64 md:h-80">
+            {bannerImages.map((url, idx) => (
+              <img
+                key={url}
+                src={url}
+                alt={`Banner ${idx + 1}`}
+                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
+              />
+            ))}
+            {/* Slogan overlay */}
+            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end">
               <div className="p-6 text-white">
-                <h2 className="text-2xl md:text-3xl font-bold">{store.name}</h2>
-                {store.slogan && <p className="text-sm md:text-base opacity-90 mt-1">{store.slogan}</p>}
+                {store.slogan && <p className="text-base md:text-xl font-semibold drop-shadow">{store.slogan}</p>}
               </div>
             </div>
+            {/* Prev / Next arrows */}
+            {bannerImages.length > 1 && (
+              <>
+                <button
+                  onClick={() => goToBanner((bannerIndex - 1 + bannerImages.length) % bannerImages.length)}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center"
+                >‹</button>
+                <button
+                  onClick={() => goToBanner((bannerIndex + 1) % bannerImages.length)}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center"
+                >›</button>
+                {/* Dots */}
+                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                  {bannerImages.map((_, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => goToBanner(idx)}
+                      className={`w-2 h-2 rounded-full transition-all ${idx === bannerIndex ? 'bg-white scale-125' : 'bg-white/50'}`}
+                    />
+                  ))}
+                </div>
+              </>
+            )}
           </div>
-        )}
-
-        {!backgroundImage && (
-          <div className={`rounded-lg shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+        ) : (
+          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
             <div className="p-6 md:p-8">
               <h2 className="text-2xl md:text-3xl font-bold">{store.name}</h2>
-              <p className="text-sm md:text-base opacity-90 mt-2">{store.slogan || store.description}</p>
-            </div>
-          </div>
-        )}
-
-        {carouselImages.length > 0 && (
-          <div className="mb-8">
-            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Featured</h2>
-            <div className="flex gap-4 overflow-x-auto pb-2">
-              {carouselImages.map((url, index) => (
-                <img
-                  key={`${url}-${index}`}
-                  src={url}
-                  alt={`Featured slide ${index + 1}`}
-                  className="h-52 md:h-64 w-[85%] md:w-[45%] shrink-0 rounded-lg object-cover border"
-                />
-              ))}
+              {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2">{store.slogan}</p>}
             </div>
           </div>
         )}
@@ -400,11 +552,10 @@ const StoreDetail: React.FC = () => {
             <img 
               src={store.logo} 
               alt={store.name} 
-              className="h-32 w-32 object-cover rounded-full border-4 border-white shadow-sm"
+              className="h-24 w-24 object-cover rounded-full border-4 border-white shadow-sm"
             />
             <div className="flex-1 text-center md:text-left">
-              <h1 className={`text-3xl font-bold mb-2 ${currentTheme.sectionTitle}`}>{store.name}</h1>
-              <div className="flex items-center justify-center md:justify-start gap-3 mb-2">
+              <div className="flex items-center justify-center md:justify-start gap-3 mb-3">
                 {avgRating !== null ? (
                   <div className="flex items-center text-yellow-500">
                     <Star size={16} className="mr-2" />
@@ -414,29 +565,24 @@ const StoreDetail: React.FC = () => {
                 ) : (
                   <div className={`text-sm ${currentTheme.mutedText}`}>No ratings yet</div>
                 )}
-                <div className="ml-4">
-                  <Button size="sm" variant={isFollowing ? 'ghost' : 'outline'} className={currentTheme.actionButton} onClick={async () => {
-                    if (!user) { toast('Please sign in to follow stores'); return; }
-                    try {
-                      if (isFollowing) await unfollowStore(store.id); else await followStore(store.id);
-                    } catch (err) {
-                      const maybeErr = err as { code?: string; name?: string; message?: string } | undefined;
-                      const code = maybeErr?.code || maybeErr?.name || '';
-                      const msg = maybeErr?.message || String(err);
-                      console.error('Follow button failed', { err });
-                      const full = code ? `${code}: ${msg}` : msg;
-                      pushDebugLog('Follow failed', full, { storeId: store.id, err });
-                      toast.error('Failed to update follow status: ' + full);
-                    }
-                  }}>
-                    {isFollowing ? 'Following' : 'Follow'}
-                  </Button>
-                </div>
+                <Button size="sm" variant={isFollowing ? 'ghost' : 'outline'} className={currentTheme.actionButton} onClick={async () => {
+                  if (!user) { toast('Please sign in to follow stores'); return; }
+                  try {
+                    if (isFollowing) await unfollowStore(store.id); else await followStore(store.id);
+                  } catch (err) {
+                    const maybeErr = err as { code?: string; name?: string; message?: string } | undefined;
+                    const code = maybeErr?.code || maybeErr?.name || '';
+                    const msg = maybeErr?.message || String(err);
+                    console.error('Follow button failed', { err });
+                    const full = code ? `${code}: ${msg}` : msg;
+                    pushDebugLog('Follow failed', full, { storeId: store.id, err });
+                    toast.error('Failed to update follow status: ' + full);
+                  }
+                }}>
+                  {isFollowing ? 'Following' : 'Follow'}
+                </Button>
               </div>
-              {store.slogan && (
-                <p className={`text-lg italic mb-4 ${currentTheme.mutedText}`}>"{store.slogan}"</p>
-              )}
-              <p className={`mb-4 ${currentTheme.mutedText}`}>{store.description}</p>
+              <p className={`mb-4 text-sm ${currentTheme.mutedText}`}>{store.description}</p>
               
               <div className="flex flex-wrap justify-center md:justify-start gap-4">
                 <div className={`flex items-center ${currentTheme.mutedText}`}>
@@ -487,35 +633,66 @@ const StoreDetail: React.FC = () => {
           </div>
         </div>
         
+        {/* Page Navigation Bar */}
+        {(() => {
+          const customPages = Array.isArray(store.customPages) ? store.customPages : [];
+          const hasAbout = !!(store.aboutUs || store.mission || store.vision);
+          const hasContact = !!(store.contactInfo?.phone || store.contactInfo?.email || store.location || store.website || store.socialLinks?.facebook || store.socialLinks?.instagram || store.socialLinks?.twitter || store.socialLinks?.whatsapp);
+          const navPages = [
+            { id: 'home', label: 'Home' },
+            ...(hasAbout ? [{ id: 'about', label: 'About Us' }] : []),
+            { id: 'products', label: 'Products' },
+            ...customPages.sort((a, b) => a.order - b.order).map(p => ({ id: p.id, label: p.name })),
+            ...(hasContact ? [{ id: 'contact', label: 'Contact Us' }] : []),
+          ];
+          if (navPages.length <= 1) return null;
+          return (
+            <div className={`flex gap-1 mb-6 overflow-x-auto rounded-lg p-1 ${currentTheme.cardSoft}`}>
+              {navPages.map(p => (
+                <button
+                  key={p.id}
+                  onClick={() => setActivePage(p.id)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
+                    activePage === p.id
+                      ? 'bg-white shadow text-gray-900'
+                      : `${currentTheme.mutedText} hover:bg-white/60`
+                  }`}
+                >
+                  {p.label}
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+
+        {/* Page Content */}
+        {activePage === 'home' && (
+          <>
         {/* Announcements */}
         {(aboutUs || mission || vision) && (
           <div className="mb-8">
             <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>About Us</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              {aboutUs && (
-                <Card className={currentTheme.cardSoft}>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold mb-2">Who We Are</h3>
-                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText}`}>{aboutUs}</p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
+              {[
+                { title: 'Who We Are', text: aboutUs },
+                { title: 'Mission', text: mission },
+                { title: 'Vision', text: vision },
+              ].filter(c => c.text).map(c => (
+                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col`}>
+                  <CardContent className="p-4 flex flex-col flex-1">
+                    <h3 className="font-semibold mb-2">{c.title}</h3>
+                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} line-clamp-6 flex-1`}>{c.text}</p>
+                    {c.text.length > 200 && (
+                      <button
+                        onClick={() => setReadMoreContent({ title: c.title, text: c.text })}
+                        className={`mt-3 text-xs font-semibold underline self-start ${currentTheme.link}`}
+                      >
+                        Read More
+                      </button>
+                    )}
                   </CardContent>
                 </Card>
-              )}
-              {mission && (
-                <Card className={currentTheme.cardSoft}>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold mb-2">Mission</h3>
-                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText}`}>{mission}</p>
-                  </CardContent>
-                </Card>
-              )}
-              {vision && (
-                <Card className={currentTheme.cardSoft}>
-                  <CardContent className="p-4">
-                    <h3 className="font-semibold mb-2">Vision</h3>
-                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText}`}>{vision}</p>
-                  </CardContent>
-                </Card>
-              )}
+              ))}
             </div>
           </div>
         )}
@@ -543,11 +720,11 @@ const StoreDetail: React.FC = () => {
           {products.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
               {products.map((product) => (
-                <ProductCard key={product.id} product={product} />
+                <ProductCard key={product.id} product={product} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
               ))}
             </div>
           ) : (
-            <Card className={currentTheme.card}>
+            <Card>
               <CardContent className="flex items-center justify-center h-40">
                 <p className="text-gray-500">This store doesn't have any products yet.</p>
               </CardContent>
@@ -570,8 +747,150 @@ const StoreDetail: React.FC = () => {
             </div>
           </div>
         )}
+          </>
+        )}
 
-        {/* Reviews */}
+        {/* About Us Page */}
+        {activePage === 'about' && (
+          <div className="space-y-6">
+            <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>About Us</h2>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+              {[
+                { title: 'Who We Are', text: aboutUs },
+                { title: 'Mission', text: mission },
+                { title: 'Vision', text: vision },
+              ].filter(c => c.text).map(c => (
+                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col`}>
+                  <CardContent className="p-6 flex flex-col flex-1">
+                    <h3 className="text-lg font-semibold mb-3">{c.title}</h3>
+                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} leading-relaxed flex-1`}>{c.text}</p>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Products Page */}
+        {activePage === 'products' && (
+          <div className="space-y-4">
+            <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>Products</h2>
+            {products.length > 0 ? (
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                {products.map((product) => (
+                  <ProductCard key={product.id} product={product} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
+                ))}
+              </div>
+            ) : (
+              <Card className={currentTheme.card}>
+                <CardContent className="flex items-center justify-center h-40">
+                  <p className="text-gray-500">This store doesn't have any products yet.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Custom Pages */}
+        {Array.isArray(store.customPages) && store.customPages.map(page => activePage === page.id && (
+          <div key={page.id} className="space-y-6">
+            <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>{page.name}</h2>
+            {page.image && (
+              <div className="rounded-xl overflow-hidden shadow-md">
+                <img src={page.image} alt={page.name} className="w-full max-h-80 object-cover" />
+              </div>
+            )}
+            {page.content && (
+              <Card className={currentTheme.cardSoft}>
+                <CardContent className="p-6">
+                  <p className={`text-sm whitespace-pre-line leading-relaxed ${currentTheme.mutedText}`}>{page.content}</p>
+                </CardContent>
+              </Card>
+            )}
+            {!page.image && !page.content && (
+              <p className={`${currentTheme.mutedText}`}>This page has no content yet.</p>
+            )}
+          </div>
+        ))}
+
+        {/* Contact Us Page */}
+        {activePage === 'contact' && (
+          <div className="space-y-6">
+            <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>Contact Us</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              {/* Contact Details Card */}
+              <Card className={currentTheme.cardSoft}>
+                <CardContent className="p-6 space-y-5">
+                  {store.location && (
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><MapPin size={18} className={currentTheme.mutedText} /></div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Location</p>
+                        <p className={`text-sm ${currentTheme.mutedText}`}>{store.location}</p>
+                      </div>
+                    </div>
+                  )}
+                  {store.contactInfo?.phone && (
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Phone size={18} className={currentTheme.mutedText} /></div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Phone</p>
+                        <a href={`tel:${store.contactInfo.phone}`} className={`text-sm ${currentTheme.link} hover:underline`}>{store.contactInfo.phone}</a>
+                      </div>
+                    </div>
+                  )}
+                  {store.contactInfo?.email && (
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Mail size={18} className={currentTheme.mutedText} /></div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Email</p>
+                        <a href={`mailto:${store.contactInfo.email}`} className={`text-sm ${currentTheme.link} hover:underline break-all`}>{store.contactInfo.email}</a>
+                      </div>
+                    </div>
+                  )}
+                  {store.website && (
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Globe size={18} className={currentTheme.mutedText} /></div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Website</p>
+                        <a href={store.website} target="_blank" rel="noopener noreferrer" className={`text-sm ${currentTheme.link} hover:underline break-all`}>{store.website}</a>
+                      </div>
+                    </div>
+                  )}
+                  {(store.socialLinks?.facebook || store.socialLinks?.instagram || store.socialLinks?.twitter || store.socialLinks?.whatsapp) && (
+                    <div className="flex items-start gap-4">
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><span className={`text-xs font-bold ${currentTheme.mutedText}`}>@</span></div>
+                      <div>
+                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Social Media</p>
+                        <div className="flex gap-3">
+                          {store.socialLinks?.facebook && (
+                            <a href={store.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className={`${currentTheme.link} hover:opacity-70`} title="Facebook"><Facebook size={22} /></a>
+                          )}
+                          {store.socialLinks?.instagram && (
+                            <a href={store.socialLinks.instagram} target="_blank" rel="noopener noreferrer" className={`${currentTheme.link} hover:opacity-70`} title="Instagram"><Instagram size={22} /></a>
+                          )}
+                          {store.socialLinks?.twitter && (
+                            <a href={store.socialLinks.twitter} target="_blank" rel="noopener noreferrer" className={`${currentTheme.link} hover:opacity-70`} title="Twitter"><Twitter size={22} /></a>
+                          )}
+                          {store.socialLinks?.whatsapp && (
+                            <a href={`https://wa.me/${store.socialLinks.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className={`${currentTheme.link} hover:opacity-70`} title="WhatsApp">
+                              <svg viewBox="0 0 24 24" className="w-[22px] h-[22px] fill-current"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Send a Message Card */}
+              <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} />
+            </div>
+          </div>
+        )}
+
+        {/* Reviews — always visible */}
         <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
           <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
           {reviews.length > 0 ? (

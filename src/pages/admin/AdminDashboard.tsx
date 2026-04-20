@@ -19,7 +19,8 @@ import {
   ShoppingCart,
   FileText,
   Undo2,
-  DollarSign
+  DollarSign,
+  Mail
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -435,6 +436,12 @@ const AdminDashboard: React.FC = () => {
                   <Link to="/admin/revenue" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
                     <DollarSign className="h-5 w-5 mr-3" />
                     <span>Revenue</span>
+                  </Link>
+                </li>
+                <li>
+                  <Link to="/admin/marketing" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
+                    <Mail className="h-5 w-5 mr-3" />
+                    <span>Email Marketing</span>
                   </Link>
                 </li>
               </>

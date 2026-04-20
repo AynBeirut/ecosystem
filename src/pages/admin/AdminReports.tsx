@@ -131,6 +131,30 @@ const AdminReports: React.FC = () => {
   const totalProduction = completedBatches.reduce((sum, b) => sum + (b.actualQuantity || 0), 0);
   const productionCost = completedBatches.reduce((sum, b) => sum + b.materialsCost, 0);
 
+  // Sales by Person
+  const salesByPerson = completedOrders.reduce((acc, o) => {
+    const name = o.assignedSalesPersonName || o.assignedSalesPerson || 'Unassigned';
+    if (!acc[name]) acc[name] = { name, total: 0, count: 0 };
+    acc[name].total += o.total || 0;
+    acc[name].count += 1;
+    return acc;
+  }, {} as Record<string, { name: string; total: number; count: number }>);
+
+  const salesByPersonList = Object.values(salesByPerson).sort((a, b) => b.total - a.total);
+  const grandTotalSales = salesByPersonList.reduce((s, p) => s + p.total, 0);
+
+  // Monthly sales breakdown
+  const monthlySales = completedOrders.reduce((acc, o) => {
+    const month = (o.createdAt || '').toString().slice(0, 7);
+    if (!month) return acc;
+    if (!acc[month]) acc[month] = { month, total: 0, count: 0 };
+    acc[month].total += o.total || 0;
+    acc[month].count += 1;
+    return acc;
+  }, {} as Record<string, { month: string; total: number; count: number }>);
+
+  const monthlySalesList = Object.values(monthlySales).sort((a, b) => a.month.localeCompare(b.month));
+
   // Customer Metrics
   const activeCustomers = customers.filter(c => c.status === 'active').length;
   const totalCustomerValue = customers.reduce((sum, c) => sum + (c.lifetimeValue || 0), 0);
@@ -303,8 +327,9 @@ const AdminReports: React.FC = () => {
         </Card>
 
         <Tabs defaultValue="overview" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4">
+          <TabsList className="grid w-full grid-cols-5">
             <TabsTrigger value="overview">Overview</TabsTrigger>
+            <TabsTrigger value="salesperson">By Sales Person</TabsTrigger>
             <TabsTrigger value="financial">Financial</TabsTrigger>
             <TabsTrigger value="inventory">Inventory</TabsTrigger>
             <TabsTrigger value="production">Production</TabsTrigger>
@@ -428,6 +453,182 @@ const AdminReports: React.FC = () => {
                 </CardContent>
               </Card>
             </div>
+          </TabsContent>
+
+          <TabsContent value="salesperson" className="space-y-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Sales by Person */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Sales by Person</CardTitle>
+                  <CardDescription>{dateRange.startDate} → {dateRange.endDate}</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {salesByPersonList.length === 0 ? (
+                    <p className="text-sm text-gray-500">No sales assigned to any person in this period.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Person</th>
+                          <th className="text-right py-2">Orders</th>
+                          <th className="text-right py-2">Total</th>
+                          <th className="text-right py-2">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {salesByPersonList.map((p) => (
+                          <tr key={p.name} className="border-b last:border-0">
+                            <td className="py-2 font-medium">{p.name}</td>
+                            <td className="py-2 text-right">{p.count}</td>
+                            <td className="py-2 text-right">${p.total.toFixed(2)}</td>
+                            <td className="py-2 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-blue-500 h-2 rounded-full"
+                                    style={{ width: `${grandTotalSales > 0 ? (p.total / grandTotalSales) * 100 : 0}%` }}
+                                  />
+                                </div>
+                                <span className="w-10 text-right">
+                                  {grandTotalSales > 0 ? ((p.total / grandTotalSales) * 100).toFixed(1) : '0.0'}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t-2">
+                        <tr>
+                          <td className="py-2 font-bold">Total</td>
+                          <td className="py-2 text-right font-bold">{completedOrders.length}</td>
+                          <td className="py-2 text-right font-bold">${grandTotalSales.toFixed(2)}</td>
+                          <td className="py-2 text-right font-bold">100%</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Monthly Sales Report */}
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" />Monthly Sales Report</CardTitle>
+                  <CardDescription>Revenue per month in selected range</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {monthlySalesList.length === 0 ? (
+                    <p className="text-sm text-gray-500">No sales data in this period.</p>
+                  ) : (
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2">Month</th>
+                          <th className="text-right py-2">Orders</th>
+                          <th className="text-right py-2">Revenue</th>
+                          <th className="text-right py-2">vs Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {monthlySalesList.map((m) => (
+                          <tr key={m.month} className="border-b last:border-0">
+                            <td className="py-2 font-medium">
+                              {new Date(m.month + '-01').toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })}
+                            </td>
+                            <td className="py-2 text-right">{m.count}</td>
+                            <td className="py-2 text-right">${m.total.toFixed(2)}</td>
+                            <td className="py-2 text-right">
+                              <div className="flex items-center justify-end gap-2">
+                                <div className="w-16 bg-gray-200 rounded-full h-2">
+                                  <div
+                                    className="bg-green-500 h-2 rounded-full"
+                                    style={{ width: `${grandTotalSales > 0 ? (m.total / grandTotalSales) * 100 : 0}%` }}
+                                  />
+                                </div>
+                                <span className="w-10 text-right">
+                                  {grandTotalSales > 0 ? ((m.total / grandTotalSales) * 100).toFixed(1) : '0.0'}%
+                                </span>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t-2">
+                        <tr>
+                          <td className="py-2 font-bold">Total</td>
+                          <td className="py-2 text-right font-bold">{completedOrders.length}</td>
+                          <td className="py-2 text-right font-bold">${grandTotalSales.toFixed(2)}</td>
+                          <td></td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Monthly breakdown per salesperson */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Monthly Breakdown per Sales Person</CardTitle>
+                <CardDescription>Each person's sales per month</CardDescription>
+              </CardHeader>
+              <CardContent className="overflow-x-auto">
+                {salesByPersonList.length === 0 ? (
+                  <p className="text-sm text-gray-500">No data available.</p>
+                ) : (() => {
+                  const months = monthlySalesList.map(m => m.month);
+                  const perPersonPerMonth: Record<string, Record<string, number>> = {};
+                  completedOrders.forEach(o => {
+                    const name = o.assignedSalesPersonName || o.assignedSalesPerson || 'Unassigned';
+                    const month = (o.createdAt || '').toString().slice(0, 7);
+                    if (!month) return;
+                    if (!perPersonPerMonth[name]) perPersonPerMonth[name] = {};
+                    perPersonPerMonth[name][month] = (perPersonPerMonth[name][month] || 0) + (o.total || 0);
+                  });
+                  return (
+                    <table className="min-w-full text-sm">
+                      <thead>
+                        <tr className="border-b">
+                          <th className="text-left py-2 pr-4">Person</th>
+                          {months.map(m => (
+                            <th key={m} className="text-right py-2 px-2">
+                              {new Date(m + '-01').toLocaleDateString('en-GB', { month: 'short', year: '2-digit' })}
+                            </th>
+                          ))}
+                          <th className="text-right py-2 pl-4">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {salesByPersonList.map(p => (
+                          <tr key={p.name} className="border-b last:border-0">
+                            <td className="py-2 pr-4 font-medium">{p.name}</td>
+                            {months.map(m => (
+                              <td key={m} className="py-2 px-2 text-right">
+                                {perPersonPerMonth[p.name]?.[m] ? `$${perPersonPerMonth[p.name][m].toFixed(2)}` : '-'}
+                              </td>
+                            ))}
+                            <td className="py-2 pl-4 text-right font-bold">${p.total.toFixed(2)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="border-t-2">
+                        <tr>
+                          <td className="py-2 font-bold">Total</td>
+                          {months.map(m => (
+                            <td key={m} className="py-2 px-2 text-right font-bold">
+                              ${(monthlySales[m]?.total || 0).toFixed(2)}
+                            </td>
+                          ))}
+                          <td className="py-2 pl-4 text-right font-bold">${grandTotalSales.toFixed(2)}</td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  );
+                })()}
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="financial" className="space-y-6">
