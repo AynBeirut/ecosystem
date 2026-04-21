@@ -489,7 +489,7 @@ const AdminProfile: React.FC = () => {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      https://grabio.space/store/{formData.slug || 'your-store-name'}
+                      https://grabio.space/{formData.slug || 'your-store-name'}
                     </p>
                     {slugError && (
                       <div className="mt-2">
