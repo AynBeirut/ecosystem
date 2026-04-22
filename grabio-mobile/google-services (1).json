@@ -67,6 +67,14 @@
           }
         },
         {
+          "client_id": "997465465802-o58auvsmh98l4b1kp735squ0vcof2fop.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "space.grabio.app",
+            "certificate_hash": "057e93364b739af7fa8c57acaa24f628571c506a"
+          }
+        },
+        {
           "client_id": "997465465802-biu0r3k8ff880560gvgd8tao71361bp4.apps.googleusercontent.com",
           "client_type": 3
         }

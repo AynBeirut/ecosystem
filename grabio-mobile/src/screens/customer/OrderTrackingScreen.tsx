@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
+import { getFirestore, doc, onSnapshot } from '@react-native-firebase/firestore';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList, Order } from '../../types';
 
@@ -25,17 +25,16 @@ export default function OrderTrackingScreen() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsub = firestore()
-      .collectionGroup('orders')
-      .where(firestore.FieldPath.documentId(), '==', params.orderId)
-      .onSnapshot((snap) => {
-        if (!snap.empty) {
-          setOrder({ id: snap.docs[0].id, ...snap.docs[0].data() } as Order);
-        }
-        setLoading(false);
-      });
+    const db = getFirestore();
+    const orderRef = doc(db, 'storeProfiles', params.storeId, 'orders', params.orderId);
+    const unsub = onSnapshot(orderRef, (snap) => {
+      if (snap.exists()) {
+        setOrder({ id: snap.id, ...snap.data() } as Order);
+      }
+      setLoading(false);
+    });
     return unsub;
-  }, [params.orderId]);
+  }, [params.orderId, params.storeId]);
 
   if (loading) return <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />;
   if (!order) return <View style={styles.center}><Text>Order not found</Text></View>;

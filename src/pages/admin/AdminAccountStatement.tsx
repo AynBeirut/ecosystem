@@ -177,6 +177,14 @@ const AdminAccountStatement: React.FC = () => {
   const [filterCustomer, setFilterCustomer] = useState('');
   const [filterProduct, setFilterProduct] = useState('');
 
+  // Separate date filters for cash collections tab
+  const [cashFilterStart, setCashFilterStart] = useState('');
+  const [cashFilterEnd, setCashFilterEnd] = useState('');
+
+  // Expanded ledger rows for sales / purchases
+  const [expandedSalesCustomer, setExpandedSalesCustomer] = useState<string | null>(null);
+  const [expandedPurchaseSupplier, setExpandedPurchaseSupplier] = useState<string | null>(null);
+
   const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -671,29 +679,26 @@ const AdminAccountStatement: React.FC = () => {
 
       collectionsSnapshot.forEach(doc => {
         const entry = doc.data();
-        const amount = toFiniteNumber(entry.totalAmount, Number.NaN);
+        // Use 0 as fallback so records with missing amounts are still shown
+        const amount = toFiniteNumber(entry.totalAmount, 0);
         const ordersCount = toFiniteNumber(entry.ordersCount, 0);
-
-        if (!Number.isFinite(amount) || amount < 0) {
-          return;
-        }
 
         const date =
           typeof entry.collectionDate === 'string'
-            ? entry.collectionDate
-            : normalizeDateString(entry.collectionDate) || 'N/A';
+            ? entry.collectionDate.slice(0, 10)
+            : normalizeDateString(entry.collectionDate) || '';
 
         list.push({
           id: doc.id,
           collectionDate: date,
-          bankAccount: toNonEmptyString(entry.bankAccount, 'N/A'),
-          depositReference: toNonEmptyString(entry.depositReference, 'N/A'),
-          totalAmount: amount,
+          bankAccount: toNonEmptyString(entry.bankAccount, '-'),
+          depositReference: toNonEmptyString(entry.depositReference, '-'),
+          totalAmount: Math.max(0, amount),
           ordersCount: Math.max(0, Math.floor(ordersCount)),
           notes: typeof entry.notes === 'string' ? entry.notes : undefined,
         });
 
-        total += amount;
+        total += Math.max(0, amount);
       });
 
       list.sort((a, b) => new Date(b.collectionDate).getTime() - new Date(a.collectionDate).getTime());
@@ -3035,125 +3040,189 @@ const AdminAccountStatement: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'purchases' && (
-            <div>
-              {(() => {
-                const purchaseRows = buildPurchaseStatementRows(purchases);
-                const totals = purchaseRows.reduce((acc, row) => {
-                  acc.debit += row.debit;
-                  acc.net += row.net;
-                  acc.vat += row.vat;
-                  acc.credit += row.credit;
-                  return acc;
-                }, { debit: 0, net: 0, vat: 0, credit: 0 });
+          {activeTab === 'purchases' && (() => {
+            const filteredPurchases = purchases.filter(p =>
+              isDateInRange(p.date, filterStartDate, filterEndDate)
+            );
 
-                const closingBalance = purchaseRows.length > 0
-                  ? purchaseRows[purchaseRows.length - 1].balance
-                  : 0;
+            // Group by supplier
+            const supplierMap = new Map<string, {
+              name: string;
+              invoices: PurchaseRecord[];
+              totalDebit: number;
+              totalCredit: number;
+              balance: number;
+            }>();
+            filteredPurchases.forEach(p => {
+              if (!supplierMap.has(p.supplier)) {
+                supplierMap.set(p.supplier, { name: p.supplier, invoices: [], totalDebit: 0, totalCredit: 0, balance: 0 });
+              }
+              const entry = supplierMap.get(p.supplier)!;
+              entry.invoices.push(p);
+              entry.totalDebit += p.amount;
+              entry.totalCredit += p.amountPaid;
+              entry.balance += (p.amount - p.amountPaid);
+            });
+            const supplierAccounts = Array.from(supplierMap.values()).sort((a, b) => b.balance - a.balance);
+            const totalDebit = supplierAccounts.reduce((s, c) => s + c.totalDebit, 0);
+            const totalCredit = supplierAccounts.reduce((s, c) => s + c.totalCredit, 0);
+            const totalBalance = totalDebit - totalCredit;
 
-                return (
-              <>
-              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Purchase History</h2>
-                <div className="flex gap-2 flex-wrap items-center">
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">From:</label>
-                    <input
-                      type="date"
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">To:</label>
-                    <input
-                      type="date"
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  {(filterStartDate || filterEndDate) && (
-                    <button
-                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
-                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
-                    >
-                      Clear Dates
+            return (
+              <div>
+                {/* Filters */}
+                <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
+                  <h2 className="text-xl font-semibold">Purchase Accounts</h2>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">From:</label>
+                      <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">To:</label>
+                      <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    {(filterStartDate || filterEndDate) && (
+                      <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }} className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded">Clear Dates</button>
+                    )}
+                    <button onClick={exportPurchasesToExcel} className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm">
+                      <Download size={16} />{!isMobile && 'Export Excel'}
                     </button>
-                  )}
-                  <button
-                    onClick={exportPurchasesToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
-                  >
-                    <Download size={16} />
-                    {!isMobile && 'Export Excel'}
-                  </button>
-                  <button
-                    onClick={exportPurchasesToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
-                  >
-                    <FileDown size={16} />
-                    {!isMobile && 'Export PDF'}
-                  </button>
+                    <button onClick={exportPurchasesToPDF} className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm">
+                      <FileDown size={16} />{!isMobile && 'Export PDF'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-orange-50 border border-orange-200 rounded p-4">
+                    <div className="text-sm text-orange-600 font-medium">Total Purchased (Dr)</div>
+                    <div className="text-2xl font-bold text-orange-700">${totalDebit.toFixed(2)}</div>
+                    <div className="text-xs text-gray-500 mt-1">{filteredPurchases.length} invoice(s)</div>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded p-4">
+                    <div className="text-sm text-green-600 font-medium">Total Paid (Cr)</div>
+                    <div className="text-2xl font-bold text-green-700">${totalCredit.toFixed(2)}</div>
+                  </div>
+                  <div className={`border rounded p-4 ${totalBalance > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                    <div className={`text-sm font-medium ${totalBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>Outstanding (Owed to Suppliers)</div>
+                    <div className={`text-2xl font-bold ${totalBalance > 0 ? 'text-red-700' : 'text-green-700'}`}>${totalBalance.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                {/* Supplier Account Table */}
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <table className="min-w-full border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="border px-3 py-2 text-left text-xs">Supplier</th>
+                        <th className="border px-3 py-2 text-right text-xs">Invoices</th>
+                        <th className="border px-3 py-2 text-right text-xs">Total Purchased (Dr)</th>
+                        <th className="border px-3 py-2 text-right text-xs">Total Paid (Cr)</th>
+                        <th className="border px-3 py-2 text-right text-xs">Outstanding</th>
+                        <th className="border px-3 py-2 text-center text-xs">Ledger</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {supplierAccounts.length === 0 && (
+                        <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No purchases found{(filterStartDate || filterEndDate) ? ' for the selected date range' : ''}.</td></tr>
+                      )}
+                      {supplierAccounts.map(supplier => (
+                        <React.Fragment key={supplier.name}>
+                          <tr className={`border-b hover:bg-gray-50 ${expandedPurchaseSupplier === supplier.name ? 'bg-orange-50' : ''}`}>
+                            <td className="border px-3 py-2 font-medium">{supplier.name}</td>
+                            <td className="border px-3 py-2 text-right">{supplier.invoices.length}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{supplier.totalDebit.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{supplier.totalCredit.toFixed(2)}</td>
+                            <td className={`border px-3 py-2 text-right font-bold ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {supplier.balance.toFixed(2)}
+                              {supplier.balance > 0 && <span className="ml-1 text-xs font-normal">(owed)</span>}
+                            </td>
+                            <td className="border px-3 py-2 text-center">
+                              <button
+                                onClick={() => setExpandedPurchaseSupplier(expandedPurchaseSupplier === supplier.name ? null : supplier.name)}
+                                className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded font-medium"
+                              >
+                                {expandedPurchaseSupplier === supplier.name ? 'Hide' : 'View Ledger'}
+                              </button>
+                            </td>
+                          </tr>
+                          {expandedPurchaseSupplier === supplier.name && (
+                            <tr>
+                              <td colSpan={6} className="border px-0 py-0 bg-gray-50">
+                                <div className="px-6 py-3">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Ledger — {supplier.name}</p>
+                                  <table className="min-w-full text-xs border-collapse">
+                                    <thead className="bg-white">
+                                      <tr>
+                                        <th className="border px-2 py-1 text-left">Date</th>
+                                        <th className="border px-2 py-1 text-left">Ref</th>
+                                        <th className="border px-2 py-1 text-left">Items</th>
+                                        <th className="border px-2 py-1 text-right">Debit (Invoice)</th>
+                                        <th className="border px-2 py-1 text-right">Credit (Paid)</th>
+                                        <th className="border px-2 py-1 text-right">Running Balance</th>
+                                        <th className="border px-2 py-1 text-left">Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(() => {
+                                        let running = 0;
+                                        return [...supplier.invoices]
+                                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                                          .map(inv => {
+                                            running += (inv.amount - inv.amountPaid);
+                                            return (
+                                              <tr key={inv.id} className="border-b hover:bg-white">
+                                                <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
+                                                <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
+                                                <td className="border px-2 py-1">{inv.items?.length ?? 0} item(s)</td>
+                                                <td className="border px-2 py-1 text-right font-semibold text-orange-700">{inv.amount.toFixed(2)}</td>
+                                                <td className="border px-2 py-1 text-right text-green-600">{inv.amountPaid.toFixed(2)}</td>
+                                                <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-red-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
+                                                <td className="border px-2 py-1">
+                                                  <span className={`px-1 py-0.5 rounded text-xs ${
+                                                    inv.status === 'received' || inv.status === 'completed' ? 'bg-green-100 text-green-700' :
+                                                    inv.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
+                                                  }`}>{inv.status}</span>
+                                                </td>
+                                              </tr>
+                                            );
+                                          });
+                                      })()}
+                                    </tbody>
+                                    <tfoot className="bg-white font-semibold">
+                                      <tr>
+                                        <td colSpan={3} className="border px-2 py-1">Total</td>
+                                        <td className="border px-2 py-1 text-right text-orange-700">{supplier.totalDebit.toFixed(2)}</td>
+                                        <td className="border px-2 py-1 text-right text-green-600">{supplier.totalCredit.toFixed(2)}</td>
+                                        <td className={`border px-2 py-1 text-right ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{supplier.balance.toFixed(2)}</td>
+                                        <td className="border px-2 py-1"></td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-100 font-bold">
+                      <tr>
+                        <td className="border px-3 py-3">TOTAL</td>
+                        <td className="border px-3 py-3 text-right">{filteredPurchases.length}</td>
+                        <td className="border px-3 py-3 text-right text-orange-700">{totalDebit.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-green-600">{totalCredit.toFixed(2)}</td>
+                        <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>{totalBalance.toFixed(2)}</td>
+                        <td className="border px-3 py-3"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
-              <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Date</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Ref.</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Description</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Debit</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Net</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">VAT</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Credit</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Balance</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {purchaseRows.map((row) => (
-                      <tr key={row.id} className="border-b hover:bg-gray-50 text-sm">
-                        <td className="px-3 py-2">{row.dateLabel}</td>
-                        <td className="px-3 py-2">{row.ref}</td>
-                        <td className="px-3 py-2">{row.description}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{row.debit.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right">{row.net.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right">{row.vat.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right text-green-600">{row.credit.toFixed(2)}</td>
-                        <td className="px-3 py-2 text-right font-semibold">{row.balance.toFixed(2)}</td>
-                        <td className="px-3 py-2">
-                          <span className={`px-2 py-1 rounded text-xs ${
-                            row.status === 'received' ? 'bg-green-100 text-green-800' :
-                            row.status === 'confirmed' ? 'bg-blue-100 text-blue-800' :
-                            'bg-yellow-100 text-yellow-800'
-                          }`}>
-                            {row.status}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                  <tfoot className="bg-gray-100 font-bold">
-                    <tr>
-                      <td className="px-3 py-3" colSpan={3}>TOTAL</td>
-                      <td className="px-3 py-3 text-right text-blue-600">{totals.debit.toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{totals.net.toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{totals.vat.toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right text-green-600">{totals.credit.toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{closingBalance.toFixed(2)}</td>
-                      <td className="px-3 py-3"></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-              </>
-                );
-              })()}
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === 'expenses' && (
             <div>
@@ -3257,17 +3326,212 @@ const AdminAccountStatement: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'sales' && (
+          {activeTab === 'sales' && (() => {
+            const filteredSales = sales.filter(s => {
+              if (!isDateInRange(s.date, filterStartDate, filterEndDate)) return false;
+              if (filterCustomer && s.customer !== filterCustomer) return false;
+              return true;
+            });
+
+            // Group by customer
+            const customerMap = new Map<string, {
+              name: string;
+              invoices: SalesRecord[];
+              totalDebit: number;
+              totalCredit: number;
+              balance: number;
+            }>();
+            filteredSales.forEach(s => {
+              if (!customerMap.has(s.customer)) {
+                customerMap.set(s.customer, { name: s.customer, invoices: [], totalDebit: 0, totalCredit: 0, balance: 0 });
+              }
+              const entry = customerMap.get(s.customer)!;
+              entry.invoices.push(s);
+              entry.totalDebit += s.total;
+              entry.totalCredit += s.amountPaid;
+              entry.balance += (s.total - s.amountPaid);
+            });
+            const customerAccounts = Array.from(customerMap.values()).sort((a, b) => b.balance - a.balance);
+            const totalDebit = customerAccounts.reduce((sum, c) => sum + c.totalDebit, 0);
+            const totalCredit = customerAccounts.reduce((sum, c) => sum + c.totalCredit, 0);
+            const totalBalance = totalDebit - totalCredit;
+
+            return (
+              <div>
+                {/* Filters */}
+                <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
+                  <h2 className="text-xl font-semibold">Sales Accounts</h2>
+                  <div className="flex gap-2 items-center flex-wrap">
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">From:</label>
+                      <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">To:</label>
+                      <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">Customer:</label>
+                      <select value={filterCustomer} onChange={(e) => setFilterCustomer(e.target.value)} className="border rounded px-2 py-1 text-sm">
+                        <option value="">All Customers</option>
+                        {Array.from(new Set(sales.map(s => s.customer))).sort().map(c => (
+                          <option key={c} value={c}>{c}</option>
+                        ))}
+                      </select>
+                    </div>
+                    {(filterStartDate || filterEndDate || filterCustomer) && (
+                      <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); setFilterCustomer(''); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">Clear Filters</button>
+                    )}
+                    <button onClick={exportSalesToExcel} className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm">
+                      <Download size={16} />{!isMobile && 'Export Excel'}
+                    </button>
+                    <button onClick={exportSalesToPDF} className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm">
+                      <FileDown size={16} />{!isMobile && 'Export PDF'}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                    <div className="text-sm text-blue-600 font-medium">Total Invoiced (Dr)</div>
+                    <div className="text-2xl font-bold text-blue-700">${totalDebit.toFixed(2)}</div>
+                    <div className="text-xs text-gray-500 mt-1">{filteredSales.length} invoice(s) across {customerAccounts.length} customer(s)</div>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded p-4">
+                    <div className="text-sm text-green-600 font-medium">Total Paid (Cr)</div>
+                    <div className="text-2xl font-bold text-green-700">${totalCredit.toFixed(2)}</div>
+                  </div>
+                  <div className={`border rounded p-4 ${totalBalance > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
+                    <div className={`text-sm font-medium ${totalBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>Outstanding (Receivable)</div>
+                    <div className={`text-2xl font-bold ${totalBalance > 0 ? 'text-orange-700' : 'text-green-700'}`}>${totalBalance.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                {/* Customer Account Table */}
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <table className="min-w-full border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="border px-3 py-2 text-left text-xs">Customer</th>
+                        <th className="border px-3 py-2 text-right text-xs">Invoices</th>
+                        <th className="border px-3 py-2 text-right text-xs">Total Invoiced (Dr)</th>
+                        <th className="border px-3 py-2 text-right text-xs">Total Paid (Cr)</th>
+                        <th className="border px-3 py-2 text-right text-xs">Outstanding</th>
+                        <th className="border px-3 py-2 text-center text-xs">Ledger</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {customerAccounts.length === 0 && (
+                        <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No sales found{(filterStartDate || filterEndDate || filterCustomer) ? ' for the selected filters' : ''}.</td></tr>
+                      )}
+                      {customerAccounts.map(customer => (
+                        <React.Fragment key={customer.name}>
+                          <tr className={`border-b hover:bg-gray-50 ${expandedSalesCustomer === customer.name ? 'bg-blue-50' : ''}`}>
+                            <td className="border px-3 py-2 font-medium">{customer.name}</td>
+                            <td className="border px-3 py-2 text-right">{customer.invoices.length}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{customer.totalDebit.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{customer.totalCredit.toFixed(2)}</td>
+                            <td className={`border px-3 py-2 text-right font-bold ${customer.balance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                              {customer.balance.toFixed(2)}
+                              {customer.balance > 0 && <span className="ml-1 text-xs font-normal">(due)</span>}
+                            </td>
+                            <td className="border px-3 py-2 text-center">
+                              <button
+                                onClick={() => setExpandedSalesCustomer(expandedSalesCustomer === customer.name ? null : customer.name)}
+                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
+                              >
+                                {expandedSalesCustomer === customer.name ? 'Hide' : 'View Ledger'}
+                              </button>
+                            </td>
+                          </tr>
+                          {expandedSalesCustomer === customer.name && (
+                            <tr>
+                              <td colSpan={6} className="border px-0 py-0 bg-gray-50">
+                                <div className="px-6 py-3">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Ledger — {customer.name}</p>
+                                  <table className="min-w-full text-xs border-collapse">
+                                    <thead className="bg-white">
+                                      <tr>
+                                        <th className="border px-2 py-1 text-left">Date</th>
+                                        <th className="border px-2 py-1 text-left">Invoice Ref</th>
+                                        <th className="border px-2 py-1 text-right">Debit (Invoice)</th>
+                                        <th className="border px-2 py-1 text-right">Credit (Paid)</th>
+                                        <th className="border px-2 py-1 text-right">Running Balance</th>
+                                        <th className="border px-2 py-1 text-left">Payment Status</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {(() => {
+                                        let running = 0;
+                                        return [...customer.invoices]
+                                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+                                          .map(inv => {
+                                            running += (inv.total - inv.amountPaid);
+                                            return (
+                                              <tr key={inv.id} className="border-b hover:bg-white">
+                                                <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
+                                                <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
+                                                <td className="border px-2 py-1 text-right font-semibold text-blue-700">{inv.total.toFixed(2)}</td>
+                                                <td className="border px-2 py-1 text-right text-green-600">{inv.amountPaid.toFixed(2)}</td>
+                                                <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
+                                                <td className="border px-2 py-1">
+                                                  <span className={`px-1 py-0.5 rounded text-xs ${
+                                                    inv.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                                                    inv.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-700' :
+                                                    'bg-red-100 text-red-700'
+                                                  }`}>{inv.paymentStatus || 'unpaid'}</span>
+                                                </td>
+                                              </tr>
+                                            );
+                                          });
+                                      })()}
+                                    </tbody>
+                                    <tfoot className="bg-white font-semibold">
+                                      <tr>
+                                        <td colSpan={2} className="border px-2 py-1">Total</td>
+                                        <td className="border px-2 py-1 text-right text-blue-700">{customer.totalDebit.toFixed(2)}</td>
+                                        <td className="border px-2 py-1 text-right text-green-600">{customer.totalCredit.toFixed(2)}</td>
+                                        <td className={`border px-2 py-1 text-right ${customer.balance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{customer.balance.toFixed(2)}</td>
+                                        <td className="border px-2 py-1"></td>
+                                      </tr>
+                                    </tfoot>
+                                  </table>
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-100 font-bold">
+                      <tr>
+                        <td className="border px-3 py-3">TOTAL</td>
+                        <td className="border px-3 py-3 text-right">{filteredSales.length}</td>
+                        <td className="border px-3 py-3 text-right text-blue-700">{totalDebit.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-green-600">{totalCredit.toFixed(2)}</td>
+                        <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{totalBalance.toFixed(2)}</td>
+                        <td className="border px-3 py-3"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            );
+          })()}
+
+
+          {activeTab === 'cashCollections' && (
             <div>
               <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Sales History</h2>
-                <div className="flex gap-2 items-center flex-wrap">
+                <h2 className="text-xl font-semibold">Cash Collection History</h2>
+                <div className="flex gap-2 flex-wrap items-center">
                   <div className="flex gap-2 items-center">
                     <label className="text-sm text-gray-600">From:</label>
                     <input
                       type="date"
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
+                      value={cashFilterStart}
+                      onChange={(e) => setCashFilterStart(e.target.value)}
                       className="border rounded px-2 py-1 text-sm"
                     />
                   </div>
@@ -3275,367 +3539,33 @@ const AdminAccountStatement: React.FC = () => {
                     <label className="text-sm text-gray-600">To:</label>
                     <input
                       type="date"
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
+                      value={cashFilterEnd}
+                      onChange={(e) => setCashFilterEnd(e.target.value)}
                       className="border rounded px-2 py-1 text-sm"
                     />
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">Customer:</label>
-                    <select
-                      value={filterCustomer}
-                      onChange={(e) => setFilterCustomer(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    >
-                      <option value="">All Customers</option>
-                      {Array.from(new Set(sales.map(s => s.customer))).sort().map(customer => (
-                        <option key={customer} value={customer}>{customer}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">Product:</label>
-                    <select
-                      value={filterProduct}
-                      onChange={(e) => setFilterProduct(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    >
-                      <option value="">All Products</option>
-                      {products.map(product => (
-                        <option key={product.id} value={product.id}>{product.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  {(filterStartDate || filterEndDate || filterCustomer || filterProduct) && (
+                  {(cashFilterStart || cashFilterEnd) && (
                     <button
-                      onClick={() => {
-                        setFilterStartDate('');
-                        setFilterEndDate('');
-                        setFilterCustomer('');
-                        setFilterProduct('');
-                      }}
-                      className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm"
+                      onClick={() => { setCashFilterStart(''); setCashFilterEnd(''); }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
                     >
-                      Clear Filters
+                      Clear Dates
                     </button>
                   )}
-                  <button
-                    onClick={exportSalesToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
-                  >
-                    <Download size={16} />
-                    {!isMobile && 'Export Excel'}
-                  </button>
-                  <button
-                    onClick={exportSalesToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
-                  >
-                    <FileDown size={16} />
-                    {!isMobile && 'Export PDF'}
-                  </button>
-                </div>
-              </div>
-              <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Date</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Ref.</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Description</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Subtotal</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Discount</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Debit</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Net</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">VAT</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Credit</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Balance</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      const runningBalance = 0;
-                      // Filter sales by date, customer, and product
-                      const filteredSales = sales.filter(sale => {
-                        const saleDate = new Date(sale.date).toISOString().split('T')[0];
-                        const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                        const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                        const matchesCustomer = !filterCustomer || sale.customer === filterCustomer;
-                        const matchesProduct = !filterProduct || (sale.items && sale.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                        return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                      }).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-                      
-                      return filteredSales.map(sale => {
-                        // If filtering by product, calculate only that product's amounts
-                        let subtotal, discount, total, vat, net, credit, invoiceBalance;
-                        
-                        if (filterProduct && sale.items) {
-                          // Calculate only the filtered product's amounts
-                          const orderSubtotal = sale.subtotal || sale.total || 0;
-                          const orderDiscount = sale.discountAmount || 0;
-                          
-                          subtotal = 0;
-                          sale.items.forEach((item: StatementLineItem) => {
-                            if (item.productId === filterProduct) {
-                              const itemSubtotal = (item.quantity || 0) * (item.price || 0);
-                              subtotal += itemSubtotal;
-                            }
-                          });
-                          
-                          // Calculate proportional discount for this product
-                          discount = orderSubtotal > 0 ? (subtotal / orderSubtotal) * orderDiscount : 0;
-                          total = subtotal - discount;
-                          
-                          // Calculate proportional tax
-                          const orderVat = sale.taxAmount || 0;
-                          vat = (sale.total > 0 && orderVat > 0) ? (total / (sale.total - orderVat)) * orderVat : 0;
-                          net = total - vat;
-                          
-                          // Calculate proportional payment
-                          credit = (sale.total > 0) ? (total / sale.total) * sale.amountPaid : 0;
-                          invoiceBalance = total - credit;
-                        } else {
-                          // Show full order amounts
-                          subtotal = sale.subtotal || sale.total;
-                          discount = sale.discountAmount || 0;
-                          total = sale.total;
-                          vat = sale.taxAmount || 0;
-                          net = total - vat;
-                          credit = sale.amountPaid;
-                          invoiceBalance = total - sale.amountPaid;
-                        }
-                        return (
-                          <tr key={sale.id} className="border-b hover:bg-gray-50 text-sm">
-                            <td className="px-3 py-2">{new Date(sale.date).toLocaleDateString('en-GB')}</td>
-                            <td className="px-3 py-2">{sale.invoiceNumber || '-'}</td>
-                            <td className="px-3 py-2">{sale.customer}</td>
-                            <td className="px-3 py-2 text-right">{subtotal.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right text-red-600">{discount > 0 ? `-${discount.toFixed(2)}` : '0.00'}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{total.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right">{net.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right">{vat.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right text-green-600">{credit.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{invoiceBalance.toFixed(2)}</td>
-                            <td className="px-3 py-2">
-                              <span className={`px-2 py-1 rounded text-xs ${
-                                sale.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' : 
-                                sale.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-800' :
-                                'bg-red-100 text-red-800'
-                              }`}>
-                                {sale.paymentStatus || 'unpaid'}
-                              </span>
-                            </td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                  <tfoot className="bg-gray-100 font-bold">
-                    <tr>
-                      <td className="px-3 py-3" colSpan={3}>TOTAL</td>
-                      <td className="px-3 py-3 text-right">
-                        {(() => {
-                          return sales.filter(s => {
-                            const saleDate = new Date(s.date).toISOString().split('T')[0];
-                            const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                            const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                            const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                            return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                          }).reduce((sum, s) => {
-                            if (filterProduct && s.items) {
-                              let itemSubtotal = 0;
-                              s.items.forEach((item: StatementLineItem) => {
-                                if (item.productId === filterProduct) {
-                                  itemSubtotal += (item.quantity || 0) * (item.price || 0);
-                                }
-                              });
-                              return sum + itemSubtotal;
-                            }
-                            return sum + (s.subtotal || s.total);
-                          }, 0).toFixed(2);
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-right text-red-600">
-                        {(() => {
-                          return sales.filter(s => {
-                            const saleDate = new Date(s.date).toISOString().split('T')[0];
-                            const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                            const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                            const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                            return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                          }).reduce((sum, s) => {
-                            if (filterProduct && s.items) {
-                              const orderSubtotal = s.subtotal || s.total || 0;
-                              const orderDiscount = s.discountAmount || 0;
-                              let itemSubtotal = 0;
-                              s.items.forEach((item: StatementLineItem) => {
-                                if (item.productId === filterProduct) {
-                                  itemSubtotal += (item.quantity || 0) * (item.price || 0);
-                                }
-                              });
-                              const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                              return sum + itemDiscount;
-                            }
-                            return sum + (s.discountAmount || 0);
-                          }, 0).toFixed(2);
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-right text-blue-600">
-                        {(() => {
-                          return sales.filter(s => {
-                            const saleDate = new Date(s.date).toISOString().split('T')[0];
-                            const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                            const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                            const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                            return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                          }).reduce((sum, s) => {
-                            if (filterProduct && s.items) {
-                              const orderSubtotal = s.subtotal || s.total || 0;
-                              const orderDiscount = s.discountAmount || 0;
-                              let itemSubtotal = 0;
-                              s.items.forEach((item: StatementLineItem) => {
-                                if (item.productId === filterProduct) {
-                                  itemSubtotal += (item.quantity || 0) * (item.price || 0);
-                                }
-                              });
-                              const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                              return sum + (itemSubtotal - itemDiscount);
-                            }
-                            return sum + s.total;
-                          }, 0).toFixed(2);
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        {(() => {
-                          return sales.filter(s => {
-                            const saleDate = new Date(s.date).toISOString().split('T')[0];
-                            const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                            const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                            const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                            return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                          }).reduce((sum, s) => {
-                            if (filterProduct && s.items) {
-                              const orderSubtotal = s.subtotal || s.total || 0;
-                              const orderDiscount = s.discountAmount || 0;
-                              const orderVat = s.taxAmount || 0;
-                              let itemSubtotal = 0;
-                              s.items.forEach((item: StatementLineItem) => {
-                                if (item.productId === filterProduct) {
-                                  itemSubtotal += (item.quantity || 0) * (item.price || 0);
-                                }
-                              });
-                              const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                              const itemTotal = itemSubtotal - itemDiscount;
-                              const itemVat = (s.total > 0 && orderVat > 0) ? (itemTotal / (s.total - orderVat)) * orderVat : 0;
-                              return sum + (itemTotal - itemVat);
-                            }
-                            return sum + (s.total - (s.taxAmount || 0));
-                          }, 0).toFixed(2);
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        {(() => {
-                          return sales.filter(s => {
-                            const saleDate = new Date(s.date).toISOString().split('T')[0];
-                            const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                            const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                            const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                            return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                          }).reduce((sum, s) => {
-                            if (filterProduct && s.items) {
-                              const orderSubtotal = s.subtotal || s.total || 0;
-                              const orderDiscount = s.discountAmount || 0;
-                              const orderVat = s.taxAmount || 0;
-                              let itemSubtotal = 0;
-                              s.items.forEach((item: StatementLineItem) => {
-                                if (item.productId === filterProduct) {
-                                  itemSubtotal += (item.quantity || 0) * (item.price || 0);
-                                }
-                              });
-                              const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                              const itemTotal = itemSubtotal - itemDiscount;
-                              const itemVat = (s.total > 0 && orderVat > 0) ? (itemTotal / (s.total - orderVat)) * orderVat : 0;
-                              return sum + itemVat;
-                            }
-                            return sum + (s.taxAmount || 0);
-                          }, 0).toFixed(2);
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-right text-green-600">
-                        {(() => {
-                          return sales.filter(s => {
-                            const saleDate = new Date(s.date).toISOString().split('T')[0];
-                            const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                            const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                            const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                            return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                          }).reduce((sum, s) => {
-                            if (filterProduct && s.items) {
-                              const orderSubtotal = s.subtotal || s.total || 0;
-                              const orderDiscount = s.discountAmount || 0;
-                              let itemSubtotal = 0;
-                              s.items.forEach((item: StatementLineItem) => {
-                                if (item.productId === filterProduct) {
-                                  itemSubtotal += (item.quantity || 0) * (item.price || 0);
-                                }
-                              });
-                              const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                              const itemTotal = itemSubtotal - itemDiscount;
-                              const itemCredit = (s.total > 0) ? (itemTotal / s.total) * s.amountPaid : 0;
-                              return sum + itemCredit;
-                            }
-                            return sum + s.amountPaid;
-                          }, 0).toFixed(2);
-                        })()}
-                      </td>
-                      <td className="px-3 py-3 text-right">
-                        {(() => {
-                          return sales.filter(s => {
-                            const saleDate = new Date(s.date).toISOString().split('T')[0];
-                            const matchesStart = !filterStartDate || saleDate >= filterStartDate;
-                            const matchesEnd = !filterEndDate || saleDate <= filterEndDate;
-                            const matchesCustomer = !filterCustomer || s.customer === filterCustomer;
-                            const matchesProduct = !filterProduct || (s.items && s.items.some((item: StatementLineItem) => item.productId === filterProduct));
-                            return matchesStart && matchesEnd && matchesCustomer && matchesProduct;
-                          }).reduce((sum, s) => {
-                            if (filterProduct && s.items) {
-                              const orderSubtotal = s.subtotal || s.total || 0;
-                              const orderDiscount = s.discountAmount || 0;
-                              let itemSubtotal = 0;
-                              s.items.forEach((item: StatementLineItem) => {
-                                if (item.productId === filterProduct) {
-                                  itemSubtotal += (item.quantity || 0) * (item.price || 0);
-                                }
-                              });
-                              const itemDiscount = orderSubtotal > 0 ? (itemSubtotal / orderSubtotal) * orderDiscount : 0;
-                              const itemTotal = itemSubtotal - itemDiscount;
-                              const itemCredit = (s.total > 0) ? (itemTotal / s.total) * s.amountPaid : 0;
-                              return sum + (itemTotal - itemCredit);
-                            }
-                            return sum + (s.total - s.amountPaid);
-                          }, 0).toFixed(2);
-                        })()}
-                      </td>
-                      <td className="px-3 py-3"></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {activeTab === 'cashCollections' && (
-            <div>
-              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Cash Collection History</h2>
-                <div className="text-sm text-gray-600">
-                  Total Deposited: <span className="font-semibold text-emerald-600">${totalCashDeposited.toFixed(2)}</span>
+                  <div className="text-sm text-gray-600 ml-2">
+                    Total: <span className="font-semibold text-emerald-600">
+                      ${cashCollections
+                        .filter(e => {
+                          if (!cashFilterStart && !cashFilterEnd) return true;
+                          const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
+                          if (!d) return true;
+                          if (cashFilterStart && d < cashFilterStart) return false;
+                          if (cashFilterEnd && d > cashFilterEnd) return false;
+                          return true;
+                        })
+                        .reduce((sum, e) => sum + e.totalAmount, 0).toFixed(2)}
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -3652,7 +3582,16 @@ const AdminAccountStatement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {cashCollections.map((entry) => (
+                    {cashCollections
+                      .filter(e => {
+                        if (!cashFilterStart && !cashFilterEnd) return true;
+                        const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
+                        if (!d) return true;
+                        if (cashFilterStart && d < cashFilterStart) return false;
+                        if (cashFilterEnd && d > cashFilterEnd) return false;
+                        return true;
+                      })
+                      .map((entry) => (
                       <tr key={entry.id} className="border-b hover:bg-gray-50">
                         <td className="border px-4 py-2">{toDateLabel(entry.collectionDate)}</td>
                         <td className="border px-4 py-2">{entry.bankAccount}</td>
@@ -3662,12 +3601,50 @@ const AdminAccountStatement: React.FC = () => {
                         <td className="border px-4 py-2">{entry.notes || '-'}</td>
                       </tr>
                     ))}
+                    {cashCollections.filter(e => {
+                      if (!cashFilterStart && !cashFilterEnd) return true;
+                      const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
+                      if (!d) return true;
+                      if (cashFilterStart && d < cashFilterStart) return false;
+                      if (cashFilterEnd && d > cashFilterEnd) return false;
+                      return true;
+                    }).length === 0 && (
+                      <tr>
+                        <td colSpan={6} className="border px-4 py-6 text-center text-gray-500">
+                          {cashCollections.length === 0
+                            ? 'No cash collections found. Create collections from the Cash Collection page.'
+                            : 'No records match the selected date range.'}
+                        </td>
+                      </tr>
+                    )}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
                       <td className="border px-4 py-3" colSpan={3}>TOTAL</td>
-                      <td className="border px-4 py-3 text-right">{cashCollections.reduce((sum, e) => sum + e.ordersCount, 0)}</td>
-                      <td className="border px-4 py-3 text-right text-emerald-600">{totalCashDeposited.toFixed(2)}</td>
+                      <td className="border px-4 py-3 text-right">
+                        {cashCollections
+                          .filter(e => {
+                            if (!cashFilterStart && !cashFilterEnd) return true;
+                            const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
+                            if (!d) return true;
+                            if (cashFilterStart && d < cashFilterStart) return false;
+                            if (cashFilterEnd && d > cashFilterEnd) return false;
+                            return true;
+                          })
+                          .reduce((sum, e) => sum + e.ordersCount, 0)}
+                      </td>
+                      <td className="border px-4 py-3 text-right text-emerald-600">
+                        {cashCollections
+                          .filter(e => {
+                            if (!cashFilterStart && !cashFilterEnd) return true;
+                            const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
+                            if (!d) return true;
+                            if (cashFilterStart && d < cashFilterStart) return false;
+                            if (cashFilterEnd && d > cashFilterEnd) return false;
+                            return true;
+                          })
+                          .reduce((sum, e) => sum + e.totalAmount, 0).toFixed(2)}
+                      </td>
                       <td className="border px-4 py-3"></td>
                     </tr>
                   </tfoot>

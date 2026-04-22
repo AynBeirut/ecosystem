@@ -17,7 +17,7 @@ import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { generateUniqueSlug } from '@/lib/slugify';
 import { assertCanCreateProduct, assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
@@ -47,6 +47,7 @@ const AdminProducts: React.FC = () => {
   const [categories, setCategories] = useState<string[]>(DEFAULT_PRODUCT_CATEGORIES);
   const [isAddingProduct, setIsAddingProduct] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   
   // Check if user has permission to manage inventory
@@ -186,7 +187,14 @@ const AdminProducts: React.FC = () => {
         await assertCanUploadBytes(db, user.storeId, newProduct.imageFile.size);
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
-        await uploadBytes(imageRef, newProduct.imageFile);
+        await new Promise<void>((resolve, reject) => {
+          const task = uploadBytesResumable(imageRef, newProduct.imageFile!);
+          task.on('state_changed',
+            (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+            (err) => { setUploadProgress(null); reject(err); },
+            () => { setUploadProgress(null); resolve(); }
+          );
+        });
         imageUrl = await getDownloadURL(imageRef);
         await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
       } catch (error) {
@@ -347,7 +355,14 @@ const AdminProducts: React.FC = () => {
         }
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
-        await uploadBytes(imageRef, newProduct.imageFile);
+        await new Promise<void>((resolve, reject) => {
+          const task = uploadBytesResumable(imageRef, newProduct.imageFile!);
+          task.on('state_changed',
+            (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
+            (err) => { setUploadProgress(null); reject(err); },
+            () => { setUploadProgress(null); resolve(); }
+          );
+        });
         imageUrl = await getDownloadURL(imageRef);
         if (user?.storeId) {
           await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
@@ -683,6 +698,20 @@ const AdminProducts: React.FC = () => {
                         <span className="truncate text-xs text-gray-500 max-w-[120px]">{newProduct.imageFile.name}</span>
                       )}
                     </div>
+                    {uploadProgress !== null && (
+                      <div className="mt-2">
+                        <div className="flex justify-between text-xs text-gray-500 mb-1">
+                          <span>Uploading...</span>
+                          <span>{uploadProgress}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2">
+                          <div
+                            className="bg-primary h-2 rounded-full transition-all duration-200"
+                            style={{ width: `${uploadProgress}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
                 
@@ -742,7 +771,7 @@ const AdminProducts: React.FC = () => {
               
               <CardContent>
                 <img 
-                  src={product.image} 
+                  src={product.image || (product as any).imageUrl} 
                   alt={product.name}
                   className="w-full h-32 object-cover rounded-md mb-3"
                 />

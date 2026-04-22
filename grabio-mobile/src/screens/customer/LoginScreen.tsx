@@ -4,6 +4,8 @@ import {
 } from 'react-native';
 import auth from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
+import { useAuth } from '../../context/AuthContext';
+import { COLORS, RADIUS } from '../../theme';
 
 // Configure Google Sign-In (webClientId from Firebase Console > Authentication > Sign-in providers > Google)
 GoogleSignin.configure({
@@ -11,6 +13,7 @@ GoogleSignin.configure({
 });
 
 export default function LoginScreen() {
+  const { enterGuestMode } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isSignUp, setIsSignUp] = useState(false);
@@ -97,6 +100,16 @@ export default function LoginScreen() {
             {isSignUp ? 'Already have an account? Sign in' : "Don't have an account? Sign up"}
           </Text>
         </TouchableOpacity>
+
+        <View style={styles.divider}>
+          <View style={styles.dividerLine} />
+          <Text style={styles.dividerText}>or</Text>
+          <View style={styles.dividerLine} />
+        </View>
+
+        <TouchableOpacity style={styles.guestButton} onPress={enterGuestMode}>
+          <Text style={styles.guestText}>Browse as Guest →</Text>
+        </TouchableOpacity>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -105,14 +118,14 @@ export default function LoginScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
   inner: { flexGrow: 1, padding: 24, justifyContent: 'center' },
-  logo: { fontSize: 42, fontWeight: '800', color: '#6366f1', textAlign: 'center', marginBottom: 4 },
+  logo: { fontSize: 42, fontWeight: '800', color: COLORS.primary, textAlign: 'center', marginBottom: 4 },
   subtitle: { fontSize: 16, color: '#6b7280', textAlign: 'center', marginBottom: 40 },
   input: {
-    borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 14,
+    borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 14,
     fontSize: 16, marginBottom: 12, backgroundColor: '#f9fafb',
   },
   button: {
-    backgroundColor: '#6366f1', borderRadius: 10, padding: 16, alignItems: 'center', marginTop: 8,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 16, alignItems: 'center', marginTop: 8,
   },
   buttonText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 20 },
@@ -120,12 +133,17 @@ const styles = StyleSheet.create({
   dividerText: { marginHorizontal: 12, color: '#9ca3af', fontSize: 14 },
   googleButton: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 14,
+    borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 14,
     backgroundColor: '#fff',
   },
   googleIcon: {
     fontSize: 18, fontWeight: '800', color: '#4285F4', marginRight: 10,
   },
   googleText: { fontSize: 15, fontWeight: '600', color: '#374151' },
-  toggle: { color: '#6366f1', textAlign: 'center', marginTop: 20, fontSize: 14 },
+  toggle: { color: COLORS.primary, textAlign: 'center', marginTop: 20, fontSize: 14 },
+  guestButton: {
+    borderWidth: 1, borderColor: COLORS.primary, borderRadius: RADIUS.md,
+    padding: 14, alignItems: 'center', backgroundColor: '#fff',
+  },
+  guestText: { color: COLORS.primary, fontSize: 15, fontWeight: '600' },
 });

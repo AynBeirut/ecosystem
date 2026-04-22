@@ -52,9 +52,8 @@ export default function MyOrdersScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>My Orders</Text>
       {loading ? (
-        <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color="#38B2AC" style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={orders}

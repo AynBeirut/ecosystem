@@ -1,13 +1,29 @@
+export interface StorePaymentMethods {
+  cashOnDelivery?: boolean;
+  creditCard?: boolean;
+  debitCard?: boolean;
+  bankTransfer?: boolean;
+  paypal?: boolean;
+  applePay?: boolean;
+  googlePay?: boolean;
+  storeCredits?: boolean;
+}
+
 export interface Store {
   id: string;
   name: string;
   description?: string;
   logoUrl?: string;
+  logo?: string;
   slug?: string;
   rating?: number;
   ratingCount?: number;
   ownerId: string;
   whatsappNumber?: string;
+  whatsappBusiness?: string;
+  location?: string;
+  mainCurrency?: string;
+  paymentMethods?: StorePaymentMethods;
 }
 
 export interface Product {
@@ -16,7 +32,8 @@ export interface Product {
   description?: string;
   price: number;
   currency?: string;
-  imageUrl?: string;
+  image?: string;    // web field name
+  imageUrl?: string; // mobile field name (both kept in sync)
   storeId: string;
   productType: 'simple' | 'composed' | 'production' | 'finished_good';
   inStock: boolean;
@@ -54,18 +71,21 @@ export type RootStackParamList = {
   ProductDetail: { product: Product; storeName: string };
   Cart: undefined;
   Checkout: undefined;
-  OrderTracking: { orderId: string };
+  OrderTracking: { orderId: string; storeId: string };
   OrderList: undefined;
   OwnerDashboard: undefined;
   OwnerOrders: undefined;
   OwnerProducts: undefined;
   AddEditProduct: { productId?: string };
+  Inventory: undefined;
+  Expenses: undefined;
+  CreateOrder: undefined;
 };
 
 export type TabParamList = {
-  Marketplace: undefined;
-  Favorites: undefined;
-  MyOrders: undefined;
   Profile: undefined;
+  Marketplace: undefined;
+  MyOrders: undefined;
+  Cart: undefined;
   OwnerTab: undefined;
 };

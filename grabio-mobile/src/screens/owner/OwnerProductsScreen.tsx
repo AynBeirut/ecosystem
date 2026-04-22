@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, Switch,
+  ActivityIndicator, Alert, Switch, Image,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -56,7 +57,14 @@ export default function OwnerProductsScreen() {
     const isSimple = item.productType === 'simple';
     return (
       <View style={styles.card}>
-        <View style={styles.cardRow}>
+      <View style={styles.cardRow}>
+        {(item.image || item.imageUrl) ? (
+          <Image source={{ uri: item.image || item.imageUrl }} style={styles.thumb} />
+        ) : (
+          <View style={[styles.thumb, styles.thumbPlaceholder]}>
+            <Text style={{ fontSize: 20 }}>📦</Text>
+          </View>
+        )}
           <View style={{ flex: 1 }}>
             <Text style={styles.productName}>{item.name}</Text>
             <Text style={styles.productMeta}>
@@ -70,7 +78,7 @@ export default function OwnerProductsScreen() {
           <Switch
             value={item.inStock}
             onValueChange={() => toggleStock(item)}
-            trackColor={{ true: '#6366f1' }}
+            trackColor={{ true: COLORS.primary }}
           />
         </View>
         {!item.inStock && <Text style={styles.outOfStock}>⚠️ Out of stock</Text>}
@@ -102,17 +110,16 @@ export default function OwnerProductsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <View style={styles.header}>
-        <Text style={styles.title}>Products</Text>
         <TouchableOpacity
           style={styles.addBtn}
           onPress={() => navigation.navigate('AddEditProduct', {})}
         >
-          <Text style={styles.addBtnText}>+ Add</Text>
+          <Text style={styles.addBtnText}>+ Add Product</Text>
         </TouchableOpacity>
       </View>
 
       {loading ? (
-        <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={products}
@@ -127,24 +134,26 @@ export default function OwnerProductsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
+  container: { flex: 1, backgroundColor: COLORS.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16 },
-  title: { fontSize: 22, fontWeight: '700', color: '#111827' },
-  addBtn: { backgroundColor: '#6366f1', borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
+  title: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary },
+  addBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 8 },
   addBtnText: { color: '#fff', fontWeight: '700' },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 14, marginBottom: 10, ...SHADOW.sm },
   cardRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  productName: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  productMeta: { fontSize: 13, color: '#6b7280', marginTop: 2 },
-  typeBadge: { backgroundColor: '#f3f4f6', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4, alignSelf: 'flex-start' },
-  typeText: { fontSize: 11, color: '#6b7280' },
-  outOfStock: { fontSize: 12, color: '#ef4444', marginBottom: 6 },
-  lowStock: { fontSize: 12, color: '#f59e0b', marginBottom: 6 },
+  thumb: { width: 48, height: 48, borderRadius: RADIUS.md, resizeMode: 'cover', marginRight: 10 },
+  thumbPlaceholder: { backgroundColor: COLORS.light, justifyContent: 'center', alignItems: 'center' },
+  productName: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  productMeta: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
+  typeBadge: { backgroundColor: COLORS.light, borderRadius: RADIUS.sm, paddingHorizontal: 8, paddingVertical: 2, marginTop: 4, alignSelf: 'flex-start' },
+  typeText: { fontSize: 11, color: COLORS.textSecondary },
+  outOfStock: { fontSize: 12, color: COLORS.error, marginBottom: 6 },
+  lowStock: { fontSize: 12, color: COLORS.warning, marginBottom: 6 },
   actions: { flexDirection: 'row', gap: 8, marginTop: 4 },
-  editBtn: { flex: 1, backgroundColor: '#e0e7ff', borderRadius: 8, paddingVertical: 7, alignItems: 'center' },
-  editBtnText: { color: '#6366f1', fontWeight: '600', fontSize: 13 },
-  deleteBtn: { flex: 1, backgroundColor: '#fee2e2', borderRadius: 8, paddingVertical: 7, alignItems: 'center' },
-  deleteBtnText: { color: '#ef4444', fontWeight: '600', fontSize: 13 },
-  readOnlyNote: { fontSize: 12, color: '#9ca3af', fontStyle: 'italic' },
-  empty: { textAlign: 'center', marginTop: 40, color: '#9ca3af', fontSize: 15 },
+  editBtn: { flex: 1, backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md, paddingVertical: 7, alignItems: 'center' },
+  editBtnText: { color: COLORS.primary, fontWeight: '600', fontSize: 13 },
+  deleteBtn: { flex: 1, backgroundColor: '#fee2e2', borderRadius: RADIUS.md, paddingVertical: 7, alignItems: 'center' },
+  deleteBtnText: { color: COLORS.error, fontWeight: '600', fontSize: 13 },
+  readOnlyNote: { fontSize: 12, color: COLORS.textMuted, fontStyle: 'italic' },
+  empty: { textAlign: 'center', marginTop: 40, color: COLORS.textMuted, fontSize: 15 },
 });

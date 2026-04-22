@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onOrderStatusChanged = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -242,9 +242,9 @@ app.post('/checkout', async (req, res) => {
             customerPhone = deliveryInfo?.phone || '';
             customerEmail = deliveryInfo?.email || '';
             // Validate required guest info
-            if (!customerEmail || !customerPhone) {
+            if (!customerPhone) {
                 return res.status(400).json({
-                    error: 'Guest checkout requires email and phone number'
+                    error: 'Guest checkout requires a phone number'
                 });
             }
             console.log('Guest checkout:', { userId, customerName, customerPhone, customerEmail });
@@ -463,3 +463,6 @@ Object.defineProperty(exports, "checkSubscriptions", { enumerable: true, get: fu
 // Export the scheduled expiry stock checker
 var checkExpiringStock_1 = require("./scheduled/checkExpiringStock");
 Object.defineProperty(exports, "checkExpiringStock", { enumerable: true, get: function () { return checkExpiringStock_1.checkExpiringStock; } });
+// Export Firestore trigger: order status / payment status change notifications
+var orderNotifications_1 = require("./triggers/orderNotifications");
+Object.defineProperty(exports, "onOrderStatusChanged", { enumerable: true, get: function () { return orderNotifications_1.onOrderStatusChanged; } });

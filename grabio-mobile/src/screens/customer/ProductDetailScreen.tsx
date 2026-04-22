@@ -5,6 +5,7 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
+import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 type Route = RouteProp<RootStackParamList, 'ProductDetail'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -26,8 +27,8 @@ export default function ProductDetailScreen() {
 
   return (
     <ScrollView style={styles.container}>
-      {product.imageUrl ? (
-        <Image source={{ uri: product.imageUrl }} style={styles.image} />
+      {(product.image || product.imageUrl) ? (
+        <Image source={{ uri: product.image || product.imageUrl }} style={styles.image} />
       ) : (
         <View style={styles.imagePlaceholder}>
           <Text style={{ fontSize: 60 }}>🛍️</Text>
@@ -45,7 +46,7 @@ export default function ProductDetailScreen() {
               name: product.name,
               price: product.price,
               currency: product.currency,
-              imageUrl: product.imageUrl,
+              imageUrl: product.imageUrl || product.image,
               unit: product.unit,
             })}
           >
@@ -55,9 +56,21 @@ export default function ProductDetailScreen() {
         <Text style={styles.price}>{product.currency || 'USD'} {product.price.toFixed(2)}</Text>
         {product.unit ? <Text style={styles.meta}>Unit: {product.unit}</Text> : null}
         {product.stock !== undefined ? (
-          <Text style={[styles.meta, product.stock <= (product.lowStockThreshold ?? 5) ? styles.lowStock : null]}>
-            {product.stock > 0 ? `In stock: ${product.stock}` : 'Out of stock'}
-          </Text>
+          <View style={styles.stockRow}>
+            {product.stock <= 0 ? (
+              <Text style={styles.stockOut}>❌ Out of Stock</Text>
+            ) : product.stock <= (product.lowStockThreshold ?? 10) ? (
+              <>
+                <Text style={styles.stockLow}>⚠ Low Stock</Text>
+                <Text style={styles.stockQty}>{product.stock} {product.unit || 'units'} left</Text>
+              </>
+            ) : (
+              <>
+                <Text style={styles.stockIn}>✓ In Stock</Text>
+                <Text style={styles.stockQty}>{product.stock} {product.unit || 'units'} available</Text>
+              </>
+            )}
+          </View>
         ) : null}
         {product.description ? <Text style={styles.description}>{product.description}</Text> : null}
 
@@ -82,19 +95,23 @@ export default function ProductDetailScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#fff' },
+  container: { flex: 1, backgroundColor: COLORS.surface },
   image: { width: '100%', height: 280, resizeMode: 'cover' },
-  imagePlaceholder: { width: '100%', height: 280, backgroundColor: '#f3f4f6', justifyContent: 'center', alignItems: 'center' },
+  imagePlaceholder: { width: '100%', height: 280, backgroundColor: COLORS.light, justifyContent: 'center', alignItems: 'center' },
   body: { padding: 20 },
-  name: { fontSize: 22, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  price: { fontSize: 24, color: '#6366f1', fontWeight: '800', marginBottom: 8 },
-  meta: { fontSize: 14, color: '#6b7280', marginBottom: 4 },
-  lowStock: { color: '#ef4444' },
+  name: { fontSize: 22, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 8 },
+  price: { fontSize: 26, color: COLORS.primary, fontWeight: '800', marginBottom: 8 },
+  meta: { fontSize: 14, color: COLORS.textSecondary, marginBottom: 4 },
+  stockRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 },
+  stockIn: { fontSize: 13, fontWeight: '600', color: COLORS.success },
+  stockLow: { fontSize: 13, fontWeight: '600', color: COLORS.warning },
+  stockOut: { fontSize: 13, fontWeight: '600', color: COLORS.error },
+  stockQty: { fontSize: 12, color: COLORS.textSecondary },
   description: { fontSize: 15, color: '#374151', marginTop: 12, lineHeight: 22 },
-  addBtn: { backgroundColor: '#6366f1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 24 },
+  addBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 24 },
   disabledBtn: { backgroundColor: '#d1d5db' },
   addBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  viewCartBtn: { borderWidth: 1, borderColor: '#6366f1', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 10 },
-  viewCartText: { color: '#6366f1', fontSize: 15, fontWeight: '600' },
+  viewCartBtn: { borderWidth: 1.5, borderColor: COLORS.primary, borderRadius: RADIUS.lg, padding: 14, alignItems: 'center', marginTop: 10 },
+  viewCartText: { color: COLORS.primary, fontSize: 15, fontWeight: '600' },
   nameRow: { flexDirection: 'row', alignItems: 'flex-start', marginBottom: 8 },
 });

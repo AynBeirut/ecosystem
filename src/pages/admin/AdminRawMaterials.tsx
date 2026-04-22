@@ -8,7 +8,9 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, AlertTriangle, Package } from 'lucide-react';
+import { Trash2, Plus, Edit3, AlertTriangle, Package, FileDown } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
 import { RawMaterial, Supplier } from '@/types/inventory';
 import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
@@ -276,6 +278,42 @@ const AdminRawMaterials: React.FC = () => {
 
   const lowStockCount = materials.filter(m => m.currentStock < m.minimumThreshold).length;
 
+  const exportToPDF = () => {
+    const doc = new jsPDF();
+    doc.setFontSize(16);
+    doc.text('Raw Materials Report', 105, 15, { align: 'center' });
+    doc.setFontSize(9);
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString()}`, 105, 22, { align: 'center' });
+
+    const tableData = filteredMaterials.map(m => [
+      m.name,
+      m.sku || '',
+      `${m.currentStock} ${m.unit}`,
+      `${m.minimumThreshold} ${m.unit}`,
+      `$${m.costPerUnit.toFixed(2)}`,
+      `$${(m.currentStock * m.costPerUnit).toFixed(2)}`,
+      m.storageLocation || '-',
+      m.currentStock < m.minimumThreshold ? 'LOW STOCK' : 'OK',
+    ]);
+
+    autoTable(doc, {
+      startY: 28,
+      head: [['Name', 'SKU', 'Stock', 'Min Threshold', 'Cost/Unit', 'Total Value', 'Location', 'Status']],
+      body: tableData,
+      theme: 'striped',
+      styles: { fontSize: 7, cellPadding: 2 },
+      headStyles: { fillColor: [66, 66, 66], textColor: 255, fontStyle: 'bold' },
+      didParseCell: (data) => {
+        if (data.section === 'body' && data.column.index === 7 && data.cell.text[0] === 'LOW STOCK') {
+          data.cell.styles.textColor = [220, 38, 38];
+          data.cell.styles.fontStyle = 'bold';
+        }
+      },
+    });
+
+    doc.save(`raw_materials_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {isMobile ? <MobileHeader title="Raw Materials" /> : null}
@@ -285,7 +323,12 @@ const AdminRawMaterials: React.FC = () => {
             {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
             <h1 className="text-2xl font-bold">Raw Materials</h1>
           </div>
-          <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={exportToPDF}>
+              <FileDown className="mr-2 h-4 w-4" />
+              Export PDF
+            </Button>
+            <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -446,6 +489,7 @@ const AdminRawMaterials: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
 
         {/* Low Stock Alert */}

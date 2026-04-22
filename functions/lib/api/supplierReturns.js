@@ -1,6 +1,7 @@
 "use strict";
 // Supplier Return API endpoints skeleton
 // This would be implemented in Firebase Functions
+Object.defineProperty(exports, "__esModule", { value: true });
 // Example endpoints:
 // POST /api/supplier-returns/create
 // PUT /api/supplier-returns/update-status

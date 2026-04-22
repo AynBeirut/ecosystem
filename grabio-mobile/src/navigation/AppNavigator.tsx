@@ -6,6 +6,14 @@ import { Text } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useCart } from '../context/CartContext';
 import { RootStackParamList, TabParamList } from '../types';
+import { COLORS } from '../theme';
+
+const TAB_HEADER = {
+  headerShown: true,
+  headerStyle: { backgroundColor: COLORS.primary },
+  headerTintColor: '#fff',
+  headerTitleStyle: { fontWeight: '700' as const },
+};
 
 // Screens
 import LoginScreen from '../screens/customer/LoginScreen';
@@ -16,12 +24,14 @@ import CartScreen from '../screens/customer/CartScreen';
 import CheckoutScreen from '../screens/customer/CheckoutScreen';
 import OrderTrackingScreen from '../screens/customer/OrderTrackingScreen';
 import MyOrdersScreen from '../screens/customer/MyOrdersScreen';
-import FavoritesScreen from '../screens/customer/FavoritesScreen';
 import ProfileScreen from '../screens/customer/ProfileScreen';
 import OwnerDashboardScreen from '../screens/owner/OwnerDashboardScreen';
 import OwnerOrdersScreen from '../screens/owner/OwnerOrdersScreen';
 import OwnerProductsScreen from '../screens/owner/OwnerProductsScreen';
 import AddEditProductScreen from '../screens/owner/AddEditProductScreen';
+import InventoryScreen from '../screens/owner/InventoryScreen';
+import ExpensesScreen from '../screens/owner/ExpensesScreen';
+import CreateOrderScreen from '../screens/owner/CreateOrderScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -29,26 +39,31 @@ const Tab = createBottomTabNavigator<TabParamList>();
 function CustomerTabs() {
   const { itemCount } = useCart();
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
+    <Tab.Navigator screenOptions={{ ...TAB_HEADER, tabBarActiveTintColor: COLORS.primary }}>
       <Tab.Screen
         name="Marketplace"
         component={MarketplaceScreen}
-        options={{ tabBarLabel: 'Shop', tabBarIcon: () => <Text>🏪</Text> }}
+        options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text>🏪</Text>, title: 'Home', headerShown: false }}
       />
       <Tab.Screen
-        name="Favorites"
-        component={FavoritesScreen}
-        options={{ tabBarLabel: 'Favorites', tabBarIcon: () => <Text>❤️</Text> }}
+        name="Cart"
+        component={CartScreen}
+        options={{
+          tabBarLabel: 'Cart',
+          tabBarIcon: () => <Text>🛒</Text>,
+          title: 'My Cart',
+          tabBarBadge: itemCount > 0 ? itemCount : undefined,
+        }}
       />
       <Tab.Screen
         name="MyOrders"
         component={MyOrdersScreen}
-        options={{ tabBarLabel: 'Orders', tabBarIcon: () => <Text>📦</Text> }}
+        options={{ tabBarLabel: 'Track Order', tabBarIcon: () => <Text>📍</Text>, title: 'Track Order' }}
       />
       <Tab.Screen
         name="Profile"
         component={ProfileScreen}
-        options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text>👤</Text> }}
+        options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text>👤</Text>, title: 'Profile' }}
       />
     </Tab.Navigator>
   );
@@ -56,44 +71,47 @@ function CustomerTabs() {
 
 function OwnerTabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }}>
+    <Tab.Navigator screenOptions={{ ...TAB_HEADER, tabBarActiveTintColor: COLORS.primary }}>
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text>👤</Text>, title: 'Profile' }}
+      />
       <Tab.Screen
         name="Marketplace"
-        component={OwnerDashboardScreen}
-        options={{ tabBarLabel: 'Dashboard', tabBarIcon: () => <Text>📊</Text> }}
+        component={OwnerProductsScreen}
+        options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text>🏠</Text>, title: 'My Store' }}
       />
       <Tab.Screen
         name="OwnerTab"
         component={OwnerOrdersScreen}
-        options={{ tabBarLabel: 'Orders', tabBarIcon: () => <Text>🛒</Text> }}
+        options={{ tabBarLabel: 'Orders', tabBarIcon: () => <Text>🛒</Text>, title: 'Orders' }}
       />
       <Tab.Screen
         name="Favorites"
-        component={OwnerProductsScreen}
-        options={{ tabBarLabel: 'Products', tabBarIcon: () => <Text>📋</Text> }}
-      />
-      <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text>👤</Text> }}
+        component={OwnerDashboardScreen}
+        options={{ tabBarLabel: 'Dashboard', tabBarIcon: () => <Text>📊</Text>, title: 'Dashboard' }}
       />
     </Tab.Navigator>
   );
 }
 
 export default function AppNavigator() {
-  const { user, loading } = useAuth();
+  const { user, loading, isGuest } = useAuth();
 
   if (loading) return null;
 
   return (
     <NavigationContainer>
       <Stack.Navigator screenOptions={{ headerShown: false }}>
-        {!user ? (
+        {!user && !isGuest ? (
           <Stack.Screen name="Login" component={LoginScreen} />
         ) : (
           <>
-            <Stack.Screen name="MainTabs" component={user.isStoreOwner ? OwnerTabs : CustomerTabs} />
+            <Stack.Screen
+              name="MainTabs"
+              component={user && ['owner', 'sub_seller', 'sub_manager', 'sub_delivery'].includes(user.userRole) ? OwnerTabs : CustomerTabs}
+            />
             <Stack.Screen name="StoreDetail" component={StoreDetailScreen} options={{ headerShown: true }} />
             <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ headerShown: true }} />
             <Stack.Screen name="Cart" component={CartScreen} options={{ headerShown: true, title: 'Cart' }} />
@@ -102,6 +120,9 @@ export default function AppNavigator() {
             <Stack.Screen name="OwnerOrders" component={OwnerOrdersScreen} options={{ headerShown: true, title: 'Orders' }} />
             <Stack.Screen name="OwnerProducts" component={OwnerProductsScreen} options={{ headerShown: true, title: 'Products' }} />
             <Stack.Screen name="AddEditProduct" component={AddEditProductScreen} options={{ headerShown: true, title: 'Product' }} />
+            <Stack.Screen name="Inventory" component={InventoryScreen} options={{ headerShown: true, title: 'Inventory' }} />
+            <Stack.Screen name="Expenses" component={ExpensesScreen} options={{ headerShown: true, title: 'Expenses' }} />
+            <Stack.Screen name="CreateOrder" component={CreateOrderScreen} options={{ headerShown: true, title: 'Create Order' }} />
           </>
         )}
       </Stack.Navigator>

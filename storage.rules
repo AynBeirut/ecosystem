@@ -2,6 +2,15 @@ rules_version = '2';
 service firebase.storage {
   match /b/{bucket}/o {
 
+    // Product images — flat path used by web admin upload
+    // Path: products/{filename}
+    match /products/{filename} {
+      allow read: if true;
+      allow write: if request.auth != null
+        && request.resource.size < 10 * 1024 * 1024  // 10 MB max
+        && request.resource.contentType.matches('image/.*');
+    }
+
     // Product images — authenticated store owners can upload to their own store path
     // Path: products/images/{storeId}/{filename}
     match /products/images/{storeId}/{filename} {

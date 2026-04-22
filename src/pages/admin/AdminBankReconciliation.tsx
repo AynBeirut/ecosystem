@@ -17,6 +17,7 @@ type EligibleOrder = {
   customerName: string;
   createdAt: string;
   remainingCash: number;
+  status: string;
 };
 
 const AdminBankReconciliation: React.FC = () => {
@@ -141,7 +142,7 @@ const AdminBankReconciliation: React.FC = () => {
 
   const eligibleOrders = useMemo<EligibleOrder[]>(() => {
     return orders
-      .filter((order) => isCountedSaleStatus(order.status))
+      .filter((order) => String(order.status || '').toLowerCase() !== 'cancelled')
       .map((order) => {
         const totalCashPaid = getCashPaidForOrder(order);
         const alreadyAllocated = toFiniteNumber(allocatedByOrder[order.id], 0);
@@ -153,6 +154,7 @@ const AdminBankReconciliation: React.FC = () => {
           customerName: order.customerName || 'Walk-in Customer',
           createdAt: resolveOrderDate(order),
           remainingCash,
+          status: order.status || 'unknown',
         };
       })
       .filter((order) => order.remainingCash > 0.009)
@@ -169,14 +171,18 @@ const AdminBankReconciliation: React.FC = () => {
 
   const totalCashReceived = useMemo(() => {
     return orders
-      .filter((order) => isCountedSaleStatus(order.status))
+      .filter((order) => String(order.status || '').toLowerCase() !== 'cancelled')
       .reduce((sum, order) => sum + getCashPaidForOrder(order), 0);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orders]);
 
   const filteredCollections = useMemo(() => {
     return collections.filter((entry) => {
-      const d = entry.collectionDate;
+      if (!filterFrom && !filterTo) return true;
+      // Normalize to YYYY-MM-DD (strip time component if any)
+      const d = typeof entry.collectionDate === 'string'
+        ? entry.collectionDate.slice(0, 10)
+        : '';
       if (!d) return true;
       if (filterFrom && d < filterFrom) return false;
       if (filterTo && d > filterTo) return false;
@@ -381,7 +387,7 @@ const AdminBankReconciliation: React.FC = () => {
             {loading ? (
               <div className="text-sm text-gray-600">Loading orders...</div>
             ) : eligibleOrders.length === 0 ? (
-              <div className="text-sm text-gray-600">No undeposited cash found in delivered sales.</div>
+              <div className="text-sm text-gray-600">No undeposited cash found.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -391,6 +397,7 @@ const AdminBankReconciliation: React.FC = () => {
                       <th className="px-3 py-2 text-left">Date</th>
                       <th className="px-3 py-2 text-left">Invoice</th>
                       <th className="px-3 py-2 text-left">Customer</th>
+                      <th className="px-3 py-2 text-left">Status</th>
                       <th className="px-3 py-2 text-right">Remaining Cash</th>
                     </tr>
                   </thead>
@@ -407,6 +414,13 @@ const AdminBankReconciliation: React.FC = () => {
                         <td className="px-3 py-2">{toDisplayDate(order.createdAt)}</td>
                         <td className="px-3 py-2">{order.invoiceNumber}</td>
                         <td className="px-3 py-2">{order.customerName}</td>
+                        <td className="px-3 py-2">
+                          <span className={`px-2 py-0.5 rounded text-xs font-medium capitalize ${
+                            order.status === 'delivered' || order.status === 'completed' || order.status === 'paid'
+                              ? 'bg-green-100 text-green-700'
+                              : 'bg-yellow-100 text-yellow-700'
+                          }`}>{order.status}</span>
+                        </td>
                         <td className="px-3 py-2 text-right font-medium">${order.remainingCash.toFixed(2)}</td>
                       </tr>
                     ))}

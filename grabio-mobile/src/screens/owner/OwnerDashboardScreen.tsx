@@ -1,75 +1,170 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, FlatList } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import { RootStackParamList } from '../../types';
+import { COLORS, RADIUS, SHADOW } from '../../theme';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 interface Stats {
   totalOrders: number;
   pendingOrders: number;
+  newOrders: Array<{ id: string; customerName: string; total: number; currency: string }>;
   todayRevenue: number;
+  yesterdayRevenue: number;
+  todayCount: number;
   currency: string;
+  lowStockItems: Array<{ id: string; name: string; stock: number; unit?: string }>;
 }
 
 export default function OwnerDashboardScreen() {
   const { user } = useAuth();
-  const [stats, setStats] = useState<Stats>({ totalOrders: 0, pendingOrders: 0, todayRevenue: 0, currency: 'USD' });
+  const navigation = useNavigation<Nav>();
+  const [stats, setStats] = useState<Stats>({
+    totalOrders: 0, pendingOrders: 0, newOrders: [], todayRevenue: 0,
+    yesterdayRevenue: 0, todayCount: 0, currency: 'USD', lowStockItems: [],
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!user?.storeId) { setLoading(false); return; }
 
-    const startOfDay = new Date();
-    startOfDay.setHours(0, 0, 0, 0);
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfYesterday = new Date(startOfToday);
+    startOfYesterday.setDate(startOfYesterday.getDate() - 1);
 
-    const unsub = firestore()
-      .collection('storeProfiles')
-      .doc(user.storeId)
+    // Fetch store currency setting first
+    let storeCurrency = 'USD';
+    firestore().collection('storeProfiles').doc(user.storeId).get().then((storeDoc) => {
+      if (storeDoc.exists()) {
+        storeCurrency = storeDoc.data()?.mainCurrency || 'USD';
+      }
+    });
+
+    // Real-time orders
+    const unsubOrders = firestore()
       .collection('orders')
+      .where('storeId', '==', user.storeId)
       .onSnapshot((snap) => {
+        if (!snap) return;
         let pending = 0;
         let todayRev = 0;
-        let currency = 'USD';
+        let todayCount = 0;
+        let yesterdayRev = 0;
+        let currency = storeCurrency;
+        const newOrders: Stats['newOrders'] = [];
 
         snap.docs.forEach((d) => {
           const data = d.data();
-          currency = data.currency || 'USD';
-          if (['pending', 'confirmed', 'preparing'].includes(data.status)) pending++;
-          const createdAt = data.createdAt?.toDate?.();
-          if (createdAt && createdAt >= startOfDay && data.status !== 'cancelled') {
-            todayRev += data.total || 0;
+          const createdAt = data.createdAt?.toDate?.() || new Date(0);
+          const isToday = createdAt >= startOfToday;
+          const isYesterday = createdAt >= startOfYesterday && createdAt < startOfToday;
+
+          if (data.status === 'pending') {
+            pending++;
+            if (isToday) newOrders.push({ id: d.id, customerName: data.customerName || 'Guest', total: data.total || 0, currency });
           }
+          if (isToday && data.status !== 'cancelled') { todayRev += data.total || 0; todayCount++; }
+          if (isYesterday && data.status !== 'cancelled') yesterdayRev += data.total || 0;
         });
 
-        setStats({ totalOrders: snap.size, pendingOrders: pending, todayRevenue: todayRev, currency });
-        setLoading(false);
+        // Real-time low stock
+        firestore().collection('products')
+          .where('storeId', '==', user.storeId)
+          .where('inStock', '==', true)
+          .get()
+          .then((prodSnap) => {
+            const low: Stats['lowStockItems'] = [];
+            prodSnap.docs.forEach((p) => {
+              const d = p.data();
+              if (d.stock != null && d.stock > 0 && d.stock <= (d.lowStockThreshold || 10)) {
+                low.push({ id: p.id, name: d.name, stock: d.stock, unit: d.unit });
+              }
+            });
+            setStats({ totalOrders: snap.size, pendingOrders: pending, newOrders: newOrders.slice(0, 3),
+              todayRevenue: todayRev, yesterdayRevenue: yesterdayRev, todayCount, currency, lowStockItems: low.slice(0, 5) });
+            setLoading(false);
+          });
       });
 
-    return unsub;
+    return unsubOrders;
   }, [user?.storeId]);
 
-  if (loading) return <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />;
+  const trend = stats.yesterdayRevenue > 0
+    ? Math.round((stats.todayRevenue - stats.yesterdayRevenue) / stats.yesterdayRevenue * 100)
+    : 0;
+
+  if (loading) return <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />;
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={{ padding: 16 }}>
-        <Text style={styles.title}>Dashboard</Text>
+      <ScrollView contentContainerStyle={styles.scroll}>
+        {/* Widget 1: New Orders */}
+        <TouchableOpacity style={[styles.widget, { borderLeftColor: COLORS.primary }]} onPress={() => navigation.navigate('OwnerOrders')} activeOpacity={0.85}>
+          <View style={styles.widgetHeader}>
+            <Text style={styles.widgetTitle}>📦 New Orders</Text>
+            {stats.pendingOrders > 0 && (
+              <View style={styles.badge}><Text style={styles.badgeText}>{stats.pendingOrders}</Text></View>
+            )}
+          </View>
+          {stats.newOrders.length > 0 ? stats.newOrders.map((o) => (
+            <View key={o.id} style={styles.orderRow}>
+              <Text style={styles.orderCustomer}>{o.customerName}</Text>
+              <Text style={styles.orderTotal}>{o.currency} {o.total.toFixed(0)}</Text>
+            </View>
+          )) : <Text style={styles.noData}>No pending orders</Text>}
+        </TouchableOpacity>
 
-        <View style={styles.statsGrid}>
-          <View style={[styles.statCard, { backgroundColor: '#e0e7ff' }]}>
-            <Text style={styles.statIcon}>🛒</Text>
-            <Text style={styles.statValue}>{stats.pendingOrders}</Text>
-            <Text style={styles.statLabel}>Active Orders</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#d1fae5' }]}>
-            <Text style={styles.statIcon}>💰</Text>
-            <Text style={styles.statValue}>{stats.currency} {stats.todayRevenue.toFixed(0)}</Text>
-            <Text style={styles.statLabel}>Today's Revenue</Text>
-          </View>
-          <View style={[styles.statCard, { backgroundColor: '#fef3c7' }]}>
-            <Text style={styles.statIcon}>📦</Text>
-            <Text style={styles.statValue}>{stats.totalOrders}</Text>
-            <Text style={styles.statLabel}>Total Orders</Text>
-          </View>
+        {/* Widget 2: Today's Sales */}
+        <View style={[styles.widget, { borderLeftColor: COLORS.success }]}>
+          <Text style={styles.widgetTitle}>💰 Today's Sales</Text>
+          <Text style={styles.salesAmount}>{stats.currency} {stats.todayRevenue.toFixed(0)}</Text>
+          <Text style={styles.salesSub}>
+            {stats.todayCount} orders {trend !== 0 ? `${trend > 0 ? '↗' : '↘'} ${Math.abs(trend)}% vs yesterday` : ''}
+          </Text>
+        </View>
+
+        {/* Widget 3: Stock Alerts */}
+        {stats.lowStockItems.length > 0 && (
+          <TouchableOpacity style={[styles.widget, { borderLeftColor: COLORS.warning }]} onPress={() => navigation.navigate('Favorites')} activeOpacity={0.85}>
+            <View style={styles.widgetHeader}>
+              <Text style={styles.widgetTitle}>⚠️ Stock Alerts</Text>
+              <View style={[styles.badge, { backgroundColor: COLORS.warning }]}><Text style={styles.badgeText}>{stats.lowStockItems.length}</Text></View>
+            </View>
+            {stats.lowStockItems.map((item) => (
+              <View key={item.id} style={styles.orderRow}>
+                <Text style={styles.orderCustomer}>{item.name}</Text>
+                <Text style={[styles.orderTotal, { color: item.stock <= 5 ? COLORS.error : COLORS.warning }]}>
+                  {item.stock} {item.unit || 'units'}
+                </Text>
+              </View>
+            ))}
+          </TouchableOpacity>
+        )}
+
+        {/* Widget 4: Quick Actions */}
+        <Text style={[styles.widgetTitle, { marginBottom: 10, marginTop: 4 }]}>⚡ Quick Actions</Text>
+        <View style={styles.actionsGrid}>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('OwnerOrders')}>
+            <Text style={styles.actionIcon}>📋</Text>
+            <Text style={styles.actionLabel}>Orders</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#d1fae5' }]} onPress={() => navigation.navigate('AddEditProduct', {})}>
+            <Text style={styles.actionIcon}>➕</Text>
+            <Text style={[styles.actionLabel, { color: '#065f46' }]}>Add Product</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: COLORS.primaryLight }]} onPress={() => navigation.navigate('Inventory')}>
+            <Text style={styles.actionIcon}>📦</Text>
+            <Text style={[styles.actionLabel, { color: COLORS.secondary }]}>Inventory</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fef3c7' }]} onPress={() => navigation.navigate('Expenses')}>
+            <Text style={styles.actionIcon}>💸</Text>
+            <Text style={[styles.actionLabel, { color: '#92400e' }]}>Expenses</Text>
+          </TouchableOpacity>
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -77,11 +172,24 @@ export default function OwnerDashboardScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  title: { fontSize: 24, fontWeight: '800', color: '#111827', marginBottom: 20 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  statCard: { flex: 1, minWidth: '45%', borderRadius: 14, padding: 16, alignItems: 'center' },
-  statIcon: { fontSize: 28, marginBottom: 6 },
-  statValue: { fontSize: 20, fontWeight: '800', color: '#111827' },
-  statLabel: { fontSize: 12, color: '#6b7280', marginTop: 2, textAlign: 'center' },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  scroll: { padding: 16, paddingBottom: 40 },
+  widget: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16, marginBottom: 14, borderLeftWidth: 4, ...SHADOW.sm },
+  widgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
+  widgetTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  badge: { backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: '700' },
+
+  orderRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderTopWidth: 1, borderTopColor: COLORS.border },
+  orderCustomer: { fontSize: 13, color: COLORS.textPrimary, fontWeight: '500' },
+  orderTotal: { fontSize: 13, fontWeight: '700', color: COLORS.primary },
+  noData: { fontSize: 13, color: COLORS.textMuted, fontStyle: 'italic', paddingTop: 4 },
+
+  salesAmount: { fontSize: 30, fontWeight: '800', color: COLORS.success, marginVertical: 4 },
+  salesSub: { fontSize: 13, color: COLORS.textSecondary },
+
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
+  actionBtn: { flex: 1, minWidth: '45%', backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.lg, paddingVertical: 14, alignItems: 'center' },
+  actionIcon: { fontSize: 22, marginBottom: 4 },
+  actionLabel: { fontSize: 12, fontWeight: '600', color: COLORS.primary, textAlign: 'center' },
 });

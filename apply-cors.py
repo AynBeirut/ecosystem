@@ -12,7 +12,7 @@ import sys
 with open('cors.json', 'r') as f:
     cors_config = json.load(f)
 
-bucket_name = "gs://market-flow-7b074.appspot.com"
+bucket_name = "gs://market-flow-7b074.firebasestorage.app"
 
 print(f"🔧 Applying CORS configuration to {bucket_name}...")
 print(f"📄 CORS Config: {json.dumps(cors_config, indent=2)}")

@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Order } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -28,20 +29,34 @@ export default function OwnerOrdersScreen() {
   const navigation = useNavigation<Nav>();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
+  const [showAll, setShowAll] = useState(false);
 
   useEffect(() => {
     if (!user?.storeId) { setLoading(false); return; }
-    const unsub = firestore()
+
+    let baseQuery = firestore()
       .collection('storeProfiles')
       .doc(user.storeId)
-      .collection('orders')
-      .orderBy('createdAt', 'desc')
-      .onSnapshot((snap) => {
-        setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Order)));
-        setLoading(false);
-      });
+      .collection('orders');
+
+    let query: any;
+    if (!showAll) {
+      const now = new Date();
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      query = baseQuery
+        .where('createdAt', '>=', firestore.Timestamp.fromDate(startOfToday))
+        .orderBy('createdAt', 'desc');
+    } else {
+      query = baseQuery.orderBy('createdAt', 'desc');
+    }
+
+    const unsub = query.onSnapshot((snap: any) => {
+      if (!snap) { setLoading(false); return; }
+      setOrders(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Order)));
+      setLoading(false);
+    });
     return unsub;
-  }, [user?.storeId]);
+  }, [user?.storeId, showAll]);
 
   const updateStatus = async (order: Order) => {
     const next = NEXT_STATUS[order.status];
@@ -111,36 +126,62 @@ export default function OwnerOrdersScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Orders</Text>
+      {/* Filter bar */}
+      <View style={styles.filterBar}>
+        <Text style={styles.filterLabel}>
+          {showAll ? 'All Orders' : "Today's Orders"} · {orders.length}
+        </Text>
+        <TouchableOpacity onPress={() => setShowAll(!showAll)}>
+          <Text style={styles.filterToggle}>{showAll ? '← Today' : '📅 All Orders'}</Text>
+        </TouchableOpacity>
+      </View>
+
       {loading ? (
-        <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />
+        <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
           data={orders}
           keyExtractor={(o) => o.id}
           renderItem={renderOrder}
-          contentContainerStyle={{ padding: 12 }}
-          ListEmptyComponent={<Text style={styles.empty}>No orders yet</Text>}
+          contentContainerStyle={{ padding: 12, paddingBottom: 90 }}
+          ListEmptyComponent={<Text style={styles.empty}>{showAll ? 'No orders yet' : 'No orders today'}</Text>}
         />
       )}
+
+      {/* Create Order FAB */}
+      <TouchableOpacity
+        style={styles.fab}
+        onPress={() => navigation.navigate('CreateOrder')}
+      >
+        <Text style={styles.fabText}>＋ Create Order</Text>
+      </TouchableOpacity>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f9fafb' },
-  title: { fontSize: 22, fontWeight: '700', color: '#111827', padding: 16 },
-  card: { backgroundColor: '#fff', borderRadius: 12, padding: 14, marginBottom: 10, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 4, elevation: 2 },
+  container: { flex: 1, backgroundColor: COLORS.background },
+  filterBar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 10, backgroundColor: COLORS.surface, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  filterLabel: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary },
+  filterToggle: { fontSize: 13, color: COLORS.primary, fontWeight: '600' },
+  card: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 14, marginBottom: 10, ...SHADOW.sm },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 },
-  orderId: { fontSize: 15, fontWeight: '700', color: '#111827' },
-  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 20 },
+  orderId: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
+  badge: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: RADIUS.full },
   badgeText: { fontSize: 12, fontWeight: '600' },
   customer: { fontSize: 14, color: '#374151', marginBottom: 4 },
-  items: { fontSize: 13, color: '#6b7280', marginBottom: 4 },
-  total: { fontSize: 15, color: '#6366f1', fontWeight: '700', marginBottom: 10 },
+  items: { fontSize: 13, color: COLORS.textSecondary, marginBottom: 4 },
+  total: { fontSize: 15, color: COLORS.primary, fontWeight: '700', marginBottom: 10 },
   actions: { flexDirection: 'row', gap: 8 },
-  actionBtn: { flex: 1, backgroundColor: '#e0e7ff', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
+  actionBtn: { flex: 1, backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md, paddingVertical: 8, alignItems: 'center' },
   cancelBtn: { backgroundColor: '#fee2e2' },
-  actionBtnText: { color: '#6366f1', fontWeight: '600', fontSize: 13 },
-  empty: { textAlign: 'center', marginTop: 40, color: '#9ca3af', fontSize: 15 },
+  actionBtnText: { color: COLORS.primary, fontWeight: '600', fontSize: 13 },
+  empty: { textAlign: 'center', marginTop: 40, color: COLORS.textMuted, fontSize: 15 },
+  fab: {
+    position: 'absolute', bottom: 24, right: 20, left: 20,
+    backgroundColor: COLORS.primary, borderRadius: RADIUS.lg,
+    paddingVertical: 15, alignItems: 'center',
+    shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 6,
+  },
+  fabText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

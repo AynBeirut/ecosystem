@@ -254,9 +254,9 @@ app.post('/checkout', async (req: Request, res: Response) => {
       customerEmail = deliveryInfo?.email || '';
       
       // Validate required guest info
-      if (!customerEmail || !customerPhone) {
+      if (!customerPhone) {
         return res.status(400).json({ 
-          error: 'Guest checkout requires email and phone number' 
+          error: 'Guest checkout requires a phone number' 
         });
       }
       
@@ -530,3 +530,5 @@ export const api = functions.https.onRequest(
 export { checkSubscriptions } from './scheduled/checkSubscriptions';
 // Export the scheduled expiry stock checker
 export { checkExpiringStock } from './scheduled/checkExpiringStock';
+// Export Firestore trigger: order status / payment status change notifications
+export { onOrderStatusChanged } from './triggers/orderNotifications';

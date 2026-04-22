@@ -1,6 +1,6 @@
 [
   {
-    "origin": ["http://localhost:8080", "https://emoove.site"],
+    "origin": ["http://localhost:8080", "https://emoove.site", "https://grabio.space"],
     "method": ["GET", "POST", "PUT", "DELETE"],
     "maxAgeSeconds": 3600,
     "responseHeader": [

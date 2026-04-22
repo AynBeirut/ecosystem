@@ -14,7 +14,6 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <Text style={styles.title}>Profile</Text>
       <View style={styles.card}>
         <Text style={styles.avatar}>👤</Text>
         <Text style={styles.name}>{user?.displayName || 'User'}</Text>

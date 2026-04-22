@@ -10,6 +10,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { COLORS, RADIUS } from '../../theme';
 
 type Route = RouteProp<RootStackParamList, 'AddEditProduct'>;
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -50,7 +51,7 @@ export default function AddEditProductScreen() {
           setLowStockThreshold(String(d.lowStockThreshold || 5));
           setInStock(d.inStock !== false);
           setCurrency(d.currency || 'USD');
-          setExistingImageUrl(d.imageUrl || null);
+          setExistingImageUrl(d.imageUrl || d.image || null);
         }
         setLoadingData(false);
       });
@@ -119,7 +120,7 @@ export default function AddEditProductScreen() {
         productType: 'simple',
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
-      if (imageUrl) data.imageUrl = imageUrl;
+      if (imageUrl) { data.imageUrl = imageUrl; data.image = imageUrl; }
       if (stock !== '') data.stock = parseInt(stock, 10);
       if (lowStockThreshold !== '') data.lowStockThreshold = parseInt(lowStockThreshold, 10);
 
@@ -138,7 +139,7 @@ export default function AddEditProductScreen() {
     }
   };
 
-  if (loadingData) return <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />;
+  if (loadingData) return <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />;
 
   const displayImage = imageUri || existingImageUrl;
 
@@ -196,7 +197,7 @@ export default function AddEditProductScreen() {
 
       <View style={styles.switchRow}>
         <Text style={styles.label}>In Stock</Text>
-        <Switch value={inStock} onValueChange={setInStock} trackColor={{ true: '#6366f1' }} />
+        <Switch value={inStock} onValueChange={setInStock} trackColor={{ true: COLORS.primary }} />
       </View>
 
       <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
@@ -212,16 +213,16 @@ export default function AddEditProductScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#fff' },
-  previewImage: { width: '100%', height: 200, borderRadius: 12, resizeMode: 'cover', marginBottom: 10 },
-  imagePlaceholder: { width: '100%', height: 160, backgroundColor: '#f3f4f6', borderRadius: 12, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
+  previewImage: { width: '100%', height: 200, borderRadius: RADIUS.lg, resizeMode: 'cover', marginBottom: 10 },
+  imagePlaceholder: { width: '100%', height: 160, backgroundColor: '#f3f4f6', borderRadius: RADIUS.lg, justifyContent: 'center', alignItems: 'center', marginBottom: 10 },
   imagePlaceholderText: { color: '#9ca3af', marginTop: 6 },
   imageButtons: { flexDirection: 'row', gap: 10, marginBottom: 16 },
-  imgBtn: { flex: 1, backgroundColor: '#e0e7ff', borderRadius: 8, padding: 10, alignItems: 'center' },
-  imgBtnText: { color: '#6366f1', fontWeight: '600' },
+  imgBtn: { flex: 1, backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md, padding: 10, alignItems: 'center' },
+  imgBtnText: { color: COLORS.primary, fontWeight: '600' },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 4, marginTop: 8 },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: 10, padding: 12, fontSize: 15, backgroundColor: '#f9fafb' },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 12, fontSize: 15, backgroundColor: '#f9fafb' },
   row: { flexDirection: 'row' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingVertical: 8 },
-  saveBtn: { backgroundColor: '#6366f1', borderRadius: 12, padding: 16, alignItems: 'center', marginTop: 24, marginBottom: 40, height: 52, justifyContent: 'center' },
+  saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 24, marginBottom: 40, height: 52, justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
 });

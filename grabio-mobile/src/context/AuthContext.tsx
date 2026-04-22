@@ -7,6 +7,7 @@ import {
   where,
   limit,
   getDocs,
+  getDoc,
   query,
   doc,
   setDoc,
@@ -20,23 +21,35 @@ interface AuthUser {
   displayName: string | null;
   isStoreOwner: boolean;
   storeId?: string;
+  userRole: 'owner' | 'sub_seller' | 'sub_manager' | 'sub_delivery' | 'buyer';
+  subAccountRole?: 'sales' | 'delivery' | 'manager';
 }
 
 interface AuthContextType {
   user: AuthUser | null;
   loading: boolean;
+  isGuest: boolean;
+  enterGuestMode: () => void;
+  exitGuestMode: () => void;
   signOut: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
   user: null,
   loading: true,
+  isGuest: false,
+  enterGuestMode: () => {},
+  exitGuestMode: () => {},
   signOut: async () => {},
 });
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
+  const [isGuest, setIsGuest] = useState(false);
+
+  const enterGuestMode = () => setIsGuest(true);
+  const exitGuestMode = () => setIsGuest(false);
 
   useEffect(() => {
     const auth = getAuth();
@@ -53,7 +66,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         const storeSnap = await getDocs(storeQuery);
 
         const isStoreOwner = !storeSnap.empty;
-        const storeId = isStoreOwner ? storeSnap.docs[0].id : undefined;
+        let storeId: string | undefined = isStoreOwner ? storeSnap.docs[0].id : undefined;
+        let userRole: AuthUser['userRole'] = 'buyer';
+        let subAccountRole: AuthUser['subAccountRole'];
+
+        if (isStoreOwner) {
+          userRole = 'owner';
+        } else {
+          // Check if sub-account user
+          try {
+            const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (userDoc.exists()) {
+              const userData = userDoc.data() as any;
+              if (userData.role === 'sub_account') {
+                subAccountRole = userData.subAccountRole;
+                storeId = userData.subAccountId || userData.storeId;
+                if (subAccountRole === 'sales') userRole = 'sub_seller';
+                else if (subAccountRole === 'manager') userRole = 'sub_manager';
+                else if (subAccountRole === 'delivery') userRole = 'sub_delivery';
+                else userRole = 'sub_seller';
+              }
+            }
+          } catch (_) {}
+        }
 
         setUser({
           uid: firebaseUser.uid,
@@ -61,6 +96,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           displayName: firebaseUser.displayName,
           isStoreOwner,
           storeId,
+          userRole,
+          subAccountRole,
         });
 
         // Register FCM token
@@ -77,6 +114,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setUser(null);
+        setIsGuest(false);
       }
       setLoading(false);
     });
@@ -87,7 +125,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = () => firebaseSignOut(getAuth());
 
   return (
-    <AuthContext.Provider value={{ user, loading, signOut }}>
+    <AuthContext.Provider value={{ user, loading, isGuest, enterGuestMode, exitGuestMode, signOut }}>
       {children}
     </AuthContext.Provider>
   );
