@@ -1286,6 +1286,7 @@ const AdminPurchases: React.FC = () => {
     isAddingPurchaseRef.current = true;
     setIsCreatingPO(true);
     let operationSucceeded = false;
+    const today = new Date().toISOString().split('T')[0]; // Move outside try block for scope
 
     try {
       const db = getFirestore();
@@ -1334,7 +1335,6 @@ const AdminPurchases: React.FC = () => {
       
       // Mark operation as succeeded immediately after purchase is created
       operationSucceeded = true;
-      const today = new Date().toISOString().split('T')[0];
 
       // Save dates for this supplier
       if (newPurchase.supplierId) {
