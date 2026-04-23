@@ -3,7 +3,7 @@ import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image,
   ActivityIndicator, ScrollView, Linking,
 } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
+import { getFirestore, collection, doc, query, where, onSnapshot } from '@react-native-firebase/firestore';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Product, Store } from '../../types';
@@ -24,16 +24,16 @@ export default function StoreDetailScreen() {
   useEffect(() => {
     navigation.setOptions({ title: params.storeName });
 
-    const unsubStore = firestore()
-      .collection('storeProfiles')
-      .doc(params.storeId)
-      .onSnapshot((d) => setStore({ id: d.id, ...d.data() } as Store));
+    const db = getFirestore();
 
-    const unsubProd = firestore()
-      .collection('products')
-      .where('storeId', '==', params.storeId)
-      .where('inStock', '==', true)
-      .onSnapshot((snap) => {
+    const unsubStore = onSnapshot(doc(db, 'storeProfiles', params.storeId),
+      (d) => setStore({ id: d.id, ...d.data() } as Store));
+
+    const unsubProd = onSnapshot(
+      query(collection(db, 'products'),
+        where('storeId', '==', params.storeId),
+        where('inStock', '==', true)),
+      (snap) => {
         setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
         setLoading(false);
       });
