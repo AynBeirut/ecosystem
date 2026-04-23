@@ -15,6 +15,7 @@ import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Downloa
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
+import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 import {
@@ -36,6 +37,7 @@ const AdminPurchases: React.FC = () => {
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
+  const [simpleProducts, setSimpleProducts] = useState<Product[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
@@ -162,6 +164,18 @@ const AdminPurchases: React.FC = () => {
         ...doc.data()
       } as RawMaterial));
       setRawMaterials(materialsList);
+
+      // Fetch simple products (products the store buys and resells)
+      const productsRef = collection(db, 'products');
+      const productsQuery = query(productsRef, where('storeId', '==', user.storeId));
+      const productsSnapshot = await getDocs(productsQuery);
+      const productsList: Product[] = productsSnapshot.docs
+        .map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Product))
+        .filter(p => p.productType === 'simple' || !p.productType); // Only simple products
+      setSimpleProducts(productsList);
     };
     fetchData();
   }, [user?.storeId]);
@@ -287,6 +301,9 @@ const AdminPurchases: React.FC = () => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     const itemsHtml = purchase.items?.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+      const product = simpleProducts.find(p => p.id === item.productId);
+      const itemName = material?.name || product?.name || item.materialName || 'Item';
+      const itemUnit = material?.unit || item.unit || 'unit';
       const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
       const unitPrice = typeof item.unitPrice === 'number'
         ? item.unitPrice
@@ -295,8 +312,8 @@ const AdminPurchases: React.FC = () => {
       const lineTotalWithTax = qty * unitPriceWithTax;
       return `
         <tr>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">${material?.name || 'Material'}</td>
-          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${qty}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">${itemName}</td>
+          <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${qty} ${itemUnit}</td>
           <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: right;">
             ${formatCurrency(hasTax ? unitPriceWithTax : unitPrice, true)}
             ${hasTax ? `<div style="font-size: 11px; color: #6b7280;">incl. ${taxLabel}</div>` : ''}
@@ -1164,7 +1181,10 @@ const AdminPurchases: React.FC = () => {
     const subject = `Purchase Order ${purchase.invoiceNumber || purchase.poNumber}`;
     const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: $${purchase.totalAmount.toFixed(2)}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
-      return `- ${material?.name}: ${item.quantity} ${material?.unit} @ $${item.unitPrice}`;
+      const product = simpleProducts.find(p => p.id === item.productId);
+      const itemName = material?.name || product?.name || item.materialName || 'Item';
+      const itemUnit = material?.unit || item.unit || 'unit';
+      return `- ${itemName}: ${item.quantity} ${itemUnit} @ $${item.unitPrice}`;
     }).join('\n')}\n\nBest regards,\n${storeProfile?.name || 'Your Store'}`;
     
     const mailtoLink = `mailto:${supplier?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -1175,7 +1195,10 @@ const AdminPurchases: React.FC = () => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: $${purchase.totalAmount.toFixed(2)}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${purchase.items.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
-      return `• ${material?.name}: ${item.quantity} ${material?.unit} @ $${item.unitPrice} = $${(item.quantity * item.unitPrice).toFixed(2)}`;
+      const product = simpleProducts.find(p => p.id === item.productId);
+      const itemName = material?.name || product?.name || item.materialName || 'Item';
+      const itemUnit = material?.unit || item.unit || 'unit';
+      return `• ${itemName}: ${item.quantity} ${itemUnit} @ $${item.unitPrice} = $${(item.quantity * item.unitPrice).toFixed(2)}`;
     }).join('\n')}\n\nThank you!\n${storeProfile?.name || 'Your Store'}`;
     
     const whatsappUrl = `https://wa.me/${supplier?.phone?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
@@ -1187,7 +1210,7 @@ const AdminPurchases: React.FC = () => {
       ...newPurchase,
       items: [
         ...newPurchase.items,
-        { rawMaterialId: '', quantity: '' as any, unitPrice: '' as any, receivedQuantity: 0 }
+        { itemType: 'raw_material', rawMaterialId: '', productId: '', quantity: '' as any, unitPrice: '' as any, receivedQuantity: 0, materialName: '', sku: '' }
       ]
     });
   };
@@ -1203,11 +1226,24 @@ const AdminPurchases: React.FC = () => {
     const updated = [...newPurchase.items];
     updated[index] = { ...updated[index], [field]: value };
     
-    // Auto-fill unit price from material's cost
+    // Auto-fill unit price and details from material or product
     if (field === 'rawMaterialId' && value) {
       const material = rawMaterials.find(m => m.id === value);
       if (material) {
         updated[index].unitPrice = material.costPerUnit;
+        updated[index].materialName = material.name;
+        updated[index].sku = material.sku;
+        updated[index].unit = material.unit;
+      }
+    }
+    
+    if (field === 'productId' && value) {
+      const product = simpleProducts.find(p => p.id === value);
+      if (product) {
+        updated[index].unitPrice = product.costPrice || product.price || 0;
+        updated[index].materialName = product.name;
+        updated[index].sku = product.sku || '';
+        updated[index].unit = 'piece';
       }
     }
     
@@ -1222,6 +1258,22 @@ const AdminPurchases: React.FC = () => {
 
     if (!newPurchase.supplierId || newPurchase.items.length === 0 || !user?.storeId) {
       toast({ title: "Error", description: "Supplier and at least one item required", variant: "destructive" });
+      return;
+    }
+
+    // Validate that each item has either rawMaterialId OR productId
+    const invalidItems = newPurchase.items.filter(item => {
+      const hasRawMaterial = item.rawMaterialId && item.rawMaterialId.trim() !== '';
+      const hasProduct = item.productId && item.productId.trim() !== '';
+      return !hasRawMaterial && !hasProduct; // Neither is set
+    });
+
+    if (invalidItems.length > 0) {
+      toast({ 
+        title: "Error", 
+        description: "Each item must have either a raw material or product selected", 
+        variant: "destructive" 
+      });
       return;
     }
 
@@ -1412,9 +1464,33 @@ const AdminPurchases: React.FC = () => {
           continue;
         }
         
-        let material = rawMaterials.find(m => m.id === item.rawMaterialId);
         const baseItemUnitCost = Number(item.unitCost || item.unitPrice || 0);
         const itemUnitCost = getEffectiveUnitCost(baseItemUnitCost);
+        
+        // Handle product items (simple products for resale)
+        if (item.productId) {
+          const productRef = doc(db, 'products', item.productId);
+          await runTransaction(db, async (tx) => {
+            const freshSnap = await tx.get(productRef);
+            if (!freshSnap.exists()) return;
+            const freshData = freshSnap.data() as { stock?: number; costPrice?: number };
+            const freshStock = Number(freshData.stock || 0);
+            const newStock = freshStock + receivedQty;
+
+            console.log(`✅ Updating product stock: ${freshStock} + ${receivedQty} = ${newStock}`);
+
+            tx.update(productRef, {
+              stock: newStock,
+              costPrice: itemUnitCost,
+              updatedAt: new Date().toISOString(),
+            });
+          });
+          updatedCount++;
+          continue;
+        }
+        
+        // Handle raw material items (for composed products)
+        let material = rawMaterials.find(m => m.id === item.rawMaterialId);
         
         console.log(`Material found:`, material ? `${material.name} (ID: ${material.id})` : 'NOT FOUND');
         
@@ -1500,6 +1576,16 @@ const AdminPurchases: React.FC = () => {
       setRawMaterials(rawMaterialsList);
       
       console.log('📊 Refetched raw materials. Assets stock:', rawMaterialsList.find(m => m.name === 'assets')?.currentStock);
+
+      // Refetch simple products to ensure sync
+      const productsRef = collection(db, 'products');
+      const productsQuery = query(productsRef, where('storeId', '==', user.storeId));
+      const productsSnapshot = await getDocs(productsQuery);
+      const productsList: Product[] = productsSnapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data()
+      } as Product)).filter(p => p.productType === 'simple' || !p.productType);
+      setSimpleProducts(productsList);
 
       // Refetch purchases to update UI
       const purchasesRef = collection(db, 'purchases');
@@ -1977,30 +2063,69 @@ const AdminPurchases: React.FC = () => {
                   </div>
                   {newPurchase.items.map((item, index) => {
                     const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+                    const product = simpleProducts.find(p => p.id === item.productId);
                     const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
                     const price = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
                     const lineTotal = qty * price;
 
                     return (
-                      <div key={index} className="grid grid-cols-12 gap-2 mb-2 items-end">
-                        <div className="col-span-5">
-                          <Label className="text-xs">Raw Material</Label>
-                          <Select
-                            value={item.rawMaterialId}
-                            onValueChange={(value) => updateItem(index, 'rawMaterialId', value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select material" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {rawMaterials.map(mat => (
-                                <SelectItem key={mat.id} value={mat.id}>
-                                  {mat.name} ({mat.unit})
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
+                      <div key={index} className="space-y-2 p-3 border rounded-lg mb-3">
+                        <div className="grid grid-cols-12 gap-2 items-end">
+                          <div className="col-span-3">
+                            <Label className="text-xs">Item Type</Label>
+                            <Select
+                              value={item.itemType || 'raw_material'}
+                              onValueChange={(value: any) => {
+                                const updated = [...newPurchase.items];
+                                updated[index] = { ...updated[index], itemType: value, rawMaterialId: '', productId: '' };
+                                setNewPurchase({ ...newPurchase, items: updated });
+                              }}
+                            >
+                              <SelectTrigger>
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="raw_material">Raw Material</SelectItem>
+                                <SelectItem value="product">Simple Product</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div className="col-span-5">
+                            <Label className="text-xs">{item.itemType === 'product' ? 'Product' : 'Raw Material'}</Label>
+                            {item.itemType === 'product' ? (
+                              <Select
+                                value={item.productId || ''}
+                                onValueChange={(value) => updateItem(index, 'productId', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select product" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {simpleProducts.map(prod => (
+                                    <SelectItem key={prod.id} value={prod.id}>
+                                      {prod.name} {prod.sku ? `(${prod.sku})` : ''}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            ) : (
+                              <Select
+                                value={item.rawMaterialId || ''}
+                                onValueChange={(value) => updateItem(index, 'rawMaterialId', value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Select material" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {rawMaterials.map(mat => (
+                                    <SelectItem key={mat.id} value={mat.id}>
+                                      {mat.name} ({mat.unit})
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            )}
+                          </div>
                         <div className="col-span-2">
                           <Label className="text-xs">Quantity</Label>
                           <Input
@@ -2036,6 +2161,7 @@ const AdminPurchases: React.FC = () => {
                           >
                             <Minus className="h-4 w-4" />
                           </Button>
+                        </div>
                         </div>
                       </div>
                     );
@@ -2304,10 +2430,13 @@ const AdminPurchases: React.FC = () => {
                       <div className="space-y-1">
                         {purchase.items.map((item, idx) => {
                           const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+                          const product = simpleProducts.find(p => p.id === item.productId);
+                          const itemName = material?.name || product?.name || item.materialName || 'Unknown';
+                          const itemUnit = material?.unit || item.unit || 'unit';
                           return (
                             <div key={idx} className="text-sm flex justify-between">
                               <span>
-                                {material?.name || 'Unknown'}: {item.quantity} {material?.unit} @ ${item.unitPrice}
+                                {itemName}: {item.quantity} {itemUnit} @ ${item.unitPrice}
                                 {item.receivedQuantity > 0 && ` (Received: ${item.receivedQuantity})`}
                               </span>
                               <span className="font-medium">${(item.quantity * item.unitPrice).toFixed(2)}</span>
@@ -2366,12 +2495,16 @@ const AdminPurchases: React.FC = () => {
               <div className="grid gap-4">
                 {receivingPurchase.items.map((item, index) => {
                   const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+                  const product = simpleProducts.find(p => p.id === item.productId);
+                  const itemName = material?.name || product?.name || item.materialName || 'Unknown';
+                  const itemUnit = material?.unit || item.unit || 'unit';
+                  const currentStock = material?.currentStock || product?.stock || 0;
                   
                   return (
                     <div key={index} className="grid grid-cols-12 gap-2 items-center border-b pb-2">
                       <div className="col-span-5">
-                        <p className="font-medium">{material?.name || 'Unknown'}</p>
-                        <p className="text-xs text-gray-500">Current stock: {material?.currentStock} {material?.unit}</p>
+                        <p className="font-medium">{itemName}</p>
+                        <p className="text-xs text-gray-500">Current stock: {currentStock} {itemUnit}</p>
                       </div>
                       <div className="col-span-2">
                         <Label className="text-xs">Ordered</Label>

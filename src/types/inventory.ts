@@ -180,8 +180,11 @@ export interface Purchase {
 }
 
 export interface PurchaseItem {
-  rawMaterialId: string;
-  materialName: string;
+  // Item can be either a raw material OR a simple product
+  itemType?: 'raw_material' | 'product'; // Type of item being purchased
+  rawMaterialId?: string; // ID of raw material (if itemType is 'raw_material')
+  productId?: string; // ID of product (if itemType is 'product')
+  materialName: string; // Name of the item (material or product)
   sku: string;
   unit?: string; // Unit from raw material (kg, liter, piece, etc.)
   quantity: number;
