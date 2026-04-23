@@ -44,6 +44,12 @@ const AdminPurchases: React.FC = () => {
   const [receivingPurchase, setReceivingPurchase] = useState<Purchase | null>(null);
   const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ purchase: Purchase; payment: any } | null>(null);
+  
+  // Loading states for button disabling
+  const [isCreatingPO, setIsCreatingPO] = useState(false);
+  const [isReceivingPO, setIsReceivingPO] = useState(false);
+  const [isPayingPO, setIsPayingPO] = useState(false);
+  
   const [paymentData, setPaymentData] = useState({
     amountPaid: 0,
     paymentDate: new Date().toISOString().split('T')[0],
@@ -1278,6 +1284,7 @@ const AdminPurchases: React.FC = () => {
     }
 
     isAddingPurchaseRef.current = true;
+    setIsCreatingPO(true);
     let operationSucceeded = false;
 
     try {
@@ -1356,6 +1363,7 @@ const AdminPurchases: React.FC = () => {
       toast({ title: "Error", description: "Failed to create purchase order", variant: "destructive" });
     } finally {
       isAddingPurchaseRef.current = false;
+      setIsCreatingPO(false);
       
       if (operationSucceeded) {
         setNewPurchase({
@@ -1418,6 +1426,7 @@ const AdminPurchases: React.FC = () => {
     if (!receivingPurchase || !user?.storeId) return;
 
     isReceivingRef.current = true;
+    setIsReceivingPO(true);
     let operationSucceeded = false;
 
     try {
@@ -1635,6 +1644,7 @@ const AdminPurchases: React.FC = () => {
       toast({ title: "Error", description: "Failed to receive purchase order", variant: "destructive" });
     } finally {
       isReceivingRef.current = false;
+      setIsReceivingPO(false);
       
       if (operationSucceeded) {
         setReceivingPurchase(null);
@@ -1651,6 +1661,7 @@ const AdminPurchases: React.FC = () => {
     if (!payingPurchase || !user?.storeId) return;
 
     isPayingRef.current = true;
+    setIsPayingPO(true);
     let operationSucceeded = false;
 
     try {
@@ -1739,6 +1750,7 @@ const AdminPurchases: React.FC = () => {
       toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
     } finally {
       isPayingRef.current = false;
+      setIsPayingPO(false);
       
       if (operationSucceeded) {
         setPayingPurchase(null);
@@ -2244,8 +2256,10 @@ const AdminPurchases: React.FC = () => {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddingPurchase(false)}>Cancel</Button>
-                <Button onClick={handleAddPurchase}>Create Purchase Order</Button>
+                <Button variant="outline" onClick={() => setIsAddingPurchase(false)} disabled={isCreatingPO}>Cancel</Button>
+                <Button onClick={handleAddPurchase} disabled={isCreatingPO}>
+                  {isCreatingPO ? 'Creating...' : 'Create Purchase Order'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -2552,8 +2566,10 @@ const AdminPurchases: React.FC = () => {
                 })}
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setReceivingPurchase(null)}>Cancel</Button>
-                <Button onClick={handleReceivePurchase}>Receive & Update Stock</Button>
+                <Button variant="outline" onClick={() => setReceivingPurchase(null)} disabled={isReceivingPO}>Cancel</Button>
+                <Button onClick={handleReceivePurchase} disabled={isReceivingPO}>
+                  {isReceivingPO ? 'Receiving...' : 'Receive & Update Stock'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
@@ -2640,8 +2656,10 @@ const AdminPurchases: React.FC = () => {
                 </div>
               </div>
               <DialogFooter>
-                <Button variant="outline" onClick={() => setPayingPurchase(null)}>Cancel</Button>
-                <Button onClick={handlePayPurchase}>Record Payment</Button>
+                <Button variant="outline" onClick={() => setPayingPurchase(null)} disabled={isPayingPO}>Cancel</Button>
+                <Button onClick={handlePayPurchase} disabled={isPayingPO}>
+                  {isPayingPO ? 'Processing...' : 'Record Payment'}
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
