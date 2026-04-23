@@ -25,13 +25,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 
 // ── Store-level contact form (sends message to storeContactMessages/{storeId}/messages) ──
-const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { cardSoft: string; sectionTitle: string; mutedText: string } }> = ({ storeId, storeName, theme }) => {
-  const [form, setForm] = useState({ name: '', email: '', message: '' });
+const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { cardSoft: string; sectionTitle: string; mutedText: string }; formStyle?: 1 | 2 | 3 | 4 | 5 | 6 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 }> = ({ storeId, storeName, theme, formStyle = 1 }) => {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '', company: '', priority: 'normal', rating: 5 });
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
     setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -42,14 +42,14 @@ const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { 
       const res = await fetch(`${API_URL}/contact/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, subject: `Message from ${form.name}`, storeId }),
+        body: JSON.stringify({ ...form, subject: form.subject || `Message from ${form.name}`, storeId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || 'Failed to send');
       }
       setDone(true);
-      setForm({ name: '', email: '', message: '' });
+      setForm({ name: '', email: '', phone: '', subject: '', message: '', company: '', priority: 'normal', rating: 5 });
     } catch {
       setErr('Failed to send. Please try again.');
     } finally {
@@ -57,10 +57,137 @@ const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { 
     }
   };
 
+  // Compact inline style (style 8)
+  if (formStyle === 8) {
+    return (
+      <Card className={theme.cardSoft}>
+        <CardContent className="p-4">
+          <h3 className={`font-semibold text-base mb-3 ${theme.sectionTitle}`}>Quick Contact</h3>
+          {done ? (
+            <div className="text-center py-6">
+              <p className={`font-medium ${theme.sectionTitle}`}>✓ Sent!</p>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-2">
+              <div className="grid grid-cols-2 gap-2">
+                <Input name="name" placeholder="Name *" value={form.name} onChange={handleChange} required className="text-sm" />
+                <Input name="email" type="email" placeholder="Email *" value={form.email} onChange={handleChange} required className="text-sm" />
+              </div>
+              <Textarea name="message" placeholder="Message *" rows={3} value={form.message} onChange={handleChange} required className="text-sm resize-none" />
+              {err && <p className="text-xs text-red-500">{err}</p>}
+              <Button type="submit" disabled={sending} size="sm" className="w-full">{sending ? 'Sending...' : 'Send'}</Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Appointment style with date/time (style 11)
+  if (formStyle === 11) {
+    return (
+      <Card className={theme.cardSoft}>
+        <CardContent className="p-6">
+          <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>Book an Appointment</h3>
+          {done ? (
+            <div className="flex flex-col items-center py-8 gap-3 text-center">
+              <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p className={`font-medium ${theme.sectionTitle}`}>Appointment Requested!</p>
+              <p className={`text-sm ${theme.mutedText}`}>We'll confirm your booking soon.</p>
+              <button onClick={() => setDone(false)} className={`text-xs underline mt-1 ${theme.mutedText}`}>Book another</button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <Input name="name" placeholder="Your Name *" value={form.name} onChange={handleChange} required />
+              <Input name="email" type="email" placeholder="Email Address *" value={form.email} onChange={handleChange} required />
+              <Input name="phone" type="tel" placeholder="Phone Number *" value={form.phone} onChange={handleChange} required />
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="appt-date" className="text-xs">Preferred Date</Label>
+                  <Input id="appt-date" name="subject" type="date" value={form.subject} onChange={handleChange} required />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="appt-time" className="text-xs">Preferred Time</Label>
+                  <Input id="appt-time" name="company" type="time" value={form.company} onChange={handleChange} required />
+                </div>
+              </div>
+              <Textarea name="message" placeholder="Additional notes or special requests..." rows={3} value={form.message} onChange={handleChange} className="resize-none" />
+              {err && <p className="text-sm text-red-500">{err}</p>}
+              <Button type="submit" disabled={sending} className="w-full">{sending ? 'Sending...' : 'Request Appointment'}</Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Quote request with product selector (style 12)
+  if (formStyle === 12) {
+    return (
+      <Card className={theme.cardSoft}>
+        <CardContent className="p-6">
+          <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>Request a Quote</h3>
+          {done ? (
+            <div className="flex flex-col items-center py-8 gap-3 text-center">
+              <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+              <p className={`font-medium ${theme.sectionTitle}`}>Quote Request Sent!</p>
+              <p className={`text-sm ${theme.mutedText}`}>We'll prepare your custom quote.</p>
+              <button onClick={() => setDone(false)} className={`text-xs underline mt-1 ${theme.mutedText}`}>Request another</button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <Input name="name" placeholder="Your Name *" value={form.name} onChange={handleChange} required />
+              <Input name="email" type="email" placeholder="Email Address *" value={form.email} onChange={handleChange} required />
+              <div className="space-y-1">
+                <Label htmlFor="product-select" className="text-sm">Product/Service</Label>
+                <Input id="product-select" name="subject" placeholder="What product are you interested in? *" value={form.subject} onChange={handleChange} required />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="quantity" className="text-sm">Quantity</Label>
+                <Input id="quantity" name="company" type="number" min="1" placeholder="How many units?" value={form.company} onChange={handleChange} />
+              </div>
+              <Textarea name="message" placeholder="Additional requirements or specifications..." rows={4} value={form.message} onChange={handleChange} className="resize-none" />
+              {err && <p className="text-sm text-red-500">{err}</p>}
+              <Button type="submit" disabled={sending} className="w-full">{sending ? 'Sending...' : 'Get Quote'}</Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Bordered glass style (style 15)
+  if (formStyle === 15) {
+    return (
+      <Card className="backdrop-blur-md bg-white/60 border-2 border-white/80 shadow-xl">
+        <CardContent className="p-6">
+          <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>Get in Touch</h3>
+          {done ? (
+            <div className="flex flex-col items-center py-8 gap-3 text-center">
+              <div className="w-16 h-16 rounded-full bg-green-500/20 flex items-center justify-center">
+                <svg className="w-8 h-8 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" /></svg>
+              </div>
+              <p className={`font-medium ${theme.sectionTitle}`}>Message Delivered!</p>
+              <button onClick={() => setDone(false)} className="text-xs underline">Send another</button>
+            </div>
+          ) : (
+            <form onSubmit={handleSubmit} className="space-y-3">
+              <Input name="name" placeholder="Your Name *" value={form.name} onChange={handleChange} required className="bg-white/50 border-white/60" />
+              <Input name="email" type="email" placeholder="Email Address *" value={form.email} onChange={handleChange} required className="bg-white/50 border-white/60" />
+              <Textarea name="message" placeholder="Your Message *" rows={5} value={form.message} onChange={handleChange} required className="resize-none bg-white/50 border-white/60" />
+              {err && <p className="text-sm text-red-500">{err}</p>}
+              <Button type="submit" disabled={sending} className="w-full">{sending ? 'Sending...' : 'Send Message'}</Button>
+            </form>
+          )}
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
-    <Card className={theme.cardSoft}>
+    <Card className={formStyle === 5 ? 'shadow-xl' : theme.cardSoft}>
       <CardContent className="p-6">
-        <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>Send a Message</h3>
+        <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>{formStyle === 4 ? 'Step 1: Your Details' : formStyle === 10 ? 'Stay Updated' : formStyle === 13 ? 'Support Request' : formStyle === 14 ? 'Share Your Feedback' : 'Send a Message'}</h3>
         {done ? (
           <div className="flex flex-col items-center py-8 gap-3 text-center">
             <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
@@ -69,22 +196,75 @@ const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { 
             <button onClick={() => setDone(false)} className={`text-xs underline mt-1 ${theme.mutedText}`}>Send another</button>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className={formStyle === 5 ? 'space-y-3 bg-white rounded-xl p-4 shadow-md' : 'space-y-3'}>
+            {formStyle !== 10 && formStyle !== 14 && (
+              <div className="space-y-1">
+                <Label htmlFor="sc-name">Your Name *</Label>
+                <Input id="sc-name" name="name" autoComplete="name" placeholder="Your name" value={form.name} onChange={handleChange} required />
+              </div>
+            )}
             <div className="space-y-1">
-              <Label htmlFor="sc-name">Your Name *</Label>
-              <Input id="sc-name" name="name" autoComplete="name" placeholder="Your name" value={form.name} onChange={handleChange} required />
-            </div>
-            <div className="space-y-1">
-              <Label htmlFor="sc-email">Email Address *</Label>
+              <Label htmlFor="sc-email">{formStyle === 10 ? 'Email Address *' : 'Email Address *'}</Label>
               <Input id="sc-email" name="email" type="email" autoComplete="email" placeholder="you@example.com" value={form.email} onChange={handleChange} required />
             </div>
-            <div className="space-y-1">
-              <Label htmlFor="sc-message">Message *</Label>
-              <Textarea id="sc-message" name="message" autoComplete="off" placeholder="Write your message..." rows={5} value={form.message} onChange={handleChange} required className="resize-none" />
-            </div>
+            {formStyle === 2 && (
+              <div className="space-y-1">
+                <Label htmlFor="sc-phone">Phone Number</Label>
+                <Input id="sc-phone" name="phone" autoComplete="tel" placeholder="+1 555 000 000" value={form.phone} onChange={handleChange} />
+              </div>
+            )}
+            {formStyle === 3 && (
+              <div className="space-y-1">
+                <Label htmlFor="sc-subject">Subject</Label>
+                <Input id="sc-subject" name="subject" autoComplete="off" placeholder="Order inquiry" value={form.subject} onChange={handleChange} />
+              </div>
+            )}
+            {formStyle === 9 && (
+              <>
+                <div className="space-y-1">
+                  <Label htmlFor="sc-phone">Phone Number</Label>
+                  <Input id="sc-phone" name="phone" autoComplete="tel" placeholder="+1 555 000 000" value={form.phone} onChange={handleChange} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="sc-company">Company</Label>
+                  <Input id="sc-company" name="company" autoComplete="organization" placeholder="Your company name" value={form.company} onChange={handleChange} />
+                </div>
+                <div className="space-y-1">
+                  <Label htmlFor="sc-subject">Subject *</Label>
+                  <Input id="sc-subject" name="subject" autoComplete="off" placeholder="Topic" value={form.subject} onChange={handleChange} required />
+                </div>
+              </>
+            )}
+            {formStyle === 13 && (
+              <div className="space-y-1">
+                <Label htmlFor="sc-priority">Priority</Label>
+                <select id="sc-priority" name="priority" value={form.priority} onChange={handleChange} className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
+                  <option value="low">Low</option>
+                  <option value="normal">Normal</option>
+                  <option value="high">High</option>
+                  <option value="urgent">Urgent</option>
+                </select>
+              </div>
+            )}
+            {formStyle === 14 && (
+              <div className="space-y-1">
+                <Label htmlFor="sc-rating">Rating (1-5)</Label>
+                <input id="sc-rating" name="rating" type="range" min="1" max="5" value={form.rating} onChange={e => setForm(prev => ({ ...prev, rating: Number(e.target.value) }))} className="w-full" />
+                <div className="text-center text-sm text-yellow-500">{'★'.repeat(form.rating)}{'☆'.repeat(5 - form.rating)} ({form.rating}/5)</div>
+              </div>
+            )}
+            {formStyle === 4 && (
+              <div className="rounded-md bg-muted px-3 py-2 text-xs text-muted-foreground">Step 2: Write your message below.</div>
+            )}
+            {formStyle !== 10 && (
+              <div className="space-y-1">
+                <Label htmlFor="sc-message">{formStyle === 14 ? 'Feedback' : 'Message'} *</Label>
+                <Textarea id="sc-message" name="message" autoComplete="off" placeholder={formStyle === 14 ? 'Share your experience...' : 'Write your message...'} rows={5} value={form.message} onChange={handleChange} required className="resize-none" />
+              </div>
+            )}
             {err && <p className="text-sm text-red-500">{err}</p>}
             <div className="flex justify-end">
-              <Button type="submit" disabled={sending}>{sending ? 'Sending...' : 'Send Message'}</Button>
+              <Button type="submit" disabled={sending}>{sending ? 'Sending...' : formStyle === 10 ? 'Subscribe' : 'Send Message'}</Button>
             </div>
           </form>
         )}
@@ -441,6 +621,24 @@ const StoreDetail: React.FC = () => {
   const aboutUs = typeof store.aboutUs === 'string' ? store.aboutUs.trim() : '';
   const mission = typeof store.mission === 'string' ? store.mission.trim() : '';
   const vision = typeof store.vision === 'string' ? store.vision.trim() : '';
+  const productDisplayType = store.productDisplayType || 'grid-standard';
+  const productCardAnimation = store.productCardAnimation || 'none';
+  const heroLayout = store.heroLayout || 'fullscreen';
+  const menuStyle = store.menuStyle || 'classic';
+  const aboutLayout = store.aboutLayout || 'left';
+  const contactFormStyle = store.contactFormStyle || 1;
+  const ratingDisplayType = store.ratingDisplayType || 'stars';
+  const sectionOrder: StoreSectionOrder[] = Array.isArray(store.sectionOrder) 
+    ? store.sectionOrder 
+    : [
+        { id: 'hero', enabled: true, order: 0, width: 'full' },
+        { id: 'about', enabled: true, order: 1, width: 'full' },
+        { id: 'announcements', enabled: true, order: 2, width: 'full' },
+        { id: 'products', enabled: true, order: 3, width: 'full' },
+        { id: 'gallery', enabled: true, order: 4, width: 'full' },
+        { id: 'reviews', enabled: true, order: 5, width: 'full' },
+        { id: 'contact', enabled: true, order: 6, width: 'full' },
+      ];
 
   // Merge backgroundImage + carouselImages into one unified banner list
   const bannerImages = [
@@ -461,7 +659,199 @@ const StoreDetail: React.FC = () => {
     '--store-primary': tColors.primary,
     '--store-secondary': tColors.secondary,
     '--store-accent': tColors.accent,
+    '--store-bg': tColors.background || '#f8fafc',
+    '--store-surface': tColors.surface || '#ffffff',
+    '--store-text': tColors.textColor || '#1a202c',
+    '--store-highlight': tColors.highlight || '#22d3ee',
   } as React.CSSProperties : {};
+
+  const productGridClass =
+    productDisplayType === 'grid-large'
+      ? 'grid grid-cols-1 sm:grid-cols-2 gap-6'
+      : productDisplayType === 'list'
+        ? 'grid grid-cols-1 gap-4'
+        : productDisplayType === 'masonry'
+          ? 'columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4'
+          : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6';
+
+  // Helper to check if section is enabled
+  const isSectionEnabled = (sectionId: StoreSectionId): boolean => {
+    const section = sectionOrder.find(s => s.id === sectionId);
+    return section ? section.enabled : true; // default to enabled if not found
+  };
+
+  // Group sections into rows based on width (full = own row, consecutive half sections = shared row)
+  const groupSectionsIntoRows = (): StoreSectionOrder[][] => {
+    const enabled = sectionOrder
+      .filter(s => s.enabled)
+      .sort((a, b) => a.order - b.order);
+    
+    const rows: StoreSectionOrder[][] = [];
+    let currentRow: StoreSectionOrder[] = [];
+    
+    enabled.forEach((section) => {
+      const width = section.width || 'full';
+      
+      if (width === 'full') {
+        // Full width section gets its own row
+        if (currentRow.length > 0) {
+          rows.push(currentRow);
+          currentRow = [];
+        }
+        rows.push([section]);
+      } else {
+        // Half width section
+        currentRow.push(section);
+        if (currentRow.length === 2) {
+          rows.push(currentRow);
+          currentRow = [];
+        }
+      }
+    });
+    
+    // Push any remaining half-width section
+    if (currentRow.length > 0) {
+      rows.push(currentRow);
+    }
+    
+    return rows;
+  };
+
+  // Render individual section by ID
+  const renderSection = (sectionId: StoreSectionId) => {
+    switch (sectionId) {
+      case 'about':
+        if ((aboutUs || mission || vision) && aboutLayout !== 'off') {
+          return (
+            <div>
+              <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>About Us</h2>
+              <div className={aboutLayout === 'centered' ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch'}>
+                {[
+                  { title: 'Who We Are', text: aboutUs },
+                  { title: 'Mission', text: mission },
+                  { title: 'Vision', text: vision },
+                ].filter(c => c.text).map(c => (
+                  <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`}>
+                    <CardContent className="p-4 flex flex-col flex-1">
+                      <h3 className={`font-semibold mb-2 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.title}</h3>
+                      <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} line-clamp-6 flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.text}</p>
+                      {c.text.length > 200 && (
+                        <button
+                          onClick={() => setReadMoreContent({ title: c.title, text: c.text })}
+                          className={`mt-3 text-xs font-semibold underline ${aboutLayout === 'centered' ? 'self-center' : 'self-start'} ${currentTheme.link}`}
+                        >
+                          Read More
+                        </button>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        return null;
+
+      case 'announcements':
+        if (announcements.length > 0) {
+          return (
+            <div>
+              <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Announcements</h2>
+              <div className="space-y-4">
+                {announcements.map((announcement) => (
+                  <Alert key={announcement.id} className={currentTheme.card}>
+                    <AlertTitle className={currentTheme.sectionTitle}>{announcement.title}</AlertTitle>
+                    <AlertDescription>{announcement.message}</AlertDescription>
+                  </Alert>
+                ))}
+              </div>
+            </div>
+          );
+        }
+        return null;
+
+      case 'products':
+        return (
+          <div>
+            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Products</h2>
+            {products.length > 0 ? (
+              <div className={productGridClass}>
+                {products.map((product, index) => (
+                  <div key={product.id} className={productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
+                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="flex items-center justify-center h-40">
+                  <p className="text-gray-500">This store doesn't have any products yet.</p>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        );
+
+      case 'gallery':
+        if (galleryImages.length > 0) {
+          return (
+            <div>
+              <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Gallery</h2>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {galleryImages.map((url, index) => (
+                  <img
+                    key={`${url}-${index}`}
+                    src={url}
+                    alt={`Store gallery ${index + 1}`}
+                    className="w-full h-36 md:h-44 rounded-lg object-cover border"
+                  />
+                ))}
+              </div>
+            </div>
+          );
+        }
+        return null;
+
+      case 'reviews':
+        return (
+          <div>
+            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
+            {reviews.length > 0 ? (
+              <div className="space-y-4">
+                {reviews.map(r => (
+                  <div key={r.id} className={`p-4 rounded shadow-sm ${currentTheme.reviewCard}`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="font-semibold">{r.userName || 'Anonymous'}</div>
+                        <div className="text-yellow-500 flex items-center">{Array.from({length: r.rating}).map((_,i)=>(<Star key={i} size={14}/>))}</div>
+                      </div>
+                      <div className={`text-sm ${currentTheme.mutedText}`}>
+                        {(() => {
+                          if (!r.createdAt) return 'Recently';
+                          const date = new Date(String(r.createdAt));
+                          return Number.isNaN(date.getTime()) ? 'Recently' : date.toLocaleDateString();
+                        })()}
+                      </div>
+                    </div>
+                    {r.comment && <p className={`mt-2 ${currentTheme.mutedText}`}>{r.comment}</p>}
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className={`p-6 rounded border text-center ${currentTheme.mutedText}`}>
+                No reviews yet. Be the first to review!
+              </div>
+            )}
+          </div>
+        );
+
+      case 'contact':
+        return <StoreContactForm storeId={storeId} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle} />;
+
+      default:
+        return null;
+    }
+  };
 
   return (
     <div className={`min-h-screen ${currentTheme.pageBg}`} style={colorStyle}>
@@ -497,7 +887,38 @@ const StoreDetail: React.FC = () => {
       <Header />
       <main className="container mx-auto px-4 py-6">
         {/* Hero Banner — image carousel OR gradient fallback */}
-        {bannerImages.length > 0 ? (
+        {heroLayout === 'minimal' ? (
+          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+            <div className="p-4 md:p-5 flex items-center justify-between gap-4">
+              <h2 className="text-xl md:text-2xl font-bold">{store.name}</h2>
+              {store.slogan && <p className="text-sm opacity-90 hidden md:block">{store.slogan}</p>}
+            </div>
+          </div>
+        ) : heroLayout === 'centered' ? (
+          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+            <div className="p-8 md:p-12 text-center">
+              <h2 className="text-3xl md:text-4xl font-bold">{store.name}</h2>
+              {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto">{store.slogan}</p>}
+            </div>
+          </div>
+        ) : heroLayout === 'split' && bannerImages.length > 0 ? (
+          <div className="relative rounded-xl overflow-hidden shadow-md mb-6 grid grid-cols-1 md:grid-cols-2 min-h-[280px]">
+            <div className="relative h-64 md:h-full">
+              {bannerImages.map((url, idx) => (
+                <img
+                  key={url}
+                  src={url}
+                  alt={`Banner ${idx + 1}`}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
+                />
+              ))}
+            </div>
+            <div className={`p-8 flex flex-col justify-center text-white ${currentTheme.heroBg}`}>
+              <h2 className="text-3xl font-bold">{store.name}</h2>
+              {store.slogan && <p className="text-base opacity-90 mt-3">{store.slogan}</p>}
+            </div>
+          </div>
+        ) : bannerImages.length > 0 ? (
           <div className="relative rounded-xl overflow-hidden shadow-md mb-6 h-64 md:h-80">
             {bannerImages.map((url, idx) => (
               <img
@@ -558,9 +979,28 @@ const StoreDetail: React.FC = () => {
               <div className="flex items-center justify-center md:justify-start gap-3 mb-3">
                 {avgRating !== null ? (
                   <div className="flex items-center text-yellow-500">
-                    <Star size={16} className="mr-2" />
-                    <span className="font-semibold">{avgRating.toFixed(1)}</span>
-                    <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>({reviews.length} reviews)</span>
+                    {ratingDisplayType === 'pill' ? (
+                      <>
+                        <span className="bg-yellow-400 text-white text-xs font-bold px-2.5 py-1 rounded-full">★ {avgRating.toFixed(1)}</span>
+                        <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>/ 5.0 · {reviews.length} reviews</span>
+                      </>
+                    ) : ratingDisplayType === 'number' ? (
+                      <>
+                        <span className="text-2xl font-black text-yellow-500">{avgRating.toFixed(1)}</span>
+                        <span className="text-sm ml-2">★★★★☆</span>
+                        <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>({reviews.length})</span>
+                      </>
+                    ) : ratingDisplayType === 'minimal' ? (
+                      <span className={`text-sm ${currentTheme.mutedText}`}>
+                        <span className="font-semibold text-foreground">{Math.round((avgRating / 5) * 100)}% positive</span> based on {reviews.length} reviews
+                      </span>
+                    ) : (
+                      <>
+                        <Star size={16} className="mr-2" />
+                        <span className="font-semibold">{avgRating.toFixed(1)}</span>
+                        <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>({reviews.length} reviews)</span>
+                      </>
+                    )}
                   </div>
                 ) : (
                   <div className={`text-sm ${currentTheme.mutedText}`}>No ratings yet</div>
@@ -647,15 +1087,15 @@ const StoreDetail: React.FC = () => {
           ];
           if (navPages.length <= 1) return null;
           return (
-            <div className={`flex gap-1 mb-6 overflow-x-auto rounded-lg p-1 ${currentTheme.cardSoft}`}>
+            <div className={`flex gap-1 mb-6 overflow-x-auto rounded-lg p-1 ${menuStyle === 'bold' ? 'bg-[var(--store-primary)]/20' : menuStyle === 'sticky-glass' ? 'backdrop-blur bg-white/70 border border-white/50 sticky top-2 z-20' : currentTheme.cardSoft}`}>
               {navPages.map(p => (
                 <button
                   key={p.id}
                   onClick={() => setActivePage(p.id)}
                   className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                     activePage === p.id
-                      ? 'bg-white shadow text-gray-900'
-                      : `${currentTheme.mutedText} hover:bg-white/60`
+                      ? `${menuStyle === 'bold' ? 'bg-[var(--store-primary)] text-white shadow' : 'bg-white shadow text-gray-900'}`
+                      : `${menuStyle === 'bold' ? 'text-[var(--store-text)] hover:bg-white/50' : `${currentTheme.mutedText} hover:bg-white/60`}`
                   }`}
                 >
                   {p.label}
@@ -667,103 +1107,36 @@ const StoreDetail: React.FC = () => {
 
         {/* Page Content */}
         {activePage === 'home' && (
-          <>
-        {/* Announcements */}
-        {(aboutUs || mission || vision) && (
-          <div className="mb-8">
-            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>About Us</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-stretch">
-              {[
-                { title: 'Who We Are', text: aboutUs },
-                { title: 'Mission', text: mission },
-                { title: 'Vision', text: vision },
-              ].filter(c => c.text).map(c => (
-                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col`}>
-                  <CardContent className="p-4 flex flex-col flex-1">
-                    <h3 className="font-semibold mb-2">{c.title}</h3>
-                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} line-clamp-6 flex-1`}>{c.text}</p>
-                    {c.text.length > 200 && (
-                      <button
-                        onClick={() => setReadMoreContent({ title: c.title, text: c.text })}
-                        className={`mt-3 text-xs font-semibold underline self-start ${currentTheme.link}`}
-                      >
-                        Read More
-                      </button>
-                    )}
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
+          <div className="space-y-6">
+            {groupSectionsIntoRows().map((row, rowIdx) => (
+              <div
+                key={rowIdx}
+                className={row.length === 1 ? '' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}
+              >
+                {row.map((section) => (
+                  <div key={section.id} className={`rounded-lg p-4 ${currentTheme.cardSoft}`}>
+                    {renderSection(section.id)}
+                  </div>
+                ))}
+              </div>
+            ))}
           </div>
-        )}
-
-        {/* Announcements */}
-        {announcements.length > 0 && (
-          <div className={`mb-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Announcements</h2>
-            <div className="space-y-4">
-              {announcements.map((announcement) => (
-                <Alert key={announcement.id} className={currentTheme.card}>
-                  <AlertTitle className={currentTheme.sectionTitle}>{announcement.title}</AlertTitle>
-                  <AlertDescription>
-                    {announcement.message}
-                  </AlertDescription>
-                </Alert>
-              ))}
-            </div>
-          </div>
-        )}
-        
-        {/* Products */}
-        <div className={`rounded-lg p-4 ${currentTheme.cardSoft}`}>
-          <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Products</h2>
-          {products.length > 0 ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-              {products.map((product) => (
-                <ProductCard key={product.id} product={product} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
-              ))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="flex items-center justify-center h-40">
-                <p className="text-gray-500">This store doesn't have any products yet.</p>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-
-        {galleryImages.length > 0 && (
-          <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Gallery</h2>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {galleryImages.map((url, index) => (
-                <img
-                  key={`${url}-${index}`}
-                  src={url}
-                  alt={`Store gallery ${index + 1}`}
-                  className="w-full h-36 md:h-44 rounded-lg object-cover border"
-                />
-              ))}
-            </div>
-          </div>
-        )}
-          </>
         )}
 
         {/* About Us Page */}
         {activePage === 'about' && (
           <div className="space-y-6">
             <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>About Us</h2>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch">
+            <div className={aboutLayout === 'centered' ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch'}>
               {[
                 { title: 'Who We Are', text: aboutUs },
                 { title: 'Mission', text: mission },
                 { title: 'Vision', text: vision },
               ].filter(c => c.text).map(c => (
-                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col`}>
+                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`}>
                   <CardContent className="p-6 flex flex-col flex-1">
-                    <h3 className="text-lg font-semibold mb-3">{c.title}</h3>
-                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} leading-relaxed flex-1`}>{c.text}</p>
+                    <h3 className={`text-lg font-semibold mb-3 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.title}</h3>
+                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} leading-relaxed flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.text}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -776,9 +1149,11 @@ const StoreDetail: React.FC = () => {
           <div className="space-y-4">
             <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>Products</h2>
             {products.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                {products.map((product) => (
-                  <ProductCard key={product.id} product={product} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
+              <div className={productGridClass}>
+                {products.map((product, index) => (
+                  <div key={product.id} className={productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
+                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
+                  </div>
                 ))}
               </div>
             ) : (
@@ -885,12 +1260,34 @@ const StoreDetail: React.FC = () => {
               </Card>
 
               {/* Send a Message Card */}
-              <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} />
+              {contactFormStyle === 7 ? (
+                <Card className={currentTheme.cardSoft}>
+                  <CardContent className="p-6 space-y-4">
+                    <h3 className={`font-semibold text-lg ${currentTheme.sectionTitle}`}>Quick Contact</h3>
+                    {store.socialLinks?.whatsapp ? (
+                      <a
+                        href={`https://wa.me/${store.socialLinks.whatsapp.replace(/\D/g, '')}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center justify-center gap-2 w-full h-11 rounded-md bg-green-500 hover:bg-green-600 text-white font-semibold"
+                      >
+                        <span>📲</span>
+                        Message on WhatsApp
+                      </a>
+                    ) : (
+                      <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle as 1 | 2 | 3 | 4 | 5 | 6} />
+                    )}
+                  </CardContent>
+                </Card>
+              ) : (
+                <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle as 1 | 2 | 3 | 4 | 5 | 6} />
+              )}
             </div>
           </div>
         )}
 
-        {/* Reviews — always visible */}
+        {/* Reviews */}
+        {isSectionEnabled('reviews') && (
         <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
           <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
           {reviews.length > 0 ? (
@@ -1033,6 +1430,7 @@ const StoreDetail: React.FC = () => {
             )}
           </div>
         </div>
+        )}
       </main>
     </div>
   );

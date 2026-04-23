@@ -10,6 +10,27 @@ export interface StoreTemplateColors {
   primary: string;
   secondary: string;
   accent: string;
+  background?: string;
+  surface?: string;
+  textColor?: string;
+  highlight?: string;
+}
+
+export type ProductDisplayType = 'grid-standard' | 'grid-large' | 'list' | 'masonry' | 'spotlight';
+export type ProductCardAnimation = 'none' | 'parallax' | 'lift-3d' | 'glow-pulse' | 'slide-reveal' | 'zoom-tilt';
+export type HeroLayout = 'fullscreen' | 'split' | 'minimal' | 'centered';
+export type MenuStyle = 'classic' | 'centered' | 'bold' | 'sticky-glass' | 'hamburger';
+export type ContactFormStyle = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
+export type RatingDisplayType = 'stars' | 'pill' | 'number' | 'card' | 'minimal';
+export type AboutLayout = 'off' | 'left' | 'centered' | 'with-image';
+export type StoreSectionId = 'hero' | 'about' | 'announcements' | 'products' | 'gallery' | 'reviews' | 'contact';
+export type SectionWidth = 'full' | 'half';
+
+export interface StoreSectionOrder {
+  id: StoreSectionId;
+  enabled: boolean;
+  order: number;
+  width?: SectionWidth; // 'full' (default) or 'half' for side-by-side layouts
 }
 
 export interface StoreProfile {
@@ -99,6 +120,14 @@ export interface StoreProfile {
   galleryImages?: string[];
   customPages?: StorePage[];
   templateColors?: StoreTemplateColors;
+  productDisplayType?: ProductDisplayType;
+  productCardAnimation?: ProductCardAnimation;
+  heroLayout?: HeroLayout;
+  menuStyle?: MenuStyle;
+  contactFormStyle?: ContactFormStyle;
+  ratingDisplayType?: RatingDisplayType;
+  aboutLayout?: AboutLayout;
+  sectionOrder?: StoreSectionOrder[];
   whatsappBusiness?: string; // WhatsApp Business number (international format, digits only)
   proEmail?: string;         // Email address to receive Contact Us messages
   customDomain?: string;     // Custom domain (e.g. "shop.client.com")
