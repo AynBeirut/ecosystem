@@ -66,12 +66,12 @@ export interface Order {
 
 export type RootStackParamList = {
   Login: undefined;
-  MainTabs: undefined;
+  MainTabs: { screen?: keyof TabParamList } | undefined;
   StoreDetail: { storeId: string; storeName: string };
   ProductDetail: { product: Product; storeName: string };
   Cart: undefined;
   Checkout: undefined;
-  OrderTracking: { orderId: string; storeId: string };
+  OrderTracking: { orderId: string; storeId?: string };
   OrderList: undefined;
   OwnerDashboard: undefined;
   OwnerOrders: undefined;

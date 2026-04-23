@@ -39,9 +39,13 @@ service cloud.firestore {
 
     // Orders: allow authenticated users (including sales people) to create orders,
     // allow buyers to read/update their own orders,
-    // allow sellers to read/update orders for their store
+    // allow sellers to read/update orders for their store.
+    // Guest users (unauthenticated) may read a single order by its ID (for order tracking).
+    // Note: guest checkout is handled server-side via Cloud Functions (admin SDK bypasses rules).
     match /orders/{orderId} {
-      allow create, read, update: if request.auth != null;
+      allow create, update: if request.auth != null;
+      allow get: if true; // orderId is unguessable — safe to allow unauthenticated single-doc read for tracking
+      allow list: if request.auth != null;
       // Allow deletion only for cancelled orders
       allow delete: if request.auth != null && resource.data.status == 'cancelled';
     }

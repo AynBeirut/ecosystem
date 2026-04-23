@@ -324,6 +324,11 @@ const AdminDashboard: React.FC = () => {
           <User className="h-5 w-5 text-gray-700" />
           <span className="text-xs text-gray-600 mt-1">Profile</span>
         </Link>
+
+        <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition">
+          <FileText className="h-5 w-5 text-indigo-600" />
+          <span className="text-xs text-indigo-700 mt-1 font-semibold">Guide</span>
+        </a>
       </div>
     </div>
   <div className="flex">
@@ -461,8 +466,12 @@ const AdminDashboard: React.FC = () => {
                   </Link>
                 </li>
               </>
-            )}
-          </ul>
+            )}            <li>
+              <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="flex items-center px-3 py-2 text-indigo-700 font-semibold rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition">
+                <FileText className="h-5 w-5 mr-3 text-indigo-600" />
+                <span>Store Owner Guide</span>
+              </a>
+            </li>          </ul>
         </nav>
           <div className="px-6 py-4 absolute bottom-0 w-full border-t bg-white">
           <div className="flex items-center">

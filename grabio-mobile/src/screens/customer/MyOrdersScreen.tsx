@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, SafeAreaView } from 'react-native';
-import firestore from '@react-native-firebase/firestore';
+import { getFirestore, collection, query, where, orderBy, onSnapshot } from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Order } from '../../types';
@@ -21,14 +21,16 @@ export default function MyOrdersScreen() {
 
   useEffect(() => {
     if (!user) return;
-    const unsub = firestore()
-      .collectionGroup('orders')
-      .where('customerId', '==', user.uid)
-      .orderBy('createdAt', 'desc')
-      .onSnapshot((snap) => {
-        setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Order)));
-        setLoading(false);
-      });
+    const db = getFirestore();
+    const q = query(
+      collection(db, 'orders'),
+      where('customerId', '==', user.uid),
+      orderBy('createdAt', 'desc'),
+    );
+    const unsub = onSnapshot(q, (snap) => {
+      setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Order)));
+      setLoading(false);
+    }, () => setLoading(false));
     return unsub;
   }, [user]);
 

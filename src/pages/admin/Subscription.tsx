@@ -886,6 +886,40 @@ export default function Subscription() {
             );
           })}
         </div>
+
+        {/* Enterprise Plan */}
+        <div className="mt-6 rounded-xl border-2 border-indigo-300 bg-gradient-to-r from-indigo-50 to-purple-50 p-6 flex flex-col md:flex-row md:items-center md:justify-between gap-6">
+          <div className="flex-1">
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-2xl font-bold text-indigo-800">Enterprise</span>
+              <Badge className="bg-indigo-600 text-white">CUSTOM</Badge>
+            </div>
+            <p className="text-gray-600 mb-3">For large-scale operations, franchises, and multi-branch businesses.</p>
+            <ul className="grid sm:grid-cols-2 gap-x-8 gap-y-1 text-sm text-gray-700">
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> Unlimited products &amp; storage</li>
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> Unlimited staff accounts</li>
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> Multi-branch inventory management</li>
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> Dedicated account manager</li>
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> Custom integrations &amp; API priority</li>
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> SLA-backed uptime guarantee</li>
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> White-label option available</li>
+              <li className="flex items-start gap-2"><span className="text-green-500 mt-0.5">✓</span> All add-ons included</li>
+            </ul>
+          </div>
+          <div className="flex flex-col items-center gap-3 min-w-[200px]">
+            <div className="text-center">
+              <div className="text-3xl font-bold text-indigo-700">Custom</div>
+              <div className="text-sm text-gray-500">Pricing</div>
+            </div>
+            <a
+              href="mailto:enterprise@grabio.space?subject=Enterprise Plan Inquiry"
+              className="w-full text-center px-6 py-3 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition"
+            >
+              📞 Contact Us for an Offer
+            </a>
+            <p className="text-xs text-gray-500 text-center">We'll get back to you within 24 hours</p>
+          </div>
+        </div>
       </div>
 
       {/* Comparison Table */}

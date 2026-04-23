@@ -26,7 +26,7 @@ export default function OrderTrackingScreen() {
 
   useEffect(() => {
     const db = getFirestore();
-    const orderRef = doc(db, 'storeProfiles', params.storeId, 'orders', params.orderId);
+    const orderRef = doc(db, 'orders', params.orderId);
     const unsub = onSnapshot(orderRef, (snap) => {
       if (snap.exists()) {
         setOrder({ id: snap.id, ...snap.data() } as Order);

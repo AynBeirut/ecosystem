@@ -23,7 +23,6 @@ import { FavoritesProvider } from "./context/FavoritesContext";
 import Login from "./pages/Login";
 import Signup from "./pages/Signup";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Marketplace from "./pages/Marketplace";
 import StoreDetail from "./pages/StoreDetail";
 import ProductDetail from "./pages/ProductDetail";
@@ -47,6 +46,7 @@ import AdminMarketing from "./pages/admin/AdminMarketing";
 import AdminOrders from "./pages/admin/AdminOrders";
 import OrderTracking from "./pages/OrderTracking";
 import GuestOrderTracking from "./pages/GuestOrderTracking";
+import CustomerProfile from "./pages/CustomerProfile";
 import DebugConsole from './components/DebugConsole';
 import Footer from './components/Footer';
 import OrderConfirmation from "./pages/OrderConfirmation";
@@ -142,6 +142,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         {/* Protected routes */}
                         <Route path="/orders" element={<ProtectedRoute><OrderTracking /></ProtectedRoute>} />
                         <Route path="/orders/confirmation" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
+                        <Route path="/profile" element={<ProtectedRoute><CustomerProfile /></ProtectedRoute>} />
                         <Route path="/upgrade" element={<ProtectedRoute><UpgradeToAdmin /></ProtectedRoute>} />
                         {/* Payment Routes */}
                         <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />

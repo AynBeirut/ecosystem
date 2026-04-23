@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, UserPlus, AlertCircle, Mail, Phone, Shield } from 'lucide-react';
+import { Trash2, Plus, Edit3, UserPlus, AlertCircle, Mail, Phone, Shield, ChevronDown, ChevronUp, TrendingUp, Users, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { SubAccount, SubAccountRole, ROLE_PERMISSIONS } from '@/types/subaccount';
 import { logAction } from '@/lib/auditLog';
@@ -26,6 +26,14 @@ const AdminSubAccounts: React.FC = () => {
   const [subAccounts, setSubAccounts] = useState<SubAccount[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingAccount, setEditingAccount] = useState<SubAccount | null>(null);
+  const [allOrders, setAllOrders] = useState<any[]>([]);
+  const [allCustomers, setAllCustomers] = useState<any[]>([]);
+  const [expandedSalesPerson, setExpandedSalesPerson] = useState<string | null>(null);
+  const [expandedClients, setExpandedClients] = useState<string | null>(null);
+  const [addClientDialogFor, setAddClientDialogFor] = useState<string | null>(null);
+  const [clientSearch, setClientSearch] = useState('');
+  const [salesReportStart, setSalesReportStart] = useState('');
+  const [salesReportEnd, setSalesReportEnd] = useState('');
   const [newAccount, setNewAccount] = useState({
     name: '',
     email: '',
@@ -56,6 +64,16 @@ const AdminSubAccounts: React.FC = () => {
         ...doc.data()
       } as SubAccount));
       setSubAccounts(accountsList);
+
+      // Fetch all orders for this store
+      const ordersRef = collection(db, 'orders');
+      const ordersQ = query(ordersRef, where('storeId', '==', user.storeId));
+      const ordersSnap = await getDocs(ordersQ);
+      setAllOrders(ordersSnap.docs.map(d => ({ id: d.id, ...d.data() })));
+
+      // Fetch all customers for this store
+      const custSnap = await getDocs(query(collection(db, 'customers'), where('storeId', '==', user.storeId)));
+      setAllCustomers(custSnap.docs.map(d => ({ id: d.id, ...d.data() })));
     };
     fetchSubAccounts();
   }, [user?.storeId]);
@@ -256,6 +274,41 @@ const AdminSubAccounts: React.FC = () => {
       case 'suspended': return 'bg-yellow-100 text-yellow-800';
       case 'inactive': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  const handleAddClientToSalesPerson = async (spId: string, spName: string, customer: any) => {
+    if (!user?.storeId) return;
+    try {
+      const db = getFirestore();
+      await updateDoc(doc(db, 'customers', customer.id), {
+        assignedSalesPerson: spId,
+        assignedSalesPersonName: spName,
+      });
+      setAllCustomers(prev => prev.map(c =>
+        c.id === customer.id ? { ...c, assignedSalesPerson: spId, assignedSalesPersonName: spName } : c
+      ));
+      toast({ title: 'Client added', description: `${customer.name} linked to ${spName}` });
+      setClientSearch('');
+    } catch {
+      toast({ title: 'Error', description: 'Failed to link client', variant: 'destructive' });
+    }
+  };
+
+  const handleRemoveClientFromSalesPerson = async (customer: any) => {
+    if (!user?.storeId) return;
+    try {
+      const db = getFirestore();
+      await updateDoc(doc(db, 'customers', customer.id), {
+        assignedSalesPerson: '',
+        assignedSalesPersonName: '',
+      });
+      setAllCustomers(prev => prev.map(c =>
+        c.id === customer.id ? { ...c, assignedSalesPerson: '', assignedSalesPersonName: '' } : c
+      ));
+      toast({ title: 'Client removed', description: `${customer.name} unlinked` });
+    } catch {
+      toast({ title: 'Error', description: 'Failed to unlink client', variant: 'destructive' });
     }
   };
 
@@ -486,6 +539,286 @@ const AdminSubAccounts: React.FC = () => {
             ))
           )}
         </div>
+
+        {/* ── Salesman Sales Report ── */}
+        {(() => {
+          const salesPersons = subAccounts.filter(a => a.role === 'sales');
+          if (salesPersons.length === 0) return null;
+
+          return (
+            <div className="mt-10">
+              <div className="flex items-center gap-3 mb-4">
+                <TrendingUp className="h-5 w-5 text-blue-600" />
+                <h2 className="text-xl font-bold">Salesperson Report & Clients</h2>
+              </div>
+
+              {/* Date filter */}
+              <div className="flex flex-wrap gap-3 items-center mb-6 p-4 bg-white rounded-lg border">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">From:</label>
+                  <input
+                    type="date"
+                    value={salesReportStart}
+                    onChange={e => setSalesReportStart(e.target.value)}
+                    className="border rounded px-2 py-1 text-sm"
+                  />
+                </div>
+                <div className="flex items-center gap-2">
+                  <label className="text-sm text-gray-600">To:</label>
+                  <input
+                    type="date"
+                    value={salesReportEnd}
+                    onChange={e => setSalesReportEnd(e.target.value)}
+                    className="border rounded px-2 py-1 text-sm"
+                  />
+                </div>
+                {(salesReportStart || salesReportEnd) && (
+                  <button
+                    onClick={() => { setSalesReportStart(''); setSalesReportEnd(''); }}
+                    className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+
+              <div className="grid gap-6">
+                {salesPersons.map(sp => {
+                  // Clients currently linked to this salesperson
+                  const linkedClients = allCustomers.filter(c =>
+                    c.assignedSalesPerson === sp.id ||
+                    // Also show customers who have orders assigned to this salesperson (legacy)
+                    (!c.assignedSalesPerson && allOrders.some(o => o.assignedSalesPerson === sp.id && o.customerId === c.id))
+                  );
+                  const linkedClientIds = new Set(linkedClients.map(c => c.id));
+
+                  // Orders from linked clients OR orders directly assigned to this salesperson (legacy data)
+                  const spOrders = allOrders.filter(o => {
+                    if (!linkedClientIds.has(o.customerId) && o.assignedSalesPerson !== sp.id) return false;
+                    if (String(o.status).toLowerCase() === 'cancelled') return false;
+                    if (salesReportStart || salesReportEnd) {
+                      const d = (o.createdAt || '').slice(0, 10);
+                      if (salesReportStart && d < salesReportStart) return false;
+                      if (salesReportEnd && d > salesReportEnd) return false;
+                    }
+                    return true;
+                  }).sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
+
+                  const totalSales  = spOrders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+                  const totalPaid   = spOrders.reduce((s, o) => s + (Number(o.amountPaid) || 0), 0);
+                  const outstanding = totalSales - totalPaid;
+                  const commRate    = sp.commissionRate || 0;
+                  const commEarned  = totalSales * (commRate / 100);
+                  const isExpanded  = expandedSalesPerson === sp.id;
+                  const isClientsExpanded = expandedClients === sp.id;
+
+                  // Unlinked customers available to add
+                  const unlinkedCustomers = allCustomers.filter(c =>
+                    !c.assignedSalesPerson &&
+                    c.name?.toLowerCase().includes(clientSearch.toLowerCase())
+                  );
+
+                  return (
+                    <Card key={sp.id} className="border-2">
+                      <CardHeader className="pb-3">
+                        <div className="flex items-start justify-between flex-wrap gap-2">
+                          <div>
+                            <CardTitle className="flex items-center gap-2 flex-wrap">
+                              {sp.name}
+                              <Badge className="bg-blue-100 text-blue-800">Sales</Badge>
+                              {commRate > 0 && (
+                                <Badge className="bg-purple-100 text-purple-800">{commRate}% commission</Badge>
+                              )}
+                            </CardTitle>
+                            <CardDescription>{sp.email}</CardDescription>
+                          </div>
+                          <div className="flex gap-2 flex-wrap">
+                            <button
+                              onClick={() => setExpandedClients(isClientsExpanded ? null : sp.id)}
+                              className="flex items-center gap-1 text-sm text-green-600 hover:text-green-800 border border-green-300 rounded px-2 py-1"
+                            >
+                              <Users size={14} />
+                              Clients ({linkedClients.length})
+                              {isClientsExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                            </button>
+                            <button
+                              onClick={() => setExpandedSalesPerson(isExpanded ? null : sp.id)}
+                              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 border border-blue-300 rounded px-2 py-1"
+                            >
+                              {isExpanded ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+                              {isExpanded ? 'Hide Orders' : 'View Orders'}
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Summary cards */}
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3">
+                          <div className="bg-blue-50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-gray-500">Orders</div>
+                            <div className="text-xl font-bold text-blue-700">{spOrders.length}</div>
+                          </div>
+                          <div className="bg-green-50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-gray-500">Total Sales</div>
+                            <div className="text-xl font-bold text-green-700">{totalSales.toFixed(2)}</div>
+                          </div>
+                          <div className={`rounded-lg p-3 text-center ${outstanding > 0 ? 'bg-orange-50' : 'bg-gray-50'}`}>
+                            <div className="text-xs text-gray-500">Outstanding</div>
+                            <div className={`text-xl font-bold ${outstanding > 0 ? 'text-orange-600' : 'text-gray-500'}`}>{outstanding.toFixed(2)}</div>
+                          </div>
+                          <div className="bg-purple-50 rounded-lg p-3 text-center">
+                            <div className="text-xs text-gray-500">Commission Earned</div>
+                            <div className="text-xl font-bold text-purple-700">
+                              {commRate > 0 ? commEarned.toFixed(2) : '—'}
+                            </div>
+                            {commRate === 0 && <div className="text-xs text-gray-400">No rate set</div>}
+                          </div>
+                        </div>
+                      </CardHeader>
+
+                      {/* ── Client List ── */}
+                      {isClientsExpanded && (
+                        <CardContent className="pt-0 border-t bg-green-50/40">
+                          <div className="py-3">
+                            <div className="flex items-center justify-between mb-3">
+                              <h3 className="font-semibold text-sm text-green-800 flex items-center gap-1">
+                                <Users size={14} /> Linked Clients
+                              </h3>
+                              <button
+                                onClick={() => setAddClientDialogFor(addClientDialogFor === sp.id ? null : sp.id)}
+                                className="flex items-center gap-1 text-xs bg-green-600 text-white px-2 py-1 rounded hover:bg-green-700"
+                              >
+                                <Plus size={12} /> Add Client
+                              </button>
+                            </div>
+
+                            {/* Add client search */}
+                            {addClientDialogFor === sp.id && (
+                              <div className="mb-3 p-3 bg-white border border-green-200 rounded-lg">
+                                <input
+                                  type="text"
+                                  placeholder="Search unlinked customers..."
+                                  value={clientSearch}
+                                  onChange={e => setClientSearch(e.target.value)}
+                                  className="w-full border rounded px-2 py-1 text-sm mb-2"
+                                  autoFocus
+                                />
+                                <div className="max-h-48 overflow-y-auto space-y-1">
+                                  {unlinkedCustomers.length === 0 ? (
+                                    <p className="text-xs text-gray-500 text-center py-2">No unlinked customers found</p>
+                                  ) : (
+                                    unlinkedCustomers.slice(0, 20).map(c => (
+                                      <div key={c.id} className="flex items-center justify-between p-2 hover:bg-gray-50 rounded text-sm">
+                                        <div>
+                                          <div className="font-medium">{c.name}</div>
+                                          {c.phone && <div className="text-xs text-gray-500">{c.phone}</div>}
+                                        </div>
+                                        <button
+                                          onClick={() => handleAddClientToSalesPerson(sp.id, sp.name, c)}
+                                          className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200"
+                                        >
+                                          Add
+                                        </button>
+                                      </div>
+                                    ))
+                                  )}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Linked clients list */}
+                            {linkedClients.length === 0 ? (
+                              <p className="text-xs text-gray-500 text-center py-3">No clients linked yet. Click "Add Client" to link customers.</p>
+                            ) : (
+                              <div className="space-y-2">
+                                {linkedClients.map(c => (
+                                  <div key={c.id} className="flex items-center justify-between bg-white border border-green-100 rounded-lg px-3 py-2">
+                                    <div>
+                                      <div className="font-medium text-sm">{c.name}</div>
+                                      {c.phone && <div className="text-xs text-gray-500">{c.phone}</div>}
+                                    </div>
+                                    <button
+                                      onClick={() => handleRemoveClientFromSalesPerson(c)}
+                                      className="text-red-500 hover:text-red-700 p-1 rounded"
+                                      title="Remove client"
+                                    >
+                                      <X size={14} />
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </CardContent>
+                      )}
+
+                      {/* ── Orders Table ── */}
+                      {isExpanded && (
+                        <CardContent className="pt-0 border-t">
+                          {spOrders.length === 0 ? (
+                            <p className="text-center text-gray-500 py-4">No orders found for linked clients in this period.</p>
+                          ) : (
+                            <div className="overflow-x-auto mt-3">
+                              <table className="min-w-full text-sm">
+                                <thead className="bg-gray-50">
+                                  <tr>
+                                    <th className="px-3 py-2 text-left text-xs">Date</th>
+                                    <th className="px-3 py-2 text-left text-xs">Invoice</th>
+                                    <th className="px-3 py-2 text-left text-xs">Customer</th>
+                                    <th className="px-3 py-2 text-right text-xs">Total</th>
+                                    <th className="px-3 py-2 text-right text-xs">Paid</th>
+                                    <th className="px-3 py-2 text-right text-xs">Balance</th>
+                                    {commRate > 0 && <th className="px-3 py-2 text-right text-xs">Commission</th>}
+                                    <th className="px-3 py-2 text-left text-xs">Status</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {spOrders.map(o => {
+                                    const total     = Number(o.total) || 0;
+                                    const paid      = Number(o.amountPaid) || 0;
+                                    const balance   = total - paid;
+                                    const orderComm = total * (commRate / 100);
+                                    return (
+                                      <tr key={o.id} className="border-b hover:bg-gray-50">
+                                        <td className="px-3 py-2">{new Date(o.createdAt).toLocaleDateString('en-GB')}</td>
+                                        <td className="px-3 py-2">{o.invoiceNumber || '-'}</td>
+                                        <td className="px-3 py-2">{o.customerName || '-'}</td>
+                                        <td className="px-3 py-2 text-right">{total.toFixed(2)}</td>
+                                        <td className="px-3 py-2 text-right text-green-600">{paid.toFixed(2)}</td>
+                                        <td className={`px-3 py-2 text-right ${balance > 0 ? 'text-orange-600' : 'text-gray-500'}`}>{balance.toFixed(2)}</td>
+                                        {commRate > 0 && <td className="px-3 py-2 text-right text-purple-600 font-medium">{orderComm.toFixed(2)}</td>}
+                                        <td className="px-3 py-2">
+                                          <span className={`px-2 py-1 rounded text-xs ${
+                                            o.paymentStatus === 'paid' ? 'bg-green-100 text-green-800' :
+                                            o.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-800' :
+                                            'bg-red-100 text-red-800'
+                                          }`}>{o.paymentStatus || 'unpaid'}</span>
+                                        </td>
+                                      </tr>
+                                    );
+                                  })}
+                                </tbody>
+                                <tfoot className="bg-gray-100 font-semibold">
+                                  <tr>
+                                    <td className="px-3 py-2" colSpan={3}>TOTAL</td>
+                                    <td className="px-3 py-2 text-right">{totalSales.toFixed(2)}</td>
+                                    <td className="px-3 py-2 text-right text-green-600">{totalPaid.toFixed(2)}</td>
+                                    <td className={`px-3 py-2 text-right ${outstanding > 0 ? 'text-orange-600' : 'text-gray-500'}`}>{outstanding.toFixed(2)}</td>
+                                    {commRate > 0 && <td className="px-3 py-2 text-right text-purple-600">{commEarned.toFixed(2)}</td>}
+                                    <td className="px-3 py-2"></td>
+                                  </tr>
+                                </tfoot>
+                              </table>
+                            </div>
+                          )}
+                        </CardContent>
+                      )}
+                    </Card>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
       </main>
 
       {/* Edit Dialog */}

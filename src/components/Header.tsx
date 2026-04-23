@@ -134,6 +134,12 @@ const Header: React.FC = () => {
                     ) : null}
                     
                     <DropdownMenuItem asChild>
+                      <Link to="/profile" className="flex cursor-pointer items-center">
+                        <User className="mr-2 h-4 w-4" />
+                        <span>My Profile</span>
+                      </Link>
+                    </DropdownMenuItem>
+                    <DropdownMenuItem asChild>
                       <Link to="/favorites" className="flex cursor-pointer items-center">
                         <Heart className="mr-2 h-4 w-4" />
                         <span>Favorites</span>

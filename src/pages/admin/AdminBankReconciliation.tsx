@@ -38,6 +38,7 @@ const AdminBankReconciliation: React.FC = () => {
 
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
+  const [selectedDateFilter, setSelectedDateFilter] = useState(new Date().toISOString().split('T')[0]);
 
   const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = typeof value === 'number' ? value : Number(value);
@@ -58,7 +59,7 @@ const AdminBankReconciliation: React.FC = () => {
     if (raw && typeof raw === 'object' && 'seconds' in raw) {
       return new Date((raw.seconds as number) * 1000).toISOString().split('T')[0];
     }
-    return String(raw || '');
+    return String(raw || '').slice(0, 10);
   };
 
   const fetchData = async () => {
@@ -193,6 +194,34 @@ const AdminBankReconciliation: React.FC = () => {
   const totalDeposited = collections.reduce((sum, entry) => sum + toFiniteNumber(entry.totalAmount, 0), 0);
   const undepositedCash = Math.max(0, totalCashReceived - totalDeposited);
 
+  const todayStr = new Date().toISOString().split('T')[0];
+  const yesterdayStr = new Date(Date.now() - 86400000).toISOString().split('T')[0];
+
+  const todayCash = useMemo(() => {
+    return orders
+      .filter(o => String(o.status || '').toLowerCase() !== 'cancelled')
+      .filter(o => resolveOrderDate(o) === todayStr)
+      .reduce((sum, o) => sum + getCashPaidForOrder(o), 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, todayStr]);
+
+  const yesterdayCash = useMemo(() => {
+    return orders
+      .filter(o => String(o.status || '').toLowerCase() !== 'cancelled')
+      .filter(o => resolveOrderDate(o) === yesterdayStr)
+      .reduce((sum, o) => sum + getCashPaidForOrder(o), 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, yesterdayStr]);
+
+  const selectedDateCash = useMemo(() => {
+    if (!selectedDateFilter) return 0;
+    return orders
+      .filter(o => String(o.status || '').toLowerCase() !== 'cancelled')
+      .filter(o => resolveOrderDate(o) === selectedDateFilter)
+      .reduce((sum, o) => sum + getCashPaidForOrder(o), 0);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, selectedDateFilter]);
+
   const toggleOrderSelection = (orderId: string) => {
     setSelectedOrderIds((prev) => {
       if (prev.includes(orderId)) return prev.filter((id) => id !== orderId);
@@ -296,7 +325,7 @@ const AdminBankReconciliation: React.FC = () => {
           <p className="text-sm text-gray-600">Track cash deposited to bank and link each deposit to collected orders.</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-white border rounded p-4">
             <div className="text-sm text-gray-600">Cash Received</div>
             <div className="text-2xl font-bold">${totalCashReceived.toFixed(2)}</div>
@@ -312,6 +341,26 @@ const AdminBankReconciliation: React.FC = () => {
           <div className="bg-white border rounded p-4">
             <div className="text-sm text-gray-600">Collections</div>
             <div className="text-2xl font-bold">{collections.length}</div>
+          </div>
+          <div className="bg-blue-50 border border-blue-200 rounded p-4">
+            <div className="text-sm text-blue-600 font-medium">Today's Cash</div>
+            <div className="text-2xl font-bold text-blue-700">${todayCash.toFixed(2)}</div>
+            <div className="text-xs text-blue-400 mt-1">{todayStr}</div>
+          </div>
+          <div className="bg-indigo-50 border border-indigo-200 rounded p-4">
+            <div className="text-sm text-indigo-600 font-medium">Yesterday's Cash</div>
+            <div className="text-2xl font-bold text-indigo-700">${yesterdayCash.toFixed(2)}</div>
+            <div className="text-xs text-indigo-400 mt-1">{yesterdayStr}</div>
+          </div>
+          <div className="bg-teal-50 border border-teal-200 rounded p-4 col-span-2 md:col-span-1">
+            <div className="text-sm text-teal-600 font-medium mb-1">Cash on Date</div>
+            <input
+              type="date"
+              value={selectedDateFilter}
+              onChange={e => setSelectedDateFilter(e.target.value)}
+              className="w-full border border-teal-300 rounded px-2 py-1 text-sm mb-2 bg-white"
+            />
+            <div className="text-2xl font-bold text-teal-700">${selectedDateCash.toFixed(2)}</div>
           </div>
         </div>
 

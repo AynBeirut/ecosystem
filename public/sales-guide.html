@@ -1,0 +1,890 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grabio — Sales Guide</title>
+  <style>
+    :root {
+      --bg: #0d0f14;
+      --surface: #161b26;
+      --surface2: #1e2535;
+      --border: #2a3349;
+      --accent: #4f8ef7;
+      --accent2: #7c5ef7;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --text: #e8ecf5;
+      --muted: #8b97b8;
+      --white: #ffffff;
+      --radius: 14px;
+      --gradient: linear-gradient(135deg, #4f8ef7 0%, #7c5ef7 100%);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      line-height: 1.6;
+      font-size: 15px;
+    }
+
+    /* ── HERO ── */
+    .hero {
+      background: linear-gradient(160deg, #0f1522 0%, #1a1040 50%, #0d1520 100%);
+      padding: 56px 24px 48px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+    }
+    .hero::before {
+      content: '';
+      position: absolute;
+      top: -60px; left: 50%;
+      transform: translateX(-50%);
+      width: 500px; height: 300px;
+      background: radial-gradient(ellipse, rgba(79,142,247,.18) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .hero-badge {
+      display: inline-block;
+      background: rgba(79,142,247,.15);
+      border: 1px solid rgba(79,142,247,.35);
+      color: #7eb4ff;
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      padding: 5px 14px;
+      border-radius: 50px;
+      margin-bottom: 20px;
+    }
+    .hero h1 {
+      font-size: clamp(32px, 7vw, 58px);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      line-height: 1.1;
+      margin-bottom: 10px;
+    }
+    .hero h1 span {
+      background: var(--gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: 17px;
+      color: var(--muted);
+      max-width: 520px;
+      margin: 0 auto 8px;
+    }
+    .hero-tagline {
+      font-size: 13px;
+      color: #5b6a8a;
+      margin-top: 16px;
+      letter-spacing: .04em;
+    }
+
+    /* ── SECTIONS ── */
+    section {
+      padding: 48px 20px;
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    .section-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--accent);
+      margin-bottom: 8px;
+    }
+    h2 {
+      font-size: clamp(22px, 5vw, 32px);
+      font-weight: 800;
+      letter-spacing: -.02em;
+      margin-bottom: 20px;
+    }
+
+    /* ── DIVIDER ── */
+    .divider {
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--border), transparent);
+      max-width: 860px;
+      margin: 0 auto;
+    }
+
+    /* ── WHAT IS GRABIO ── */
+    .about-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px 24px;
+      font-size: 16px;
+      line-height: 1.75;
+      color: #c8d3ea;
+    }
+    .about-card strong {
+      color: var(--white);
+    }
+
+    /* ── WHO IS IT FOR ── */
+    .client-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .client-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 20px;
+      transition: border-color .2s, transform .2s;
+    }
+    .client-card:hover {
+      border-color: var(--accent);
+      transform: translateY(-3px);
+    }
+    .client-icon {
+      font-size: 36px;
+      margin-bottom: 12px;
+    }
+    .client-card h3 {
+      font-size: 16px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      color: var(--white);
+    }
+    .client-card p {
+      font-size: 13px;
+      color: var(--muted);
+      line-height: 1.55;
+    }
+
+    /* ── PLANS TABLE ── */
+    .billing-toggle {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+      justify-content: center;
+    }
+    .toggle-btn {
+      padding: 8px 20px;
+      border-radius: 50px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .toggle-btn.active {
+      background: var(--gradient);
+      border-color: transparent;
+      color: var(--white);
+    }
+    .save-badge {
+      background: rgba(34,197,94,.15);
+      color: var(--green);
+      border: 1px solid rgba(34,197,94,.25);
+      font-size: 11px;
+      font-weight: 700;
+      padding: 3px 10px;
+      border-radius: 50px;
+      letter-spacing: .04em;
+    }
+
+    .plans-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+      gap: 14px;
+    }
+    .plan-card {
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 18px;
+      position: relative;
+      transition: border-color .2s;
+    }
+    .plan-card.featured {
+      border-color: var(--accent);
+      background: linear-gradient(160deg, #131d35 0%, #1a1a30 100%);
+    }
+    .plan-badge {
+      position: absolute;
+      top: -11px; left: 50%;
+      transform: translateX(-50%);
+      background: var(--gradient);
+      color: #fff;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .1em;
+      padding: 3px 12px;
+      border-radius: 50px;
+      white-space: nowrap;
+    }
+    .plan-name {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 4px;
+    }
+    .plan-desc {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      min-height: 30px;
+    }
+    .plan-price {
+      font-size: 28px;
+      font-weight: 900;
+      color: var(--white);
+      letter-spacing: -.03em;
+    }
+    .plan-price sup { font-size: 16px; font-weight: 700; vertical-align: top; margin-top: 6px; display: inline-block; }
+    .plan-period {
+      font-size: 12px;
+      color: var(--muted);
+      margin-bottom: 18px;
+    }
+    .plan-features-list {
+      list-style: none;
+      font-size: 12.5px;
+      color: #b0bcda;
+    }
+    .plan-features-list li {
+      padding: 4px 0;
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+    }
+    .plan-features-list li::before {
+      content: '✓';
+      color: var(--green);
+      font-weight: 700;
+      flex-shrink: 0;
+      margin-top: 1px;
+    }
+    .plan-features-list li.no::before {
+      content: '✗';
+      color: #3d4a6a;
+    }
+    .plan-features-list li.no {
+      color: #3d4a6a;
+    }
+    .plan-separator {
+      height: 1px;
+      background: var(--border);
+      margin: 14px 0;
+    }
+    .plan-limit {
+      font-size: 11.5px;
+      color: var(--muted);
+      margin-bottom: 2px;
+    }
+
+    /* Comparison table */
+    .compare-table-wrap {
+      margin-top: 32px;
+      overflow-x: auto;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+    thead th {
+      background: var(--surface2);
+      padding: 14px 16px;
+      text-align: center;
+      font-weight: 700;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+    }
+    thead th:first-child { text-align: left; }
+    tbody tr:nth-child(even) { background: rgba(255,255,255,.02); }
+    tbody td {
+      padding: 11px 16px;
+      text-align: center;
+      border-bottom: 1px solid rgba(42,51,73,.5);
+      color: var(--muted);
+    }
+    tbody td:first-child {
+      text-align: left;
+      color: var(--text);
+      font-weight: 500;
+    }
+    .check { color: var(--green); font-weight: 700; }
+    .cross { color: #3d4a6a; }
+    .highlight-col { color: var(--accent) !important; font-weight: 700; }
+
+    /* ── ADD-ONS ── */
+    .addons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 14px;
+      margin-top: 24px;
+    }
+    .addon-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px 16px;
+    }
+    .addon-icon { font-size: 24px; margin-bottom: 8px; }
+    .addon-name { font-size: 14px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .addon-price { font-size: 13px; color: var(--accent); font-weight: 600; margin-bottom: 4px; }
+    .addon-desc { font-size: 12px; color: var(--muted); }
+
+    /* ── REASONS ── */
+    .reasons-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+      gap: 14px;
+    }
+    .reason-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 18px;
+      display: flex;
+      gap: 14px;
+      align-items: flex-start;
+    }
+    .reason-num {
+      flex-shrink: 0;
+      width: 34px; height: 34px;
+      background: var(--gradient);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 15px; font-weight: 900; color: #fff;
+    }
+    .reason-card h3 { font-size: 14px; font-weight: 700; color: var(--white); margin-bottom: 4px; }
+    .reason-card p { font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+
+    /* ── PITCH SCRIPT ── */
+    .pitch-steps {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .pitch-step {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 22px 22px 24px;
+      border-left: 4px solid var(--accent2);
+      position: relative;
+    }
+    .pitch-step:nth-child(2) { border-left-color: var(--accent); }
+    .pitch-step:nth-child(3) { border-left-color: var(--green); }
+    .step-label {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 6px;
+    }
+    .pitch-step h3 {
+      font-size: 16px;
+      font-weight: 800;
+      color: var(--white);
+      margin-bottom: 10px;
+    }
+    .pitch-quote {
+      background: rgba(255,255,255,.04);
+      border-radius: 8px;
+      padding: 12px 16px;
+      font-size: 13.5px;
+      color: #c0cce8;
+      font-style: italic;
+      line-height: 1.6;
+      border-left: 3px solid rgba(124,94,247,.4);
+    }
+    .pitch-tip {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--muted);
+    }
+    .pitch-tip strong { color: var(--amber); }
+
+    /* ── CTA ── */
+    .cta-section {
+      background: linear-gradient(135deg, #121d38 0%, #1a1030 100%);
+      border: 1px solid rgba(79,142,247,.3);
+      border-radius: 20px;
+      padding: 48px 28px;
+      text-align: center;
+      max-width: 860px;
+      margin: 0 auto 56px;
+    }
+    .cta-section h2 {
+      font-size: clamp(24px, 5vw, 36px);
+      margin-bottom: 12px;
+    }
+    .cta-section p {
+      color: var(--muted);
+      font-size: 15px;
+      margin-bottom: 32px;
+      max-width: 480px;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .cta-buttons {
+      display: flex;
+      gap: 14px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn-primary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      background: var(--gradient);
+      color: #fff;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 50px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: opacity .2s, transform .2s;
+      box-shadow: 0 4px 24px rgba(79,142,247,.35);
+    }
+    .btn-primary:hover { opacity: .9; transform: translateY(-2px); }
+    .btn-secondary {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 14px 32px;
+      background: transparent;
+      color: var(--text);
+      font-size: 15px;
+      font-weight: 600;
+      border-radius: 50px;
+      text-decoration: none;
+      border: 1.5px solid var(--border);
+      cursor: pointer;
+      transition: border-color .2s;
+    }
+    .btn-secondary:hover { border-color: var(--accent); }
+
+    /* ── FOOTER ── */
+    footer {
+      text-align: center;
+      padding: 24px;
+      color: var(--muted);
+      font-size: 12px;
+      border-top: 1px solid var(--border);
+    }
+    footer a { color: var(--accent); text-decoration: none; }
+
+    /* ── RESPONSIVE ── */
+    @media (max-width: 600px) {
+      .hero { padding: 44px 18px 38px; }
+      section { padding: 38px 16px; }
+      .plans-grid { grid-template-columns: 1fr 1fr; }
+      .compare-table-wrap { font-size: 12px; }
+      thead th, tbody td { padding: 10px 10px; }
+    }
+    @media (max-width: 400px) {
+      .plans-grid { grid-template-columns: 1fr; }
+    }
+
+    /* Tooltips via title attr are enough for mobile; adding subtle glow on featured plan */
+    .plan-card.featured:hover {
+      box-shadow: 0 0 0 1px var(--accent), 0 8px 32px rgba(79,142,247,.2);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ══ HERO ══════════════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-badge">Freelance Sales Kit · 2026</div>
+  <h1>Sell Smarter with<br><span>Grabio</span></h1>
+  <p class="hero-sub">Your complete cheat sheet for pitching Grabio to small business owners — everything you need, one page.</p>
+  <p class="hero-tagline">grabio.space · App & Web · Lebanon & MENA</p>
+</div>
+
+<!-- ══ 1. WHAT IS GRABIO ══════════════════════════════════════════════════ -->
+<section>
+  <p class="section-label">01 — What is Grabio</p>
+  <h2>One platform. Every tool a small business needs.</h2>
+  <div class="about-card">
+    <strong>Grabio</strong> is a <strong>cloud-based commerce and inventory platform</strong> built for small Lebanese and MENA businesses that want to sell online, manage their stock, and run their operations — all from a single dashboard or mobile app. From the moment a customer discovers your store on <strong>grabio.space</strong>, to the second an order ships and payment lands, Grabio handles it: <strong>online storefront, real-time inventory, purchase orders, staff payroll, invoicing, analytics, and multi-currency checkout</strong> (USD/LBP, OMT &amp; Stripe). No expensive developers, no complicated setup — just sign up and your store goes live in minutes.
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ 2. WHO IS IT FOR ════════════════════════════════════════════════════ -->
+<section>
+  <p class="section-label">02 — Who is it for</p>
+  <h2>Your ideal customers</h2>
+  <div class="client-grid">
+    <div class="client-card">
+      <div class="client-icon">🏪</div>
+      <h3>Retail &amp; Product Stores</h3>
+      <p>Clothing boutiques, electronics shops, beauty stores, and any business selling physical goods that needs inventory control and an online storefront.</p>
+    </div>
+    <div class="client-card">
+      <div class="client-icon">🍽️</div>
+      <h3>Food Businesses &amp; Cafes</h3>
+      <p>Restaurants, bakeries, homemade food brands, and catering services that produce from raw ingredients and need recipe-based manufacturing tracking.</p>
+    </div>
+    <div class="client-card">
+      <div class="client-icon">🛍️</div>
+      <h3>Service Providers &amp; Freelancers</h3>
+      <p>Salons, tutors, repair shops, and marketplaces that combine service packages with physical products and need invoicing + customer credit management.</p>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ 3. PLANS ═══════════════════════════════════════════════════════════ -->
+<section>
+  <p class="section-label">03 — Plans &amp; Pricing</p>
+  <h2>Choose the right plan</h2>
+
+  <!-- Toggle (display only — purely visual reference) -->
+  <div class="billing-toggle">
+    <button class="toggle-btn active" onclick="showBilling('monthly',this)">Monthly</button>
+    <button class="toggle-btn" onclick="showBilling('yearly',this)">Yearly &nbsp;<span class="save-badge">SAVE UP TO $60</span></button>
+  </div>
+
+  <!-- Plan cards -->
+  <div class="plans-grid">
+    <!-- Trial -->
+    <div class="plan-card">
+      <div class="plan-name">Trial</div>
+      <div class="plan-desc">Pay as you go — free to start</div>
+      <div class="plan-price monthly-price"><sup>$</sup>0</div>
+      <div class="plan-price yearly-price" style="display:none"><sup>$</sup>0</div>
+      <div class="plan-period monthly-period">upfront + 20% of sales</div>
+      <div class="plan-period yearly-period" style="display:none">Up to 3 months free period</div>
+      <div class="plan-separator"></div>
+      <div class="plan-limit">📦 10 products max</div>
+      <div class="plan-limit">💾 500MB storage</div>
+      <div class="plan-limit">⚙️ 30 operations/month</div>
+      <div class="plan-separator"></div>
+      <ul class="plan-features-list">
+        <li>grabio.space subdomain</li>
+        <li>OMT &amp; Stripe checkout</li>
+        <li>Multi-currency (USD/LBP)</li>
+        <li>Basic inventory + 3 themes</li>
+        <li class="no">Custom domain</li>
+        <li class="no">Manufacturing features</li>
+      </ul>
+    </div>
+    <!-- Starter -->
+    <div class="plan-card featured">
+      <div class="plan-badge">POPULAR</div>
+      <div class="plan-name">Starter</div>
+      <div class="plan-desc">Best for growing stores</div>
+      <div class="plan-price monthly-price"><sup>$</sup>10</div>
+      <div class="plan-price yearly-price" style="display:none"><sup>$</sup>100</div>
+      <div class="plan-period monthly-period">per month</div>
+      <div class="plan-period yearly-period" style="display:none">per year · save $20</div>
+      <div class="plan-separator"></div>
+      <div class="plan-limit">📦 8 products max</div>
+      <div class="plan-limit">💾 5GB storage</div>
+      <div class="plan-limit">⚙️ Unlimited operations</div>
+      <div class="plan-separator"></div>
+      <ul class="plan-features-list">
+        <li>Keep 100% of revenue</li>
+        <li>All product types</li>
+        <li>Discount codes + SEO tools</li>
+        <li>Email marketing (200/mo)</li>
+        <li>Priority email support</li>
+        <li class="no">Manufacturing features</li>
+      </ul>
+    </div>
+    <!-- Pro -->
+    <div class="plan-card">
+      <div class="plan-name">Pro</div>
+      <div class="plan-desc">For advanced operations</div>
+      <div class="plan-price monthly-price"><sup>$</sup>20</div>
+      <div class="plan-price yearly-price" style="display:none"><sup>$</sup>200</div>
+      <div class="plan-period monthly-period">per month</div>
+      <div class="plan-period yearly-period" style="display:none">per year · save $40</div>
+      <div class="plan-separator"></div>
+      <div class="plan-limit">📦 20 products max</div>
+      <div class="plan-limit">💾 10GB storage</div>
+      <div class="plan-limit">⚙️ Unlimited operations</div>
+      <div class="plan-separator"></div>
+      <ul class="plan-features-list">
+        <li>Everything in Starter</li>
+        <li>Manufacturing + composed products</li>
+        <li>Advanced analytics + API access</li>
+        <li>Email marketing (1,000/mo)</li>
+        <li>Multi-location inventory</li>
+        <li>Phone support</li>
+      </ul>
+    </div>
+    <!-- Business -->
+    <div class="plan-card">
+      <div class="plan-badge" style="background: linear-gradient(135deg,#22c55e,#16a34a)">BEST VALUE</div>
+      <div class="plan-name">Business</div>
+      <div class="plan-desc">Best value for scaling brands</div>
+      <div class="plan-price monthly-price"><sup>$</sup>30</div>
+      <div class="plan-price yearly-price" style="display:none"><sup>$</sup>300</div>
+      <div class="plan-period monthly-period">per month</div>
+      <div class="plan-period yearly-period" style="display:none">per year · save $60</div>
+      <div class="plan-separator"></div>
+      <div class="plan-limit">📦 50 products max</div>
+      <div class="plan-limit">💾 20GB storage</div>
+      <div class="plan-limit">⚙️ Unlimited operations</div>
+      <div class="plan-separator"></div>
+      <ul class="plan-features-list">
+        <li>Everything in Pro</li>
+        <li>Email marketing (5,000/mo)</li>
+        <li>Multi-user access (10 users)</li>
+        <li>Meta Shop integration</li>
+        <li>Advanced SEO tools</li>
+        <li>Dedicated account manager</li>
+      </ul>
+    </div>
+  </div>
+
+  <!-- Add-ons -->
+  <p style="margin-top:34px;margin-bottom:6px" class="section-label">Optional Add-Ons (Starter &amp; above)</p>
+  <div class="addons-grid">
+    <div class="addon-card">
+      <div class="addon-icon">🌐</div>
+      <div class="addon-name">Custom Domain Package</div>
+      <div class="addon-price">$15/mo · $150/yr</div>
+      <div class="addon-desc">Use your own branded domain instead of a grabio.space subdomain.</div>
+    </div>
+    <div class="addon-card">
+      <div class="addon-icon">💬</div>
+      <div class="addon-name">WhatsApp Business</div>
+      <div class="addon-price">$10/mo · $100/yr</div>
+      <div class="addon-desc">Connect your WhatsApp Business account for order alerts and customer chat.</div>
+    </div>
+    <div class="addon-card">
+      <div class="addon-icon">🗄️</div>
+      <div class="addon-name">Extra Storage (per 5GB)</div>
+      <div class="addon-price">$2/mo · $24/yr</div>
+      <div class="addon-desc">Need more space for product photos and files? Add 5GB blocks anytime.</div>
+    </div>
+  </div>
+
+  <!-- Comparison table -->
+  <div class="compare-table-wrap" style="margin-top:36px">
+    <table>
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>Trial</th>
+          <th class="highlight-col">Starter</th>
+          <th>Pro</th>
+          <th>Business</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Monthly cost</td>
+          <td>$0 + 20%</td>
+          <td class="highlight-col">$10</td>
+          <td>$20</td>
+          <td>$30</td>
+        </tr>
+        <tr>
+          <td>Yearly cost</td>
+          <td>N/A</td>
+          <td class="highlight-col">$100</td>
+          <td>$200</td>
+          <td>$300</td>
+        </tr>
+        <tr>
+          <td>Products limit</td>
+          <td>10</td>
+          <td class="highlight-col">8</td>
+          <td>20</td>
+          <td>50</td>
+        </tr>
+        <tr>
+          <td>Storage</td>
+          <td>500MB</td>
+          <td class="highlight-col">5GB</td>
+          <td>10GB</td>
+          <td>20GB</td>
+        </tr>
+        <tr>
+          <td>Revenue share</td>
+          <td>20%</td>
+          <td class="highlight-col check">0%</td>
+          <td class="check">0%</td>
+          <td class="check">0%</td>
+        </tr>
+        <tr>
+          <td>Manufacturing</td>
+          <td class="cross">✗</td>
+          <td class="cross highlight-col">✗</td>
+          <td class="check">✓</td>
+          <td class="check">✓</td>
+        </tr>
+        <tr>
+          <td>Email marketing</td>
+          <td class="cross">✗</td>
+          <td class="highlight-col">200/mo</td>
+          <td>1,000/mo</td>
+          <td>5,000/mo</td>
+        </tr>
+        <tr>
+          <td>Multi-user access</td>
+          <td class="cross">✗</td>
+          <td class="cross highlight-col">✗</td>
+          <td class="cross">✗</td>
+          <td class="check">10 users</td>
+        </tr>
+        <tr>
+          <td>Support level</td>
+          <td>Email</td>
+          <td class="highlight-col">Priority</td>
+          <td>Phone</td>
+          <td>Dedicated</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ 4. TOP 5 REASONS ═══════════════════════════════════════════════════ -->
+<section>
+  <p class="section-label">04 — Why Choose Grabio</p>
+  <h2>5 reasons businesses love it</h2>
+  <div class="reasons-grid">
+    <div class="reason-card">
+      <div class="reason-num">1</div>
+      <div>
+        <h3>Built for Lebanon &amp; MENA</h3>
+        <p>Dual-currency (USD/LBP), OMT cash payment support, Lebanese tax settings — not a generic foreign tool stitched together.</p>
+      </div>
+    </div>
+    <div class="reason-card">
+      <div class="reason-num">2</div>
+      <div>
+        <h3>All-in-one, zero plugins</h3>
+        <p>Inventory, POS, invoicing, payroll, analytics, and an online storefront in a single subscription. No piecing together 5 apps.</p>
+      </div>
+    </div>
+    <div class="reason-card">
+      <div class="reason-num">3</div>
+      <div>
+        <h3>Start free, pay later</h3>
+        <p>The Trial plan costs $0 upfront. The business only shares 20% of sales — meaning they pay nothing until they earn. Zero financial risk.</p>
+      </div>
+    </div>
+    <div class="reason-card">
+      <div class="reason-num">4</div>
+      <div>
+        <h3>Mobile-first &amp; offline-ready</h3>
+        <p>The native Grabio app works on Android. The web app installs as a PWA on any device. Business owners manage everything from their phone.</p>
+      </div>
+    </div>
+    <div class="reason-card">
+      <div class="reason-num">5</div>
+      <div>
+        <h3>Real-time, always backed up</h3>
+        <p>Powered by Google Firebase — data syncs instantly across devices and is automatically backed up in the cloud. No data loss, ever.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ 5. PITCH SCRIPT ════════════════════════════════════════════════════ -->
+<section>
+  <p class="section-label">05 — How to Pitch It</p>
+  <h2>3-step sales script</h2>
+  <div class="pitch-steps">
+
+    <div class="pitch-step">
+      <div class="step-label">Step 1 — Open with a problem</div>
+      <h3>Find the pain point</h3>
+      <div class="pitch-quote">
+        "Hey [name], quick question — right now, how do you keep track of your stock and know what's selling? Are you using Excel? WhatsApp? Your memory?"
+      </div>
+      <p class="pitch-tip"><strong>Listen.</strong> Let them answer. Most will mention a messy spreadsheet or nothing at all. That's your opening.</p>
+    </div>
+
+    <div class="pitch-step">
+      <div class="step-label">Step 2 — Introduce the solution</div>
+      <h3>Show them Grabio on your phone</h3>
+      <div class="pitch-quote">
+        "There's an app called Grabio, made specifically for businesses here in Lebanon. It gives you a full online store, tracks your inventory in real time, handles invoices, and even lets your customers pay with OMT. You can start completely free — you only pay 20% of what you sell, nothing upfront. After that, it's just $10 a month to keep 100% of your sales."
+      </div>
+      <p class="pitch-tip"><strong>Show the app live.</strong> Pull up grabio.space on your phone. Nothing sells better than seeing an actual store demo.</p>
+    </div>
+
+    <div class="pitch-step">
+      <div class="step-label">Step 3 — Close with a low-risk ask</div>
+      <h3>Remove the barrier to yes</h3>
+      <div class="pitch-quote">
+        "The best part? It costs you nothing to try. I can help you set up your store right now in about 15 minutes. What do you think — want to get started?"
+      </div>
+      <p class="pitch-tip"><strong>Don't ask if they're interested.</strong> Ask if they want to start <em>right now</em>. Offer to set it up with them on the spot — that converts.</p>
+    </div>
+
+  </div>
+</section>
+
+<div class="divider"></div>
+
+<!-- ══ 6. CTA ══════════════════════════════════════════════════════════════ -->
+<div style="padding: 0 20px;">
+  <div class="cta-section">
+    <p class="section-label" style="text-align:center">06 — Sign Up</p>
+    <h2>Ready to set up a store?</h2>
+    <p>Visit grabio.space, tap <strong>Sign Up</strong>, and have a live store running in under 15 minutes. The Trial plan is free to start.</p>
+    <div class="cta-buttons">
+      <a href="https://grabio.space" class="btn-primary" target="_blank" rel="noopener">
+        🚀 Open grabio.space
+      </a>
+      <a href="https://grabio.space/upgrade" class="btn-secondary" target="_blank" rel="noopener">
+        📋 View All Plans
+      </a>
+    </div>
+    <p style="margin-top:28px;font-size:12px;color:#3d4a6a">
+      Share this guide: send clients to <strong style="color:#5b7aa8">grabio.space</strong> · For agent support, contact your Grabio manager
+    </p>
+  </div>
+</div>
+
+<!-- ══ FOOTER ══════════════════════════════════════════════════════════════ -->
+<footer>
+  <p>© 2026 Grabio · <a href="https://grabio.space">grabio.space</a> · Sales Agent Reference Guide · Confidential</p>
+</footer>
+
+<script>
+  function showBilling(type, btn) {
+    // Toggle active state on buttons
+    document.querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+
+    // Toggle price/period visibility
+    document.querySelectorAll('.monthly-price').forEach(el => el.style.display = type === 'monthly' ? '' : 'none');
+    document.querySelectorAll('.yearly-price').forEach(el => el.style.display = type === 'yearly' ? '' : 'none');
+    document.querySelectorAll('.monthly-period').forEach(el => el.style.display = type === 'monthly' ? '' : 'none');
+    document.querySelectorAll('.yearly-period').forEach(el => el.style.display = type === 'yearly' ? '' : 'none');
+  }
+</script>
+
+</body>
+</html>

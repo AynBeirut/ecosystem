@@ -689,6 +689,20 @@ const AdminOrders: React.FC = () => {
           console.error('Failed to update customer stats:', updateError);
           // Don't fail the order creation if customer update fails
         }
+
+        // Auto-link customer to salesman on first order with that salesman
+        if (newOrder.assignedSalesPerson && customer && (customer as any).assignedSalesPerson !== newOrder.assignedSalesPerson) {
+          try {
+            const customerRef = doc(db, 'customers', customer.id);
+            await updateDoc(customerRef, {
+              assignedSalesPerson: newOrder.assignedSalesPerson,
+              assignedSalesPersonName: salesPerson?.name || '',
+            });
+            console.log('Customer auto-linked to salesman:', newOrder.assignedSalesPerson);
+          } catch (linkError) {
+            console.error('Failed to auto-link customer to salesman:', linkError);
+          }
+        }
       }
 
       try {
@@ -1122,6 +1136,19 @@ const AdminOrders: React.FC = () => {
 
       const orderRef = doc(db, 'orders', editingOrder.id);
       await updateDoc(orderRef, orderData);
+
+      // Auto-link customer to salesman if salesman was set/changed
+      if (newOrder.assignedSalesPerson && customer && (customer as any).assignedSalesPerson !== newOrder.assignedSalesPerson) {
+        try {
+          const customerRef = doc(db, 'customers', customer.id);
+          await updateDoc(customerRef, {
+            assignedSalesPerson: newOrder.assignedSalesPerson,
+            assignedSalesPersonName: salesPerson?.name || '',
+          });
+        } catch (linkError) {
+          console.error('Failed to auto-link customer to salesman on update:', linkError);
+        }
+      }
 
       // Update local state
       const updatedOrder = { ...editingOrder, ...orderData };
@@ -1939,7 +1966,12 @@ const AdminOrders: React.FC = () => {
                                     key={customer.id}
                                     value={`${customer.name} ${customer.phone}`}
                                     onSelect={() => {
-                                      setNewOrder({ ...newOrder, customerId: customer.id });
+                                      const updates: any = { customerId: customer.id };
+                                      // Auto-assign salesperson if the customer has one linked
+                                      if ((customer as any).assignedSalesPerson) {
+                                        updates.assignedSalesPerson = (customer as any).assignedSalesPerson;
+                                      }
+                                      setNewOrder({ ...newOrder, ...updates });
                                       setCustomerSearchOpen(false);
                                     }}
                                   >

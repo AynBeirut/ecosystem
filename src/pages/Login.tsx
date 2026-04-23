@@ -206,6 +206,16 @@ const Login: React.FC = () => {
             </Link>
           </div>
         </div>
+
+        <a
+          href="/store-owner-guide.html"
+          target="_blank"
+          rel="noopener noreferrer"
+          className="flex items-center justify-center gap-2 w-full px-4 py-3 rounded-lg border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition text-sm font-semibold"
+        >
+          <span>📘</span>
+          Store Owner Guide — Features &amp; Plans
+        </a>
       </div>
     </div>
   );

@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grabio — Full Product Description</title>
+  <style>
+    /* ══ DESIGN TOKENS — matching app (Grabio / Market Flow) ══ */
+    :root {
+      /* Brand */
+      --primary:    #38B2AC;
+      --primary-dk: #2C9E98;
+      --secondary:  #2C5282;
+      --accent:     #ED8936;
+
+      /* Backgrounds */
+      --bg:       #f8fafc;
+      --surface:  #ffffff;
+      --surface2: #f1f5f9;
+      --surface3: #e8f4f8;
+
+      /* Borders */
+      --border:  #e2e8f0;
+      --border2: #cbd5e0;
+
+      /* Text */
+      --text:  #1a202c;
+      --muted: #64748b;
+      --dim:   #94a3b8;
+      --white: #ffffff;
+
+      /* State */
+      --green: #16a34a;
+      --amber: #d97706;
+      --rose:  #dc2626;
+
+      /* Gradients */
+      --grad-primary:   linear-gradient(135deg, #38B2AC, #2C9E98);
+      --grad-secondary: linear-gradient(135deg, #2C5282, #1e3a5f);
+      --grad-accent:    linear-gradient(135deg, #ED8936, #dd6b20);
+      --grad-hero:      linear-gradient(160deg, #ebfafa 0%, #eef2fc 50%, #fdf6ee 100%);
+
+      /* Spacing */
+      --radius:    12px;
+      --radius-sm: 8px;
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+      line-height: 1.65;
+      font-size: 15px;
+      overflow-x: hidden;
+    }
+
+    /* ══ HERO ══ */
+    .hero {
+      min-height: 88vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      text-align: center;
+      padding: 80px 24px 64px;
+      background: var(--grad-hero);
+      border-bottom: 1px solid var(--border);
+    }
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      background: rgba(56,178,172,.1);
+      border: 1px solid rgba(56,178,172,.3);
+      color: var(--primary);
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      padding: 5px 16px;
+      border-radius: 50px;
+      margin-bottom: 28px;
+    }
+    .hero-pill span {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--primary);
+      display: inline-block;
+      animation: pulse 2s infinite;
+    }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .hero h1 {
+      font-size: clamp(36px, 7vw, 68px);
+      font-weight: 900;
+      letter-spacing: -.03em;
+      line-height: 1.06;
+      color: var(--text);
+      margin-bottom: 18px;
+    }
+    .hero h1 .grad {
+      background: linear-gradient(135deg, var(--primary), var(--secondary));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .hero-sub {
+      font-size: clamp(15px, 2vw, 18px);
+      color: var(--muted);
+      max-width: 600px;
+      margin: 0 auto 36px;
+      line-height: 1.75;
+    }
+    .hero-stats { display: flex; gap: 40px; justify-content: center; flex-wrap: wrap; }
+    .hero-stat { text-align: center; }
+    .hero-stat .num {
+      font-size: 30px;
+      font-weight: 900;
+      color: var(--primary);
+    }
+    .hero-stat .lbl { font-size: 12px; color: var(--muted); margin-top: 2px; }
+
+    /* ══ STICKY NAV ══ */
+    .sticky-nav {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(248,250,252,.92);
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 20px;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: none;
+    }
+    .sticky-nav::-webkit-scrollbar { display: none; }
+    .sticky-nav ul { display: inline-flex; gap: 4px; list-style: none; padding: 10px 0; }
+    .sticky-nav a {
+      color: var(--muted);
+      text-decoration: none;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 6px 13px;
+      border-radius: 6px;
+      transition: all .2s;
+      display: inline-block;
+    }
+    .sticky-nav a:hover { color: var(--primary); background: rgba(56,178,172,.08); }
+
+    /* ══ LAYOUT ══ */
+    .container { max-width: 1020px; margin: 0 auto; padding: 0 20px; }
+    section { padding: 64px 20px; max-width: 1020px; margin: 0 auto; }
+    .divider {
+      height: 1px;
+      background: var(--border);
+      max-width: 1020px;
+      margin: 0 auto;
+    }
+    .section-eyebrow {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: var(--primary);
+      margin-bottom: 10px;
+    }
+    h2.section-title {
+      font-size: clamp(24px, 5vw, 38px);
+      font-weight: 900;
+      letter-spacing: -.025em;
+      line-height: 1.15;
+      color: var(--text);
+      margin-bottom: 10px;
+    }
+    .section-desc {
+      color: var(--muted);
+      font-size: 15.5px;
+      max-width: 560px;
+      margin-bottom: 36px;
+      line-height: 1.75;
+    }
+
+    /* ══ FEATURE CARDS ══ */
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px,1fr)); gap: 16px; }
+    .feature-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 22px 20px;
+      transition: border-color .2s, box-shadow .2s, transform .2s;
+    }
+    .feature-card:hover {
+      border-color: var(--primary);
+      box-shadow: 0 4px 20px rgba(56,178,172,.1);
+      transform: translateY(-2px);
+    }
+    .feature-card .icon {
+      width: 42px;
+      height: 42px;
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 20px;
+      margin-bottom: 14px;
+      flex-shrink: 0;
+    }
+    .feature-card h3 { font-size: 14.5px; font-weight: 700; color: var(--text); margin-bottom: 6px; }
+    .feature-card p  { font-size: 13px; color: var(--muted); line-height: 1.65; }
+
+    /* ══ ICON BG VARIANTS ══ */
+    .bg-blue   { background: rgba(56,178,172,.12); }
+    .bg-purple { background: rgba(44,82,130,.12); }
+    .bg-teal   { background: rgba(56,178,172,.18); }
+    .bg-green  { background: rgba(22,163,74,.12); }
+    .bg-amber  { background: rgba(217,119,6,.12); }
+    .bg-rose   { background: rgba(220,38,38,.1); }
+
+    /* ══ DESIGN / TEMPLATES ══ */
+    .template-showcase { display: grid; grid-template-columns: repeat(auto-fill,minmax(155px,1fr)); gap: 14px; margin-top: 4px; }
+    .template-card {
+      border-radius: var(--radius-sm);
+      overflow: hidden;
+      border: 1.5px solid var(--border);
+      transition: border-color .2s, transform .2s, box-shadow .2s;
+      background: var(--surface);
+    }
+    .template-card:hover {
+      border-color: var(--primary);
+      transform: translateY(-4px);
+      box-shadow: 0 8px 24px rgba(56,178,172,.12);
+    }
+    .template-preview { height: 100px; display: flex; flex-direction: column; gap: 6px; padding: 10px; }
+    .tp-bar   { height: 8px; border-radius: 4px; width: 70%; }
+    .tp-row   { display: flex; gap: 6px; }
+    .tp-block { height: 38px; flex: 1; border-radius: 4px; }
+    .tp-line  { height: 5px; border-radius: 3px; margin-top: 4px; }
+    .template-info { padding: 10px 12px; background: var(--surface2); }
+    .template-info .name  { font-size: 13px; font-weight: 700; color: var(--text); }
+    .template-info .badge { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 50px; margin-top: 4px; }
+    .badge-free    { background: rgba(22,163,74,.12); color: #16a34a; }
+    .badge-premium { background: rgba(44,82,130,.12); color: var(--secondary); }
+
+    .design-feature-list { display: grid; grid-template-columns: repeat(auto-fill,minmax(240px,1fr)); gap: 12px; margin-top: 28px; }
+    .dfl-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      transition: border-color .2s;
+    }
+    .dfl-item:hover { border-color: var(--primary); }
+    .dfl-icon { font-size: 22px; flex-shrink: 0; line-height: 1; }
+    .dfl-item h4 { font-size: 13.5px; font-weight: 700; color: var(--text); margin-bottom: 3px; }
+    .dfl-item p  { font-size: 12px; color: var(--muted); }
+
+    /* ══ FULL FEATURE TABLE ══ */
+    .full-table-wrap {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .full-table-wrap table  { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    .full-table-wrap thead th {
+      background: var(--surface2);
+      padding: 13px 18px;
+      text-align: left;
+      font-weight: 700;
+      color: var(--text);
+      border-bottom: 1px solid var(--border);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: .06em;
+    }
+    .full-table-wrap tbody tr   { border-bottom: 1px solid var(--border); }
+    .full-table-wrap tbody tr:last-child { border-bottom: none; }
+    .full-table-wrap tbody tr:nth-child(even) { background: var(--surface2); }
+    .full-table-wrap tbody td  { padding: 11px 18px; vertical-align: top; color: var(--muted); }
+    .full-table-wrap tbody td:first-child { color: var(--text); font-weight: 600; white-space: nowrap; }
+    .cat-row td {
+      background: rgba(56,178,172,.07) !important;
+      color: var(--primary) !important;
+      font-size: 11px !important;
+      font-weight: 800 !important;
+      letter-spacing: .1em !important;
+      text-transform: uppercase !important;
+      padding: 10px 18px !important;
+    }
+
+    /* ══ PAYMENT CARDS ══ */
+    .payment-grid { display: grid; grid-template-columns: repeat(auto-fill,minmax(180px,1fr)); gap: 14px; }
+    .payment-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 22px 16px;
+      text-align: center;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .payment-card:hover { border-color: var(--primary); box-shadow: 0 4px 16px rgba(56,178,172,.1); }
+    .payment-icon { font-size: 32px; margin-bottom: 10px; }
+    .payment-name { font-size: 14px; font-weight: 700; color: var(--text); margin-bottom: 4px; }
+    .payment-desc { font-size: 12px; color: var(--muted); }
+
+    /* ══ FLOW STEPS ══ */
+    .flow-steps { display: flex; gap: 0; flex-wrap: wrap; margin-top: 8px; }
+    .flow-step {
+      flex: 1;
+      min-width: 160px;
+      padding: 22px 18px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      position: relative;
+      text-align: center;
+    }
+    .flow-step:not(:last-child)::after {
+      content: '→';
+      position: absolute;
+      right: -12px;
+      top: 50%;
+      transform: translateY(-50%);
+      font-size: 18px;
+      color: var(--dim);
+      z-index: 2;
+    }
+    .flow-step:first-child { border-radius: var(--radius-sm) 0 0 var(--radius-sm); }
+    .flow-step:last-child  { border-radius: 0 var(--radius-sm) var(--radius-sm) 0; }
+    .flow-num {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--grad-primary);
+      margin: 0 auto 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 800;
+      color: #fff;
+    }
+    .flow-step p    { font-size: 12.5px; font-weight: 600; color: var(--text); }
+    .flow-step span { font-size: 11px; color: var(--muted); }
+
+    /* ══ MOBILE APP STRIP ══ */
+    .app-strip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 32px 28px;
+      display: flex;
+      gap: 28px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-top: 10px;
+    }
+    .app-strip .app-icon { font-size: 52px; flex-shrink: 0; }
+    .app-strip h3  { font-size: 20px; font-weight: 800; color: var(--text); margin-bottom: 6px; }
+    .app-strip p   { font-size: 13.5px; color: var(--muted); max-width: 480px; line-height: 1.65; }
+    .app-badges    { display: flex; gap: 10px; margin-top: 12px; flex-wrap: wrap; }
+    .app-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 8px 14px;
+      background: rgba(56,178,172,.08);
+      border: 1px solid rgba(56,178,172,.25);
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--secondary);
+      text-decoration: none;
+    }
+
+    /* ══ CTA ══ */
+    .cta-wrap {
+      background: linear-gradient(135deg, #1a3a5c 0%, #1d4d4a 100%);
+      border-radius: 20px;
+      padding: 52px 32px;
+      text-align: center;
+      margin: 0 20px 64px;
+      color: #fff;
+    }
+    .cta-wrap .section-eyebrow { color: rgba(56,178,172,.9); }
+    .cta-wrap h2  { font-size: clamp(24px, 5vw, 40px); font-weight: 900; letter-spacing: -.025em; color: #fff; margin-bottom: 14px; }
+    .cta-wrap p   { color: rgba(255,255,255,.7); max-width: 440px; margin: 0 auto 32px; font-size: 15px; }
+    .btn-row      { display: flex; gap: 14px; justify-content: center; flex-wrap: wrap; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 13px 28px;
+      font-size: 14px;
+      font-weight: 700;
+      border-radius: 8px;
+      text-decoration: none;
+      border: none;
+      cursor: pointer;
+      transition: all .2s;
+    }
+    .btn-primary  { background: var(--primary); color: #fff; box-shadow: 0 4px 20px rgba(56,178,172,.35); }
+    .btn-primary:hover  { background: var(--primary-dk); transform: translateY(-2px); }
+    .btn-outline  { background: transparent; color: #fff; border: 1.5px solid rgba(255,255,255,.35); }
+    .btn-outline:hover  { border-color: var(--primary); color: var(--primary); }
+
+    /* ══ TAG PILLS ══ */
+    .pill-list { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+    .pill {
+      display: inline-block;
+      padding: 5px 13px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 50px;
+      font-size: 12px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+    .pill.hi {
+      border-color: rgba(56,178,172,.35);
+      color: var(--primary);
+      background: rgba(56,178,172,.06);
+    }
+
+    /* ══ FOOTER ══ */
+    footer {
+      text-align: center;
+      padding: 28px;
+      color: var(--dim);
+      font-size: 12.5px;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+    }
+    footer a { color: var(--primary); text-decoration: none; }
+
+    /* ══ RESPONSIVE ══ */
+    @media(max-width:640px){
+      section { padding: 48px 16px; }
+      .flow-steps { flex-direction: column; }
+      .flow-step:not(:last-child)::after { content:'↓'; right:50%; top:auto; bottom:-14px; transform:translateX(50%); }
+      .flow-step:first-child { border-radius: var(--radius-sm) var(--radius-sm) 0 0; }
+      .flow-step:last-child  { border-radius: 0 0 var(--radius-sm) var(--radius-sm); }
+      .feature-grid { grid-template-columns: 1fr; }
+      .template-showcase { grid-template-columns: repeat(3,1fr); }
+    }
+    @media(max-width:380px){ .template-showcase { grid-template-columns: 1fr 1fr; } }
+  </style>
+</head>
+<body>
+
+<!-- ══ HERO ════════════════════════════════════════════════════════════════ -->
+<div class="hero">
+  <div class="hero-pill"><span></span> E-Commerce Platform · Lebanon &amp; MENA</div>
+  <h1>Everything your business<br>needs to sell online.<br><span class="grad">Built into one platform.</span></h1>
+  <p class="hero-sub">Grabio is a full-stack e-commerce builder — beautiful store designs, real-time inventory, payments, staff management, and analytics — all from a single dashboard or mobile app.</p>
+  <div class="hero-stats">
+    <div class="hero-stat"><div class="num">6</div><div class="lbl">Store Templates</div></div>
+    <div class="hero-stat"><div class="num">20+</div><div class="lbl">Core Modules</div></div>
+    <div class="hero-stat"><div class="num">2</div><div class="lbl">Payment Gateways</div></div>
+    <div class="hero-stat"><div class="num">4</div><div class="lbl">Subscription Plans</div></div>
+  </div>
+</div>
+
+<!-- ══ STICKY NAV ═══════════════════════════════════════════════════════════ -->
+<nav class="sticky-nav">
+  <ul>
+    <li><a href="#store-design">Store Design</a></li>
+    <li><a href="#products">Products</a></li>
+    <li><a href="#inventory">Inventory</a></li>
+    <li><a href="#sales">Sales &amp; Orders</a></li>
+    <li><a href="#payments">Payments</a></li>
+    <li><a href="#analytics">Analytics</a></li>
+    <li><a href="#staff">Staff &amp; HR</a></li>
+    <li><a href="#marketing">Marketing</a></li>
+    <li><a href="#mobile">Mobile App</a></li>
+    <li><a href="#all-features">Full Feature List</a></li>
+    <li><a href="#plans">Plans</a></li>
+  </ul>
+</nav>
+
+<!-- ══ 1. STORE DESIGN ══════════════════════════════════════════════════════ -->
+<section id="store-design">
+  <p class="section-eyebrow">Store Design &amp; Customization</p>
+  <h2 class="section-title">Professional store, no designer needed.</h2>
+  <p class="section-desc">Pick a template, upload your photos, and your online store goes live at <strong style="color:var(--text)">yourstore.grabio.space</strong> — ready to receive orders from day one.</p>
+
+  <!-- Template showcase -->
+  <div class="template-showcase">
+    <!-- Modern -->
+    <div class="template-card">
+      <div class="template-preview" style="background:linear-gradient(135deg,#ebfafa,#eef2fc)">
+        <div class="tp-bar" style="background:#38B2AC"></div>
+        <div class="tp-row">
+          <div class="tp-block" style="background:#2C5282;opacity:.7"></div>
+          <div class="tp-block" style="background:#ED8936;opacity:.6"></div>
+        </div>
+        <div class="tp-line" style="background:#38B2AC;width:55%"></div>
+      </div>
+      <div class="template-info"><div class="name">Modern</div><div class="badge badge-free">FREE</div></div>
+    </div>
+    <!-- Minimal -->
+    <div class="template-card">
+      <div class="template-preview" style="background:#ffffff">
+        <div class="tp-bar" style="background:#718096"></div>
+        <div class="tp-row">
+          <div class="tp-block" style="background:#E2E8F0"></div>
+          <div class="tp-block" style="background:#CBD5E0"></div>
+        </div>
+        <div class="tp-line" style="background:#2D3748;width:40%"></div>
+      </div>
+      <div class="template-info"><div class="name">Minimal</div><div class="badge badge-free">FREE</div></div>
+    </div>
+    <!-- Classic -->
+    <div class="template-card">
+      <div class="template-preview" style="background:#EBF4FF">
+        <div class="tp-bar" style="background:#2C5282"></div>
+        <div class="tp-row">
+          <div class="tp-block" style="background:#3182CE;opacity:.7"></div>
+          <div class="tp-block" style="background:#63B3ED;opacity:.7"></div>
+        </div>
+        <div class="tp-line" style="background:#2C5282;width:60%"></div>
+      </div>
+      <div class="template-info"><div class="name">Classic</div><div class="badge badge-free">FREE</div></div>
+    </div>
+    <!-- Vibrant -->
+    <div class="template-card">
+      <div class="template-preview" style="background:linear-gradient(135deg,#fff4eb,#fdf2f8,#f5f0ff)">
+        <div class="tp-bar" style="background:#ED8936"></div>
+        <div class="tp-row">
+          <div class="tp-block" style="background:#F56565;opacity:.6"></div>
+          <div class="tp-block" style="background:#9F7AEA;opacity:.6"></div>
+        </div>
+        <div class="tp-line" style="background:#ED8936;width:50%"></div>
+      </div>
+      <div class="template-info"><div class="name">Vibrant</div><div class="badge badge-premium">PREMIUM</div></div>
+    </div>
+    <!-- Professional -->
+    <div class="template-card">
+      <div class="template-preview" style="background:#f1f5f9">
+        <div class="tp-bar" style="background:#2D3748"></div>
+        <div class="tp-row">
+          <div class="tp-block" style="background:#4A5568;opacity:.8"></div>
+          <div class="tp-block" style="background:#718096;opacity:.6"></div>
+        </div>
+        <div class="tp-line" style="background:#2D3748;width:45%"></div>
+      </div>
+      <div class="template-info"><div class="name">Professional</div><div class="badge badge-premium">PREMIUM</div></div>
+    </div>
+    <!-- Artistic -->
+    <div class="template-card">
+      <div class="template-preview" style="background:linear-gradient(135deg,#f5f0ff,#fff7ed)">
+        <div class="tp-bar" style="background:#9F7AEA"></div>
+        <div class="tp-row">
+          <div class="tp-block" style="background:#ED64A6;opacity:.6"></div>
+          <div class="tp-block" style="background:#F6AD55;opacity:.6"></div>
+        </div>
+        <div class="tp-line" style="background:#9F7AEA;width:55%"></div>
+      </div>
+      <div class="template-info"><div class="name">Artistic</div><div class="badge badge-premium">PREMIUM</div></div>
+    </div>
+  </div>
+
+  <!-- Design features -->
+  <div class="design-feature-list">
+    <div class="dfl-item">
+      <div class="dfl-icon">🖼️</div>
+      <div><h4>Hero Background Image</h4><p>Upload a full-width banner photo for your store's top section.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">🎠</div>
+      <div><h4>Image Carousel</h4><p>Add multiple hero images that rotate — great for promotions and seasonal campaigns.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">🗂️</div>
+      <div><h4>Photo Gallery</h4><p>Showcase your space, products, or team with a drag-and-drop gallery section.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">🔗</div>
+      <div><h4>Friendly URL Slugs</h4><p>Store and product URLs are human-readable: <em>grabio.space/store/your-store-name</em></p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">🌐</div>
+      <div><h4>Custom Domain (Add-on)</h4><p>Bring your own domain. Grabio handles SSL and DNS setup for you.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">📱</div>
+      <div><h4>Mobile-Optimised Storefront</h4><p>Every template is fully responsive — looks sharp on phones, tablets, and desktops.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">↕️</div>
+      <div><h4>Drag &amp; Drop Image Order</h4><p>Reorder carousel and gallery images by dragging — no code, no uploads repeated.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">🔍</div>
+      <div><h4>SEO Tools</h4><p>Meta titles, descriptions, Open Graph tags, and XML sitemaps built in.</p></div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 2. PRODUCTS ═══════════════════════════════════════════════════════════ -->
+<section id="products">
+  <p class="section-eyebrow">Product Management</p>
+  <h2 class="section-title">List any type of product — simply.</h2>
+  <p class="section-desc">From a plain t-shirt to a composed food recipe, Grabio handles all product types in one unified catalog.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon bg-blue">📦</div>
+      <h3>Simple Products</h3>
+      <p>Physical goods with stock tracking, SKU, barcode auto-generation, price, images, and categories.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">🛠️</div>
+      <h3>Service Products</h3>
+      <p>Bookings, consultations, repairs — services with no inventory tracking, invoiceable on demand.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-purple">🍰</div>
+      <h3>Composed / Manufactured</h3>
+      <p>Products built from raw ingredients or components — with recipes, yield, and production cost tracking. <em>(Pro &amp; Business)</em></p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-green">🏷️</div>
+      <h3>Auto SKU &amp; Barcode</h3>
+      <p>Auto-generated SKUs (<em>STORE_MAT_001</em>) and 12-digit barcodes — no manual entry required.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-amber">📂</div>
+      <h3>Categories &amp; Filters</h3>
+      <p>Organise products into categories. Customers can filter and browse your catalogue easily.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-rose">🖼️</div>
+      <h3>Product Images</h3>
+      <p>Upload product photos stored in the cloud. Supports multiple angles and gallery views.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-blue">💹</div>
+      <h3>Dual-Currency Pricing</h3>
+      <p>Set prices in USD. Customers see real-time LBP equivalent based on your custom exchange rate.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">🔎</div>
+      <h3>Friendly Product URLs</h3>
+      <p>Each product gets a clean, shareable URL: <em>/store/my-shop/product/product-name</em></p>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 3. INVENTORY ══════════════════════════════════════════════════════════ -->
+<section id="inventory">
+  <p class="section-eyebrow">Inventory &amp; Stock Control</p>
+  <h2 class="section-title">Know what you have. Always.</h2>
+  <p class="section-desc">Full warehouse-grade inventory management — from raw materials to finished goods — in a system any shop owner can use.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon bg-blue">🧪</div>
+      <h3>Raw Materials</h3>
+      <p>Track ingredients and components with minimum thresholds, reorder points, expiry dates, and warranty periods.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-purple">📋</div>
+      <h3>Recipes &amp; Production</h3>
+      <p>Define recipes with ingredient lists, production yield, and cost per unit. Trigger production batches directly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">🏭</div>
+      <h3>Production Batches</h3>
+      <p>Plan, execute, and track manufacturing runs with status (<em>planned → in progress → completed</em>), quality checks, and expiry tracking.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-green">📦</div>
+      <h3>Finished Goods Inventory</h3>
+      <p>Opening balance, current stock, quantities sold, manual adjustments, transaction history, and full valuation (FIFO/LIFO/Weighted Average).</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-amber">⚠️</div>
+      <h3>Low Stock Alerts</h3>
+      <p>Push notification + email when stock drops to or below your set threshold (default: 5 units). Configurable per product.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-rose">📅</div>
+      <h3>Expiry Date Tracking</h3>
+      <p>Enable per-item expiry tracking on <strong>raw materials, simple products, composed products, and finished goods</strong>. Set a custom alert window (default: 30 days before expiry) per item. Items show visual expired/expiring-soon badges in the admin.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-amber">🔔</div>
+      <h3>Expiry Alerts — Push &amp; Email</h3>
+      <p>A daily scheduled job (08:00 UTC) scans all tracked items across all 4 item types. When any item hits its alert window, the store owner gets a <strong>push notification + email digest</strong> listing item name, type, expiry date, and exact days remaining. Each item is only notified once per day.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-rose">🔄</div>
+      <h3>Stock Adjustments</h3>
+      <p>Record purchases, wastage, damaged goods, returns-to-supplier, or manual corrections — each logged with reason and timestamp.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-blue">🏢</div>
+      <h3>Supplier Management</h3>
+      <p>Full supplier database: contact person, payment terms, preferred supplier per material, status tracking.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">📄</div>
+      <h3>Purchase Orders</h3>
+      <p>Create and track supplier purchase orders with delivery dates, receiving status, and payment tracking.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-purple">📝</div>
+      <h3>Audit Log</h3>
+      <p>Every action is logged: who did it, what changed, old vs new values — full traceability.</p>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 4. SALES & ORDERS ═════════════════════════════════════════════════════ -->
+<section id="sales">
+  <p class="section-eyebrow">Sales &amp; Order Management</p>
+  <h2 class="section-title">From cart to delivery — fully tracked.</h2>
+  <p class="section-desc">Customers order online. You see it instantly. Every step from checkout to delivery is visible in your dashboard.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon bg-green">🛒</div>
+      <h3>Online Storefront Checkout</h3>
+      <p>Customers add to cart, enter delivery address with GPS coordinates, and pay online — zero friction.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-blue">🏷️</div>
+      <h3>Flexible Discounts</h3>
+      <p>Apply discounts at the order level <em>or</em> individually per item. Percentage or fixed amount. Supports 100% off for promos.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-purple">💳</div>
+      <h3>Customer Credit</h3>
+      <p>Track customer balances, outstanding payments, and full payment history per client.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">🧾</div>
+      <h3>PDF Invoice Generation</h3>
+      <p>Generate and share professional invoices as PDFs — shareable via WhatsApp, email, or download.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-amber">↩️</div>
+      <h3>Returns Processing</h3>
+      <p>Handle sales returns with automatic inventory re-adjustment and financial record correction.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-rose">🚚</div>
+      <h3>Delivery Management</h3>
+      <p>Configure delivery zones, standard/express/same-day fees, free shipping thresholds, and working hours.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-blue">📍</div>
+      <h3>GPS Order Address</h3>
+      <p>Customers pin their delivery location on a map — coordinates are saved with the order for drivers.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-green">💬</div>
+      <h3>Order via WhatsApp</h3>
+      <p>A built-in wa.me button lets customers send a pre-formatted order message to your WhatsApp — included free on all paid plans.</p>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 5. PAYMENTS ═══════════════════════════════════════════════════════════ -->
+<section id="payments">
+  <p class="section-eyebrow">Payments &amp; Checkout</p>
+  <h2 class="section-title">Accept payments the way Lebanon works.</h2>
+  <p class="section-desc">Grabio supports the payment methods your customers already use — not just international credit cards.</p>
+  <div class="payment-grid">
+    <div class="payment-card">
+      <div class="payment-icon">🟢</div>
+      <div class="payment-name">OMT / Whish Money</div>
+      <div class="payment-desc">Lebanese cash-based mobile payment. No bank account required for customers.</div>
+    </div>
+    <div class="payment-card">
+      <div class="payment-icon">💳</div>
+      <div class="payment-name">Stripe</div>
+      <div class="payment-desc">International credit &amp; debit card processing for global customers.</div>
+    </div>
+    <div class="payment-card">
+      <div class="payment-icon">💵</div>
+      <div class="payment-name">Cash on Delivery</div>
+      <div class="payment-desc">Customers pay on receipt — order is tracked and recorded in the dashboard.</div>
+    </div>
+    <div class="payment-card">
+      <div class="payment-icon">🔄</div>
+      <div class="payment-name">USD &amp; LBP</div>
+      <div class="payment-desc">Dual-currency checkout with your custom USD→LBP conversion rate.</div>
+    </div>
+  </div>
+
+  <!-- Payment flow -->
+  <p style="margin-top:32px;margin-bottom:14px" class="section-eyebrow">How payment flows</p>
+  <div class="flow-steps">
+    <div class="flow-step"><div class="flow-num">1</div><p>Customer checks out</p><span>Picks payment method</span></div>
+    <div class="flow-step"><div class="flow-num">2</div><p>Payment processed</p><span>OMT / Stripe / COD</span></div>
+    <div class="flow-step"><div class="flow-num">3</div><p>Order confirmed</p><span>Store &amp; customer notified</span></div>
+    <div class="flow-step"><div class="flow-num">4</div><p>Inventory updated</p><span>Stock decremented instantly</span></div>
+    <div class="flow-step"><div class="flow-num">5</div><p>Invoice generated</p><span>PDF shareable instantly</span></div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 6. ANALYTICS ══════════════════════════════════════════════════════════ -->
+<section id="analytics">
+  <p class="section-eyebrow">Analytics &amp; Reporting</p>
+  <h2 class="section-title">Real data. Smarter decisions.</h2>
+  <p class="section-desc">See what's selling, where your money goes, and how your business is growing — from a dashboard that refreshes in real time.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon bg-blue">📊</div>
+      <h3>Sales Dashboard</h3>
+      <p>Live revenue, order count, average order value, and sales trend charts — daily, weekly, monthly, or yearly.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-purple">📈</div>
+      <h3>Top Products Report</h3>
+      <p>See which products sell most, generate highest revenue, and contribute most to profit.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">🗂️</div>
+      <h3>Category Breakdown</h3>
+      <p>Revenue and unit sales split by product category — show each category's share of total sales.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-green">💰</div>
+      <h3>Profit &amp; Cost Tracking</h3>
+      <p>Revenue, cost of goods sold, and gross profit for every time period — powered by real inventory costs.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-amber">📋</div>
+      <h3>Account Statement</h3>
+      <p>Full financial overview: all income and expense categories, sub-account balances, and cash flow summary.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-rose">📑</div>
+      <h3>Inventory Reports</h3>
+      <p>Stock levels, movement history, valuation by method (FIFO/LIFO/Weighted Average), and low-stock summary.</p>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 7. STAFF & HR ═════════════════════════════════════════════════════════ -->
+<section id="staff">
+  <p class="section-eyebrow">Staff &amp; HR Management</p>
+  <h2 class="section-title">Your team. Fully managed.</h2>
+  <p class="section-desc">Add sales staff, set their permissions, track their salary, and give them limited access to only what they need.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon bg-blue">👥</div>
+      <h3>Multi-Role Access</h3>
+      <p>Three roles: <strong>Admin</strong> (full access), <strong>Manager</strong> (most features), <strong>Staff</strong> (sales-only). Each sees only what's needed.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-purple">💼</div>
+      <h3>Sub-Accounts</h3>
+      <p>Create managed user accounts under your store. Sub-accounts operate under your subscription — used by Business plan stores. <em>(Business plan)</em></p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-green">💰</div>
+      <h3>Payroll &amp; Salary</h3>
+      <p>Set recurring salaries per staff member. The system tracks monthly payroll expenses automatically.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-amber">✂️</div>
+      <h3>Smart Termination</h3>
+      <p>When a staff member is terminated, all future salary obligations are automatically removed — historical records stay intact.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">📅</div>
+      <h3>Expense Tracking</h3>
+      <p>Record and categorise all business expenses — rent, utilities, salaries, supplies — with date and category filtering.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-rose">🔐</div>
+      <h3>Data Isolation</h3>
+      <p>Each store's data is completely isolated. Staff can never access another store's information, even in shared environments.</p>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 8. MARKETING ══════════════════════════════════════════════════════════ -->
+<section id="marketing">
+  <p class="section-eyebrow">Marketing &amp; Growth Tools</p>
+  <h2 class="section-title">Grow your reach. Automatically.</h2>
+  <p class="section-desc">Built-in tools to attract customers, communicate with them, and bring them back — no third-party apps needed.</p>
+  <div class="feature-grid">
+    <div class="feature-card">
+      <div class="icon bg-rose">🏷️</div>
+      <h3>Discount Codes</h3>
+      <p>Create promotional codes with percentage or fixed discounts. Set expiry dates and usage limits. <em>(Starter &amp; above)</em></p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">📧</div>
+      <h3>Email Marketing</h3>
+      <p>Send newsletters and promotions to your customer list. Limits: 200/mo (Starter), 1,000/mo (Pro), 5,000/mo (Business).</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-blue">📢</div>
+      <h3>Store Announcements</h3>
+      <p>Publish banners or alerts on your storefront for promotions, new arrivals, or temporary closures.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-purple">📲</div>
+      <h3>Social Sharing Built In</h3>
+      <p>Every product page has one-tap sharing: Facebook, Twitter/X, Instagram, LinkedIn, Pinterest, WhatsApp, Email, Copy Link.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-green">🔍</div>
+      <h3>SEO Foundation</h3>
+      <p>Structured URLs, meta tags, Open Graph cards for social preview, and sitemap generation — so Google finds you.</p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-amber">🛍️</div>
+      <h3>Meta Shop Integration</h3>
+      <p>Connect your Grabio catalogue to your Facebook and Instagram shop. <em>(Business plan)</em></p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-rose">💬</div>
+      <h3>WhatsApp Business API</h3>
+      <p>Automated order confirmation, abandoned cart recovery, and broadcast campaigns via WhatsApp Business. <em>(Add-on)</em></p>
+    </div>
+    <div class="feature-card">
+      <div class="icon bg-teal">�</div>
+      <h3>Push Notifications — 3 Triggers</h3>
+      <p>Firebase Cloud Messaging delivers real-time push to phone and browser for:</p>
+      <ul style="margin-top:8px;padding-left:16px;font-size:12px;color:var(--muted);line-height:1.9">
+        <li><strong>📦 New Order</strong> — instant alert the moment a customer places an order</li>
+        <li><strong>📅 Expiring Stock</strong> — daily digest of items nearing or past their expiry date (raw materials, products, finished goods)</li>
+        <li><strong>⚠️ Low Stock</strong> — alert when any product stock falls to or below its threshold (default: 5 units)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ 9. MOBILE APP ══════════════════════════════════════════════════════════ -->
+<section id="mobile">
+  <p class="section-eyebrow">Mobile App</p>
+  <h2 class="section-title">Run your store from your pocket.</h2>
+  <p class="section-desc">Grabio ships as both a native Android app and an installable PWA — so you and your customers can use it on any device.</p>
+  <div class="app-strip">
+    <div class="app-icon">📱</div>
+    <div>
+      <h3>Grabio Native App &amp; PWA</h3>
+      <p>The <strong>Grabio Android app</strong> (<em>space.grabio.app</em>) gives store owners a full admin experience on mobile. The <strong>Progressive Web App</strong> installs on any device from the browser — no app store download required. Customers browse your marketplace, track orders, and shop in the native app or on the web.</p>
+      <div class="app-badges">
+        <span class="app-badge">📲 Android (Play Store)</span>
+        <span class="app-badge">🌐 PWA (Any Device)</span>
+        <span class="app-badge">👆 Swipe Navigation</span>
+        <span class="app-badge">🔔 Push Notifications</span>
+        <span class="app-badge">📍 GPS Order Tracking</span>
+      </div>
+    </div>
+  </div>
+  <div class="design-feature-list" style="margin-top:20px">
+    <div class="dfl-item">
+      <div class="dfl-icon">👆</div>
+      <div><h4>Swipe Gesture Navigation</h4><p>Swipe right to go back — feels native on any touchscreen.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">🔢</div>
+      <div><h4>Touch-Optimised Inputs</h4><p>Quantity fields and number inputs behave correctly on mobile keyboards.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">🔄</div>
+      <div><h4>Real-Time Sync</h4><p>Orders, stock, and analytics update instantly across all connected devices.</p></div>
+    </div>
+    <div class="dfl-item">
+      <div class="dfl-icon">📦</div>
+      <div><h4>Order Tracking Screen</h4><p>Customers track their order status in real time from within the app.</p></div>
+    </div>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ FULL FEATURE TABLE ════════════════════════════════════════════════════ -->
+<section id="all-features">
+  <p class="section-eyebrow">Complete Feature Reference</p>
+  <h2 class="section-title">Everything Grabio does — at a glance.</h2>
+  <p class="section-desc">The full, unabbreviated list of every feature and function in the platform.</p>
+  <div class="full-table-wrap">
+    <table>
+      <thead><tr><th>Feature / Function</th><th>Description</th></tr></thead>
+      <tbody>
+        <!-- STORE BUILDER -->
+        <tr class="cat-row"><td colspan="2">🏗️ Store Builder &amp; Design</td></tr>
+        <tr><td>6 Store Templates</td><td>Modern, Minimal, Classic (free) · Vibrant, Professional, Artistic (premium)</td></tr>
+        <tr><td>Hero Background Image</td><td>Full-width custom banner photo per store</td></tr>
+        <tr><td>Image Carousel</td><td>Multiple rotating hero images — drag-and-drop ordering</td></tr>
+        <tr><td>Photo Gallery</td><td>Showcase section with drag-and-drop reordering</td></tr>
+        <tr><td>Friendly URL Slugs</td><td>Human-readable store &amp; product URLs with auto-generation and conflict resolution</td></tr>
+        <tr><td>Custom Domain</td><td>Bring your own domain with SSL auto-provisioning (add-on: $15/mo · $150/yr)</td></tr>
+        <tr><td>Store Announcements</td><td>Publish banners, promotions, or alerts on your live storefront</td></tr>
+        <tr><td>SEO: Meta Tags</td><td>Custom title, description, and Open Graph for each product and store page</td></tr>
+        <tr><td>XML Sitemap</td><td>Auto-generated for Google and other search engines</td></tr>
+        <tr><td>Social Share Buttons</td><td>Facebook, Twitter/X, Instagram, LinkedIn, Pinterest, WhatsApp, Email, Copy Link</td></tr>
+
+        <!-- PRODUCTS -->
+        <tr class="cat-row"><td colspan="2">📦 Product Management</td></tr>
+        <tr><td>Simple Products</td><td>Physical goods with stock, SKU, barcode, price, images, categories</td></tr>
+        <tr><td>Service Products</td><td>Bookable or invoiceable services — no inventory tracking</td></tr>
+        <tr><td>Composed / Manufactured</td><td>Products built from raw ingredients with recipes and costing (Pro &amp; Business)</td></tr>
+        <tr><td>Auto SKU Generation</td><td>Pattern: STORE_TYPE_001 — no manual entry</td></tr>
+        <tr><td>Auto Barcode Generation</td><td>12-digit barcodes per product</td></tr>
+        <tr><td>Product Images</td><td>Cloud-stored product photos (multiple supported)</td></tr>
+        <tr><td>Categories &amp; Filtering</td><td>Customer-facing category browse and search</td></tr>
+        <tr><td>Dual-Currency Pricing</td><td>USD price with live LBP equivalent at your custom exchange rate</td></tr>
+        <tr><td>Product-Level Discounts</td><td>Apply individual discounts per item in any order</td></tr>
+
+        <!-- INVENTORY -->
+        <tr class="cat-row"><td colspan="2">🏭 Inventory &amp; Stock Control</td></tr>
+        <tr><td>Raw Materials</td><td>Quantity, minimum threshold, reorder point, cost, expiry, warranty tracking</td></tr>
+        <tr><td>Recipes</td><td>Define production recipes with ingredient lists, yield, and total cost</td></tr>
+        <tr><td>Production Batches</td><td>Plan → In Progress → Completed workflow with quality status and expiry</td></tr>
+        <tr><td>Finished Goods</td><td>Opening balance, current stock, sold quantity, adjustments, full transaction history</td></tr>
+        <tr><td>Stock Valuation Methods</td><td>FIFO, LIFO, Weighted Average — selectable per store</td></tr>
+        <tr><td>Low Stock Alerts</td><td>Push + email when stock ≤ threshold (default 5 units) — configurable per product</td></tr>
+        <tr><td>Expiry Date Tracking</td><td>Per-item toggle on raw materials, simple products, composed products, and finished goods</td></tr>
+        <tr><td>Expiry Alert Window</td><td>Set days-before-expiry alert per item (default 30 days) — each item tracked independently</td></tr>
+        <tr><td>Daily Expiry Scan</td><td>Scheduled job at 08:00 UTC — scans all 4 item types, deduplicates alerts per-day per-item</td></tr>
+        <tr><td>Expiry Push + Email</td><td>FCM push notification AND email digest: item name, type, expiry date, days left (or days past)</td></tr>
+        <tr><td>Expired Badge in Admin</td><td>Visual red/amber badges in raw materials and inventory lists for expired or expiring-soon items</td></tr>
+        <tr><td>Stock Adjustments</td><td>Purchase, wastage, damaged, production, return-to-supplier — all logged</td></tr>
+        <tr><td>Supplier Management</td><td>Contact, payment terms, preferred supplier per material, status</td></tr>
+        <tr><td>Purchase Orders</td><td>Create and track POs with expected delivery, received status, payment tracking</td></tr>
+        <tr><td>Supplier Return Analytics</td><td>Track goods returned to suppliers with reason and financial impact</td></tr>
+        <tr><td>Audit Log</td><td>Full immutable trail: user, action, old value, new value, timestamp</td></tr>
+
+        <!-- SALES -->
+        <tr class="cat-row"><td colspan="2">🛒 Sales &amp; Orders</td></tr>
+        <tr><td>Online Storefront Checkout</td><td>Cart, multi-item orders, delivery address with GPS pin</td></tr>
+        <tr><td>Order-Level Discounts</td><td>Percentage or fixed amount off the entire order</td></tr>
+        <tr><td>Item-Level Discounts</td><td>Individual discount per line item including 100% off for promos</td></tr>
+        <tr><td>Customer Credit Management</td><td>Track balances, payments, and outstanding amounts per customer</td></tr>
+        <tr><td>PDF Invoice Generation</td><td>Professional PDF invoices — downloadable or shareable via WhatsApp/email</td></tr>
+        <tr><td>Sales Returns</td><td>Process returns with automatic inventory and financial correction</td></tr>
+        <tr><td>Delivery Zones</td><td>Configure local, regional, and extended zones with custom fees and ETAs</td></tr>
+        <tr><td>Order via WhatsApp (free)</td><td>Pre-formatted wa.me order button on product pages — all paid plans</td></tr>
+        <tr><td>GPS Delivery Address</td><td>Map pin stored with each order for driver routing</td></tr>
+        <tr><td>Real-Time Order Updates</td><td>Status changes push-notified to customer device instantly</td></tr>
+
+        <!-- PAYMENTS -->
+        <tr class="cat-row"><td colspan="2">💳 Payments</td></tr>
+        <tr><td>OMT / Whish Money</td><td>Lebanese mobile cash payment — HMAC-secured API with webhook verification</td></tr>
+        <tr><td>Stripe</td><td>International credit/debit card processing</td></tr>
+        <tr><td>Cash on Delivery</td><td>Order recorded and tracked in dashboard; payment logged on delivery</td></tr>
+        <tr><td>USD + LBP Multi-Currency</td><td>All transactions recordable in both currencies at a custom rate</td></tr>
+        <tr><td>Payment History</td><td>Full billing history per store and per customer</td></tr>
+        <tr><td>Refund Processing</td><td>Whish-based refunds initiated from the admin dashboard</td></tr>
+
+        <!-- ANALYTICS -->
+        <tr class="cat-row"><td colspan="2">📊 Analytics &amp; Reporting</td></tr>
+        <tr><td>Sales Dashboard</td><td>Revenue, order count, AOV, by day/week/month/year with trend charts</td></tr>
+        <tr><td>Profit &amp; Cost Reports</td><td>Revenue, COGS, and gross profit per period — using real inventory costs</td></tr>
+        <tr><td>Top Products Report</td><td>Best-selling items by units and revenue</td></tr>
+        <tr><td>Category Breakdown</td><td>Pie and bar charts showing revenue share per product category</td></tr>
+        <tr><td>Account Statement</td><td>Income vs. expense overview with sub-account balances</td></tr>
+        <tr><td>Inventory Reports</td><td>Stock levels, movement history, valuation, and low-stock summary</td></tr>
+        <tr><td>Supplier Return Analytics</td><td>Dedicated analytics for returns-to-supplier with financial impact</td></tr>
+
+        <!-- STAFF -->
+        <tr class="cat-row"><td colspan="2">👥 Staff &amp; HR</td></tr>
+        <tr><td>Role-Based Access</td><td>Admin, Manager, Staff — granular permission per section</td></tr>
+        <tr><td>Sub-Accounts</td><td>Managed user accounts under main store (Business plan — up to 10)</td></tr>
+        <tr><td>Staff Salary Tracking</td><td>Recurring salary as expense — automates monthly payroll records</td></tr>
+        <tr><td>Smart Termination</td><td>Removes future salary obligations; preserves historical payroll</td></tr>
+        <tr><td>Expense Tracking</td><td>Categorise all business costs with date filtering</td></tr>
+        <tr><td>Sub-Account Dashboard</td><td>Separate light view for staff sub-accounts</td></tr>
+
+        <!-- MARKETING -->
+        <tr class="cat-row"><td colspan="2">📣 Marketing</td></tr>
+        <tr><td>Discount Codes</td><td>Promo codes with %, fixed amount, expiry, and usage limits (Starter+)</td></tr>
+        <tr><td>Email Marketing</td><td>Send to customer list — 200 (Starter) · 1K (Pro) · 5K (Business) per month</td></tr>
+        <tr><td>Push Notifications</td><td>3 triggers: new order (real-time), expiring stock (daily 08:00 UTC scan), low stock (daily scan)</td></tr>
+        <tr><td>Expiry Email Digest</td><td>Daily email to store owner listing all expiring/expired items with days remaining per item</td></tr>
+        <tr><td>Meta Shop Integration</td><td>Sync catalogue to Facebook &amp; Instagram shop (Business plan)</td></tr>
+        <tr><td>WhatsApp Business API</td><td>Automated order messages, broadcasts, cart recovery (add-on: $10/mo)</td></tr>
+
+        <!-- MOBILE -->
+        <tr class="cat-row"><td colspan="2">📱 Mobile &amp; Technology</td></tr>
+        <tr><td>Native Android App</td><td>Full-featured store management app on Google Play (space.grabio.app)</td></tr>
+        <tr><td>Progressive Web App</td><td>Install Grabio from any browser — no app store needed</td></tr>
+        <tr><td>Responsive Design</td><td>All screens optimised for phone, tablet, and desktop</td></tr>
+        <tr><td>Swipe Gesture Navigation</td><td>Right-swipe to go back — native-feel touch navigation</td></tr>
+        <tr><td>Touch-Optimised Inputs</td><td>Number fields and forms built for mobile keyboards</td></tr>
+        <tr><td>Google Firebase Backend</td><td>Real-time sync, automatic cloud backup, 99.9%+ uptime</td></tr>
+        <tr><td>Firebase Authentication</td><td>Secure login with email/password and Google OAuth</td></tr>
+        <tr><td>Data Isolation</td><td>Each store's data is completely separate — no cross-store leakage</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Tech tags -->
+  <p style="margin-top:28px;font-size:12px;color:#64748b;font-weight:700;text-transform:uppercase;letter-spacing:.1em">Powered by</p>
+  <div class="pill-list">
+    <span class="pill hi">React 18</span>
+    <span class="pill hi">TypeScript</span>
+    <span class="pill hi">Firebase / Firestore</span>
+    <span class="pill hi">Firebase Auth</span>
+    <span class="pill hi">Firebase Storage</span>
+    <span class="pill hi">Whish (OMT) API</span>
+    <span class="pill hi">Stripe</span>
+    <span class="pill">Tailwind CSS</span>
+    <span class="pill">Radix UI</span>
+    <span class="pill">React Native (Expo)</span>
+    <span class="pill">Vite</span>
+    <span class="pill">jsPDF</span>
+    <span class="pill">Recharts</span>
+    <span class="pill">Google OAuth</span>
+  </div>
+</section>
+<div class="divider"></div>
+
+<!-- ══ PLANS SUMMARY ══════════════════════════════════════════════════════════ -->
+<section id="plans">
+  <p class="section-eyebrow">Subscription Plans</p>
+  <h2 class="section-title">Start free. Scale when ready.</h2>
+  <p class="section-desc">Every plan gives access to the Grabio platform. Upgrade as your business grows — no lock-in, cancel anytime.</p>
+  <div class="full-table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>Plan</th>
+          <th>Monthly</th>
+          <th>Yearly</th>
+          <th>Products</th>
+          <th>Storage</th>
+          <th>Revenue Share</th>
+          <th>Key Extras</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Trial</td>
+          <td>$0 + 20%</td>
+          <td>Up to 3 months</td>
+          <td>10</td>
+          <td>500MB</td>
+          <td>20% of sales</td>
+          <td>Basic themes, OMT + Stripe</td>
+        </tr>
+        <tr>
+          <td>Starter</td>
+          <td>$10</td>
+          <td>$100 <em style="color:var(--green);font-size:11px">save $20</em></td>
+          <td>8</td>
+          <td>5GB</td>
+          <td style="color:var(--green);font-weight:700">0%</td>
+          <td>All types, discount codes, 200 emails/mo</td>
+        </tr>
+        <tr>
+          <td>Pro</td>
+          <td>$20</td>
+          <td>$200 <em style="color:var(--green);font-size:11px">save $40</em></td>
+          <td>20</td>
+          <td>10GB</td>
+          <td style="color:var(--green);font-weight:700">0%</td>
+          <td>Manufacturing, API access, 1K emails/mo</td>
+        </tr>
+        <tr>
+          <td>Business</td>
+          <td>$30</td>
+          <td>$300 <em style="color:var(--green);font-size:11px">save $60</em></td>
+          <td>50</td>
+          <td>20GB</td>
+          <td style="color:var(--green);font-weight:700">0%</td>
+          <td>10 users, Meta Shop, 5K emails/mo, dedicated manager</td>
+        </tr>
+        <tr style="background:linear-gradient(90deg,rgba(44,82,130,.08) 0%,rgba(56,178,172,.08) 100%)">
+          <td><strong style="color:#2C5282">Enterprise</strong></td>
+          <td colspan="2" style="color:#2C5282;font-weight:700;text-align:center">Custom — Call for an Offer</td>
+          <td>Unlimited</td>
+          <td>Unlimited</td>
+          <td style="color:#16a34a;font-weight:700">0%</td>
+          <td>Multi-branch, white-label, SLA, all add-ons included</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="pill-list" style="margin-top:20px">
+    <span class="pill">+ Custom Domain: $15/mo · $150/yr</span>
+    <span class="pill">+ WhatsApp Business API: $10/mo · $100/yr</span>
+    <span class="pill">+ Extra Storage (per 5GB): $2/mo · $24/yr</span>
+  </div>
+
+  <!-- Enterprise Banner -->
+  <div style="margin-top:40px;background:linear-gradient(135deg,#2C5282 0%,#2C9E98 100%);border-radius:16px;padding:40px 36px;display:flex;flex-wrap:wrap;gap:32px;align-items:center;justify-content:space-between;color:#fff">
+    <div style="flex:1;min-width:260px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+        <span style="font-size:1.8rem;font-weight:800;letter-spacing:-0.5px">Enterprise</span>
+        <span style="background:rgba(255,255,255,0.2);border-radius:20px;padding:3px 14px;font-size:0.7rem;font-weight:700;letter-spacing:1px;text-transform:uppercase">Custom Pricing</span>
+      </div>
+      <p style="opacity:0.85;margin-bottom:20px">For franchises, large retailers, and multi-branch operations that need unlimited scale, custom integrations, and dedicated support.</p>
+      <ul style="list-style:none;padding:0;margin:0;display:grid;grid-template-columns:1fr 1fr;gap:6px 24px;font-size:0.9rem">
+        <li>✓ Unlimited products &amp; storage</li>
+        <li>✓ Unlimited staff accounts</li>
+        <li>✓ Multi-branch inventory</li>
+        <li>✓ Dedicated account manager</li>
+        <li>✓ Custom API integrations</li>
+        <li>✓ SLA-backed uptime</li>
+        <li>✓ White-label option</li>
+        <li>✓ All add-ons included</li>
+      </ul>
+    </div>
+    <div style="text-align:center;min-width:200px">
+      <div style="font-size:2rem;font-weight:800;margin-bottom:4px">Custom</div>
+      <div style="opacity:0.75;font-size:0.85rem;margin-bottom:20px">Pricing tailored to your needs</div>
+      <a href="mailto:enterprise@grabio.space?subject=Enterprise Plan Inquiry" style="display:inline-block;background:#fff;color:#2C5282;font-weight:700;padding:14px 28px;border-radius:10px;text-decoration:none;font-size:0.95rem;transition:opacity 0.2s">📞 Contact Us for an Offer</a>
+      <p style="font-size:0.75rem;opacity:0.7;margin-top:10px">We'll respond within 24 hours</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══ CTA ════════════════════════════════════════════════════════════════════ -->
+<div class="cta-wrap">
+  <p class="section-eyebrow" style="margin-bottom:8px">Get started today</p>
+  <h2>Your store, live in 15 minutes.</h2>
+  <p>No credit card needed for the Trial. Start with $0, grow at your own pace.</p>
+  <div class="btn-row">
+    <a href="https://grabio.space" class="btn btn-primary" target="_blank" rel="noopener">🚀 Start Free on grabio.space</a>
+    <a href="https://grabio.space/upgrade" class="btn btn-outline" target="_blank" rel="noopener">📋 Compare All Plans</a>
+  </div>
+</div>
+
+<!-- ══ FOOTER ═════════════════════════════════════════════════════════════════ -->
+<footer>
+  <p>© 2026 <a href="https://grabio.space">Grabio</a> · grabio.space · Full Product Description · All features subject to plan eligibility</p>
+</footer>
+
+</body>
+</html>

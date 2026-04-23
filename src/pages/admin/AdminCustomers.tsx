@@ -29,7 +29,8 @@ const CustomerForm: React.FC<{
   customer: any;
   onChange: (updates: any) => void;
   isEdit?: boolean;
-}> = React.memo(({ customer, onChange, isEdit = false }) => (
+  salesPersons?: { id: string; name: string }[];
+}> = React.memo(({ customer, onChange, isEdit = false, salesPersons = [] }) => (
   <div className="grid gap-4">
     <div className="grid grid-cols-2 gap-4">
       <div className="col-span-2">
@@ -144,6 +145,32 @@ const CustomerForm: React.FC<{
           placeholder="0"
         />
       </div>
+      {salesPersons.length > 0 && (
+        <div className="col-span-2">
+          <Label htmlFor="assignedSalesPerson">Assigned Salesperson</Label>
+          <Select
+            value={customer.assignedSalesPerson || 'none'}
+            onValueChange={(val) => {
+              const sp = salesPersons.find(s => s.id === val);
+              onChange({
+                assignedSalesPerson: val === 'none' ? '' : val,
+                assignedSalesPersonName: sp ? sp.name : '',
+              });
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="No salesperson" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No salesperson</SelectItem>
+              {salesPersons.map(sp => (
+                <SelectItem key={sp.id} value={sp.id}>{sp.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <p className="text-xs text-gray-500 mt-1">All new orders for this customer will be auto-assigned to this salesperson</p>
+        </div>
+      )}
       <div className="col-span-2">
         <Label htmlFor="notes">Notes</Label>
         <Textarea
@@ -163,6 +190,7 @@ const AdminCustomers: React.FC = () => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const [customers, setCustomers] = useState<Customer[]>([]);
+  const [salesPersons, setSalesPersons] = useState<{ id: string; name: string }[]>([]);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
@@ -180,6 +208,8 @@ const AdminCustomers: React.FC = () => {
     loyaltyPoints: 0,
     status: 'active' as 'active' | 'inactive' | 'suspended',
     notes: '',
+    assignedSalesPerson: '',
+    assignedSalesPersonName: '',
   });
 
   useEffect(() => {
@@ -194,6 +224,10 @@ const AdminCustomers: React.FC = () => {
         ...doc.data()
       } as Customer));
       setCustomers(customersList);
+
+      // Fetch salespeople from subAccounts
+      const saSnap = await getDocs(query(collection(db, 'subAccounts'), where('storeId', '==', user.storeId), where('role', '==', 'sales')));
+      setSalesPersons(saSnap.docs.map(d => ({ id: d.id, name: (d.data() as any).name || '' })));
     };
     fetchCustomers();
   }, [user?.storeId]);
@@ -254,6 +288,8 @@ const AdminCustomers: React.FC = () => {
         loyaltyPoints: 0,
         status: 'active',
         notes: '',
+        assignedSalesPerson: '',
+        assignedSalesPersonName: '',
       });
       setIsAddingCustomer(false);
       toast({ title: "Success", description: "Customer added successfully!" });
@@ -284,6 +320,8 @@ const AdminCustomers: React.FC = () => {
         loyaltyPoints: editingCustomer.loyaltyPoints || 0,
         status: editingCustomer.status || 'active',
         notes: editingCustomer.notes || '',
+        assignedSalesPerson: (editingCustomer as any).assignedSalesPerson || '',
+        assignedSalesPersonName: (editingCustomer as any).assignedSalesPersonName || '',
       };
 
       await updateDoc(customerRef, updateData);
@@ -385,6 +423,7 @@ const AdminCustomers: React.FC = () => {
               <CustomerForm
                 customer={newCustomer}
                 onChange={(updates) => setNewCustomer({ ...newCustomer, ...updates })}
+                salesPersons={salesPersons}
               />
               <DialogFooter>
                 <Button variant="outline" onClick={() => setIsAddingCustomer(false)}>Cancel</Button>
@@ -565,6 +604,7 @@ const AdminCustomers: React.FC = () => {
                 customer={editingCustomer}
                 onChange={handleCustomerFormChange}
                 isEdit
+                salesPersons={salesPersons}
               />
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditingCustomer(null)}>Cancel</Button>
