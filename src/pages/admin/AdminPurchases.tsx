@@ -1324,26 +1324,32 @@ const AdminPurchases: React.FC = () => {
 
       const docRef = await addDoc(collection(db, 'purchases'), purchaseData);
       setPurchases([{ id: docRef.id, ...purchaseData }, ...purchases]);
+      
+      // Mark operation as succeeded immediately after purchase is created
+      operationSucceeded = true;
+      const today = new Date().toISOString().split('T')[0];
 
       // Save dates for this supplier
       if (newPurchase.supplierId) {
         saveSupplierDates(newPurchase.supplierId, newPurchase.orderDate, newPurchase.expectedDeliveryDate);
       }
 
-      // Audit log
-      await logAction(
-        user.id,
-        user.name,
-        user.role,
-        'create',
-        'purchase',
-        docRef.id,
-        { newValue: purchaseData },
-        user.storeId
-      );
+      // Audit log (don't block dialog close if this fails)
+      try {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'create',
+          'purchase',
+          docRef.id,
+          { newValue: purchaseData },
+          user.storeId
+        );
+      } catch (logError) {
+        console.error('Audit log failed:', logError);
+      }
 
-      const today = new Date().toISOString().split('T')[0];
-      operationSucceeded = true;
       toast({ title: "Success", description: `Purchase order ${invoiceNumber} created!` });
     } catch (error) {
       console.error('Error adding purchase:', error);
@@ -1425,6 +1431,9 @@ const AdminPurchases: React.FC = () => {
         items: receivingPurchase.items,
         updatedAt: new Date().toISOString(),
       });
+
+      // Mark operation as succeeded immediately after status update
+      operationSucceeded = true;
 
       const purchaseWithTax = receivingPurchase as Purchase & {
         taxType?: 'none' | 'VAT' | 'TTC';
@@ -1597,23 +1606,25 @@ const AdminPurchases: React.FC = () => {
       } as Purchase));
       setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
 
-      // Audit log
-      await logAction(
-        user.id,
-        user.name,
-        user.role,
-        'update',
-        'purchase',
-        receivingPurchase.id,
-        { oldValue: purchases.find(p => p.id === receivingPurchase.id), newValue: receivingPurchase },
-        user.storeId
-      );
+      // Audit log (don't block dialog close if this fails)
+      try {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'update',
+          'purchase',
+          receivingPurchase.id,
+          { oldValue: purchases.find(p => p.id === receivingPurchase.id), newValue: receivingPurchase },
+          user.storeId
+        );
+      } catch (logError) {
+        console.error('Audit log failed:', logError);
+      }
 
       const successMessage = createdCount > 0 
         ? `Purchase received! ${updatedCount} material(s) updated, ${createdCount} new material(s) created.`
         : `Purchase received! ${updatedCount} material(s) stock updated.`;
-      
-      operationSucceeded = true;
       
       toast({ 
         title: "Success", 
@@ -1681,6 +1692,9 @@ const AdminPurchases: React.FC = () => {
         updatedAt: new Date().toISOString(),
       });
 
+      // Mark operation as succeeded immediately after payment recorded
+      operationSucceeded = true;
+
       // Refetch purchases
       const purchasesRef = collection(db, 'purchases');
       const purchasesQuery = query(purchasesRef, where('storeId', '==', user.storeId));
@@ -1691,22 +1705,24 @@ const AdminPurchases: React.FC = () => {
       } as Purchase));
       setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
 
-      // Audit log
-      await logAction(
-        user.id,
-        user.name,
-        user.role,
-        'update',
-        'purchase_payment',
-        payingPurchase.id,
-        { 
-          oldValue: { amountPaid: currentPaid, paymentStatus: payingPurchase.paymentStatus },
-          newValue: { amountPaid: newAmountPaid, paymentStatus, ...paymentData }
-        },
-        user.storeId
-      );
-
-      operationSucceeded = true;
+      // Audit log (don't block dialog close if this fails)
+      try {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'update',
+          'purchase_payment',
+          payingPurchase.id,
+          { 
+            oldValue: { amountPaid: currentPaid, paymentStatus: payingPurchase.paymentStatus },
+            newValue: { amountPaid: newAmountPaid, paymentStatus, ...paymentData }
+          },
+          user.storeId
+        );
+      } catch (logError) {
+        console.error('Audit log failed:', logError);
+      }
 
       toast({ 
         title: "Success", 
