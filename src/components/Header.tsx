@@ -79,7 +79,7 @@ const Header: React.FC<HeaderProps> = ({
   // Use store color or default Grabio green
   const headerBgColor = useWhiteLabel && primaryColor 
     ? primaryColor 
-    : 'rgb(16, 185, 129)'; // market-primary green
+    : 'rgb(56, 178, 172)'; // Grabio brand color #38B2AC
   
   // Determine text color based on background
   const isLightBg = primaryColor ? isColorLight(primaryColor) : false;
