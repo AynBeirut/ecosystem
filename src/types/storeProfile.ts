@@ -14,6 +14,9 @@ export interface StoreTemplateColors {
   surface?: string;
   textColor?: string;
   highlight?: string;
+  heroBg?: string;
+  storeCardBg?: string;
+  contentCardBg?: string;
 }
 
 export type ProductDisplayType = 'grid-standard' | 'grid-large' | 'list' | 'masonry' | 'spotlight';

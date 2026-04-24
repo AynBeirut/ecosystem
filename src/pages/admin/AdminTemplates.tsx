@@ -202,6 +202,7 @@ const AdminTemplates: React.FC = () => {
   const EMPTY_COLORS = (): Required<StoreTemplateColors> => ({
     primary: '#38B2AC', secondary: '#2C5282', accent: '#ED8936',
     background: '#f8fafc', surface: '#ffffff', textColor: '#1a202c', highlight: '#22d3ee',
+    heroBg: '#38B2AC', storeCardBg: '#ffffff', contentCardBg: '#f8fafc',
   });
   const [colors, setColors] = useState<Required<StoreTemplateColors>>(EMPTY_COLORS());
   const [savingColors, setSavingColors] = useState(false);
@@ -424,13 +425,16 @@ const AdminTemplates: React.FC = () => {
 
   // ── color slot labels ────────────────────────────────────────────────────
   const COLOR_SLOTS: Array<{ key: keyof Required<StoreTemplateColors>; label: string; hint: string; affects: string }> = [
-    { key: 'primary',    label: 'Primary Color',       hint: 'Header bar, banner, buttons, links',             affects: 'Top navigation bar, store banner/hero section, Add to Cart button, product links' },
-    { key: 'secondary',  label: 'Secondary Color',     hint: 'Secondary buttons, accents',            affects: 'Secondary elements and navigation accents' },
-    { key: 'accent',     label: 'Accent Color',        hint: 'Call-to-action, highlights, badges',    affects: 'Buy Now button, badges, special highlights' },
-    { key: 'background', label: 'Page Background',     hint: 'Main page background color',            affects: 'Entire page background behind all content' },
-    { key: 'surface',    label: 'Cards Background',    hint: 'Product cards, info sections',          affects: 'Product cards, store info card, all card backgrounds' },
-    { key: 'textColor',  label: 'Main Text Color',     hint: 'Headings, descriptions, body text',     affects: 'Product names, descriptions, all main text' },
-    { key: 'highlight',  label: 'Highlight Color',     hint: 'Borders, hover effects, decorative',    affects: 'Card borders, hover effects, dividers' },
+    { key: 'primary',       label: 'Primary Color',           hint: 'Header bar, buttons, links',                 affects: 'Top navigation bar, primary buttons, product links' },
+    { key: 'heroBg',        label: 'Banner Background',       hint: 'Store banner/hero section',                  affects: 'The banner area below the top navigation with store name and slogan' },
+    { key: 'storeCardBg',   label: 'Store Info Card',         hint: 'Store information card background',          affects: 'The main card showing store logo, description, and contact info' },
+    { key: 'contentCardBg', label: 'Content Cards',           hint: 'About, contact, and section cards',          affects: 'About Us cards, Contact page cards, and other content sections' },
+    { key: 'surface',       label: 'Product Cards',           hint: 'Product card backgrounds',                   affects: 'Individual product card backgrounds in the products grid' },
+    { key: 'background',    label: 'Page Background',         hint: 'Main page background color',                 affects: 'Entire page background behind all content' },
+    { key: 'secondary',     label: 'Secondary Color',         hint: 'Secondary buttons, accents',                 affects: 'Secondary elements and navigation accents' },
+    { key: 'accent',        label: 'Accent Color',            hint: 'Call-to-action, highlights, badges',         affects: 'Buy Now button, badges, special highlights' },
+    { key: 'textColor',     label: 'Main Text Color',         hint: 'Headings, descriptions, body text',          affects: 'Product names, descriptions, all main text' },
+    { key: 'highlight',     label: 'Highlight/Border Color',  hint: 'Borders, hover effects, decorative',         affects: 'Card borders, hover effects, dividers' },
   ];
 
   // ── shared picker tile ───────────────────────────────────────────────────
@@ -787,19 +791,19 @@ const AdminTemplates: React.FC = () => {
                     </div>
                   </div>
 
-                  {/* Hero/Banner Section - Shows Primary Color */}
-                  <div className="mx-6 mt-6 mb-0 p-6 rounded-xl shadow-sm" style={{ background: colors.primary }}>
+                  {/* Hero/Banner Section */}
+                  <div className="mx-6 mt-6 mb-0 p-6 rounded-xl shadow-sm" style={{ background: colors.heroBg }}>
                     <h2 className="text-white text-2xl font-bold mb-2">Store Banner</h2>
-                    <p className="text-white/90 text-sm">This banner area uses your Primary Color</p>
+                    <p className="text-white/90 text-sm">Banner Background color</p>
                   </div>
 
                   {/* Store Info Card */}
-                  <div className="m-6 p-6 rounded-xl border-2" style={{ background: colors.surface, borderColor: colors.highlight }}>
+                  <div className="m-6 p-6 rounded-xl border-2" style={{ background: colors.storeCardBg, borderColor: colors.highlight }}>
                     <div className="flex items-start gap-4 mb-4">
-                      <div className="w-20 h-20 rounded-xl" style={{ background: colors.primary + '40' }} />
+                      <div className="w-20 h-20 rounded-xl border-4 border-white shadow-lg" style={{ background: colors.primary + '40' }} />
                       <div className="flex-1">
-                        <div className="h-6 w-48 rounded mb-2" style={{ background: colors.textColor + '30' }} />
-                        <div className="h-4 w-64 rounded" style={{ background: colors.textColor + '20' }} />
+                        <h3 className="text-xl font-bold mb-2" style={{ color: colors.textColor }}>Store Name</h3>
+                        <p className="text-sm" style={{ color: colors.textColor + 'CC' }}>Store Info Card Background</p>
                       </div>
                     </div>
                     <div className="flex gap-2 mb-3">
@@ -810,11 +814,17 @@ const AdminTemplates: React.FC = () => {
                       ))}
                     </div>
                     <p className="text-sm leading-relaxed" style={{ color: colors.textColor }}>
-                      Store description banner text appears here. This shows how your main text content will look with your chosen colors.
+                      Store description and contact information appears here.
                     </p>
                   </div>
 
-                  {/* Product Cards Grid */}
+                  {/* Content Card (About/Contact) */}
+                  <div className="mx-6 mb-4 p-4 rounded-xl border" style={{ background: colors.contentCardBg, borderColor: colors.highlight }}>
+                    <h3 className="font-semibold mb-2" style={{ color: colors.textColor }}>About / Contact Section</h3>
+                    <p className="text-sm" style={{ color: colors.textColor + 'CC' }}>Content Cards Background</p>
+                  </div>
+
+                  {/* Products Section */}
                   <div className="px-6 pb-6">
                     <div className="mb-4">
                       <h3 className="text-xl font-bold" style={{ color: colors.textColor }}>Products</h3>

@@ -697,10 +697,31 @@ const StoreDetail: React.FC = () => {
     backgroundColor: tColors.background
   } as React.CSSProperties : colorStyle;
 
-  // Hero banner style - uses primary color for white-label stores
-  const heroBannerStyle = (isWhiteLabel && tColors?.primary) ? {
+  // Hero banner style - uses heroBg color or primary as fallback
+  const heroBannerStyle = tColors?.heroBg ? {
+    backgroundColor: tColors.heroBg
+  } : (isWhiteLabel && tColors?.primary) ? {
     backgroundColor: tColors.primary
-  } as React.CSSProperties : {};
+  } : {} as React.CSSProperties;
+
+  // Store info card style - uses storeCardBg or surface as fallback
+  const storeCardStyle = tColors?.storeCardBg ? {
+    backgroundColor: tColors.storeCardBg
+  } : tColors?.surface ? {
+    backgroundColor: tColors.surface
+  } : {} as React.CSSProperties;
+
+  // Content cards style - uses contentCardBg or surface as fallback  
+  const contentCardStyle = tColors?.contentCardBg ? {
+    backgroundColor: tColors.contentCardBg
+  } : tColors?.surface ? {
+    backgroundColor: tColors.surface
+  } : {} as React.CSSProperties;
+
+  // Product cards style - uses surface color
+  const productCardStyle = tColors?.surface ? {
+    backgroundColor: tColors.surface
+  } : {} as React.CSSProperties;
 
   const productGridClass =
     productDisplayType === 'grid-large'
@@ -1013,7 +1034,7 @@ const StoreDetail: React.FC = () => {
         )}
 
         {/* Store Header */}
-        <div className={`rounded-lg shadow-sm p-6 mb-6 ${currentTheme.headerCard}`}>
+        <div className={`rounded-lg shadow-sm p-6 mb-6 ${currentTheme.headerCard}`} style={storeCardStyle}>
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
             <img 
               src={store.logo} 
@@ -1178,7 +1199,7 @@ const StoreDetail: React.FC = () => {
                 { title: 'Mission', text: mission },
                 { title: 'Vision', text: vision },
               ].filter(c => c.text).map(c => (
-                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`}>
+                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`} style={contentCardStyle}>
                   <CardContent className="p-6 flex flex-col flex-1">
                     <h3 className={`text-lg font-semibold mb-3 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.title}</h3>
                     <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} leading-relaxed flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.text}</p>
@@ -1221,7 +1242,7 @@ const StoreDetail: React.FC = () => {
               </div>
             )}
             {page.content && (
-              <Card className={currentTheme.cardSoft}>
+              <Card className={currentTheme.cardSoft} style={contentCardStyle}>
                 <CardContent className="p-6">
                   <p className={`text-sm whitespace-pre-line leading-relaxed ${currentTheme.mutedText}`}>{page.content}</p>
                 </CardContent>
@@ -1239,7 +1260,7 @@ const StoreDetail: React.FC = () => {
             <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>Contact Us</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Contact Details Card */}
-              <Card className={currentTheme.cardSoft}>
+              <Card className={currentTheme.cardSoft} style={contentCardStyle}>
                 <CardContent className="p-6 space-y-5">
                   {store.location && (
                     <div className="flex items-start gap-4">
