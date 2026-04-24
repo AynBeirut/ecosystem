@@ -188,13 +188,7 @@ const ProductDetail: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header
-          storeName={store?.name}
-          storeLogo={store?.logo}
-          storeSlug={store?.slug}
-          primaryColor={store?.templateColors?.primary}
-          subscriptionTier={store?.subscriptionTier}
-        />
+        <Header />
         <div className="container mx-auto px-4 py-12">
           <div className="animate-pulse max-w-6xl mx-auto">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
@@ -217,13 +211,7 @@ const ProductDetail: React.FC = () => {
   if (error || !product) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header
-          storeName={store?.name}
-          storeLogo={store?.logo}
-          storeSlug={store?.slug}
-          primaryColor={store?.templateColors?.primary}
-          subscriptionTier={store?.subscriptionTier}
-        />
+        <Header />
         <div className="container mx-auto px-4 py-12 flex justify-center">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">{error || 'Product not found'}</h2>
@@ -251,13 +239,7 @@ const ProductDetail: React.FC = () => {
         price={product.price}
         currency={store ? undefined : 'USD'}
       />
-      <Header
-        storeName={store?.name}
-        storeLogo={store?.logo}
-        storeSlug={store?.slug}
-        primaryColor={store?.templateColors?.primary}
-        subscriptionTier={store?.subscriptionTier}
-      />
+      <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">

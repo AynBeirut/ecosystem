@@ -20,47 +20,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
-// Helper function to determine if a color is light or dark
-const isColorLight = (color: string): boolean => {
-  // Convert hex/rgb to RGB values
-  let r = 0, g = 0, b = 0;
-  
-  if (color.startsWith('#')) {
-    const hex = color.replace('#', '');
-    r = parseInt(hex.substr(0, 2), 16);
-    g = parseInt(hex.substr(2, 2), 16);
-    b = parseInt(hex.substr(4, 2), 16);
-  } else if (color.startsWith('rgb')) {
-    const rgb = color.match(/\d+/g);
-    if (rgb) {
-      r = parseInt(rgb[0]);
-      g = parseInt(rgb[1]);
-      b = parseInt(rgb[2]);
-    }
-  }
-  
-  // Calculate relative luminance
-  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
-  return luminance > 0.5;
-};
-
-interface HeaderProps {
-  storeName?: string;
-  storeLogo?: string;
-  storeSlug?: string;
-  primaryColor?: string;
-  subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
-  hideGrabioBranding?: boolean;
-}
-
-const Header: React.FC<HeaderProps> = ({ 
-  storeName, 
-  storeLogo, 
-  storeSlug, 
-  primaryColor,
-  subscriptionTier,
-  hideGrabioBranding = false 
-}) => {
+const Header: React.FC = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const { items } = useCart();
@@ -72,42 +32,24 @@ const Header: React.FC<HeaderProps> = ({
     setIsMenuOpen(!isMenuOpen);
   };
 
-  // Determine if we should use store branding (Pro, Business, Enterprise tiers)
-  const useStoreBranding = hideGrabioBranding || ['pro', 'business', 'premium'].includes(subscriptionTier || '');
-  
-  // Use store color or default Grabio green
-  const headerBgColor = useStoreBranding && primaryColor 
-    ? primaryColor 
-    : 'rgb(16, 185, 129)'; // market-primary green
-  
-  // Determine text color based on background (simple light/dark check)
-  const isLightBackground = primaryColor ? isColorLight(primaryColor) : false;
-  const textColor = isLightBackground ? 'text-gray-900' : 'text-white';
-  const hoverColor = isLightBackground ? 'hover:text-gray-700' : 'hover:text-white/80';
-
   return (
-    <header className="shadow-sm sticky top-0 z-50" style={{ backgroundColor: headerBgColor }}>
+    <header className="bg-market-primary shadow-sm sticky top-0 z-50">
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to={useStoreBranding && storeSlug ? `/store/${storeSlug}` : '/'} className="flex items-center gap-2">
-            {useStoreBranding && storeLogo && (
-              <img src={storeLogo} alt={storeName} className="h-8 w-8 object-cover rounded" />
-            )}
-            <span className={`text-xl font-bold ${textColor}`}>
-              {useStoreBranding && storeName ? storeName : 'Home'}
-            </span>
+          <Link to="/" className="flex items-center">
+            <span className="text-xl font-bold text-white">Home</span>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             {user && (user.role === 'admin' || user.role === 'sub_account') && (
-              <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className={`${textColor} ${hoverColor}`}>
+              <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className="text-white hover:text-market-primary/80">
                 Dashboard
               </Link>
             )}
             {user && user.role === 'user' && (
-              <Link to="/upgrade" className={`${textColor} ${hoverColor}`}>
+              <Link to="/upgrade" className="text-white hover:text-market-primary/80">
                 Become a Seller
               </Link>
             )}
@@ -118,7 +60,7 @@ const Header: React.FC<HeaderProps> = ({
             {/* Favorites Link - Available to everyone (uses localStorage) */}
             <Link 
               to="/favorites"
-              className={`p-2 rounded-full ${isLightBackground ? 'text-gray-600 hover:bg-gray-100' : 'text-white hover:bg-white/10'} relative`}
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
               aria-label="Favorites"
             >
               <Heart size={20} />
@@ -132,7 +74,7 @@ const Header: React.FC<HeaderProps> = ({
             {/* Cart Link - Available to everyone (uses localStorage) */}
             <Link 
               to="/cart"
-              className={`p-2 rounded-full ${isLightBackground ? 'text-gray-600 hover:bg-gray-100' : 'text-white hover:bg-white/10'} relative`}
+              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
               aria-label="Cart"
             >
               <ShoppingCart size={20} />
@@ -148,7 +90,7 @@ const Header: React.FC<HeaderProps> = ({
                 {/* Order Tracking Link - Only for logged-in users */}
                 <Link 
                   to="/orders"
-                  className={`p-2 rounded-full ${isLightBackground ? 'text-gray-600 hover:bg-gray-100' : 'text-white hover:bg-white/10'} relative`}
+                  className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
                   aria-label="Order Tracking"
                 >
                   <Package size={20} />
@@ -238,7 +180,7 @@ const Header: React.FC<HeaderProps> = ({
 
             {/* Mobile Menu Button */}
             <button
-              className={`md:hidden p-2 rounded-full ${isLightBackground ? 'text-gray-600 hover:bg-gray-100' : 'text-white hover:bg-white/10'} focus:outline-none`}
+              className="md:hidden p-2 rounded-full text-gray-600 hover:bg-gray-100 focus:outline-none"
               onClick={toggleMenu}
               aria-label="Open menu"
             >
@@ -249,14 +191,14 @@ const Header: React.FC<HeaderProps> = ({
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className={`md:hidden mt-3 py-3 border-t ${isLightBackground ? 'border-gray-300' : 'border-white/20'}`}>
+          <div className="md:hidden mt-3 py-3 border-t border-gray-100">
             <nav className="flex flex-col space-y-3">
               <Link
-                to={useStoreBranding && storeSlug ? `/store/${storeSlug}` : '/'}
-                className={`px-2 py-1 ${textColor} ${hoverColor}`}
+                to="/"
+                className="px-2 py-1 text-gray-600 hover:text-market-primary"
                 onClick={toggleMenu}
               >
-                {useStoreBranding && storeName ? storeName : 'Home'}
+                Home
               </Link>
               
               {user && (user.role === 'admin' || user.role === 'sub_account') && (

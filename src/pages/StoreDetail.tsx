@@ -478,13 +478,7 @@ const StoreDetail: React.FC = () => {
   if (isLoading) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header
-          storeName={store?.name}
-          storeLogo={store?.logo}
-          storeSlug={store?.slug}
-          primaryColor={store?.templateColors?.primary}
-          subscriptionTier={store?.subscriptionTier}
-        />
+        <Header />
         <div className="container mx-auto px-4 py-12 flex justify-center">
           <div className="animate-pulse space-y-8 w-full max-w-4xl">
             <div className="h-40 bg-gray-200 rounded-lg"></div>
@@ -504,13 +498,7 @@ const StoreDetail: React.FC = () => {
   if (error || !store) {
     return (
       <div className="min-h-screen bg-gray-50">
-        <Header
-          storeName={store?.name}
-          storeLogo={store?.logo}
-          storeSlug={store?.slug}
-          primaryColor={store?.templateColors?.primary}
-          subscriptionTier={store?.subscriptionTier}
-        />
+        <Header />
         <div className="container mx-auto px-4 py-12 flex justify-center">
           <div className="text-center">
             <h2 className="text-2xl font-bold text-gray-800 mb-4">{error || 'Store not found'}</h2>
@@ -896,13 +884,7 @@ const StoreDetail: React.FC = () => {
         </div>
       )}
 
-      <Header
-        storeName={store.name}
-        storeLogo={store.logo}
-        storeSlug={store.slug}
-        primaryColor={store.templateColors?.primary}
-        subscriptionTier={store.subscriptionTier}
-      />
+      <Header />
       <main className="container mx-auto px-4 py-6">
         {/* Hero Banner — image carousel OR gradient fallback */}
         {heroLayout === 'minimal' ? (
