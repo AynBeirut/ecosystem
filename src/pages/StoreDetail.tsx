@@ -697,6 +697,11 @@ const StoreDetail: React.FC = () => {
     backgroundColor: tColors.background
   } as React.CSSProperties : colorStyle;
 
+  // Hero banner style - uses primary color for white-label stores
+  const heroBannerStyle = (isWhiteLabel && tColors?.primary) ? {
+    backgroundColor: tColors.primary
+  } as React.CSSProperties : {};
+
   const productGridClass =
     productDisplayType === 'grid-large'
       ? 'grid grid-cols-1 sm:grid-cols-2 gap-6'
@@ -928,14 +933,14 @@ const StoreDetail: React.FC = () => {
       <main className="container mx-auto px-4 py-6">
         {/* Hero Banner — image carousel OR gradient fallback */}
         {heroLayout === 'minimal' ? (
-          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
             <div className="p-4 md:p-5 flex items-center justify-between gap-4">
               <h2 className="text-xl md:text-2xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-sm opacity-90 hidden md:block">{store.slogan}</p>}
             </div>
           </div>
         ) : heroLayout === 'centered' ? (
-          <div className={` rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+          <div className={` rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
             <div className="p-8 md:p-12 text-center">
               <h2 className="text-3xl md:text-4xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto">{store.slogan}</p>}
@@ -953,7 +958,7 @@ const StoreDetail: React.FC = () => {
                 />
               ))}
             </div>
-            <div className={`p-8 flex flex-col justify-center text-white ${currentTheme.heroBg}`}>
+            <div className={`p-8 flex flex-col justify-center text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
               <h2 className="text-3xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-base opacity-90 mt-3">{store.slogan}</p>}
             </div>
@@ -999,7 +1004,7 @@ const StoreDetail: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
             <div className="p-6 md:p-8">
               <h2 className="text-2xl md:text-3xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2">{store.slogan}</p>}

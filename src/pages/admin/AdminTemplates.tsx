@@ -424,7 +424,7 @@ const AdminTemplates: React.FC = () => {
 
   // ── color slot labels ────────────────────────────────────────────────────
   const COLOR_SLOTS: Array<{ key: keyof Required<StoreTemplateColors>; label: string; hint: string; affects: string }> = [
-    { key: 'primary',    label: 'Primary Color',       hint: 'Header bar, buttons, links',             affects: 'Top navigation bar, Add to Cart button, product links' },
+    { key: 'primary',    label: 'Primary Color',       hint: 'Header bar, banner, buttons, links',             affects: 'Top navigation bar, store banner/hero section, Add to Cart button, product links' },
     { key: 'secondary',  label: 'Secondary Color',     hint: 'Secondary buttons, accents',            affects: 'Secondary elements and navigation accents' },
     { key: 'accent',     label: 'Accent Color',        hint: 'Call-to-action, highlights, badges',    affects: 'Buy Now button, badges, special highlights' },
     { key: 'background', label: 'Page Background',     hint: 'Main page background color',            affects: 'Entire page background behind all content' },
@@ -785,6 +785,12 @@ const AdminTemplates: React.FC = () => {
                       <div className="w-8 h-8 rounded-full bg-white/20" />
                       <div className="w-8 h-8 rounded-full bg-white/20" />
                     </div>
+                  </div>
+
+                  {/* Hero/Banner Section - Shows Primary Color */}
+                  <div className="mx-6 mt-6 mb-0 p-6 rounded-xl shadow-sm" style={{ background: colors.primary }}>
+                    <h2 className="text-white text-2xl font-bold mb-2">Store Banner</h2>
+                    <p className="text-white/90 text-sm">This banner area uses your Primary Color</p>
                   </div>
 
                   {/* Store Info Card */}

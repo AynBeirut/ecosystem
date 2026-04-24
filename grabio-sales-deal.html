@@ -1,0 +1,966 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Grabio — Sales Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #060608;
+    --surface: #0e0e12;
+    --surface2: #13131a;
+    --border: #1e1e2a;
+    --accent: #6ee7b7;
+    --accent2: #fbbf24;
+    --accent3: #f472b6;
+    --text: #f1f1f3;
+    --muted: #5a5a72;
+    --syne: 'Syne', sans-serif;
+    --body: 'DM Sans', sans-serif;
+    --mono: 'DM Mono', monospace;
+  }
+
+  html { scroll-behavior: smooth; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--body);
+    font-weight: 300;
+    line-height: 1.65;
+    overflow-x: hidden;
+  }
+
+  /* NOISE TEXTURE */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
+    pointer-events: none;
+    z-index: 0;
+    opacity: 0.4;
+  }
+
+  .wrap {
+    max-width: 780px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── HERO ── */
+  .hero {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: 4rem 0 3rem;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .hero::after {
+    content: '';
+    position: absolute;
+    top: -200px;
+    right: -200px;
+    width: 600px;
+    height: 600px;
+    background: radial-gradient(circle, rgba(110,231,183,0.06) 0%, transparent 70%);
+    pointer-events: none;
+  }
+
+  .hero-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--accent);
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    border: 1px solid rgba(110,231,183,0.25);
+    padding: 0.35rem 0.75rem;
+    margin-bottom: 2rem;
+    width: fit-content;
+  }
+
+  .hero-badge::before {
+    content: '';
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--accent);
+    animation: pulse 2s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.3; }
+  }
+
+  .hero h1 {
+    font-family: var(--syne);
+    font-weight: 800;
+    font-size: clamp(2.8rem, 9vw, 5.5rem);
+    line-height: 1.0;
+    letter-spacing: -0.02em;
+    margin-bottom: 1.5rem;
+  }
+
+  .hero h1 em {
+    font-style: normal;
+    color: var(--accent);
+  }
+
+  .hero-sub {
+    font-size: 1.05rem;
+    color: #9898b0;
+    max-width: 480px;
+    margin-bottom: 2.5rem;
+    line-height: 1.7;
+  }
+
+  .hero-stats {
+    display: flex;
+    gap: 2rem;
+    flex-wrap: wrap;
+    padding-top: 2rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .stat-item label {
+    display: block;
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    margin-bottom: 0.2rem;
+  }
+
+  .stat-item .num {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 1.6rem;
+    color: var(--text);
+  }
+
+  /* ── SECTION ── */
+  section {
+    padding: 5rem 0;
+    border-top: 1px solid var(--border);
+  }
+
+  .section-tag {
+    font-family: var(--mono);
+    font-size: 0.62rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.2em;
+    margin-bottom: 0.75rem;
+  }
+
+  .section-title {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: clamp(1.6rem, 4vw, 2.4rem);
+    line-height: 1.15;
+    margin-bottom: 2.5rem;
+    letter-spacing: -0.01em;
+  }
+
+  /* ── WHO IT'S FOR ── */
+  .client-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    margin-bottom: 1rem;
+  }
+
+  .client-card {
+    background: var(--surface);
+    padding: 1.75rem 1.5rem;
+    transition: background 0.2s;
+  }
+
+  .client-card:hover { background: var(--surface2); }
+
+  .client-icon {
+    font-size: 2rem;
+    margin-bottom: 1rem;
+    display: block;
+  }
+
+  .client-type {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: var(--text);
+  }
+
+  .client-desc {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .client-pain {
+    font-family: var(--mono);
+    font-size: 0.68rem;
+    color: var(--accent2);
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border);
+  }
+
+  /* ── VS TABLE ── */
+  .vs-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+    margin-bottom: 1rem;
+  }
+
+  .vs-table th {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 0.8rem;
+    text-align: left;
+    padding: 0.85rem 1rem;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .vs-table th:first-child { color: var(--muted); }
+  .vs-table th:nth-child(2) { color: #e05252; }
+  .vs-table th:nth-child(3) { color: var(--accent); }
+
+  .vs-table td {
+    padding: 0.8rem 1rem;
+    border-bottom: 1px solid #0f0f15;
+    vertical-align: top;
+  }
+
+  .vs-table td:first-child {
+    font-weight: 500;
+    font-size: 0.8rem;
+    color: var(--muted);
+  }
+
+  .vs-table td:nth-child(2) { color: #e05252; }
+  .vs-table td:nth-child(3) { color: var(--accent); }
+
+  .vs-table tr:hover td { background: rgba(255,255,255,0.01); }
+
+  /* ── PLANS ── */
+  .plans-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .plan-card {
+    background: var(--surface);
+    padding: 1.5rem 1.25rem;
+    position: relative;
+  }
+
+  .plan-card.featured {
+    background: #0d1a14;
+  }
+
+  .plan-featured-badge {
+    font-family: var(--mono);
+    font-size: 0.55rem;
+    color: var(--accent);
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    border: 1px solid rgba(110,231,183,0.3);
+    padding: 0.2rem 0.5rem;
+    display: inline-block;
+    margin-bottom: 0.75rem;
+  }
+
+  .plan-name {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .plan-price {
+    font-family: var(--syne);
+    font-weight: 800;
+    font-size: 2rem;
+    line-height: 1;
+    margin-bottom: 0.25rem;
+    color: var(--text);
+  }
+
+  .plan-price span {
+    font-size: 0.85rem;
+    font-weight: 400;
+    color: var(--muted);
+    font-family: var(--body);
+  }
+
+  .plan-yearly {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--accent2);
+    margin-bottom: 1.25rem;
+  }
+
+  .plan-features {
+    list-style: none;
+    font-size: 0.78rem;
+    color: #8888a0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .plan-features li::before {
+    content: "✓ ";
+    color: var(--accent);
+    font-weight: 500;
+  }
+
+  /* ── 5 REASONS ── */
+  .reasons-list {
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+  }
+
+  .reason-item {
+    background: var(--surface);
+    display: grid;
+    grid-template-columns: 56px 1fr;
+    gap: 0;
+  }
+
+  .reason-num {
+    font-family: var(--syne);
+    font-weight: 800;
+    font-size: 1.4rem;
+    color: var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-right: 1px solid var(--border);
+    padding: 1.25rem 0;
+  }
+
+  .reason-body {
+    padding: 1.25rem 1.5rem;
+  }
+
+  .reason-title {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 0.95rem;
+    margin-bottom: 0.3rem;
+    color: var(--text);
+  }
+
+  .reason-desc {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  /* ── PITCH SCRIPT ── */
+  .pitch-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  .pitch-step {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 1.25rem;
+    align-items: start;
+  }
+
+  .pitch-step-num {
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 0.9rem;
+    color: var(--accent);
+    flex-shrink: 0;
+  }
+
+  .pitch-step-title {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 0.9rem;
+    margin-bottom: 0.4rem;
+    color: var(--text);
+  }
+
+  .pitch-script {
+    background: var(--surface2);
+    border-left: 2px solid var(--accent);
+    padding: 0.85rem 1rem;
+    font-size: 0.82rem;
+    color: #9898b0;
+    font-style: italic;
+    line-height: 1.65;
+    margin-top: 0.5rem;
+  }
+
+  .pitch-note {
+    font-size: 0.75rem;
+    color: var(--muted);
+    margin-top: 0.4rem;
+  }
+
+  /* ── ADD-ONS ── */
+  .addons-row {
+    display: flex;
+    gap: 1px;
+    background: var(--border);
+    border: 1px solid var(--border);
+    flex-wrap: wrap;
+  }
+
+  .addon-item {
+    background: var(--surface);
+    padding: 1rem 1.25rem;
+    flex: 1;
+    min-width: 150px;
+  }
+
+  .addon-name {
+    font-family: var(--syne);
+    font-weight: 600;
+    font-size: 0.82rem;
+    margin-bottom: 0.2rem;
+  }
+
+  .addon-price {
+    font-family: var(--mono);
+    font-size: 0.7rem;
+    color: var(--accent2);
+  }
+
+  /* ── CTA ── */
+  .cta-block {
+    padding: 4rem 0 6rem;
+    border-top: 1px solid var(--border);
+    text-align: center;
+  }
+
+  .cta-block h2 {
+    font-family: var(--syne);
+    font-weight: 800;
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    line-height: 1.1;
+    margin-bottom: 1rem;
+    letter-spacing: -0.02em;
+  }
+
+  .cta-block p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-bottom: 2rem;
+  }
+
+  .cta-url {
+    display: inline-block;
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 1.1rem;
+    color: var(--bg);
+    background: var(--accent);
+    padding: 0.9rem 2.5rem;
+    text-decoration: none;
+    letter-spacing: 0.02em;
+    transition: opacity 0.2s;
+  }
+
+  .cta-url:hover { opacity: 0.85; }
+
+  .cta-sub {
+    font-family: var(--mono);
+    font-size: 0.65rem;
+    color: var(--muted);
+    margin-top: 1rem;
+    letter-spacing: 0.1em;
+  }
+
+  /* ── COMMISSION BOX ── */
+  .commission-box {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--accent2);
+    padding: 1.75rem;
+    margin-top: 2.5rem;
+  }
+
+  .commission-title {
+    font-family: var(--syne);
+    font-weight: 700;
+    font-size: 1rem;
+    margin-bottom: 1rem;
+    color: var(--accent2);
+  }
+
+  .commission-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 1rem;
+    margin-bottom: 1rem;
+  }
+
+  .commission-item {
+    text-align: center;
+  }
+
+  .commission-item .plan-l {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    display: block;
+    margin-bottom: 0.25rem;
+  }
+
+  .commission-item .earn {
+    font-family: var(--syne);
+    font-weight: 800;
+    font-size: 1.4rem;
+    color: var(--accent2);
+    display: block;
+  }
+
+  .commission-item .per {
+    font-family: var(--mono);
+    font-size: 0.6rem;
+    color: var(--muted);
+  }
+
+  .commission-note {
+    font-size: 0.78rem;
+    color: var(--muted);
+    border-top: 1px solid var(--border);
+    padding-top: 0.75rem;
+  }
+
+  /* RESPONSIVE */
+  @media (max-width: 500px) {
+    .commission-grid { grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
+    .hero-stats { gap: 1.25rem; }
+    .vs-table { font-size: 0.75rem; }
+    .vs-table td, .vs-table th { padding: 0.65rem 0.6rem; }
+  }
+
+  /* ── A4 PRINT ── */
+  @media print {
+    @page {
+      size: A4 portrait;
+      margin: 14mm 16mm 14mm 16mm;
+    }
+
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+
+    body {
+      background: #060608 !important;
+      color: #f1f1f3 !important;
+      font-size: 8.5pt;
+      line-height: 1.5;
+    }
+
+    body::before { display: none; }
+
+    .wrap { max-width: 100%; padding: 0; }
+
+    /* Page breaks */
+    .hero           { page-break-after: always; min-height: auto; padding: 2rem 0 2rem; }
+    .page-break     { page-break-before: always; }
+
+    section { padding: 1.6rem 0; border-top: 1px solid #1e1e2a; }
+    section:first-of-type { border-top: none; }
+
+    /* Hero sizing for print */
+    .hero h1 { font-size: 32pt; margin-bottom: 0.75rem; }
+    .hero-sub { font-size: 9pt; margin-bottom: 1.25rem; }
+    .hero-badge { font-size: 6pt; margin-bottom: 1rem; }
+    .stat-item .num { font-size: 18pt; }
+
+    /* Section titles */
+    .section-title { font-size: 16pt; margin-bottom: 1.2rem; }
+    .section-tag { font-size: 6pt; margin-bottom: 0.4rem; }
+
+    /* Client grid */
+    .client-grid { display: grid; grid-template-columns: repeat(3,1fr); }
+    .client-card { padding: 1rem; }
+    .client-icon { font-size: 1.4rem; margin-bottom: 0.5rem; }
+    .client-type { font-size: 8.5pt; }
+    .client-desc { font-size: 7.5pt; }
+    .client-pain { font-size: 7pt; }
+
+    /* VS table */
+    .vs-table th, .vs-table td { font-size: 7.5pt; padding: 0.45rem 0.6rem; }
+
+    /* Plans */
+    .plans-grid { display: grid; grid-template-columns: repeat(4,1fr); }
+    .plan-card { padding: 0.85rem; }
+    .plan-name { font-size: 8pt; }
+    .plan-price { font-size: 16pt; }
+    .plan-yearly { font-size: 6pt; }
+    .plan-features { font-size: 7pt; gap: 0.25rem; }
+    .plan-featured-badge { font-size: 5pt; }
+
+    /* Add-ons */
+    .addon-item { padding: 0.6rem 0.75rem; }
+    .addon-name { font-size: 7.5pt; }
+    .addon-price { font-size: 6.5pt; }
+
+    /* Commission */
+    .commission-box { padding: 1rem; margin-top: 1rem; }
+    .commission-title { font-size: 8.5pt; margin-bottom: 0.6rem; }
+    .commission-item .earn { font-size: 16pt; }
+    .commission-item .plan-l, .commission-item .per { font-size: 6pt; }
+    .commission-note { font-size: 7pt; }
+
+    /* Reasons */
+    .reason-num { font-size: 14pt; }
+    .reason-title { font-size: 8.5pt; }
+    .reason-desc { font-size: 7.5pt; }
+    .reason-body { padding: 0.85rem 1rem; }
+
+    /* Pitch */
+    .pitch-step-title { font-size: 8.5pt; }
+    .pitch-script { font-size: 7.5pt; padding: 0.6rem 0.75rem; }
+    .pitch-note { font-size: 7pt; }
+    .pitch-step-num { width: 28px; height: 28px; font-size: 8pt; }
+    .pitch-steps { gap: 1rem; }
+
+    /* CTA */
+    .cta-block { padding: 2rem 0 2rem; text-align: center; }
+    .cta-block h2 { font-size: 22pt; }
+    .cta-block p { font-size: 8pt; }
+    .cta-url { font-size: 11pt; padding: 0.6rem 1.5rem; }
+    .cta-sub { font-size: 6pt; }
+  }
+
+  /* A4 screen preview */
+  @media screen {
+    .a4-hint {
+      position: fixed;
+      bottom: 1rem;
+      right: 1rem;
+      font-family: var(--mono);
+      font-size: 0.6rem;
+      color: var(--muted);
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 0.4rem 0.75rem;
+      z-index: 100;
+      letter-spacing: 0.1em;
+    }
+  }
+</style>
+</head>
+<body>
+
+<!-- HERO -->
+<div class="wrap">
+  <div class="hero">
+    <div class="hero-badge">Grabio · Sales Agent Guide · 2026</div>
+    <h1>Your clients<br>deserve better<br>than <em>WhatsApp.</em></h1>
+    <p class="hero-sub">Grabio gives small businesses a complete digital store, inventory system, and invoicing platform — starting at $10/month. Your job: show them what they're missing.</p>
+    <div class="hero-stats">
+      <div class="stat-item"><label>Plans from</label><div class="num">$10<span style="font-size:1rem;font-family:var(--body);color:var(--muted)">/mo</span></div></div>
+      <div class="stat-item"><label>Core Modules</label><div class="num">20+</div></div>
+      <div class="stat-item"><label>Store Templates</label><div class="num">6</div></div>
+      <div class="stat-item"><label>Android App</label><div class="num">✓</div></div>
+    </div>
+  </div>
+</div>
+
+<div class="a4-hint">🖨 Ctrl+P → Save as PDF → A4</div>
+
+<!-- PAGE 2 START -->
+<div class="page-break"></div>
+
+<!-- WHO IT'S FOR -->
+<section>
+  <div class="wrap">
+    <div class="section-tag">// Target Clients</div>
+    <h2 class="section-title">Who to pitch first</h2>
+    <div class="client-grid">
+      <div class="client-card">
+        <span class="client-icon">🏪</span>
+        <div class="client-type">Small Retailers & Product Sellers</div>
+        <div class="client-desc">Clothing, accessories, cosmetics, electronics — anyone selling physical products and taking orders manually.</div>
+        <div class="client-pain">Pain: Orders on WhatsApp, no tracking, no invoices</div>
+      </div>
+      <div class="client-card">
+        <span class="client-icon">🏭</span>
+        <div class="client-type">Manufacturers & Distributors</div>
+        <div class="client-desc">Tissue, food, packaging, cleaning products — businesses with raw materials, production batches, and B2B clients.</div>
+        <div class="client-pain">Pain: Excel inventory, no production tracking, manual POs</div>
+      </div>
+      <div class="client-card">
+        <span class="client-icon">🍱</span>
+        <div class="client-type">Food & Composed Product Businesses</div>
+        <div class="client-desc">Catering, bakeries, meal prep — products built from ingredients with recipes, yield, and cost to track.</div>
+        <div class="client-pain">Pain: No recipe costing, no stock deduction on sale</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- VS -->
+<section>
+  <div class="wrap">
+    <div class="section-tag">// The Real Competition</div>
+    <h2 class="section-title">Grabio vs. How they work today</h2>
+    <table class="vs-table">
+      <thead>
+        <tr>
+          <th>Feature</th>
+          <th>WhatsApp + Excel</th>
+          <th>Grabio</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td>Online Store</td><td>No store — just messages</td><td>Live store in 15 minutes</td></tr>
+        <tr><td>Inventory Tracking</td><td>Manual Excel, always wrong</td><td>Real-time, auto-updated on sale</td></tr>
+        <tr><td>Invoices</td><td>Written by hand or WhatsApp text</td><td>PDF invoice generated instantly</td></tr>
+        <tr><td>Orders</td><td>Lost in chat history</td><td>Dashboard with full history</td></tr>
+        <tr><td>Payments</td><td>Cash only, no record</td><td>OMT, Stripe, Cash on Delivery</td></tr>
+        <tr><td>Mobile App</td><td>WhatsApp is the "app"</td><td>Native Android app on Play Store</td></tr>
+        <tr><td>Analytics</td><td>Zero — no data at all</td><td>Revenue, profit, top products</td></tr>
+        <tr><td>Staff Access</td><td>Share one phone</td><td>Role-based accounts per staff</td></tr>
+        <tr><td>Cost</td><td>"Free" but costs hours daily</td><td>From $10/mo — saves hours daily</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- PLANS -->
+<section>
+  <div class="wrap">
+    <div class="section-tag">// Pricing</div>
+    <h2 class="section-title">Plans & pricing</h2>
+    <div class="plans-grid">
+      <div class="plan-card">
+        <div class="plan-name">Trial</div>
+        <div class="plan-price">$0<span>/mo</span></div>
+        <div class="plan-yearly" style="color:var(--accent3);">+ 20% revenue share</div>
+        <ul class="plan-features">
+          <li>Up to 10 products</li>
+          <li>500MB storage</li>
+          <li>3 months max</li>
+          <li>OMT + Stripe</li>
+          <li>Basic templates</li>
+        </ul>
+      </div>
+      <div class="plan-card">
+        <div class="plan-name">Starter</div>
+        <div class="plan-price">$10<span>/mo</span></div>
+        <div class="plan-yearly">$100/yr — save $20</div>
+        <ul class="plan-features">
+          <li>Up to 8 products</li>
+          <li>5GB storage</li>
+          <li>0% revenue share</li>
+          <li>Discount codes</li>
+          <li>200 emails/mo</li>
+          <li>All product types</li>
+        </ul>
+      </div>
+      <div class="plan-card featured">
+        <div class="plan-featured-badge">Most Popular</div>
+        <div class="plan-name">Pro</div>
+        <div class="plan-price">$20<span>/mo</span></div>
+        <div class="plan-yearly">$200/yr — save $40</div>
+        <ul class="plan-features">
+          <li>Up to 20 products</li>
+          <li>10GB storage</li>
+          <li>Manufacturing + BOM</li>
+          <li>API access</li>
+          <li>1,000 emails/mo</li>
+          <li>All Starter features</li>
+        </ul>
+      </div>
+      <div class="plan-card">
+        <div class="plan-name">Business</div>
+        <div class="plan-price">$30<span>/mo</span></div>
+        <div class="plan-yearly">$300/yr — save $60</div>
+        <ul class="plan-features">
+          <li>Up to 50 products</li>
+          <li>20GB storage</li>
+          <li>10 staff accounts</li>
+          <li>Meta Shop integration</li>
+          <li>5,000 emails/mo</li>
+          <li>Dedicated manager</li>
+        </ul>
+      </div>
+    </div>
+
+    <!-- ADD-ONS -->
+    <div style="margin-top:1px;background:var(--border);">
+      <div class="addons-row">
+        <div class="addon-item">
+          <div class="addon-name">🌐 Custom Domain</div>
+          <div class="addon-price">$15/mo · $150/yr</div>
+        </div>
+        <div class="addon-item">
+          <div class="addon-name">💬 WhatsApp Business API</div>
+          <div class="addon-price">$10/mo · $100/yr</div>
+        </div>
+        <div class="addon-item">
+          <div class="addon-name">💾 Extra Storage (+5GB)</div>
+          <div class="addon-price">$2/mo · $24/yr</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- COMMISSION BOX -->
+    <div class="commission-box">
+      <div class="commission-title">💰 Your Commission (30% monthly recurring)</div>
+      <div class="commission-grid">
+        <div class="commission-item">
+          <span class="plan-l">Starter</span>
+          <span class="earn">$3</span>
+          <span class="per">/mo per client</span>
+        </div>
+        <div class="commission-item">
+          <span class="plan-l">Pro</span>
+          <span class="earn">$6</span>
+          <span class="per">/mo per client</span>
+        </div>
+        <div class="commission-item">
+          <span class="plan-l">Business</span>
+          <span class="earn">$9</span>
+          <span class="per">/mo per client</span>
+        </div>
+      </div>
+      <div class="commission-note">Paid monthly as long as the client stays active. 10 Pro clients = $60/mo recurring — just from referrals. Commission starts after client completes first paid month.</div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 REASONS -->
+<section>
+  <div class="wrap">
+    <div class="section-tag">// Your Pitch Ammunition</div>
+    <h2 class="section-title">5 reasons clients say yes</h2>
+    <div class="reasons-list">
+      <div class="reason-item">
+        <div class="reason-num">01</div>
+        <div class="reason-body">
+          <div class="reason-title">Live in 15 minutes — no tech skills needed</div>
+          <div class="reason-desc">Pick a template, upload products, and the store is live at yourstore.grabio.space. No developer, no hosting setup, no domain required to start.</div>
+        </div>
+      </div>
+      <div class="reason-item">
+        <div class="reason-num">02</div>
+        <div class="reason-body">
+          <div class="reason-title">Built for how Lebanon & MENA actually pay</div>
+          <div class="reason-desc">OMT / Whish Money, Stripe, and Cash on Delivery — all supported. USD and LBP dual-currency with a custom exchange rate. No bank account required for customers.</div>
+        </div>
+      </div>
+      <div class="reason-item">
+        <div class="reason-num">03</div>
+        <div class="reason-body">
+          <div class="reason-title">Inventory that manages itself</div>
+          <div class="reason-desc">Every sale automatically deducts stock. Low-stock alerts by push and email. Expiry tracking. Production batches. Raw material recipes. This replaces 3 Excel sheets.</div>
+        </div>
+      </div>
+      <div class="reason-item">
+        <div class="reason-num">04</div>
+        <div class="reason-body">
+          <div class="reason-title">Android app included — run everything from your phone</div>
+          <div class="reason-desc">Full store management from the Grabio Android app on Google Play. Real-time order alerts, stock updates, and analytics — all in the pocket.</div>
+        </div>
+      </div>
+      <div class="reason-item">
+        <div class="reason-num">05</div>
+        <div class="reason-body">
+          <div class="reason-title">$10/mo replaces tools that cost 10x more</div>
+          <div class="reason-desc">Shopify starts at $39/mo — without inventory management, without OMT, without Arabic-first UX. Grabio is built for this market at a price that fits it.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- PAGE 3 START -->
+<div class="page-break"></div>
+
+<!-- PITCH SCRIPT -->
+<section>
+  <div class="wrap">
+    <div class="section-tag">// Your Script</div>
+    <h2 class="section-title">How to pitch in 3 steps</h2>
+    <div class="pitch-steps">
+
+      <div class="pitch-step">
+        <div class="pitch-step-num">1</div>
+        <div>
+          <div class="pitch-step-title">Open with the pain — don't mention Grabio yet</div>
+          <div class="pitch-script">"How are you managing your orders and inventory right now? WhatsApp and Excel? And how much time does that take you every day?"</div>
+          <div class="pitch-note">Let them talk. Every "we use WhatsApp" is your opening. Every "we lose track of orders" is your close.</div>
+        </div>
+      </div>
+
+      <div class="pitch-step">
+        <div class="pitch-step-num">2</div>
+        <div>
+          <div class="pitch-step-title">Show — don't tell</div>
+          <div class="pitch-script">"Let me show you something quickly — a manufacturer I work with was doing exactly that. Now they have a live store, their inventory updates automatically on every sale, and they send PDF invoices in one click. This is Grabio."</div>
+          <div class="pitch-note">Pull out your phone. Show the store. Show the dashboard. Show an invoice being generated. 60 seconds is enough.</div>
+        </div>
+      </div>
+
+      <div class="pitch-step">
+        <div class="pitch-step-num">3</div>
+        <div>
+          <div class="pitch-step-title">Close with zero risk</div>
+          <div class="pitch-script">"You can start completely free — no credit card. Try it for 3 months, see if it works for your business. If you like it, it's $10 a month. Less than one delivery fee."</div>
+          <div class="pitch-note">Send them to grabio.space right there. Help them register on the spot if they're willing. First impression matters.</div>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<div class="wrap">
+  <div class="cta-block">
+    <h2>Ready to<br>close your first client?</h2>
+    <p>Send them here — or open it on their phone right now.</p>
+    <a href="https://grabio.space" class="cta-url" target="_blank">grabio.space</a>
+    <div class="cta-sub">Free trial · No credit card · Live in 15 minutes</div>
+  </div>
+</div>
+
+</body>
+</html>
