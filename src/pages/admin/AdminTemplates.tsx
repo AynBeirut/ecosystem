@@ -423,14 +423,14 @@ const AdminTemplates: React.FC = () => {
   };
 
   // ── color slot labels ────────────────────────────────────────────────────
-  const COLOR_SLOTS: Array<{ key: keyof Required<StoreTemplateColors>; label: string; hint: string }> = [
-    { key: 'primary',    label: 'Primary',    hint: 'Buttons, links, main accents' },
-    { key: 'secondary',  label: 'Secondary',  hint: 'Headers, nav bar' },
-    { key: 'accent',     label: 'Accent',     hint: 'Highlights, badges, CTAs' },
-    { key: 'background', label: 'Background', hint: 'Page background' },
-    { key: 'surface',    label: 'Surface',    hint: 'Card & section backgrounds' },
-    { key: 'textColor',  label: 'Text',       hint: 'Main body text color' },
-    { key: 'highlight',  label: 'Highlight',  hint: 'Hover state, borders, glow' },
+  const COLOR_SLOTS: Array<{ key: keyof Required<StoreTemplateColors>; label: string; hint: string; affects: string }> = [
+    { key: 'primary',    label: 'Primary Color',       hint: 'Header bar, buttons, links',             affects: 'Top navigation bar, Add to Cart button, product links' },
+    { key: 'secondary',  label: 'Secondary Color',     hint: 'Secondary buttons, accents',            affects: 'Secondary elements and navigation accents' },
+    { key: 'accent',     label: 'Accent Color',        hint: 'Call-to-action, highlights, badges',    affects: 'Buy Now button, badges, special highlights' },
+    { key: 'background', label: 'Page Background',     hint: 'Main page background color',            affects: 'Entire page background behind all content' },
+    { key: 'surface',    label: 'Cards Background',    hint: 'Product cards, info sections',          affects: 'Product cards, store info card, all card backgrounds' },
+    { key: 'textColor',  label: 'Main Text Color',     hint: 'Headings, descriptions, body text',     affects: 'Product names, descriptions, all main text' },
+    { key: 'highlight',  label: 'Highlight Color',     hint: 'Borders, hover effects, decorative',    affects: 'Card borders, hover effects, dividers' },
   ];
 
   // ── shared picker tile ───────────────────────────────────────────────────
@@ -763,35 +763,85 @@ const AdminTemplates: React.FC = () => {
         {/* ══ COLORS TAB ══ */}
         {activeTab === 'colors' && (
           <div className="space-y-8">
-            {/* Current palette preview */}
+            {/* Enhanced Live Preview */}
             <Card>
               <CardHeader>
-                <CardTitle>Active Palette</CardTitle>
-                <CardDescription>Live preview of your 7-color palette</CardDescription>
+                <CardTitle className="flex items-center gap-2">
+                  <Eye className="h-5 w-5" />
+                  Live Store Preview
+                </CardTitle>
+                <CardDescription>Real-time preview showing how your colors look on your store</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="flex flex-wrap gap-3 mb-4">
+                {/* Realistic store page mockup */}
+                <div className="rounded-xl overflow-hidden border-4 shadow-2xl" style={{ background: colors.background }}>
+                  {/* Top Navigation Bar */}
+                  <div className="px-6 py-4 flex items-center justify-between border-b" style={{ background: colors.primary, borderColor: colors.highlight }}>
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 rounded-full bg-white/20" />
+                      <span className="text-white font-bold text-lg">Your Store</span>
+                    </div>
+                    <div className="flex gap-2">
+                      <div className="w-8 h-8 rounded-full bg-white/20" />
+                      <div className="w-8 h-8 rounded-full bg-white/20" />
+                    </div>
+                  </div>
+
+                  {/* Store Info Card */}
+                  <div className="m-6 p-6 rounded-xl border-2" style={{ background: colors.surface, borderColor: colors.highlight }}>
+                    <div className="flex items-start gap-4 mb-4">
+                      <div className="w-20 h-20 rounded-xl" style={{ background: colors.primary + '40' }} />
+                      <div className="flex-1">
+                        <div className="h-6 w-48 rounded mb-2" style={{ background: colors.textColor + '30' }} />
+                        <div className="h-4 w-64 rounded" style={{ background: colors.textColor + '20' }} />
+                      </div>
+                    </div>
+                    <div className="flex gap-2 mb-3">
+                      {[1,2,3].map(i => (
+                        <div key={i} className="px-3 py-1 rounded-full text-xs font-semibold text-white" style={{ background: colors.accent }}>
+                          Badge {i}
+                        </div>
+                      ))}
+                    </div>
+                    <p className="text-sm leading-relaxed" style={{ color: colors.textColor }}>
+                      Store description banner text appears here. This shows how your main text content will look with your chosen colors.
+                    </p>
+                  </div>
+
+                  {/* Product Cards Grid */}
+                  <div className="px-6 pb-6">
+                    <div className="mb-4">
+                      <h3 className="text-xl font-bold" style={{ color: colors.textColor }}>Products</h3>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+                      {[1,2,3].map(i => (
+                        <div key={i} className="rounded-xl p-4 border-2 hover:shadow-lg transition-shadow" style={{ background: colors.surface, borderColor: colors.highlight }}>
+                          <div className="aspect-square rounded-lg mb-3" style={{ background: colors.primary + '20' }} />
+                          <div className="font-semibold mb-2" style={{ color: colors.textColor }}>Product {i}</div>
+                          <div className="text-sm mb-3" style={{ color: colors.textColor + 'CC' }}>$99.99</div>
+                          <button 
+                            className="w-full py-2 rounded-lg font-semibold text-white text-sm transition-opacity hover:opacity-90" 
+                            style={{ background: colors.accent }}
+                          >
+                            Add to Cart
+                          </button>
+                          <a href="#" className="block text-center text-sm mt-2 hover:underline" style={{ color: colors.primary }}>
+                            View Details →
+                          </a>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Color Swatches */}
+                <div className="mt-6 flex flex-wrap gap-3">
                   {COLOR_SLOTS.map(slot => (
                     <div key={slot.key} className="flex flex-col items-center gap-1">
-                      <div className="w-10 h-10 rounded-full border-2 border-white shadow" style={{ backgroundColor: colors[slot.key] }} />
-                      <span className="text-[10px] text-muted-foreground font-medium">{slot.label}</span>
+                      <div className="w-12 h-12 rounded-full border-4 border-white shadow-lg" style={{ backgroundColor: colors[slot.key] }} />
+                      <span className="text-[10px] text-muted-foreground font-semibold text-center leading-tight max-w-[60px]">{slot.label}</span>
                     </div>
                   ))}
-                </div>
-                <div className="rounded-lg overflow-hidden border" style={{ background: colors.background }}>
-                  <div className="px-4 py-3 flex items-center gap-3" style={{ background: colors.secondary }}>
-                    <div className="w-6 h-6 rounded-full" style={{ background: colors.primary }} />
-                    <span className="text-sm font-semibold text-white">Store Header</span>
-                  </div>
-                  <div className="p-4 grid grid-cols-3 gap-3">
-                    {[1,2,3].map(i => (
-                      <div key={i} className="rounded-lg p-3 border" style={{ background: colors.surface, borderColor: colors.highlight }}>
-                        <div className="text-xs font-semibold mb-1" style={{ color: colors.textColor }}>Product {i}</div>
-                        <div className="text-xs" style={{ color: colors.primary }}>View Details →</div>
-                        <div className="mt-2 px-2 py-1 rounded text-xs text-white text-center" style={{ background: colors.accent }}>Add to Cart</div>
-                      </div>
-                    ))}
-                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -827,34 +877,41 @@ const AdminTemplates: React.FC = () => {
             <Card>
               <CardHeader>
                 <CardTitle>Custom Colors</CardTitle>
-                <CardDescription>Fine-tune each slot — click the swatch or type a hex code</CardDescription>
+                <CardDescription>Fine-tune each color to match your brand — changes preview instantly</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 gap-4">
                   {COLOR_SLOTS.map(slot => (
-                    <div key={slot.key} className="flex items-center gap-3 p-3 border rounded-xl bg-muted/20">
-                      <label className="cursor-pointer flex-shrink-0 relative" title="Pick color">
+                    <div key={slot.key} className="flex items-start gap-4 p-4 border-2 rounded-xl bg-gradient-to-br from-muted/30 to-muted/10 hover:border-primary/40 transition-colors">
+                      <label className="cursor-pointer flex-shrink-0 relative group" title="Click to pick color">
                         <input
                           type="color"
                           value={colors[slot.key]}
                           onChange={e => updateColor(slot.key, e.target.value)}
                           className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                         />
-                        <div className="w-12 h-12 rounded-xl border-2 border-white shadow-md ring-1 ring-border" style={{ background: colors[slot.key] }} />
+                        <div className="w-16 h-16 rounded-xl border-4 border-white shadow-lg ring-2 ring-border group-hover:ring-primary transition-all" style={{ background: colors[slot.key] }} />
+                        <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
+                          <Palette className="h-3 w-3" />
+                        </div>
                       </label>
                       <div className="flex-1 min-w-0">
-                        <div className="font-semibold text-sm">{slot.label}</div>
-                        <div className="text-xs text-muted-foreground mb-1">{slot.hint}</div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-sm text-muted-foreground">#</span>
+                        <div className="font-bold text-base mb-1">{slot.label}</div>
+                        <div className="text-sm text-foreground/80 mb-2 font-medium">{slot.hint}</div>
+                        <div className="text-xs text-muted-foreground mb-3 leading-relaxed">
+                          <span className="font-semibold">Affects:</span> {slot.affects}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm text-muted-foreground font-mono">#</span>
                           <input
                             type="text"
                             maxLength={7}
                             value={colors[slot.key].replace('#', '')}
                             onChange={e => handleHexInput(slot.key, e.target.value)}
-                            className="w-24 text-sm font-mono border rounded px-2 py-1 bg-background uppercase"
+                            className="w-28 text-sm font-mono font-bold border-2 rounded-lg px-3 py-2 bg-background uppercase focus:ring-2 focus:ring-primary focus:border-primary"
                             placeholder="RRGGBB"
                           />
+                          <span className="text-xs text-muted-foreground">{colors[slot.key]}</span>
                         </div>
                       </div>
                     </div>
