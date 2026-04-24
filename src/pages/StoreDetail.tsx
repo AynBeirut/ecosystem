@@ -1026,44 +1026,54 @@ const StoreDetail: React.FC = () => {
         )}
 
         {/* Store Header */}
-        <div className={`rounded-lg shadow-sm p-6 mb-6 ${currentTheme.headerCard}`}>
+        <div 
+          className={`rounded-lg shadow-sm p-6 mb-6 ${isWhiteLabel ? '' : currentTheme.headerCard}`}
+          style={isWhiteLabel && store.templateColors?.primary ? { 
+            backgroundColor: store.templateColors.primary,
+            color: '#fff'
+          } : {}}
+        >
           <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
             <img 
               src={store.logo} 
               alt={store.name} 
-              className="h-24 w-24 object-cover rounded-full border-4 border-white shadow-sm"
+              className={`h-24 w-24 object-cover rounded-full shadow-sm ${isWhiteLabel ? 'border-4 border-white/30' : 'border-4 border-white'}`}
             />
             <div className="flex-1 text-center md:text-left">
               <div className="flex items-center justify-center md:justify-start gap-3 mb-3">
                 {avgRating !== null ? (
-                  <div className="flex items-center text-yellow-500">
+                  <div className={`flex items-center ${isWhiteLabel ? 'text-yellow-200' : 'text-yellow-500'}`}>
                     {ratingDisplayType === 'pill' ? (
                       <>
                         <span className="bg-yellow-400 text-white text-xs font-bold px-2.5 py-1 rounded-full">★ {avgRating.toFixed(1)}</span>
-                        <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>/ 5.0 · {reviews.length} reviews</span>
+                        <span className={`text-sm ml-2 ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>/ 5.0 · {reviews.length} reviews</span>
                       </>
                     ) : ratingDisplayType === 'number' ? (
                       <>
-                        <span className="text-2xl font-black text-yellow-500">{avgRating.toFixed(1)}</span>
+                        <span className={`text-2xl font-black ${isWhiteLabel ? 'text-yellow-200' : 'text-yellow-500'}`}>{avgRating.toFixed(1)}</span>
                         <span className="text-sm ml-2">★★★★☆</span>
-                        <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>({reviews.length})</span>
+                        <span className={`text-sm ml-2 ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>({reviews.length})</span>
                       </>
                     ) : ratingDisplayType === 'minimal' ? (
-                      <span className={`text-sm ${currentTheme.mutedText}`}>
-                        <span className="font-semibold text-foreground">{Math.round((avgRating / 5) * 100)}% positive</span> based on {reviews.length} reviews
+                      <span className={`text-sm ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>
+                        <span className={`font-semibold ${isWhiteLabel ? 'text-white' : 'text-foreground'}`}>{Math.round((avgRating / 5) * 100)}% positive</span> based on {reviews.length} reviews
                       </span>
                     ) : (
                       <>
                         <Star size={16} className="mr-2" />
                         <span className="font-semibold">{avgRating.toFixed(1)}</span>
-                        <span className={`text-sm ml-2 ${currentTheme.mutedText}`}>({reviews.length} reviews)</span>
+                        <span className={`text-sm ml-2 ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>({reviews.length} reviews)</span>
                       </>
                     )}
                   </div>
                 ) : (
-                  <div className={`text-sm ${currentTheme.mutedText}`}>No ratings yet</div>
+                  <div className={`text-sm ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>No ratings yet</div>
                 )}
-                <Button size="sm" variant={isFollowing ? 'ghost' : 'outline'} className={currentTheme.actionButton} onClick={async () => {
+                <Button 
+                  size="sm" 
+                  variant={isFollowing ? 'ghost' : 'outline'} 
+                  className={isWhiteLabel ? 'border-white/30 text-white hover:bg-white/10' : currentTheme.actionButton}
+                  onClick={async () => {
                   if (!user) { toast('Please sign in to follow stores'); return; }
                   try {
                     if (isFollowing) await unfollowStore(store.id); else await followStore(store.id);
@@ -1080,30 +1090,30 @@ const StoreDetail: React.FC = () => {
                   {isFollowing ? 'Following' : 'Follow'}
                 </Button>
               </div>
-              <p className={`mb-4 text-sm ${currentTheme.mutedText}`}>{store.description}</p>
+              <p className={`mb-4 text-sm ${isWhiteLabel ? 'text-white/90' : currentTheme.mutedText}`}>{store.description}</p>
               
               <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                <div className={`flex items-center ${currentTheme.mutedText}`}>
+                <div className={`flex items-center ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>
                   <MapPin size={18} className="mr-2" />
                   {store.location}
                 </div>
                 
                 {store.website && (
-                  <a href={store.website} target="_blank" rel="noopener noreferrer" className={`flex items-center hover:underline ${currentTheme.link}`}>
+                  <a href={store.website} target="_blank" rel="noopener noreferrer" className={`flex items-center hover:underline ${isWhiteLabel ? 'text-white hover:text-white/80' : currentTheme.link}`}>
                     <Globe size={18} className="mr-2" />
                     Website
                   </a>
                 )}
                 
                 {store.contactInfo?.phone && (
-                  <div className={`flex items-center ${currentTheme.mutedText}`}>
+                  <div className={`flex items-center ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>
                     <Phone size={18} className="mr-2" />
                     {store.contactInfo.phone}
                   </div>
                 )}
                 
                 {store.contactInfo?.email && (
-                  <div className={`flex items-center ${currentTheme.mutedText}`}>
+                  <div className={`flex items-center ${isWhiteLabel ? 'text-white/80' : currentTheme.mutedText}`}>
                     <Mail size={18} className="mr-2" />
                     {store.contactInfo.email}
                   </div>
