@@ -25,7 +25,7 @@ export default function AddEditProductScreen() {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState('');
-  const [stock, setStock] = useState('');
+  const [stock, setStock] = useState(''); // read-only: managed by purchases & damage entries
   const [lowStockThreshold, setLowStockThreshold] = useState('5');
   const [inStock, setInStock] = useState(true);
   const [currency, setCurrency] = useState('USD');
@@ -121,7 +121,7 @@ export default function AddEditProductScreen() {
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
       if (imageUrl) { data.imageUrl = imageUrl; data.image = imageUrl; }
-      if (stock !== '') data.stock = parseInt(stock, 10);
+      // NOTE: stock is NOT set here — it is controlled only by purchase entries and damage/waste records
       if (lowStockThreshold !== '') data.lowStockThreshold = parseInt(lowStockThreshold, 10);
 
       if (isEdit) {
@@ -184,16 +184,17 @@ export default function AddEditProductScreen() {
       <Text style={styles.label}>Unit (optional)</Text>
       <TextInput style={styles.input} value={unit} onChangeText={setUnit} placeholder="e.g. kg, piece, liter" />
 
-      <View style={styles.row}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.label}>Stock Quantity</Text>
-          <TextInput style={styles.input} value={stock} onChangeText={setStock} keyboardType="number-pad" placeholder="Leave blank if unlimited" />
+      {/* Stock is read-only — controlled by purchase entries & damage/waste records */}
+      {isEdit && stock !== '' && (
+        <View style={styles.stockInfoBox}>
+          <Text style={styles.stockInfoLabel}>Current Stock</Text>
+          <Text style={styles.stockInfoValue}>{stock} {unit || 'units'}</Text>
+          <Text style={styles.stockInfoHint}>Stock is updated automatically via Purchases and Damage entries.</Text>
         </View>
-        <View style={{ flex: 1, marginLeft: 10 }}>
-          <Text style={styles.label}>Low Stock Alert</Text>
-          <TextInput style={styles.input} value={lowStockThreshold} onChangeText={setLowStockThreshold} keyboardType="number-pad" placeholder="5" />
-        </View>
-      </View>
+      )}
+
+      <Text style={styles.label}>Low Stock Alert Threshold</Text>
+      <TextInput style={styles.input} value={lowStockThreshold} onChangeText={setLowStockThreshold} keyboardType="number-pad" placeholder="5" />
 
       <View style={styles.switchRow}>
         <Text style={styles.label}>In Stock</Text>
@@ -225,4 +226,8 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingVertical: 8 },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 24, marginBottom: 40, height: 52, justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  stockInfoBox: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 10, padding: 14, marginBottom: 16 },
+  stockInfoLabel: { fontSize: 12, fontWeight: '600', color: '#15803d', marginBottom: 2 },
+  stockInfoValue: { fontSize: 22, fontWeight: '700', color: '#166534', marginBottom: 4 },
+  stockInfoHint: { fontSize: 11, color: '#4ade80' },
 });

@@ -385,7 +385,8 @@ const AdminProducts: React.FC = () => {
         image: imageUrl || editingProduct.image,
         storeId: editingProduct.storeId,
         slug: productSlug,
-        ...getStockPayload(newProduct.productType, newProduct.stock),
+        // NOTE: stock is NOT updated here — it is controlled only by purchase entries and damage/waste records
+        inStock: newProduct.productType === 'service' ? true : (editingProduct.stock ?? 0) > 0,
         rating: editingProduct.rating,
         productType: newProduct.productType,
         isService: newProduct.productType === 'service',
@@ -1040,17 +1041,13 @@ const AdminProducts: React.FC = () => {
                 placeholder="e.g., 3-5 days"
               />
             </div>
-            {newProduct.productType !== 'service' && (
-              <div>
-                <Label htmlFor="edit-stock">Stock Quantity</Label>
-                <Input
-                  id="edit-stock"
-                  type="number"
-                  min="0"
-                  value={newProduct.stock === 0 || newProduct.stock === '' ? '' : newProduct.stock}
-                  onChange={e => setNewProduct(prev => ({ ...prev, stock: e.target.value === '' ? 0 : e.target.value }))}
-                  placeholder="0"
-                />
+            {newProduct.productType !== 'service' && editingProduct && (
+              <div className="rounded-md border border-green-200 bg-green-50 px-4 py-3">
+                <p className="text-xs font-semibold text-green-700 mb-0.5">Current Stock</p>
+                <p className="text-2xl font-bold text-green-800">
+                  {finishedGoodsStock[editingProduct.id] ?? editingProduct.stock ?? 0}
+                </p>
+                <p className="text-xs text-green-600 mt-1">Stock is updated automatically via Purchase entries and Damage/Waste records. It cannot be edited manually.</p>
               </div>
             )}
 
