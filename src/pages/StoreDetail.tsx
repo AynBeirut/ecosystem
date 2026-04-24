@@ -960,17 +960,17 @@ const StoreDetail: React.FC = () => {
       <main className="container mx-auto px-4 py-6">
         {/* Hero Banner — image carousel OR gradient fallback */}
         {heroLayout === 'minimal' ? (
-          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
+          <div className={`rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`} style={heroBannerStyle}>
             <div className="p-4 md:p-5 flex items-center justify-between gap-4">
-              <h2 className="text-xl md:text-2xl font-bold">{store.name}</h2>
-              {store.slogan && <p className="text-sm opacity-90 hidden md:block">{store.slogan}</p>}
+              <h2 className="text-xl md:text-2xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+              {store.slogan && <p className="text-sm opacity-90 hidden md:block" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
             </div>
           </div>
         ) : heroLayout === 'centered' ? (
-          <div className={` rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
+          <div className={` rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`} style={heroBannerStyle}>
             <div className="p-8 md:p-12 text-center">
-              <h2 className="text-3xl md:text-4xl font-bold">{store.name}</h2>
-              {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto">{store.slogan}</p>}
+              <h2 className="text-3xl md:text-4xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+              {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
             </div>
           </div>
         ) : heroLayout === 'split' && bannerImages.length > 0 ? (
@@ -985,9 +985,9 @@ const StoreDetail: React.FC = () => {
                 />
               ))}
             </div>
-            <div className={`p-8 flex flex-col justify-center text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
-              <h2 className="text-3xl font-bold">{store.name}</h2>
-              {store.slogan && <p className="text-base opacity-90 mt-3">{store.slogan}</p>}
+            <div className={`p-8 flex flex-col justify-center ${currentTheme.heroBg}`} style={heroBannerStyle}>
+              <h2 className="text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+              {store.slogan && <p className="text-base opacity-90 mt-3" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
             </div>
           </div>
         ) : bannerImages.length > 0 ? (
@@ -1031,10 +1031,10 @@ const StoreDetail: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`} style={heroBannerStyle}>
+          <div className={`rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`} style={heroBannerStyle}>
             <div className="p-6 md:p-8">
-              <h2 className="text-2xl md:text-3xl font-bold">{store.name}</h2>
-              {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2">{store.slogan}</p>}
+              <h2 className="text-2xl md:text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+              {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
             </div>
           </div>
         )}
@@ -1094,10 +1094,10 @@ const StoreDetail: React.FC = () => {
                   {isFollowing ? 'Following' : 'Follow'}
                 </Button>
               </div>
-              <p className={`mb-4 text-sm ${currentTheme.mutedText}`}>{store.description}</p>
+              <p className="mb-4 text-sm" style={{ color: storeCardStyle.color }}>{store.description}</p>
               
-              <div className="flex flex-wrap justify-center md:justify-start gap-4">
-                <div className={`flex items-center ${currentTheme.mutedText}`}>
+              <div className="flex flex-wrap justify-center md:justify-start gap-4" style={{ color: storeCardStyle.color }}>
+                <div className="flex items-center">
                   <MapPin size={18} className="mr-2" />
                   {store.location}
                 </div>
@@ -1205,10 +1205,10 @@ const StoreDetail: React.FC = () => {
                 { title: 'Mission', text: mission },
                 { title: 'Vision', text: vision },
               ].filter(c => c.text).map(c => (
-                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`} style={contentCardStyle}>
+                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' :  ''}`} style={contentCardStyle}>
                   <CardContent className="p-6 flex flex-col flex-1">
-                    <h3 className={`text-lg font-semibold mb-3 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.title}</h3>
-                    <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} leading-relaxed flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.text}</p>
+                    <h3 className={`text-lg font-semibold mb-3 ${aboutLayout === 'centered' ? 'text-center' : ''}`} style={{ color: contentCardStyle.color }}>{c.title}</h3>
+                    <p className={`text-sm whitespace-pre-line leading-relaxed flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`} style={{ color: contentCardStyle.color }}>{c.text}</p>
                   </CardContent>
                 </Card>
               ))}
@@ -1250,7 +1250,7 @@ const StoreDetail: React.FC = () => {
             {page.content && (
               <Card className={currentTheme.cardSoft} style={contentCardStyle}>
                 <CardContent className="p-6">
-                  <p className={`text-sm whitespace-pre-line leading-relaxed ${currentTheme.mutedText}`}>{page.content}</p>
+                  <p className="text-sm whitespace-pre-line leading-relaxed" style={{ color: contentCardStyle.color }}>{page.content}</p>
                 </CardContent>
               </Card>
             )}
@@ -1270,46 +1270,46 @@ const StoreDetail: React.FC = () => {
                 <CardContent className="p-6 space-y-5">
                   {store.location && (
                     <div className="flex items-start gap-4">
-                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><MapPin size={18} className={currentTheme.mutedText} /></div>
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><MapPin size={18} style={{ color: contentCardStyle.color, opacity: 0.7 }} /></div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Location</p>
-                        <p className={`text-sm ${currentTheme.mutedText}`}>{store.location}</p>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-0.5" style={{ color: contentCardStyle.color, opacity: 0.6 }}>Location</p>
+                        <p className="text-sm" style={{ color: contentCardStyle.color }}>{store.location}</p>
                       </div>
                     </div>
                   )}
                   {store.contactInfo?.phone && (
                     <div className="flex items-start gap-4">
-                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Phone size={18} className={currentTheme.mutedText} /></div>
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Phone size={18} style={{ color: contentCardStyle.color, opacity: 0.7 }} /></div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Phone</p>
-                        <a href={`tel:${store.contactInfo.phone}`} className={`text-sm ${currentTheme.link} hover:underline`}>{store.contactInfo.phone}</a>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-0.5" style={{ color: contentCardStyle.color, opacity: 0.6 }}>Phone</p>
+                        <a href={`tel:${store.contactInfo.phone}`} className="text-sm hover:underline" style={{ color: contentCardStyle.color }}>{store.contactInfo.phone}</a>
                       </div>
                     </div>
                   )}
                   {store.contactInfo?.email && (
                     <div className="flex items-start gap-4">
-                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Mail size={18} className={currentTheme.mutedText} /></div>
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Mail size={18} style={{ color: contentCardStyle.color, opacity: 0.7 }} /></div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Email</p>
-                        <a href={`mailto:${store.contactInfo.email}`} className={`text-sm ${currentTheme.link} hover:underline break-all`}>{store.contactInfo.email}</a>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-0.5" style={{ color: contentCardStyle.color, opacity: 0.6 }}>Email</p>
+                        <a href={`mailto:${store.contactInfo.email}`} className="text-sm hover:underline break-all" style={{ color: contentCardStyle.color }}>{store.contactInfo.email}</a>
                       </div>
                     </div>
                   )}
                   {store.website && (
                     <div className="flex items-start gap-4">
-                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Globe size={18} className={currentTheme.mutedText} /></div>
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><Globe size={18} style={{ color: contentCardStyle.color, opacity: 0.7 }} /></div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-0.5">Website</p>
-                        <a href={store.website} target="_blank" rel="noopener noreferrer" className={`text-sm ${currentTheme.link} hover:underline break-all`}>{store.website}</a>
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-0.5" style={{ color: contentCardStyle.color, opacity: 0.6 }}>Website</p>
+                        <a href={store.website} target="_blank" rel="noopener noreferrer" className="text-sm hover:underline break-all" style={{ color: contentCardStyle.color }}>{store.website}</a>
                       </div>
                     </div>
                   )}
                   {(store.socialLinks?.facebook || store.socialLinks?.instagram || store.socialLinks?.twitter || store.socialLinks?.whatsapp) && (
                     <div className="flex items-start gap-4">
-                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><span className={`text-xs font-bold ${currentTheme.mutedText}`}>@</span></div>
+                      <div className="rounded-full bg-white/80 shadow p-2 mt-0.5"><span className="text-xs font-bold" style={{ color: contentCardStyle.color, opacity: 0.7 }}>@</span></div>
                       <div>
-                        <p className="text-xs font-semibold uppercase tracking-wide text-gray-400 mb-2">Social Media</p>
-                        <div className="flex gap-3">
+                        <p className="text-xs font-semibold uppercase tracking-wide mb-2" style={{ color: contentCardStyle.color, opacity: 0.6 }}>Social Media</p>
+                        <div className="flex gap-3" style={{ color: contentCardStyle.color }}>
                           {store.socialLinks?.facebook && (
                             <a href={store.socialLinks.facebook} target="_blank" rel="noopener noreferrer" className={`${currentTheme.link} hover:opacity-70`} title="Facebook"><Facebook size={22} /></a>
                           )}
