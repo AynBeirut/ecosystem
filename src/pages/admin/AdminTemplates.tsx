@@ -253,9 +253,10 @@ const AdminTemplates: React.FC = () => {
       setBackgroundImage(typeof d.storeBackgroundImage === 'string' ? d.storeBackgroundImage : '');
       setCarouselImages(Array.isArray(d.carouselImages) ? d.carouselImages.filter((u: unknown) => typeof u === 'string') : []);
       setGalleryImages(Array.isArray(d.galleryImages) ? d.galleryImages.filter((u: unknown) => typeof u === 'string') : []);
-      // colors tab
+      // colors tab - merge with defaults to ensure all fields exist
       if (d.templateColors && typeof d.templateColors === 'object') {
-        setColors(prev => ({ ...prev, ...d.templateColors }));
+        const defaults = EMPTY_COLORS();
+        setColors({ ...defaults, ...d.templateColors });
       }
       // layout tab
       if (d.productDisplayType) setProductDisplayType(d.productDisplayType as ProductDisplayType);
@@ -897,16 +898,18 @@ const AdminTemplates: React.FC = () => {
               </CardHeader>
               <CardContent>
                 <div className="grid grid-cols-1 gap-4">
-                  {COLOR_SLOTS.map(slot => (
+                  {COLOR_SLOTS.map(slot => {
+                    const colorValue = colors[slot.key] || '#000000';
+                    return (
                     <div key={slot.key} className="flex items-start gap-4 p-4 border-2 rounded-xl bg-gradient-to-br from-muted/30 to-muted/10 hover:border-primary/40 transition-colors">
                       <label className="cursor-pointer flex-shrink-0 relative group" title="Click to pick color">
                         <input
                           type="color"
-                          value={colors[slot.key]}
+                          value={colorValue}
                           onChange={e => updateColor(slot.key, e.target.value)}
                           className="absolute inset-0 opacity-0 w-full h-full cursor-pointer"
                         />
-                        <div className="w-16 h-16 rounded-xl border-4 border-white shadow-lg ring-2 ring-border group-hover:ring-primary transition-all" style={{ background: colors[slot.key] }} />
+                        <div className="w-16 h-16 rounded-xl border-4 border-white shadow-lg ring-2 ring-border group-hover:ring-primary transition-all" style={{ background: colorValue }} />
                         <div className="absolute -bottom-1 -right-1 bg-primary text-primary-foreground rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity">
                           <Palette className="h-3 w-3" />
                         </div>
@@ -922,16 +925,16 @@ const AdminTemplates: React.FC = () => {
                           <input
                             type="text"
                             maxLength={7}
-                            value={colors[slot.key].replace('#', '')}
+                            value={colorValue.replace('#', '')}
                             onChange={e => handleHexInput(slot.key, e.target.value)}
                             className="w-28 text-sm font-mono font-bold border-2 rounded-lg px-3 py-2 bg-background uppercase focus:ring-2 focus:ring-primary focus:border-primary"
                             placeholder="RRGGBB"
                           />
-                          <span className="text-xs text-muted-foreground">{colors[slot.key]}</span>
+                          <span className="text-xs text-muted-foreground">{colorValue}</span>
                         </div>
                       </div>
                     </div>
-                  ))}
+                  )})}
                 </div>
                 <div className="flex justify-between items-center mt-6">
                   <Button variant="outline" onClick={() => {
