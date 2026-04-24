@@ -529,6 +529,16 @@ const StoreDetail: React.FC = () => {
   const resolvedTemplate = typeof store.template === 'string' && allowedTemplates.has(store.template)
     ? store.template
     : 'modern';
+  
+  // White-label detection: Pro/Business/Premium tier OR Custom Domain OR Imported Design
+  const isPaidTier = ['pro', 'business', 'premium'].includes(store.subscriptionTier || '');
+  const isWhiteLabel = isPaidTier || !!store.customDomain || !!store.hasImportedDesign;
+  
+  // For white-label stores, use a clean hero background (no dark gradient)
+  const whiteLabelHeroBg = store.templateColors?.primary 
+    ? '' // Use inline style with store's primary color
+    : 'bg-gradient-to-r from-blue-50 to-indigo-50'; // Light fallback
+  
   const templateStyles: Record<string, {
     pageBg: string;
     heroBg: string;
@@ -543,7 +553,7 @@ const StoreDetail: React.FC = () => {
   }> = {
     default: {
       pageBg: 'bg-gray-50',
-      heroBg: 'bg-gradient-to-r from-gray-700 to-gray-900',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-gray-700 to-gray-900',
       headerCard: 'bg-white border border-gray-100',
       sectionTitle: 'text-gray-900',
       card: 'bg-white',
@@ -555,7 +565,7 @@ const StoreDetail: React.FC = () => {
     },
     modern: {
       pageBg: 'bg-gradient-to-b from-cyan-50 via-white to-indigo-50',
-      heroBg: 'bg-gradient-to-r from-cyan-500 via-sky-500 to-indigo-600',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-cyan-500 via-sky-500 to-indigo-600',
       headerCard: 'bg-white/90 backdrop-blur border border-cyan-100',
       sectionTitle: 'text-cyan-900',
       card: 'bg-white border border-cyan-100',
@@ -567,7 +577,7 @@ const StoreDetail: React.FC = () => {
     },
     minimal: {
       pageBg: 'bg-white',
-      heroBg: 'bg-gradient-to-r from-gray-700 to-gray-900',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-gray-700 to-gray-900',
       headerCard: 'bg-white border border-gray-200 shadow-none',
       sectionTitle: 'text-gray-800',
       card: 'bg-white border border-gray-200 shadow-none',
@@ -579,7 +589,7 @@ const StoreDetail: React.FC = () => {
     },
     classic: {
       pageBg: 'bg-blue-50/40',
-      heroBg: 'bg-gradient-to-r from-blue-700 to-blue-900',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-blue-700 to-blue-900',
       headerCard: 'bg-white border border-blue-200',
       sectionTitle: 'text-blue-900',
       card: 'bg-white border border-blue-100',
@@ -591,7 +601,7 @@ const StoreDetail: React.FC = () => {
     },
     vibrant: {
       pageBg: 'bg-gradient-to-br from-orange-50 via-pink-50 to-violet-100',
-      heroBg: 'bg-gradient-to-r from-orange-500 via-pink-500 to-violet-600',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-orange-500 via-pink-500 to-violet-600',
       headerCard: 'bg-white/95 border border-orange-200',
       sectionTitle: 'text-fuchsia-900',
       card: 'bg-white border border-pink-200',
@@ -603,7 +613,7 @@ const StoreDetail: React.FC = () => {
     },
     professional: {
       pageBg: 'bg-slate-100',
-      heroBg: 'bg-gradient-to-r from-slate-700 to-slate-900',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-slate-700 to-slate-900',
       headerCard: 'bg-white border border-slate-300',
       sectionTitle: 'text-slate-900',
       card: 'bg-white border border-slate-200',
@@ -615,7 +625,7 @@ const StoreDetail: React.FC = () => {
     },
     artistic: {
       pageBg: 'bg-gradient-to-tr from-violet-100 via-rose-50 to-amber-50',
-      heroBg: 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-amber-500',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-violet-600 via-fuchsia-500 to-amber-500',
       headerCard: 'bg-white/90 border border-violet-200',
       sectionTitle: 'text-violet-900',
       card: 'bg-white border border-rose-200',
@@ -912,14 +922,26 @@ const StoreDetail: React.FC = () => {
       <main className="container mx-auto px-4 py-6">
         {/* Hero Banner — image carousel OR gradient fallback */}
         {heroLayout === 'minimal' ? (
-          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+          <div 
+            className={`rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`}
+            style={isWhiteLabel && store.templateColors?.primary ? { 
+              backgroundColor: store.templateColors.primary,
+              color: '#fff'
+            } : {}}
+          >
             <div className="p-4 md:p-5 flex items-center justify-between gap-4">
               <h2 className="text-xl md:text-2xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-sm opacity-90 hidden md:block">{store.slogan}</p>}
             </div>
           </div>
         ) : heroLayout === 'centered' ? (
-          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+          <div 
+            className={`rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`}
+            style={isWhiteLabel && store.templateColors?.primary ? { 
+              backgroundColor: store.templateColors.primary,
+              color: '#fff'
+            } : {}}
+          >
             <div className="p-8 md:p-12 text-center">
               <h2 className="text-3xl md:text-4xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto">{store.slogan}</p>}
@@ -937,7 +959,13 @@ const StoreDetail: React.FC = () => {
                 />
               ))}
             </div>
-            <div className={`p-8 flex flex-col justify-center text-white ${currentTheme.heroBg}`}>
+            <div 
+              className={`p-8 flex flex-col justify-center ${currentTheme.heroBg}`}
+              style={isWhiteLabel && store.templateColors?.primary ? { 
+                backgroundColor: store.templateColors.primary,
+                color: '#fff'
+              } : {}}
+            >
               <h2 className="text-3xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-base opacity-90 mt-3">{store.slogan}</p>}
             </div>
@@ -983,7 +1011,13 @@ const StoreDetail: React.FC = () => {
             )}
           </div>
         ) : (
-          <div className={`rounded-xl shadow-sm mb-6 text-white ${currentTheme.heroBg}`}>
+          <div 
+            className={`rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`}
+            style={isWhiteLabel && store.templateColors?.primary ? { 
+              backgroundColor: store.templateColors.primary,
+              color: '#fff'
+            } : {}}
+          >
             <div className="p-6 md:p-8">
               <h2 className="text-2xl md:text-3xl font-bold">{store.name}</h2>
               {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2">{store.slogan}</p>}

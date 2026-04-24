@@ -3,6 +3,14 @@
     "default": "market-flow-7b074",
     "grabio": "market-flow-7b074"
   },
-  "targets": {},
+  "targets": {
+    "market-flow-7b074": {
+      "hosting": {
+        "production": [
+          "market-flow-7b074"
+        ]
+      }
+    }
+  },
   "etags": {}
 }
