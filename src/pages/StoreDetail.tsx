@@ -699,23 +699,29 @@ const StoreDetail: React.FC = () => {
 
   // Hero banner style - uses heroBg color or primary as fallback
   const heroBannerStyle = tColors?.heroBg ? {
-    backgroundColor: tColors.heroBg
+    backgroundColor: tColors.heroBg,
+    color: tColors.heroTextColor || '#ffffff'
   } : (isWhiteLabel && tColors?.primary) ? {
-    backgroundColor: tColors.primary
+    backgroundColor: tColors.primary,
+    color: tColors.heroTextColor || '#ffffff'
   } : {} as React.CSSProperties;
 
   // Store info card style - uses storeCardBg or surface as fallback
   const storeCardStyle = tColors?.storeCardBg ? {
-    backgroundColor: tColors.storeCardBg
+    backgroundColor: tColors.storeCardBg,
+    color: tColors.storeCardTextColor || tColors.textColor || '#1a202c'
   } : tColors?.surface ? {
-    backgroundColor: tColors.surface
+    backgroundColor: tColors.surface,
+    color: tColors.storeCardTextColor || tColors.textColor || '#1a202c'
   } : {} as React.CSSProperties;
 
   // Content cards style - uses contentCardBg or surface as fallback  
   const contentCardStyle = tColors?.contentCardBg ? {
-    backgroundColor: tColors.contentCardBg
+    backgroundColor: tColors.contentCardBg,
+    color: tColors.contentCardTextColor || tColors.textColor || '#1a202c'
   } : tColors?.surface ? {
-    backgroundColor: tColors.surface
+    backgroundColor: tColors.surface,
+    color: tColors.contentCardTextColor || tColors.textColor || '#1a202c'
   } : {} as React.CSSProperties;
 
   // Product cards style - uses surface color
