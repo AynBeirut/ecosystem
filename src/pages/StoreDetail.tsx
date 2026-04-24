@@ -654,6 +654,9 @@ const StoreDetail: React.FC = () => {
   const aboutLayout = store.aboutLayout || 'left';
   const contactFormStyle = store.contactFormStyle || 1;
   const ratingDisplayType = store.ratingDisplayType || 'stars';
+  const pageLayout = store.pageLayout || 'contained';
+  const storeCardLayout = store.storeCardStyle || 'standard';
+  const visualStyle = store.visualStyle || 'rounded';
   const sectionOrder: StoreSectionOrder[] = Array.isArray(store.sectionOrder) 
     ? store.sectionOrder 
     : [
@@ -752,6 +755,7 @@ const StoreDetail: React.FC = () => {
     
     const rows: StoreSectionOrder[][] = [];
     let currentRow: StoreSectionOrder[] = [];
+    let currentRowWidth: SectionWidth | null = null;
     
     enabled.forEach((section) => {
       const width = section.width || 'full';
@@ -761,24 +765,78 @@ const StoreDetail: React.FC = () => {
         if (currentRow.length > 0) {
           rows.push(currentRow);
           currentRow = [];
+          currentRowWidth = null;
         }
         rows.push([section]);
       } else {
-        // Half width section
-        currentRow.push(section);
-        if (currentRow.length === 2) {
+        // Half or Third width sections
+        // Start new row if width type changes or row is full
+        if (currentRowWidth !== null && currentRowWidth !== width) {
           rows.push(currentRow);
           currentRow = [];
+          currentRowWidth = null;
+        }
+        
+        currentRow.push(section);
+        currentRowWidth = width;
+        
+        // Check if row is complete
+        const maxSectionsInRow = width === 'half' ? 2 : 3; // 'third' = 3 per row
+        if (currentRow.length === maxSectionsInRow) {
+          rows.push(currentRow);
+          currentRow = [];
+          currentRowWidth = null;
         }
       }
     });
     
-    // Push any remaining half-width section
+    // Push any remaining sections
     if (currentRow.length > 0) {
       rows.push(currentRow);
     }
     
     return rows;
+  };
+
+  // Helper: Get section wrapper styling (Elementor-style)
+  const getSectionWrapperClasses = (section: StoreSectionOrder) => {
+    const container = section.container || 'contained';
+    const padding = section.padding || 'medium';
+    const showBg = section.showBackground ?? true;
+    const showBorders = section.showBorders ?? true;
+    
+    let classes = '';
+    
+    // Padding
+    if (padding === 'none') classes += ' p-0';
+    else if (padding === 'small') classes += ' p-4';
+    else if (padding === 'medium') classes += ' p-6';
+    else if (padding === 'large') classes += ' p-12';
+    
+    // Borders and rounded corners
+    if (showBorders) {
+      classes += ' rounded-xl border-2 shadow-sm';
+    }
+    
+    // Background
+    if (showBg) {
+      classes += ` ${currentTheme.cardSoft}`;
+    }
+    
+    return classes.trim();
+  };
+
+  // Helper: Get section container wrapper classes
+  const getSectionContainerClasses = (section: StoreSectionOrder) => {
+    const container = section.container || 'contained';
+    
+    if (container === 'full-width') {
+      return 'w-full'; // Edge-to-edge
+    } else if (container === 'wide') {
+      return 'max-w-screen-2xl mx-auto px-4'; // Wide centered (1536px)
+    } else {
+      return 'max-w-7xl mx-auto px-4'; // Contained (1280px)
+    }
   };
 
   // Render individual section by ID
@@ -912,6 +970,93 @@ const StoreDetail: React.FC = () => {
       case 'contact':
         return <StoreContactForm storeId={storeId} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle} />;
 
+      case 'hero':
+        // Hero/Banner section with different layout options
+        if (heroLayout === 'minimal') {
+          return (
+            <div className="p-4 md:p-5 flex items-center justify-between gap-4" style={heroBannerStyle}>
+              <h2 className="text-xl md:text-2xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+              {store.slogan && <p className="text-sm opacity-90 hidden md:block" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+            </div>
+          );
+        } else if (heroLayout === 'centered') {
+          return (
+            <div className="p-8 md:p-12 text-center" style={heroBannerStyle}>
+              <h2 className=" text-3xl md:text-4xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+              {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+            </div>
+          );
+        } else if (heroLayout === 'split' && bannerImages.length > 0) {
+          return (
+            <div className="relative overflow-hidden grid grid-cols-1 md:grid-cols-2 min-h-[280px]">
+              <div className="relative h-64 md:h-full">
+                {bannerImages.map((url, idx) => (
+                  <img
+                    key={url}
+                    src={url}
+                    alt={`Banner ${idx + 1}`}
+                    className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
+                  />
+                ))}
+              </div>
+              <div className="p-8 flex flex-col justify-center" style={heroBannerStyle}>
+                <h2 className="text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+                {store.slogan && <p className="text-base opacity-90 mt-3" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+              </div>
+            </div>
+          );
+        } else if (bannerImages.length > 0) {
+          // Fullscreen with image carousel
+          return (
+            <div className="relative overflow-hidden h-64 md:h-96">
+              {bannerImages.map((url, idx) => (
+                <img
+                  key={url}
+                  src={url}
+                  alt={`Banner ${idx + 1}`}
+                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
+                />
+              ))}
+              {/* Slogan overlay */}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end">
+                <div className="p-6 text-white">
+                  {store.slogan && <p className="text-base md:text-xl font-semibold drop-shadow">{store.slogan}</p>}
+                </div>
+              </div>
+              {/* Carousel controls */}
+              {bannerImages.length > 1 && (
+                <>
+                  <button
+                    onClick={() => goToBanner((bannerIndex - 1 + bannerImages.length) % bannerImages.length)}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-10 h-10 flex items-center justify-center text-2xl"
+                  >‹</button>
+                  <button
+                    onClick={() => goToBanner((bannerIndex + 1) % bannerImages.length)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-10 h-10 flex items-center justify-center text-2xl"
+                  >›</button>
+                  <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
+                    {bannerImages.map((_, idx) => (
+                      <button
+                        key={idx}
+                        onClick={() => goToBanner(idx)}
+                        className={`w-2.5 h-2.5 rounded-full transition-all ${idx === bannerIndex ? 'bg-white scale-125' : 'bg-white/50'}`}
+                      />
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+          );
+        } else {
+          // No images - solid color banner
+          return (
+            <div className="p-6 md:p-8" style={heroBannerStyle}>
+              <h2 className="text-2xl md:text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
+              {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+            </div>
+          );
+        }
+
       default:
         return null;
     }
@@ -957,97 +1102,18 @@ const StoreDetail: React.FC = () => {
         hasCustomDomain={!!store.customDomain}
         hasImportedDesign={store.hasImportedDesign}
       />
-      <main className="container mx-auto px-4 py-6">
-        {/* Hero Banner — image carousel OR gradient fallback */}
-        {heroLayout === 'minimal' ? (
-          <div className={`rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`} style={heroBannerStyle}>
-            <div className="p-4 md:p-5 flex items-center justify-between gap-4">
-              <h2 className="text-xl md:text-2xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-              {store.slogan && <p className="text-sm opacity-90 hidden md:block" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
-            </div>
-          </div>
-        ) : heroLayout === 'centered' ? (
-          <div className={` rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`} style={heroBannerStyle}>
-            <div className="p-8 md:p-12 text-center">
-              <h2 className="text-3xl md:text-4xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-              {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
-            </div>
-          </div>
-        ) : heroLayout === 'split' && bannerImages.length > 0 ? (
-          <div className="relative rounded-xl overflow-hidden shadow-md mb-6 grid grid-cols-1 md:grid-cols-2 min-h-[280px]">
-            <div className="relative h-64 md:h-full">
-              {bannerImages.map((url, idx) => (
-                <img
-                  key={url}
-                  src={url}
-                  alt={`Banner ${idx + 1}`}
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
-                />
-              ))}
-            </div>
-            <div className={`p-8 flex flex-col justify-center ${currentTheme.heroBg}`} style={heroBannerStyle}>
-              <h2 className="text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-              {store.slogan && <p className="text-base opacity-90 mt-3" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
-            </div>
-          </div>
-        ) : bannerImages.length > 0 ? (
-          <div className="relative rounded-xl overflow-hidden shadow-md mb-6 h-64 md:h-80">
-            {bannerImages.map((url, idx) => (
-              <img
-                key={url}
-                src={url}
-                alt={`Banner ${idx + 1}`}
-                className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
-              />
-            ))}
-            {/* Slogan overlay */}
-            <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end">
-              <div className="p-6 text-white">
-                {store.slogan && <p className="text-base md:text-xl font-semibold drop-shadow">{store.slogan}</p>}
-              </div>
-            </div>
-            {/* Prev / Next arrows */}
-            {bannerImages.length > 1 && (
-              <>
-                <button
-                  onClick={() => goToBanner((bannerIndex - 1 + bannerImages.length) % bannerImages.length)}
-                  className="absolute left-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center"
-                >‹</button>
-                <button
-                  onClick={() => goToBanner((bannerIndex + 1) % bannerImages.length)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 bg-black/40 hover:bg-black/60 text-white rounded-full w-8 h-8 flex items-center justify-center"
-                >›</button>
-                {/* Dots */}
-                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-2">
-                  {bannerImages.map((_, idx) => (
-                    <button
-                      key={idx}
-                      onClick={() => goToBanner(idx)}
-                      className={`w-2 h-2 rounded-full transition-all ${idx === bannerIndex ? 'bg-white scale-125' : 'bg-white/50'}`}
-                    />
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-        ) : (
-          <div className={`rounded-xl shadow-sm mb-6 ${currentTheme.heroBg}`} style={heroBannerStyle}>
-            <div className="p-6 md:p-8">
-              <h2 className="text-2xl md:text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-              {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
-            </div>
-          </div>
-        )}
-
+      
+      <main className={pageLayout === 'contained' ? 'container mx-auto px-4 py-6' : pageLayout === 'hybrid' ? 'container mx-auto px-4 py-6' : 'py-6'}>
         {/* Store Header */}
-        <div className={`rounded-lg shadow-sm p-6 mb-6 ${currentTheme.headerCard}`} style={storeCardStyle}>
-          <div className="flex flex-col md:flex-row items-center md:items-start gap-6">
-            <img 
-              src={store.logo} 
-              alt={store.name} 
-              className="h-24 w-24 object-cover rounded-full border-4 border-white shadow-sm"
-            />
-            <div className="flex-1 text-center md:text-left">
+        <div className={`${storeCardLayout === 'full-width' || (pageLayout === 'full-width' && storeCardLayout === 'standard') ? '' : ''}${storeCardLayout !== 'minimal' ? 'rounded-lg shadow-sm p-6 mb-6' : 'mb-6'} ${currentTheme.headerCard}`} style={storeCardStyle}>
+          <div className={`${storeCardLayout === 'full-width' || (pageLayout === 'full-width' && storeCardLayout === 'standard') ? 'container mx-auto px-4' : ''}`}>
+            <div className={`flex ${storeCardLayout === 'split' ? 'grid md:grid-cols-2 gap-8' : 'flex-col md:flex-row'} items-center md:items-start gap-6`}>
+              <img 
+                src={store.logo} 
+                alt={store.name} 
+                className="h-24 w-24 object-cover rounded-full border-4 border-white shadow-sm"
+              />
+              <div className="flex-1 text-center md:text-left">
               <div className="flex items-center justify-center md:justify-start gap-3 mb-3">
                 {avgRating !== null ? (
                   <div className="flex items-center text-yellow-500">
@@ -1144,6 +1210,10 @@ const StoreDetail: React.FC = () => {
             </div>
           </div>
         </div>
+        </div>
+        
+        {/* Content wrapper for full-width layout */}
+        <div className={pageLayout === 'full-width' ? 'container mx-auto px-4' : ''}>
         
         {/* Page Navigation Bar */}
         {(() => {
@@ -1180,18 +1250,30 @@ const StoreDetail: React.FC = () => {
         {/* Page Content */}
         {activePage === 'home' && (
           <div className="space-y-6">
-            {groupSectionsIntoRows().map((row, rowIdx) => (
-              <div
-                key={rowIdx}
-                className={row.length === 1 ? '' : 'grid grid-cols-1 md:grid-cols-2 gap-6'}
-              >
-                {row.map((section) => (
-                  <div key={section.id} className={`rounded-lg p-4 ${currentTheme.cardSoft}`}>
-                    {renderSection(section.id)}
+            {groupSectionsIntoRows().map((row, rowIdx) => {
+              // Check if all sections in row want full-width containers
+              const allFullWidth = row.every(s => (s.container || 'contained') === 'full-width');
+              
+              return (
+                <div key={rowIdx} className={allFullWidth ? 'w-full' : ''}>
+                  <div
+                    className={
+                      row.length === 1 
+                        ? getSectionContainerClasses(row[0])
+                        : row.length === 2 
+                        ? `grid grid-cols-1 md:grid-cols-2 gap-6 ${!allFullWidth ? 'max-w-7xl mx-auto px-4' : ''}`
+                        : `grid grid-cols-1 md:grid-cols-3 gap-6 ${!allFullWidth ? 'max-w-7xl mx-auto px-4' : ''}`
+                    }
+                  >
+                    {row.map((section) => (
+                      <div key={section.id} className={getSectionWrapperClasses(section)}>
+                        {renderSection(section.id)}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ))}
+                </div>
+              );
+            })}
           </div>
         )}
 
@@ -1360,10 +1442,10 @@ const StoreDetail: React.FC = () => {
 
         {/* Reviews */}
         {isSectionEnabled('reviews') && (
-        <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
-          <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
-          {reviews.length > 0 ? (
-            <div className="space-y-4">
+          <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
+            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
+            {reviews.length > 0 ? (
+              <div className="space-y-4">
               {reviews.map(r => (
                 <div key={r.id} className={`p-4 rounded shadow-sm ${currentTheme.reviewCard}`}>
                   <div className="flex items-center justify-between">
@@ -1425,12 +1507,12 @@ const StoreDetail: React.FC = () => {
                   )}
                 </div>
               ))}
-            </div>
+              </div>
             ) : (
-            <div className={currentTheme.mutedText}>No reviews yet. Be the first to review this store.</div>
-          )}
+              <div className={currentTheme.mutedText}>No reviews yet. Be the first to review this store.</div>
+            )}
 
-          <div className={`mt-6 p-4 rounded shadow-sm ${currentTheme.card}`}>
+            <div className={`mt-6 p-4 rounded shadow-sm ${currentTheme.card}`}>
             <h3 className="font-semibold mb-2">Write a review</h3>
             {!user ? (
               <div className="text-gray-600">Please sign in to leave a review.</div>
@@ -1494,7 +1576,7 @@ const StoreDetail: React.FC = () => {
                     {[5,4,3,2,1].map(n => <option key={n} value={n}>{n} star{n>1?'s':''}</option>)}
                   </select>
                 </div>
-                <textarea value={newComment} onChange={(e)=>setNewComment(e.target.value)} className="w-full border rounded p-2 mb-3" placeholder="Write your comment (optional)" />
+                <textarea value={newComment} onChange={(e)=>setNewComment(e.target.value)} className="w-full border rounded p-2 mb-3" placeholder="Write your comment (optional)"></textarea>
                 <div className="text-right">
                   <Button type="submit" disabled={isSubmittingReview}>{isSubmittingReview ? 'Submitting...' : 'Submit review'}</Button>
                 </div>
@@ -1503,6 +1585,7 @@ const StoreDetail: React.FC = () => {
           </div>
         </div>
         )}
+        </div>{/* End content wrapper for full-width layout */}
       </main>
     </div>
   );

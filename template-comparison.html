@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Template Visual Comparison</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #f0f4f8; padding: 20px; }
+        .header { text-align: center; margin-bottom: 40px; }
+        .header h1 { font-size: 2.5rem; color: #1a202c; margin-bottom: 10px; }
+        .header p { color: #718096; font-size: 1.1rem; }
+        .comparison-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(350px, 1fr)); gap: 30px; max-width: 1400px; margin: 0 auto; }
+        .template-card { background: white; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 6px rgba(0,0,0,0.1); transition: transform 0.2s; }
+        .template-card:hover { transform: translateY(-5px); box-shadow: 0 8px 12px rgba(0,0,0,0.15); }
+        .template-name { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; padding: 20px; font-size: 1.5rem; font-weight: bold; }
+        .modern .template-name { background: linear-gradient(135deg, #38B2AC 0%, #2C5282 100%); }
+        .minimal .template-name { background: linear-gradient(135deg, #718096 0%, #2D3748 100%); }
+        .classic .template-name { background: linear-gradient(135deg, #2C5282 0%, #3182CE 100%); }
+        .vibrant .template-name { background: linear-gradient(135deg, #ED8936 0%, #F56565 100%); }
+        .professional .template-name { background: linear-gradient(135deg, #2D3748 0%, #4A5568 100%); }
+        .artistic .template-name { background: linear-gradient(135deg, #9F7AEA 0%, #ED64A6 100%); }
+        .preview { padding: 20px; }
+        .feature { padding: 12px 0; border-bottom: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+        .feature:last-child { border-bottom: none; }
+        .feature-label { font-weight: 600; color: #2d3748; }
+        .feature-value { color: #4a5568; background: #edf2f7; padding: 4px 12px; border-radius: 6px; font-size: 0.9rem; }
+        .highlight { background: #48bb78; color: white; font-weight: bold; }
+        .visual-demo { margin: 20px 0; padding: 15px; background: #f7fafc; border-radius: 8px; }
+        .visual-demo h4 { margin-bottom: 10px; color: #2d3748; }
+        .demo-box { padding: 10px; margin: 8px 0; border-radius: 6px; font-size: 0.85rem; }
+        .demo-hero { border: 2px dashed #cbd5e0; text-align: center; padding: 20px; }
+        .demo-products { display: grid; gap: 8px; margin-top: 10px; }
+        .demo-product { background: white; padding: 10px; border-radius: 4px; border: 1px solid #e2e8f0; }
+        .note { background: #fef5e7; border-left: 4px solid #f59e0b; padding: 15px; margin-top: 20px; border-radius: 6px; }
+        .note strong { color: #d97706; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🎨 Template Visual Comparison</h1>
+        <p>See exactly how each template looks different</p>
+    </div>
+
+    <div class="comparison-grid">
+        <!-- MODERN -->
+        <div class="template-card modern">
+            <div class="template-name">🌊 Modern</div>
+            <div class="preview">
+                <div class="feature">
+                    <span class="feature-label">Page Layout</span>
+                    <span class="feature-value highlight">Hybrid</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Hero Banner</span>
+                    <span class="feature-value highlight">Fullscreen</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Products</span>
+                    <span class="feature-value">4-Column Grid</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Animation</span>
+                    <span class="feature-value">3D Lift</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Menu</span>
+                    <span class="feature-value highlight">Sticky Glass</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Rating</span>
+                    <span class="feature-value">Yellow Pill</span>
+                </div>
+                <div class="visual-demo">
+                    <h4>Visual Preview:</h4>
+                    <div class="demo-box demo-hero" style="background: linear-gradient(135deg, #38B2AC 0%, #2C5282 100%); color: white;">
+                        FULL-WIDTH HERO (edge-to-edge)
+                    </div>
+                    <div style="max-width: 800px; margin: 10px auto; padding: 10px; background: white; border-radius: 8px;">
+                        Content contained inside
+                    </div>
+                    <div class="demo-products" style="grid-template-columns: repeat(4, 1fr);">
+                        <div class="demo-product">Product</div>
+                        <div class="demo-product">Product</div>
+                        <div class="demo-product">Product</div>
+                        <div class="demo-product">Product</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- MINIMAL -->
+        <div class="template-card minimal">
+            <div class="template-name">🎯 Minimal</div>
+            <div class="preview">
+                <div class="feature">
+                    <span class="feature-label">Page Layout</span>
+                    <span class="feature-value highlight">Contained</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Hero Banner</span>
+                    <span class="feature-value highlight">Minimal</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Products</span>
+                    <span class="feature-value highlight">List View</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Animation</span>
+                    <span class="feature-value">Fade In</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Menu</span>
+                    <span class="feature-value">Classic</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Rating</span>
+                    <span class="feature-value highlight">Percentage</span>
+                </div>
+                <div class="visual-demo">
+                    <h4>Visual Preview:</h4>
+                    <div style="max-width: 800px; margin: 0 auto;">
+                        <div class="demo-box demo-hero" style="background: #718096; color: white;">
+                            Just Store Name
+                        </div>
+                        <div class="demo-products" style="grid-template-columns: 1fr;">
+                            <div class="demo-product">Product 1 - Full Width</div>
+                            <div class="demo-product">Product 2 - Full Width</div>
+                            <div class="demo-product">Product 3 - Full Width</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- VIBRANT -->
+        <div class="template-card vibrant">
+            <div class="template-name">🎨 Vibrant</div>
+            <div class="preview">
+                <div class="feature">
+                    <span class="feature-label">Page Layout</span>
+                    <span class="feature-value highlight">Full-Width</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Hero Banner</span>
+                    <span class="feature-value">Fullscreen</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Products</span>
+                    <span class="feature-value highlight">Masonry</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Animation</span>
+                    <span class="feature-value">Slide Up</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Menu</span>
+                    <span class="feature-value highlight">Bold Color</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Rating</span>
+                    <span class="feature-value">Large Number</span>
+                </div>
+                <div class="visual-demo">
+                    <h4>Visual Preview:</h4>
+                    <div class="demo-box demo-hero" style="background: linear-gradient(135deg, #ED8936 0%, #F56565 100%); color: white;">
+                        FULL-WIDTH EVERYTHING (edge-to-edge)
+                    </div>
+                    <div class="demo-products" style="columns: 3; column-gap: 8px;">
+                        <div class="demo-product" style="height: 60px; margin-bottom: 8px;">Product</div>
+                        <div class="demo-product" style="height: 100px; margin-bottom: 8px;">Product</div>
+                        <div class="demo-product" style="height: 80px; margin-bottom: 8px;">Product</div>
+                        <div class="demo-product" style="height: 90px; margin-bottom: 8px;">Product</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLASSIC -->
+        <div class="template-card classic">
+            <div class="template-name">📘 Classic</div>
+            <div class="preview">
+                <div class="feature">
+                    <span class="feature-label">Page Layout</span>
+                    <span class="feature-value">Contained</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Hero Banner</span>
+                    <span class="feature-value highlight">Split</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Products</span>
+                    <span class="feature-value">3-Column Grid</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Animation</span>
+                    <span class="feature-value">None</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Menu</span>
+                    <span class="feature-value">Classic</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Rating</span>
+                    <span class="feature-value">Stars</span>
+                </div>
+                <div class="visual-demo">
+                    <h4>Visual Preview:</h4>
+                    <div style="max-width: 800px; margin: 0 auto;">
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                            <div class="demo-box" style="background: #3182CE; color: white;">Image</div>
+                            <div class="demo-box" style="background: #63B3ED; color: white;">Store Info</div>
+                        </div>
+                        <div class="demo-products" style="grid-template-columns: repeat(3, 1fr);">
+                            <div class="demo-product">Product</div>
+                            <div class="demo-product">Product</div>
+                            <div class="demo-product">Product</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROFESSIONAL -->
+        <div class="template-card professional">
+            <div class="template-name">💼 Professional</div>
+            <div class="preview">
+                <div class="feature">
+                    <span class="feature-label">Page Layout</span>
+                    <span class="feature-value">Contained</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Hero Banner</span>
+                    <span class="feature-value">Centered</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Products</span>
+                    <span class="feature-value highlight">Large 2-Col Grid</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Animation</span>
+                    <span class="feature-value">Scale Smooth</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Menu</span>
+                    <span class="feature-value">Classic</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Store Card</span>
+                    <span class="feature-value highlight">Split Layout</span>
+                </div>
+                <div class="visual-demo">
+                    <h4>Visual Preview:</h4>
+                    <div style="max-width: 800px; margin: 0 auto;">
+                        <div class="demo-box demo-hero" style="background: #4A5568; color: white;">
+                            Centered Hero
+                        </div>
+                        <div class="demo-products" style="grid-template-columns: repeat(2, 1fr);">
+                            <div class="demo-product" style="height: 80px;">Large Product Card</div>
+                            <div class="demo-product" style="height: 80px;">Large Product Card</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ARTISTIC -->
+        <div class="template-card artistic">
+            <div class="template-name">🎭 Artistic</div>
+            <div class="preview">
+                <div class="feature">
+                    <span class="feature-label">Page Layout</span>
+                    <span class="feature-value">Hybrid</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Hero Banner</span>
+                    <span class="feature-value">Centered</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Products</span>
+                    <span class="feature-value highlight">Compact 4-Col</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Animation</span>
+                    <span class="feature-value">Scale Smooth</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Menu</span>
+                    <span class="feature-value">Sticky Glass</span>
+                </div>
+                <div class="feature">
+                    <span class="feature-label">Style</span>
+                    <span class="feature-value highlight">Mixed Corners</span>
+                </div>
+                <div class="visual-demo">
+                    <h4>Visual Preview:</h4>
+                    <div class="demo-box demo-hero" style="background: linear-gradient(135deg, #9F7AEA 0%, #ED64A6 100%); color: white;">
+                        FULL-WIDTH HERO
+                    </div>
+                    <div style="max-width: 800px; margin: 10px auto;">
+                        <div class="demo-products" style="grid-template-columns: repeat(4, 1fr);">
+                            <div class="demo-product" style="height: 50px;">Compact</div>
+                            <div class="demo-product" style="height: 50px;">Compact</div>
+                            <div class="demo-product" style="height: 50px;">Compact</div>
+                            <div class="demo-product" style="height: 50px;">Compact</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="note" style="max-width: 1400px; margin: 40px auto;">
+        <strong>⚠️ Important:</strong> These visual previews are simplified representations. The actual templates on your store page will have much more detail with proper styling, colors, animations, and responsive behavior. To see the real differences, select a template in the admin panel and view your actual store page!
+    </div>
+
+    <div style="text-align: center; margin: 40px auto; max-width: 800px; padding: 30px; background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1);">
+        <h2 style="color: #2d3748; margin-bottom: 15px;">🚀 How to Test</h2>
+        <ol style="text-align: left; color: #4a5568; line-height: 1.8; padding-left: 40px;">
+            <li>Go to <strong>Admin Templates</strong> page</li>
+            <li>Click <strong>"Use Template"</strong> on any template above</li>
+            <li>Open your <strong>store page</strong> in a new tab</li>
+            <li>Press <strong>Ctrl + Shift + R</strong> to hard refresh</li>
+            <li>See the differences! 🎉</li>
+        </ol>
+        <p style="margin-top: 20px; padding: 15px; background: #edf2f7; border-radius: 8px; color: #2d3748;">
+            For most dramatic comparison: Try <strong>Vibrant</strong> (full-width masonry) vs <strong>Minimal</strong> (contained list)
+        </p>
+    </div>
+</body>
+</html>

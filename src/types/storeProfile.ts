@@ -29,14 +29,25 @@ export type MenuStyle = 'classic' | 'centered' | 'bold' | 'sticky-glass' | 'hamb
 export type ContactFormStyle = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 export type RatingDisplayType = 'stars' | 'pill' | 'number' | 'card' | 'minimal';
 export type AboutLayout = 'off' | 'left' | 'centered' | 'with-image';
+export type PageLayout = 'contained' | 'full-width' | 'hybrid';
+export type StoreCardStyle = 'standard' | 'full-width' | 'split' | 'minimal';
+export type VisualStyle = 'rounded' | 'sharp' | 'mixed';
 export type StoreSectionId = 'hero' | 'about' | 'announcements' | 'products' | 'gallery' | 'reviews' | 'contact';
-export type SectionWidth = 'full' | 'half';
+export type SectionWidth = 'full' | 'half' | 'third';
+export type SectionContainer = 'full-width' | 'contained' | 'wide'; // edge-to-edge, max-w-7xl centered, max-w-5xl centered
+export type SectionPadding = 'none' | 'small' | 'medium' | 'large';
 
 export interface StoreSectionOrder {
   id: StoreSectionId;
   enabled: boolean;
   order: number;
-  width?: SectionWidth; // 'full' (default) or 'half' for side-by-side layouts
+  width?: SectionWidth; // 'full' (1 per row), 'half' (2 per row), or 'third' (3 per row)
+  
+  // Elementor-style section styling
+  container?: SectionContainer; // Container width: full-width, contained, wide
+  showBackground?: boolean; // Show section background color
+  showBorders?: boolean; // Show rounded corners and borders
+  padding?: SectionPadding; // Section padding
 }
 
 export interface StoreProfile {
@@ -133,6 +144,9 @@ export interface StoreProfile {
   contactFormStyle?: ContactFormStyle;
   ratingDisplayType?: RatingDisplayType;
   aboutLayout?: AboutLayout;
+  pageLayout?: PageLayout;
+  storeCardStyle?: StoreCardStyle;
+  visualStyle?: VisualStyle;
   sectionOrder?: StoreSectionOrder[];
   whatsappBusiness?: string; // WhatsApp Business number (international format, digits only)
   proEmail?: string;         // Email address to receive Contact Us messages

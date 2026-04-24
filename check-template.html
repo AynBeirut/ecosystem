@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Template Checker</title>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore-compat.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .field { margin: 15px 0; padding: 10px; background: #f9f9f9; border-left: 3px solid #3b82f6; }
+        .field strong { color: #1e40af; }
+        .value { color: #059669; font-weight: bold; }
+        button { background: #3b82f6; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; margin: 10px 5px 0 0; }
+        button:hover { background: #2563eb; }
+        #output { margin-top: 20px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Store Template Inspector</h1>
+        <p>Enter your Store ID to check which template and layout settings are active:</p>
+        <input type="text" id="storeId" placeholder="Enter Store ID" style="width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; margin-bottom: 10px;">
+        <button onclick="checkTemplate()">Check Template</button>
+        <button onclick="document.getElementById('output').innerHTML = '';">Clear</button>
+        <div id="output"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-app.js';
+        import { getFirestore, doc, getDoc } from 'https://www.gstatic.com/firebasejs/9.22.0/firebase-firestore.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDk6klORM1ZpNm6-SBGCRPxVw0uZo9g2QU",
+            authDomain: "market-place-5e860.firebaseapp.com",
+            projectId: "market-place-5e860",
+            storageBucket: "market-place-5e860.firebasestorage.app",
+            messagingSenderId: "612365997226",
+            appId: "1:612365997226:web:bef3a1c1bb58f833f9f9b4"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        window.checkTemplate = async function() {
+            const storeId = document.getElementById('storeId').value.trim();
+            const output = document.getElementById('output');
+            
+            if (!storeId) {
+                output.innerHTML = '<div class="field" style="border-color: #ef4444;"><strong>Error:</strong> Please enter a Store ID</div>';
+                return;
+            }
+
+            output.innerHTML = '<div class="field">Loading...</div>';
+
+            try {
+                const docRef = doc(db, 'storeProfiles', storeId);
+                const docSnap = await getDoc(docRef);
+
+                if (!docSnap.exists()) {
+                    output.innerHTML = '<div class="field" style="border-color: #ef4444;"><strong>Error:</strong> Store not found</div>';
+                    return;
+                }
+
+                const data = docSnap.data();
+                
+                let html = '<h2>📊 Current Template Settings</h2>';
+                
+                html += `<div class="field"><strong>Template:</strong> <span class="value">${data.template || 'Not set'}</span></div>`;
+                html += `<div class="field"><strong>Page Layout:</strong> <span class="value">${data.pageLayout || 'contained (default)'}</span></div>`;
+                html += `<div class="field"><strong>Store Card Style:</strong> <span class="value">${data.storeCardStyle || 'standard (default)'}</span></div>`;
+                html += `<div class="field"><strong>Visual Style:</strong> <span class="value">${data.visualStyle || 'rounded (default)'}</span></div>`;
+                html += `<div class="field"><strong>Hero Layout:</strong> <span class="value">${data.heroLayout || 'Not set'}</span></div>`;
+                html += `<div class="field"><strong>Product Display:</strong> <span class="value">${data.productDisplayType || 'grid-standard (default)'}</span></div>`;
+                html += `<div class="field"><strong>Product Animation:</strong> <span class="value">${data.productCardAnimation || 'none (default)'}</span></div>`;
+                html += `<div class="field"><strong>Menu Style:</strong> <span class="value">${data.menuStyle || 'classic (default)'}</span></div>`;
+                html += `<div class="field"><strong>About Layout:</strong> <span class="value">${data.aboutLayout || 'left (default)'}</span></div>`;
+                html += `<div class="field"><strong>Contact Form Style:</strong> <span class="value">${data.contactFormStyle || '1 (default)'}</span></div>`;
+                html += `<div class="field"><strong>Rating Display:</strong> <span class="value">${data.ratingDisplayType || 'stars (default)'}</span></div>`;
+
+                output.innerHTML = html;
+            } catch (error) {
+                output.innerHTML = `<div class="field" style="border-color: #ef4444;"><strong>Error:</strong> ${error.message}</div>`;
+            }
+        };
+    </script>
+</body>
+</html>

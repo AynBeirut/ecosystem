@@ -19,11 +19,26 @@ import { assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscr
 import type {
   ProductDisplayType, HeroLayout, MenuStyle, ContactFormStyle,
   RatingDisplayType, AboutLayout, StoreTemplateColors,
+  ProductCardAnimation, PageLayout, StoreCardStyle, VisualStyle,
+  StoreSectionId, StoreSectionOrder, SectionWidth,
 } from '@/types/storeProfile';
 
 // ── types ────────────────────────────────────────────────────────────────────
-type TemplateId = 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic';
+type TemplateId = 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic' | 'custom';
 type TabId = 'templates' | 'colors' | 'layout' | 'sections';
+
+type TemplateLayoutConfig = {
+  heroLayout: HeroLayout;
+  productDisplayType: ProductDisplayType;
+  productCardAnimation: ProductCardAnimation;
+  menuStyle: MenuStyle;
+  aboutLayout: AboutLayout;
+  contactFormStyle: ContactFormStyle;
+  ratingDisplayType: RatingDisplayType;
+  pageLayout: PageLayout;
+  storeCardStyle: StoreCardStyle;
+  visualStyle: VisualStyle;
+};
 
 type TemplateDefinition = {
   id: TemplateId;
@@ -33,6 +48,7 @@ type TemplateDefinition = {
   features: string[];
   isPremium: boolean;
   defaultPalette: Required<StoreTemplateColors>;
+  layoutConfig?: TemplateLayoutConfig; // Optional for custom template
 };
 
 // ── color presets (10 per template) ─────────────────────────────────────────
@@ -109,6 +125,18 @@ const COLOR_PRESETS: Record<TemplateId, Array<{ name: string; palette: Required<
     { name: 'Surreal',       palette: { primary:'#76E4F7', secondary:'#00B5D8', accent:'#ED64A6', background:'#E6FFFA', surface:'#ffffff', textColor:'#1A202C', highlight:'#B2F5EA' } },
     { name: 'Canvas',        palette: { primary:'#ECC94B', secondary:'#D69E2E', accent:'#9F7AEA', background:'#FFFFF0', surface:'#ffffff', textColor:'#1A202C', highlight:'#FAF089' } },
   ],
+  custom: [
+    { name: 'Neutral',       palette: { primary:'#4A5568', secondary:'#2D3748', accent:'#38B2AC', background:'#F7FAFC', surface:'#ffffff', textColor:'#1A202C', highlight:'#CBD5E0' } },
+    { name: 'Sky',           palette: { primary:'#3182CE', secondary:'#2C5282', accent:'#38B2AC', background:'#EBF8FF', surface:'#ffffff', textColor:'#1A202C', highlight:'#90CDF4' } },
+    { name: 'Sunset',        palette: { primary:'#ED8936', secondary:'#DD6B20', accent:'#E53E3E', background:'#FFFAF0', surface:'#ffffff', textColor:'#1A202C', highlight:'#FBD38D' } },
+    { name: 'Forest',        palette: { primary:'#38A169', secondary:'#276749', accent:'#F6E05E', background:'#F0FFF4', surface:'#ffffff', textColor:'#1C4532', highlight:'#9AE6B4' } },
+    { name: 'Purple',        palette: { primary:'#9F7AEA', secondary:'#6B46C1', accent:'#ED64A6', background:'#FAF5FF', surface:'#ffffff', textColor:'#1A202C', highlight:'#D6BCFA' } },
+    { name: 'Monochrome',    palette: { primary:'#2D3748', secondary:'#1A202C', accent:'#718096', background:'#F7FAFC', surface:'#ffffff', textColor:'#1A202C', highlight:'#CBD5E0' } },
+    { name: 'Warm',          palette: { primary:'#C05621', secondary:'#9C4221', accent:'#D69E2E', background:'#FFFAF0', surface:'#ffffff', textColor:'#1A202C', highlight:'#FBD38D' } },
+    { name: 'Cool',          palette: { primary:'#2B6CB0', secondary:'#2C5282', accent:'#38B2AC', background:'#EBF8FF', surface:'#ffffff', textColor:'#1A202C', highlight:'#90CDF4' } },
+    { name: 'Earth',         palette: { primary:'#744210', secondary:'#5F370E', accent:'#38A169', background:'#FFFFF0', surface:'#ffffff', textColor:'#1A202C', highlight:'#9AE6B4' } },
+    { name: 'Ocean',         palette: { primary:'#0987A0', secondary:'#086F83', accent:'#0EA5E9', background:'#ECFEFF', surface:'#ffffff', textColor:'#1A202C', highlight:'#67E8F9' } },
+  ],
 };
 
 // ── option definitions ───────────────────────────────────────────────────────
@@ -178,6 +206,25 @@ const ABOUT_LAYOUT_OPTIONS: Array<{ id: AboutLayout; label: string; desc: string
   { id: 'with-image', label: 'With Image',   desc: 'Image + text side-by-side', icon: '▣' },
 ];
 
+const PAGE_LAYOUT_OPTIONS: Array<{ id: PageLayout; label: string; desc: string; icon: string }> = [
+  { id: 'contained',  label: 'Contained',    desc: 'All content centered, max-width container', icon: '▢' },
+  { id: 'full-width', label: 'Full-Width',   desc: 'Edge-to-edge, spans entire screen', icon: '▭' },
+  { id: 'hybrid',     label: 'Hybrid',       desc: 'Full hero, contained content', icon: '▥' },
+];
+
+const STORE_CARD_STYLE_OPTIONS: Array<{ id: StoreCardStyle; label: string; desc: string; icon: string }> = [
+  { id: 'standard',   label: 'Standard',     desc: 'Normal card with rounded corners', icon: '▢' },
+  { id: 'full-width', label: 'Full-Width',   desc: 'Spans entire width, edge-to-edge', icon: '▭' },
+  { id: 'split',      label: 'Split',        desc: '2-column grid layout', icon: '▦' },
+  { id: 'minimal',    label: 'Minimal',      desc: 'No background, just content', icon: '○' },
+];
+
+const VISUAL_STYLE_OPTIONS: Array<{ id: VisualStyle; label: string; desc: string; icon: string }> = [
+  { id: 'rounded',    label: 'Rounded',      desc: 'Soft, rounded corners everywhere', icon: '◯' },
+  { id: 'sharp',      label: 'Sharp',        desc: 'Clean, square edges', icon: '▢' },
+  { id: 'mixed',      label: 'Mixed',        desc: 'Combination of round and sharp', icon: '◪' },
+];
+
 // ── component ────────────────────────────────────────────────────────────────
 const AdminTemplates: React.FC = () => {
   const { toast } = useToast();
@@ -214,30 +261,168 @@ const AdminTemplates: React.FC = () => {
   const [heroLayout, setHeroLayout] = useState<HeroLayout>('fullscreen');
   const [menuStyle, setMenuStyle] = useState<MenuStyle>('classic');
   const [aboutLayout, setAboutLayout] = useState<AboutLayout>('left');
+  const [pageLayout, setPageLayout] = useState<PageLayout>('contained');
+  const [storeCardStyleLayout, setStoreCardStyleLayout] = useState<StoreCardStyle>('standard');
+  const [visualStyle, setVisualStyle] = useState<VisualStyle>('rounded');
   const [savingLayout, setSavingLayout] = useState(false);
 
   // Sections tab
   const [contactFormStyle, setContactFormStyle] = useState<ContactFormStyle>(1);
   const [ratingDisplayType, setRatingDisplayType] = useState<RatingDisplayType>('stars');
   const [sectionOrder, setSectionOrder] = useState<StoreSectionOrder[]>([
-    { id: 'hero', enabled: true, order: 0, width: 'full' },
-    { id: 'about', enabled: true, order: 1, width: 'full' },
-    { id: 'announcements', enabled: true, order: 2, width: 'full' },
-    { id: 'products', enabled: true, order: 3, width: 'full' },
-    { id: 'gallery', enabled: true, order: 4, width: 'full' },
-    { id: 'reviews', enabled: true, order: 5, width: 'full' },
-    { id: 'contact', enabled: true, order: 6, width: 'full' },
+    { id: 'hero', enabled: true, order: 0, width: 'full', container: 'full-width', padding: 'none', showBackground: true, showBorders: false },
+    { id: 'about', enabled: true, order: 1, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
+    { id: 'announcements', enabled: true, order: 2, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
+    { id: 'products', enabled: true, order: 3, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
+    { id: 'gallery', enabled: true, order: 4, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
+    { id: 'reviews', enabled: true, order: 5, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
+    { id: 'contact', enabled: true, order: 6, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
   ]);
   const [savingSections, setSavingSections] = useState(false);
 
+  // Unsaved changes tracking
+  const [hasUnsavedColors, setHasUnsavedColors] = useState(false);
+  const [hasUnsavedLayout, setHasUnsavedLayout] = useState(false);
+  const [hasUnsavedSections, setHasUnsavedSections] = useState(false);
+
   // ── load from Firestore ──────────────────────────────────────────────────
   const templates: TemplateDefinition[] = [
-    { id: 'modern', name: 'Modern', description: 'Clean, contemporary design with bold typography', colors: ['#38B2AC','#2C5282','#ED8936'], features: ['Responsive','Animations','Teal Accents'], isPremium: false, defaultPalette: COLOR_PRESETS.modern[0].palette },
-    { id: 'minimal', name: 'Minimal', description: 'Simple, elegant design focusing on whitespace', colors: ['#718096','#2D3748','#E2E8F0'], features: ['Clean Layout','Typography','Fast Loading'], isPremium: false, defaultPalette: COLOR_PRESETS.minimal[0].palette },
-    { id: 'classic', name: 'Classic', description: 'Timeless design with proven usability', colors: ['#2C5282','#3182CE','#63B3ED'], features: ['Traditional','High Contrast','Easy Nav'], isPremium: false, defaultPalette: COLOR_PRESETS.classic[0].palette },
-    { id: 'vibrant', name: 'Vibrant', description: 'Energetic design with bold colors', colors: ['#ED8936','#F56565','#9F7AEA'], features: ['Bold Colors','Dynamic','Interactive'], isPremium: true, defaultPalette: COLOR_PRESETS.vibrant[0].palette },
-    { id: 'professional', name: 'Professional', description: 'Corporate-style for B2B stores', colors: ['#2D3748','#4A5568','#718096'], features: ['Corporate','Trust','Formal'], isPremium: true, defaultPalette: COLOR_PRESETS.professional[0].palette },
-    { id: 'artistic', name: 'Artistic', description: 'Creative layouts with unique artistic feel', colors: ['#9F7AEA','#ED64A6','#F6AD55'], features: ['Creative','Artistic','Unique'], isPremium: true, defaultPalette: COLOR_PRESETS.artistic[0].palette },
+    { 
+      id: 'modern', 
+      name: 'Modern', 
+      description: 'Clean, contemporary design with bold typography and full-width hero',
+      colors: ['#38B2AC','#2C5282','#ED8936'], 
+      features: ['Full-Width Hero','Grid Products','3D Hover Effects'], 
+      isPremium: false, 
+      defaultPalette: COLOR_PRESETS.modern[0].palette,
+      layoutConfig: {
+        heroLayout: 'fullscreen',
+        productDisplayType: 'grid-standard',
+        productCardAnimation: '3d-lift',
+        menuStyle: 'sticky-glass',
+        aboutLayout: 'left',
+        contactFormStyle: 2,
+        ratingDisplayType: 'pill',
+        pageLayout: 'hybrid',
+        storeCardStyle: 'standard',
+        visualStyle: 'rounded',
+      }
+    },
+    { 
+      id: 'minimal', 
+      name: 'Minimal', 
+      description: 'Simple, elegant design with centered layout and minimal hero',
+      colors: ['#718096','#2D3748','#E2E8F0'], 
+      features: ['Centered Design','List View','Sharp Edges'], 
+      isPremium: false, 
+      defaultPalette: COLOR_PRESETS.minimal[0].palette,
+      layoutConfig: {
+        heroLayout: 'minimal',
+        productDisplayType: 'list',
+        productCardAnimation: 'fade-in',
+        menuStyle: 'classic',
+        aboutLayout: 'centered',
+        contactFormStyle: 1,
+        ratingDisplayType: 'minimal',
+        pageLayout: 'contained',
+        storeCardStyle: 'minimal',
+        visualStyle: 'sharp',
+      }
+    },
+    { 
+      id: 'classic', 
+      name: 'Classic', 
+      description: 'Timeless design with split hero and traditional grid layout',
+      colors: ['#2C5282','#3182CE','#63B3ED'], 
+      features: ['Split Hero','Standard Grid','Classic Menu'], 
+      isPremium: false, 
+      defaultPalette: COLOR_PRESETS.classic[0].palette,
+      layoutConfig: {
+        heroLayout: 'split',
+        productDisplayType: 'grid-standard',
+        productCardAnimation: 'none',
+        menuStyle: 'classic',
+        aboutLayout: 'left',
+        contactFormStyle: 1,
+        ratingDisplayType: 'stars',
+        pageLayout: 'contained',
+        storeCardStyle: 'standard',
+        visualStyle: 'rounded',
+      }
+    },
+    { 
+      id: 'vibrant', 
+      name: 'Vibrant', 
+      description: 'Energetic design with masonry products and bold full-width layout',
+      colors: ['#ED8936','#F56565','#9F7AEA'], 
+      features: ['Masonry Layout','Bold Menu','Slide-Up Animations'], 
+      isPremium: true, 
+      defaultPalette: COLOR_PRESETS.vibrant[0].palette,
+      layoutConfig: {
+        heroLayout: 'fullscreen',
+        productDisplayType: 'masonry',
+        productCardAnimation: 'slide-up',
+        menuStyle: 'bold',
+        aboutLayout: 'left',
+        contactFormStyle: 3,
+        ratingDisplayType: 'number',
+        pageLayout: 'full-width',
+        storeCardStyle: 'full-width',
+        visualStyle: 'mixed',
+      }
+    },
+    { 
+      id: 'professional', 
+      name: 'Professional', 
+      description: 'Corporate-style with large grid and split store card',
+      colors: ['#2D3748','#4A5568','#718096'], 
+      features: ['Large Grid','Split Card','Professional Menu'], 
+      isPremium: true, 
+      defaultPalette: COLOR_PRESETS.professional[0].palette,
+      layoutConfig: {
+        heroLayout: 'centered',
+        productDisplayType: 'grid-large',
+        productCardAnimation: 'scale-smooth',
+        menuStyle: 'classic',
+        aboutLayout: 'centered',
+        contactFormStyle: 2,
+        ratingDisplayType: 'stars',
+        pageLayout: 'contained',
+        storeCardStyle: 'split',
+        visualStyle: 'sharp',
+      }
+    },
+    { 
+      id: 'artistic', 
+      name: 'Artistic', 
+      description: 'Creative layouts with compact grid and unique artistic feel',
+      colors: ['#9F7AEA','#ED64A6','#F6AD55'], 
+      features: ['Compact Grid','Creative Layouts','Mixed Styles'], 
+      isPremium: true, 
+      defaultPalette: COLOR_PRESETS.artistic[0].palette,
+      layoutConfig: {
+        heroLayout: 'centered',
+        productDisplayType: 'grid-compact',
+        productCardAnimation: 'bounce',
+        menuStyle: 'bold',
+        aboutLayout: 'left',
+        contactFormStyle: 3,
+        ratingDisplayType: 'pill',
+        pageLayout: 'hybrid',
+        storeCardStyle: 'standard',
+        visualStyle: 'mixed',
+      }
+    },
+    {
+      id: 'custom',
+      name: 'Custom',
+      description: 'Build your own template with complete control over all settings',
+      colors: ['#4A5568','#38B2AC','#ED8936'],
+      features: ['Full Control','Any Layout','Complete Customization'],
+      isPremium: false,
+      defaultPalette: COLOR_PRESETS.modern[0].palette,
+      // No layoutConfig - custom template uses manual settings
+    }
   ];
 
   useEffect(() => {
@@ -265,6 +450,9 @@ const AdminTemplates: React.FC = () => {
       if (d.heroLayout) setHeroLayout(d.heroLayout as HeroLayout);
       if (d.menuStyle) setMenuStyle(d.menuStyle as MenuStyle);
       if (d.aboutLayout) setAboutLayout(d.aboutLayout as AboutLayout);
+      if (d.pageLayout) setPageLayout(d.pageLayout as PageLayout);
+      if (d.storeCardStyle) setStoreCardStyleLayout(d.storeCardStyle as StoreCardStyle);
+      if (d.visualStyle) setVisualStyle(d.visualStyle as VisualStyle);
       // sections tab
       if (d.contactFormStyle) setContactFormStyle(d.contactFormStyle as ContactFormStyle);
       if (d.ratingDisplayType) setRatingDisplayType(d.ratingDisplayType as RatingDisplayType);
@@ -274,14 +462,31 @@ const AdminTemplates: React.FC = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [storeId]);
 
+  // ── warn before leaving with unsaved changes ─────────────────────────────
+  useEffect(() => {
+    const hasUnsaved = hasUnsavedColors || hasUnsavedLayout || hasUnsavedSections;
+    
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      if (hasUnsaved) {
+        e.preventDefault();
+        e.returnValue = 'Your changes are not saved. Save before you leave or you will lose the changes.';
+        return e.returnValue;
+      }
+    };
+
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    return () => window.removeEventListener('beforeunload', handleBeforeUnload);
+  }, [hasUnsavedColors, hasUnsavedLayout, hasUnsavedSections]);
+
   // ── template handlers ────────────────────────────────────────────────────
   const previewStyles: Record<TemplateId, { shell: string; header: string; block: string; title: string }> = {
-    modern:       { shell: 'bg-gradient-to-b from-cyan-50 to-indigo-50', header: 'bg-white/90 border-cyan-200', block: 'bg-white border-cyan-100', title: 'text-cyan-800' },
-    minimal:      { shell: 'bg-white', header: 'bg-white border-gray-200', block: 'bg-white border-gray-200', title: 'text-gray-800' },
-    classic:      { shell: 'bg-blue-50/50', header: 'bg-white border-blue-300', block: 'bg-white border-blue-200', title: 'text-blue-900' },
-    vibrant:      { shell: 'bg-gradient-to-br from-orange-50 via-pink-50 to-violet-100', header: 'bg-white border-orange-200', block: 'bg-white border-pink-200', title: 'text-fuchsia-900' },
-    professional: { shell: 'bg-slate-100', header: 'bg-white border-slate-300', block: 'bg-white border-slate-200', title: 'text-slate-900' },
-    artistic:     { shell: 'bg-gradient-to-tr from-violet-100 to-amber-50', header: 'bg-white border-violet-200', block: 'bg-white border-rose-200', title: 'text-violet-900' },
+    modern:       { shell: 'bg-gradient-to-br from-cyan-100 via-blue-50 to-indigo-100', header: 'bg-gradient-to-r from-cyan-500 to-blue-600 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-cyan-200', title: 'text-white drop-shadow-sm' },
+    minimal:      { shell: 'bg-gradient-to-br from-gray-50 to-slate-100', header: 'bg-white shadow-md border-2 border-gray-300', block: 'bg-white shadow-sm hover:shadow-md transition-shadow border border-gray-200', title: 'text-gray-800' },
+    classic:      { shell: 'bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100', header: 'bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-blue-300', title: 'text-white font-bold drop-shadow' },
+    vibrant:      { shell: 'bg-gradient-to-br from-orange-200 via-pink-200 to-fuchsia-200', header: 'bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 shadow-xl', block: 'bg-white shadow-lg hover:shadow-xl transition-all border-2 border-pink-300', title: 'text-white font-extrabold drop-shadow-lg' },
+    professional: { shell: 'bg-gradient-to-br from-slate-200 via-gray-100 to-zinc-200', header: 'bg-gradient-to-r from-slate-700 to-gray-800 shadow-xl', block: 'bg-white shadow-md hover:shadow-xl transition-all border-slate-300', title: 'text-white tracking-wide font-semibold' },
+    artistic:     { shell: 'bg-gradient-to-tr from-violet-200 via-fuchsia-100 to-amber-200', header: 'bg-gradient-to-r from-violet-600 via-purple-500 to-pink-500 shadow-2xl', block: 'bg-white/95 shadow-lg hover:shadow-2xl transition-all border-2 border-violet-300 backdrop-blur-sm', title: 'text-white font-bold drop-shadow-xl' },
+    custom:       { shell: 'bg-gradient-to-br from-emerald-100 via-teal-50 to-cyan-100', header: 'bg-gradient-to-r from-teal-600 to-cyan-600 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-teal-200', title: 'text-white font-semibold' },
   };
 
   const handleSelectTemplate = async (templateId: TemplateId) => {
@@ -289,14 +494,44 @@ const AdminTemplates: React.FC = () => {
     const found = templates.find(t => t.id === templateId);
     if (found) {
       setColors(found.defaultPalette);
+      
+      // Apply layout configuration if available (not for custom template)
+      if (found.layoutConfig) {
+        setHeroLayout(found.layoutConfig.heroLayout);
+        setProductDisplayType(found.layoutConfig.productDisplayType);
+        setProductCardAnimation(found.layoutConfig.productCardAnimation);
+        setMenuStyle(found.layoutConfig.menuStyle);
+        setAboutLayout(found.layoutConfig.aboutLayout);
+        setContactFormStyle(found.layoutConfig.contactFormStyle);
+        setRatingDisplayType(found.layoutConfig.ratingDisplayType);
+        setPageLayout(found.layoutConfig.pageLayout);
+        setStoreCardStyleLayout(found.layoutConfig.storeCardStyle);
+        setVisualStyle(found.layoutConfig.visualStyle);
+      }
     }
     if (storeId) {
-      await setDoc(doc(db, 'storeProfiles', storeId), {
+      const updateData: any = {
         template: templateId,
         templateColors: found?.defaultPalette ?? colors,
-      }, { merge: true });
+      };
+      
+      // Include layout config in the update if available
+      if (found?.layoutConfig) {
+        updateData.heroLayout = found.layoutConfig.heroLayout;
+        updateData.productDisplayType = found.layoutConfig.productDisplayType;
+        updateData.productCardAnimation = found.layoutConfig.productCardAnimation;
+        updateData.menuStyle = found.layoutConfig.menuStyle;
+        updateData.aboutLayout = found.layoutConfig.aboutLayout;
+        updateData.contactFormStyle = found.layoutConfig.contactFormStyle;
+        updateData.ratingDisplayType = found.layoutConfig.ratingDisplayType;
+        updateData.pageLayout = found.layoutConfig.pageLayout;
+        updateData.storeCardStyle = found.layoutConfig.storeCardStyle;
+        updateData.visualStyle = found.layoutConfig.visualStyle;
+      }
+      
+      await setDoc(doc(db, 'storeProfiles', storeId), updateData, { merge: true });
     }
-    toast({ title: 'Template Applied', description: `Now using the ${found?.name} template.` });
+    toast({ title: 'Template Applied', description: `Now using the ${found?.name} template with complete layout settings.` });
   };
 
   const saveMediaSettings = async (next: { backgroundImage?: string; carouselImages?: string[]; galleryImages?: string[] }) => {
@@ -380,17 +615,17 @@ const AdminTemplates: React.FC = () => {
   };
 
   // ── color handlers ───────────────────────────────────────────────────────
-  const applyPreset = (preset: Required<StoreTemplateColors>) => setColors(preset);
+  const applyPreset = (preset: Required<StoreTemplateColors>) => updateColors(preset);
 
   const updateColor = (key: keyof Required<StoreTemplateColors>, value: string) => {
     // accept raw hex input without # too
     const clean = value.startsWith('#') ? value : `#${value}`;
-    setColors(prev => ({ ...prev, [key]: clean }));
+    updateColors(prev => ({ ...prev, [key]: clean }));
   };
 
   const handleHexInput = (key: keyof Required<StoreTemplateColors>, raw: string) => {
     const sanitized = raw.replace(/[^0-9a-fA-F]/g, '').slice(0, 6);
-    setColors(prev => ({ ...prev, [key]: `#${sanitized}` }));
+    updateColors(prev => ({ ...prev, [key]: `#${sanitized}` }));
   };
 
   const saveColors = async () => {
@@ -398,6 +633,7 @@ const AdminTemplates: React.FC = () => {
     setSavingColors(true);
     try {
       await setDoc(doc(db, 'storeProfiles', storeId), { templateColors: colors }, { merge: true });
+      setHasUnsavedColors(false);
       toast({ title: 'Colors Saved', description: 'Your custom palette is live.' });
     } catch { toast({ title: 'Save Failed', variant: 'destructive' }); }
     finally { setSavingColors(false); }
@@ -408,7 +644,19 @@ const AdminTemplates: React.FC = () => {
     if (!storeId) return;
     setSavingLayout(true);
     try {
-      await setDoc(doc(db, 'storeProfiles', storeId), { productDisplayType, productCardAnimation, heroLayout, menuStyle, aboutLayout }, { merge: true });
+      await setDoc(doc(db, 'storeProfiles', storeId), { 
+        productDisplayType, 
+        productCardAnimation, 
+        heroLayout, 
+        menuStyle, 
+        aboutLayout,
+        contactFormStyle,
+        ratingDisplayType,
+        pageLayout,
+        storeCardStyle: storeCardStyleLayout,
+        visualStyle,
+      }, { merge: true });
+      setHasUnsavedLayout(false);
       toast({ title: 'Layout Saved', description: 'Store layout preferences updated.' });
     } catch { toast({ title: 'Save Failed', variant: 'destructive' }); }
     finally { setSavingLayout(false); }
@@ -420,9 +668,74 @@ const AdminTemplates: React.FC = () => {
     setSavingSections(true);
     try {
       await setDoc(doc(db, 'storeProfiles', storeId), { contactFormStyle, ratingDisplayType, sectionOrder }, { merge: true });
+      setHasUnsavedSections(false);
       toast({ title: 'Sections Saved', description: 'Section styles updated.' });
     } catch { toast({ title: 'Save Failed', variant: 'destructive' }); }
     finally { setSavingSections(false); }
+  };
+
+  // ── wrapper functions to mark unsaved changes ────────────────────────────
+  const updateColors = (updater: React.SetStateAction<Required<StoreTemplateColors>>) => {
+    setColors(updater);
+    setHasUnsavedColors(true);
+  };
+
+  const updateLayoutSetting = (setter: () => void) => {
+    setter();
+    setHasUnsavedLayout(true);
+  };
+
+  const updateSectionSetting = (setter: () => void) => {
+    setter();
+    setHasUnsavedSections(true);
+  };
+
+  // Layout wrapper functions
+  const updateProductDisplayType = (val: ProductDisplayType) => {
+    setProductDisplayType(val);
+    setHasUnsavedLayout(true);
+  };
+  const updateProductCardAnimation = (val: ProductCardAnimation) => {
+    setProductCardAnimation(val);
+    setHasUnsavedLayout(true);
+  };
+  const updateHeroLayout = (val: HeroLayout) => {
+    setHeroLayout(val);
+    setHasUnsavedLayout(true);
+  };
+  const updateMenuStyle = (val: MenuStyle) => {
+    setMenuStyle(val);
+    setHasUnsavedLayout(true);
+  };
+  const updateAboutLayout = (val: AboutLayout) => {
+    setAboutLayout(val);
+    setHasUnsavedLayout(true);
+  };
+  const updatePageLayout = (val: PageLayout) => {
+    setPageLayout(val);
+    setHasUnsavedLayout(true);
+  };
+  const updateStoreCardStyleLayout = (val: StoreCardStyle) => {
+    setStoreCardStyleLayout(val);
+    setHasUnsavedLayout(true);
+  };
+  const updateVisualStyle = (val: VisualStyle) => {
+    setVisualStyle(val);
+    setHasUnsavedLayout(true);
+  };
+
+  // Sections wrapper functions
+  const updateContactFormStyle = (val: ContactFormStyle) => {
+    setContactFormStyle(val);
+    setHasUnsavedSections(true);
+  };
+  const updateRatingDisplayType = (val: RatingDisplayType) => {
+    setRatingDisplayType(val);
+    setHasUnsavedSections(true);
+  };
+  const updateSectionOrder = (updater: React.SetStateAction<StoreSectionOrder[]>) => {
+    setSectionOrder(updater);
+    setHasUnsavedSections(true);
   };
 
   // ── color slot labels ────────────────────────────────────────────────────
@@ -571,36 +884,6 @@ const AdminTemplates: React.FC = () => {
         {/* ══ TEMPLATES TAB ══ */}
         {activeTab === 'templates' && (
           <div className="space-y-8">
-            {/* Live preview */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Live Preview</CardTitle>
-                <CardDescription>Hover template cards and click Eye to preview style</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className={`rounded-lg border p-4 ${previewStyles[previewTemplate].shell}`}>
-                  <div className={`rounded-md border p-3 mb-3 ${previewStyles[previewTemplate].header}`}>
-                    <div className={`font-semibold ${previewStyles[previewTemplate].title}`}>Store Header</div>
-                    <div className="text-sm text-muted-foreground">Brand · Slogan · Nav</div>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                    <div className={`rounded-md border p-3 ${previewStyles[previewTemplate].block}`}>
-                      <div className="text-sm font-medium">Product Card</div>
-                      <div className="text-xs text-muted-foreground">Image · Name · Price</div>
-                    </div>
-                    <div className={`rounded-md border p-3 ${previewStyles[previewTemplate].block}`}>
-                      <div className="text-sm font-medium">Announcement</div>
-                      <div className="text-xs text-muted-foreground">Store update block</div>
-                    </div>
-                    <div className={`rounded-md border p-3 ${previewStyles[previewTemplate].block}`}>
-                      <div className="text-sm font-medium">Review Card</div>
-                      <div className="text-xs text-muted-foreground">Rating · Comment</div>
-                    </div>
-                  </div>
-                </div>
-              </CardContent>
-            </Card>
-
             {/* Template cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {templates.map(tmpl => (
@@ -613,14 +896,105 @@ const AdminTemplates: React.FC = () => {
                   {tmpl.isPremium && (
                     <div className="absolute top-2 left-2 z-10"><Badge variant="secondary">Premium</Badge></div>
                   )}
-                  <div className={`aspect-video relative overflow-hidden p-3 ${previewStyles[tmpl.id].shell}`}>
-                    <div className={`rounded-md border p-2 mb-2 ${previewStyles[tmpl.id].header}`}>
-                      <div className={`text-xs font-semibold ${previewStyles[tmpl.id].title}`}>{tmpl.name} Header</div>
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                      <div className={`rounded-md border p-2 ${previewStyles[tmpl.id].block}`}><div className="text-[10px] font-medium">Products</div></div>
-                      <div className={`rounded-md border p-2 ${previewStyles[tmpl.id].block}`}><div className="text-[10px] font-medium">Reviews</div></div>
-                    </div>
+                  {/* Visual Layout Preview */}
+                  <div className={`aspect-video relative overflow-hidden border-b-2 shadow-inner ${previewStyles[tmpl.id].shell} transition-transform hover:scale-[1.02] duration-300`}>
+                    {/* Modern: Hybrid layout with 4-col grid */}
+                    {tmpl.id === 'modern' && (
+                      <div className="h-full flex flex-col">
+                        <div className={`h-1/3 ${previewStyles[tmpl.id].header} flex items-center justify-center relative overflow-hidden`}>
+                          <div className="absolute inset-0 bg-gradient-to-t from-black/10 to-transparent"></div>
+                          <span className={`text-xs font-bold ${previewStyles[tmpl.id].title} relative z-10`}>FULL HERO</span>
+                        </div>
+                        <div className="flex-1 p-2">
+                          <div className="grid grid-cols-4 gap-1.5 h-full">
+                            {[1,2,3,4].map(i => <div key={i} className={`rounded-lg ${previewStyles[tmpl.id].block}`}/>)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Minimal: Contained with list view */}
+                    {tmpl.id === 'minimal' && (
+                      <div className="h-full flex flex-col p-3">
+                        <div className={`h-8 ${previewStyles[tmpl.id].header} rounded-lg mb-2 flex items-center justify-center`}>
+                          <span className="text-[10px] font-semibold">Minimal Bar</span>
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          {[1,2,3].map(i => <div key={i} className={`h-1/3 rounded-lg ${previewStyles[tmpl.id].block}`}/>)}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Classic: Split hero + 3-col grid */}
+                    {tmpl.id === 'classic' && (
+                      <div className="h-full flex flex-col p-2">
+                        <div className="h-1/2 grid grid-cols-2 gap-2 mb-2">
+                          <div className={`rounded-lg ${previewStyles[tmpl.id].header} relative overflow-hidden`}>
+                            <div className="absolute inset-0 bg-gradient-to-br from-white/20 to-transparent"></div>
+                          </div>
+                          <div className={`rounded-lg ${previewStyles[tmpl.id].header} opacity-80 relative overflow-hidden`}>
+                            <div className="absolute inset-0 bg-gradient-to-tl from-black/20 to-transparent"></div>
+                          </div>
+                        </div>
+                        <div className="flex-1 grid grid-cols-3 gap-1.5">
+                          {[1,2,3].map(i => <div key={i} className={`rounded-lg ${previewStyles[tmpl.id].block}`}/>)}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Vibrant: Full-width masonry */}
+                    {tmpl.id === 'vibrant' && (
+                      <div className="h-full flex flex-col">
+                        <div className={`h-1/4 ${previewStyles[tmpl.id].header} flex items-center justify-center relative overflow-hidden`}>
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_rgba(255,255,255,0.2)_0%,_transparent_70%)]"></div>
+                          <span className={`text-xs font-extrabold ${previewStyles[tmpl.id].title} relative z-10 tracking-wider`}>FULL WIDTH</span>
+                        </div>
+                        <div className="flex-1 grid grid-cols-3 gap-1.5 p-2">
+                          <div className={`rounded-xl ${previewStyles[tmpl.id].block} row-span-2`}/>
+                          <div className={`rounded-xl ${previewStyles[tmpl.id].block}`}/>
+                          <div className={`rounded-xl ${previewStyles[tmpl.id].block} row-span-2`}/>
+                          <div className={`rounded-xl ${previewStyles[tmpl.id].block}`}/>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Professional: Large 2-col cards */}
+                    {tmpl.id === 'professional' && (
+                      <div className="h-full flex flex-col p-3">
+                        <div className={`h-1/4 ${previewStyles[tmpl.id].header} rounded-lg mb-3 flex items-center justify-center shadow-lg`}>
+                          <span className={`text-xs ${previewStyles[tmpl.id].title} font-semibold tracking-wide`}>CENTERED</span>
+                        </div>
+                        <div className="flex-1 grid grid-cols-2 gap-3">
+                          {[1,2].map(i => <div key={i} className={`rounded-lg ${previewStyles[tmpl.id].block}`}/>)}
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Artistic: Compact 4-col */}
+                    {tmpl.id === 'artistic' && (
+                      <div className="h-full flex flex-col">
+                        <div className={`h-1/3 ${previewStyles[tmpl.id].header} flex items-center justify-center relative overflow-hidden`}>
+                          <div className="absolute inset-0 bg-[radial-gradient(circle_at_top_right,_rgba(255,255,255,0.3)_0%,_transparent_60%)]"></div>
+                          <span className={`text-xs font-extrabold ${previewStyles[tmpl.id].title} relative z-10 tracking-widest`}>HYBRID</span>
+                        </div>
+                        <div className="flex-1 p-2">
+                          <div className="grid grid-cols-4 gap-1.5 h-full">
+                            {[1,2,3,4,5,6,7,8].map(i => <div key={i} className={`rounded-lg ${previewStyles[tmpl.id].block}`}/>)}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                    
+                    {/* Custom: User defined */}
+                    {tmpl.id === 'custom' && (
+                      <div className="h-full flex items-center justify-center p-4 bg-gradient-to-br from-teal-100 via-emerald-50 to-cyan-100">
+                        <div className="text-center">
+                          <div className="text-4xl mb-3 animate-pulse">⚙️</div>
+                          <div className="text-sm font-bold text-teal-800 mb-1">Your Layout</div>
+                          <div className="text-xs text-teal-600 font-medium">Customize Everything</div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                   <CardHeader>
                     <CardTitle>{tmpl.name}</CardTitle>
@@ -657,6 +1031,380 @@ const AdminTemplates: React.FC = () => {
                 </Card>
               ))}
             </div>
+
+            {/* Section Order & Visibility - only show when Custom template is selected */}
+            {selectedTemplate === 'custom' && (
+              <Card className="border-2 border-primary/30 shadow-lg">
+                <CardHeader className="bg-primary/5">
+                  <CardTitle className="flex items-center gap-2">
+                    <Layers className="h-5 w-5" />
+                    Customize Your Template Sections
+                  </CardTitle>
+                  <CardDescription>Control which sections appear and their display order on your storefront</CardDescription>
+                </CardHeader>
+                <CardContent className="pt-6">
+                  <div className="space-y-3">
+                    {sectionOrder
+                      .sort((a, b) => a.order - b.order)
+                      .map((section) => {
+                        const sectionLabels: Record<StoreSectionId, string> = {
+                          hero: 'Hero / Banner',
+                          about: 'About Us',
+                          announcements: 'Announcements',
+                          products: 'Products Catalog',
+                          gallery: 'Gallery',
+                          reviews: 'Customer Reviews',
+                          contact: 'Contact Form',
+                        };
+                        const label = sectionLabels[section.id];
+                        
+                        return (
+                          <div key={section.id} className="border-2 rounded-xl bg-gradient-to-br from-muted/40 to-muted/20 hover:border-primary/40 transition-all p-4">
+                            {/* Row 1: Basic controls */}
+                            <div className="flex items-center gap-3 mb-3">
+                              {/* Drag handle */}
+                              <div className="text-muted-foreground cursor-move select-none">
+                                <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                                  <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
+                                </svg>
+                              </div>
+                              
+                              {/* Position */}
+                              <span className="w-7 h-7 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
+                                {section.order + 1}
+                              </span>
+                              
+                              {/* Label */}
+                              <span className="flex-1 font-bold text-sm">{label}</span>
+                              
+                              {/* Up/Down */}
+                              <div className="flex gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentIdx = sectionOrder.findIndex(s => s.id === section.id);
+                                    if (currentIdx <= 0) return;
+                                    const newOrder = [...sectionOrder];
+                                    [newOrder[currentIdx], newOrder[currentIdx - 1]] = [newOrder[currentIdx - 1], newOrder[currentIdx]];
+                                    newOrder.forEach((s, idx) => s.order = idx);
+                                    setSectionOrder(newOrder);
+                                  }}
+                                  disabled={section.order === 0}
+                                  className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                  title="Move up"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const currentIdx = sectionOrder.findIndex(s => s.id === section.id);
+                                    if (currentIdx >= sectionOrder.length - 1) return;
+                                    const newOrder = [...sectionOrder];
+                                    [newOrder[currentIdx], newOrder[currentIdx + 1]] = [newOrder[currentIdx + 1], newOrder[currentIdx]];
+                                    newOrder.forEach((s, idx) => s.order = idx);
+                                    setSectionOrder(newOrder);
+                                  }}
+                                  disabled={section.order === sectionOrder.length - 1}
+                                  className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+                                  title="Move down"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                  </svg>
+                                </button>
+                              </div>
+                              
+                              {/* Visible/Hidden */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  updateSectionOrder(prev =>
+                                    prev.map(s => s.id === section.id ? { ...s, enabled: !s.enabled } : s)
+                                  );
+                                }}
+                                className={`px-3 py-1.5 text-xs font-bold rounded-md transition-all ${
+                                  section.enabled
+                                    ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30'
+                                    : 'bg-gray-300/60 text-gray-600 hover:bg-gray-300/80'
+                                }`}
+                              >
+                                {section.enabled ? '👁 Visible' : '🚫 Hidden'}
+                              </button>
+                            </div>
+
+                            {/* Row 2: Style controls */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pl-7">
+                              {/* Grid Width */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-muted-foreground uppercase mb-1 block">Grid Width</label>
+                                <div className="flex gap-0.5 border rounded overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, width: 'full' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${(section.width || 'full') === 'full' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                                    title="Full width row"
+                                  >
+                                    Full
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, width: 'half' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${section.width === 'half' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                                    title="Half - 2 per row"
+                                  >
+                                    1/2
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, width: 'third' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${section.width === 'third' ? 'bg-primary text-primary-foreground' : 'bg-background hover:bg-muted'}`}
+                                    title="Third - 3 per row"
+                                  >
+                                    1/3
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Container Width */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-muted-foreground uppercase mb-1 block">Container</label>
+                                <div className="flex gap-0.5 border rounded overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, container: 'full-width' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${(section.container || 'contained') === 'full-width' ? 'bg-blue-500 text-white' : 'bg-background hover:bg-muted'}`}
+                                    title="Edge-to-edge"
+                                  >
+                                    Full
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, container: 'wide' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${section.container === 'wide' ? 'bg-blue-500 text-white' : 'bg-background hover:bg-muted'}`}
+                                    title="Wide 1536px"
+                                  >
+                                    Wide
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, container: 'contained' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${section.container === 'contained' ? 'bg-blue-500 text-white' : 'bg-background hover:bg-muted'}`}
+                                    title="Contained 1280px"
+                                  >
+                                    Box
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Padding */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-muted-foreground uppercase mb-1 block">Padding</label>
+                                <div className="flex gap-0.5 border rounded overflow-hidden">
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, padding: 'none' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${section.padding === 'none' ? 'bg-purple-500 text-white' : 'bg-background hover:bg-muted'}`}
+                                    title="No padding"
+                                  >
+                                    0
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, padding: 'small' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${section.padding === 'small' ? 'bg-purple-500 text-white' : 'bg-background hover:bg-muted'}`}
+                                    title="Small padding"
+                                  >
+                                    S
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, padding: 'medium' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${(section.padding || 'medium') === 'medium' ? 'bg-purple-500 text-white' : 'bg-background hover:bg-muted'}`}
+                                    title="Medium padding"
+                                  >
+                                    M
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, padding: 'large' } : s))}
+                                    className={`flex-1 px-2 py-1 text-xs font-medium transition-colors ${section.padding === 'large' ? 'bg-purple-500 text-white' : 'bg-background hover:bg-muted'}`}
+                                    title="Large padding"
+                                  >
+                                    L
+                                  </button>
+                                </div>
+                              </div>
+
+                              {/* Toggles */}
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, showBackground: !(s.showBackground ?? true) } : s))}
+                                  className={`flex-1 px-2 py-1 text-xs font-bold rounded transition-all ${(section.showBackground ?? true) ? 'bg-amber-500 text-white' : 'bg-gray-200 text-gray-600'}`}
+                                  title="Toggle background"
+                                >
+                                  {(section.showBackground ?? true) ? '🎨 BG' : '⬜ BG'}
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, showBorders: !(s.showBorders ?? true) } : s))}
+                                  className={`flex-1 px-2 py-1 text-xs font-bold rounded transition-all ${(section.showBorders ?? true) ? 'bg-teal-500 text-white' : 'bg-gray-200 text-gray-600'}`}
+                                  title="Toggle borders/rounded corners"
+                                >
+                                  {(section.showBorders ?? true) ? '📐 Border' : '▢ Border'}
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                  </div>
+
+                  {/* Visual Layout Preview */}
+                  <div className="mt-6 p-6 bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-blue-300 rounded-xl">
+                    <p className="text-sm font-bold text-slate-800 mb-4 flex items-center gap-2">
+                      <Eye className="h-4 w-4" />
+                      Layout Preview - How Your Sections Will Appear:
+                    </p>
+                    <div className="space-y-3">
+                      {(() => {
+                        // Group sections into rows based on width
+                        const enabledSections = sectionOrder
+                          .filter(s => s.enabled)
+                          .sort((a, b) => a.order - b.order);
+                        
+                        const rows: StoreSectionOrder[][] = [];
+                        let currentRow: StoreSectionOrder[] = [];
+                        let currentRowWidth: SectionWidth | null = null;
+                        
+                        enabledSections.forEach((section) => {
+                          const width = section.width || 'full';
+                          
+                          if (width === 'full') {
+                            if (currentRow.length > 0) {
+                              rows.push(currentRow);
+                              currentRow = [];
+                              currentRowWidth = null;
+                            }
+                            rows.push([section]);
+                          } else {
+                            if (currentRowWidth !== null && currentRowWidth !== width) {
+                              rows.push(currentRow);
+                              currentRow = [];
+                              currentRowWidth = null;
+                            }
+                            
+                            currentRow.push(section);
+                            currentRowWidth = width;
+                            
+                            const maxSectionsInRow = width === 'half' ? 2 : 3;
+                            if (currentRow.length === maxSectionsInRow) {
+                              rows.push(currentRow);
+                              currentRow = [];
+                              currentRowWidth = null;
+                            }
+                          }
+                        });
+                        
+                        if (currentRow.length > 0) {
+                          rows.push(currentRow);
+                        }
+                        
+                        const sectionLabels: Record<StoreSectionId, string> = {
+                          hero: 'Hero',
+                          about: 'About',
+                          announcements: 'News',
+                          products: 'Products',
+                          gallery: 'Gallery',
+                          reviews: 'Reviews',
+                          contact: 'Contact',
+                        };
+                        
+                        return rows.map((row, rowIdx) => (
+                          <div
+                            key={rowIdx}
+                            className={`grid gap-2 ${
+                              row.length === 1 
+                                ? 'grid-cols-1' 
+                                : row.length === 2 
+                                ? 'grid-cols-2'
+                                : 'grid-cols-3'
+                            }`}
+                          >
+                            {row.map((section) => (
+                              <div
+                                key={section.id}
+                                className="bg-white border-2 border-primary/40 rounded-lg p-3 text-center shadow-sm"
+                              >
+                                <div className="text-xs font-bold text-primary mb-1">
+                                  {sectionLabels[section.id]}
+                                </div>
+                                <div className="text-[10px] text-muted-foreground">
+                                  {section.width === 'half' ? '50% width' : section.width === 'third' ? '33% width' : '100% width'}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        ));
+                      })()}
+                    </div>
+                    {sectionOrder.filter(s => s.enabled).length === 0 && (
+                      <div className="text-center text-sm text-muted-foreground py-8">
+                        No visible sections - enable sections to see preview
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="mt-6 p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-300 rounded-xl shadow-sm">
+                    <p className="text-base text-blue-900 font-bold mb-3 flex items-center gap-2">
+                      <Settings2 className="h-5 w-5" />
+                      Elementor-Style Controls Guide:
+                    </p>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-blue-900">
+                      <div>
+                        <p className="font-bold mb-1.5">📐 Grid Width (Row Position)</p>
+                        <ul className="space-y-0.5 ml-3">
+                          <li>• <strong>Full</strong> - Section takes entire row</li>
+                          <li>• <strong>1/2</strong> - 2 sections side-by-side</li>
+                          <li>• <strong>1/3</strong> - 3 sections side-by-side</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-bold mb-1.5">📦 Container (Section Width)</p>
+                        <ul className="space-y-0.5 ml-3">
+                          <li>• <strong>Full</strong> - Edge-to-edge (fullscreen)</li>
+                          <li>• <strong>Wide</strong> - 1536px max, centered</li>
+                          <li>• <strong>Box</strong> - 1280px max, centered</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-bold mb-1.5">📏 Padding</p>
+                        <ul className="space-y-0.5 ml-3">
+                          <li>• <strong>0</strong> - No padding (tight)</li>
+                          <li>• <strong>S</strong> - Small (16px)</li>
+                          <li>• <strong>M</strong> - Medium (24px, default)</li>
+                          <li>• <strong>L</strong> - Large (48px)</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-bold mb-1.5">🎨 Style Toggles</p>
+                        <ul className="space-y-0.5 ml-3">
+                          <li>• <strong>BG</strong> - Show/hide background color</li>
+                          <li>• <strong>Border</strong> - Show/hide rounded corners & borders</li>
+                          <li>• <strong>Visible/Hidden</strong> - Enable/disable section</li>
+                        </ul>
+                      </div>
+                    </div>
+                    <p className="text-xs text-blue-800 mt-3 pt-3 border-t border-blue-200">
+                      <strong>💡 Pro Tip:</strong> For fullscreen hero banners, use <strong>Container: Full + Padding: 0 + BG: Off + Border: Off</strong> to get true edge-to-edge layouts like Elementor!
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             {/* Media upload */}
             <Card>
@@ -766,6 +1514,11 @@ const AdminTemplates: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+
+            {/* Auto-save Notice */}
+            <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800">
+              <strong>✓ Auto-Save Enabled:</strong> Template selection and media uploads are saved automatically. No save button needed!
+            </div>
           </div>
         )}
 
@@ -940,19 +1693,110 @@ const AdminTemplates: React.FC = () => {
                     </div>
                   )})}
                 </div>
-                <div className="flex justify-between items-center mt-6">
-                  <Button variant="outline" onClick={() => {
-                    const found = templates.find(t => t.id === selectedTemplate);
-                    if (found) setColors(found.defaultPalette);
-                  }}>
-                    Reset to Template Defaults
-                  </Button>
-                  <Button onClick={saveColors} disabled={savingColors} className="gap-2">
-                    <Save className="h-4 w-4" />{savingColors ? 'Saving…' : 'Save Colors'}
-                  </Button>
+              </CardContent>
+            </Card>
+
+            {/* Hero/Banner Layout Style */}
+            <Card className="border-2 border-primary/20 shadow-lg">
+              <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
+                <CardTitle className="flex items-center gap-2">
+                  <LayoutGrid className="h-5 w-5" />
+                  Banner / Hero Layout Style
+                </CardTitle>
+                <CardDescription>Choose how your banner section appears - configure both style and colors in one place</CardDescription>
+              </CardHeader>
+              <CardContent className="pt-6">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  {HERO_LAYOUT_OPTIONS.map(opt => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      onClick={() => setHeroLayout(opt.id)}
+                      className={`relative flex flex-col items-center gap-3 p-5 rounded-xl border-2 text-center transition-all focus:outline-none hover:shadow-lg ${
+                        heroLayout === opt.id
+                          ? 'border-primary bg-primary/10 ring-2 ring-primary/30 shadow-lg'
+                          : 'border-border bg-card hover:border-primary/40 hover:bg-muted/40'
+                      }`}
+                    >
+                      {heroLayout === opt.id && (
+                        <span className="absolute top-2 right-2 bg-primary text-primary-foreground rounded-full p-1">
+                          <Check className="h-3 w-3" />
+                        </span>
+                      )}
+                      <span className="text-3xl leading-none">{opt.icon}</span>
+                      <div>
+                        <div className="font-semibold text-sm mb-1">{opt.label}</div>
+                        <div className="text-xs text-muted-foreground leading-tight">{opt.desc}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+                
+                {/* Visual Preview of Selected Layout */}
+                <div className="mt-6 p-6 bg-gradient-to-br from-slate-50 to-blue-50 border-2 border-blue-200 rounded-xl">
+                  <p className="text-sm font-bold text-slate-800 mb-4">Preview: {HERO_LAYOUT_OPTIONS.find(o => o.id === heroLayout)?.label}</p>
+                  
+                  {heroLayout === 'fullscreen' && (
+                    <div className="aspect-video rounded-lg overflow-hidden" style={{ background: colors.heroBg }}>
+                      <div className="h-full flex flex-col items-center justify-center p-8">
+                        <h2 className="text-2xl font-bold mb-2" style={{ color: colors.heroTextColor }}>Your Store Name</h2>
+                        <p className="text-sm" style={{ color: colors.heroTextColor, opacity: 0.9 }}>Welcome message or slogan goes here</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {heroLayout === 'split' && (
+                    <div className="grid grid-cols-2 gap-4 rounded-lg overflow-hidden">
+                      <div className="aspect-video rounded-lg bg-gradient-to-br from-gray-300 to-gray-400 flex items-center justify-center text-gray-600">
+                        Image
+                      </div>
+                      <div className="flex flex-col justify-center p-6 rounded-lg" style={{ background: colors.heroBg }}>
+                        <h2 className="text-xl font-bold mb-2" style={{ color: colors.heroTextColor }}>Store Name</h2>
+                        <p className="text-xs" style={{ color: colors.heroTextColor, opacity: 0.9 }}>Description text</p>
+                      </div>
+                    </div>
+                  )}
+                  
+                  {heroLayout === 'minimal' && (
+                    <div className="h-16 rounded-lg flex items-center justify-between px-6" style={{ background: colors.heroBg }}>
+                      <span className="font-bold" style={{ color: colors.heroTextColor }}>Store Name</span>
+                      <span className="text-sm" style={{ color: colors.heroTextColor, opacity: 0.8 }}>Minimal Banner</span>
+                    </div>
+                  )}
+                  
+                  {heroLayout === 'centered' && (
+                    <div className="aspect-video rounded-lg flex items-center justify-center text-center p-8" style={{ background: colors.heroBg }}>
+                      <div>
+                        <h2 className="text-2xl font-bold mb-2" style={{ color: colors.heroTextColor }}>Your Store</h2>
+                        <p className="text-sm" style={{ color: colors.heroTextColor, opacity: 0.9 }}>Centered text over gradient background</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+                
+                <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+                  <strong>💡 Tip:</strong> Banner colors are configured above (Banner Background & Banner Text Color). Choose a layout that complements your brand - Fullscreen for impact, Minimal for simplicity, Split for visual balance.
                 </div>
               </CardContent>
             </Card>
+
+            {/* Save Colors Section */}
+            <div className="flex justify-between items-center">
+              <Button variant="outline" onClick={() => {
+                const found = templates.find(t => t.id === selectedTemplate);
+                if (found) updateColors(found.defaultPalette);
+              }}>
+                Reset to Template Defaults
+              </Button>
+              <div className="flex items-center gap-3">
+                {hasUnsavedColors && (
+                  <span className="text-xs text-amber-600 font-medium">• Unsaved changes</span>
+                )}
+                <Button onClick={saveColors} disabled={savingColors} className="gap-2" variant={hasUnsavedColors ? 'default' : 'outline'}>
+                  <Save className="h-4 w-4" />{savingColors ? 'Saving…' : hasUnsavedColors ? 'Save Colors *' : 'Save Colors'}
+                </Button>
+              </div>
+            </div>
           </div>
         )}
 
@@ -968,7 +1812,7 @@ const AdminTemplates: React.FC = () => {
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {PRODUCT_DISPLAY_OPTIONS.map(opt => (
-                    <OptionTile key={opt.id} option={opt} selected={productDisplayType} onSelect={setProductDisplayType} />
+                    <OptionTile key={opt.id} option={opt} selected={productDisplayType} onSelect={updateProductDisplayType} />
                   ))}
                 </div>
                 {/* Mini animation demo */}
@@ -1017,29 +1861,11 @@ const AdminTemplates: React.FC = () => {
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-3">
                   {PRODUCT_ANIMATION_OPTIONS.map(opt => (
-                    <OptionTile key={opt.id} option={opt} selected={productCardAnimation} onSelect={setProductCardAnimation} />
+                    <OptionTile key={opt.id} option={opt} selected={productCardAnimation} onSelect={updateProductCardAnimation} />
                   ))}
                 </div>
                 <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
                   <strong>💡 Tip:</strong> Hover animations are subtle on mobile but create an engaging experience on desktop. Try "Parallax" or "3D Lift" for modern stores.
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Hero layout */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Hero / Banner Style</CardTitle>
-                <CardDescription>Choose the layout style for your store banner section</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                  {HERO_LAYOUT_OPTIONS.map(opt => (
-                    <OptionTile key={opt.id} option={opt} selected={heroLayout} onSelect={setHeroLayout} />
-                  ))}
-                </div>
-                <div className="mt-4 p-3 rounded-lg bg-amber-50 border border-amber-200 text-sm text-amber-800">
-                  <strong>📐 Banner Style:</strong> All layouts show the banner as a rounded card (not full page width). Use "Fullscreen" for a large banner, "Minimal Bar" for compact, or "Centered Text" for text-focused design. Banner colors are controlled in the Colors tab.
                 </div>
               </CardContent>
             </Card>
@@ -1053,7 +1879,7 @@ const AdminTemplates: React.FC = () => {
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {MENU_STYLE_OPTIONS.map(opt => (
-                    <OptionTile key={opt.id} option={opt} selected={menuStyle} onSelect={setMenuStyle} />
+                    <OptionTile key={opt.id} option={opt} selected={menuStyle} onSelect={updateMenuStyle} />
                   ))}
                 </div>
               </CardContent>
@@ -1068,15 +1894,69 @@ const AdminTemplates: React.FC = () => {
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   {ABOUT_LAYOUT_OPTIONS.map(opt => (
-                    <OptionTile key={opt.id} option={opt} selected={aboutLayout} onSelect={setAboutLayout} />
+                    <OptionTile key={opt.id} option={opt} selected={aboutLayout} onSelect={updateAboutLayout} />
                   ))}
                 </div>
               </CardContent>
             </Card>
 
-            <div className="flex justify-end">
-              <Button onClick={saveLayout} disabled={savingLayout} className="gap-2">
-                <Save className="h-4 w-4" />{savingLayout ? 'Saving…' : 'Save Layout'}
+            {/* Page Layout */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Page Layout</CardTitle>
+                <CardDescription>Choose how content is positioned on the page — full-width for modern edge-to-edge design or contained for classic centered layout</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {PAGE_LAYOUT_OPTIONS.map(opt => (
+                    <OptionTile key={opt.id} option={opt} selected={pageLayout} onSelect={updatePageLayout} />
+                  ))}
+                </div>
+                <div className="mt-4 p-3 rounded-lg bg-violet-50 border border-violet-200 text-sm text-violet-800">
+                  <strong>🎨 Pro Tip:</strong> "Hybrid" gives you the best of both worlds — full-width hero banner with contained content sections for optimal readability.
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Store Card Style */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Store Info Card Style</CardTitle>
+                <CardDescription>Control how your store information card (logo, description, contact) is displayed</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {STORE_CARD_STYLE_OPTIONS.map(opt => (
+                    <OptionTile key={opt.id} option={opt} selected={storeCardStyleLayout} onSelect={updateStoreCardStyleLayout} />
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Visual Style */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Visual Style</CardTitle>
+                <CardDescription>Choose the overall visual aesthetic for borders and corners throughout your store</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                  {VISUAL_STYLE_OPTIONS.map(opt => (
+                    <OptionTile key={opt.id} option={opt} selected={visualStyle} onSelect={updateVisualStyle} />
+                  ))}
+                </div>
+                <div className="mt-4 p-3 rounded-lg bg-blue-50 border border-blue-200 text-sm text-blue-800">
+                  <strong>✨ Style Guide:</strong> "Rounded" is friendly and modern, "Sharp" is professional and bold, "Mixed" combines both for unique visual interest.
+                </div>
+              </CardContent>
+            </Card>
+
+            <div className="flex justify-end gap-3 items-center">
+              {hasUnsavedLayout && (
+                <span className="text-xs text-amber-600 font-medium">• Unsaved changes</span>
+              )}
+              <Button onClick={saveLayout} disabled={savingLayout} className="gap-2" variant={hasUnsavedLayout ? 'default' : 'outline'}>
+                <Save className="h-4 w-4" />{savingLayout ? 'Saving…' : hasUnsavedLayout ? 'Save Layout *' : 'Save Layout'}
               </Button>
             </div>
           </div>
@@ -1165,11 +2045,11 @@ const AdminTemplates: React.FC = () => {
                           </div>
                           
                           {/* Width controls */}
-                          <div className="flex gap-1 border rounded-md overflow-hidden">
+                          <div className="flex gap-0.5 border rounded-md overflow-hidden">
                             <button
                               type="button"
                               onClick={() => {
-                                setSectionOrder(prev =>
+                                updateSectionOrder(prev =>
                                   prev.map(s => s.id === section.id ? { ...s, width: 'full' } : s)
                                 );
                               }}
@@ -1178,14 +2058,14 @@ const AdminTemplates: React.FC = () => {
                                   ? 'bg-primary/20 text-primary'
                                   : 'bg-background hover:bg-muted'
                               }`}
-                              title="Full width"
+                              title="Full width - takes entire row"
                             >
                               Full
                             </button>
                             <button
                               type="button"
                               onClick={() => {
-                                setSectionOrder(prev =>
+                                updateSectionOrder(prev =>
                                   prev.map(s => s.id === section.id ? { ...s, width: 'half' } : s)
                                 );
                               }}
@@ -1194,9 +2074,25 @@ const AdminTemplates: React.FC = () => {
                                   ? 'bg-primary/20 text-primary'
                                   : 'bg-background hover:bg-muted'
                               }`}
-                              title="Half width (side-by-side)"
+                              title="Half width - 2 sections per row"
                             >
-                              Half
+                              1/2
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                updateSectionOrder(prev =>
+                                  prev.map(s => s.id === section.id ? { ...s, width: 'third' } : s)
+                                );
+                              }}
+                              className={`px-2 py-1 text-xs font-medium transition-colors ${
+                                section.width === 'third'
+                                  ? 'bg-primary/20 text-primary'
+                                  : 'bg-background hover:bg-muted'
+                              }`}
+                              title="Third width - 3 sections per row"
+                            >
+                              1/3
                             </button>
                           </div>
                           
@@ -1204,7 +2100,7 @@ const AdminTemplates: React.FC = () => {
                           <button
                             type="button"
                             onClick={() => {
-                              setSectionOrder(prev =>
+                              updateSectionOrder(prev =>
                                 prev.map(s => s.id === section.id ? { ...s, enabled: !s.enabled } : s)
                               );
                             }}
@@ -1220,9 +2116,16 @@ const AdminTemplates: React.FC = () => {
                       );
                     })}
                 </div>
-                <p className="text-xs text-muted-foreground mt-4">
-                  💡 Use ↑↓ buttons to reorder sections. Toggle <strong>Full/Half</strong> width to place 2 sections side-by-side. Click Visible/Hidden to show or hide sections.
-                </p>
+                <div className="mt-6 p-4 bg-blue-50/50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-900 font-medium mb-2">💡 Layout Guide:</p>
+                  <ul className="text-xs text-blue-800 space-y-1">
+                    <li>• Use <strong>↑↓ arrows</strong> to reorder sections</li>
+                    <li>• Choose <strong>Full</strong> for 1 section per row (full width)</li>
+                    <li>• Choose <strong>1/2</strong> to place 2 sections side-by-side</li>
+                    <li>• Choose <strong>1/3</strong> to place 3 sections side-by-side</li>
+                    <li>• Click <strong>Visible/Hidden</strong> to show or hide sections</li>
+                  </ul>
+                </div>
               </CardContent>
             </Card>
 
@@ -1235,7 +2138,7 @@ const AdminTemplates: React.FC = () => {
               <CardContent>
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
                   {CONTACT_FORM_OPTIONS.map(opt => (
-                    <OptionTile key={opt.id} option={opt} selected={contactFormStyle} onSelect={setContactFormStyle} />
+                    <OptionTile key={opt.id} option={opt} selected={contactFormStyle} onSelect={updateContactFormStyle} />
                   ))}
                 </div>
 
@@ -1274,7 +2177,7 @@ const AdminTemplates: React.FC = () => {
               <CardContent>
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-3">
                   {RATING_OPTIONS.map(opt => (
-                    <OptionTile key={opt.id} option={opt} selected={ratingDisplayType} onSelect={setRatingDisplayType} />
+                    <OptionTile key={opt.id} option={opt} selected={ratingDisplayType} onSelect={updateRatingDisplayType} />
                   ))}
                 </div>
 
@@ -1326,9 +2229,12 @@ const AdminTemplates: React.FC = () => {
               </CardContent>
             </Card>
 
-            <div className="flex justify-end">
-              <Button onClick={saveSections} disabled={savingSections} className="gap-2">
-                <Save className="h-4 w-4" />{savingSections ? 'Saving…' : 'Save Sections'}
+            <div className="flex justify-end gap-3 items-center">
+              {hasUnsavedSections && (
+                <span className="text-xs text-amber-600 font-medium">• Unsaved changes</span>
+              )}
+              <Button onClick={saveSections} disabled={savingSections} className="gap-2" variant={hasUnsavedSections ? 'default' : 'outline'}>
+                <Save className="h-4 w-4" />{savingSections ? 'Saving…' : hasUnsavedSections ? 'Save Sections *' : 'Save Sections'}
               </Button>
             </div>
           </div>
