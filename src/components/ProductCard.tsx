@@ -56,9 +56,9 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
   };
 
   const cardLink = linkToStore 
-    ? `/store/${product.store?.slug || product.storeId}` 
+    ? `/${product.store?.slug || product.storeId}` 
     : product.slug && product.store?.slug
-      ? `/store/${product.store.slug}/product/${product.slug}`
+      ? `/${product.store.slug}/product/${product.slug}`
       : `/product/id/${product.id}`;
 
   // ── list display ──────────────────────────────────────────────────────────

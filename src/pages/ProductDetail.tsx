@@ -107,7 +107,7 @@ const ProductDetail: React.FC = () => {
               
               // Redirect to slug URL if both product and store have slugs
               if (productData.slug && storeData.slug) {
-                navigate(`/store/${storeData.slug}/product/${productData.slug}`, { replace: true });
+                navigate(`/${storeData.slug}/product/${productData.slug}`, { replace: true });
                 return;
               }
             }
@@ -315,14 +315,14 @@ const ProductDetail: React.FC = () => {
                 </div>
                 
                 {store && (
-                  <Link to={`/store/${store.slug || store.id}`} className="flex items-center text-market-secondary hover:underline mb-6">
+                  <Link to={`/${store.slug || store.id}`} className="flex items-center text-market-secondary hover:underline mb-6">
                     <StoreIcon size={18} className="mr-2" />
                     Sold by: {store.name}
                   </Link>
                 )}
                 
                 {store && (
-                  <Link to={`/store/${store.slug || store.id}`} className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6">
+                  <Link to={`/${store.slug || store.id}`} className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6">
                     <ArrowLeft size={18} className="mr-2" />
                     Back to Store
                   </Link>

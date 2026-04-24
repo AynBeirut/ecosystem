@@ -62,7 +62,7 @@ const CustomDomainStore: React.FC<Props> = ({ hostname }) => {
   }
 
   if (storeSlug) {
-    return <Navigate to={`/store/${storeSlug}`} replace />;
+    return <Navigate to={`/${storeSlug}`} replace />;
   }
 
   if (storeId) {

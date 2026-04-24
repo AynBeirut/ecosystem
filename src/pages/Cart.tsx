@@ -624,7 +624,7 @@ const Cart: React.FC = () => {
                                 <h3 className="font-medium text-gray-900">
                                   <Link 
                                     to={item.product.slug && item.product.store?.slug 
-                                      ? `/store/${item.product.store.slug}/product/${item.product.slug}`
+                                      ? `/${item.product.store.slug}/product/${item.product.slug}`
                                       : `/product/id/${item.product.id}`
                                     } 
                                     className="hover:text-market-primary"
