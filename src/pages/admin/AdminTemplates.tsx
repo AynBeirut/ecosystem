@@ -504,7 +504,8 @@ const AdminTemplates: React.FC = () => {
                     try {
                       const text = await file.text();
                       const imported = JSON.parse(text);
-                      await setDoc(doc(db, 'storeProfiles', storeId), imported, { merge: true });
+                      // Mark store as having imported design for white-label header
+                      await setDoc(doc(db, 'storeProfiles', storeId), { ...imported, hasImportedDesign: true }, { merge: true });
                       // Update local state
                       if (imported.template) {
                         setSelectedTemplate(imported.template);

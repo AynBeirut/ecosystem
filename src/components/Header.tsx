@@ -20,7 +20,47 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 
-const Header: React.FC = () => {
+// Helper function to determine if a color is light or dark
+const isColorLight = (color: string): boolean => {
+  let r = 0, g = 0, b = 0;
+  
+  if (color.startsWith('#')) {
+    const hex = color.replace('#', '');
+    r = parseInt(hex.substr(0, 2), 16);
+    g = parseInt(hex.substr(2, 2), 16);
+    b = parseInt(hex.substr(4, 2), 16);
+  } else if (color.startsWith('rgb')) {
+    const rgb = color.match(/\d+/g);
+    if (rgb) {
+      r = parseInt(rgb[0]);
+      g = parseInt(rgb[1]);
+      b = parseInt(rgb[2]);
+    }
+  }
+  
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.5;
+};
+
+interface HeaderProps {
+  storeName?: string;
+  storeLogo?: string;
+  storeSlug?: string;
+  primaryColor?: string;
+  subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
+  hasCustomDomain?: boolean;
+  hasImportedDesign?: boolean;
+}
+
+const Header: React.FC<HeaderProps> = ({ 
+  storeName, 
+  storeLogo, 
+  storeSlug, 
+  primaryColor,
+  subscriptionTier,
+  hasCustomDomain = false,
+  hasImportedDesign = false
+}) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, logout } = useAuth();
   const { items } = useCart();
@@ -32,24 +72,44 @@ const Header: React.FC = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
+  // White-label conditions: Pro/Business/Enterprise OR Custom Domain OR Imported Design
+  const isPaidTier = ['pro', 'business', 'premium'].includes(subscriptionTier || '');
+  const useWhiteLabel = isPaidTier || hasCustomDomain || hasImportedDesign;
+  
+  // Use store color or default Grabio green
+  const headerBgColor = useWhiteLabel && primaryColor 
+    ? primaryColor 
+    : 'rgb(16, 185, 129)'; // market-primary green
+  
+  // Determine text color based on background
+  const isLightBg = primaryColor ? isColorLight(primaryColor) : false;
+  const textColor = isLightBg ? 'text-gray-900' : 'text-white';
+  const hoverColor = isLightBg ? 'hover:text-gray-700' : 'hover:text-white/80';
+  const iconBg = isLightBg ? 'text-gray-600 hover:bg-gray-100' : 'text-white hover:bg-white/10';
+
   return (
-    <header className="bg-market-primary shadow-sm sticky top-0 z-50">
+    <header className="shadow-sm sticky top-0 z-50" style={{ backgroundColor: headerBgColor }}>
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to="/" className="flex items-center">
-            <span className="text-xl font-bold text-white">Home</span>
+          <Link to={useWhiteLabel && storeSlug ? `/store/${storeSlug}` : '/'} className="flex items-center gap-2">
+            {useWhiteLabel && storeLogo && (
+              <img src={storeLogo} alt={storeName} className="h-8 w-8 object-cover rounded" />
+            )}
+            <span className={`text-xl font-bold ${textColor}`}>
+              {useWhiteLabel && storeName ? storeName : 'Home'}
+            </span>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
-            {user && (user.role === 'admin' || user.role === 'sub_account') && (
-              <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className="text-white hover:text-market-primary/80">
+            {user && (user.role === 'admin' || user.role === 'sub_account') && !useWhiteLabel && (
+              <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className={`${textColor} ${hoverColor}`}>
                 Dashboard
               </Link>
             )}
-            {user && user.role === 'user' && (
-              <Link to="/upgrade" className="text-white hover:text-market-primary/80">
+            {user && user.role === 'user' && !useWhiteLabel && (
+              <Link to="/upgrade" className={`${textColor} ${hoverColor}`}>
                 Become a Seller
               </Link>
             )}
@@ -60,7 +120,7 @@ const Header: React.FC = () => {
             {/* Favorites Link - Available to everyone (uses localStorage) */}
             <Link 
               to="/favorites"
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
+              className={`p-2 rounded-full ${iconBg} relative`}
               aria-label="Favorites"
             >
               <Heart size={20} />
@@ -74,7 +134,7 @@ const Header: React.FC = () => {
             {/* Cart Link - Available to everyone (uses localStorage) */}
             <Link 
               to="/cart"
-              className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
+              className={`p-2 rounded-full ${iconBg} relative`}
               aria-label="Cart"
             >
               <ShoppingCart size={20} />
@@ -90,7 +150,7 @@ const Header: React.FC = () => {
                 {/* Order Tracking Link - Only for logged-in users */}
                 <Link 
                   to="/orders"
-                  className="p-2 rounded-full text-gray-600 hover:bg-gray-100 relative"
+                  className={`p-2 rounded-full ${iconBg} relative`}
                   aria-label="Order Tracking"
                 >
                   <Package size={20} />
@@ -180,7 +240,7 @@ const Header: React.FC = () => {
 
             {/* Mobile Menu Button */}
             <button
-              className="md:hidden p-2 rounded-full text-gray-600 hover:bg-gray-100 focus:outline-none"
+              className={`md:hidden p-2 rounded-full ${iconBg} focus:outline-none`}
               onClick={toggleMenu}
               aria-label="Open menu"
             >
@@ -191,20 +251,20 @@ const Header: React.FC = () => {
 
         {/* Mobile Menu */}
         {isMenuOpen && (
-          <div className="md:hidden mt-3 py-3 border-t border-gray-100">
+          <div className={`md:hidden mt-3 py-3 border-t ${isLightBg ? 'border-gray-300' : 'border-white/20'}`}>
             <nav className="flex flex-col space-y-3">
               <Link
-                to="/"
-                className="px-2 py-1 text-gray-600 hover:text-market-primary"
+                to={useWhiteLabel && storeSlug ? `/store/${storeSlug}` : '/'}
+                className={`px-2 py-1 ${textColor} ${hoverColor}`}
                 onClick={toggleMenu}
               >
-                Home
+                {useWhiteLabel && storeName ? storeName : 'Home'}
               </Link>
               
               {user && (user.role === 'admin' || user.role === 'sub_account') && (
                 <Link
                   to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'}
-                  className="px-2 py-1 text-gray-600 hover:text-market-primary"
+                  className={`px-2 py-1 ${textColor} ${hoverColor}`}
                   onClick={toggleMenu}
                 >
                   Dashboard
@@ -214,7 +274,7 @@ const Header: React.FC = () => {
               {user && user.role === 'user' && (
                 <Link
                   to="/upgrade"
-                  className="px-2 py-1 text-market-primary font-medium"
+                  className={`px-2 py-1 ${textColor} ${hoverColor}`}
                   onClick={toggleMenu}
                 >
                   Become a Seller

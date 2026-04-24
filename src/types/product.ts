@@ -76,6 +76,7 @@ export type Store = {
   proEmail?: string;
   customDomain?: string;
   customDomainStatus?: 'pending' | 'active' | 'error';
+  hasImportedDesign?: boolean; // Flag when store imports custom design (triggers white-label)
   ownerId: string;
   isPremium: boolean;
   subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
