@@ -36,7 +36,7 @@
     ],
     "rewrites": [
       {
-        "source": "**",
+        "source": "!/@(sg|sd|grabio-product-description).html",
         "destination": "/index.html"
       }
     ],
