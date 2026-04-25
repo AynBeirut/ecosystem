@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Grabio — Sales Guide</title>
-<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=DM+Sans:wght@300;400;500&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+
 <style>
   *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -18,9 +18,9 @@
     --accent3: #f472b6;
     --text: #f1f1f3;
     --muted: #5a5a72;
-    --syne: 'Syne', sans-serif;
-    --body: 'DM Sans', sans-serif;
-    --mono: 'DM Mono', monospace;
+    --syne: 'Helvetica Neue', 'Arial Black', Arial, sans-serif;
+    --body: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    --mono: 'Courier New', Courier, monospace;
   }
 
   html { scroll-behavior: smooth; }
@@ -55,7 +55,7 @@
 
   /* ── HERO ── */
   .hero {
-    min-height: 100svh;
+    min-height: 100vh;
     display: flex;
     flex-direction: column;
     justify-content: center;
@@ -107,15 +107,21 @@
   .hero h1 {
     font-family: var(--syne);
     font-weight: 800;
-    font-size: clamp(2.8rem, 9vw, 5.5rem);
-    line-height: 1.0;
-    letter-spacing: -0.02em;
-    margin-bottom: 1.5rem;
+    font-size: clamp(3rem, 10vw, 6rem);
+    line-height: 0.95;
+    letter-spacing: -0.035em;
+    margin-bottom: 1.75rem;
   }
 
   .hero h1 em {
     font-style: normal;
     color: var(--accent);
+    display: block;
+    font-size: clamp(3rem, 10vw, 6rem);
+    letter-spacing: -0.035em;
+    line-height: 1;
+    margin-top: 0.1em;
+    padding-bottom: 0.1em;
   }
 
   .hero-sub {
@@ -862,6 +868,54 @@
         </div>
       </div>
       <div class="commission-note">Paid monthly as long as the client stays active. 10 Pro clients = $60/mo recurring — just from referrals. Commission starts after client completes first paid month.</div>
+    </div>
+
+    <!-- SETUP SERVICE BOX -->
+    <div class="commission-box" style="border-left-color: var(--accent); margin-top: 1px;">
+      <div class="commission-title" style="color: var(--accent);">🛠 Your Setup Service — Charge on Top</div>
+      <div style="font-size:0.82rem; color:#9898b0; margin-bottom:1.25rem; line-height:1.65;">
+        Beyond the monthly subscription, you can charge a <strong style="color:var(--text)">one-time setup fee</strong> to build the store for your client. This is your own service — Grabio gives you the tools, you deliver the result.
+      </div>
+
+      <div style="display:grid; grid-template-columns: repeat(3,1fr); gap:1px; background:var(--border); border:1px solid var(--border); margin-bottom:1.25rem;">
+        <div style="background:var(--surface); padding:1rem 1.1rem;">
+          <div style="font-family:var(--mono);font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.4rem;">Basic Setup</div>
+          <div style="font-family:var(--syne);font-weight:800;font-size:1.5rem;color:var(--accent);">$100</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem;line-height:1.5;">Logo upload, default template, products entered, store live</div>
+        </div>
+        <div style="background:#0d1a14; padding:1rem 1.1rem;">
+          <div style="font-family:var(--mono);font-size:0.58rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.4rem;">Custom Design</div>
+          <div style="font-family:var(--syne);font-weight:800;font-size:1.5rem;color:var(--accent);">$300</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem;line-height:1.5;">Custom layout imported from Figma, AI tool, or any design file</div>
+        </div>
+        <div style="background:var(--surface); padding:1rem 1.1rem;">
+          <div style="font-family:var(--mono);font-size:0.58rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.12em;margin-bottom:0.4rem;">Full E-Commerce</div>
+          <div style="font-family:var(--syne);font-weight:800;font-size:1.5rem;color:var(--accent);">$500+</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.4rem;line-height:1.5;">Full store, custom design, payment setup, content, launch-ready</div>
+        </div>
+      </div>
+
+      <div style="background:var(--surface2);border:1px solid var(--border);padding:1rem 1.25rem;margin-bottom:1rem;">
+        <div style="font-family:var(--syne);font-weight:700;font-size:0.82rem;color:var(--accent2);margin-bottom:0.5rem;">🎨 Import Any Design — Your Unfair Advantage</div>
+        <div style="font-size:0.8rem;color:#9898b0;line-height:1.65;">
+          Grabio's design import lets you bring in any layout — built with <strong style="color:var(--text)">Figma, Framer, an AI website builder, Photoshop</strong>, or any tool you already use. Your client brings a reference site they love, you rebuild it inside Grabio. This unlocks premium clients willing to pay <strong style="color:var(--text)">$1,000–$5,000</strong> for a fully branded e-commerce experience — not just a basic store.
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--border);border:1px solid var(--border);margin-bottom:1rem;">
+        <div style="background:var(--surface);padding:0.85rem 1rem;">
+          <div style="font-family:var(--mono);font-size:0.6rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.35rem;">Small client</div>
+          <div style="font-family:var(--syne);font-weight:700;font-size:0.9rem;color:var(--text);">$100–$500 setup</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem;">Default template, quick launch, local retail or manufacturer</div>
+        </div>
+        <div style="background:var(--surface);padding:0.85rem 1rem;">
+          <div style="font-family:var(--mono);font-size:0.6rem;color:var(--accent);text-transform:uppercase;letter-spacing:0.1em;margin-bottom:0.35rem;">Premium client</div>
+          <div style="font-family:var(--syne);font-weight:700;font-size:0.9rem;color:var(--text);">$1,000–$5,000 setup</div>
+          <div style="font-size:0.75rem;color:var(--muted);margin-top:0.2rem;">Imported custom design, branded UX, full content & product setup</div>
+        </div>
+      </div>
+
+      <div class="commission-note">Setup fee is 100% yours — paid directly by the client before you start. Grabio takes nothing from your service income. Monthly plan on top = recurring commission forever.</div>
     </div>
   </div>
 </section>
