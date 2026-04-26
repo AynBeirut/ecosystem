@@ -50,8 +50,38 @@ type ChannelSyncSettings = {
   channelId: string;
   syncMode: 'full' | 'incremental';
   autoRetryFailed: boolean;
+  requiredFields?: string[];
   updatedBy?: string;
 };
+
+type ValidationReport = {
+  channelId: string;
+  total: number;
+  validCount: number;
+  invalidCount: number;
+  errorSamples: string[];
+  validatedAt: string;
+};
+
+const DEFAULT_REQUIRED_FIELDS: Record<string, string[]> = {
+  alibaba: ['name', 'description', 'category', 'price', 'image', 'stock'],
+  amazon: ['name', 'description', 'category', 'price', 'image', 'sku'],
+  walmart: ['name', 'description', 'category', 'price', 'image', 'stock'],
+  ebay: ['name', 'description', 'category', 'price', 'image'],
+  etsy: ['name', 'description', 'category', 'price', 'image'],
+};
+
+const FIELD_LABELS: Record<string, string> = {
+  name: 'Product Name',
+  description: 'Description',
+  category: 'Category',
+  price: 'Price',
+  image: 'Main Image',
+  stock: 'Stock Quantity',
+  sku: 'SKU',
+};
+
+const AVAILABLE_MAPPING_FIELDS = ['name', 'description', 'category', 'price', 'image', 'stock', 'sku'];
 
 const toIsoSafe = (value: unknown): string => {
   if (!value) return '';
@@ -73,10 +103,12 @@ const AdminMarketplaceSync: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [jobs, setJobs] = useState<SyncJobRow[]>([]);
   const [channelSettings, setChannelSettings] = useState<Record<string, ChannelSyncSettings>>({});
+  const [validationReports, setValidationReports] = useState<Record<string, ValidationReport>>({});
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [connectionBusy, setConnectionBusy] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState<string | null>(null);
   const [savingSettings, setSavingSettings] = useState<string | null>(null);
+  const [validationBusy, setValidationBusy] = useState<string | null>(null);
   const [retryBusy, setRetryBusy] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
@@ -144,6 +176,9 @@ const AdminMarketplaceSync: React.FC = () => {
           channelId,
           syncMode: data.syncMode === 'incremental' ? 'incremental' : 'full',
           autoRetryFailed: Boolean(data.autoRetryFailed),
+          requiredFields: Array.isArray(data.requiredFields)
+            ? (data.requiredFields as unknown[]).map((value) => String(value))
+            : undefined,
           updatedBy: String(data.updatedBy || ''),
         };
         return acc;
@@ -192,7 +227,14 @@ const AdminMarketplaceSync: React.FC = () => {
       channelId: integration.id,
       syncMode: 'full',
       autoRetryFailed: false,
+      requiredFields: DEFAULT_REQUIRED_FIELDS[integration.id.toLowerCase()] || ['name', 'description', 'category', 'price'],
     };
+  };
+
+  const getRequiredFields = (integration: MarketplaceIntegrationSetting): string[] => {
+    const settings = getChannelSettings(integration);
+    if (settings.requiredFields && settings.requiredFields.length > 0) return settings.requiredFields;
+    return DEFAULT_REQUIRED_FIELDS[integration.id.toLowerCase()] || ['name', 'description', 'category', 'price'];
   };
 
   const saveChannelSettings = async (channelId: string, patch: Partial<ChannelSyncSettings>) => {
@@ -237,6 +279,100 @@ const AdminMarketplaceSync: React.FC = () => {
       });
     } finally {
       setSavingSettings(null);
+    }
+  };
+
+  const buildMappedPayload = (sourceProducts: Product[]) => {
+    return sourceProducts.map((product) => ({
+      productId: product.id,
+      name: product.name,
+      description: product.description || '',
+      category: product.category || 'General',
+      price: Number(product.price || 0),
+      stock: Number(product.stock || 0),
+      inStock: Boolean(product.inStock),
+      image: product.image || '',
+      slug: product.slug || '',
+      sku: product.sku || '',
+      productType: product.productType || 'simple',
+    }));
+  };
+
+  const validateMappedPayload = (
+    integration: MarketplaceIntegrationSetting,
+    mappedPayload: ReturnType<typeof buildMappedPayload>
+  ): ValidationReport => {
+    const requiredFields = getRequiredFields(integration);
+    const errors: string[] = [];
+    let invalidCount = 0;
+
+    mappedPayload.forEach((product) => {
+      const missingForProduct: string[] = [];
+
+      requiredFields.forEach((field) => {
+        const value = product[field as keyof typeof product];
+
+        if (field === 'price') {
+          if (!Number.isFinite(Number(value)) || Number(value) <= 0) missingForProduct.push(field);
+          return;
+        }
+
+        if (field === 'stock') {
+          if (!Number.isFinite(Number(value)) || Number(value) < 0) missingForProduct.push(field);
+          return;
+        }
+
+        if (typeof value === 'string') {
+          if (!value.trim()) missingForProduct.push(field);
+          return;
+        }
+
+        if (value === null || value === undefined) {
+          missingForProduct.push(field);
+        }
+      });
+
+      if (missingForProduct.length > 0) {
+        invalidCount += 1;
+        if (errors.length < 8) {
+          const readable = missingForProduct.map((field) => FIELD_LABELS[field] || field).join(', ');
+          errors.push(`${product.name || product.productId}: missing ${readable}`);
+        }
+      }
+    });
+
+    return {
+      channelId: integration.id,
+      total: mappedPayload.length,
+      validCount: mappedPayload.length - invalidCount,
+      invalidCount,
+      errorSamples: errors,
+      validatedAt: new Date().toISOString(),
+    };
+  };
+
+  const runPreSyncValidation = async (integration: MarketplaceIntegrationSetting) => {
+    setValidationBusy(integration.id);
+    try {
+      const payload = buildMappedPayload(filteredProducts);
+      const report = validateMappedPayload(integration, payload);
+
+      setValidationReports((prev) => ({ ...prev, [integration.id]: report }));
+
+      if (report.invalidCount > 0) {
+        toast({
+          title: 'Validation failed',
+          description: `${integration.name}: ${report.invalidCount} product(s) are missing required mapped fields.`,
+          variant: 'destructive',
+        });
+      } else {
+        toast({
+          title: 'Validation passed',
+          description: `${integration.name}: ${report.validCount} products are ready to sync.`,
+        });
+      }
+    } finally {
+      setValidationBusy(null);
     }
   };
 
@@ -302,6 +438,16 @@ const AdminMarketplaceSync: React.FC = () => {
       return;
     }
 
+    const preflight = validationReports[integration.id];
+    if (!preflight || preflight.invalidCount > 0) {
+      toast({
+        title: 'Validation required',
+        description: `Run and pass pre-sync validation for ${integration.name} before enqueueing jobs.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
     if (filteredProducts.length === 0) {
       toast({
         title: 'No products to sync',
@@ -315,19 +461,7 @@ const AdminMarketplaceSync: React.FC = () => {
     try {
       const db = getFirestore();
       const settings = getChannelSettings(integration);
-      const mappedPayload = filteredProducts.map((product) => ({
-        productId: product.id,
-        name: product.name,
-        description: product.description || '',
-        category: product.category || 'General',
-        price: Number(product.price || 0),
-        stock: Number(product.stock || 0),
-        inStock: Boolean(product.inStock),
-        image: product.image || '',
-        slug: product.slug || '',
-        sku: product.sku || '',
-        productType: product.productType || 'simple',
-      }));
+      const mappedPayload = buildMappedPayload(filteredProducts);
 
       const invalidProducts = mappedPayload.filter((product) => !product.name || !Number.isFinite(product.price) || product.price <= 0);
 
@@ -342,6 +476,7 @@ const AdminMarketplaceSync: React.FC = () => {
         retryOfJobId: retryOfJobId || null,
         syncMode: settings.syncMode,
         autoRetryFailed: settings.autoRetryFailed,
+        requiredFields: settings.requiredFields || getRequiredFields(integration),
         totalProducts: mappedPayload.length,
         failedCount: 0,
         previewProducts: snapshotPreview,
@@ -524,7 +659,7 @@ const AdminMarketplaceSync: React.FC = () => {
                     {isAlibaba && <Badge className="bg-amber-100 text-amber-800 hover:bg-amber-100">Priority Channel</Badge>}
                   </CardTitle>
                   <CardDescription>
-                    {integration.id} channel configured in profile.
+                            {integration.id} channel configured in profile.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -573,6 +708,32 @@ const AdminMarketplaceSync: React.FC = () => {
                         </div>
                       </div>
                     </div>
+                    <div>
+                      <Label>Required Field Mapping Template</Label>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {AVAILABLE_MAPPING_FIELDS.map((field) => {
+                          const active = getRequiredFields(integration).includes(field);
+                          return (
+                            <Button
+                              key={`${integration.id}-${field}`}
+                              type="button"
+                              size="sm"
+                              variant={active ? 'default' : 'outline'}
+                              disabled={savingSettings === integration.id}
+                              onClick={() => {
+                                const current = getRequiredFields(integration);
+                                const next = active
+                                  ? current.filter((item) => item !== field)
+                                  : [...current, field];
+                                saveChannelSettings(integration.id, { requiredFields: next });
+                              }}
+                            >
+                              {FIELD_LABELS[field] || field}
+                            </Button>
+                          );
+                        })}
+                      </div>
+                    </div>
                   </div>
 
                   <div className="flex flex-wrap gap-2">
@@ -597,8 +758,33 @@ const AdminMarketplaceSync: React.FC = () => {
 
                     <Button
                       type="button"
+                      variant="outline"
+                      onClick={() => runPreSyncValidation(integration)}
+                      disabled={validationBusy === integration.id || !!syncBusy}
+                    >
+                      {validationBusy === integration.id ? (
+                        <>
+                          <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                          Validating...
+                        </>
+                      ) : (
+                        <>
+                          <CheckCircle2 className="h-4 w-4 mr-2" />
+                          Run Validation
+                        </>
+                      )}
+                    </Button>
+
+                    <Button
+                      type="button"
                       onClick={() => syncProductsToChannel(integration)}
-                      disabled={!canSync || syncBusy === integration.id || connectionBusy === integration.id}
+                      disabled={
+                        !canSync ||
+                        syncBusy === integration.id ||
+                        connectionBusy === integration.id ||
+                        !validationReports[integration.id] ||
+                        validationReports[integration.id].invalidCount > 0
+                      }
                     >
                       {syncBusy === integration.id ? (
                         <>
@@ -613,6 +799,30 @@ const AdminMarketplaceSync: React.FC = () => {
                       )}
                     </Button>
                   </div>
+
+                  {validationReports[integration.id] && (
+                    <div className="rounded-md border p-3 text-sm space-y-1">
+                      <div className="font-medium">
+                        Pre-Sync Validation: {validationReports[integration.id].invalidCount === 0 ? 'Passed' : 'Failed'}
+                      </div>
+                      <div className="text-muted-foreground">
+                        {validationReports[integration.id].validCount}/{validationReports[integration.id].total} valid
+                        {validationReports[integration.id].invalidCount > 0
+                          ? ` • ${validationReports[integration.id].invalidCount} invalid`
+                          : ''}
+                      </div>
+                      {validationReports[integration.id].errorSamples.length > 0 && (
+                        <div className="text-xs text-red-600 pt-1 space-y-0.5">
+                          {validationReports[integration.id].errorSamples.map((error, index) => (
+                            <div key={`${integration.id}-err-${index}`}>{error}</div>
+                          ))}
+                        </div>
+                      )}
+                      <div className="text-xs text-muted-foreground pt-1">
+                        {new Date(validationReports[integration.id].validatedAt).toLocaleString()}
+                      </div>
+                    </div>
+                  )}
 
                   {result && (
                     <div className="rounded-md border p-3 text-sm">
