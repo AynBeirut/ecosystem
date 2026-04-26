@@ -21,7 +21,9 @@ import {
   Undo2,
   DollarSign,
   Mail,
-  Globe
+  Globe,
+  Star,
+  Bell
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -315,6 +317,24 @@ const AdminDashboard: React.FC = () => {
               <Globe className="h-4 w-4" />
             </div>
             <span className="text-xs text-gray-700 mt-1">Marketplace</span>
+          </Link>
+        )}
+
+        {user?.role === 'admin' && (
+          <Link to="/admin/product-reviews" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-yellow-200 shadow-sm hover:shadow-md transition">
+            <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700">
+              <Star className="h-4 w-4" />
+            </div>
+            <span className="text-xs text-gray-700 mt-1">Reviews</span>
+          </Link>
+        )}
+
+        {user?.role === 'admin' && (
+          <Link to="/admin/order-notifications" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-sky-200 shadow-sm hover:shadow-md transition">
+            <div className="h-8 w-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700">
+              <Bell className="h-4 w-4" />
+            </div>
+            <span className="text-xs text-gray-700 mt-1">Notif Logs</span>
           </Link>
         )}
 
@@ -762,6 +782,24 @@ const AdminDashboard: React.FC = () => {
                       <Globe className="h-4 w-4" />
                     </div>
                     <span className="text-sm font-medium">Marketplace Sync</span>
+                  </Link>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link to="/admin/product-reviews" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-yellow-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700">
+                      <Star className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">Product Reviews</span>
+                  </Link>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link to="/admin/order-notifications" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-sky-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700">
+                      <Bell className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">Notification Logs</span>
                   </Link>
                 )}
 

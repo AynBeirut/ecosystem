@@ -71,6 +71,8 @@ import AdminAccountStatement from "./pages/admin/AdminAccountStatement";
 import AdminBankReconciliation from "./pages/admin/AdminBankReconciliation";
 import AdminFinanceSuite from "./pages/admin/AdminFinanceSuite";
 import AdminMarketplaceSync from "./pages/admin/AdminMarketplaceSync";
+import AdminProductReviews from "./pages/admin/AdminProductReviews";
+import AdminOrderNotifications from "./pages/admin/AdminOrderNotifications";
 import AdminServiceRenewals from "./pages/admin/AdminServiceRenewals";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminReturns from "./pages/admin/AdminReturns";
@@ -188,6 +190,8 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} />
                         <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']}><AdminFinanceSuite /></ProtectedRoute>} />
                         <Route path="/admin/marketplace" element={<ProtectedRoute allowedRoles={['admin']}><AdminMarketplaceSync /></ProtectedRoute>} />
+                        <Route path="/admin/product-reviews" element={<ProtectedRoute allowedRoles={['admin']}><AdminProductReviews /></ProtectedRoute>} />
+                        <Route path="/admin/order-notifications" element={<ProtectedRoute allowedRoles={['admin']}><AdminOrderNotifications /></ProtectedRoute>} />
                         <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']}><AdminAccountStatement /></ProtectedRoute>} />
                         <Route path="/admin/cash-collection" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
                         <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />

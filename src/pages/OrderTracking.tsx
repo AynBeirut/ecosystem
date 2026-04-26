@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Phone, Mail, Package } from 'lucide-react';
 import { Order } from '@/types/order';
 import { ReturnReason, ItemCondition, ExchangeItem } from '@/types/returns';
+import type { ProductReview } from '@/types/product';
 import { toast } from '@/components/ui/sonner';
 
 type StoreProfile = Record<string, unknown>;
@@ -57,6 +58,7 @@ const OrderTracking: React.FC = () => {
   const [orders, setOrders] = useState<Order[]>([]);
   const [stores, setStores] = useState<Record<string, StoreProfile>>({});
   const [products, setProducts] = useState<Record<string, ProductInfo>>({});
+  const [reviewStatusByProduct, setReviewStatusByProduct] = useState<Record<string, string>>({});
   const [returnsByOrder, setReturnsByOrder] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [returnDialogOpen, setReturnDialogOpen] = useState(false);
@@ -165,6 +167,23 @@ const OrderTracking: React.FC = () => {
       
       setStores(storeMap);
       setProducts(productMap);
+
+      const reviewMap: Record<string, string> = {};
+      try {
+        const reviewsRef = collection(db, 'productReviews');
+        const reviewsQuery = query(reviewsRef, where('userId', '==', user.id));
+        const reviewsSnap = await getDocs(reviewsQuery);
+        reviewsSnap.docs.forEach((reviewDoc) => {
+          const data = reviewDoc.data() as ProductReview;
+          if (data.productId && !reviewMap[data.productId]) {
+            reviewMap[data.productId] = data.status;
+          }
+        });
+      } catch (reviewErr) {
+        console.warn('Failed to load product review history', reviewErr);
+      }
+      setReviewStatusByProduct(reviewMap);
+
       setLoading(false);
     };
     fetchOrders();
@@ -462,11 +481,15 @@ const OrderTracking: React.FC = () => {
                         <div className="space-y-2">
                           {order.items.map((item, idx) => {
                             const product = products[item.productId];
+                            const reviewStatus = reviewStatusByProduct[item.productId];
                             return (
                               <div key={idx} className="flex justify-between items-center text-sm bg-white p-2 rounded">
                                 <div className="flex-1">
                                   <span className="font-medium">{product?.name || 'Loading...'}</span>
                                   <span className="text-gray-500 ml-2">× {item.quantity}</span>
+                                  {reviewStatus && (
+                                    <span className="ml-2 text-xs text-gray-500">• Review: {reviewStatus}</span>
+                                  )}
                                 </div>
                                 <div className="text-gray-700 font-medium">
                                   ${((item.price || product?.price || 0) * item.quantity).toFixed(2)}

@@ -50,8 +50,8 @@ This backlog consolidates unfinished updates into one place.
 - [ ] AI-assisted live chat response system
 
 ### Newly Requested Enhancements
-- [ ] Product ratings and reviews flow (storefront + customer history + admin moderation)
-- [ ] Automatic order notifications for guest and signed-in buyers via email and optional WhatsApp
+- [x] Product ratings and reviews flow (storefront + customer history + admin moderation)
+- [x] Automatic order notifications for guest and signed-in buyers via email and optional WhatsApp
 
 
 ## Notes
@@ -73,3 +73,5 @@ This backlog consolidates unfinished updates into one place.
 - Channel mapping templates and pre-sync validation gates are now included in `/admin/marketplace`: admins can set required fields per channel (e.g., Alibaba/Amazon/eBay templates), run validation to see invalid product samples, and only enqueue sync jobs after a passing validation report.
 - Finance suite hub is now available at `/admin/finance` with Balance/Capital/Credit/Bill Pay modules, real-time finance KPIs (gross/paid/receivable/expenses), and quick actions linked to existing finance workflows (`/admin/payments`, `/admin/revenue`, `/admin/account-statement`, `/admin/expenses`, `/admin/bank-reconciliation`).
 - Store template editor now supports richer section controls in `/admin/templates`: per-section background images, section animation presets, custom CSS blocks, and drag-and-drop section ordering with live storefront rendering support.
+- Product reviews are now implemented end-to-end: customers can submit product reviews from product pages after purchase, order history surfaces review status, and admins moderate reviews in `/admin/product-reviews` with product rating aggregates updated on approve/reject.
+- Automatic order notifications are now active for checkout-created orders: email confirmations are sent for guest/signed-in buyers, optional WhatsApp webhook delivery is supported when configured, and delivery logs with retry are available in `/admin/order-notifications`.

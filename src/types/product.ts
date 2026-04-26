@@ -133,6 +133,23 @@ export type StoreReview = {
   createdAt: string;
 };
 
+export type ProductReviewStatus = 'pending' | 'approved' | 'rejected';
+
+export type ProductReview = {
+  id?: string;
+  storeId: string;
+  productId: string;
+  userId: string;
+  userName?: string;
+  rating: number;
+  comment?: string;
+  status: ProductReviewStatus;
+  createdAt: string;
+  moderatedAt?: string;
+  moderatedBy?: string;
+  orderId?: string;
+};
+
 export type AdWatchHistory = {
   id: string;
   userId: string;

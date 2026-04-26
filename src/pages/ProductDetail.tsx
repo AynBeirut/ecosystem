@@ -1,10 +1,10 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import SEOHead from '@/components/SEOHead';
 import { pixelViewContent } from '@/lib/metaPixel';
-import { Product, Store } from '@/types/product';
+import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
 import Header from '@/components/Header';
@@ -15,6 +15,9 @@ import { Heart, Minus, Plus, Clock, Store as StoreIcon, ArrowLeft } from 'lucide
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import ShareButtons from '@/components/ui/ShareButtons';
+import { Textarea } from '@/components/ui/textarea';
+import { useAuth } from '@/context/useAuth';
+import { toast } from '@/components/ui/sonner';
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
@@ -24,6 +27,15 @@ const ProductDetail: React.FC = () => {
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [reviews, setReviews] = useState<ProductReview[]>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState('');
+  const [isSubmittingReview, setIsSubmittingReview] = useState(false);
+  const [hasPurchasedProduct, setHasPurchasedProduct] = useState(false);
+  const [existingUserReview, setExistingUserReview] = useState<ProductReview | null>(null);
+
+  const { user } = useAuth();
   
   const { addToCart } = useCart();
   const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
@@ -145,6 +157,129 @@ const ProductDetail: React.FC = () => {
 
     loadProduct();
   }, [id, productSlug, storeSlug, navigate]);
+
+  useEffect(() => {
+    const loadReviews = async () => {
+      if (!product?.id) {
+        setReviews([]);
+        return;
+      }
+
+      setReviewsLoading(true);
+      try {
+        const db = getFirestore();
+        const reviewsRef = collection(db, 'productReviews');
+        const q = query(
+          reviewsRef,
+          where('productId', '==', product.id),
+          where('status', '==', 'approved')
+        );
+        const snap = await getDocs(q);
+        const rows = snap.docs.map((d) => ({ id: d.id, ...d.data() } as ProductReview));
+        rows.sort((a, b) => {
+          const ta = Number(new Date(String(a.createdAt || 0)).getTime() || 0);
+          const tb = Number(new Date(String(b.createdAt || 0)).getTime() || 0);
+          return tb - ta;
+        });
+        setReviews(rows);
+      } catch (err) {
+        console.error('Failed to load product reviews', err);
+      } finally {
+        setReviewsLoading(false);
+      }
+    };
+
+    loadReviews();
+  }, [product?.id]);
+
+  useEffect(() => {
+    const loadCustomerReviewState = async () => {
+      if (!user?.id || !product?.id) {
+        setHasPurchasedProduct(false);
+        setExistingUserReview(null);
+        return;
+      }
+
+      try {
+        const db = getFirestore();
+
+        const userOrdersQuery = query(collection(db, 'orders'), where('customerId', '==', user.id));
+        const userOrdersSnap = await getDocs(userOrdersQuery);
+        const purchased = userOrdersSnap.docs.some((orderDoc) => {
+          const items = (orderDoc.data().items || []) as Array<{ productId?: string }>;
+          return items.some((item) => item.productId === product.id);
+        });
+        setHasPurchasedProduct(purchased);
+
+        const reviewQuery = query(
+          collection(db, 'productReviews'),
+          where('userId', '==', user.id),
+          where('productId', '==', product.id)
+        );
+        const reviewSnap = await getDocs(reviewQuery);
+        if (!reviewSnap.empty) {
+          const first = reviewSnap.docs[0];
+          setExistingUserReview({ id: first.id, ...first.data() } as ProductReview);
+        } else {
+          setExistingUserReview(null);
+        }
+      } catch (err) {
+        console.error('Failed to load review eligibility', err);
+      }
+    };
+
+    loadCustomerReviewState();
+  }, [user?.id, product?.id]);
+
+  const handleSubmitReview = async () => {
+    if (!user?.id || !product || !store?.id) {
+      toast.error('Please sign in first.');
+      return;
+    }
+    if (!hasPurchasedProduct) {
+      toast.error('Only customers who purchased this product can review it.');
+      return;
+    }
+    if (existingUserReview) {
+      toast.error('You already submitted a review for this product.');
+      return;
+    }
+
+    setIsSubmittingReview(true);
+    try {
+      const db = getFirestore();
+      await addDoc(collection(db, 'productReviews'), {
+        storeId: store.id,
+        productId: product.id,
+        userId: user.id,
+        userName: user.name || user.email || 'Customer',
+        rating: Number(reviewRating),
+        comment: reviewComment.trim(),
+        status: 'pending',
+        createdAt: serverTimestamp(),
+      });
+
+      setReviewComment('');
+      setReviewRating(5);
+      toast.success('Review submitted and pending moderation.');
+
+      setExistingUserReview({
+        storeId: store.id,
+        productId: product.id,
+        userId: user.id,
+        userName: user.name || user.email || 'Customer',
+        rating: Number(reviewRating),
+        comment: reviewComment.trim(),
+        status: 'pending',
+        createdAt: new Date().toISOString(),
+      });
+    } catch (err) {
+      console.error('Failed to submit product review', err);
+      toast.error('Failed to submit review.');
+    } finally {
+      setIsSubmittingReview(false);
+    }
+  };
 
   const handleAddToCart = () => {
     if (product) {
@@ -387,6 +522,70 @@ const ProductDetail: React.FC = () => {
                     </Button>
                     <ShareButtons url={window.location.href} title={product.name} description={product.description} />
                   </div>
+                </div>
+
+                <div className="mt-8 border-t pt-6">
+                  <h2 className="text-xl font-semibold mb-3">Customer Reviews</h2>
+
+                  {reviewsLoading ? (
+                    <div className="text-sm text-gray-500">Loading reviews...</div>
+                  ) : reviews.length === 0 ? (
+                    <div className="text-sm text-gray-500 mb-4">No approved reviews yet for this product.</div>
+                  ) : (
+                    <div className="space-y-3 mb-5">
+                      {reviews.slice(0, 6).map((review) => (
+                        <div key={review.id} className="rounded-md border border-gray-200 p-3">
+                          <div className="text-sm font-medium text-gray-900">{review.userName || 'Customer'}</div>
+                          <div className="text-xs text-amber-600">
+                            {'★'.repeat(Math.round(review.rating || 0)).padEnd(5, '☆')} {Number(review.rating || 0).toFixed(1)}
+                          </div>
+                          {review.comment && <div className="text-sm text-gray-700 mt-1">{review.comment}</div>}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {!user && (
+                    <div className="text-sm text-gray-600">Please sign in to submit a review.</div>
+                  )}
+
+                  {user && !hasPurchasedProduct && (
+                    <div className="text-sm text-gray-600">You can review this product after purchasing it.</div>
+                  )}
+
+                  {user && hasPurchasedProduct && existingUserReview && (
+                    <div className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+                      Your review is already submitted ({existingUserReview.status}).
+                    </div>
+                  )}
+
+                  {user && hasPurchasedProduct && !existingUserReview && (
+                    <div className="space-y-3 rounded-md border border-gray-200 p-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Rating</label>
+                        <select
+                          value={reviewRating}
+                          onChange={(e) => setReviewRating(Number(e.target.value))}
+                          className="h-10 rounded-md border border-gray-300 px-3 text-sm"
+                        >
+                          {[5, 4, 3, 2, 1].map((n) => (
+                            <option key={n} value={n}>{n} star{n > 1 ? 's' : ''}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Comment</label>
+                        <Textarea
+                          value={reviewComment}
+                          onChange={(e) => setReviewComment(e.target.value)}
+                          placeholder="Share your experience with this product"
+                        />
+                      </div>
+                      <Button onClick={handleSubmitReview} disabled={isSubmittingReview}>
+                        {isSubmittingReview ? 'Submitting...' : 'Submit Review'}
+                      </Button>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

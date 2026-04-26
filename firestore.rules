@@ -92,6 +92,41 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && resource.data.userId == request.auth.uid;
     }
 
+    // Product reviews: customers submit pending reviews; store owner moderates
+    match /productReviews/{reviewId} {
+      allow create: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.storeId is string
+        && request.resource.data.productId is string
+        && request.resource.data.rating is number
+        && request.resource.data.rating >= 1
+        && request.resource.data.rating <= 5
+        && request.resource.data.status == 'pending'
+        && (request.resource.data.createdAt is timestamp || request.resource.data.createdAt == null);
+
+      allow read: if true;
+
+      allow update: if request.auth != null && (
+        resource.data.userId == request.auth.uid ||
+        request.auth.uid == resource.data.storeId ||
+        request.auth.uid == get(/databases/$(database)/documents/storeProfiles/$(resource.data.storeId)).data.ownerId
+      );
+
+      allow delete: if request.auth != null && (
+        request.auth.uid == resource.data.storeId ||
+        request.auth.uid == get(/databases/$(database)/documents/storeProfiles/$(resource.data.storeId)).data.ownerId
+      );
+    }
+
+    // Order notification delivery logs are server-managed; allow owners to read
+    match /orderNotifications/{notificationId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.storeId ||
+        request.auth.uid == get(/databases/$(database)/documents/storeProfiles/$(resource.data.storeId)).data.ownerId
+      );
+      allow create, update, delete: if false;
+    }
+
     // Suppliers: only store owners can manage
     match /suppliers/{supplierId} {
       allow read: if request.auth != null && request.auth.uid == resource.data.storeId;

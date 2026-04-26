@@ -31,6 +31,7 @@ import { sendContactEmail } from './api/contact';
 import { registerCustomDomain } from './api/domain';
 import { getSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
+import { dispatchOrderNotifications, retryOrderNotification } from './services/orderNotifications';
 import {
   createSupplierReturn,
   updateSupplierReturnStatus,
@@ -132,6 +133,33 @@ app.post('/marketing/unsubscribe', unsubscribeFromStore);
 app.get('/marketing/subscribers', listSubscribers);
 app.post('/marketing/send-campaign', sendCampaign);
 app.get('/marketing/campaigns', listCampaigns);
+
+app.post('/notifications/order/retry', async (req: Request, res: Response) => {
+  try {
+    const authHeader = req.get('authorization') || '';
+    const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!token) {
+      return res.status(401).json({ error: 'Unauthorized: missing bearer token' });
+    }
+
+    const decoded = await admin.auth().verifyIdToken(token);
+    const notificationId = String(req.body?.notificationId || '').trim();
+    if (!notificationId) {
+      return res.status(400).json({ error: 'Missing notificationId' });
+    }
+
+    const result = await retryOrderNotification(notificationId, decoded.uid);
+    if (!result.ok) {
+      const status = result.error === 'Unauthorized' ? 403 : 400;
+      return res.status(status).json({ error: result.error });
+    }
+
+    return res.json({ ok: true });
+  } catch (err) {
+    console.error('Order notification retry failed', err);
+    return res.status(500).json({ error: err instanceof Error ? err.message : 'Retry failed' });
+  }
+});
 
 // Supplier returns
 app.post('/supplier-returns/create', createSupplierReturn);
@@ -527,6 +555,15 @@ app.post('/checkout', async (req: Request, res: Response) => {
         }
       } catch (fcmErr) {
         console.warn('FCM new-order notification failed:', fcmErr);
+      }
+    })();
+
+    // Fire-and-forget customer notifications (email + optional WhatsApp webhook)
+    (async () => {
+      try {
+        await dispatchOrderNotifications(orderIds);
+      } catch (notifyErr) {
+        console.warn('Order customer notification dispatch failed:', notifyErr);
       }
     })();
 

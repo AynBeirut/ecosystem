@@ -77,6 +77,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
               <div>
                 <div className="text-xs text-gray-500 mb-0.5">{product.category}</div>
                 <h3 className="font-semibold text-sm mb-1 line-clamp-2">{product.name}</h3>
+                {(product.rating ?? 0) > 0 && (product.ratingCount ?? 0) > 0 && (
+                  <div className="text-xs text-amber-600 mb-1">
+                    {'★'.repeat(Math.round(product.rating || 0)).padEnd(5, '☆')} {Number(product.rating).toFixed(1)} ({product.ratingCount})
+                  </div>
+                )}
                 <div className="flex items-baseline gap-2">
                   <span className="font-medium text-market-primary">${product.price.toFixed(2)}</span>
                   {product.deliveryTime && <span className="text-xs text-gray-400">{product.deliveryTime}</span>}
@@ -145,6 +150,11 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
             {product.category}
           </div>
           <h3 className="font-semibold text-base mb-1 text-left">{product.name}</h3>
+          {(product.rating ?? 0) > 0 && (product.ratingCount ?? 0) > 0 && (
+            <div className="text-xs text-amber-600 mb-1 text-left">
+              {'★'.repeat(Math.round(product.rating || 0)).padEnd(5, '☆')} {Number(product.rating).toFixed(1)} ({product.ratingCount})
+            </div>
+          )}
           <div className="flex justify-between items-baseline">
             <span className="font-medium text-market-primary">
               ${product.price.toFixed(2)}

@@ -70,6 +70,7 @@ const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
+const orderNotifications_1 = require("./services/orderNotifications");
 const supplierReturns_1 = require("./api/supplierReturns");
 const db = admin.firestore();
 const app = (0, express_1.default)();
@@ -155,6 +156,30 @@ app.post('/marketing/unsubscribe', marketing_1.unsubscribeFromStore);
 app.get('/marketing/subscribers', marketing_1.listSubscribers);
 app.post('/marketing/send-campaign', marketing_1.sendCampaign);
 app.get('/marketing/campaigns', marketing_1.listCampaigns);
+app.post('/notifications/order/retry', async (req, res) => {
+    try {
+        const authHeader = req.get('authorization') || '';
+        const token = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+        if (!token) {
+            return res.status(401).json({ error: 'Unauthorized: missing bearer token' });
+        }
+        const decoded = await admin.auth().verifyIdToken(token);
+        const notificationId = String(req.body?.notificationId || '').trim();
+        if (!notificationId) {
+            return res.status(400).json({ error: 'Missing notificationId' });
+        }
+        const result = await (0, orderNotifications_1.retryOrderNotification)(notificationId, decoded.uid);
+        if (!result.ok) {
+            const status = result.error === 'Unauthorized' ? 403 : 400;
+            return res.status(status).json({ error: result.error });
+        }
+        return res.json({ ok: true });
+    }
+    catch (err) {
+        console.error('Order notification retry failed', err);
+        return res.status(500).json({ error: err instanceof Error ? err.message : 'Retry failed' });
+    }
+});
 // Supplier returns
 app.post('/supplier-returns/create', supplierReturns_1.createSupplierReturn);
 app.put('/supplier-returns/update-status', supplierReturns_1.updateSupplierReturnStatus);
@@ -458,6 +483,15 @@ app.post('/checkout', async (req, res) => {
                 console.warn('FCM new-order notification failed:', fcmErr);
             }
         })();
+        // Fire-and-forget customer notifications (email + optional WhatsApp webhook)
+        (async () => {
+            try {
+                await (0, orderNotifications_1.dispatchOrderNotifications)(orderIds);
+            }
+            catch (notifyErr) {
+                console.warn('Order customer notification dispatch failed:', notifyErr);
+            }
+        })();
         return res.json({ ok: true, ordersCreated, orderIds });
     }
     catch (err) {
@@ -476,5 +510,5 @@ Object.defineProperty(exports, "checkSubscriptions", { enumerable: true, get: fu
 var checkExpiringStock_1 = require("./scheduled/checkExpiringStock");
 Object.defineProperty(exports, "checkExpiringStock", { enumerable: true, get: function () { return checkExpiringStock_1.checkExpiringStock; } });
 // Export Firestore trigger: order status / payment status change notifications
-var orderNotifications_1 = require("./triggers/orderNotifications");
-Object.defineProperty(exports, "onOrderStatusChanged", { enumerable: true, get: function () { return orderNotifications_1.onOrderStatusChanged; } });
+var orderNotifications_2 = require("./triggers/orderNotifications");
+Object.defineProperty(exports, "onOrderStatusChanged", { enumerable: true, get: function () { return orderNotifications_2.onOrderStatusChanged; } });
