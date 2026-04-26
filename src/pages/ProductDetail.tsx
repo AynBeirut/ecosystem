@@ -159,6 +159,42 @@ const ProductDetail: React.FC = () => {
   }, [id, productSlug, storeSlug, navigate]);
 
   useEffect(() => {
+    const pixelEnabled = store?.metaIntegrationSettings?.pixelEnabled;
+    const pixelId = store?.metaIntegrationSettings?.pixelId?.trim();
+    if (!pixelEnabled || !pixelId || typeof window === 'undefined') return;
+
+    try {
+      if (localStorage.getItem('grabio_cookie_consent') !== 'accepted') return;
+    } catch {
+      return;
+    }
+
+    if (window.fbq) {
+      window.fbq('init', pixelId);
+      window.fbq('track', 'PageView');
+      return;
+    }
+
+    const fbq: any = function (...args: any[]) {
+      fbq.callMethod ? fbq.callMethod(...args) : fbq.queue.push(args);
+    };
+    fbq.push = fbq;
+    fbq.loaded = true;
+    fbq.version = '2.0';
+    fbq.queue = [];
+    window.fbq = fbq;
+    if (!window._fbq) window._fbq = fbq;
+
+    const script = document.createElement('script');
+    script.async = true;
+    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
+    document.head.appendChild(script);
+
+    window.fbq('init', pixelId);
+    window.fbq('track', 'PageView');
+  }, [store?.metaIntegrationSettings?.pixelEnabled, store?.metaIntegrationSettings?.pixelId]);
+
+  useEffect(() => {
     const loadReviews = async () => {
       if (!product?.id) {
         setReviews([]);
@@ -380,15 +416,20 @@ const ProductDetail: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
       <SEOHead
         title={product.name}
-        description={product.description || `Buy ${product.name} from ${store?.name || 'a local store'} on Grabio`}
-        image={product.image}
-        url={store?.slug
+        description={store?.seoSettings?.metaDescription || product.description || `Buy ${product.name} from ${store?.name || 'a local store'} on Grabio`}
+        image={store?.seoSettings?.ogImage || product.image}
+        url={store?.seoSettings?.canonicalBaseUrl || (store?.slug
           ? `https://grabio.space/${store.slug}/product/${product.slug || product.id}`
           : `https://grabio.space/product/id/${product.id}`
-        }
+        )}
         type="product"
         price={product.price}
         currency={store ? undefined : 'USD'}
+        keywords={store?.seoSettings?.keywords}
+        robotsIndex={store?.seoSettings?.robotsIndex ?? true}
+        robotsFollow={store?.seoSettings?.robotsFollow ?? true}
+        twitterHandle={store?.seoSettings?.twitterHandle}
+        facebookAppId={store?.metaIntegrationSettings?.facebookAppId}
       />
       <Header
         storeName={store?.name}

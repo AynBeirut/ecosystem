@@ -8,6 +8,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil, ImagePlus, Palette, GripVertical, ChevronUp, ChevronDown, Globe } from 'lucide-react';
@@ -46,7 +47,48 @@ const defaultProfile: StoreProfile = {
     { id: 'in_house_dropship', name: 'In-house Dropshipping', enabled: false, notes: '' },
   ],
   productCategories: ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other'],
-  priceMultiplier: 2.5
+  priceMultiplier: 2.5,
+  paymentGatewaySettings: {
+    whishEnabled: true,
+    stripeEnabled: true,
+    paypalEnabled: false,
+    bankTransferEnabled: false,
+    cashOnDeliveryEnabled: true,
+    preferredGateway: 'whish',
+  },
+  seoSettings: {
+    metaTitleSuffix: '',
+    metaDescription: '',
+    keywords: [],
+    canonicalBaseUrl: '',
+    robotsIndex: true,
+    robotsFollow: true,
+    ogImage: '',
+    twitterHandle: '',
+  },
+  metaIntegrationSettings: {
+    pixelEnabled: false,
+    pixelId: '',
+    facebookPageUrl: '',
+    facebookAppId: '',
+    catalogId: '',
+    conversionApiToken: '',
+  },
+  serviceCatalogSettings: {
+    allowServiceProducts: true,
+    allowRecurringSubscriptions: true,
+    defaultServiceBillingType: 'one-time',
+    minimumServiceDurationMinutes: 30,
+    defaultRenewalReminderDays: 7,
+  },
+  subscriptionBillingSettings: {
+    autoRenewEnabled: true,
+    retryFailedPayments: true,
+    maxRetryAttempts: 3,
+    renewalGraceDays: 7,
+    invoiceLeadDays: 3,
+    preferredRenewalGateway: 'whish',
+  }
 };
 
 const AdminProfile: React.FC = () => {
@@ -79,6 +121,26 @@ const AdminProfile: React.FC = () => {
               dropshippingPartners: data.dropshippingPartners && data.dropshippingPartners.length > 0
                 ? data.dropshippingPartners
                 : defaultProfile.dropshippingPartners,
+              paymentGatewaySettings: {
+                ...defaultProfile.paymentGatewaySettings,
+                ...(data.paymentGatewaySettings || {}),
+              },
+              seoSettings: {
+                ...defaultProfile.seoSettings,
+                ...(data.seoSettings || {}),
+              },
+              metaIntegrationSettings: {
+                ...defaultProfile.metaIntegrationSettings,
+                ...(data.metaIntegrationSettings || {}),
+              },
+              serviceCatalogSettings: {
+                ...defaultProfile.serviceCatalogSettings,
+                ...(data.serviceCatalogSettings || {}),
+              },
+              subscriptionBillingSettings: {
+                ...defaultProfile.subscriptionBillingSettings,
+                ...(data.subscriptionBillingSettings || {}),
+              },
             });
             setLogoPreview(data.logo || '');
           } else {
@@ -761,6 +823,383 @@ const AdminProfile: React.FC = () => {
                   placeholder="+9611234567 (international format)"
                 />
                 <p className="text-xs text-muted-foreground mt-1">Customers can order directly via WhatsApp from the product page.</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Growth, SEO & Subscription Controls</CardTitle>
+              <CardDescription>
+                Configure discoverability, Meta/Facebook data, service policy, and recurring billing defaults.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold">SEO Basics</h4>
+                <div>
+                  <Label htmlFor="seoMetaDescription">Meta Description Override</Label>
+                  <Textarea
+                    id="seoMetaDescription"
+                    value={formData.seoSettings?.metaDescription || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      seoSettings: {
+                        ...(prev.seoSettings || {}),
+                        metaDescription: e.target.value,
+                      },
+                    }))}
+                    placeholder="Short store summary used in search engines"
+                    rows={3}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="seoTitleSuffix">Meta Title Suffix</Label>
+                    <Input
+                      id="seoTitleSuffix"
+                      value={formData.seoSettings?.metaTitleSuffix || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        seoSettings: {
+                          ...(prev.seoSettings || {}),
+                          metaTitleSuffix: e.target.value,
+                        },
+                      }))}
+                      placeholder="e.g. | Premium Food in Beirut"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="seoCanonicalBaseUrl">Canonical URL (optional)</Label>
+                    <Input
+                      id="seoCanonicalBaseUrl"
+                      value={formData.seoSettings?.canonicalBaseUrl || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        seoSettings: {
+                          ...(prev.seoSettings || {}),
+                          canonicalBaseUrl: e.target.value,
+                        },
+                      }))}
+                      placeholder="https://yourdomain.com/store"
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label htmlFor="seoKeywords">SEO Keywords (comma separated)</Label>
+                  <Input
+                    id="seoKeywords"
+                    value={(formData.seoSettings?.keywords || []).join(', ')}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      seoSettings: {
+                        ...(prev.seoSettings || {}),
+                        keywords: e.target.value
+                          .split(',')
+                          .map((keyword) => keyword.trim())
+                          .filter((keyword) => keyword.length > 0),
+                      },
+                    }))}
+                    placeholder="food delivery, bakery, beirut"
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="robotsIndex">Allow search indexing</Label>
+                    <Switch
+                      id="robotsIndex"
+                      checked={formData.seoSettings?.robotsIndex ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        seoSettings: {
+                          ...(prev.seoSettings || {}),
+                          robotsIndex: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="robotsFollow">Allow links to be followed</Label>
+                    <Switch
+                      id="robotsFollow"
+                      checked={formData.seoSettings?.robotsFollow ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        seoSettings: {
+                          ...(prev.seoSettings || {}),
+                          robotsFollow: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold">Meta/Facebook Integration</h4>
+                <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                  <Label htmlFor="metaPixelEnabled">Enable Meta Pixel for this store</Label>
+                  <Switch
+                    id="metaPixelEnabled"
+                    checked={formData.metaIntegrationSettings?.pixelEnabled ?? false}
+                    onCheckedChange={(checked) => setFormData((prev) => ({
+                      ...prev,
+                      metaIntegrationSettings: {
+                        ...(prev.metaIntegrationSettings || {}),
+                        pixelEnabled: checked,
+                      },
+                    }))}
+                  />
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="metaPixelId">Meta Pixel ID</Label>
+                    <Input
+                      id="metaPixelId"
+                      value={formData.metaIntegrationSettings?.pixelId || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        metaIntegrationSettings: {
+                          ...(prev.metaIntegrationSettings || {}),
+                          pixelId: e.target.value,
+                        },
+                      }))}
+                      placeholder="123456789012345"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="facebookAppId">Facebook App ID</Label>
+                    <Input
+                      id="facebookAppId"
+                      value={formData.metaIntegrationSettings?.facebookAppId || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        metaIntegrationSettings: {
+                          ...(prev.metaIntegrationSettings || {}),
+                          facebookAppId: e.target.value,
+                        },
+                      }))}
+                      placeholder="Facebook App ID"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="facebookPageUrl">Facebook Page URL</Label>
+                    <Input
+                      id="facebookPageUrl"
+                      value={formData.metaIntegrationSettings?.facebookPageUrl || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        metaIntegrationSettings: {
+                          ...(prev.metaIntegrationSettings || {}),
+                          facebookPageUrl: e.target.value,
+                        },
+                      }))}
+                      placeholder="https://facebook.com/yourstore"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="facebookCatalogId">Facebook Catalog ID</Label>
+                    <Input
+                      id="facebookCatalogId"
+                      value={formData.metaIntegrationSettings?.catalogId || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        metaIntegrationSettings: {
+                          ...(prev.metaIntegrationSettings || {}),
+                          catalogId: e.target.value,
+                        },
+                      }))}
+                      placeholder="Catalog ID"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold">Service & Subscription Billing Policy</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="allowServiceProducts">Allow service products</Label>
+                    <Switch
+                      id="allowServiceProducts"
+                      checked={formData.serviceCatalogSettings?.allowServiceProducts ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        serviceCatalogSettings: {
+                          ...(prev.serviceCatalogSettings || {}),
+                          allowServiceProducts: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="allowRecurringSubscriptions">Allow recurring service billing</Label>
+                    <Switch
+                      id="allowRecurringSubscriptions"
+                      checked={formData.serviceCatalogSettings?.allowRecurringSubscriptions ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        serviceCatalogSettings: {
+                          ...(prev.serviceCatalogSettings || {}),
+                          allowRecurringSubscriptions: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <Label htmlFor="defaultServiceBillingType">Default Service Billing Type</Label>
+                    <select
+                      id="defaultServiceBillingType"
+                      value={formData.serviceCatalogSettings?.defaultServiceBillingType || 'one-time'}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        serviceCatalogSettings: {
+                          ...(prev.serviceCatalogSettings || {}),
+                          defaultServiceBillingType: e.target.value as 'one-time' | 'monthly' | 'yearly',
+                        },
+                      }))}
+                      className="w-full p-2 border rounded-md"
+                    >
+                      <option value="one-time">One-time</option>
+                      <option value="monthly">Monthly</option>
+                      <option value="yearly">Yearly</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="minimumServiceDurationMinutes">Minimum Service Duration (minutes)</Label>
+                    <Input
+                      id="minimumServiceDurationMinutes"
+                      type="number"
+                      min="5"
+                      value={formData.serviceCatalogSettings?.minimumServiceDurationMinutes ?? 30}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        serviceCatalogSettings: {
+                          ...(prev.serviceCatalogSettings || {}),
+                          minimumServiceDurationMinutes: Number(e.target.value || 30),
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="defaultRenewalReminderDays">Renewal Reminder Days</Label>
+                    <Input
+                      id="defaultRenewalReminderDays"
+                      type="number"
+                      min="1"
+                      value={formData.serviceCatalogSettings?.defaultRenewalReminderDays ?? 7}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        serviceCatalogSettings: {
+                          ...(prev.serviceCatalogSettings || {}),
+                          defaultRenewalReminderDays: Number(e.target.value || 7),
+                        },
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="autoRenewEnabled">Auto-renew subscriptions</Label>
+                    <Switch
+                      id="autoRenewEnabled"
+                      checked={formData.subscriptionBillingSettings?.autoRenewEnabled ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        subscriptionBillingSettings: {
+                          ...(prev.subscriptionBillingSettings || {}),
+                          autoRenewEnabled: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="retryFailedPayments">Retry failed payments</Label>
+                    <Switch
+                      id="retryFailedPayments"
+                      checked={formData.subscriptionBillingSettings?.retryFailedPayments ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        subscriptionBillingSettings: {
+                          ...(prev.subscriptionBillingSettings || {}),
+                          retryFailedPayments: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <Label htmlFor="maxRetryAttempts">Max Retry Attempts</Label>
+                    <Input
+                      id="maxRetryAttempts"
+                      type="number"
+                      min="0"
+                      value={formData.subscriptionBillingSettings?.maxRetryAttempts ?? 3}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        subscriptionBillingSettings: {
+                          ...(prev.subscriptionBillingSettings || {}),
+                          maxRetryAttempts: Number(e.target.value || 0),
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="renewalGraceDays">Renewal Grace Days</Label>
+                    <Input
+                      id="renewalGraceDays"
+                      type="number"
+                      min="0"
+                      value={formData.subscriptionBillingSettings?.renewalGraceDays ?? 7}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        subscriptionBillingSettings: {
+                          ...(prev.subscriptionBillingSettings || {}),
+                          renewalGraceDays: Number(e.target.value || 0),
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="invoiceLeadDays">Invoice Lead Days</Label>
+                    <Input
+                      id="invoiceLeadDays"
+                      type="number"
+                      min="0"
+                      value={formData.subscriptionBillingSettings?.invoiceLeadDays ?? 3}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        subscriptionBillingSettings: {
+                          ...(prev.subscriptionBillingSettings || {}),
+                          invoiceLeadDays: Number(e.target.value || 0),
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="preferredRenewalGateway">Preferred Renewal Gateway</Label>
+                    <select
+                      id="preferredRenewalGateway"
+                      value={formData.subscriptionBillingSettings?.preferredRenewalGateway || 'whish'}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        subscriptionBillingSettings: {
+                          ...(prev.subscriptionBillingSettings || {}),
+                          preferredRenewalGateway: e.target.value as 'whish' | 'stripe' | 'paypal' | 'manual',
+                        },
+                      }))}
+                      className="w-full p-2 border rounded-md"
+                    >
+                      <option value="whish">Whish</option>
+                      <option value="stripe">Stripe</option>
+                      <option value="paypal">PayPal</option>
+                      <option value="manual">Manual</option>
+                    </select>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>

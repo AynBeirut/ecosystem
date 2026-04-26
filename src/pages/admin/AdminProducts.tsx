@@ -49,6 +49,13 @@ const AdminProducts: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [servicePolicy, setServicePolicy] = useState({
+    allowServiceProducts: true,
+    allowRecurringSubscriptions: true,
+    defaultServiceBillingType: 'one-time' as ServiceBillingType,
+    minimumServiceDurationMinutes: 0,
+    defaultRenewalReminderDays: 7,
+  });
   
   // Check if user has permission to manage inventory
   const canManageInventory = user?.role === 'admin' || 
@@ -99,12 +106,37 @@ const AdminProducts: React.FC = () => {
           const profileSnap = await getDoc(doc(db, 'storeProfiles', profileDocId));
           if (!profileSnap.exists()) continue;
 
-          const profileData = profileSnap.data() as { productCategories?: string[] };
+          const profileData = profileSnap.data() as {
+            productCategories?: string[];
+            serviceCatalogSettings?: {
+              allowServiceProducts?: boolean;
+              allowRecurringSubscriptions?: boolean;
+              defaultServiceBillingType?: ServiceBillingType;
+              minimumServiceDurationMinutes?: number;
+              defaultRenewalReminderDays?: number;
+            };
+          };
           if (Array.isArray(profileData.productCategories) && profileData.productCategories.length > 0) {
             loadedCategories = profileData.productCategories
               .map((category) => (typeof category === 'string' ? category.trim() : ''))
               .filter((category) => category.length > 0);
             if (loadedCategories.length > 0) break;
+          }
+
+          if (profileData.serviceCatalogSettings) {
+            const settings = profileData.serviceCatalogSettings;
+            setServicePolicy((prev) => ({
+              ...prev,
+              allowServiceProducts: settings.allowServiceProducts ?? prev.allowServiceProducts,
+              allowRecurringSubscriptions: settings.allowRecurringSubscriptions ?? prev.allowRecurringSubscriptions,
+              defaultServiceBillingType: settings.defaultServiceBillingType ?? prev.defaultServiceBillingType,
+              minimumServiceDurationMinutes: settings.minimumServiceDurationMinutes ?? prev.minimumServiceDurationMinutes,
+              defaultRenewalReminderDays: settings.defaultRenewalReminderDays ?? prev.defaultRenewalReminderDays,
+            }));
+            setNewProduct((prev) => ({
+              ...prev,
+              serviceBillingType: settings.defaultServiceBillingType ?? prev.serviceBillingType,
+            }));
           }
         }
 
@@ -164,6 +196,44 @@ const AdminProducts: React.FC = () => {
         variant: "destructive"
       });
       console.warn("Attempted to add product but user.storeId is missing! User:", user);
+      setIsSaving(false);
+      return;
+    }
+
+    if (newProduct.productType === 'service' && !servicePolicy.allowServiceProducts) {
+      toast({
+        title: 'Service Products Disabled',
+        description: 'Service product creation is disabled in your store policy settings.',
+        variant: 'destructive',
+      });
+      setIsSaving(false);
+      return;
+    }
+
+    if (
+      newProduct.productType === 'service' &&
+      !servicePolicy.allowRecurringSubscriptions &&
+      newProduct.serviceBillingType !== 'one-time'
+    ) {
+      toast({
+        title: 'Recurring Billing Disabled',
+        description: 'Recurring subscriptions are disabled in your store policy settings.',
+        variant: 'destructive',
+      });
+      setIsSaving(false);
+      return;
+    }
+
+    if (
+      newProduct.productType === 'service' &&
+      Number(newProduct.serviceDuration || 0) > 0 &&
+      Number(newProduct.serviceDuration) < servicePolicy.minimumServiceDurationMinutes
+    ) {
+      toast({
+        title: 'Service Duration Too Short',
+        description: `Minimum service duration is ${servicePolicy.minimumServiceDurationMinutes} minutes by store policy.`,
+        variant: 'destructive',
+      });
       setIsSaving(false);
       return;
     }
@@ -230,6 +300,8 @@ const AdminProducts: React.FC = () => {
           : undefined,
         renewalReminderDays: newProduct.productType === 'service' && newProduct.serviceBillingType !== 'one-time' && newProduct.renewalReminderDays
           ? Number(newProduct.renewalReminderDays)
+          : newProduct.productType === 'service' && newProduct.serviceBillingType !== 'one-time'
+            ? servicePolicy.defaultRenewalReminderDays
           : undefined,
         recipeId: newProduct.productType === 'composed' && newProduct.recipeId ? newProduct.recipeId : undefined,
         expiryTracking: newProduct.productType !== 'service' ? newProduct.expiryTracking : undefined,
@@ -309,6 +381,28 @@ const AdminProducts: React.FC = () => {
     const db = getFirestore();
     if (!editingProduct || !newProduct.name || !newProduct.price) {
       toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
+      return;
+    }
+
+    if (newProduct.productType === 'service' && !servicePolicy.allowServiceProducts) {
+      toast({
+        title: 'Service Products Disabled',
+        description: 'Service products are disabled in your store policy settings.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    if (
+      newProduct.productType === 'service' &&
+      !servicePolicy.allowRecurringSubscriptions &&
+      newProduct.serviceBillingType !== 'one-time'
+    ) {
+      toast({
+        title: 'Recurring Billing Disabled',
+        description: 'Recurring subscriptions are disabled in your store policy settings.',
+        variant: 'destructive',
+      });
       return;
     }
     
@@ -395,6 +489,8 @@ const AdminProducts: React.FC = () => {
         serviceBillingType: newProduct.productType === 'service' ? newProduct.serviceBillingType : null,
         renewalReminderDays: newProduct.productType === 'service' && newProduct.serviceBillingType !== 'one-time' && newProduct.renewalReminderDays
           ? Number(newProduct.renewalReminderDays)
+          : newProduct.productType === 'service' && newProduct.serviceBillingType !== 'one-time'
+            ? servicePolicy.defaultRenewalReminderDays
           : null,
         recipeId: newProduct.productType === 'composed'
           ? (newProduct.recipeId || editingProduct.recipeId || null)

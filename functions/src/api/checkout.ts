@@ -174,6 +174,14 @@ export async function processCheckout(req: Request, res: Response) {
     }
 
     const storeData = storeSnap.data();
+    const gatewaySettings = storeData?.paymentGatewaySettings || {};
+    if (gatewaySettings.whishEnabled === false) {
+      return res.status(403).json({
+        error: 'Whish payments are disabled for this store',
+        details: 'Store owner must enable Whish in Admin > Payments > Gateway Control Center',
+      });
+    }
+
     const credentials: WhishCredentials = {
       whishChannel: storeData?.whishChannel,
       whishSecret: storeData?.whishSecret,

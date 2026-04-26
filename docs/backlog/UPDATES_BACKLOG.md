@@ -1,6 +1,6 @@
 # Updates Backlog
 
-Last updated: 2026-04-26
+Last updated: 2026-04-27
 
 ## Scope
 This backlog consolidates unfinished updates into one place.
@@ -52,6 +52,11 @@ This backlog consolidates unfinished updates into one place.
 ### Newly Requested Enhancements
 - [x] Product ratings and reviews flow (storefront + customer history + admin moderation)
 - [x] Automatic order notifications for guest and signed-in buyers via email and optional WhatsApp
+- [x] Critical payment gateway control center (admin toggles + backend enforcement for disabled providers)
+- [x] Product/service completion with store-level service billing policy controls and enforcement
+- [x] Subscription billing infrastructure settings (auto-renew, retry policy, grace/invoice lead times, preferred renewal gateway)
+- [x] SEO basics expansion (keywords, robots, canonical/meta overrides, OG/Twitter enrichments)
+- [x] Meta/Facebook integration settings and runtime pixel wiring from store profile
 
 
 ## Notes
@@ -75,3 +80,7 @@ This backlog consolidates unfinished updates into one place.
 - Store template editor now supports richer section controls in `/admin/templates`: per-section background images, section animation presets, custom CSS blocks, and drag-and-drop section ordering with live storefront rendering support.
 - Product reviews are now implemented end-to-end: customers can submit product reviews from product pages after purchase, order history surfaces review status, and admins moderate reviews in `/admin/product-reviews` with product rating aggregates updated on approve/reject.
 - Automatic order notifications are now active for checkout-created orders: email confirmations are sent for guest/signed-in buyers, optional WhatsApp webhook delivery is supported when configured, and delivery logs with retry are available in `/admin/order-notifications`.
+- Payment gateway controls are now consolidated in `/admin/payments` with a gateway control center (Whish/Stripe/PayPal/Bank transfer/COD), persistent store-level gateway preferences, and backend checkout enforcement that blocks Whish/Stripe checkout when disabled in store settings.
+- Service policy controls are now available in `/admin/profile` (allow services, recurring billing policy, default billing type, minimum service duration, renewal reminder defaults) and enforced in `/admin/products` create/edit flows.
+- Subscription billing policy controls are now available in `/admin/profile` (auto-renew toggle, retry behavior, max retries, grace days, invoice lead days, preferred renewal gateway) and persisted per store profile for operational billing workflows.
+- SEO and Meta/Facebook configuration now supports store-level overrides in `/admin/profile`, and storefront/product metadata rendering now consumes those settings (keywords, robots directives, canonical/meta description/title suffix, OG image, twitter handle, fb app id, optional per-store pixel id).

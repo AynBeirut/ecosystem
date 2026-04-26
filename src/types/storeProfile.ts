@@ -109,6 +109,54 @@ export interface DropshippingPartnerSetting {
   notes?: string;
 }
 
+export interface PaymentGatewaySettings {
+  whishEnabled?: boolean;
+  stripeEnabled?: boolean;
+  paypalEnabled?: boolean;
+  bankTransferEnabled?: boolean;
+  cashOnDeliveryEnabled?: boolean;
+  preferredGateway?: 'whish' | 'stripe' | 'paypal' | 'manual';
+  stripePublishableKey?: string;
+  paypalClientId?: string;
+}
+
+export interface StoreSeoSettings {
+  metaTitleSuffix?: string;
+  metaDescription?: string;
+  keywords?: string[];
+  canonicalBaseUrl?: string;
+  robotsIndex?: boolean;
+  robotsFollow?: boolean;
+  ogImage?: string;
+  twitterHandle?: string;
+}
+
+export interface MetaIntegrationSettings {
+  pixelEnabled?: boolean;
+  pixelId?: string;
+  facebookPageUrl?: string;
+  facebookAppId?: string;
+  catalogId?: string;
+  conversionApiToken?: string;
+}
+
+export interface ServiceCatalogSettings {
+  allowServiceProducts?: boolean;
+  allowRecurringSubscriptions?: boolean;
+  defaultServiceBillingType?: 'one-time' | 'monthly' | 'yearly';
+  minimumServiceDurationMinutes?: number;
+  defaultRenewalReminderDays?: number;
+}
+
+export interface SubscriptionBillingSettings {
+  autoRenewEnabled?: boolean;
+  retryFailedPayments?: boolean;
+  maxRetryAttempts?: number;
+  renewalGraceDays?: number;
+  invoiceLeadDays?: number;
+  preferredRenewalGateway?: 'whish' | 'stripe' | 'paypal' | 'manual';
+}
+
 export interface StoreProfile {
   name: string;
   slug?: string; // URL-friendly store identifier (e.g., 'tech-gadgets')
@@ -219,6 +267,11 @@ export interface StoreProfile {
   // Marketplace and dropshipping integrations
   marketplaceIntegrations?: MarketplaceIntegrationSetting[];
   dropshippingPartners?: DropshippingPartnerSetting[];
+  paymentGatewaySettings?: PaymentGatewaySettings;
+  seoSettings?: StoreSeoSettings;
+  metaIntegrationSettings?: MetaIntegrationSettings;
+  serviceCatalogSettings?: ServiceCatalogSettings;
+  subscriptionBillingSettings?: SubscriptionBillingSettings;
   // Migration tracking
   migrationVersion?: number;
   lastMigrationDate?: string;

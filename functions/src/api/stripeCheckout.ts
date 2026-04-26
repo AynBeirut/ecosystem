@@ -105,6 +105,17 @@ export async function createStripeCheckoutSession(req: Request, res: Response) {
       return res.status(400).json({ error: 'Invalid order data for Stripe checkout' });
     }
 
+    const storeProfileSnap = await db.collection('storeProfiles').doc(storeId).get();
+    const storeGatewaySettings = storeProfileSnap.exists
+      ? (storeProfileSnap.data()?.paymentGatewaySettings || {})
+      : {};
+
+    if (storeGatewaySettings.stripeEnabled === false) {
+      return res.status(403).json({
+        error: 'Stripe payments are disabled for this store',
+      });
+    }
+
     if (orderData?.paymentStatus === 'paid') {
       return res.status(409).json({ error: 'Order is already paid' });
     }

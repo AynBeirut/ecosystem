@@ -76,6 +76,49 @@ export type Store = {
   proEmail?: string;
   customDomain?: string;
   customDomainStatus?: 'pending' | 'active' | 'error';
+  paymentGatewaySettings?: {
+    whishEnabled?: boolean;
+    stripeEnabled?: boolean;
+    paypalEnabled?: boolean;
+    bankTransferEnabled?: boolean;
+    cashOnDeliveryEnabled?: boolean;
+    preferredGateway?: 'whish' | 'stripe' | 'paypal' | 'manual';
+    stripePublishableKey?: string;
+    paypalClientId?: string;
+  };
+  seoSettings?: {
+    metaTitleSuffix?: string;
+    metaDescription?: string;
+    keywords?: string[];
+    canonicalBaseUrl?: string;
+    robotsIndex?: boolean;
+    robotsFollow?: boolean;
+    ogImage?: string;
+    twitterHandle?: string;
+  };
+  metaIntegrationSettings?: {
+    pixelEnabled?: boolean;
+    pixelId?: string;
+    facebookPageUrl?: string;
+    facebookAppId?: string;
+    catalogId?: string;
+    conversionApiToken?: string;
+  };
+  serviceCatalogSettings?: {
+    allowServiceProducts?: boolean;
+    allowRecurringSubscriptions?: boolean;
+    defaultServiceBillingType?: 'one-time' | 'monthly' | 'yearly';
+    minimumServiceDurationMinutes?: number;
+    defaultRenewalReminderDays?: number;
+  };
+  subscriptionBillingSettings?: {
+    autoRenewEnabled?: boolean;
+    retryFailedPayments?: boolean;
+    maxRetryAttempts?: number;
+    renewalGraceDays?: number;
+    invoiceLeadDays?: number;
+    preferredRenewalGateway?: 'whish' | 'stripe' | 'paypal' | 'manual';
+  };
   hasImportedDesign?: boolean; // Flag when store imports custom design (triggers white-label)
   ownerId: string;
   isPremium: boolean;

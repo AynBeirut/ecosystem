@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
 import { CreditCard, DollarSign, Wallet, Building2, Smartphone } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
@@ -25,6 +26,7 @@ const AdminPayments: React.FC = () => {
     websiteUrl: ''
   });
   const [isSavingCreds, setIsSavingCreds] = useState(false);
+  const [isSavingGateways, setIsSavingGateways] = useState(false);
 
   // Load credentials from Firestore on mount
   useEffect(() => {
@@ -86,6 +88,17 @@ const AdminPayments: React.FC = () => {
     processingFee: '0.30'
   });
 
+  const [gatewaySettings, setGatewaySettings] = useState({
+    whishEnabled: true,
+    stripeEnabled: true,
+    paypalEnabled: false,
+    bankTransferEnabled: false,
+    cashOnDeliveryEnabled: true,
+    preferredGateway: 'whish' as 'whish' | 'stripe' | 'paypal' | 'manual',
+    stripePublishableKey: '',
+    paypalClientId: '',
+  });
+
   // Load payment methods and fees from Firestore on mount
   useEffect(() => {
     const fetchPaymentSettings = async () => {
@@ -100,6 +113,12 @@ const AdminPayments: React.FC = () => {
           if (data.paymentFees) {
             setFees(data.paymentFees);
           }
+          if (data.paymentGatewaySettings) {
+            setGatewaySettings((prev) => ({
+              ...prev,
+              ...data.paymentGatewaySettings,
+            }));
+          }
         }
       }
     };
@@ -109,6 +128,15 @@ const AdminPayments: React.FC = () => {
   const handleMethodToggle = async (method: string, enabled: boolean) => {
     const updatedMethods = { ...paymentMethods, [method]: enabled };
     setPaymentMethods(updatedMethods);
+    if (method === 'paypal') {
+      setGatewaySettings((prev) => ({ ...prev, paypalEnabled: enabled }));
+    }
+    if (method === 'bankTransfer') {
+      setGatewaySettings((prev) => ({ ...prev, bankTransferEnabled: enabled }));
+    }
+    if (method === 'cashOnDelivery') {
+      setGatewaySettings((prev) => ({ ...prev, cashOnDeliveryEnabled: enabled }));
+    }
     
     // Save to Firestore immediately
     if (user?.id) {
@@ -148,6 +176,27 @@ const AdminPayments: React.FC = () => {
           variant: "destructive"
         });
       }
+    }
+  };
+
+  const handleSaveGatewaySettings = async () => {
+    if (!user?.id) return;
+    setIsSavingGateways(true);
+    try {
+      const settingsRef = doc(db, 'storeProfiles', user.id);
+      await setDoc(settingsRef, { paymentGatewaySettings: gatewaySettings }, { merge: true });
+      toast({
+        title: 'Gateway settings saved',
+        description: 'Payment gateway controls and credentials were updated successfully.',
+      });
+    } catch (error) {
+      toast({
+        title: 'Error',
+        description: 'Failed to save gateway settings.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSavingGateways(false);
     }
   };
 
@@ -334,6 +383,109 @@ const AdminPayments: React.FC = () => {
                 </div>
                 <Button onClick={handleSaveCreds} className="w-full" disabled={isSavingCreds}>
                   {isSavingCreds ? 'Saving...' : 'Save Payment Credentials'}
+                </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Gateway Control Center</CardTitle>
+                <CardDescription>
+                  Critical payment gateway controls for checkout and subscription renewals.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  <div className="flex items-center justify-between p-3 border rounded-md">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Whish</p>
+                      <Badge variant={gatewaySettings.whishEnabled ? 'default' : 'outline'}>
+                        {gatewaySettings.whishEnabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </div>
+                    <Switch
+                      checked={gatewaySettings.whishEnabled}
+                      onCheckedChange={(checked) => setGatewaySettings((prev) => ({ ...prev, whishEnabled: checked }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 border rounded-md">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Stripe</p>
+                      <Badge variant={gatewaySettings.stripeEnabled ? 'default' : 'outline'}>
+                        {gatewaySettings.stripeEnabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </div>
+                    <Switch
+                      checked={gatewaySettings.stripeEnabled}
+                      onCheckedChange={(checked) => setGatewaySettings((prev) => ({ ...prev, stripeEnabled: checked }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 border rounded-md">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">PayPal</p>
+                      <Badge variant={gatewaySettings.paypalEnabled ? 'default' : 'outline'}>
+                        {gatewaySettings.paypalEnabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </div>
+                    <Switch
+                      checked={gatewaySettings.paypalEnabled}
+                      onCheckedChange={(checked) => setGatewaySettings((prev) => ({ ...prev, paypalEnabled: checked }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between p-3 border rounded-md">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">Bank Transfer</p>
+                      <Badge variant={gatewaySettings.bankTransferEnabled ? 'default' : 'outline'}>
+                        {gatewaySettings.bankTransferEnabled ? 'Enabled' : 'Disabled'}
+                      </Badge>
+                    </div>
+                    <Switch
+                      checked={gatewaySettings.bankTransferEnabled}
+                      onCheckedChange={(checked) => setGatewaySettings((prev) => ({ ...prev, bankTransferEnabled: checked }))}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div>
+                    <Label htmlFor="preferredGateway">Preferred Gateway</Label>
+                    <select
+                      id="preferredGateway"
+                      value={gatewaySettings.preferredGateway}
+                      onChange={(e) => setGatewaySettings((prev) => ({
+                        ...prev,
+                        preferredGateway: e.target.value as 'whish' | 'stripe' | 'paypal' | 'manual',
+                      }))}
+                      className="w-full p-2 border rounded-md"
+                    >
+                      <option value="whish">Whish</option>
+                      <option value="stripe">Stripe</option>
+                      <option value="paypal">PayPal</option>
+                      <option value="manual">Manual Selection</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="stripePublishableKey">Stripe Publishable Key</Label>
+                    <Input
+                      id="stripePublishableKey"
+                      value={gatewaySettings.stripePublishableKey}
+                      onChange={(e) => setGatewaySettings((prev) => ({ ...prev, stripePublishableKey: e.target.value }))}
+                      placeholder="pk_live_..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="paypalClientId">PayPal Client ID</Label>
+                    <Input
+                      id="paypalClientId"
+                      value={gatewaySettings.paypalClientId}
+                      onChange={(e) => setGatewaySettings((prev) => ({ ...prev, paypalClientId: e.target.value }))}
+                      placeholder="PayPal app client id"
+                    />
+                  </div>
+                </div>
+
+                <Button onClick={handleSaveGatewaySettings} className="w-full" disabled={isSavingGateways}>
+                  {isSavingGateways ? 'Saving...' : 'Save Gateway Controls'}
                 </Button>
               </CardContent>
             </Card>

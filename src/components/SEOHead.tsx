@@ -10,6 +10,11 @@ interface SEOHeadProps {
   price?: number;
   currency?: string;
   siteName?: string;
+  keywords?: string[];
+  robotsIndex?: boolean;
+  robotsFollow?: boolean;
+  twitterHandle?: string;
+  facebookAppId?: string;
 }
 
 const DEFAULT_DESCRIPTION = 'Grabio – Discover and shop from local stores in Lebanon. Browse products, place orders, and support local businesses.';
@@ -25,9 +30,15 @@ const SEOHead: React.FC<SEOHeadProps> = ({
   price,
   currency = 'USD',
   siteName = SITE_NAME,
+  keywords,
+  robotsIndex = true,
+  robotsFollow = true,
+  twitterHandle,
+  facebookAppId,
 }) => {
   const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
   const canonicalUrl = url || (typeof window !== 'undefined' ? window.location.href : 'https://grabio.space');
+  const robotsContent = `${robotsIndex ? 'index' : 'noindex'}, ${robotsFollow ? 'follow' : 'nofollow'}`;
 
   const schema =
     type === 'product' && price !== undefined
@@ -56,6 +67,10 @@ const SEOHead: React.FC<SEOHeadProps> = ({
     <Helmet>
       <title>{fullTitle}</title>
       <meta name="description" content={description} />
+      {keywords && keywords.length > 0 && (
+        <meta name="keywords" content={keywords.join(', ')} />
+      )}
+      <meta name="robots" content={robotsContent} />
       <link rel="canonical" href={canonicalUrl} />
 
       {/* Open Graph */}
@@ -65,6 +80,7 @@ const SEOHead: React.FC<SEOHeadProps> = ({
       <meta property="og:url" content={canonicalUrl} />
       <meta property="og:type" content={type === 'product' ? 'product' : 'website'} />
       <meta property="og:site_name" content={siteName} />
+      {facebookAppId && <meta property="fb:app_id" content={facebookAppId} />}
       {type === 'product' && price !== undefined && (
         <meta property="og:price:amount" content={price.toFixed(2)} />
       )}
@@ -77,6 +93,8 @@ const SEOHead: React.FC<SEOHeadProps> = ({
       <meta name="twitter:title" content={fullTitle} />
       <meta name="twitter:description" content={description} />
       <meta name="twitter:image" content={image} />
+      {twitterHandle && <meta name="twitter:site" content={twitterHandle} />}
+      {twitterHandle && <meta name="twitter:creator" content={twitterHandle} />}
 
       {/* Schema.org JSON-LD */}
       <script type="application/ld+json">{schema}</script>
