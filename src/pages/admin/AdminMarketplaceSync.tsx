@@ -26,6 +26,11 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import { Globe, CheckCircle2, XCircle, RefreshCw, UploadCloud, Link2 } from 'lucide-react';
 import { MarketplaceIntegrationSetting } from '@/types/storeProfile';
 import { Product } from '@/types/product';
+import {
+  buildMarketplacePayload,
+  filterIncrementalProducts,
+  type MarketplacePayload,
+} from '@/lib/marketplaceSync';
 
 type TestResult = {
   status: 'passed' | 'failed';
@@ -51,6 +56,7 @@ type ChannelSyncSettings = {
   syncMode: 'full' | 'incremental';
   autoRetryFailed: boolean;
   requiredFields?: string[];
+  lastSuccessfulSyncAt?: string;
   updatedBy?: string;
 };
 
@@ -103,6 +109,7 @@ const AdminMarketplaceSync: React.FC = () => {
   const [products, setProducts] = useState<Product[]>([]);
   const [jobs, setJobs] = useState<SyncJobRow[]>([]);
   const [channelSettings, setChannelSettings] = useState<Record<string, ChannelSyncSettings>>({});
+  const [channelLastCompletedAt, setChannelLastCompletedAt] = useState<Record<string, string>>({});
   const [validationReports, setValidationReports] = useState<Record<string, ValidationReport>>({});
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [connectionBusy, setConnectionBusy] = useState<string | null>(null);
@@ -144,6 +151,18 @@ const AdminMarketplaceSync: React.FC = () => {
 
       const productRows = productsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Product));
 
+      const completedByChannel = jobsSnap.docs.reduce((acc, row) => {
+        const data = row.data() as Record<string, unknown>;
+        const channelId = String(data.channelId || '');
+        const status = String(data.status || '').toLowerCase();
+        const createdAtIso = toIsoSafe(data.createdAt);
+        if (!channelId || status !== 'completed' || !createdAtIso) return acc;
+        if (!acc[channelId] || createdAtIso > acc[channelId]) {
+          acc[channelId] = createdAtIso;
+        }
+        return acc;
+      }, {} as Record<string, string>);
+
       const jobRows = jobsSnap.docs
         .map((doc) => {
           const data = doc.data() as Record<string, unknown>;
@@ -179,6 +198,7 @@ const AdminMarketplaceSync: React.FC = () => {
           requiredFields: Array.isArray(data.requiredFields)
             ? (data.requiredFields as unknown[]).map((value) => String(value))
             : undefined,
+          lastSuccessfulSyncAt: toIsoSafe(data.lastSuccessfulSyncAt),
           updatedBy: String(data.updatedBy || ''),
         };
         return acc;
@@ -188,6 +208,7 @@ const AdminMarketplaceSync: React.FC = () => {
       setProducts(productRows);
       setJobs(jobRows);
       setChannelSettings(settingRows);
+      setChannelLastCompletedAt(completedByChannel);
     } catch (error) {
       console.error('Failed to load marketplace sync data', error);
       toast({
@@ -282,25 +303,9 @@ const AdminMarketplaceSync: React.FC = () => {
     }
   };
 
-  const buildMappedPayload = (sourceProducts: Product[]) => {
-    return sourceProducts.map((product) => ({
-      productId: product.id,
-      name: product.name,
-      description: product.description || '',
-      category: product.category || 'General',
-      price: Number(product.price || 0),
-      stock: Number(product.stock || 0),
-      inStock: Boolean(product.inStock),
-      image: product.image || '',
-      slug: product.slug || '',
-      sku: product.sku || '',
-      productType: product.productType || 'simple',
-    }));
-  };
-
   const validateMappedPayload = (
     integration: MarketplaceIntegrationSetting,
-    mappedPayload: ReturnType<typeof buildMappedPayload>
+    mappedPayload: MarketplacePayload[]
   ): ValidationReport => {
     const requiredFields = getRequiredFields(integration);
     const errors: string[] = [];
@@ -310,7 +315,7 @@ const AdminMarketplaceSync: React.FC = () => {
       const missingForProduct: string[] = [];
 
       requiredFields.forEach((field) => {
-        const value = product[field as keyof typeof product];
+        const value = product[field as keyof MarketplacePayload];
 
         if (field === 'price') {
           if (!Number.isFinite(Number(value)) || Number(value) <= 0) missingForProduct.push(field);
@@ -355,7 +360,8 @@ const AdminMarketplaceSync: React.FC = () => {
     setValidationBusy(integration.id);
     try {
       const payload = buildMappedPayload(filteredProducts);
-      const report = validateMappedPayload(integration, payload);
+      const transformedPayload = buildMarketplacePayload(integration.id, filteredProducts);
+      const report = validateMappedPayload(integration, transformedPayload);
 
       setValidationReports((prev) => ({ ...prev, [integration.id]: report }));
 
@@ -461,7 +467,20 @@ const AdminMarketplaceSync: React.FC = () => {
     try {
       const db = getFirestore();
       const settings = getChannelSettings(integration);
-      const mappedPayload = buildMappedPayload(filteredProducts);
+      const fallbackLastSyncAt = channelLastCompletedAt[integration.id] || '';
+      const sourceProducts = settings.syncMode === 'incremental'
+        ? filterIncrementalProducts(filteredProducts, settings.lastSuccessfulSyncAt || fallbackLastSyncAt)
+        : filteredProducts;
+
+      if (sourceProducts.length === 0) {
+        toast({
+          title: 'No incremental changes',
+          description: `${integration.name}: no products changed since last successful sync.`,
+        });
+        return;
+      }
+
+      const mappedPayload = buildMarketplacePayload(integration.id, sourceProducts);
 
       const invalidProducts = mappedPayload.filter((product) => !product.name || !Number.isFinite(product.price) || product.price <= 0);
 
@@ -478,6 +497,7 @@ const AdminMarketplaceSync: React.FC = () => {
         autoRetryFailed: settings.autoRetryFailed,
         requiredFields: settings.requiredFields || getRequiredFields(integration),
         totalProducts: mappedPayload.length,
+        sourceScope: settings.syncMode,
         failedCount: 0,
         previewProducts: snapshotPreview,
         createdAt: serverTimestamp(),
@@ -515,6 +535,30 @@ const AdminMarketplaceSync: React.FC = () => {
         failedCount: 0,
         finishedAt: serverTimestamp(),
       });
+
+      const completedAtIso = new Date().toISOString();
+      await setDoc(
+        doc(db, 'marketplaceChannelSettings', `${storeId}_${integration.id}`),
+        {
+          lastSuccessfulSyncAt: serverTimestamp(),
+          updatedAt: serverTimestamp(),
+          updatedBy: user.id,
+        },
+        { merge: true }
+      );
+
+      setChannelSettings((prev) => ({
+        ...prev,
+        [integration.id]: {
+          ...getChannelSettings(integration),
+          lastSuccessfulSyncAt: completedAtIso,
+        },
+      }));
+
+      setChannelLastCompletedAt((prev) => ({
+        ...prev,
+        [integration.id]: completedAtIso,
+      }));
 
       toast({
         title: 'Sync complete',
@@ -650,6 +694,8 @@ const AdminMarketplaceSync: React.FC = () => {
             const result = testResults[integration.id];
             const canSync = Boolean(result && result.status === 'passed');
             const isAlibaba = integration.id.toLowerCase() === 'alibaba';
+            const settings = getChannelSettings(integration);
+            const lastSyncAt = settings.lastSuccessfulSyncAt || channelLastCompletedAt[integration.id] || '';
 
             return (
               <Card key={integration.id} className={isAlibaba ? 'border-amber-300' : ''}>
@@ -663,6 +709,11 @@ const AdminMarketplaceSync: React.FC = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {lastSyncAt && (
+                    <div className="text-xs text-muted-foreground">
+                      Last successful sync: {new Date(lastSyncAt).toLocaleString()}
+                    </div>
+                  )}
                   <div className="rounded-md border p-3 space-y-3">
                     <div className="text-sm font-medium">Channel Sync Settings</div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
