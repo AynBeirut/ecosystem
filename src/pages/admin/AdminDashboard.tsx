@@ -20,7 +20,8 @@ import {
   FileText,
   Undo2,
   DollarSign,
-  Mail
+  Mail,
+  Globe
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -308,6 +309,15 @@ const AdminDashboard: React.FC = () => {
           <span className="text-xs text-gray-700 mt-1">Finance</span>
         </Link>
 
+        {user?.role === 'admin' && (
+          <Link to="/admin/marketplace" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-amber-200 shadow-sm hover:shadow-md transition">
+            <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
+              <Globe className="h-4 w-4" />
+            </div>
+            <span className="text-xs text-gray-700 mt-1">Marketplace</span>
+          </Link>
+        )}
+
         <Link to="/admin/delivery" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
           <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
             <Package className="h-4 w-4" />
@@ -379,6 +389,14 @@ const AdminDashboard: React.FC = () => {
                 <Link to="/admin/finance" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-green-50 border border-green-200 hover:shadow-sm transition">
                   <DollarSign className="h-5 w-5 mr-3 text-green-700" />
                   <span className="font-medium">Finance Suite</span>
+                </Link>
+              </li>
+            )}
+            {user?.role === 'admin' && (
+              <li>
+                <Link to="/admin/marketplace" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-amber-50 border border-amber-200 hover:shadow-sm transition">
+                  <Globe className="h-5 w-5 mr-3 text-amber-700" />
+                  <span className="font-medium">Marketplace Sync</span>
                 </Link>
               </li>
             )}
@@ -735,6 +753,15 @@ const AdminDashboard: React.FC = () => {
                       <Clock className="h-4 w-4" />
                     </div>
                     <span className="text-sm font-medium">Service Renewals</span>
+                  </Link>
+                )}
+
+                {user?.role === 'admin' && (
+                  <Link to="/admin/marketplace" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-amber-600/20 shadow-sm hover:shadow-md transition">
+                    <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
+                      <Globe className="h-4 w-4" />
+                    </div>
+                    <span className="text-sm font-medium">Marketplace Sync</span>
                   </Link>
                 )}
 

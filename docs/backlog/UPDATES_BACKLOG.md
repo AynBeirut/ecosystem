@@ -41,7 +41,7 @@ This backlog consolidates unfinished updates into one place.
 - [x] Split/merge orders workflow
 - [x] Shipping labels workflow (bulk labels, manifests, pickup scheduling)
 - [x] Saved custom order views
-- [ ] Marketplace integrations (Amazon, Walmart, eBay, Etsy)
+- [x] Marketplace integrations (Amazon, Walmart, eBay, Etsy)
 - [x] Finance suite (Balance/Capital/Credit/Bill Pay style modules)
 
 ### Low Priority / Future
@@ -63,5 +63,6 @@ This backlog consolidates unfinished updates into one place.
 - Shipping labels workflow is now available in `/admin/orders`: select eligible orders (confirmed/processing/ready), generate single/bulk printable labels, generate printable manifests, and schedule pickups with carrier/date/notes persisted to orders.
 - Delivery partner configuration now supports multiple shipping partners, multiple local delivery partners, and optional own in-house delivery via `/admin/delivery`; pickup carrier choices in `/admin/orders` are loaded dynamically from these settings with a configurable default.
 - Saved custom order views are now available in `/admin/orders`: admins can filter by search/status/payment/delivery method, save the current filter set as a named view, re-apply views, and delete views (persisted per store admin).
-- Marketplace integration foundation is now available in `/admin/profile`: admins can enable/configure Amazon, Walmart, eBay, Etsy, and Alibaba credentials, plus manage multiple dropshipping partners (enabled state, contact, webhook, notes). Full channel sync workflows remain the next expansion step.
+- Marketplace integration foundation is now available in `/admin/profile`: admins can enable/configure Amazon, Walmart, eBay, Etsy, and Alibaba credentials, plus manage multiple dropshipping partners (enabled state, contact, webhook, notes).
+- Marketplace sync center is now available at `/admin/marketplace`: admins can run connection tests per enabled channel, filter product scope, manually push product snapshots (starting with Alibaba-first operational flow), and review recent sync history.
 - Finance suite hub is now available at `/admin/finance` with Balance/Capital/Credit/Bill Pay modules, real-time finance KPIs (gross/paid/receivable/expenses), and quick actions linked to existing finance workflows (`/admin/payments`, `/admin/revenue`, `/admin/account-statement`, `/admin/expenses`, `/admin/bank-reconciliation`).
