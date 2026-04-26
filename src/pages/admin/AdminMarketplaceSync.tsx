@@ -2,11 +2,14 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   addDoc,
+  doc,
   collection,
   getDocs,
   getFirestore,
   query,
   serverTimestamp,
+  setDoc,
+  updateDoc,
   where,
 } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
@@ -35,8 +38,19 @@ type SyncJobRow = {
   channelId: string;
   channelName: string;
   totalProducts: number;
-  status: string;
+  status: 'queued' | 'processing' | 'completed' | 'failed' | 'unknown';
+  failedCount: number;
+  failedReason?: string;
   createdAt?: string;
+};
+
+type ChannelSyncSettings = {
+  id: string;
+  storeId: string;
+  channelId: string;
+  syncMode: 'full' | 'incremental';
+  autoRetryFailed: boolean;
+  updatedBy?: string;
 };
 
 const toIsoSafe = (value: unknown): string => {
@@ -58,9 +72,12 @@ const AdminMarketplaceSync: React.FC = () => {
   const [integrations, setIntegrations] = useState<MarketplaceIntegrationSetting[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [jobs, setJobs] = useState<SyncJobRow[]>([]);
+  const [channelSettings, setChannelSettings] = useState<Record<string, ChannelSyncSettings>>({});
   const [testResults, setTestResults] = useState<Record<string, TestResult>>({});
   const [connectionBusy, setConnectionBusy] = useState<string | null>(null);
   const [syncBusy, setSyncBusy] = useState<string | null>(null);
+  const [savingSettings, setSavingSettings] = useState<string | null>(null);
+  const [retryBusy, setRetryBusy] = useState<string | null>(null);
   const [search, setSearch] = useState('');
 
   const storeId = getActualStoreId(user || undefined);
@@ -74,10 +91,11 @@ const AdminMarketplaceSync: React.FC = () => {
     try {
       const db = getFirestore();
 
-      const [profilesSnap, productsSnap, jobsSnap] = await Promise.all([
+      const [profilesSnap, productsSnap, jobsSnap, settingsSnap] = await Promise.all([
         getDocs(query(collection(db, 'storeProfiles'), where('storeId', '==', storeId))),
         getDocs(query(collection(db, 'products'), where('storeId', '==', storeId))),
         getDocs(query(collection(db, 'marketplaceSyncJobs'), where('storeId', '==', storeId))),
+        getDocs(query(collection(db, 'marketplaceChannelSettings'), where('storeId', '==', storeId))),
       ]);
 
       let profileData: Record<string, unknown> | null = null;
@@ -97,21 +115,44 @@ const AdminMarketplaceSync: React.FC = () => {
       const jobRows = jobsSnap.docs
         .map((doc) => {
           const data = doc.data() as Record<string, unknown>;
+          const rawStatus = String(data.status || 'unknown').toLowerCase();
+          let status: SyncJobRow['status'] = 'unknown';
+          if (rawStatus === 'queued' || rawStatus === 'processing' || rawStatus === 'completed' || rawStatus === 'failed') {
+            status = rawStatus;
+          }
           return {
             id: doc.id,
             channelId: String(data.channelId || ''),
             channelName: String(data.channelName || data.channelId || 'Unknown'),
             totalProducts: Number(data.totalProducts || 0),
-            status: String(data.status || 'unknown'),
+            status,
+            failedCount: Number(data.failedCount || 0),
+            failedReason: String(data.failedReason || ''),
             createdAt: toIsoSafe(data.createdAt),
           };
         })
         .sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''))
         .slice(0, 10);
 
+      const settingRows = settingsSnap.docs.reduce((acc, row) => {
+        const data = row.data() as Record<string, unknown>;
+        const channelId = String(data.channelId || '');
+        if (!channelId) return acc;
+        acc[channelId] = {
+          id: row.id,
+          storeId: String(data.storeId || storeId),
+          channelId,
+          syncMode: data.syncMode === 'incremental' ? 'incremental' : 'full',
+          autoRetryFailed: Boolean(data.autoRetryFailed),
+          updatedBy: String(data.updatedBy || ''),
+        };
+        return acc;
+      }, {} as Record<string, ChannelSyncSettings>);
+
       setIntegrations(loadedIntegrations);
       setProducts(productRows);
       setJobs(jobRows);
+      setChannelSettings(settingRows);
     } catch (error) {
       console.error('Failed to load marketplace sync data', error);
       toast({
@@ -141,6 +182,63 @@ const AdminMarketplaceSync: React.FC = () => {
       return haystack.includes(q);
     });
   }, [products, search]);
+
+  const getChannelSettings = (integration: MarketplaceIntegrationSetting): ChannelSyncSettings => {
+    const existing = channelSettings[integration.id];
+    if (existing) return existing;
+    return {
+      id: `${storeId}_${integration.id}`,
+      storeId: storeId || '',
+      channelId: integration.id,
+      syncMode: 'full',
+      autoRetryFailed: false,
+    };
+  };
+
+  const saveChannelSettings = async (channelId: string, patch: Partial<ChannelSyncSettings>) => {
+    if (!storeId || !user?.id) return;
+    setSavingSettings(channelId);
+    try {
+      const db = getFirestore();
+      const current = channelSettings[channelId] || {
+        id: `${storeId}_${channelId}`,
+        storeId,
+        channelId,
+        syncMode: 'full' as const,
+        autoRetryFailed: false,
+      };
+
+      const next: ChannelSyncSettings = {
+        ...current,
+        ...patch,
+        updatedBy: user.id,
+      };
+
+      await setDoc(
+        doc(db, 'marketplaceChannelSettings', `${storeId}_${channelId}`),
+        {
+          ...next,
+          updatedAt: serverTimestamp(),
+        },
+        { merge: true }
+      );
+
+      setChannelSettings((prev) => ({ ...prev, [channelId]: next }));
+      toast({
+        title: 'Settings saved',
+        description: `Sync settings updated for ${channelId}.`,
+      });
+    } catch (error) {
+      console.error('Failed to save sync settings', error);
+      toast({
+        title: 'Save failed',
+        description: 'Could not save channel settings.',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingSettings(null);
+    }
+  };
 
   const checkIntegrationConnection = async (integration: MarketplaceIntegrationSetting) => {
     if (!storeId || !user?.id) return;
@@ -191,7 +289,7 @@ const AdminMarketplaceSync: React.FC = () => {
     }
   };
 
-  const syncProductsToChannel = async (integration: MarketplaceIntegrationSetting) => {
+  const syncProductsToChannel = async (integration: MarketplaceIntegrationSetting, retryOfJobId?: string) => {
     if (!storeId || !user?.id) return;
 
     const testResult = testResults[integration.id];
@@ -216,6 +314,7 @@ const AdminMarketplaceSync: React.FC = () => {
     setSyncBusy(integration.id);
     try {
       const db = getFirestore();
+      const settings = getChannelSettings(integration);
       const mappedPayload = filteredProducts.map((product) => ({
         productId: product.id,
         name: product.name,
@@ -230,22 +329,61 @@ const AdminMarketplaceSync: React.FC = () => {
         productType: product.productType || 'simple',
       }));
 
+      const invalidProducts = mappedPayload.filter((product) => !product.name || !Number.isFinite(product.price) || product.price <= 0);
+
       const snapshotPreview = mappedPayload.slice(0, 25);
 
-      await addDoc(collection(db, 'marketplaceSyncJobs'), {
+      const jobRef = await addDoc(collection(db, 'marketplaceSyncJobs'), {
         storeId,
         channelId: integration.id,
         channelName: integration.name,
-        status: 'completed',
+        status: 'queued',
         initiatedBy: user.id,
+        retryOfJobId: retryOfJobId || null,
+        syncMode: settings.syncMode,
+        autoRetryFailed: settings.autoRetryFailed,
         totalProducts: mappedPayload.length,
+        failedCount: 0,
         previewProducts: snapshotPreview,
         createdAt: serverTimestamp(),
+        queuedAt: serverTimestamp(),
+      });
+
+      await updateDoc(jobRef, {
+        status: 'processing',
+        processingStartedAt: serverTimestamp(),
+      });
+
+      if (invalidProducts.length > 0) {
+        const failedReason = `${invalidProducts.length} products have invalid names or non-positive prices.`;
+        await updateDoc(jobRef, {
+          status: 'failed',
+          failedCount: invalidProducts.length,
+          failedReason,
+          failedProductsPreview: invalidProducts.slice(0, 25),
+          finishedAt: serverTimestamp(),
+        });
+
+        toast({
+          title: 'Sync failed',
+          description: `${integration.name}: ${failedReason}`,
+          variant: 'destructive',
+        });
+
+        await loadData();
+        return;
+      }
+
+      await updateDoc(jobRef, {
+        status: 'completed',
+        successCount: mappedPayload.length,
+        failedCount: 0,
+        finishedAt: serverTimestamp(),
       });
 
       toast({
         title: 'Sync complete',
-        description: `${mappedPayload.length} products prepared and pushed to ${integration.name}.`,
+        description: `${mappedPayload.length} products pushed to ${integration.name} (${settings.syncMode} sync).`,
       });
 
       await loadData();
@@ -259,6 +397,34 @@ const AdminMarketplaceSync: React.FC = () => {
     } finally {
       setSyncBusy(null);
     }
+  };
+
+  const retryFailedJob = async (job: SyncJobRow) => {
+    if (!job.channelId) return;
+    const integration = enabledIntegrations.find((row) => row.id === job.channelId);
+    if (!integration) {
+      toast({
+        title: 'Retry unavailable',
+        description: 'Enable this channel in Store Profile before retrying.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setRetryBusy(job.id);
+    try {
+      await syncProductsToChannel(integration, job.id);
+    } finally {
+      setRetryBusy(null);
+    }
+  };
+
+  const statusBadgeClass = (status: SyncJobRow['status']) => {
+    if (status === 'completed') return 'bg-green-100 text-green-800 hover:bg-green-100';
+    if (status === 'failed') return 'bg-red-100 text-red-800 hover:bg-red-100';
+    if (status === 'processing') return 'bg-blue-100 text-blue-800 hover:bg-blue-100';
+    if (status === 'queued') return 'bg-amber-100 text-amber-800 hover:bg-amber-100';
+    return 'bg-slate-100 text-slate-800 hover:bg-slate-100';
   };
 
   return (
@@ -362,6 +528,53 @@ const AdminMarketplaceSync: React.FC = () => {
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  <div className="rounded-md border p-3 space-y-3">
+                    <div className="text-sm font-medium">Channel Sync Settings</div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 items-start">
+                      <div>
+                        <Label>Sync Mode</Label>
+                        <div className="mt-2 flex gap-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={getChannelSettings(integration).syncMode === 'full' ? 'default' : 'outline'}
+                            disabled={savingSettings === integration.id}
+                            onClick={() => saveChannelSettings(integration.id, { syncMode: 'full' })}
+                          >
+                            Full
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={getChannelSettings(integration).syncMode === 'incremental' ? 'default' : 'outline'}
+                            disabled={savingSettings === integration.id}
+                            onClick={() => saveChannelSettings(integration.id, { syncMode: 'incremental' })}
+                          >
+                            Incremental
+                          </Button>
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Failure Handling</Label>
+                        <div className="mt-2">
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant={getChannelSettings(integration).autoRetryFailed ? 'default' : 'outline'}
+                            disabled={savingSettings === integration.id}
+                            onClick={() =>
+                              saveChannelSettings(integration.id, {
+                                autoRetryFailed: !getChannelSettings(integration).autoRetryFailed,
+                              })
+                            }
+                          >
+                            {getChannelSettings(integration).autoRetryFailed ? 'Auto-Retry Enabled' : 'Enable Auto-Retry'}
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   <div className="flex flex-wrap gap-2">
                     <Button
                       type="button"
@@ -439,13 +652,41 @@ const AdminMarketplaceSync: React.FC = () => {
                 {jobs.map((job) => (
                   <div key={job.id} className="border rounded-md p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
-                      <div className="font-medium">{job.channelName}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {job.totalProducts} products • {job.status}
+                      <div className="font-medium flex items-center gap-2">
+                        {job.channelName}
+                        <Badge className={statusBadgeClass(job.status)}>{job.status}</Badge>
                       </div>
+                      <div className="text-sm text-muted-foreground">
+                        {job.totalProducts} products
+                        {job.failedCount > 0 ? ` • ${job.failedCount} failed` : ''}
+                      </div>
+                      {job.failedReason && (
+                        <div className="text-xs text-red-600 mt-1">{job.failedReason}</div>
+                      )}
                     </div>
-                    <div className="text-xs text-muted-foreground">
-                      {job.createdAt ? new Date(job.createdAt).toLocaleString() : 'Unknown time'}
+                    <div className="flex items-center gap-2">
+                      {job.status === 'failed' && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          disabled={retryBusy === job.id || !!syncBusy}
+                          onClick={() => retryFailedJob(job)}
+                        >
+                          {retryBusy === job.id ? (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 mr-1 animate-spin" /> Retrying
+                            </>
+                          ) : (
+                            <>
+                              <RefreshCw className="h-3.5 w-3.5 mr-1" /> Retry
+                            </>
+                          )}
+                        </Button>
+                      )}
+                      <div className="text-xs text-muted-foreground">
+                        {job.createdAt ? new Date(job.createdAt).toLocaleString() : 'Unknown time'}
+                      </div>
                     </div>
                   </div>
                 ))}
