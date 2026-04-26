@@ -17,6 +17,11 @@ This repository includes a `functions/` folder with a Firebase Cloud Function th
 	- If you see only status 204 logs, your frontend may be sending only preflight requests (CORS); ensure you are making a real `POST` request to `/checkout`.
 	- If you see status 200 but no order in Firestore, check for errors in the logs or Firestore security rules.
 
+## Recently Completed Backend Capabilities (April 2026)
+
+- **Email notification center support:** Functions-side notification flows are in place for centralized transactional email handling.
+- **Push notification channel expansion:** Backend push trigger support is available for expanded platform notifications.
+
 ## Example Log Output
 
 ```

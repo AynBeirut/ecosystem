@@ -53,6 +53,13 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 
 ## Recent Updates
 
+### Recently Completed Platform Features (April 2026)
+✨ **Storefront Templates Enhancements**: Template preview before apply, more custom color controls, and extended banner customization.
+✨ **Invoice UX Improvements**: Multiple invoice designs with custom branding and PDF customization options.
+✨ **Billing Currency Support**: Multi-currency support currently available for USD and LBP.
+✨ **Order Operations**: Expanded shipping option matrix for broader delivery setup coverage.
+✨ **Analytics Upgrade**: Google Analytics 4 deep integration with expanded sales and product performance reporting.
+
 ### Latest Features (January 2026)
 ✨ **Swipe Gesture Navigation**: Navigate back with intuitive right-swipe gesture on mobile
 ✨ **Item-Level Discounts**: Apply individual discounts to each item in orders
