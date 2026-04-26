@@ -18,10 +18,10 @@ import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 const CUSTOMER_TIERS = [
-  { value: 'bronze', label: 'Bronze', color: 'bg-orange-100 text-orange-800', minPoints: 0 },
-  { value: 'silver', label: 'Silver', color: 'bg-gray-100 text-gray-800', minPoints: 500 },
-  { value: 'gold', label: 'Gold', color: 'bg-yellow-100 text-yellow-800', minPoints: 1000 },
-  { value: 'platinum', label: 'Platinum', color: 'bg-purple-100 text-purple-800', minPoints: 2500 },
+  { value: 'bronze', label: 'Bronze', color: 'bg-orange-100 text-orange-800', minPercent: 0 },
+  { value: 'silver', label: 'Silver', color: 'bg-gray-100 text-gray-800', minPercent: 25 },
+  { value: 'gold', label: 'Gold', color: 'bg-yellow-100 text-yellow-800', minPercent: 50 },
+  { value: 'platinum', label: 'Platinum', color: 'bg-purple-100 text-purple-800', minPercent: 75 },
 ];
 
 // CustomerForm component moved outside to prevent recreation on every render
@@ -232,9 +232,26 @@ const AdminCustomers: React.FC = () => {
     fetchCustomers();
   }, [user?.storeId]);
 
-  const getCustomerTier = (points: number) => {
+  const getEffectiveTierPoints = (customer: Customer): number => {
+    const loyaltyPoints = Number(customer.loyaltyPoints || 0);
+    if (loyaltyPoints > 0) return loyaltyPoints;
+
+    // Backward compatibility: many records only have lifetimeValue populated.
+    // Use a 1:1 fallback so tiers still reflect real customer value.
+    const lifetimeValue = Number(customer.lifetimeValue || 0);
+    return Math.max(0, Math.floor(lifetimeValue));
+  };
+
+  const getCustomerTier = (customer: Customer) => {
+    const customerScore = getEffectiveTierPoints(customer);
+    const maxScore = Math.max(0, ...customers.map((c) => getEffectiveTierPoints(c)));
+
+    // Percentage-based tiering: classify customer score as % of top customer score.
+    // If all scores are zero, everyone defaults to Bronze.
+    const scorePercent = maxScore > 0 ? (customerScore / maxScore) * 100 : 0;
+
     const tiers = [...CUSTOMER_TIERS].reverse();
-    return tiers.find(tier => points >= tier.minPoints) || CUSTOMER_TIERS[0];
+    return tiers.find((tier) => scorePercent >= tier.minPercent) || CUSTOMER_TIERS[0];
   };
 
   const calculateLifetimeValue = (customerId: string) => {
@@ -382,13 +399,22 @@ const AdminCustomers: React.FC = () => {
   }, []);
 
   const getFilteredCustomers = () => {
-    return customers.filter(customer => {
+    const filtered = customers.filter(customer => {
       const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            customer.phone.includes(searchTerm);
-      const tier = getCustomerTier(customer.loyaltyPoints);
+      const tier = getCustomerTier(customer);
       const matchesTier = filterTier === 'all' || tier.value === filterTier;
       return matchesSearch && matchesTier;
+    });
+
+    // Display highest-value customers first.
+    return filtered.sort((a, b) => {
+      const scoreDiff = getEffectiveTierPoints(b) - getEffectiveTierPoints(a);
+      if (scoreDiff !== 0) return scoreDiff;
+
+      // Tie-breaker: higher lifetime value first.
+      return Number(b.lifetimeValue || 0) - Number(a.lifetimeValue || 0);
     });
   };
 
@@ -512,7 +538,7 @@ const AdminCustomers: React.FC = () => {
             </Card>
           ) : (
             filteredCustomers.map((customer) => {
-              const tier = getCustomerTier(customer.loyaltyPoints);
+              const tier = getCustomerTier(customer);
               return (
                 <Card key={customer.id}>
                   <CardHeader>

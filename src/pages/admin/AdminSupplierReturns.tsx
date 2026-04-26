@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,13 +12,14 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Plus, Send, PackageX, CheckCircle, Minus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { SupplierReturn, SupplierReturnItem, SupplierCredit, Supplier, RawMaterial, Purchase } from '@/types/inventory';
-import { generateSRANumber } from '@/lib/sraGenerator';
+import { SupplierReturn, SupplierReturnItem, Supplier, RawMaterial, Purchase } from '@/types/inventory';
 import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { SUPPLIER_RETURN_REASONS } from '@/constants/supplierReturnReasons';
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
 const AdminSupplierReturns: React.FC = () => {
   const { user } = useAuth();
@@ -36,53 +38,52 @@ const AdminSupplierReturns: React.FC = () => {
     notes: '',
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.storeId) return;
-      const db = getFirestore();
+  const fetchData = useCallback(async () => {
+    if (!user?.storeId) return;
+    const db = getFirestore();
 
-      // Fetch supplier returns
-      const sraRef = collection(db, 'supplierReturns');
-      const sraQuery = query(sraRef, where('storeId', '==', user.storeId));
-      const sraSnapshot = await getDocs(sraQuery);
-      const sraList: SupplierReturn[] = sraSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as SupplierReturn));
-      setSupplierReturns(sraList.sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
+    const [sraSnapshot, suppliersSnapshot, materialsSnapshot, purchasesSnapshot] = await Promise.all([
+      getDocs(query(collection(db, 'supplierReturns'), where('storeId', '==', user.storeId))),
+      getDocs(query(collection(db, 'suppliers'), where('storeId', '==', user.storeId))),
+      getDocs(query(collection(db, 'rawMaterials'), where('storeId', '==', user.storeId))),
+      getDocs(query(collection(db, 'purchases'), where('storeId', '==', user.storeId))),
+    ]);
 
-      // Fetch suppliers
-      const suppliersRef = collection(db, 'suppliers');
-      const suppliersQuery = query(suppliersRef, where('storeId', '==', user.storeId));
-      const suppliersSnapshot = await getDocs(suppliersQuery);
-      const suppliersList: Supplier[] = suppliersSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Supplier));
-      setSuppliers(suppliersList);
+    const sraList: SupplierReturn[] = sraSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as SupplierReturn));
+    setSupplierReturns(sraList.sort((a, b) => new Date(b.requestDate).getTime() - new Date(a.requestDate).getTime()));
 
-      // Fetch raw materials
-      const materialsRef = collection(db, 'rawMaterials');
-      const materialsQuery = query(materialsRef, where('storeId', '==', user.storeId));
-      const materialsSnapshot = await getDocs(materialsQuery);
-      const materialsList: RawMaterial[] = materialsSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as RawMaterial));
-      setRawMaterials(materialsList);
+    const suppliersList: Supplier[] = suppliersSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Supplier));
+    setSuppliers(suppliersList);
 
-      // Fetch purchases
-      const purchasesRef = collection(db, 'purchases');
-      const purchasesQuery = query(purchasesRef, where('storeId', '==', user.storeId));
-      const purchasesSnapshot = await getDocs(purchasesQuery);
-      const purchasesList: Purchase[] = purchasesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Purchase));
-      setPurchases(purchasesList);
-    };
-    fetchData();
+    const materialsList: RawMaterial[] = materialsSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as RawMaterial));
+    setRawMaterials(materialsList);
+
+    const purchasesList: Purchase[] = purchasesSnapshot.docs.map(doc => ({
+      id: doc.id,
+      ...doc.data()
+    } as Purchase));
+    setPurchases(purchasesList);
   }, [user?.storeId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const getToken = useCallback(async (): Promise<string> => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Not authenticated');
+    return currentUser.getIdToken();
+  }, []);
 
   const addItem = () => {
     setNewSRA({
@@ -117,7 +118,11 @@ const AdminSupplierReturns: React.FC = () => {
   };
 
   const calculateTotal = (items: SupplierReturnItem[]): number => {
-    return items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
+    return items.reduce((sum, item) => {
+      const unit = Number(item.unitPrice ?? item.unitCost ?? 0);
+      const qty = Number(item.quantity || 0);
+      return sum + (qty * unit);
+    }, 0);
   };
 
   const handleCreateSRA = async () => {
@@ -126,28 +131,62 @@ const AdminSupplierReturns: React.FC = () => {
       return;
     }
 
+    const supplier = suppliers.find(s => s.id === newSRA.supplierId);
+    if (!supplier) {
+      toast({ title: "Error", description: "Selected supplier not found", variant: "destructive" });
+      return;
+    }
+
+    const selectedPurchase = purchases.find(p => p.id === newSRA.purchaseId);
+
+    const normalizedItems = newSRA.items
+      .filter(item => item.rawMaterialId && item.quantity > 0)
+      .map(item => {
+        const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+        return {
+          rawMaterialId: item.rawMaterialId,
+          materialName: material?.name || 'Unknown Material',
+          sku: material?.sku || '',
+          quantity: Number(item.quantity || 0),
+          unitCost: Number(item.unitPrice || 0),
+          totalCost: Number(item.quantity || 0) * Number(item.unitPrice || 0),
+          reason: item.reason || newSRA.reason,
+          condition: item.condition,
+        };
+      });
+
+    if (normalizedItems.length === 0) {
+      toast({ title: "Error", description: "Add at least one valid return item", variant: "destructive" });
+      return;
+    }
+
     try {
-      const db = getFirestore();
-      const sraNumber = generateSRANumber(user.storeId, supplierReturns.length + 1);
-      const totalAmount = calculateTotal(newSRA.items);
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/supplier-returns/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeId: user.storeId,
+          supplierId: supplier.id,
+          supplierName: supplier.name,
+          purchaseOrderId: selectedPurchase?.id,
+          purchaseOrderNumber: selectedPurchase?.poNumber || selectedPurchase?.invoiceNumber || selectedPurchase?.purchaseOrderNumber || '',
+          returnItems: normalizedItems,
+          returnReason: newSRA.reason,
+          claimType: newSRA.reason === 'warranty' ? 'warranty' : 'defective',
+          notes: newSRA.notes || undefined,
+        }),
+      });
 
-      const sraData = {
-        sraNumber,
-        supplierId: newSRA.supplierId,
-        purchaseId: newSRA.purchaseId || undefined,
-        requestDate: new Date().toISOString(),
-        reason: newSRA.reason,
-        status: 'draft' as const,
-        items: newSRA.items,
-        totalAmount,
-        notes: newSRA.notes,
-        storeId: user.storeId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      };
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to create supplier return');
+      }
 
-      const docRef = await addDoc(collection(db, 'supplierReturns'), sraData);
-      setSupplierReturns([{ id: docRef.id, ...sraData }, ...supplierReturns]);
+      await fetchData();
 
       // Audit log
       await logAction(
@@ -156,8 +195,8 @@ const AdminSupplierReturns: React.FC = () => {
         user.role,
         'create',
         'supplierReturn',
-        docRef.id,
-        { newValue: sraData },
+        result.id,
+        { newValue: { supplierId: newSRA.supplierId, items: normalizedItems.length } },
         user.storeId
       );
 
@@ -169,7 +208,7 @@ const AdminSupplierReturns: React.FC = () => {
         notes: '',
       });
       setIsCreatingSRA(false);
-      toast({ title: "Success", description: `Supplier return ${sraNumber} created!` });
+      toast({ title: "Success", description: `Supplier return ${result.sraNumber || 'created'}!` });
     } catch (error) {
       console.error('Error creating SRA:', error);
       toast({ title: "Error", description: "Failed to create supplier return", variant: "destructive" });
@@ -178,54 +217,60 @@ const AdminSupplierReturns: React.FC = () => {
 
   const handleUpdateStatus = async (sraId: string, newStatus: SupplierReturn['status']) => {
     try {
-      const db = getFirestore();
-      const sraRef = doc(db, 'supplierReturns', sraId);
-      
-      const updateData: any = {
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      };
+      const token = await getToken();
 
-      if (newStatus === 'submitted') {
-        updateData.submittedDate = new Date().toISOString();
-      } else if (newStatus === 'approved') {
-        updateData.approvedDate = new Date().toISOString();
-      } else if (newStatus === 'shipped') {
-        updateData.shippedDate = new Date().toISOString();
-      } else if (newStatus === 'received_by_supplier') {
-        updateData.receivedBySupplierDate = new Date().toISOString();
-      } else if (newStatus === 'credited') {
-        updateData.creditedDate = new Date().toISOString();
-      }
-
-      await updateDoc(sraRef, updateData);
-
-      setSupplierReturns(supplierReturns.map(sra => 
-        sra.id === sraId ? { ...sra, ...updateData } : sra
-      ));
-
-      // If shipped, deduct from raw material stock
-      if (newStatus === 'shipped') {
+      if (newStatus === 'credited') {
         const sra = supplierReturns.find(s => s.id === sraId);
-        if (sra) {
-          for (const item of sra.items) {
-            const material = rawMaterials.find(m => m.id === item.rawMaterialId);
-            if (material) {
-              const materialRef = doc(db, 'rawMaterials', item.rawMaterialId);
-              const newStock = Math.max(0, material.currentStock - item.quantity);
-              
-              await updateDoc(materialRef, {
-                currentStock: newStock,
-                updatedAt: new Date().toISOString(),
-              });
+        const creditAmount = sra?.totalClaimAmount ?? sra?.totalAmount ?? calculateTotal(sra?.items || []);
 
-              setRawMaterials(rawMaterials.map(m => 
-                m.id === item.rawMaterialId ? { ...m, currentStock: newStock } : m
-              ));
-            }
-          }
+        const creditResponse = await fetch(`${API_URL}/supplier-returns/credit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            returnId: sraId,
+            creditAmount,
+            applyToPurchase: true,
+          }),
+        });
+
+        const creditResult = await creditResponse.json();
+        if (!creditResponse.ok || !creditResult.success) {
+          throw new Error(creditResult.error || 'Failed to mark credited');
+        }
+      } else if (newStatus === 'shipped') {
+        const shipResponse = await fetch(`${API_URL}/supplier-returns/ship`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ returnId: sraId }),
+        });
+
+        const shipResult = await shipResponse.json();
+        if (!shipResponse.ok || !shipResult.success) {
+          throw new Error(shipResult.error || 'Failed to mark shipped');
+        }
+      } else {
+        const statusResponse = await fetch(`${API_URL}/supplier-returns/update-status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ returnId: sraId, status: newStatus }),
+        });
+
+        const statusResult = await statusResponse.json();
+        if (!statusResponse.ok || !statusResult.success) {
+          throw new Error(statusResult.error || 'Failed to update status');
         }
       }
+
+      await fetchData();
 
       if (user) {
         await logAction(
@@ -260,6 +305,10 @@ const AdminSupplierReturns: React.FC = () => {
       disputed: { variant: 'destructive', label: 'Disputed' },
     };
     return <Badge variant={variants[status].variant}>{variants[status].label}</Badge>;
+  };
+
+  const getSraItems = (sra: SupplierReturn): SupplierReturnItem[] => {
+    return (sra.items || sra.returnItems || []) as SupplierReturnItem[];
   };
 
   return (
@@ -473,7 +522,10 @@ const AdminSupplierReturns: React.FC = () => {
           ) : (
             supplierReturns.map((sra) => {
               const supplier = suppliers.find(s => s.id === sra.supplierId);
-              const purchase = purchases.find(p => p.id === sra.purchaseId);
+              const purchaseId = sra.purchaseId || sra.purchaseOrderId;
+              const purchase = purchases.find(p => p.id === purchaseId);
+              const sraItems = getSraItems(sra);
+              const reasonValue = (sra.reason || sra.returnReason) as string | undefined;
 
               return (
                 <Card key={sra.id}>
@@ -545,15 +597,15 @@ const AdminSupplierReturns: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-sm text-gray-500">Return Value</p>
-                        <p className="font-bold text-lg">${sra.totalAmount.toFixed(2)}</p>
+                        <p className="font-bold text-lg">${Number(sra.totalAmount ?? sra.totalClaimAmount ?? 0).toFixed(2)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Items</p>
-                        <p className="font-medium">{sra.items.length} item(s)</p>
+                        <p className="font-medium">{sraItems.length} item(s)</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Reason</p>
-                        <p className="font-medium">{SUPPLIER_RETURN_REASONS.find(r => r.value === sra.reason)?.label || sra.reason}</p>
+                        <p className="font-medium">{SUPPLIER_RETURN_REASONS.find(r => r.value === reasonValue)?.label || reasonValue || 'Not specified'}</p>
                       </div>
                       {sra.creditedDate && (
                         <div>
@@ -567,15 +619,18 @@ const AdminSupplierReturns: React.FC = () => {
                     <div className="border-t pt-3">
                       <p className="text-sm font-semibold mb-2">Return Items:</p>
                       <div className="space-y-1">
-                        {sra.items.map((item, idx) => {
+                        {sraItems.map((item, idx) => {
                           const material = rawMaterials.find(m => m.id === item.rawMaterialId);
+                          const itemLabel = item.materialName || material?.name || item.rawMaterialId || 'Unknown Material';
+                          const itemUnit = material?.unit || 'units';
+                          const lineTotal = Number(item.totalCost ?? (Number(item.quantity || 0) * Number(item.unitPrice ?? item.unitCost ?? 0)));
                           return (
                             <div key={idx} className="text-sm flex justify-between">
                               <span>
-                                {material?.name || 'Unknown'}: {item.quantity} {material?.unit} 
-                                ({item.condition})
+                                {itemLabel}: {item.quantity} {itemUnit}
+                                {item.condition ? ` (${item.condition})` : ''}
                               </span>
-                              <span className="font-medium">${(item.quantity * item.unitPrice).toFixed(2)}</span>
+                              <span className="font-medium">${lineTotal.toFixed(2)}</span>
                             </div>
                           );
                         })}

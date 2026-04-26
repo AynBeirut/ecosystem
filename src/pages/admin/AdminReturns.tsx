@@ -31,6 +31,10 @@ const AdminReturns: React.FC = () => {
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [refundAmount, setRefundAmount] = useState(0);
 
+  const getRequestItems = (returnRequest: ReturnRequest): ReturnItem[] => {
+    return (returnRequest.items || returnRequest.returnItems || []) as ReturnItem[];
+  };
+
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.storeId) return;
@@ -195,6 +199,45 @@ const AdminReturns: React.FC = () => {
     return labels[reason] || reason;
   };
 
+  const handleFinalizeExchange = async (returnRequest: ReturnRequest) => {
+    try {
+      const db = getFirestore();
+      const returnRef = doc(db, 'returnRequests', returnRequest.id);
+      const now = new Date().toISOString();
+
+      await updateDoc(returnRef, {
+        status: 'completed',
+        exchangeProcessedDate: now,
+        completedDate: now,
+        updatedAt: now,
+      });
+
+      setReturns((prev) => prev.map((r) => (
+        r.id === returnRequest.id
+          ? { ...r, status: 'completed', exchangeProcessedDate: now, completedDate: now, updatedAt: now }
+          : r
+      )));
+
+      if (user) {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'update',
+          'returnRequest',
+          returnRequest.id,
+          { newValue: { status: 'completed', exchangeProcessedDate: now } },
+          user.storeId
+        );
+      }
+
+      toast({ title: 'Success', description: 'Exchange finalized successfully!' });
+    } catch (error) {
+      console.error('Error finalizing exchange:', error);
+      toast({ title: 'Error', description: 'Failed to finalize exchange', variant: 'destructive' });
+    }
+  };
+
   return (
     <div className="min-h-screen bg-gray-50">
       {isMobile ? <MobileHeader title="Customer Returns" /> : null}
@@ -263,22 +306,36 @@ const AdminReturns: React.FC = () => {
                           </Button>
                         )}
                         {returnRequest.status === 'received' && (
-                          <Button
-                            variant="default"
-                            size="sm"
-                            onClick={() => {
-                              const totalRefund = returnRequest.items.reduce((sum, item) => {
-                                const product = products.find(p => p.id === item.productId);
-                                return sum + (product?.price || 0) * item.quantity;
-                              }, 0);
-                              setRefundAmount(totalRefund);
-                              setProcessingReturn(returnRequest);
-                              setRefundDialogOpen(true);
-                            }}
-                          >
-                            <RefreshCcw className="h-4 w-4 mr-1" />
-                            Process Refund
-                          </Button>
+                          returnRequest.requestType === 'exchange' ? (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => handleFinalizeExchange(returnRequest)}
+                            >
+                              <RefreshCcw className="h-4 w-4 mr-1" />
+                              Finalize Exchange
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="default"
+                              size="sm"
+                              onClick={() => {
+                                const requestItems = getRequestItems(returnRequest);
+                                const totalRefund = requestItems.reduce((sum, item) => {
+                                  const fallbackPrice = Number((item as any).originalPrice || 0);
+                                  const product = products.find(p => p.id === item.productId);
+                                  const unitPrice = Number(product?.price || fallbackPrice || 0);
+                                  return sum + unitPrice * Number(item.quantity || 0);
+                                }, 0);
+                                setRefundAmount(totalRefund);
+                                setProcessingReturn(returnRequest);
+                                setRefundDialogOpen(true);
+                              }}
+                            >
+                              <RefreshCcw className="h-4 w-4 mr-1" />
+                              Process Refund
+                            </Button>
+                          )
                         )}
                       </div>
                     </div>
@@ -286,12 +343,16 @@ const AdminReturns: React.FC = () => {
                   <CardContent>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
+                        <p className="text-sm text-gray-500">Type</p>
+                        <p className="font-medium capitalize">{returnRequest.requestType || 'refund'}</p>
+                      </div>
+                      <div>
                         <p className="text-sm text-gray-500">Reason</p>
                         <p className="font-medium">{getReasonLabel(returnRequest.reason)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Items</p>
-                        <p className="font-medium">{returnRequest.items.length} item(s)</p>
+                        <p className="font-medium">{getRequestItems(returnRequest).length} item(s)</p>
                       </div>
                       {returnRequest.approvedDate && (
                         <div>
@@ -311,7 +372,7 @@ const AdminReturns: React.FC = () => {
                     <div className="border-t pt-3">
                       <p className="text-sm font-semibold mb-2">Return Items:</p>
                       <div className="space-y-2">
-                        {returnRequest.items.map((item, idx) => {
+                        {getRequestItems(returnRequest).map((item, idx) => {
                           const product = products.find(p => p.id === item.productId);
                           return (
                             <div key={idx} className="p-2 bg-gray-50 rounded">
@@ -326,6 +387,42 @@ const AdminReturns: React.FC = () => {
                         })}
                       </div>
                     </div>
+
+                    {returnRequest.requestType === 'exchange' && (
+                      <div className="mt-3 p-3 bg-indigo-50 rounded border border-indigo-200">
+                        <p className="text-sm font-semibold text-indigo-900 mb-2">Exchange Summary</p>
+                        <div className="space-y-1 text-sm text-indigo-900">
+                          <div className="flex justify-between">
+                            <span>Returned value</span>
+                            <span>${Number(returnRequest.returnTotalAmount || returnRequest.refundAmount || 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between">
+                            <span>Exchange value</span>
+                            <span>${Number(returnRequest.exchangeTotalAmount || 0).toFixed(2)}</span>
+                          </div>
+                          <div className="flex justify-between font-semibold border-t border-indigo-200 mt-2 pt-2">
+                            <span>Net settlement</span>
+                            <span>
+                              {returnRequest.netSettlementType === 'payable' && `Customer pays $${Number(returnRequest.netAmount || 0).toFixed(2)}`}
+                              {returnRequest.netSettlementType === 'refundable' && `Customer gets $${Math.abs(Number(returnRequest.netAmount || 0)).toFixed(2)}`}
+                              {(!returnRequest.netSettlementType || returnRequest.netSettlementType === 'even') && 'Even ($0.00)'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {Array.isArray(returnRequest.exchangeItems) && returnRequest.exchangeItems.length > 0 && (
+                          <div className="mt-3 space-y-1">
+                            <p className="text-xs font-semibold text-indigo-900">Replacement Items:</p>
+                            {returnRequest.exchangeItems.map((item, idx) => (
+                              <div key={idx} className="text-xs flex justify-between text-indigo-900">
+                                <span>{item.productName} × {item.quantity}</span>
+                                <span>${Number(item.totalPrice || (item.quantity * item.unitPrice)).toFixed(2)}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
 
                     {returnRequest.customerComments && (
                       <div className="mt-3 p-3 bg-blue-50 rounded">
@@ -359,12 +456,13 @@ const AdminReturns: React.FC = () => {
                 <div>
                   <Label>Calculated Refund Amount</Label>
                   <div className="p-4 bg-gray-100 rounded">
-                    {processingReturn.items.map((item, idx) => {
+                    {getRequestItems(processingReturn).map((item, idx) => {
                       const product = products.find(p => p.id === item.productId);
-                      const itemTotal = (product?.price || 0) * item.quantity;
+                      const fallbackPrice = Number((item as any).originalPrice || 0);
+                      const itemTotal = (product?.price || fallbackPrice || 0) * Number(item.quantity || 0);
                       return (
                         <div key={idx} className="flex justify-between text-sm mb-1">
-                          <span>{product?.name}: {item.quantity} × ${product?.price.toFixed(2)}</span>
+                          <span>{product?.name || (item as any).productName}: {item.quantity} × ${Number(product?.price || fallbackPrice || 0).toFixed(2)}</span>
                           <span className="font-medium">${itemTotal.toFixed(2)}</span>
                         </div>
                       );

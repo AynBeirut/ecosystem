@@ -70,6 +70,7 @@ const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
+const supplierReturns_1 = require("./api/supplierReturns");
 const db = admin.firestore();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
@@ -110,7 +111,12 @@ app.get('/health', (req, res) => {
             '/subscription/subscribe',
             '/subscription/cancel',
             '/subscription/info',
-            '/webhook/whish'
+            '/webhook/whish',
+            '/supplier-returns/create',
+            '/supplier-returns/update-status',
+            '/supplier-returns/ship',
+            '/supplier-returns/credit',
+            '/supplier-returns/analytics'
         ]
     });
 });
@@ -149,6 +155,12 @@ app.post('/marketing/unsubscribe', marketing_1.unsubscribeFromStore);
 app.get('/marketing/subscribers', marketing_1.listSubscribers);
 app.post('/marketing/send-campaign', marketing_1.sendCampaign);
 app.get('/marketing/campaigns', marketing_1.listCampaigns);
+// Supplier returns
+app.post('/supplier-returns/create', supplierReturns_1.createSupplierReturn);
+app.put('/supplier-returns/update-status', supplierReturns_1.updateSupplierReturnStatus);
+app.post('/supplier-returns/ship', supplierReturns_1.shipSupplierReturn);
+app.post('/supplier-returns/credit', supplierReturns_1.creditSupplierReturn);
+app.get('/supplier-returns/analytics', supplierReturns_1.getSupplierReturnAnalytics);
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp() {
     try {

@@ -50,6 +50,61 @@ export interface StoreSectionOrder {
   padding?: SectionPadding; // Section padding
 }
 
+export interface DeliveryZoneSetting {
+  id: number;
+  name: string;
+  radius: string;
+  fee: string;
+  time: string;
+}
+
+export interface DeliveryPartnerSetting {
+  id: string;
+  name: string;
+  type: 'shipping' | 'local';
+  active: boolean;
+}
+
+export interface StoreDeliverySettings {
+  standardDelivery: boolean;
+  expressDelivery: boolean;
+  sameDay: boolean;
+  pickup: boolean;
+  standardTime: string;
+  expressTime: string;
+  sameDayTime: string;
+  standardFee: string;
+  expressFee: string;
+  sameDayFee: string;
+  freeShippingThreshold: string;
+  deliveryRadius: string;
+  workingDays: string;
+  workingHours: string;
+  specialInstructions: string;
+  zones?: DeliveryZoneSetting[];
+  deliveryPartners?: DeliveryPartnerSetting[];
+  ownDeliveryEnabled?: boolean;
+  defaultPickupCarrier?: string;
+}
+
+export interface MarketplaceIntegrationSetting {
+  id: string;
+  name: string;
+  enabled: boolean;
+  merchantId?: string;
+  apiKey?: string;
+  apiSecret?: string;
+}
+
+export interface DropshippingPartnerSetting {
+  id: string;
+  name: string;
+  enabled: boolean;
+  contactEmail?: string;
+  webhookUrl?: string;
+  notes?: string;
+}
+
 export interface StoreProfile {
   name: string;
   slug?: string; // URL-friendly store identifier (e.g., 'tech-gadgets')
@@ -155,6 +210,11 @@ export interface StoreProfile {
   // Product settings
   productCategories?: string[]; // Categories for composed products
   priceMultiplier?: number; // Default price multiplier for composed products (default: 2.5)
+  // Delivery configuration
+  deliverySettings?: StoreDeliverySettings;
+  // Marketplace and dropshipping integrations
+  marketplaceIntegrations?: MarketplaceIntegrationSetting[];
+  dropshippingPartners?: DropshippingPartnerSetting[];
   // Migration tracking
   migrationVersion?: number;
   lastMigrationDate?: string;

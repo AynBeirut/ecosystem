@@ -18,6 +18,7 @@ import { useAuth } from '@/context/useAuth';
 import { Label } from '@/components/ui/label';
 import { PaymentMethod } from '@/types/product';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
 import { pixelAddToCart, pixelPurchase } from '@/lib/metaPixel';
 
@@ -42,6 +43,12 @@ type PaymentInitResponse = {
   paymentUrl?: string;
 };
 
+type DeliveryPartnerOption = {
+  id: string;
+  name: string;
+  type: 'shipping' | 'local' | 'own';
+};
+
 const Cart: React.FC = () => {
   const { items, updateQuantity, removeFromCart, clearCart, subtotal } = useCart();
   const { user, setUser } = useAuth();
@@ -63,9 +70,11 @@ const Cart: React.FC = () => {
     phone: '',
     address: '',
     city: '',
+    deliveryPartner: '',
     notes: '',
     coordinates: { lat: 0, lng: 0 }
   });
+  const [availableDeliveryPartners, setAvailableDeliveryPartners] = useState<DeliveryPartnerOption[]>([]);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [hasSavedInfo, setHasSavedInfo] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
@@ -152,6 +161,71 @@ const Cart: React.FC = () => {
       }
     };
     fetchWhatsApp();
+  }, [items]);
+
+  // Fetch available delivery partners from admin settings (intersection across all stores in cart)
+  useEffect(() => {
+    const fetchDeliveryPartners = async () => {
+      const storeIds = [...new Set(items.map(item => item.product.storeId))];
+      if (storeIds.length === 0) {
+        setAvailableDeliveryPartners([]);
+        return;
+      }
+
+      const db = getFirestore();
+      const storePartnerOptions: DeliveryPartnerOption[][] = [];
+
+      const buildStorePartnerOptions = (storeData: StoreProfile): DeliveryPartnerOption[] => {
+        const settings = storeData.deliverySettings || {};
+        const configured = Array.isArray(settings.deliveryPartners)
+          ? settings.deliveryPartners
+              .filter((partner) => partner.active && String(partner.name || '').trim() !== '')
+              .map((partner) => ({ id: partner.id, name: partner.name, type: partner.type }))
+          : [];
+
+        if (settings.ownDeliveryEnabled !== false) {
+          return [{ id: 'in_house', name: 'In-house Delivery', type: 'own' }, ...configured];
+        }
+
+        return configured;
+      };
+
+      for (const storeId of storeIds) {
+        try {
+          const storeDoc = await getDoc(doc(db, 'storeProfiles', storeId));
+          if (storeDoc.exists()) {
+            storePartnerOptions.push(buildStorePartnerOptions(storeDoc.data() as StoreProfile));
+          } else {
+            storePartnerOptions.push([{ id: 'in_house', name: 'In-house Delivery', type: 'own' }]);
+          }
+        } catch (error) {
+          console.error('Error fetching delivery partners for store:', storeId, error);
+          storePartnerOptions.push([{ id: 'in_house', name: 'In-house Delivery', type: 'own' }]);
+        }
+      }
+
+      const firstStorePartners = storePartnerOptions[0] || [];
+      const commonPartnerIds = firstStorePartners
+        .map((partner) => partner.id)
+        .filter((id) => storePartnerOptions.every((partners) => partners.some((partner) => partner.id === id)));
+
+      const commonPartners = firstStorePartners.filter((partner) => commonPartnerIds.includes(partner.id));
+      setAvailableDeliveryPartners(commonPartners);
+
+      setDeliveryInfo((prev) => {
+        if (commonPartners.length === 0) {
+          return { ...prev, deliveryPartner: '' };
+        }
+
+        if (commonPartners.some((partner) => partner.id === prev.deliveryPartner)) {
+          return prev;
+        }
+
+        return { ...prev, deliveryPartner: commonPartners[0].id };
+      });
+    };
+
+    fetchDeliveryPartners();
   }, [items]);
 
   // Fetch available payment methods from all stores in cart
@@ -343,6 +417,7 @@ const Cart: React.FC = () => {
       phone: '',
       address: '',
       city: '',
+      deliveryPartner: '',
       notes: '',
       coordinates: { lat: 0, lng: 0 }
     });
@@ -420,6 +495,11 @@ const Cart: React.FC = () => {
       toast.error('Please fill in your phone number and delivery address');
       return;
     }
+
+    if (availableDeliveryPartners.length > 0 && !deliveryInfo.deliveryPartner) {
+      toast.error('Please choose a delivery partner');
+      return;
+    }
     
     // For guest checkout, email and name are also required
     if (!user && (!deliveryInfo.email || !deliveryInfo.name)) {
@@ -480,7 +560,10 @@ const Cart: React.FC = () => {
         body: JSON.stringify({ 
           items: checkoutItems, 
           shipping: null,
-          deliveryInfo: deliveryInfo // Now includes name, email, phone, address, etc.
+          deliveryInfo: {
+            ...deliveryInfo,
+            deliveryPartnerName: availableDeliveryPartners.find((partner) => partner.id === deliveryInfo.deliveryPartner)?.name || '',
+          }
         }),
       });
 
@@ -881,6 +964,27 @@ const Cart: React.FC = () => {
                         onChange={(e) => setDeliveryInfo({ ...deliveryInfo, city: e.target.value })}
                       />
                     </div>
+                    {availableDeliveryPartners.length > 0 && (
+                      <div>
+                        <Label>Delivery Partner *</Label>
+                        <Select
+                          value={deliveryInfo.deliveryPartner}
+                          onValueChange={(value) => setDeliveryInfo({ ...deliveryInfo, deliveryPartner: value })}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Choose delivery partner" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {availableDeliveryPartners.map((partner) => (
+                              <SelectItem key={partner.id} value={partner.id}>
+                                {partner.name} {partner.type === 'local' ? '(Local)' : partner.type === 'shipping' ? '(Shipping)' : '(Own)'}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-gray-500 mt-1">Only partners enabled by the store admin are shown.</p>
+                      </div>
+                    )}
                     <div>
                       <Label htmlFor="notes">Delivery Notes</Label>
                       <Input

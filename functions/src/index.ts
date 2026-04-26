@@ -31,6 +31,13 @@ import { sendContactEmail } from './api/contact';
 import { registerCustomDomain } from './api/domain';
 import { getSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
+import {
+  createSupplierReturn,
+  updateSupplierReturnStatus,
+  shipSupplierReturn,
+  creditSupplierReturn,
+  getSupplierReturnAnalytics,
+} from './api/supplierReturns';
 const db = admin.firestore();
 
 const app = express();
@@ -73,7 +80,12 @@ app.get('/health', (req, res) => {
       '/subscription/subscribe',
       '/subscription/cancel',
       '/subscription/info',
-      '/webhook/whish'
+      '/webhook/whish',
+      '/supplier-returns/create',
+      '/supplier-returns/update-status',
+      '/supplier-returns/ship',
+      '/supplier-returns/credit',
+      '/supplier-returns/analytics'
     ]
   });
 });
@@ -120,6 +132,13 @@ app.post('/marketing/unsubscribe', unsubscribeFromStore);
 app.get('/marketing/subscribers', listSubscribers);
 app.post('/marketing/send-campaign', sendCampaign);
 app.get('/marketing/campaigns', listCampaigns);
+
+// Supplier returns
+app.post('/supplier-returns/create', createSupplierReturn);
+app.put('/supplier-returns/update-status', updateSupplierReturnStatus);
+app.post('/supplier-returns/ship', shipSupplierReturn);
+app.post('/supplier-returns/credit', creditSupplierReturn);
+app.get('/supplier-returns/analytics', getSupplierReturnAnalytics);
 
 // helper to provide a server-timestamp fallback if FieldValue is not available in runtime
 function getServerTimestamp(): FirebaseFirestore.FieldValue | FirebaseFirestore.Timestamp | Date {

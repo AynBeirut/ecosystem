@@ -18,7 +18,8 @@ import { Order, OrderItem, PaymentRecord } from '@/types/order';
 import { ComposedProduct } from '@/types/product';
 import { Customer } from '@/types/customer';
 import { StaffMember } from '@/types/staff';
-import { StoreProfile } from '@/types/storeProfile';
+import { StoreProfile, StoreDeliverySettings, DeliveryPartnerSetting } from '@/types/storeProfile';
+import { FulfillmentLocation } from '@/types/inventory';
 import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign, Edit3 } from 'lucide-react';
 import { logAction } from '@/lib/auditLog';
 import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
@@ -84,6 +85,38 @@ interface FirestoreTimestampLike {
 }
 
 type OrderItemUpdateValue = string | number | 'percentage' | 'fixed';
+type DeliveryMethod = 'standard' | 'express' | 'same_day' | 'pickup';
+type PickupCarrierOption = { id: string; name: string; type: 'shipping' | 'local' | 'own' };
+type OrderViewFilters = {
+  searchTerm: string;
+  statusFilter: string;
+  paymentFilter: string;
+  deliveryMethodFilter: string;
+};
+
+type SavedOrderView = {
+  id: string;
+  name: string;
+  filters: OrderViewFilters;
+};
+
+const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
+  standardDelivery: true,
+  expressDelivery: false,
+  sameDay: false,
+  pickup: true,
+  standardTime: '3-5 days',
+  expressTime: '1-2 days',
+  sameDayTime: '4-6 hours',
+  standardFee: '5.99',
+  expressFee: '12.99',
+  sameDayFee: '19.99',
+  freeShippingThreshold: '50.00',
+  deliveryRadius: '25',
+  workingDays: 'Monday to Friday',
+  workingHours: '9:00 AM - 6:00 PM',
+  specialInstructions: '',
+};
 
 const AdminOrders: React.FC = () => {
   const { user } = useAuth();
@@ -95,14 +128,32 @@ const AdminOrders: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
+    const [fulfillmentLocations, setFulfillmentLocations] = useState<FulfillmentLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [paymentFilter, setPaymentFilter] = useState('all');
+  const [deliveryMethodFilter, setDeliveryMethodFilter] = useState('all');
+  const [savedOrderViews, setSavedOrderViews] = useState<SavedOrderView[]>([]);
+  const [selectedOrderViewId, setSelectedOrderViewId] = useState('');
+  const [newOrderViewName, setNewOrderViewName] = useState('');
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [editingOrder, setEditingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
   const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: PaymentRecord } | null>(null);
   const [voidingPayment, setVoidingPayment] = useState<(Order & { id: string }) | null>(null);
+  const [splittingOrder, setSplittingOrder] = useState<(Order & { id: string }) | null>(null);
+  const [splitQuantities, setSplitQuantities] = useState<Record<string, number>>({});
+  const [mergingOrder, setMergingOrder] = useState<(Order & { id: string }) | null>(null);
+  const [mergeTargetOrderId, setMergeTargetOrderId] = useState('');
+  const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [isPickupDialogOpen, setIsPickupDialogOpen] = useState(false);
+  const [pickupData, setPickupData] = useState({
+    pickupDate: new Date().toISOString().split('T')[0],
+    carrier: 'in_house',
+    notes: '',
+  });
   const [paymentData, setPaymentData] = useState({
     amountPaid: 0,
     paymentDate: new Date().toISOString().split('T')[0],
@@ -116,8 +167,10 @@ const AdminOrders: React.FC = () => {
     customerPhone: '',
     customerEmail: '',
     assignedSalesPerson: '',
+      fulfillmentLocationId: '',
     salesPersonName: '',
     items: [] as OrderItem[],
+    deliveryMethod: 'standard' as DeliveryMethod,
     taxType: 'none' as 'none' | 'VAT' | 'TTC',
     taxRate: 0,
     discountType: 'percentage' as 'percentage' | 'fixed',
@@ -135,6 +188,33 @@ const AdminOrders: React.FC = () => {
   const isCreatingOrderRef = useRef(false);
   const isVoidingPaymentRef = useRef(false);
   const isPayingOrderRef = useRef(false);
+
+  const isOrderEligibleForSplitMerge = (order: Order & { id: string }) => {
+    const allowedStatuses = ['pending', 'confirmed', 'processing', 'ready'];
+    const hasPayments = (order.paymentHistory?.length || 0) > 0 || Number(order.amountPaid || 0) > 0;
+    return allowedStatuses.includes(order.status || '') && !hasPayments;
+  };
+
+  const isOrderEligibleForShippingWorkflow = (order: Order & { id: string }) => {
+    const status = String(order.status || '').toLowerCase();
+    return ['confirmed', 'processing', 'ready'].includes(status);
+  };
+
+  const getNormalizedPaymentStatus = (order: Order & { id: string }) => {
+    const rawStatus = String(order.paymentStatus || '').toLowerCase();
+    if (rawStatus === 'paid' || rawStatus === 'completed') return 'paid';
+    if (rawStatus === 'partial') return 'partial';
+    if (rawStatus === 'failed') return 'unpaid';
+
+    const total = Number(order.total || 0);
+    const paid = Number(order.amountPaid || 0);
+    if (Number.isFinite(total) && Number.isFinite(paid) && total > 0) {
+      if (paid >= total) return 'paid';
+      if (paid > 0) return 'partial';
+    }
+
+    return 'unpaid';
+  };
 
   const hasInventoryEvent = (transactions: InventoryTransaction[], idempotencyKey: string) => {
     return (transactions || []).some((tx: InventoryTransaction) => tx?.idempotencyKey === idempotencyKey);
@@ -273,18 +353,20 @@ const AdminOrders: React.FC = () => {
     subtotal: number;
     discountAmount: number;
     taxAmount: number;
+    deliveryFee: number;
     total: number;
   }) => {
     const subtotal = roundMoney(totals.subtotal || 0);
     const discountAmount = roundMoney(totals.discountAmount || 0);
     const taxAmount = roundMoney(totals.taxAmount || 0);
+    const deliveryFee = roundMoney(totals.deliveryFee || 0);
     const total = roundMoney(totals.total || 0);
 
-    if (![subtotal, discountAmount, taxAmount, total].every(Number.isFinite)) {
+    if (![subtotal, discountAmount, taxAmount, deliveryFee, total].every(Number.isFinite)) {
       return { valid: false, message: 'Order financial values are invalid (non-numeric).' };
     }
 
-    if (subtotal < 0 || discountAmount < 0 || taxAmount < 0 || total < 0) {
+    if (subtotal < 0 || discountAmount < 0 || taxAmount < 0 || deliveryFee < 0 || total < 0) {
       return { valid: false, message: 'Order financial values cannot be negative.' };
     }
 
@@ -293,7 +375,7 @@ const AdminOrders: React.FC = () => {
       return { valid: false, message: 'Discount cannot exceed subtotal.' };
     }
 
-    const expectedTotal = roundMoney(netBeforeTax + taxAmount);
+    const expectedTotal = roundMoney(netBeforeTax + taxAmount + deliveryFee);
     const diff = Math.abs(expectedTotal - total);
     if (diff > 0.01) {
       return {
@@ -308,10 +390,149 @@ const AdminOrders: React.FC = () => {
         subtotal,
         discountAmount,
         taxAmount,
+        deliveryFee,
         total: expectedTotal,
       },
     };
   };
+
+  const getEffectiveDeliverySettings = (): StoreDeliverySettings => {
+    return {
+      ...DEFAULT_DELIVERY_SETTINGS,
+      ...(storeProfile?.deliverySettings || {}),
+    };
+  };
+
+  const getDeliveryOptions = () => {
+    const settings = getEffectiveDeliverySettings();
+    const options: Array<{ value: DeliveryMethod; label: string; fee: number; time: string }> = [];
+    if (settings.standardDelivery) {
+      options.push({ value: 'standard', label: 'Standard Delivery', fee: Number(settings.standardFee || 0), time: settings.standardTime || '3-5 days' });
+    }
+    if (settings.expressDelivery) {
+      options.push({ value: 'express', label: 'Express Delivery', fee: Number(settings.expressFee || 0), time: settings.expressTime || '1-2 days' });
+    }
+    if (settings.sameDay) {
+      options.push({ value: 'same_day', label: 'Same Day Delivery', fee: Number(settings.sameDayFee || 0), time: settings.sameDayTime || '4-6 hours' });
+    }
+    if (settings.pickup) {
+      options.push({ value: 'pickup', label: 'Store Pickup', fee: 0, time: 'Customer pickup' });
+    }
+    return options;
+  };
+
+  const getPickupCarrierOptions = (): PickupCarrierOption[] => {
+    const settings = getEffectiveDeliverySettings();
+    const configuredPartners = Array.isArray(settings.deliveryPartners)
+      ? settings.deliveryPartners.filter((partner) => partner.active && String(partner.name || '').trim() !== '')
+      : [];
+
+    const partnerOptions = configuredPartners.map((partner: DeliveryPartnerSetting) => ({
+      id: partner.id,
+      name: partner.name,
+      type: partner.type,
+    }));
+
+    if (settings.ownDeliveryEnabled !== false) {
+      return [{ id: 'in_house', name: 'In-house', type: 'own' }, ...partnerOptions];
+    }
+
+    return partnerOptions;
+  };
+
+  const getCarrierLabel = (carrierId?: string) => {
+    if (!carrierId) return 'carrier';
+    const carrier = getPickupCarrierOptions().find((option) => option.id === carrierId);
+    return carrier?.name || carrierId;
+  };
+
+  const getDeliveryFee = (method: DeliveryMethod, orderNetBeforeDelivery: number) => {
+    const settings = getEffectiveDeliverySettings();
+    const freeThreshold = Number(settings.freeShippingThreshold || 0);
+
+    if (freeThreshold > 0 && orderNetBeforeDelivery >= freeThreshold && method !== 'pickup') {
+      return 0;
+    }
+
+    if (method === 'pickup') return 0;
+    if (method === 'express') return Number(settings.expressFee || 0);
+    if (method === 'same_day') return Number(settings.sameDayFee || 0);
+    return Number(settings.standardFee || 0);
+  };
+
+  const locationSupportsDeliveryMethod = (location: FulfillmentLocation, method: DeliveryMethod) => {
+    if (method === 'pickup') return location.supportsPickup !== false;
+    if (method === 'express') return location.supportsExpress !== false;
+    if (method === 'same_day') return location.supportsSameDay !== false;
+    return location.supportsStandard !== false;
+  };
+
+  const matchesCoverageCity = (location: FulfillmentLocation, city: string) => {
+    if (!city) return false;
+    const normalizedCity = city.toLowerCase().trim();
+    const coverage = Array.isArray(location.coverageCities) ? location.coverageCities : [];
+    if (coverage.length === 0) return false;
+    return coverage.some((c) => String(c || '').toLowerCase().trim() === normalizedCity);
+  };
+
+  const getBestFulfillmentLocation = (
+    method: DeliveryMethod,
+    customerCity: string,
+    manualLocationId?: string,
+  ): { location: FulfillmentLocation | null; score: number; autoRouted: boolean } => {
+    const activeLocations = fulfillmentLocations.filter((l) => l.isActive !== false);
+    if (activeLocations.length === 0) return { location: null, score: 0, autoRouted: true };
+
+    if (manualLocationId) {
+      const selected = activeLocations.find((l) => l.id === manualLocationId);
+      if (selected) return { location: selected, score: 100, autoRouted: false };
+    }
+
+    const ranked = activeLocations
+      .map((location) => {
+        let score = 0;
+        if (locationSupportsDeliveryMethod(location, method)) score += 50;
+        if (matchesCoverageCity(location, customerCity)) score += 40;
+        const priority = Number(location.priority ?? 999);
+        if (Number.isFinite(priority)) {
+          score += Math.max(0, 10 - Math.min(priority, 10));
+        }
+        return { location, score };
+      })
+      .sort((a, b) => b.score - a.score);
+
+    return {
+      location: ranked[0]?.location || null,
+      score: ranked[0]?.score || 0,
+      autoRouted: true,
+    };
+  };
+
+  useEffect(() => {
+    const options = getDeliveryOptions();
+    if (options.length === 0) return;
+    const isCurrentValid = options.some((o) => o.value === newOrder.deliveryMethod);
+    if (isCurrentValid) return;
+
+    setNewOrder((prev) => ({ ...prev, deliveryMethod: options[0].value }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeProfile]);
+
+  useEffect(() => {
+    const settings = getEffectiveDeliverySettings();
+    const carriers = getPickupCarrierOptions();
+    if (carriers.length === 0) return;
+
+    const preferred = settings.defaultPickupCarrier || carriers[0].id;
+    const selected = carriers.some((carrier) => carrier.id === pickupData.carrier)
+      ? pickupData.carrier
+      : preferred;
+
+    if (selected !== pickupData.carrier) {
+      setPickupData((prev) => ({ ...prev, carrier: selected }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storeProfile]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -347,6 +568,20 @@ const AdminOrders: React.FC = () => {
           fetchCollection('staff'),
           fetchCollection('subAccounts'),
         ]);
+
+        const locationsSnapshot = await getDocs(query(collection(db, 'fulfillmentLocations'), where('storeId', '==', user.storeId)));
+        const locations: FulfillmentLocation[] = locationsSnapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) } as FulfillmentLocation));
+        setFulfillmentLocations(locations);
+
+        const viewsSnapshot = await getDocs(query(
+          collection(db, 'orderViews'),
+          where('storeId', '==', user.storeId),
+          where('userId', '==', user.id),
+        ));
+        const views = viewsSnapshot.docs
+          .map((viewDoc) => ({ id: viewDoc.id, ...(viewDoc.data() as any) } as SavedOrderView))
+          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+        setSavedOrderViews(views);
 
         console.log('AdminOrders: Orders fetched:', ordersData);
         
@@ -415,7 +650,7 @@ const AdminOrders: React.FC = () => {
     fetchData();
   }, [user, toast]);
 
-  const calculateOrderTotals = (items: OrderItem[], taxType: string, taxRate: number, discountType: string, discountValue: number) => {
+  const calculateOrderTotals = (items: OrderItem[], taxType: string, taxRate: number, discountType: string, discountValue: number, deliveryMethod: DeliveryMethod) => {
     // Calculate raw subtotal (before any discounts)
     let rawSubtotal = 0;
     let itemDiscounts = 0;
@@ -454,7 +689,8 @@ const AdminOrders: React.FC = () => {
       taxAmount = (afterAllDiscounts * taxRate) / 100;
     }
 
-    const total = afterAllDiscounts + taxAmount;
+    const deliveryFee = getDeliveryFee(deliveryMethod, afterAllDiscounts);
+    const total = afterAllDiscounts + taxAmount + deliveryFee;
     const totalDiscountAmount = itemDiscounts + orderDiscountAmount;
 
     return { 
@@ -463,6 +699,7 @@ const AdminOrders: React.FC = () => {
       orderDiscount: orderDiscountAmount,
       discountAmount: totalDiscountAmount, 
       taxAmount, 
+      deliveryFee,
       total 
     };
   };
@@ -610,13 +847,15 @@ const AdminOrders: React.FC = () => {
         newOrder.taxType,
         sanitizeRate(newOrder.taxRate),
         newOrder.discountType,
-        sanitizeRate(newOrder.discountValue)
+        sanitizeRate(newOrder.discountValue),
+        newOrder.deliveryMethod
       );
 
       const financialCheck = validateFinancials({
         subtotal: totals.subtotal,
         discountAmount: totals.discountAmount,
         taxAmount: totals.taxAmount,
+        deliveryFee: totals.deliveryFee,
         total: totals.total,
       });
       if (!financialCheck.valid || !financialCheck.normalized) {
@@ -649,6 +888,11 @@ const AdminOrders: React.FC = () => {
         customerTaxId: customer?.taxId || '',
         deliveryAddress: customer?.address || '',
         deliveryCity: customer?.city || '',
+        deliveryMethod: newOrder.deliveryMethod,
+        deliveryFee: totals.deliveryFee,
+        estimatedDeliveryTime: getDeliveryOptions().find((opt) => opt.value === newOrder.deliveryMethod)?.time || '',
+        deliveryWorkingDays: getEffectiveDeliverySettings().workingDays,
+        deliveryWorkingHours: getEffectiveDeliverySettings().workingHours,
         invoiceNumber,
         items: itemsWithPrices,
         subtotal: financialCheck.normalized.subtotal,
@@ -668,6 +912,21 @@ const AdminOrders: React.FC = () => {
         createdAt: useAutoDate ? new Date().toISOString() : (manualOrderDate ? new Date(manualOrderDate).toISOString() : new Date().toISOString()),
         createdBy: user.id,
       };
+
+      const routing = getBestFulfillmentLocation(
+        newOrder.deliveryMethod,
+        customer?.city || '',
+        newOrder.fulfillmentLocationId || undefined,
+      );
+
+      if (routing.location) {
+        Object.assign(orderData, {
+          fulfillmentLocationId: routing.location.id,
+          fulfillmentLocationName: routing.location.name,
+          routingScore: routing.score,
+          autoRouted: routing.autoRouted,
+        });
+      }
 
       console.log('Creating order with data:', orderData);
       const docRef = await addDoc(collection(db, 'orders'), orderData);
@@ -731,6 +990,7 @@ const AdminOrders: React.FC = () => {
           assignedSalesPerson: '',
           salesPersonName: '',
           items: [],
+          deliveryMethod: getDeliveryOptions()[0]?.value || 'standard',
           taxType: 'none',
           taxRate: 0,
           discountType: 'percentage',
@@ -968,6 +1228,8 @@ const AdminOrders: React.FC = () => {
       assignedSalesPerson: order.assignedSalesPerson || '',
       salesPersonName: order.assignedSalesPersonName || '',
       items: order.items || [],
+      fulfillmentLocationId: order.fulfillmentLocationId || '',
+      deliveryMethod: (order.deliveryMethod as DeliveryMethod) || getDeliveryOptions()[0]?.value || 'standard',
       taxType: order.taxType || 'none',
       taxRate: order.taxRate || 0,
       discountType: order.discountType || 'percentage',
@@ -1013,13 +1275,15 @@ const AdminOrders: React.FC = () => {
         newOrder.taxType,
         sanitizeRate(newOrder.taxRate),
         newOrder.discountType,
-        sanitizeRate(newOrder.discountValue)
+        sanitizeRate(newOrder.discountValue),
+        newOrder.deliveryMethod
       );
 
       const financialCheck = validateFinancials({
         subtotal: totals.subtotal,
         discountAmount: totals.discountAmount,
         taxAmount: totals.taxAmount,
+        deliveryFee: totals.deliveryFee,
         total: totals.total,
       });
       if (!financialCheck.valid || !financialCheck.normalized) {
@@ -1118,6 +1382,11 @@ const AdminOrders: React.FC = () => {
         customerTaxId: customer?.taxId || '',
         deliveryAddress: customer?.address || '',
         deliveryCity: customer?.city || '',
+        deliveryMethod: newOrder.deliveryMethod,
+        deliveryFee: totals.deliveryFee,
+        estimatedDeliveryTime: getDeliveryOptions().find((opt) => opt.value === newOrder.deliveryMethod)?.time || '',
+        deliveryWorkingDays: getEffectiveDeliverySettings().workingDays,
+        deliveryWorkingHours: getEffectiveDeliverySettings().workingHours,
         customerId: newOrder.customerId,
         assignedSalesPerson: newOrder.assignedSalesPerson || '',
         assignedSalesPersonName: salesPerson?.name || newOrder.salesPersonName || '',
@@ -1133,6 +1402,21 @@ const AdminOrders: React.FC = () => {
         discountValue: sanitizeRate(newOrder.discountValue),
         updatedAt: new Date().toISOString(),
       };
+
+      const routing = getBestFulfillmentLocation(
+        newOrder.deliveryMethod,
+        customer?.city || '',
+        newOrder.fulfillmentLocationId || undefined,
+      );
+
+      if (routing.location) {
+        Object.assign(orderData, {
+          fulfillmentLocationId: routing.location.id,
+          fulfillmentLocationName: routing.location.name,
+          routingScore: routing.score,
+          autoRouted: routing.autoRouted,
+        });
+      }
 
       const orderRef = doc(db, 'orders', editingOrder.id);
       await updateDoc(orderRef, orderData);
@@ -1179,6 +1463,8 @@ const AdminOrders: React.FC = () => {
         assignedSalesPerson: '',
         salesPersonName: '',
         items: [],
+        deliveryMethod: getDeliveryOptions()[0]?.value || 'standard',
+        fulfillmentLocationId: '',
         taxType: 'none',
         taxRate: 0,
         discountType: 'percentage',
@@ -1796,6 +2082,676 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+  const normalizeDeliveryMethod = (method?: string): DeliveryMethod => {
+    if (method === 'express' || method === 'same_day' || method === 'pickup' || method === 'standard') {
+      return method;
+    }
+    return 'standard';
+  };
+
+  const getOrderItemUnitPrice = (item: OrderItem) => {
+    const product = products.find((p) => p.id === item.productId);
+    return Number(item.price || product?.sellingPrice || product?.price || 0);
+  };
+
+  const openSplitDialog = (order: Order & { id: string }) => {
+    if (!isOrderEligibleForSplitMerge(order)) {
+      toast({
+        title: 'Cannot Split',
+        description: 'Only active unpaid orders can be split.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const initial: Record<string, number> = {};
+    (order.items || []).forEach((_, index) => {
+      initial[String(index)] = 0;
+    });
+
+    setSplitQuantities(initial);
+    setSplittingOrder(order);
+  };
+
+  const openMergeDialog = (order: Order & { id: string }) => {
+    if (!isOrderEligibleForSplitMerge(order)) {
+      toast({
+        title: 'Cannot Merge',
+        description: 'Only active unpaid orders can be merged.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    const targets = orders.filter((candidate) => candidate.id !== order.id && isOrderEligibleForSplitMerge(candidate));
+    if (targets.length === 0) {
+      toast({
+        title: 'No Merge Target',
+        description: 'No other eligible active unpaid orders found to merge into.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setMergingOrder(order);
+    setMergeTargetOrderId(targets[0].id);
+  };
+
+  const handleSplitOrder = async () => {
+    if (!splittingOrder || !user?.storeId) return;
+
+    const sourceItems = splittingOrder.items || [];
+    if (sourceItems.length === 0) {
+      toast({ title: 'Cannot Split', description: 'Order has no items to split.', variant: 'destructive' });
+      return;
+    }
+
+    const movedItems: OrderItem[] = [];
+    const remainingItems: OrderItem[] = [];
+
+    sourceItems.forEach((item, index) => {
+      const maxQty = Number(item.quantity || 0);
+      const rawMoveQty = Number(splitQuantities[String(index)] || 0);
+      const moveQty = Math.max(0, Math.min(maxQty, rawMoveQty));
+      const leftQty = Math.max(0, maxQty - moveQty);
+
+      if (moveQty > 0) movedItems.push({ ...item, quantity: moveQty });
+      if (leftQty > 0) remainingItems.push({ ...item, quantity: leftQty });
+    });
+
+    if (movedItems.length === 0) {
+      toast({ title: 'Nothing Selected', description: 'Select at least one item quantity to split.', variant: 'destructive' });
+      return;
+    }
+
+    if (remainingItems.length === 0) {
+      toast({ title: 'Invalid Split', description: 'At least one item must remain in the source order.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const now = new Date().toISOString();
+      const childOrderRef = doc(collection(db, 'orders'));
+      const childInvoiceNumber = await generateInvoiceNumber();
+
+      const parentTaxType = splittingOrder.taxType || 'none';
+      const parentTaxRate = Number(splittingOrder.taxRate || 0);
+      const parentDiscountType = splittingOrder.discountType || 'percentage';
+      const parentDiscountValue = Number(splittingOrder.discountValue || 0);
+      const parentDeliveryMethod = normalizeDeliveryMethod(splittingOrder.deliveryMethod);
+
+      const parentTotals = calculateOrderTotals(
+        remainingItems,
+        parentTaxType,
+        parentTaxRate,
+        parentDiscountType,
+        parentDiscountValue,
+        parentDeliveryMethod,
+      );
+
+      const parentSplitIds = [...(splittingOrder.splitToOrderIds || []), childOrderRef.id];
+
+      const childTotals = calculateOrderTotals(
+        movedItems,
+        'none',
+        0,
+        'percentage',
+        0,
+        'pickup',
+      );
+
+      const childOrderData: Omit<Order, 'id'> = {
+        storeId: user.storeId,
+        customerId: splittingOrder.customerId,
+        customerName: splittingOrder.customerName,
+        customerPhone: splittingOrder.customerPhone,
+        customerEmail: splittingOrder.customerEmail,
+        customerTaxId: splittingOrder.customerTaxId,
+        deliveryAddress: splittingOrder.deliveryAddress,
+        deliveryCity: splittingOrder.deliveryCity,
+        deliveryMethod: 'pickup',
+        deliveryFee: 0,
+        invoiceNumber: childInvoiceNumber,
+        items: movedItems,
+        subtotal: childTotals.subtotal,
+        taxType: 'none',
+        taxRate: 0,
+        taxAmount: 0,
+        discountType: 'percentage',
+        discountValue: 0,
+        discountAmount: 0,
+        total: childTotals.total,
+        status: 'pending',
+        paymentStatus: 'unpaid',
+        amountPaid: 0,
+        assignedSalesPerson: splittingOrder.assignedSalesPerson,
+        assignedSalesPersonName: splittingOrder.assignedSalesPersonName,
+        createdAt: now,
+        createdBy: user.id,
+        splitFromOrderId: splittingOrder.id,
+      };
+
+      await runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'orders', splittingOrder.id), {
+          items: remainingItems,
+          subtotal: parentTotals.subtotal,
+          taxAmount: parentTotals.taxAmount,
+          discountAmount: parentTotals.discountAmount,
+          discount: parentTotals.discountAmount,
+          deliveryFee: parentTotals.deliveryFee,
+          total: parentTotals.total,
+          splitToOrderIds: parentSplitIds,
+          updatedAt: now,
+        });
+
+        transaction.set(childOrderRef, childOrderData);
+      });
+
+      setOrders((prev) => {
+        const updatedSource = {
+          ...splittingOrder,
+          items: remainingItems,
+          subtotal: parentTotals.subtotal,
+          taxAmount: parentTotals.taxAmount,
+          discountAmount: parentTotals.discountAmount,
+          discount: parentTotals.discountAmount,
+          deliveryFee: parentTotals.deliveryFee,
+          total: parentTotals.total,
+          splitToOrderIds: parentSplitIds,
+          updatedAt: now,
+        };
+        const childOrder: Order & { id: string } = { id: childOrderRef.id, ...childOrderData };
+        return [childOrder, ...prev.map((o) => (o.id === splittingOrder.id ? updatedSource : o))];
+      });
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'order',
+        splittingOrder.id,
+        {
+          newValue: {
+            splitCreatedOrderId: childOrderRef.id,
+            movedItemsCount: movedItems.length,
+          },
+        },
+        user.storeId,
+      );
+
+      toast({ title: 'Order Split', description: `Created split order ${childInvoiceNumber}.` });
+      setSplittingOrder(null);
+      setSplitQuantities({});
+    } catch (error) {
+      console.error('Error splitting order:', error);
+      toast({ title: 'Error', description: 'Failed to split order.', variant: 'destructive' });
+    }
+  };
+
+  const handleMergeOrder = async () => {
+    if (!mergingOrder || !mergeTargetOrderId || !user?.storeId) return;
+
+    const sourceOrder = mergingOrder;
+    const targetOrder = orders.find((o) => o.id === mergeTargetOrderId);
+    if (!targetOrder) {
+      toast({ title: 'Invalid Target', description: 'Selected merge target was not found.', variant: 'destructive' });
+      return;
+    }
+
+    if (!isOrderEligibleForSplitMerge(sourceOrder) || !isOrderEligibleForSplitMerge(targetOrder)) {
+      toast({ title: 'Cannot Merge', description: 'Both orders must be active and unpaid.', variant: 'destructive' });
+      return;
+    }
+
+    const sourceItems = sourceOrder.items || [];
+    const targetItems = targetOrder.items || [];
+    if (sourceItems.length === 0) {
+      toast({ title: 'Cannot Merge', description: 'Source order has no items.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const now = new Date().toISOString();
+
+      const mergedItemsMap = new Map<string, OrderItem>();
+      [...targetItems, ...sourceItems].forEach((item) => {
+        const key = `${item.productId}:${Number(item.price || 0).toFixed(4)}`;
+        const existing = mergedItemsMap.get(key);
+        if (existing) {
+          mergedItemsMap.set(key, { ...existing, quantity: Number(existing.quantity || 0) + Number(item.quantity || 0) });
+        } else {
+          mergedItemsMap.set(key, { ...item });
+        }
+      });
+
+      const mergedItems = Array.from(mergedItemsMap.values());
+      const targetTaxType = targetOrder.taxType || 'none';
+      const targetTaxRate = Number(targetOrder.taxRate || 0);
+      const targetDiscountType = targetOrder.discountType || 'percentage';
+      const targetDiscountValue = Number(targetOrder.discountValue || 0);
+      const targetDeliveryMethod = normalizeDeliveryMethod(targetOrder.deliveryMethod);
+
+      const mergedTotals = calculateOrderTotals(
+        mergedItems,
+        targetTaxType,
+        targetTaxRate,
+        targetDiscountType,
+        targetDiscountValue,
+        targetDeliveryMethod,
+      );
+
+      const mergedFromIds = [...(targetOrder.mergedFromOrderIds || []), sourceOrder.id];
+
+      await runTransaction(db, async (transaction) => {
+        transaction.update(doc(db, 'orders', targetOrder.id), {
+          items: mergedItems,
+          subtotal: mergedTotals.subtotal,
+          taxAmount: mergedTotals.taxAmount,
+          discountAmount: mergedTotals.discountAmount,
+          discount: mergedTotals.discountAmount,
+          deliveryFee: mergedTotals.deliveryFee,
+          total: mergedTotals.total,
+          mergedFromOrderIds: mergedFromIds,
+          updatedAt: now,
+        });
+
+        transaction.update(doc(db, 'orders', sourceOrder.id), {
+          status: 'cancelled',
+          mergedIntoOrderId: targetOrder.id,
+          mergedAt: now,
+          updatedAt: now,
+        });
+      });
+
+      setOrders((prev) => prev.map((order) => {
+        if (order.id === targetOrder.id) {
+          return {
+            ...order,
+            items: mergedItems,
+            subtotal: mergedTotals.subtotal,
+            taxAmount: mergedTotals.taxAmount,
+            discountAmount: mergedTotals.discountAmount,
+            discount: mergedTotals.discountAmount,
+            deliveryFee: mergedTotals.deliveryFee,
+            total: mergedTotals.total,
+            mergedFromOrderIds: mergedFromIds,
+            updatedAt: now,
+          };
+        }
+
+        if (order.id === sourceOrder.id) {
+          return {
+            ...order,
+            status: 'cancelled',
+            mergedIntoOrderId: targetOrder.id,
+            mergedAt: now,
+            updatedAt: now,
+          };
+        }
+
+        return order;
+      }));
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'order',
+        targetOrder.id,
+        {
+          newValue: {
+            mergedFromOrderId: sourceOrder.id,
+            mergedItemsCount: sourceItems.length,
+          },
+        },
+        user.storeId,
+      );
+
+      toast({
+        title: 'Orders Merged',
+        description: `${sourceOrder.invoiceNumber || sourceOrder.id.slice(0, 8)} merged into ${targetOrder.invoiceNumber || targetOrder.id.slice(0, 8)}.`,
+      });
+      setMergingOrder(null);
+      setMergeTargetOrderId('');
+    } catch (error) {
+      console.error('Error merging orders:', error);
+      toast({ title: 'Error', description: 'Failed to merge orders.', variant: 'destructive' });
+    }
+  };
+
+  const handleSaveCurrentView = async () => {
+    if (!user?.storeId) return;
+    const trimmedName = newOrderViewName.trim();
+    if (!trimmedName) {
+      toast({ title: 'View Name Required', description: 'Enter a name for this custom view.', variant: 'destructive' });
+      return;
+    }
+
+    const duplicate = savedOrderViews.some((view) => view.name.toLowerCase() === trimmedName.toLowerCase());
+    if (duplicate) {
+      toast({ title: 'Duplicate Name', description: 'A saved view with this name already exists.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const filters: OrderViewFilters = {
+        searchTerm,
+        statusFilter,
+        paymentFilter,
+        deliveryMethodFilter,
+      };
+      const docRef = await addDoc(collection(db, 'orderViews'), {
+        storeId: user.storeId,
+        userId: user.id,
+        name: trimmedName,
+        filters,
+        createdAt: new Date().toISOString(),
+      });
+
+      const savedView: SavedOrderView = { id: docRef.id, name: trimmedName, filters };
+      setSavedOrderViews((prev) => [...prev, savedView].sort((a, b) => a.name.localeCompare(b.name)));
+      setSelectedOrderViewId(docRef.id);
+      setNewOrderViewName('');
+      toast({ title: 'View Saved', description: `Saved view "${trimmedName}".` });
+    } catch (error) {
+      console.error('Error saving order view:', error);
+      toast({ title: 'Error', description: 'Failed to save custom order view.', variant: 'destructive' });
+    }
+  };
+
+  const applySavedView = (viewId: string) => {
+    setSelectedOrderViewId(viewId);
+    const selected = savedOrderViews.find((view) => view.id === viewId);
+    if (!selected) return;
+
+    setSearchTerm(selected.filters.searchTerm || '');
+    setStatusFilter(selected.filters.statusFilter || 'all');
+    setPaymentFilter(selected.filters.paymentFilter || 'all');
+    setDeliveryMethodFilter(selected.filters.deliveryMethodFilter || 'all');
+    toast({ title: 'View Applied', description: `Applied "${selected.name}".` });
+  };
+
+  const handleDeleteSavedView = async () => {
+    if (!selectedOrderViewId) {
+      toast({ title: 'No View Selected', description: 'Select a saved view to delete.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      await deleteDoc(doc(db, 'orderViews', selectedOrderViewId));
+      setSavedOrderViews((prev) => prev.filter((view) => view.id !== selectedOrderViewId));
+      setSelectedOrderViewId('');
+      toast({ title: 'View Deleted', description: 'Saved custom view deleted.' });
+    } catch (error) {
+      console.error('Error deleting order view:', error);
+      toast({ title: 'Error', description: 'Failed to delete saved view.', variant: 'destructive' });
+    }
+  };
+
+  const getFilteredOrders = () => {
+    return orders.filter((order) => {
+      if (statusFilter !== 'all' && String(order.status || '').toLowerCase() !== statusFilter.toLowerCase()) {
+        return false;
+      }
+
+      if (paymentFilter !== 'all' && getNormalizedPaymentStatus(order) !== paymentFilter) {
+        return false;
+      }
+
+      if (deliveryMethodFilter !== 'all' && String(order.deliveryMethod || '').toLowerCase() !== deliveryMethodFilter.toLowerCase()) {
+        return false;
+      }
+
+      if (!searchTerm) return true;
+      const search = searchTerm.toLowerCase();
+      return (
+        order.customerName.toLowerCase().includes(search) ||
+        (order.invoiceNumber && order.invoiceNumber.toLowerCase().includes(search)) ||
+        order.id.toLowerCase().includes(search) ||
+        (order.status && order.status.toLowerCase().includes(search)) ||
+        (order.assignedSalesPersonName && order.assignedSalesPersonName.toLowerCase().includes(search))
+      );
+    });
+  };
+
+  const toggleOrderSelection = (orderId: string, checked: boolean) => {
+    setSelectedOrderIds((prev) => {
+      if (checked) return Array.from(new Set([...prev, orderId]));
+      return prev.filter((id) => id !== orderId);
+    });
+  };
+
+  const buildShippingLabelHTML = (order: Order & { id: string }) => {
+    const items = order.items || [];
+    const createdAt = order.createdAt ? new Date(order.createdAt).toLocaleString() : '-';
+    const destination = [order.deliveryAddress || '-', order.deliveryCity || '-'].filter(Boolean).join(', ');
+    const itemRows = items
+      .map((item) => {
+        const product = products.find((p) => p.id === item.productId);
+        return `<tr><td style="padding:4px 8px;border:1px solid #ddd;">${product?.name || 'Item'}</td><td style="padding:4px 8px;border:1px solid #ddd;text-align:right;">${item.quantity}</td></tr>`;
+      })
+      .join('');
+
+    return `
+      <div style="font-family:Arial, sans-serif;padding:16px;border:2px solid #111;max-width:760px;margin:0 auto 16px auto;">
+        <h2 style="margin:0 0 8px 0;">Shipping Label</h2>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
+          <div><strong>Order:</strong> ${order.invoiceNumber || order.id.slice(0, 8)}</div>
+          <div><strong>Date:</strong> ${createdAt}</div>
+          <div><strong>Customer:</strong> ${order.customerName || '-'}</div>
+          <div><strong>Phone:</strong> ${order.customerPhone || '-'}</div>
+          <div style="grid-column:1 / -1;"><strong>Destination:</strong> ${destination}</div>
+        </div>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;">Item</th>
+              <th style="text-align:right;padding:6px 8px;border:1px solid #ddd;">Qty</th>
+            </tr>
+          </thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>
+    `;
+  };
+
+  const printHTMLDocument = (title: string, html: string) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) {
+      toast({ title: 'Popup Blocked', description: 'Please allow popups to print labels/manifests.', variant: 'destructive' });
+      return;
+    }
+
+    printWindow.document.write(`
+      <html>
+        <head><title>${title}</title></head>
+        <body style="margin:16px;">${html}</body>
+      </html>
+    `);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  };
+
+  const markOrdersLabeled = async (orderIds: string[], shippingBatchId: string, manifestId?: string) => {
+    if (!user?.storeId || orderIds.length === 0) return;
+    const db = getFirestore();
+    const now = new Date().toISOString();
+
+    await Promise.all(orderIds.map((orderId) => {
+      const payload: Record<string, unknown> = {
+        shippingLabelGeneratedAt: now,
+        shippingLabelGeneratedBy: user.name,
+        shippingBatchId,
+        updatedAt: now,
+      };
+      if (manifestId) payload.manifestId = manifestId;
+      return updateDoc(doc(db, 'orders', orderId), payload);
+    }));
+
+    setOrders((prev) => prev.map((order) => {
+      if (!orderIds.includes(order.id)) return order;
+      return {
+        ...order,
+        shippingLabelGeneratedAt: now,
+        shippingLabelGeneratedBy: user.name,
+        shippingBatchId,
+        manifestId: manifestId || order.manifestId,
+        updatedAt: now,
+      };
+    }));
+  };
+
+  const handleGenerateOrderLabel = async (order: Order & { id: string }) => {
+    if (!isOrderEligibleForShippingWorkflow(order)) {
+      toast({ title: 'Not Eligible', description: 'Order must be confirmed, processing, or ready.', variant: 'destructive' });
+      return;
+    }
+
+    const batchId = `LBL-${Date.now()}`;
+    printHTMLDocument(`Shipping Label ${order.invoiceNumber || order.id.slice(0, 8)}`, buildShippingLabelHTML(order));
+
+    try {
+      await markOrdersLabeled([order.id], batchId);
+      toast({ title: 'Label Generated', description: `Shipping label created for ${order.invoiceNumber || order.id.slice(0, 8)}.` });
+    } catch (error) {
+      console.error('Error marking order labeled:', error);
+      toast({ title: 'Partial Success', description: 'Label printed but status update failed.', variant: 'destructive' });
+    }
+  };
+
+  const getSelectedShippingOrders = () => {
+    return orders.filter((order) => selectedOrderIds.includes(order.id) && isOrderEligibleForShippingWorkflow(order));
+  };
+
+  const handleGenerateBulkLabels = async () => {
+    const selected = getSelectedShippingOrders();
+    if (selected.length === 0) {
+      toast({ title: 'No Eligible Orders', description: 'Select at least one confirmed/processing/ready order.', variant: 'destructive' });
+      return;
+    }
+
+    const batchId = `LBL-${Date.now()}`;
+    const labelsHTML = selected.map((order) => buildShippingLabelHTML(order)).join('<div style="page-break-after:always;"></div>');
+    printHTMLDocument(`Bulk Shipping Labels ${batchId}`, labelsHTML);
+
+    try {
+      await markOrdersLabeled(selected.map((o) => o.id), batchId);
+      toast({ title: 'Bulk Labels Generated', description: `${selected.length} labels generated.` });
+    } catch (error) {
+      console.error('Error marking bulk labels:', error);
+      toast({ title: 'Partial Success', description: 'Labels printed but status updates failed.', variant: 'destructive' });
+    }
+  };
+
+  const handleGenerateManifest = async () => {
+    const selected = getSelectedShippingOrders();
+    if (selected.length === 0) {
+      toast({ title: 'No Eligible Orders', description: 'Select at least one confirmed/processing/ready order.', variant: 'destructive' });
+      return;
+    }
+
+    const manifestId = `MAN-${Date.now()}`;
+    const rows = selected
+      .map((order, index) => {
+        const destination = [order.deliveryAddress || '-', order.deliveryCity || '-'].filter(Boolean).join(', ');
+        return `
+          <tr>
+            <td style="padding:6px 8px;border:1px solid #ddd;">${index + 1}</td>
+            <td style="padding:6px 8px;border:1px solid #ddd;">${order.invoiceNumber || order.id.slice(0, 8)}</td>
+            <td style="padding:6px 8px;border:1px solid #ddd;">${order.customerName || '-'}</td>
+            <td style="padding:6px 8px;border:1px solid #ddd;">${order.customerPhone || '-'}</td>
+            <td style="padding:6px 8px;border:1px solid #ddd;">${destination}</td>
+            <td style="padding:6px 8px;border:1px solid #ddd;text-align:right;">${(order.items || []).reduce((acc, item) => acc + Number(item.quantity || 0), 0)}</td>
+          </tr>
+        `;
+      })
+      .join('');
+
+    const manifestHTML = `
+      <div style="font-family:Arial,sans-serif;max-width:960px;margin:0 auto;">
+        <h2 style="margin-bottom:8px;">Shipping Manifest</h2>
+        <p style="margin:0 0 12px 0;"><strong>Manifest ID:</strong> ${manifestId}</p>
+        <p style="margin:0 0 12px 0;"><strong>Generated:</strong> ${new Date().toLocaleString()}</p>
+        <table style="width:100%;border-collapse:collapse;">
+          <thead>
+            <tr>
+              <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;">#</th>
+              <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;">Order</th>
+              <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;">Customer</th>
+              <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;">Phone</th>
+              <th style="text-align:left;padding:6px 8px;border:1px solid #ddd;">Destination</th>
+              <th style="text-align:right;padding:6px 8px;border:1px solid #ddd;">Units</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    `;
+
+    printHTMLDocument(`Shipping Manifest ${manifestId}`, manifestHTML);
+
+    try {
+      await markOrdersLabeled(selected.map((o) => o.id), `LBL-${Date.now()}`, manifestId);
+      toast({ title: 'Manifest Generated', description: `${selected.length} orders included in ${manifestId}.` });
+    } catch (error) {
+      console.error('Error saving manifest metadata:', error);
+      toast({ title: 'Partial Success', description: 'Manifest printed but metadata updates failed.', variant: 'destructive' });
+    }
+  };
+
+  const handleSchedulePickup = async () => {
+    if (!user?.storeId) return;
+    const selected = getSelectedShippingOrders();
+    if (selected.length === 0) {
+      toast({ title: 'No Eligible Orders', description: 'Select at least one confirmed/processing/ready order.', variant: 'destructive' });
+      return;
+    }
+
+    if (!pickupData.pickupDate) {
+      toast({ title: 'Missing Date', description: 'Pickup date is required.', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const now = new Date().toISOString();
+      const pickupAt = new Date(`${pickupData.pickupDate}T09:00:00`).toISOString();
+
+      await Promise.all(selected.map((order) => updateDoc(doc(db, 'orders', order.id), {
+        pickupScheduledAt: pickupAt,
+        pickupCarrier: pickupData.carrier,
+        pickupNotes: pickupData.notes,
+        pickupStatus: 'scheduled',
+        updatedAt: now,
+      })));
+
+      setOrders((prev) => prev.map((order) => {
+        if (!selectedOrderIds.includes(order.id)) return order;
+        return {
+          ...order,
+          pickupScheduledAt: pickupAt,
+          pickupCarrier: pickupData.carrier,
+          pickupNotes: pickupData.notes,
+          pickupStatus: 'scheduled',
+          updatedAt: now,
+        };
+      }));
+
+      setIsPickupDialogOpen(false);
+      toast({ title: 'Pickup Scheduled', description: `Pickup scheduled for ${selected.length} orders.` });
+    } catch (error) {
+      console.error('Error scheduling pickup:', error);
+      toast({ title: 'Error', description: 'Failed to schedule pickup.', variant: 'destructive' });
+    }
+  };
+
   const addItemToOrder = () => {
     if (products.length === 0) {
       toast({ 
@@ -1835,21 +2791,7 @@ const AdminOrders: React.FC = () => {
   };
 
   const getPaymentBadge = (order: Order & { id: string }) => {
-    const normalizedPaymentStatus = (() => {
-      const rawStatus = String(order.paymentStatus || '').toLowerCase();
-      if (rawStatus === 'paid' || rawStatus === 'completed') return 'paid';
-      if (rawStatus === 'partial') return 'partial';
-      if (rawStatus === 'failed') return 'unpaid';
-
-      const total = Number(order.total || 0);
-      const paid = Number(order.amountPaid || 0);
-      if (Number.isFinite(total) && Number.isFinite(paid) && total > 0) {
-        if (paid >= total) return 'paid';
-        if (paid > 0) return 'partial';
-      }
-
-      return 'unpaid';
-    })();
+    const normalizedPaymentStatus = getNormalizedPaymentStatus(order);
 
     const variants: Record<string, { color: string; label: string }> = {
       paid: { color: 'bg-green-100 text-green-800', label: 'Paid' },
@@ -1870,7 +2812,11 @@ const AdminOrders: React.FC = () => {
     );
   };
 
-  const totals = calculateOrderTotals(newOrder.items, newOrder.taxType, newOrder.taxRate, newOrder.discountType, newOrder.discountValue);
+  const totals = calculateOrderTotals(newOrder.items, newOrder.taxType, newOrder.taxRate, newOrder.discountType, newOrder.discountValue, newOrder.deliveryMethod);
+  const deliveryOptions = getDeliveryOptions();
+  const selectedDeliveryOption = deliveryOptions.find((o) => o.value === newOrder.deliveryMethod);
+  const filteredOrders = getFilteredOrders();
+  const selectedEligibleCount = getSelectedShippingOrders().length;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -1893,6 +2839,8 @@ const AdminOrders: React.FC = () => {
                 assignedSalesPerson: '',
                 salesPersonName: '',
                 items: [],
+                deliveryMethod: getDeliveryOptions()[0]?.value || 'standard',
+                fulfillmentLocationId: '',
                 taxType: 'none',
                 taxRate: 0,
                 discountType: 'percentage',
@@ -2174,6 +3122,55 @@ const AdminOrders: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
+                    <Label>Delivery Method</Label>
+                    <Select
+                      value={newOrder.deliveryMethod}
+                      onValueChange={(value: DeliveryMethod) => setNewOrder({ ...newOrder, deliveryMethod: value })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select delivery method" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {deliveryOptions.map((option) => (
+                          <SelectItem key={option.value} value={option.value}>
+                            {option.label} {option.fee > 0 ? `($${option.fee.toFixed(2)})` : '(Free)'}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {selectedDeliveryOption && (
+                      <p className="text-xs text-gray-500 mt-1">
+                        ETA: {selectedDeliveryOption.time}
+
+                                      {fulfillmentLocations.length > 0 && (
+                                        <div>
+                                          <Label>Fulfillment Location (optional override)</Label>
+                                          <Select
+                                            value={newOrder.fulfillmentLocationId || 'auto'}
+                                            onValueChange={(value) => setNewOrder({ ...newOrder, fulfillmentLocationId: value === 'auto' ? '' : value })}
+                                          >
+                                            <SelectTrigger>
+                                              <SelectValue placeholder="Auto route" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              <SelectItem value="auto">Auto route (recommended)</SelectItem>
+                                              {fulfillmentLocations
+                                                .filter((l) => l.isActive !== false)
+                                                .sort((a, b) => Number(a.priority ?? 999) - Number(b.priority ?? 999))
+                                                .map((location) => (
+                                                  <SelectItem key={location.id} value={location.id}>
+                                                    {location.name}
+                                                  </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+                                      )}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
                     <Label>Tax Type</Label>
                     <Select value={newOrder.taxType} onValueChange={(value: 'none' | 'VAT' | 'TTC') => setNewOrder({ ...newOrder, taxType: value })}>
                       <SelectTrigger>
@@ -2250,6 +3247,12 @@ const AdminOrders: React.FC = () => {
                         <div className="text-right font-medium">${totals.taxAmount.toFixed(2)}</div>
                       </>
                     )}
+                    {totals.deliveryFee > 0 && (
+                      <>
+                        <div>Delivery Fee:</div>
+                        <div className="text-right font-medium">${totals.deliveryFee.toFixed(2)}</div>
+                      </>
+                    )}
                     <div className="text-lg font-bold">Total:</div>
                     <div className="text-right text-lg font-bold text-blue-600">${totals.total.toFixed(2)}</div>
                   </div>
@@ -2281,14 +3284,135 @@ const AdminOrders: React.FC = () => {
           </Dialog>
         </div>
 
-        {/* Search Bar */}
-        <div className="mb-4">
+        {/* Search + Views */}
+        <div className="mb-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
           <Input
             placeholder="Search by customer, invoice number, order ID, or status..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="max-w-md"
+            onChange={(e) => {
+              setSearchTerm(e.target.value);
+              setSelectedOrderViewId('');
+            }}
           />
+          <Select
+            value={statusFilter}
+            onValueChange={(value) => {
+              setStatusFilter(value);
+              setSelectedOrderViewId('');
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Statuses</SelectItem>
+              {ORDER_STATUSES.map((status) => (
+                <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select
+            value={paymentFilter}
+            onValueChange={(value) => {
+              setPaymentFilter(value);
+              setSelectedOrderViewId('');
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by payment" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Payment Statuses</SelectItem>
+              <SelectItem value="paid">Paid</SelectItem>
+              <SelectItem value="partial">Partial</SelectItem>
+              <SelectItem value="unpaid">Unpaid</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select
+            value={deliveryMethodFilter}
+            onValueChange={(value) => {
+              setDeliveryMethodFilter(value);
+              setSelectedOrderViewId('');
+            }}
+          >
+            <SelectTrigger>
+              <SelectValue placeholder="Filter by delivery method" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Delivery Methods</SelectItem>
+              <SelectItem value="standard">Standard</SelectItem>
+              <SelectItem value="express">Express</SelectItem>
+              <SelectItem value="same_day">Same Day</SelectItem>
+              <SelectItem value="pickup">Pickup</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={selectedOrderViewId || 'none'} onValueChange={(value) => applySavedView(value === 'none' ? '' : value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Apply saved view" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="none">No Saved View</SelectItem>
+              {savedOrderViews.map((view) => (
+                <SelectItem key={view.id} value={view.id}>{view.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Input
+            placeholder="Save current filters as..."
+            value={newOrderViewName}
+            onChange={(e) => setNewOrderViewName(e.target.value)}
+          />
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={handleSaveCurrentView}>Save View</Button>
+            <Button variant="outline" size="sm" onClick={handleDeleteSavedView} disabled={!selectedOrderViewId}>Delete View</Button>
+          </div>
+        </div>
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleGenerateBulkLabels} disabled={selectedEligibleCount === 0}>
+            Bulk Labels ({selectedEligibleCount})
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleGenerateManifest} disabled={selectedEligibleCount === 0}>
+            Generate Manifest
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              const settings = getEffectiveDeliverySettings();
+              const carriers = getPickupCarrierOptions();
+              if (carriers.length === 0) {
+                toast({
+                  title: 'No Delivery Partners',
+                  description: 'Add at least one active shipping/local partner or enable in-house delivery in Delivery Settings.',
+                  variant: 'destructive',
+                });
+                return;
+              }
+              const defaultCarrier = settings.defaultPickupCarrier || carriers[0].id;
+              const selectedCarrier = carriers.some((carrier) => carrier.id === defaultCarrier)
+                ? defaultCarrier
+                : carriers[0].id;
+              setPickupData((prev) => ({ ...prev, carrier: selectedCarrier }));
+              setIsPickupDialogOpen(true);
+            }}
+            disabled={selectedEligibleCount === 0}
+          >
+            Schedule Pickup
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => {
+              const eligibleIds = filteredOrders.filter((order) => isOrderEligibleForShippingWorkflow(order)).map((order) => order.id);
+              setSelectedOrderIds(eligibleIds);
+            }}
+          >
+            Select Eligible
+          </Button>
+          <Button variant="ghost" size="sm" onClick={() => setSelectedOrderIds([])}>
+            Clear Selection
+          </Button>
         </div>
 
         <div className="grid gap-4">
@@ -2298,17 +3422,7 @@ const AdminOrders: React.FC = () => {
                 <p className="text-gray-500">Loading orders...</p>
               </CardContent>
             </Card>
-          ) : orders.filter(order => {
-            if (!searchTerm) return true;
-            const search = searchTerm.toLowerCase();
-            return (
-              order.customerName.toLowerCase().includes(search) ||
-              (order.invoiceNumber && order.invoiceNumber.toLowerCase().includes(search)) ||
-              order.id.toLowerCase().includes(search) ||
-              (order.status && order.status.toLowerCase().includes(search)) ||
-              (order.assignedSalesPersonName && order.assignedSalesPersonName.toLowerCase().includes(search))
-            );
-          }).length === 0 ? (
+          ) : filteredOrders.length === 0 ? (
             <Card>
               <CardContent className="py-12 text-center">
                 <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
@@ -2316,22 +3430,20 @@ const AdminOrders: React.FC = () => {
               </CardContent>
             </Card>
           ) : (
-            orders.filter(order => {
-              if (!searchTerm) return true;
-              const search = searchTerm.toLowerCase();
-              return (
-                order.customerName.toLowerCase().includes(search) ||
-                (order.invoiceNumber && order.invoiceNumber.toLowerCase().includes(search)) ||
-                order.id.toLowerCase().includes(search) ||
-                (order.status && order.status.toLowerCase().includes(search)) ||
-                (order.assignedSalesPersonName && order.assignedSalesPersonName.toLowerCase().includes(search))
-              );
-            }).map((order) => (
+            filteredOrders.map((order) => (
               <Card key={order.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
                       <CardTitle className="flex items-center gap-2">
+                        {isOrderEligibleForShippingWorkflow(order) && (
+                          <input
+                            type="checkbox"
+                            checked={selectedOrderIds.includes(order.id)}
+                            onChange={(e) => toggleOrderSelection(order.id, e.target.checked)}
+                            aria-label={`Select order ${order.invoiceNumber || order.id.slice(0, 8)} for shipping batch`}
+                          />
+                        )}
                         {order.invoiceNumber ? order.invoiceNumber : `Order #${order.id.slice(0, 8)}`}
                         {getStatusBadge(order.status)}
                         {getPaymentBadge(order)}
@@ -2339,6 +3451,8 @@ const AdminOrders: React.FC = () => {
                       <CardDescription>
                         {new Date(order.createdAt || '').toLocaleDateString()} | {order.customerName}
                         {order.assignedSalesPersonName && ` | Sales: ${order.assignedSalesPersonName}`}
+                        {order.deliveryMethod && ` | Delivery: ${order.deliveryMethod.replace('_', ' ')}`}
+                        {typeof order.deliveryFee === 'number' && ` ($${order.deliveryFee.toFixed(2)})`}
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -2368,6 +3482,26 @@ const AdminOrders: React.FC = () => {
                         >
                           <Edit3 className="h-4 w-4" />
                         </Button>
+                      )}
+                      {isOrderEligibleForSplitMerge(order) && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openSplitDialog(order)}
+                            title="Split Order"
+                          >
+                            Split
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => openMergeDialog(order)}
+                            title="Merge Order"
+                          >
+                            Merge
+                          </Button>
+                        </>
                       )}
                       <Button
                         variant="outline"
@@ -2399,6 +3533,16 @@ const AdminOrders: React.FC = () => {
                       >
                         <Share2 className="h-4 w-4" />
                       </Button>
+                      {isOrderEligibleForShippingWorkflow(order) && (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleGenerateOrderLabel(order)}
+                          title="Generate Shipping Label"
+                        >
+                          Label
+                        </Button>
+                      )}
                       {order.status !== 'cancelled' && (
                         <>
                           {(!order.paymentStatus || order.paymentStatus !== 'paid') && (
@@ -2478,6 +3622,24 @@ const AdminOrders: React.FC = () => {
                         <div>
                           <p className="text-sm text-gray-500">Payment Date</p>
                           <p className="font-medium">{new Date(order.paymentDate).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                      {order.shippingLabelGeneratedAt && (
+                        <div>
+                          <p className="text-sm text-gray-500">Label Generated</p>
+                          <p className="font-medium">{new Date(order.shippingLabelGeneratedAt).toLocaleDateString()}</p>
+                        </div>
+                      )}
+                      {order.manifestId && (
+                        <div>
+                          <p className="text-sm text-gray-500">Manifest</p>
+                          <p className="font-medium">{order.manifestId}</p>
+                        </div>
+                      )}
+                      {order.pickupScheduledAt && (
+                        <div>
+                          <p className="text-sm text-gray-500">Pickup</p>
+                          <p className="font-medium">{new Date(order.pickupScheduledAt).toLocaleDateString()} ({getCarrierLabel(order.pickupCarrier)})</p>
                         </div>
                       )}
                       <div>
@@ -2676,6 +3838,154 @@ const AdminOrders: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
+
+        {splittingOrder && (
+          <Dialog open={!!splittingOrder} onOpenChange={() => { setSplittingOrder(null); setSplitQuantities({}); }}>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>Split Order</DialogTitle>
+                <DialogDescription>
+                  Move selected quantities into a new child order.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3 max-h-[55vh] overflow-y-auto">
+                {(splittingOrder.items || []).map((item, index) => {
+                  const product = products.find((p) => p.id === item.productId);
+                  const maxQty = Number(item.quantity || 0);
+                  const unitPrice = getOrderItemUnitPrice(item);
+                  return (
+                    <div key={`${item.productId}-${index}`} className="grid grid-cols-12 gap-3 items-center border rounded p-3">
+                      <div className="col-span-7">
+                        <p className="font-medium">{product?.name || 'Product'}</p>
+                        <p className="text-xs text-gray-500">Current qty: {maxQty} | Unit: ${unitPrice.toFixed(2)}</p>
+                      </div>
+                      <div className="col-span-5">
+                        <Label className="text-xs">Quantity to move</Label>
+                        <Input
+                          type="number"
+                          min="0"
+                          max={maxQty}
+                          step="1"
+                          value={splitQuantities[String(index)] ?? 0}
+                          onChange={(e) => {
+                            const requested = Number(e.target.value || 0);
+                            const clamped = Math.max(0, Math.min(maxQty, requested));
+                            setSplitQuantities((prev) => ({ ...prev, [String(index)]: clamped }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setSplittingOrder(null); setSplitQuantities({}); }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleSplitOrder}>Create Split Order</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {mergingOrder && (
+          <Dialog open={!!mergingOrder} onOpenChange={() => { setMergingOrder(null); setMergeTargetOrderId(''); }}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Merge Order</DialogTitle>
+                <DialogDescription>
+                  Merge this order into another active unpaid order.
+                </DialogDescription>
+              </DialogHeader>
+
+              <div className="space-y-3">
+                <div className="bg-amber-50 border border-amber-200 rounded p-3 text-sm text-amber-900">
+                  Source: <strong>{mergingOrder.invoiceNumber || `#${mergingOrder.id.slice(0, 8)}`}</strong>
+                </div>
+
+                <div>
+                  <Label>Merge into order</Label>
+                  <Select value={mergeTargetOrderId} onValueChange={setMergeTargetOrderId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select target order" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {orders
+                        .filter((candidate) => candidate.id !== mergingOrder.id && isOrderEligibleForSplitMerge(candidate))
+                        .map((candidate) => (
+                          <SelectItem key={candidate.id} value={candidate.id}>
+                            {candidate.invoiceNumber || `#${candidate.id.slice(0, 8)}`} - {candidate.customerName}
+                          </SelectItem>
+                        ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <DialogFooter>
+                <Button variant="outline" onClick={() => { setMergingOrder(null); setMergeTargetOrderId(''); }}>
+                  Cancel
+                </Button>
+                <Button onClick={handleMergeOrder} disabled={!mergeTargetOrderId}>
+                  Merge Orders
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        <Dialog open={isPickupDialogOpen} onOpenChange={setIsPickupDialogOpen}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Schedule Pickup</DialogTitle>
+              <DialogDescription>
+                Schedule pickup for selected eligible orders.
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-3">
+              <div>
+                <Label>Pickup Date</Label>
+                <Input
+                  type="date"
+                  value={pickupData.pickupDate}
+                  onChange={(e) => setPickupData((prev) => ({ ...prev, pickupDate: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label>Carrier</Label>
+                <Select value={pickupData.carrier} onValueChange={(value) => setPickupData((prev) => ({ ...prev, carrier: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {getPickupCarrierOptions().map((carrier) => (
+                      <SelectItem key={carrier.id} value={carrier.id}>
+                        {carrier.name} {carrier.type === 'local' ? '(Local)' : carrier.type === 'shipping' ? '(Shipping)' : '(Own)'}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Notes</Label>
+                <Textarea
+                  placeholder="Pickup instructions"
+                  value={pickupData.notes}
+                  onChange={(e) => setPickupData((prev) => ({ ...prev, notes: e.target.value }))}
+                />
+              </div>
+              <div className="text-sm text-gray-600">
+                Selected eligible orders: {selectedEligibleCount}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsPickupDialogOpen(false)}>Cancel</Button>
+              <Button onClick={handleSchedulePickup} disabled={selectedEligibleCount === 0}>Save Pickup Schedule</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Payment Dialog */}
         {payingOrder && (

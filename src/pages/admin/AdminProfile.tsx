@@ -15,7 +15,7 @@ import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { StoreProfile, StorePage } from '../../types/storeProfile';
+import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
 
@@ -35,6 +35,16 @@ const defaultProfile: StoreProfile = {
   twitter: '',
   logo: '',
   status: 'online',
+  marketplaceIntegrations: [
+    { id: 'amazon', name: 'Amazon', enabled: false },
+    { id: 'walmart', name: 'Walmart', enabled: false },
+    { id: 'ebay', name: 'eBay', enabled: false },
+    { id: 'etsy', name: 'Etsy', enabled: false },
+    { id: 'alibaba', name: 'Alibaba', enabled: false },
+  ],
+  dropshippingPartners: [
+    { id: 'in_house_dropship', name: 'In-house Dropshipping', enabled: false, notes: '' },
+  ],
   productCategories: ['Food', 'Beverages', 'Desserts', 'Bakery', 'Manufactured Goods', 'Electronics', 'Clothing', 'Services', 'Package', 'Box', 'Bag', 'Other'],
   priceMultiplier: 2.5
 };
@@ -60,7 +70,16 @@ const AdminProfile: React.FC = () => {
           const profileSnap = await getDoc(profileRef);
           if (profileSnap.exists()) {
             const data = profileSnap.data() as StoreProfile;
-            setFormData(data);
+            setFormData({
+              ...defaultProfile,
+              ...data,
+              marketplaceIntegrations: data.marketplaceIntegrations && data.marketplaceIntegrations.length > 0
+                ? data.marketplaceIntegrations
+                : defaultProfile.marketplaceIntegrations,
+              dropshippingPartners: data.dropshippingPartners && data.dropshippingPartners.length > 0
+                ? data.dropshippingPartners
+                : defaultProfile.dropshippingPartners,
+            });
             setLogoPreview(data.logo || '');
           } else {
             setFormData(defaultProfile);
@@ -190,6 +209,47 @@ const AdminProfile: React.FC = () => {
     setFormData(prev => ({
       ...prev,
       customPages: (prev.customPages || []).map(p => p.id === id ? { ...p, image: undefined } : p),
+    }));
+  };
+
+  const updateMarketplaceIntegration = (id: string, field: keyof MarketplaceIntegrationSetting, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      marketplaceIntegrations: (prev.marketplaceIntegrations || []).map((integration) =>
+        integration.id === id ? { ...integration, [field]: value } : integration
+      ),
+    }));
+  };
+
+  const addDropshippingPartner = () => {
+    const newPartner: DropshippingPartnerSetting = {
+      id: `dropship-${Date.now()}`,
+      name: 'New Dropshipping Partner',
+      enabled: true,
+      contactEmail: '',
+      webhookUrl: '',
+      notes: '',
+    };
+
+    setFormData(prev => ({
+      ...prev,
+      dropshippingPartners: [...(prev.dropshippingPartners || []), newPartner],
+    }));
+  };
+
+  const updateDropshippingPartner = (id: string, field: keyof DropshippingPartnerSetting, value: string | boolean) => {
+    setFormData(prev => ({
+      ...prev,
+      dropshippingPartners: (prev.dropshippingPartners || []).map((partner) =>
+        partner.id === id ? { ...partner, [field]: value } : partner
+      ),
+    }));
+  };
+
+  const removeDropshippingPartner = (id: string) => {
+    setFormData(prev => ({
+      ...prev,
+      dropshippingPartners: (prev.dropshippingPartners || []).filter((partner) => partner.id !== id),
     }));
   };
 
@@ -1128,6 +1188,131 @@ const AdminProfile: React.FC = () => {
                     {isRegisteringDomain ? 'Submitting...' : 'Register Domain'}
                   </Button>
                 )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Marketplace + Dropshipping Integrations */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Marketplace & Dropshipping Integrations</CardTitle>
+              <CardDescription>
+                Enable marketplace channels (including Alibaba) and configure your dropshipping partners.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-6">
+              <div>
+                <h4 className="font-medium mb-3">Marketplaces</h4>
+                <div className="space-y-3">
+                  {(formData.marketplaceIntegrations || []).map((integration) => (
+                    <div key={integration.id} className="border rounded-lg p-3 space-y-3">
+                      <div className="flex items-center justify-between">
+                        <div className="font-medium">{integration.name}</div>
+                        <Button
+                          type="button"
+                          variant={integration.enabled ? 'default' : 'outline'}
+                          size="sm"
+                          onClick={() => updateMarketplaceIntegration(integration.id, 'enabled', !integration.enabled)}
+                        >
+                          {integration.enabled ? 'Enabled' : 'Disabled'}
+                        </Button>
+                      </div>
+                      {integration.enabled && (
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                          <div>
+                            <Label>Merchant ID</Label>
+                            <Input
+                              value={integration.merchantId || ''}
+                              onChange={(e) => updateMarketplaceIntegration(integration.id, 'merchantId', e.target.value)}
+                              placeholder="Merchant account ID"
+                            />
+                          </div>
+                          <div>
+                            <Label>API Key</Label>
+                            <Input
+                              value={integration.apiKey || ''}
+                              onChange={(e) => updateMarketplaceIntegration(integration.id, 'apiKey', e.target.value)}
+                              placeholder="API key"
+                            />
+                          </div>
+                          <div>
+                            <Label>API Secret</Label>
+                            <Input
+                              type="password"
+                              value={integration.apiSecret || ''}
+                              onChange={(e) => updateMarketplaceIntegration(integration.id, 'apiSecret', e.target.value)}
+                              placeholder="API secret"
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h4 className="font-medium">Dropshipping Partners</h4>
+                  <Button type="button" variant="outline" size="sm" onClick={addDropshippingPartner}>
+                    <Plus className="h-4 w-4 mr-1" /> Add Partner
+                  </Button>
+                </div>
+                <div className="space-y-3">
+                  {(formData.dropshippingPartners || []).map((partner) => (
+                    <div key={partner.id} className="border rounded-lg p-3 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <Input
+                          value={partner.name}
+                          onChange={(e) => updateDropshippingPartner(partner.id, 'name', e.target.value)}
+                          placeholder="Partner name"
+                          className="max-w-sm"
+                        />
+                        <div className="flex gap-2">
+                          <Button
+                            type="button"
+                            variant={partner.enabled ? 'default' : 'outline'}
+                            size="sm"
+                            onClick={() => updateDropshippingPartner(partner.id, 'enabled', !partner.enabled)}
+                          >
+                            {partner.enabled ? 'Enabled' : 'Disabled'}
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => removeDropshippingPartner(partner.id)}>
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <Label>Contact Email</Label>
+                          <Input
+                            type="email"
+                            value={partner.contactEmail || ''}
+                            onChange={(e) => updateDropshippingPartner(partner.id, 'contactEmail', e.target.value)}
+                            placeholder="partner@email.com"
+                          />
+                        </div>
+                        <div>
+                          <Label>Webhook URL</Label>
+                          <Input
+                            value={partner.webhookUrl || ''}
+                            onChange={(e) => updateDropshippingPartner(partner.id, 'webhookUrl', e.target.value)}
+                            placeholder="https://partner.example/webhook"
+                          />
+                        </div>
+                      </div>
+                      <div>
+                        <Label>Notes</Label>
+                        <Textarea
+                          value={partner.notes || ''}
+                          onChange={(e) => updateDropshippingPartner(partner.id, 'notes', e.target.value)}
+                          placeholder="SLA, minimum order qty, handling notes..."
+                          rows={2}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
             </CardContent>
           </Card>

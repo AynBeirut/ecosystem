@@ -38,12 +38,19 @@ export interface ReturnRequest {
   returnItems: ReturnItem[];
   items?: ReturnItem[]; // alias for returnItems
   reason?: ReturnReason;
+  requestType?: 'refund' | 'exchange';
   customerNotes?: string;
   customerComments?: string; // alias for customerNotes
   adminNotes?: string;
   internalNotes?: string; // alias for adminNotes
   refundMethod: 'original_payment' | 'store_credit' | 'cash' | 'bank_transfer';
   refundAmount: number;
+  returnTotalAmount?: number;
+  exchangeTotalAmount?: number;
+  netAmount?: number;
+  netSettlementType?: 'payable' | 'refundable' | 'even';
+  exchangeItems?: ExchangeItem[];
+  exchangeProcessedDate?: string;
   refundDate?: string;
   approvedDate?: string;
   completedDate?: string;
@@ -55,6 +62,14 @@ export interface ReturnRequest {
   linkedSraId?: string; // Link to supplier return if defective
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ExchangeItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+  totalPrice: number;
 }
 
 export interface ReturnItem {

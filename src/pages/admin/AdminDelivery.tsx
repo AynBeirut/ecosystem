@@ -1,4 +1,6 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
+import { getFirestore, doc, getDoc, updateDoc } from 'firebase/firestore';
+import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,44 +13,137 @@ import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { StoreDeliverySettings, DeliveryZoneSetting, DeliveryPartnerSetting } from '@/types/storeProfile';
+
+const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
+  standardDelivery: true,
+  expressDelivery: false,
+  sameDay: false,
+  pickup: true,
+  standardTime: '3-5 days',
+  expressTime: '1-2 days',
+  sameDayTime: '4-6 hours',
+  standardFee: '5.99',
+  expressFee: '12.99',
+  sameDayFee: '19.99',
+  freeShippingThreshold: '50.00',
+  deliveryRadius: '25',
+  workingDays: 'Monday to Friday',
+  workingHours: '9:00 AM - 6:00 PM',
+  specialInstructions: '',
+  ownDeliveryEnabled: true,
+  defaultPickupCarrier: 'in_house',
+};
+
+const DEFAULT_DELIVERY_PARTNERS: DeliveryPartnerSetting[] = [
+  { id: 'dhl', name: 'DHL', type: 'shipping', active: true },
+  { id: 'fedex', name: 'FedEx', type: 'shipping', active: true },
+  { id: 'ups', name: 'UPS', type: 'shipping', active: true },
+  { id: 'local-courier', name: 'Local Courier', type: 'local', active: true },
+];
+
+const DEFAULT_ZONES: DeliveryZoneSetting[] = [
+  { id: 1, name: 'Local Zone', radius: '0-10 miles', fee: '3.99', time: '1-2 days' },
+  { id: 2, name: 'Regional Zone', radius: '10-25 miles', fee: '5.99', time: '2-3 days' },
+  { id: 3, name: 'Extended Zone', radius: '25-50 miles', fee: '9.99', time: '3-5 days' },
+];
 
 const AdminDelivery: React.FC = () => {
+  const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const [isSaving, setIsSaving] = useState(false);
   
-  const [deliverySettings, setDeliverySettings] = useState({
-    standardDelivery: true,
-    expressDelivery: false,
-    sameDay: false,
-    pickup: true,
-    standardTime: '3-5 days',
-    expressTime: '1-2 days',
-    sameDayTime: '4-6 hours',
-    standardFee: '5.99',
-    expressFee: '12.99',
-    sameDayFee: '19.99',
-    freeShippingThreshold: '50.00',
-    deliveryRadius: '25',
-    workingDays: 'Monday to Friday',
-    workingHours: '9:00 AM - 6:00 PM',
-    specialInstructions: ''
-  });
+  const [deliverySettings, setDeliverySettings] = useState<StoreDeliverySettings>(DEFAULT_DELIVERY_SETTINGS);
 
-  const [zones, setZones] = useState([
-    { id: 1, name: 'Local Zone', radius: '0-10 miles', fee: '3.99', time: '1-2 days' },
-    { id: 2, name: 'Regional Zone', radius: '10-25 miles', fee: '5.99', time: '2-3 days' },
-    { id: 3, name: 'Extended Zone', radius: '25-50 miles', fee: '9.99', time: '3-5 days' }
-  ]);
+  const [zones, setZones] = useState<DeliveryZoneSetting[]>(DEFAULT_ZONES);
+  const [deliveryPartners, setDeliveryPartners] = useState<DeliveryPartnerSetting[]>(DEFAULT_DELIVERY_PARTNERS);
+
+  useEffect(() => {
+    const loadDeliverySettings = async () => {
+      if (!user?.storeId) return;
+      try {
+        const db = getFirestore();
+        const profileRef = doc(db, 'storeProfiles', user.storeId);
+        const snap = await getDoc(profileRef);
+        if (!snap.exists()) return;
+
+        const data = snap.data() as any;
+        const saved = data.deliverySettings as Partial<StoreDeliverySettings> | undefined;
+
+        if (saved && typeof saved === 'object') {
+          setDeliverySettings({ ...DEFAULT_DELIVERY_SETTINGS, ...saved });
+          if (Array.isArray(saved.zones) && saved.zones.length > 0) {
+            setZones(saved.zones as DeliveryZoneSetting[]);
+          }
+          if (Array.isArray(saved.deliveryPartners) && saved.deliveryPartners.length > 0) {
+            setDeliveryPartners(saved.deliveryPartners as DeliveryPartnerSetting[]);
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load delivery settings:', error);
+      }
+    };
+
+    loadDeliverySettings();
+  }, [user?.storeId]);
+
+  useEffect(() => {
+    const activePartners = deliveryPartners.filter((partner) => partner.active && partner.name.trim() !== '');
+    const options = [
+      ...(deliverySettings.ownDeliveryEnabled !== false ? ['in_house'] : []),
+      ...activePartners.map((partner) => partner.id),
+    ];
+
+    if (options.length === 0) {
+      if ((deliverySettings.defaultPickupCarrier || '') !== '') {
+        setDeliverySettings((prev) => ({ ...prev, defaultPickupCarrier: '' }));
+      }
+      return;
+    }
+
+    const current = deliverySettings.defaultPickupCarrier || '';
+    if (!options.includes(current)) {
+      setDeliverySettings((prev) => ({ ...prev, defaultPickupCarrier: options[0] }));
+    }
+  }, [deliveryPartners, deliverySettings.ownDeliveryEnabled, deliverySettings.defaultPickupCarrier]);
 
   const handleSettingChange = (key: string, value: string | boolean) => {
     setDeliverySettings(prev => ({ ...prev, [key]: value }));
   };
 
-  const handleSave = () => {
-    toast({
-      title: "Delivery Settings Saved",
-      description: "Your delivery configuration has been updated successfully."
-    });
+  const handleSave = async () => {
+    if (!user?.storeId) {
+      toast({ title: 'Error', description: 'Store not found', variant: 'destructive' });
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const db = getFirestore();
+      const profileRef = doc(db, 'storeProfiles', user.storeId);
+      await updateDoc(profileRef, {
+        deliverySettings: {
+          ...deliverySettings,
+          zones,
+          deliveryPartners,
+        },
+      });
+
+      toast({
+        title: 'Delivery Settings Saved',
+        description: 'Your delivery configuration has been updated successfully.'
+      });
+    } catch (error) {
+      console.error('Failed to save delivery settings:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to save delivery settings',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const addZone = () => {
@@ -71,6 +166,28 @@ const AdminDelivery: React.FC = () => {
       zone.id === id ? { ...zone, [field]: value } : zone
     ));
   };
+
+  const addDeliveryPartner = (type: 'shipping' | 'local') => {
+    const newPartner: DeliveryPartnerSetting = {
+      id: `${type}-${Date.now()}`,
+      name: type === 'shipping' ? 'New Shipping Partner' : 'New Local Delivery Partner',
+      type,
+      active: true,
+    };
+    setDeliveryPartners((prev) => [...prev, newPartner]);
+  };
+
+  const updateDeliveryPartner = (id: string, field: keyof DeliveryPartnerSetting, value: string | boolean) => {
+    setDeliveryPartners((prev) => prev.map((partner) => (
+      partner.id === id ? { ...partner, [field]: value } : partner
+    )));
+  };
+
+  const removeDeliveryPartner = (id: string) => {
+    setDeliveryPartners((prev) => prev.filter((partner) => partner.id !== id));
+  };
+
+  const activeDeliveryPartners = deliveryPartners.filter((partner) => partner.active && partner.name.trim() !== '');
 
   return (
     <div className="min-h-screen bg-background">
@@ -259,6 +376,104 @@ const AdminDelivery: React.FC = () => {
                 </div>
               </CardContent>
             </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Delivery Partners</CardTitle>
+                <CardDescription>
+                  Configure multiple shipping partners, local delivery providers, and your own delivery service.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-4 border rounded-lg">
+                  <div>
+                    <div className="font-medium">Own Delivery Team</div>
+                    <div className="text-sm text-muted-foreground">Allow in-house drivers as a delivery option</div>
+                  </div>
+                  <Switch
+                    checked={deliverySettings.ownDeliveryEnabled !== false}
+                    onCheckedChange={(checked) => handleSettingChange('ownDeliveryEnabled', checked)}
+                  />
+                </div>
+
+                <div>
+                  <Label>Default Pickup Carrier</Label>
+                  <Select
+                    value={deliverySettings.defaultPickupCarrier || 'in_house'}
+                    onValueChange={(value) => handleSettingChange('defaultPickupCarrier', value)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select default carrier" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {deliverySettings.ownDeliveryEnabled !== false && (
+                        <SelectItem value="in_house">In-house</SelectItem>
+                      )}
+                      {activeDeliveryPartners.map((partner) => (
+                        <SelectItem key={partner.id} value={partner.id}>
+                          {partner.name} ({partner.type === 'shipping' ? 'Shipping' : 'Local'})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => addDeliveryPartner('shipping')}>Add Shipping Partner</Button>
+                  <Button variant="outline" onClick={() => addDeliveryPartner('local')}>Add Local Delivery Partner</Button>
+                </div>
+
+                <div className="space-y-3">
+                  {deliveryPartners.map((partner) => (
+                    <div key={partner.id} className="p-3 border rounded-lg space-y-3">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div className="md:col-span-2">
+                          <Label>Partner Name</Label>
+                          <Input
+                            value={partner.name}
+                            onChange={(e) => updateDeliveryPartner(partner.id, 'name', e.target.value)}
+                            placeholder="Partner name"
+                          />
+                        </div>
+                        <div>
+                          <Label>Type</Label>
+                          <Select
+                            value={partner.type}
+                            onValueChange={(value: 'shipping' | 'local') => updateDeliveryPartner(partner.id, 'type', value)}
+                          >
+                            <SelectTrigger>
+                              <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="shipping">Shipping</SelectItem>
+                              <SelectItem value="local">Local Delivery</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={partner.active}
+                            onCheckedChange={(checked) => updateDeliveryPartner(partner.id, 'active', checked)}
+                          />
+                          <span className="text-sm">Active</span>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeDeliveryPartner(partner.id)}
+                          className="text-destructive hover:text-destructive"
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           {/* Delivery Zones */}
@@ -356,6 +571,10 @@ const AdminDelivery: React.FC = () => {
                     <div className="text-sm text-muted-foreground">Delivery Zones</div>
                   </div>
                   <div className="text-center">
+                    <div className="text-2xl font-bold text-primary">{activeDeliveryPartners.length + (deliverySettings.ownDeliveryEnabled !== false ? 1 : 0)}</div>
+                    <div className="text-sm text-muted-foreground">Active Partners</div>
+                  </div>
+                  <div className="text-center">
                     <div className="text-2xl font-bold text-primary">${deliverySettings.freeShippingThreshold}</div>
                     <div className="text-sm text-muted-foreground">Free Shipping</div>
                   </div>
@@ -370,8 +589,8 @@ const AdminDelivery: React.FC = () => {
         </div>
 
         <div className="mt-6 flex justify-end">
-          <Button onClick={handleSave} size="lg">
-            Save Delivery Settings
+          <Button onClick={handleSave} size="lg" disabled={isSaving}>
+            {isSaving ? 'Saving...' : 'Save Delivery Settings'}
           </Button>
         </div>
       </div>

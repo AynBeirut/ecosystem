@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
+import React, { useState, useEffect, useCallback } from 'react';
+import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -17,6 +18,8 @@ import { logAction } from '@/lib/auditLog';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+
+const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
 const SupplierReturns: React.FC = () => {
   const { user } = useAuth();
@@ -36,46 +39,45 @@ const SupplierReturns: React.FC = () => {
     items: [] as SupplierReturnItem[],
   });
 
-  useEffect(() => {
-    const fetchData = async () => {
-      if (!user?.storeId) return;
-      const db = getFirestore();
-
-      const fetchCollection = async (collectionName: string) => {
-        const ref = collection(db, collectionName);
-        const q = query(ref, where('storeId', '==', user.storeId));
-        const snapshot = await getDocs(q);
-        return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      };
-
-      try {
-        const [returnsData, purchasesData, materialsData, suppliersData] = await Promise.all([
-          fetchCollection('supplierReturns'),
-          fetchCollection('purchases'),
-          fetchCollection('rawMaterials'),
-          fetchCollection('suppliers'),
-        ]);
-
-        setReturns(returnsData as SupplierReturn[]);
-        setPurchases((purchasesData as Purchase[]).filter(p => p.status === 'received'));
-        setRawMaterials(materialsData as RawMaterial[]);
-        setSuppliers(suppliersData);
-      } catch (error) {
-        console.error('Error fetching data:', error);
-        toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
-      }
-    };
-    fetchData();
-  }, [user?.storeId, toast]);
-
-  const generateReturnNumber = async (): Promise<string> => {
-    if (!user?.storeId) return 'RET-001';
+  const fetchData = useCallback(async () => {
+    if (!user?.storeId) return;
     const db = getFirestore();
-    const returnsRef = collection(db, 'supplierReturns');
-    const q = query(returnsRef, where('storeId', '==', user.storeId));
-    const snapshot = await getDocs(q);
-    return `RET-${String(snapshot.docs.length + 1).padStart(3, '0')}`;
-  };
+
+    const fetchCollection = async (collectionName: string) => {
+      const ref = collection(db, collectionName);
+      const q = query(ref, where('storeId', '==', user.storeId));
+      const snapshot = await getDocs(q);
+      return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+    };
+
+    try {
+      const [returnsData, purchasesData, materialsData, suppliersData] = await Promise.all([
+        fetchCollection('supplierReturns'),
+        fetchCollection('purchases'),
+        fetchCollection('rawMaterials'),
+        fetchCollection('suppliers'),
+      ]);
+
+      setReturns(returnsData as SupplierReturn[]);
+      setPurchases((purchasesData as Purchase[]).filter(p => p.status === 'received'));
+      setRawMaterials(materialsData as RawMaterial[]);
+      setSuppliers(suppliersData);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({ title: "Error", description: "Failed to load data", variant: "destructive" });
+    }
+  }, [toast, user?.storeId]);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  const getToken = useCallback(async (): Promise<string> => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) throw new Error('Not authenticated');
+    return currentUser.getIdToken();
+  }, []);
 
   const handleSelectPurchase = (purchaseId: string) => {
     const purchase = purchases.find(p => p.id === purchaseId);
@@ -153,7 +155,6 @@ const SupplierReturns: React.FC = () => {
     }
 
     try {
-      const db = getFirestore();
       const purchase = purchases.find(p => p.id === newReturn.purchaseId);
       if (!purchase) return;
 
@@ -161,65 +162,40 @@ const SupplierReturns: React.FC = () => {
       const supplier = suppliers.find(s => s.id === purchase.supplierId);
       const supplierName = supplier?.name || purchase.supplierName || 'Unknown Supplier';
 
-      const returnNumber = await generateReturnNumber();
       const totalAmount = calculateTotal();
 
-      // Build returnData with only defined values
-      const returnData: any = {
-        sraNumber: returnNumber,
-        purchaseOrderId: purchase.id,
-        purchaseOrderNumber: purchase.invoiceNumber || purchase.poNumber || purchase.purchaseOrderNumber || 'N/A',
-        returnItems: itemsToReturn,
-        totalClaimAmount: totalAmount,
-        requestDate: new Date().toISOString(),
-        status: 'draft',
-        returnReason: 'defective_on_arrival',
-        claimType: 'defective',
-        storeId: user.storeId,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        supplierName: supplierName,
-      };
+      const token = await getToken();
+      const response = await fetch(`${API_URL}/supplier-returns/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeId: user.storeId,
+          supplierId: purchase.supplierId,
+          supplierName,
+          purchaseOrderId: purchase.id,
+          purchaseOrderNumber: purchase.invoiceNumber || purchase.poNumber || purchase.purchaseOrderNumber || 'N/A',
+          returnItems: itemsToReturn,
+          returnReason: 'defective_on_arrival',
+          claimType: 'defective',
+          notes: newReturn.notes || undefined,
+        }),
+      });
 
-      // Only add supplierId if it exists
-      if (purchase.supplierId) {
-        returnData.supplierId = purchase.supplierId;
+      const result = await response.json();
+      if (!response.ok || !result.success) {
+        throw new Error(result.error || 'Failed to create supplier return');
       }
-      
-      if (newReturn.notes) {
-        returnData.notes = newReturn.notes;
-      }
 
-      // Remove any undefined values from the object recursively
-      const cleanObject = (obj: any): any => {
-        if (Array.isArray(obj)) {
-          return obj.map(item => cleanObject(item));
-        }
-        if (obj !== null && typeof obj === 'object') {
-          const cleaned: any = {};
-          for (const key in obj) {
-            if (obj[key] !== undefined) {
-              cleaned[key] = cleanObject(obj[key]);
-            }
-          }
-          return cleaned;
-        }
-        return obj;
-      };
+      await logAction(user.id, user.name, user.role, 'create', 'supplier_return', result.id, { newValue: { totalAmount } }, user.storeId);
 
-      const cleanedData = cleanObject(returnData);
-
-      // Debug: Check for undefined values
-      console.log('Return data before save:', JSON.stringify(cleanedData, null, 2));
-      
-      const docRef = await addDoc(collection(db, 'supplierReturns'), cleanedData);
-      setReturns([{ id: docRef.id, ...cleanedData }, ...returns]);
-
-      await logAction(user.id, user.name, user.role, 'create', 'supplier_return', docRef.id, { newValue: cleanedData }, user.storeId);
+      await fetchData();
 
       setNewReturn({ purchaseId: '', notes: '', items: [] });
       setIsCreatingReturn(false);
-      toast({ title: "Success", description: `Return ${returnNumber} created successfully!` });
+      toast({ title: "Success", description: `Return ${result.sraNumber || 'created'} created successfully!` });
     } catch (error) {
       console.error('Error creating return:', error);
       toast({ title: "Error", description: "Failed to create return", variant: "destructive" });
@@ -230,88 +206,66 @@ const SupplierReturns: React.FC = () => {
     if (!user?.storeId) return;
 
     try {
-      const db = getFirestore();
-      const returnRef = doc(db, 'supplierReturns', returnId);
       const returnDoc = returns.find(r => r.id === returnId);
       if (!returnDoc) return;
 
-      const updateData: any = {
-        status: newStatus,
-        updatedAt: new Date().toISOString(),
-      };
+      const token = await getToken();
 
       if (newStatus === 'credited') {
-        updateData.creditIssued = refundAmount || returnDoc.totalClaimAmount;
-        updateData.creditedDate = new Date().toISOString();
+        const creditResponse = await fetch(`${API_URL}/supplier-returns/credit`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            returnId,
+            creditAmount: refundAmount || returnDoc.totalClaimAmount,
+            notes: refundMethod ? `Refund method: ${refundMethod}` : undefined,
+            applyToPurchase: true,
+          }),
+        });
 
-        // Reduce stock levels for returned items
-        for (const item of returnDoc.returnItems) {
-          const material = rawMaterials.find(m => m.id === item.rawMaterialId);
-          if (material) {
-            const materialRef = doc(db, 'rawMaterials', item.rawMaterialId);
-            const newStock = Math.max(0, material.currentStock - item.quantity);
-            await updateDoc(materialRef, {
-              currentStock: newStock,
-              updatedAt: new Date().toISOString(),
-            });
-          }
+        const creditResult = await creditResponse.json();
+        if (!creditResponse.ok || !creditResult.success) {
+          throw new Error(creditResult.error || 'Failed to credit supplier return');
         }
+      } else if (newStatus === 'shipped') {
+        const shipResponse = await fetch(`${API_URL}/supplier-returns/ship`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ returnId }),
+        });
 
-        // Update purchase payment status if refund is processed
-        const purchase = purchases.find(p => p.id === returnDoc.purchaseOrderId);
-        if (purchase && refundAmount) {
-          const purchaseRef = doc(db, 'purchases', returnDoc.purchaseOrderId);
-          
-          // Calculate amountPaid from paymentHistory if missing
-          let currentAmountPaid = purchase.amountPaid || 0;
-          if (purchase.paymentHistory && purchase.paymentHistory.length > 0) {
-            currentAmountPaid = purchase.paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-          }
-          
-          const newAmountPaid = Math.max(0, currentAmountPaid - refundAmount);
-          const totalAmount = purchase.totalAmount || purchase.total || 0;
-          
-          let paymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
-          if (newAmountPaid >= totalAmount) {
-            paymentStatus = 'paid';
-          } else if (newAmountPaid > 0) {
-            paymentStatus = 'partial';
-          }
+        const shipResult = await shipResponse.json();
+        if (!shipResponse.ok || !shipResult.success) {
+          throw new Error(shipResult.error || 'Failed to ship supplier return');
+        }
+      } else {
+        const statusResponse = await fetch(`${API_URL}/supplier-returns/update-status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ returnId, status: newStatus }),
+        });
 
-          await updateDoc(purchaseRef, {
-            amountPaid: newAmountPaid,
-            paymentStatus,
-            status: 'returned',
-            updatedAt: new Date().toISOString(),
-          });
+        const statusResult = await statusResponse.json();
+        if (!statusResponse.ok || !statusResult.success) {
+          throw new Error(statusResult.error || 'Failed to update supplier return status');
         }
       }
 
-      await updateDoc(returnRef, updateData);
-      setReturns(returns.map(r => r.id === returnId ? { ...r, ...updateData } : r));
+      await fetchData();
 
       await logAction(user.id, user.name, user.role, 'update', 'supplier_return', returnId, { 
         oldValue: { status: returnDoc.status }, 
-        newValue: { status: newStatus, ...updateData } 
+        newValue: { status: newStatus } 
       }, user.storeId);
-
-      // Refresh purchases and materials data to show updated values
-      if (newStatus === 'credited') {
-        const fetchCollection = async (collectionName: string) => {
-          const ref = collection(db, collectionName);
-          const q = query(ref, where('storeId', '==', user.storeId));
-          const snapshot = await getDocs(q);
-          return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-        };
-        
-        const [purchasesData, materialsData] = await Promise.all([
-          fetchCollection('purchases'),
-          fetchCollection('rawMaterials'),
-        ]);
-        
-        setPurchases((purchasesData as Purchase[]).filter(p => p.status === 'received'));
-        setRawMaterials(materialsData as RawMaterial[]);
-      }
 
       setProcessingReturn(null);
       toast({ title: "Success", description: `Return ${newStatus}!` });
@@ -334,6 +288,10 @@ const SupplierReturns: React.FC = () => {
       disputed: 'bg-orange-100 text-orange-800',
     };
     return <Badge className={variants[status] || 'bg-gray-100 text-gray-800'}>{status.replace(/_/g, ' ').toUpperCase()}</Badge>;
+  };
+
+  const getReturnItems = (returnDoc: SupplierReturn): SupplierReturnItem[] => {
+    return (returnDoc.returnItems || returnDoc.items || []) as SupplierReturnItem[];
   };
 
   const selectedPurchase = purchases.find(p => p.id === newReturn.purchaseId);
@@ -545,24 +503,31 @@ const SupplierReturns: React.FC = () => {
                   <div className="space-y-3">
                     <div>
                       <p className="text-sm font-semibold mb-1">Returned Items:</p>
-                      {returnDoc.returnItems.map((item, idx) => (
+                      {getReturnItems(returnDoc).map((item, idx) => {
+                        const materialLabel = item.materialName || item.sku || item.rawMaterialId || 'Unknown Material';
+                        const unitCost = Number(item.unitCost ?? item.unitPrice ?? 0);
+                        const quantity = Number(item.quantity || 0);
+                        const lineTotal = Number(item.totalCost ?? (quantity * unitCost));
+                        const reasonLabel = item.reason || returnDoc.returnReason || 'Not specified';
+
+                        return (
                         <div key={idx} className="text-sm p-2 bg-gray-50 rounded mb-1">
                           <div className="flex justify-between">
-                            <span>{item.materialName}: {item.quantity} units @ ${item.unitCost.toFixed(2)}</span>
-                            <span className="font-semibold">${item.totalCost.toFixed(2)}</span>
+                            <span>{materialLabel}: {quantity} units @ ${unitCost.toFixed(2)}</span>
+                            <span className="font-semibold">${lineTotal.toFixed(2)}</span>
                           </div>
-                          <p className="text-xs text-gray-600">Reason: {item.reason}</p>
+                          <p className="text-xs text-gray-600">Reason: {reasonLabel}</p>
                         </div>
-                      ))}
+                      )})}
                     </div>
                     <div className="flex justify-between items-center pt-2 border-t">
                       <span className="font-semibold">Total Return Amount:</span>
-                      <span className="text-lg font-bold text-red-600">${returnDoc.totalClaimAmount.toFixed(2)}</span>
+                      <span className="text-lg font-bold text-red-600">${Number(returnDoc.totalClaimAmount ?? returnDoc.totalAmount ?? 0).toFixed(2)}</span>
                     </div>
                     {returnDoc.status === 'credited' && returnDoc.creditedDate && (
                       <div className="p-2 bg-green-50 rounded border border-green-200">
                         <p className="text-sm text-green-800">
-                          <strong>Credited:</strong> ${returnDoc.creditIssued?.toFixed(2)} on {new Date(returnDoc.creditedDate).toLocaleDateString()}
+                          <strong>Credited:</strong> ${Number(returnDoc.creditIssued ?? returnDoc.totalClaimAmount ?? returnDoc.totalAmount ?? 0).toFixed(2)} on {new Date(returnDoc.creditedDate).toLocaleDateString()}
                         </p>
                       </div>
                     )}

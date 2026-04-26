@@ -56,9 +56,7 @@ import AdminRawMaterials from "./pages/admin/AdminRawMaterials";
 import AdminRecipes from "./pages/admin/AdminRecipes";
 import AdminComposedProducts from "./pages/admin/AdminComposedProducts";
 import AdminPurchases from "./pages/admin/AdminPurchases";
-import AdminSupplierReturns from "./pages/admin/AdminSupplierReturns";
 import AdminSupplierCredits from "./pages/admin/AdminSupplierCredits";
-import AdminSupplierReturnDetail from "./pages/admin/AdminSupplierReturnDetail";
 import SupplierReturns from "./pages/admin/SupplierReturns";
 import SalesReturns from "./pages/admin/SalesReturns";
 import AdminStaff from "./pages/admin/AdminStaff";
@@ -71,6 +69,7 @@ import AdminInventory from "./pages/admin/AdminInventory";
 import AdminProduction from "./pages/admin/AdminProduction";
 import AdminAccountStatement from "./pages/admin/AdminAccountStatement";
 import AdminBankReconciliation from "./pages/admin/AdminBankReconciliation";
+import AdminFinanceSuite from "./pages/admin/AdminFinanceSuite";
 import AdminServiceRenewals from "./pages/admin/AdminServiceRenewals";
 import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
 import AdminReturns from "./pages/admin/AdminReturns";
@@ -176,8 +175,6 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         {/* Purchasing & Returns */}
                         <Route path="/admin/purchases" element={<ProtectedRoute allowedRoles={['admin']}><AdminPurchases /></ProtectedRoute>} />
                         <Route path="/admin/returns" element={<ProtectedRoute allowedRoles={['admin']}><AdminReturns /></ProtectedRoute>} />
-                        <Route path="/admin/supplier-returns-old" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturns /></ProtectedRoute>} />
-                        <Route path="/admin/supplier-returns-old/:id" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierReturnDetail /></ProtectedRoute>} />
                         <Route path="/admin/supplier-credits" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierCredits /></ProtectedRoute>} />
                         <Route path="/admin/supplier-returns" element={<ProtectedRoute allowedRoles={['admin']}><SupplierReturns /></ProtectedRoute>} />
                         <Route path="/admin/sales-returns" element={<ProtectedRoute allowedRoles={['admin']}><SalesReturns /></ProtectedRoute>} />
@@ -188,6 +185,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         {/* Financial */}
                         <Route path="/admin/expenses" element={<ProtectedRoute allowedRoles={['admin']}><AdminExpenses /></ProtectedRoute>} />
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} />
+                        <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']}><AdminFinanceSuite /></ProtectedRoute>} />
                         <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']}><AdminAccountStatement /></ProtectedRoute>} />
                         <Route path="/admin/cash-collection" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
                         <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />

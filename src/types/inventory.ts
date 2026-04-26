@@ -179,6 +179,23 @@ export interface Purchase {
   updatedAt: string;
 }
 
+export interface FulfillmentLocation {
+  id: string;
+  storeId: string;
+  name: string;
+  code?: string;
+  isActive: boolean;
+  priority?: number; // lower number = higher priority
+  address?: string;
+  city?: string;
+  country?: string;
+  coverageCities?: string[];
+  supportsStandard?: boolean;
+  supportsExpress?: boolean;
+  supportsSameDay?: boolean;
+  supportsPickup?: boolean;
+}
+
 export interface PurchaseItem {
   // Item can be either a raw material OR a simple product
   itemType?: 'raw_material' | 'product'; // Type of item being purchased

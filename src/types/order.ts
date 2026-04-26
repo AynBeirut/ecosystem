@@ -20,6 +20,15 @@ export interface Order {
   deliveryAddress?: string
   deliveryCity?: string
   deliveryNotes?: string
+  deliveryMethod?: 'standard' | 'express' | 'same_day' | 'pickup'
+  deliveryFee?: number
+  estimatedDeliveryTime?: string
+  deliveryWorkingHours?: string
+  deliveryWorkingDays?: string
+  fulfillmentLocationId?: string
+  fulfillmentLocationName?: string
+  routingScore?: number
+  autoRouted?: boolean
   deliveryCoordinates?: { lat: number; lng: number }
   total?: number
   status?: string
@@ -45,6 +54,21 @@ export interface Order {
   paymentMethod?: string
   paymentNotes?: string
   paymentHistory?: PaymentRecord[]
+  createdBy?: string
+  updatedAt?: string
+  splitFromOrderId?: string
+  splitToOrderIds?: string[]
+  mergedIntoOrderId?: string
+  mergedFromOrderIds?: string[]
+  mergedAt?: string
+  shippingLabelGeneratedAt?: string
+  shippingLabelGeneratedBy?: string
+  shippingBatchId?: string
+  manifestId?: string
+  pickupScheduledAt?: string
+  pickupCarrier?: string
+  pickupNotes?: string
+  pickupStatus?: 'scheduled' | 'picked_up' | 'cancelled'
 }
 
 export interface PaymentRecord {

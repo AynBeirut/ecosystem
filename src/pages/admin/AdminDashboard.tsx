@@ -301,6 +301,13 @@ const AdminDashboard: React.FC = () => {
           <span className="text-xs text-gray-700 mt-1">Expenses</span>
         </Link>
 
+        <Link to="/admin/finance" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
+          <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
+            <DollarSign className="h-4 w-4" />
+          </div>
+          <span className="text-xs text-gray-700 mt-1">Finance</span>
+        </Link>
+
         <Link to="/admin/delivery" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
           <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
             <Package className="h-4 w-4" />
@@ -364,6 +371,14 @@ const AdminDashboard: React.FC = () => {
                 <Link to="/admin/payments" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
                   <CreditCard className="h-5 w-5 mr-3" />
                   <span>Payments</span>
+                </Link>
+              </li>
+            )}
+            {user?.role === 'admin' && (
+              <li>
+                <Link to="/admin/finance" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-green-50 border border-green-200 hover:shadow-sm transition">
+                  <DollarSign className="h-5 w-5 mr-3 text-green-700" />
+                  <span className="font-medium">Finance Suite</span>
                 </Link>
               </li>
             )}
