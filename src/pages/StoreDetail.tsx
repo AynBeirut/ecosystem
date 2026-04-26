@@ -822,8 +822,55 @@ const StoreDetail: React.FC = () => {
     if (showBg) {
       classes += ` ${currentTheme.cardSoft}`;
     }
+
+    // Animation
+    const animation = section.animation || 'fade';
+    if (animation === 'fade') classes += ' section-anim-fade';
+    else if (animation === 'slide-up') classes += ' section-anim-slide-up';
+    else if (animation === 'zoom') classes += ' section-anim-zoom';
     
     return classes.trim();
+  };
+
+  const parseCustomCssDeclarations = (customCss?: string): React.CSSProperties => {
+    if (!customCss) return {};
+    const allowedProps = new Set([
+      'background-size', 'background-position', 'background-repeat',
+      'border-style', 'border-width', 'border-color', 'border-radius',
+      'box-shadow', 'opacity', 'transform', 'filter',
+      'margin', 'margin-top', 'margin-right', 'margin-bottom', 'margin-left',
+      'padding', 'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    ]);
+
+    const style: Record<string, string | number> = {};
+    customCss
+      .split(';')
+      .map((entry) => entry.trim())
+      .filter(Boolean)
+      .forEach((entry) => {
+        const [rawProp, ...valueParts] = entry.split(':');
+        if (!rawProp || valueParts.length === 0) return;
+        const prop = rawProp.trim().toLowerCase();
+        const value = valueParts.join(':').trim();
+        if (!allowedProps.has(prop) || !value) return;
+        const camel = prop.replace(/-([a-z])/g, (_, letter) => letter.toUpperCase());
+        style[camel] = value;
+      });
+    return style as React.CSSProperties;
+  };
+
+  const getSectionWrapperStyle = (section: StoreSectionOrder): React.CSSProperties => {
+    const baseStyle: React.CSSProperties = {};
+    if (section.backgroundImage) {
+      baseStyle.backgroundImage = `url(${section.backgroundImage})`;
+      baseStyle.backgroundSize = 'cover';
+      baseStyle.backgroundPosition = 'center';
+      baseStyle.backgroundRepeat = 'no-repeat';
+    }
+    return {
+      ...baseStyle,
+      ...parseCustomCssDeclarations(section.customCss),
+    };
   };
 
   // Helper: Get section container wrapper classes
@@ -1064,6 +1111,23 @@ const StoreDetail: React.FC = () => {
 
   return (
     <div className="min-h-screen" style={pageBackgroundStyle}>
+      <style>{`
+        @keyframes sectionFadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        @keyframes sectionSlideUp {
+          from { opacity: 0; transform: translateY(14px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes sectionZoomIn {
+          from { opacity: 0; transform: scale(0.97); }
+          to { opacity: 1; transform: scale(1); }
+        }
+        .section-anim-fade { animation: sectionFadeIn 350ms ease-out both; }
+        .section-anim-slide-up { animation: sectionSlideUp 420ms ease-out both; }
+        .section-anim-zoom { animation: sectionZoomIn 360ms ease-out both; }
+      `}</style>
       {store && (
         <SEOHead
           title={store.name}
@@ -1266,7 +1330,7 @@ const StoreDetail: React.FC = () => {
                     }
                   >
                     {row.map((section) => (
-                      <div key={section.id} className={getSectionWrapperClasses(section)}>
+                      <div key={section.id} className={getSectionWrapperClasses(section)} style={getSectionWrapperStyle(section)}>
                         {renderSection(section.id)}
                       </div>
                     ))}

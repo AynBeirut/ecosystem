@@ -23,10 +23,10 @@ This backlog consolidates unfinished updates into one place.
 - [x] Verify auto-save for template selection
 
 ### 2) Follow-up Enhancements (Not Implemented Yet)
-- [ ] Add section background image support
-- [ ] Add section-level animations/transitions
-- [ ] Add custom CSS per section
-- [ ] Add drag-and-drop reordering for sections
+- [x] Add section background image support
+- [x] Add section-level animations/transitions
+- [x] Add custom CSS per section
+- [x] Add drag-and-drop reordering for sections
 
 ## B) Platform Feature Backlog (From Shopify Feature Gap Review)
 
@@ -49,6 +49,10 @@ This backlog consolidates unfinished updates into one place.
 - [ ] AI image editing/generation workflow for products
 - [ ] AI-assisted live chat response system
 
+### Newly Requested Enhancements
+- [ ] Product ratings and reviews flow (storefront + customer history + admin moderation)
+- [ ] Automatic order notifications for guest and signed-in buyers via email and optional WhatsApp
+
 
 ## Notes
 - TEMPLATE_UPDATES.md reports "No Pending Work" for that specific deployment session.
@@ -68,3 +72,4 @@ This backlog consolidates unfinished updates into one place.
 - Marketplace sync status flow now supports queued/processing/completed/failed states with failed-item reason visibility, per-channel sync settings (full/incremental + auto-retry toggle), and one-click retry for failed jobs.
 - Channel mapping templates and pre-sync validation gates are now included in `/admin/marketplace`: admins can set required fields per channel (e.g., Alibaba/Amazon/eBay templates), run validation to see invalid product samples, and only enqueue sync jobs after a passing validation report.
 - Finance suite hub is now available at `/admin/finance` with Balance/Capital/Credit/Bill Pay modules, real-time finance KPIs (gross/paid/receivable/expenses), and quick actions linked to existing finance workflows (`/admin/payments`, `/admin/revenue`, `/admin/account-statement`, `/admin/expenses`, `/admin/bank-reconciliation`).
+- Store template editor now supports richer section controls in `/admin/templates`: per-section background images, section animation presets, custom CSS blocks, and drag-and-drop section ordering with live storefront rendering support.

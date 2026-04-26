@@ -20,7 +20,7 @@ import type {
   ProductDisplayType, HeroLayout, MenuStyle, ContactFormStyle,
   RatingDisplayType, AboutLayout, StoreTemplateColors,
   ProductCardAnimation, PageLayout, StoreCardStyle, VisualStyle,
-  StoreSectionId, StoreSectionOrder, SectionWidth,
+  StoreSectionId, StoreSectionOrder, SectionWidth, SectionAnimation,
 } from '@/types/storeProfile';
 
 // ── types ────────────────────────────────────────────────────────────────────
@@ -225,6 +225,13 @@ const VISUAL_STYLE_OPTIONS: Array<{ id: VisualStyle; label: string; desc: string
   { id: 'mixed',      label: 'Mixed',        desc: 'Combination of round and sharp', icon: '◪' },
 ];
 
+const SECTION_ANIMATION_OPTIONS: Array<{ id: SectionAnimation; label: string }> = [
+  { id: 'none', label: 'None' },
+  { id: 'fade', label: 'Fade' },
+  { id: 'slide-up', label: 'Slide Up' },
+  { id: 'zoom', label: 'Zoom' },
+];
+
 // ── component ────────────────────────────────────────────────────────────────
 const AdminTemplates: React.FC = () => {
   const { toast } = useToast();
@@ -270,15 +277,16 @@ const AdminTemplates: React.FC = () => {
   const [contactFormStyle, setContactFormStyle] = useState<ContactFormStyle>(1);
   const [ratingDisplayType, setRatingDisplayType] = useState<RatingDisplayType>('stars');
   const [sectionOrder, setSectionOrder] = useState<StoreSectionOrder[]>([
-    { id: 'hero', enabled: true, order: 0, width: 'full', container: 'full-width', padding: 'none', showBackground: true, showBorders: false },
-    { id: 'about', enabled: true, order: 1, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
-    { id: 'announcements', enabled: true, order: 2, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
-    { id: 'products', enabled: true, order: 3, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
-    { id: 'gallery', enabled: true, order: 4, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
-    { id: 'reviews', enabled: true, order: 5, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
-    { id: 'contact', enabled: true, order: 6, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true },
+    { id: 'hero', enabled: true, order: 0, width: 'full', container: 'full-width', padding: 'none', showBackground: true, showBorders: false, animation: 'fade', customCss: '' },
+    { id: 'about', enabled: true, order: 1, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true, animation: 'fade', customCss: '' },
+    { id: 'announcements', enabled: true, order: 2, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true, animation: 'fade', customCss: '' },
+    { id: 'products', enabled: true, order: 3, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true, animation: 'fade', customCss: '' },
+    { id: 'gallery', enabled: true, order: 4, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true, animation: 'fade', customCss: '' },
+    { id: 'reviews', enabled: true, order: 5, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true, animation: 'fade', customCss: '' },
+    { id: 'contact', enabled: true, order: 6, width: 'full', container: 'contained', padding: 'medium', showBackground: true, showBorders: true, animation: 'fade', customCss: '' },
   ]);
   const [savingSections, setSavingSections] = useState(false);
+  const [draggingSectionId, setDraggingSectionId] = useState<StoreSectionId | null>(null);
 
   // Unsaved changes tracking
   const [hasUnsavedColors, setHasUnsavedColors] = useState(false);
@@ -298,7 +306,7 @@ const AdminTemplates: React.FC = () => {
       layoutConfig: {
         heroLayout: 'fullscreen',
         productDisplayType: 'grid-standard',
-        productCardAnimation: '3d-lift',
+        productCardAnimation: 'lift-3d',
         menuStyle: 'sticky-glass',
         aboutLayout: 'left',
         contactFormStyle: 2,
@@ -319,7 +327,7 @@ const AdminTemplates: React.FC = () => {
       layoutConfig: {
         heroLayout: 'minimal',
         productDisplayType: 'list',
-        productCardAnimation: 'fade-in',
+        productCardAnimation: 'none',
         menuStyle: 'classic',
         aboutLayout: 'centered',
         contactFormStyle: 1,
@@ -361,7 +369,7 @@ const AdminTemplates: React.FC = () => {
       layoutConfig: {
         heroLayout: 'fullscreen',
         productDisplayType: 'masonry',
-        productCardAnimation: 'slide-up',
+        productCardAnimation: 'slide-reveal',
         menuStyle: 'bold',
         aboutLayout: 'left',
         contactFormStyle: 3,
@@ -382,7 +390,7 @@ const AdminTemplates: React.FC = () => {
       layoutConfig: {
         heroLayout: 'centered',
         productDisplayType: 'grid-large',
-        productCardAnimation: 'scale-smooth',
+        productCardAnimation: 'zoom-tilt',
         menuStyle: 'classic',
         aboutLayout: 'centered',
         contactFormStyle: 2,
@@ -402,8 +410,8 @@ const AdminTemplates: React.FC = () => {
       defaultPalette: COLOR_PRESETS.artistic[0].palette,
       layoutConfig: {
         heroLayout: 'centered',
-        productDisplayType: 'grid-compact',
-        productCardAnimation: 'bounce',
+        productDisplayType: 'grid-standard',
+        productCardAnimation: 'lift-3d',
         menuStyle: 'bold',
         aboutLayout: 'left',
         contactFormStyle: 3,
@@ -456,7 +464,22 @@ const AdminTemplates: React.FC = () => {
       // sections tab
       if (d.contactFormStyle) setContactFormStyle(d.contactFormStyle as ContactFormStyle);
       if (d.ratingDisplayType) setRatingDisplayType(d.ratingDisplayType as RatingDisplayType);
-      if (Array.isArray(d.sectionOrder)) setSectionOrder(d.sectionOrder as StoreSectionOrder[]);
+      if (Array.isArray(d.sectionOrder)) {
+        setSectionOrder(
+          (d.sectionOrder as StoreSectionOrder[])
+            .sort((a, b) => a.order - b.order)
+            .map((section) => ({
+              ...section,
+              container: section.container || 'contained',
+              padding: section.padding || 'medium',
+              showBackground: section.showBackground ?? true,
+              showBorders: section.showBorders ?? true,
+              animation: section.animation || 'fade',
+              customCss: section.customCss || '',
+              backgroundImage: section.backgroundImage || '',
+            }))
+        );
+      }
     };
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -736,6 +759,35 @@ const AdminTemplates: React.FC = () => {
   const updateSectionOrder = (updater: React.SetStateAction<StoreSectionOrder[]>) => {
     setSectionOrder(updater);
     setHasUnsavedSections(true);
+  };
+
+  const reorderSectionById = (fromId: StoreSectionId, toId: StoreSectionId) => {
+    if (fromId === toId) return;
+    updateSectionOrder(prev => {
+      const sorted = [...prev].sort((a, b) => a.order - b.order);
+      const fromIndex = sorted.findIndex(section => section.id === fromId);
+      const toIndex = sorted.findIndex(section => section.id === toId);
+      if (fromIndex < 0 || toIndex < 0) return prev;
+      const [moved] = sorted.splice(fromIndex, 1);
+      sorted.splice(toIndex, 0, moved);
+      return sorted.map((section, idx) => ({ ...section, order: idx }));
+    });
+  };
+
+  const uploadSectionBackgroundImage = async (sectionId: StoreSectionId, file: File) => {
+    if (!storeId) return;
+    try {
+      await assertCanUploadBytes(db, storeId, file.size);
+      const path = `store-media/${storeId}/section-backgrounds/${sectionId}/${Date.now()}_${encodeURIComponent(file.name)}`;
+      const imageRef = ref(storage, path);
+      await uploadBytes(imageRef, file);
+      await trackStorageUsageAfterUpload(db, storeId, file.size);
+      const imageUrl = await getDownloadURL(imageRef);
+      updateSectionOrder(prev => prev.map(section => section.id === sectionId ? { ...section, backgroundImage: imageUrl } : section));
+      toast({ title: 'Section Background Added', description: 'Save sections to publish this change.' });
+    } catch {
+      toast({ title: 'Upload Failed', variant: 'destructive' });
+    }
   };
 
   // ── color slot labels ────────────────────────────────────────────────────
@@ -1059,11 +1111,22 @@ const AdminTemplates: React.FC = () => {
                         const label = sectionLabels[section.id];
                         
                         return (
-                          <div key={section.id} className="border-2 rounded-xl bg-gradient-to-br from-muted/40 to-muted/20 hover:border-primary/40 transition-all p-4">
+                          <div
+                            key={section.id}
+                            className="border-2 rounded-xl bg-gradient-to-br from-muted/40 to-muted/20 hover:border-primary/40 transition-all p-4"
+                            draggable
+                            onDragStart={() => setDraggingSectionId(section.id)}
+                            onDragOver={(e) => e.preventDefault()}
+                            onDrop={() => {
+                              if (draggingSectionId) reorderSectionById(draggingSectionId, section.id);
+                              setDraggingSectionId(null);
+                            }}
+                            onDragEnd={() => setDraggingSectionId(null)}
+                          >
                             {/* Row 1: Basic controls */}
                             <div className="flex items-center gap-3 mb-3">
                               {/* Drag handle */}
-                              <div className="text-muted-foreground cursor-move select-none">
+                              <div className="text-muted-foreground cursor-move select-none" title="Drag to reorder">
                                 <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                                   <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
                                 </svg>
@@ -1087,7 +1150,7 @@ const AdminTemplates: React.FC = () => {
                                     const newOrder = [...sectionOrder];
                                     [newOrder[currentIdx], newOrder[currentIdx - 1]] = [newOrder[currentIdx - 1], newOrder[currentIdx]];
                                     newOrder.forEach((s, idx) => s.order = idx);
-                                    setSectionOrder(newOrder);
+                                    updateSectionOrder(newOrder);
                                   }}
                                   disabled={section.order === 0}
                                   className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -1105,7 +1168,7 @@ const AdminTemplates: React.FC = () => {
                                     const newOrder = [...sectionOrder];
                                     [newOrder[currentIdx], newOrder[currentIdx + 1]] = [newOrder[currentIdx + 1], newOrder[currentIdx]];
                                     newOrder.forEach((s, idx) => s.order = idx);
-                                    setSectionOrder(newOrder);
+                                    updateSectionOrder(newOrder);
                                   }}
                                   disabled={section.order === sectionOrder.length - 1}
                                   className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
@@ -1136,7 +1199,7 @@ const AdminTemplates: React.FC = () => {
                             </div>
 
                             {/* Row 2: Style controls */}
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 pl-7">
+                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 pl-7">
                               {/* Grid Width */}
                               <div>
                                 <label className="text-[10px] font-semibold text-muted-foreground uppercase mb-1 block">Grid Width</label>
@@ -1256,6 +1319,65 @@ const AdminTemplates: React.FC = () => {
                                 >
                                   {(section.showBorders ?? true) ? '📐 Border' : '▢ Border'}
                                 </button>
+                              </div>
+
+                              {/* Animation */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-muted-foreground uppercase mb-1 block">Animation</label>
+                                <div className="flex flex-wrap gap-1">
+                                  {SECTION_ANIMATION_OPTIONS.map((option) => (
+                                    <button
+                                      key={`${section.id}-${option.id}`}
+                                      type="button"
+                                      onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, animation: option.id } : s))}
+                                      className={`px-2 py-1 text-[11px] font-medium rounded transition-colors ${(section.animation || 'fade') === option.id ? 'bg-indigo-500 text-white' : 'bg-background border hover:bg-muted'}`}
+                                    >
+                                      {option.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              {/* Section background image */}
+                              <div>
+                                <label className="text-[10px] font-semibold text-muted-foreground uppercase mb-1 block">Background Image</label>
+                                <div className="space-y-2">
+                                  <label className="cursor-pointer block">
+                                    <input
+                                      type="file"
+                                      accept="image/*"
+                                      className="hidden"
+                                      onChange={(e) => {
+                                        const file = e.target.files?.[0];
+                                        e.target.value = '';
+                                        if (!file) return;
+                                        void uploadSectionBackgroundImage(section.id, file);
+                                      }}
+                                    />
+                                    <span className="inline-flex items-center justify-center px-2 py-1 text-[11px] border rounded w-full hover:bg-muted">Upload</span>
+                                  </label>
+                                  <button
+                                    type="button"
+                                    onClick={() => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, backgroundImage: '' } : s))}
+                                    className="inline-flex items-center justify-center px-2 py-1 text-[11px] border rounded w-full hover:bg-muted"
+                                  >
+                                    Clear
+                                  </button>
+                                  {section.backgroundImage && (
+                                    <img src={section.backgroundImage} alt={`${label} background`} className="w-full h-10 object-cover rounded border" />
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Custom CSS */}
+                              <div className="md:col-span-2 lg:col-span-2">
+                                <label className="text-[10px] font-semibold text-muted-foreground uppercase mb-1 block">Custom CSS (inline declarations)</label>
+                                <textarea
+                                  value={section.customCss || ''}
+                                  onChange={(e) => updateSectionOrder(prev => prev.map(s => s.id === section.id ? { ...s, customCss: e.target.value } : s))}
+                                  className="w-full min-h-[54px] text-xs border rounded p-2 bg-background"
+                                  placeholder="background-size: cover; border-style: dashed;"
+                                />
                               </div>
                             </div>
                           </div>

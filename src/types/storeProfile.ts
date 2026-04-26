@@ -36,6 +36,7 @@ export type StoreSectionId = 'hero' | 'about' | 'announcements' | 'products' | '
 export type SectionWidth = 'full' | 'half' | 'third';
 export type SectionContainer = 'full-width' | 'contained' | 'wide'; // edge-to-edge, max-w-7xl centered, max-w-5xl centered
 export type SectionPadding = 'none' | 'small' | 'medium' | 'large';
+export type SectionAnimation = 'none' | 'fade' | 'slide-up' | 'zoom';
 
 export interface StoreSectionOrder {
   id: StoreSectionId;
@@ -48,6 +49,9 @@ export interface StoreSectionOrder {
   showBackground?: boolean; // Show section background color
   showBorders?: boolean; // Show rounded corners and borders
   padding?: SectionPadding; // Section padding
+  backgroundImage?: string; // Optional section background image URL
+  animation?: SectionAnimation; // Section entrance animation style
+  customCss?: string; // Optional CSS declarations (inline style format)
 }
 
 export interface DeliveryZoneSetting {
