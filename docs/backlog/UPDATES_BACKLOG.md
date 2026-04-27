@@ -13,7 +13,6 @@ Tag format used on each item:
 ## 1) Immediate Execution (P0)
 
 ### Security and Compliance (Optional, recommended hardening)
-- [ ] (Optional) Enable Firebase Auth MFA (TOTP) for admin accounts (`Size: 3 MB`, `Best: soon`)
 - [ ] (Optional) Add 2FA enrollment flow in admin profile/first login (`Size: 3 MB`, `Best: after MFA backend done`)
 - [ ] (Optional) Show QR setup for authenticator enrollment (`Size: 2 MB`, `Best: after 2FA enrollment done`)
 - [ ] (Optional) Add IP whitelist for admin panel (`Size: 3 MB`, `Best: after 20 clients`)

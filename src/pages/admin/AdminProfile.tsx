@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { getAuth, multiFactor, TotpMultiFactorGenerator, type MultiFactorInfo, type TotpSecret } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
@@ -202,7 +202,119 @@ const AdminProfile: React.FC = () => {
   const [isCheckingDomainStatus, setIsCheckingDomainStatus] = useState(false);
   const [domainStatusDetails, setDomainStatusDetails] = useState<DomainStatusDetails | null>(null);
   const [isSubmittingSitemap, setIsSubmittingSitemap] = useState(false);
+  const [enrolledMfaFactors, setEnrolledMfaFactors] = useState<MultiFactorInfo[]>([]);
+  const [isPreparingMfa, setIsPreparingMfa] = useState(false);
+  const [isEnrollingMfa, setIsEnrollingMfa] = useState(false);
+  const [isDisablingMfa, setIsDisablingMfa] = useState(false);
+  const [totpSecret, setTotpSecret] = useState<TotpSecret | null>(null);
+  const [totpUri, setTotpUri] = useState('');
+  const [totpCode, setTotpCode] = useState('');
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
+
+  const refreshMfaStatus = async () => {
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+    if (!currentUser) {
+      setEnrolledMfaFactors([]);
+      return;
+    }
+
+    await currentUser.reload();
+    const factors = multiFactor(currentUser).enrolledFactors || [];
+    setEnrolledMfaFactors(factors);
+  };
+
+  const prepareTotpEnrollment = async () => {
+    setIsPreparingMfa(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('You must be signed in to set up MFA.');
+
+      await currentUser.reload();
+      const mfaUser = multiFactor(currentUser);
+      if ((mfaUser.enrolledFactors || []).length > 0) {
+        setEnrolledMfaFactors(mfaUser.enrolledFactors);
+        toast({ title: 'MFA already enabled', description: 'This account already has at least one MFA factor.' });
+        return;
+      }
+
+      const session = await mfaUser.getSession();
+      const secret = await TotpMultiFactorGenerator.generateSecret(session);
+      const uri = secret.generateQrCodeUrl(currentUser.email || user?.email || 'admin', 'Grabio Admin');
+
+      setTotpSecret(secret);
+      setTotpUri(uri);
+      setTotpCode('');
+      toast({ title: 'Authenticator setup ready', description: 'Scan QR and enter your 6-digit code to finish.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to prepare MFA setup.';
+      toast({ title: 'MFA setup failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsPreparingMfa(false);
+    }
+  };
+
+  const enrollTotpMfa = async () => {
+    setIsEnrollingMfa(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('You must be signed in to set up MFA.');
+      if (!totpSecret) throw new Error('Start setup first to generate a secret.');
+
+      const code = totpCode.trim();
+      if (!/^\d{6}$/.test(code)) throw new Error('Enter a valid 6-digit authenticator code.');
+
+      const assertion = TotpMultiFactorGenerator.assertionForEnrollment(totpSecret, code);
+      await multiFactor(currentUser).enroll(assertion, 'Authenticator App');
+
+      setTotpSecret(null);
+      setTotpUri('');
+      setTotpCode('');
+      await refreshMfaStatus();
+
+      toast({ title: 'MFA enabled', description: 'TOTP MFA is now active for this admin account.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to verify and enable MFA.';
+      toast({ title: 'MFA enrollment failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsEnrollingMfa(false);
+    }
+  };
+
+  const disableTotpMfa = async () => {
+    setIsDisablingMfa(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('You must be signed in to manage MFA.');
+
+      const factors = multiFactor(currentUser).enrolledFactors || [];
+      if (factors.length === 0) throw new Error('No MFA factor is enrolled on this account.');
+
+      await multiFactor(currentUser).unenroll(factors[0]);
+      await refreshMfaStatus();
+      setTotpSecret(null);
+      setTotpUri('');
+      setTotpCode('');
+
+      toast({ title: 'MFA disabled', description: 'Authenticator MFA has been removed from this account.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to disable MFA.';
+      toast({ title: 'Disable MFA failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsDisablingMfa(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.role === 'admin') {
+      refreshMfaStatus().catch(() => setEnrolledMfaFactors([]));
+      return;
+    }
+    setEnrolledMfaFactors([]);
+  }, [user?.id, user?.role]);
 
   const robotsTxtPreview = (() => {
     const slugPrefix = formData.slug ? `/${String(formData.slug).trim().replace(/^\/+|\/+$/g, '')}` : '';
@@ -1978,6 +2090,107 @@ const AdminProfile: React.FC = () => {
                     ))}
                   </div>
                 </div>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Admin MFA */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Admin MFA (TOTP)</CardTitle>
+              <CardDescription>
+                Protect admin access with authenticator app based 2FA.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              {user?.role !== 'admin' ? (
+                <p className="text-sm text-muted-foreground">MFA enrollment is available to admin accounts only.</p>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    {enrolledMfaFactors.length > 0 ? (
+                      <Badge className="bg-green-100 text-green-800">Enabled ({enrolledMfaFactors.length})</Badge>
+                    ) : (
+                      <Badge variant="secondary">Not Enabled</Badge>
+                    )}
+                    {enrolledMfaFactors.length > 0 ? (
+                      <Button
+                        type="button"
+                        variant="destructive"
+                        size="sm"
+                        disabled={isDisablingMfa}
+                        onClick={disableTotpMfa}
+                      >
+                        {isDisablingMfa ? 'Disabling...' : 'Disable MFA'}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={isPreparingMfa || !!totpSecret}
+                        onClick={prepareTotpEnrollment}
+                      >
+                        {isPreparingMfa ? 'Preparing...' : 'Set Up Authenticator'}
+                      </Button>
+                    )}
+                  </div>
+
+                  {totpSecret && totpUri && enrolledMfaFactors.length === 0 && (
+                    <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
+                      <p className="text-sm font-medium">Finish Authenticator Enrollment</p>
+                      <ol className="text-sm text-muted-foreground list-decimal ml-5 space-y-1">
+                        <li>Scan this QR code in your authenticator app.</li>
+                        <li>Enter the 6-digit code generated by the app.</li>
+                        <li>Click Verify & Enable MFA.</li>
+                      </ol>
+
+                      <div className="flex justify-center">
+                        <img
+                          src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(totpUri)}`}
+                          alt="Authenticator QR"
+                          className="h-44 w-44 rounded border bg-white p-2"
+                        />
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="totp-code">Authenticator Code</Label>
+                        <Input
+                          id="totp-code"
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          placeholder="123456"
+                          value={totpCode}
+                          maxLength={6}
+                          onChange={(e) => setTotpCode(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        />
+                      </div>
+
+                      <div className="flex gap-2">
+                        <Button
+                          type="button"
+                          size="sm"
+                          disabled={isEnrollingMfa}
+                          onClick={enrollTotpMfa}
+                        >
+                          {isEnrollingMfa ? 'Enabling...' : 'Verify & Enable MFA'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            setTotpSecret(null);
+                            setTotpUri('');
+                            setTotpCode('');
+                          }}
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>
