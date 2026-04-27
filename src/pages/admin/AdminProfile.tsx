@@ -21,6 +21,32 @@ import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPar
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
 
+type DomainDnsRecord = {
+  type: string;
+  name: string;
+  value: string;
+  status: 'verified' | 'pending';
+};
+
+type DomainStatusDetails = {
+  domainStatus: 'active' | 'pending' | 'error';
+  sslStatus: 'active' | 'pending' | 'error';
+  dnsRecords: DomainDnsRecord[];
+};
+
+const getFallbackDnsRecords = (domain: string): DomainDnsRecord[] => {
+  if (!domain) return [];
+  const parts = domain.split('.');
+  const name = parts.length > 2 ? parts[0] : '@';
+  return [{ type: 'CNAME', name, value: 'market-flow-7b074.web.app', status: 'pending' }];
+};
+
+const getStatusBadgeClass = (status: 'active' | 'pending' | 'error') => {
+  if (status === 'active') return 'bg-green-100 text-green-800';
+  if (status === 'error') return 'bg-red-100 text-red-800';
+  return 'bg-yellow-100 text-yellow-800';
+};
+
 const defaultProfile: StoreProfile = {
   name: '',
   description: '',
@@ -173,6 +199,7 @@ const AdminProfile: React.FC = () => {
   const [newPageName, setNewPageName] = useState<string>('');
   const [isRegisteringDomain, setIsRegisteringDomain] = useState(false);
   const [isCheckingDomainStatus, setIsCheckingDomainStatus] = useState(false);
+  const [domainStatusDetails, setDomainStatusDetails] = useState<DomainStatusDetails | null>(null);
   const [isSubmittingSitemap, setIsSubmittingSitemap] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
@@ -1833,6 +1860,17 @@ const AdminProfile: React.FC = () => {
                           customDomainStatus: (data.status === 'active' || data.status === 'error') ? data.status : 'pending',
                         }));
 
+                        const details = data.details as DomainStatusDetails | undefined;
+                        if (details && Array.isArray(details.dnsRecords)) {
+                          setDomainStatusDetails({
+                            domainStatus: details.domainStatus === 'active' || details.domainStatus === 'error' ? details.domainStatus : 'pending',
+                            sslStatus: details.sslStatus === 'active' || details.sslStatus === 'error' ? details.sslStatus : 'pending',
+                            dnsRecords: details.dnsRecords,
+                          });
+                        } else {
+                          setDomainStatusDetails(null);
+                        }
+
                         const statusLabel = data.status === 'active' ? 'active' : data.status === 'error' ? 'error' : 'pending';
                         toast({
                           title: 'Domain status updated',
@@ -1867,6 +1905,7 @@ const AdminProfile: React.FC = () => {
                         const data = await res.json();
                         if (!res.ok) throw new Error(data.message || 'Registration failed');
                         setFormData(prev => ({ ...prev, customDomainStatus: 'pending' }));
+                        setDomainStatusDetails(null);
                         toast({ title: 'Domain submitted', description: 'Status is pending — check back after DNS propagates.' });
                       } catch (err) {
                         const msg = err instanceof Error ? err.message : 'Unknown error';
@@ -1880,6 +1919,40 @@ const AdminProfile: React.FC = () => {
                   </Button>
                 )}
               </div>
+
+              {formData.customDomain && (
+                <div className="rounded-lg border p-4 space-y-3">
+                  <p className="text-sm font-medium">DNS Configuration Wizard</p>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <Badge className={getStatusBadgeClass(domainStatusDetails?.domainStatus || (formData.customDomainStatus === 'active' ? 'active' : 'pending'))}>
+                      Domain: {domainStatusDetails?.domainStatus || (formData.customDomainStatus === 'active' ? 'active' : 'pending')}
+                    </Badge>
+                    <Badge className={getStatusBadgeClass(domainStatusDetails?.sslStatus || (formData.customDomainStatus === 'active' ? 'active' : 'pending'))}>
+                      SSL: {domainStatusDetails?.sslStatus || (formData.customDomainStatus === 'active' ? 'active' : 'pending')}
+                    </Badge>
+                  </div>
+
+                  <ol className="text-sm text-muted-foreground list-decimal ml-5 space-y-1">
+                    <li>Add the DNS record(s) below in your DNS provider panel.</li>
+                    <li>Wait for DNS propagation (usually minutes, up to 24 hours).</li>
+                    <li>Click <span className="font-medium text-foreground">Check Status</span> to verify domain and SSL activation.</li>
+                  </ol>
+
+                  <div className="font-mono text-xs bg-background border rounded p-3 space-y-1">
+                    <div className="grid grid-cols-4 gap-2 text-muted-foreground font-sans text-xs uppercase mb-1">
+                      <span>Type</span><span>Name</span><span>Value</span><span>Status</span>
+                    </div>
+                    {(domainStatusDetails?.dnsRecords?.length ? domainStatusDetails.dnsRecords : getFallbackDnsRecords(formData.customDomain || '')).map((record, idx) => (
+                      <div className="grid grid-cols-4 gap-2" key={`${record.type}-${record.name}-${idx}`}>
+                        <span>{record.type}</span>
+                        <span>{record.name}</span>
+                        <span className="truncate" title={record.value}>{record.value}</span>
+                        <span className={record.status === 'verified' ? 'text-green-700' : 'text-amber-700'}>{record.status}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
             </CardContent>
           </Card>
 

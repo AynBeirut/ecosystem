@@ -54,7 +54,6 @@ Tag format used on each item:
 
 ### Domain and White-label Growth
 - [ ] SSL auto-provisioning (`Size: 3 MB`, `Best: after custom domains done`)
-- [ ] DNS configuration wizard (`Size: 3 MB`, `Best: after custom domains done`)
 
 ## 4) Payments, Billing, Subscription Expansion (P2)
 

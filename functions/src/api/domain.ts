@@ -7,6 +7,103 @@ const SITE_ID = 'market-flow-7b074';
 // Basic domain validation: at least one dot, no spaces, no scheme
 const DOMAIN_REGEX = /^(?!https?:\/\/)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 
+type StatusValue = 'active' | 'pending' | 'error';
+
+type DomainDnsRecord = {
+  type: string;
+  name: string;
+  value: string;
+  status: 'verified' | 'pending';
+};
+
+type DomainStatusDetails = {
+  domainStatus: StatusValue;
+  sslStatus: StatusValue;
+  dnsRecords: DomainDnsRecord[];
+};
+
+function toStatusValue(raw: string | undefined): StatusValue {
+  const upper = (raw || '').toUpperCase();
+  if (!upper) return 'pending';
+  if (upper.includes('ACTIVE') || upper.includes('PROVISIONED') || upper.includes('CONNECTED') || upper.includes('MATCH')) {
+    return 'active';
+  }
+  if (upper.includes('FAILED') || upper.includes('ERROR') || upper.includes('INVALID')) {
+    return 'error';
+  }
+  return 'pending';
+}
+
+function getDefaultDnsRecords(customDomain: string): DomainDnsRecord[] {
+  const segments = customDomain.split('.');
+  const subdomain = segments.length > 2 ? segments[0] : '@';
+
+  return [{
+    type: 'CNAME',
+    name: subdomain,
+    value: `${PROJECT_ID}.web.app`,
+    status: 'pending',
+  }];
+}
+
+function extractDomainStatusDetails(payload: unknown, customDomain: string, fallbackStatus: StatusValue): DomainStatusDetails {
+  const data = (payload || {}) as {
+    provisioning?: { status?: string; certStatus?: string };
+    domainName?: string;
+    requiredDnsUpdates?: {
+      desired?: Array<{ domainName?: string; type?: string; rrdatas?: string[] }>;
+      discovered?: Array<{ domainName?: string; type?: string; rrdatas?: string[] }>;
+    };
+  };
+
+  const domainStatus = toStatusValue(data.provisioning?.status) || fallbackStatus;
+  const sslStatus = toStatusValue(data.provisioning?.certStatus);
+
+  const desiredRecords = Array.isArray(data.requiredDnsUpdates?.desired)
+    ? data.requiredDnsUpdates?.desired
+    : [];
+  const discoveredRecords = Array.isArray(data.requiredDnsUpdates?.discovered)
+    ? data.requiredDnsUpdates?.discovered
+    : [];
+
+  const normalizedDesired: DomainDnsRecord[] = desiredRecords
+    .filter((entry) => typeof entry?.type === 'string' && typeof entry?.domainName === 'string')
+    .map((entry) => ({
+      type: String(entry.type || 'CNAME').toUpperCase(),
+      name: String(entry.domainName || customDomain),
+      value: Array.isArray(entry.rrdatas) && entry.rrdatas.length > 0 ? String(entry.rrdatas[0]) : `${PROJECT_ID}.web.app`,
+      status: 'pending' as const,
+    }));
+
+  const normalizedDiscovered = discoveredRecords
+    .filter((entry) => typeof entry?.type === 'string' && typeof entry?.domainName === 'string')
+    .map((entry) => ({
+      type: String(entry.type || 'CNAME').toUpperCase(),
+      name: String(entry.domainName || customDomain),
+      value: Array.isArray(entry.rrdatas) && entry.rrdatas.length > 0 ? String(entry.rrdatas[0]) : '',
+    }));
+
+  const dnsRecords = (normalizedDesired.length > 0 ? normalizedDesired : getDefaultDnsRecords(customDomain)).map((record) => {
+    const isMatched = normalizedDiscovered.some(
+      (discovered) =>
+        discovered.type === record.type &&
+        discovered.name.toLowerCase() === record.name.toLowerCase() &&
+        discovered.value.toLowerCase() === record.value.toLowerCase(),
+    );
+
+    return {
+      ...record,
+      status: (isMatched ? 'verified' : 'pending') as 'verified' | 'pending',
+    };
+  });
+
+  return {
+    domainStatus: fallbackStatus === 'active' ? 'active' : domainStatus,
+    sslStatus: fallbackStatus === 'active' ? 'active' : sslStatus,
+    dnsRecords,
+  };
+}
+
 function mapHostingDomainStatus(payload: unknown): 'active' | 'pending' | 'error' {
   const raw = JSON.stringify(payload).toUpperCase();
 
@@ -138,7 +235,16 @@ export async function checkCustomDomainStatus(req: Request, res: Response): Prom
 
     const credential = admin.app().options.credential;
     if (!credential) {
-      res.json({ success: true, status: 'pending', message: 'Credential unavailable in emulator mode.' });
+      res.json({
+        success: true,
+        status: 'pending',
+        message: 'Credential unavailable in emulator mode.',
+        details: {
+          domainStatus: 'pending',
+          sslStatus: 'pending',
+          dnsRecords: getDefaultDnsRecords(normalizedDomain),
+        },
+      });
       return;
     }
 
@@ -148,15 +254,29 @@ export async function checkCustomDomainStatus(req: Request, res: Response): Prom
       const tokenResult = await cred.getAccessToken();
       accessToken = tokenResult.access_token;
     } catch (_tokenErr) {
-      res.json({ success: true, status: 'pending', message: 'Skipped Hosting API call in local mode.' });
+      res.json({
+        success: true,
+        status: 'pending',
+        message: 'Skipped Hosting API call in local mode.',
+        details: {
+          domainStatus: 'pending',
+          sslStatus: 'pending',
+          dnsRecords: getDefaultDnsRecords(normalizedDomain),
+        },
+      });
       return;
     }
 
     const hostingApiUrl =
       `https://firebasehosting.googleapis.com/v1beta1/sites/${SITE_ID}/domains/${encodeURIComponent(normalizedDomain)}`;
 
-    let status: 'active' | 'pending' | 'error' = 'pending';
+    let status: StatusValue = 'pending';
     let apiMessage = 'Domain status fetched.';
+    let details: DomainStatusDetails = {
+      domainStatus: 'pending',
+      sslStatus: 'pending',
+      dnsRecords: getDefaultDnsRecords(normalizedDomain),
+    };
 
     try {
       const response = await axios.get(hostingApiUrl, {
@@ -166,6 +286,7 @@ export async function checkCustomDomainStatus(req: Request, res: Response): Prom
         },
       });
       status = mapHostingDomainStatus(response.data);
+      details = extractDomainStatusDetails(response.data, normalizedDomain, status);
     } catch (apiErr: unknown) {
       if (axios.isAxiosError(apiErr)) {
         const responseStatus = apiErr.response?.status;
@@ -180,6 +301,12 @@ export async function checkCustomDomainStatus(req: Request, res: Response): Prom
       } else {
         status = 'error';
       }
+
+      details = {
+        domainStatus: status,
+        sslStatus: status === 'error' ? 'error' : 'pending',
+        dnsRecords: getDefaultDnsRecords(normalizedDomain),
+      };
     }
 
     await storeRef.update({
@@ -187,7 +314,7 @@ export async function checkCustomDomainStatus(req: Request, res: Response): Prom
       customDomainStatus: status,
     });
 
-    res.json({ success: true, status, message: apiMessage });
+    res.json({ success: true, status, message: apiMessage, details });
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unexpected error';
     console.error('[checkCustomDomainStatus]', err);
