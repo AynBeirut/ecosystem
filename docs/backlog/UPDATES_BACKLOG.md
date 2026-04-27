@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist completed)
+Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + auto currency rates completed)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -39,7 +39,6 @@ Tag format used on each item:
 
 
 ### Billing Features
-- [ ] Auto-updating currency rates (`Size: 3 MB`, `Best: soon`) the rate is manualy by the store owner but it can be auto optional 
 - [ ] Split payments (partial payment) (`Size: 3 MB`, `Best: after refunds workflow done`)
 - [ ] Refund management workflow (`Size: 3 MB`, `Best: soon`)
 - [ ] Payment retry for failed transactions (`Size: 3 MB`, `Best: after primary gateway stability done`)

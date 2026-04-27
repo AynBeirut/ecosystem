@@ -290,6 +290,13 @@ export interface StoreProfile {
   mainCurrency?: string; // Main currency for calculations (USD, EUR, LBP)
   secondaryCurrency?: string; // Display currency
   customExchangeRate?: number; // Custom exchange rate
+  exchangeRateMode?: 'manual' | 'auto';
+  exchangeRateProvider?: string;
+  exchangeRateBaseCurrency?: string;
+  exchangeRateQuoteCurrency?: string;
+  exchangeRateLastAutoUpdatedAt?: string;
+  exchangeRateLastAutoStatus?: 'success' | 'error';
+  exchangeRateLastAutoMessage?: string;
   // Tax configuration
   taxType?: 'none' | 'VAT' | 'TTC';
   taxRate?: number; // Default tax rate percentage

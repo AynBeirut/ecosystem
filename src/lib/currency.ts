@@ -17,6 +17,17 @@ async function fetchRateFromApi(): Promise<number> {
   return rate;
 }
 
+export async function fetchUsdToLbpRateFresh(): Promise<RateCache> {
+  const rate = await fetchRateFromApi();
+  const next: RateCache = { rate, fetchedAt: Date.now() };
+  try {
+    localStorage.setItem(CACHE_KEY, JSON.stringify(next));
+  } catch (e) {
+    // ignore storage errors
+  }
+  return next;
+}
+
 export async function getUsdToLbpRate(): Promise<RateCache> {
   try {
     const raw = localStorage.getItem(CACHE_KEY);

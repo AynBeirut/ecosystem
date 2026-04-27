@@ -26,7 +26,7 @@ import {
   Bell
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
-import { getUsdToLbpRate, formatLbp } from '@/lib/currency';
+import { fetchUsdToLbpRateFresh, getUsdToLbpRate, formatLbp } from '@/lib/currency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus } from '@/lib/salesRules';
@@ -69,9 +69,56 @@ const AdminDashboard: React.FC = () => {
   const [editingRate, setEditingRate] = useState(false);
   const [editRateValue, setEditRateValue] = useState<string>('');
   const [savingRate, setSavingRate] = useState(false);
+  const [exchangeRateMode, setExchangeRateMode] = useState<'manual' | 'auto'>('manual');
+  const [syncingAutoRate, setSyncingAutoRate] = useState(false);
   // Credits feature removed
   const [customerCount, setCustomerCount] = useState(0);
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
+
+  const syncAutoRateForStore = async (actualStoreId: string) => {
+    setSyncingAutoRate(true);
+    try {
+      const fresh = await fetchUsdToLbpRateFresh();
+      const db = getFirestore();
+      const profileRef = doc(db, 'storeProfiles', actualStoreId);
+      await updateDoc(profileRef, {
+        customExchangeRate: fresh.rate,
+        usdToLbpRate: fresh.rate,
+        exchangeRateMode: 'auto',
+        exchangeRateProvider: 'exchangerate.host',
+        exchangeRateBaseCurrency: 'USD',
+        exchangeRateQuoteCurrency: 'LBP',
+        exchangeRateLastAutoUpdatedAt: new Date(fresh.fetchedAt).toISOString(),
+        exchangeRateLastAutoStatus: 'success',
+        exchangeRateLastAutoMessage: '',
+      });
+
+      setUsdToLbpRate(fresh.rate);
+      setRateFetchedAt(fresh.fetchedAt);
+      setEditRateValue(String(fresh.rate));
+      setStore((prev) => ({
+        ...(prev as Record<string, unknown>),
+        customExchangeRate: fresh.rate,
+        usdToLbpRate: fresh.rate,
+        exchangeRateMode: 'auto',
+        exchangeRateLastAutoUpdatedAt: new Date(fresh.fetchedAt).toISOString(),
+      }));
+    } catch (err) {
+      console.warn('Failed to sync auto exchange rate', err);
+      try {
+        const db = getFirestore();
+        const profileRef = doc(db, 'storeProfiles', actualStoreId);
+        await updateDoc(profileRef, {
+          exchangeRateLastAutoStatus: 'error',
+          exchangeRateLastAutoMessage: err instanceof Error ? err.message : 'Failed to refresh rate',
+        });
+      } catch (writeErr) {
+        console.warn('Failed to write exchange rate error metadata', writeErr);
+      }
+    } finally {
+      setSyncingAutoRate(false);
+    }
+  };
 
   // Access control is handled by ProtectedRoute; avoid imperative redirects here.
   // Use `useIsMobile` unconditionally so mobile-specific UI (header/quick-actions)
@@ -129,13 +176,24 @@ const AdminDashboard: React.FC = () => {
         if (profileSnap.exists()) {
           const profileData = profileSnap.data() as Record<string, unknown>;
           setStore(profileData);
-          // If the store has a custom rate, prefer it.
-          if (profileData?.usdToLbpRate && typeof profileData.usdToLbpRate === 'number') {
-            const rateVal = profileData.usdToLbpRate as number;
+          const storedMode = profileData?.exchangeRateMode === 'auto' ? 'auto' : 'manual';
+          setExchangeRateMode(storedMode);
+
+          // Prefer unified customExchangeRate, with usdToLbpRate retained as legacy fallback.
+          const storedRateRaw = typeof profileData?.customExchangeRate === 'number'
+            ? profileData.customExchangeRate
+            : profileData?.usdToLbpRate;
+
+          if (storedRateRaw && typeof storedRateRaw === 'number') {
+            const rateVal = storedRateRaw as number;
             setUsdToLbpRate(rateVal);
             // DocumentSnapshot doesn't expose updateTime on the client SDK types; use now.
             setRateFetchedAt(Date.now());
             setEditRateValue(String(rateVal));
+          }
+
+          if (storedMode === 'auto') {
+            void syncAutoRateForStore(actualStoreId);
           }
         } else {
           setStore(null);
@@ -167,9 +225,8 @@ const AdminDashboard: React.FC = () => {
         });
         setRevenue(totalRevenue);
         setQuarantinedRevenueOrders(invalidRevenueRows);
-        // Fetch USD->LBP rate in background (non-blocking)
-        // Only fetch global rate if store doesn't provide its own rate
-        if (!profileSnap.exists() || !profileSnap.data()?.usdToLbpRate) {
+        // Fetch a fallback rate in background if no stored rate exists.
+        if (!profileSnap.exists() || (!profileSnap.data()?.customExchangeRate && !profileSnap.data()?.usdToLbpRate)) {
           getUsdToLbpRate().then(r => {
             setUsdToLbpRate(r.rate);
             setRateFetchedAt(r.fetchedAt);
@@ -685,11 +742,21 @@ const AdminDashboard: React.FC = () => {
                                 try {
                                   const db = getFirestore();
                                   const profileRef = doc(db, 'storeProfiles', actualStoreId);
-                                  await updateDoc(profileRef, { usdToLbpRate: parsed });
+                                  await updateDoc(profileRef, {
+                                    customExchangeRate: parsed,
+                                    usdToLbpRate: parsed,
+                                    exchangeRateMode: 'manual',
+                                  });
                                   // update local state
                                   setUsdToLbpRate(parsed);
                                   setRateFetchedAt(Date.now());
-                                  setStore(prev => ({ ...(prev as Record<string, unknown>), usdToLbpRate: parsed }));
+                                  setExchangeRateMode('manual');
+                                  setStore(prev => ({
+                                    ...(prev as Record<string, unknown>),
+                                    customExchangeRate: parsed,
+                                    usdToLbpRate: parsed,
+                                    exchangeRateMode: 'manual',
+                                  }));
                                   setEditingRate(false);
                                 } catch (err) {
                                   console.warn('Failed to save rate', err);
@@ -706,9 +773,61 @@ const AdminDashboard: React.FC = () => {
                             <button onClick={() => setEditingRate(false)} className="px-2 py-1 rounded text-sm border">Cancel</button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-3">
+                          <div className="flex items-center gap-3 flex-wrap">
                             <div className="text-sm text-gray-700">{usdToLbpRate ? `${usdToLbpRate} LBP per USD` : 'Not set'}</div>
+                            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">Mode: {exchangeRateMode === 'auto' ? 'Auto' : 'Manual'}</span>
                             <button onClick={() => setEditingRate(true)} className="text-sm text-market-primary">Edit</button>
+                            <button
+                              onClick={async () => {
+                                if (!user?.id) return;
+                                const actualStoreId = getActualStoreId(user);
+                                if (!actualStoreId) return;
+                                setExchangeRateMode('auto');
+                                try {
+                                  const db = getFirestore();
+                                  const profileRef = doc(db, 'storeProfiles', actualStoreId);
+                                  await updateDoc(profileRef, { exchangeRateMode: 'auto' });
+                                  await syncAutoRateForStore(actualStoreId);
+                                } catch (err) {
+                                  console.warn('Failed to enable auto exchange rates', err);
+                                }
+                              }}
+                              className="text-sm text-blue-600"
+                              disabled={syncingAutoRate}
+                            >
+                              {syncingAutoRate && exchangeRateMode === 'auto' ? 'Syncing...' : 'Auto Mode'}
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!user?.id) return;
+                                const actualStoreId = getActualStoreId(user);
+                                if (!actualStoreId) return;
+                                try {
+                                  const db = getFirestore();
+                                  const profileRef = doc(db, 'storeProfiles', actualStoreId);
+                                  await updateDoc(profileRef, { exchangeRateMode: 'manual' });
+                                  setExchangeRateMode('manual');
+                                  setStore(prev => ({ ...(prev as Record<string, unknown>), exchangeRateMode: 'manual' }));
+                                } catch (err) {
+                                  console.warn('Failed to switch to manual mode', err);
+                                }
+                              }}
+                              className="text-sm text-amber-700"
+                            >
+                              Manual Mode
+                            </button>
+                            <button
+                              onClick={async () => {
+                                if (!user?.id) return;
+                                const actualStoreId = getActualStoreId(user);
+                                if (!actualStoreId) return;
+                                await syncAutoRateForStore(actualStoreId);
+                              }}
+                              className="text-sm text-green-700"
+                              disabled={syncingAutoRate}
+                            >
+                              {syncingAutoRate ? 'Refreshing...' : 'Refresh Now'}
+                            </button>
                           </div>
                         )}
                       </div>
