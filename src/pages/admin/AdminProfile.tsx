@@ -211,6 +211,9 @@ const AdminProfile: React.FC = () => {
   const [totpSecret, setTotpSecret] = useState<TotpSecret | null>(null);
   const [totpUri, setTotpUri] = useState('');
   const [totpCode, setTotpCode] = useState('');
+  const [isExportingGdpr, setIsExportingGdpr] = useState(false);
+  const [isRequestingGdprDelete, setIsRequestingGdprDelete] = useState(false);
+  const [gdprDeleteConfirm, setGdprDeleteConfirm] = useState('');
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
   const refreshMfaStatus = async () => {
@@ -307,6 +310,82 @@ const AdminProfile: React.FC = () => {
       toast({ title: 'Disable MFA failed', description: msg, variant: 'destructive' });
     } finally {
       setIsDisablingMfa(false);
+    }
+  };
+
+  const handleGdprExport = async () => {
+    setIsExportingGdpr(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('You must be signed in.');
+
+      const token = await currentUser.getIdToken();
+      const storeId = getActualStoreId(user!);
+      const response = await fetch(`${API_URL}/gdpr/export`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storeId }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || 'GDPR export failed');
+
+      const blob = new Blob([JSON.stringify(payload.data, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `gdpr-export-${storeId}-${new Date().toISOString().slice(0, 10)}.json`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      toast({ title: 'GDPR export ready', description: 'Your data export file was generated and downloaded.' });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to export GDPR data.';
+      toast({ title: 'GDPR export failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsExportingGdpr(false);
+    }
+  };
+
+  const handleGdprDeleteRequest = async () => {
+    if (gdprDeleteConfirm.trim().toUpperCase() !== 'DELETE') {
+      toast({ title: 'Confirmation required', description: 'Type DELETE to confirm account deletion request.', variant: 'destructive' });
+      return;
+    }
+
+    setIsRequestingGdprDelete(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('You must be signed in.');
+
+      const token = await currentUser.getIdToken();
+      const storeId = getActualStoreId(user!);
+      const response = await fetch(`${API_URL}/gdpr/delete`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storeId, confirmDelete: true }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || 'GDPR delete request failed');
+
+      toast({ title: 'Deletion request submitted', description: 'Your GDPR deletion request is now pending.' });
+      setGdprDeleteConfirm('');
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : 'Failed to submit deletion request.';
+      toast({ title: 'Deletion request failed', description: msg, variant: 'destructive' });
+    } finally {
+      setIsRequestingGdprDelete(false);
     }
   };
 
@@ -2231,6 +2310,52 @@ const AdminProfile: React.FC = () => {
                   </div>
                 </>
               )}
+            </CardContent>
+          </Card>
+
+          {/* GDPR Tools */}
+          <Card>
+            <CardHeader>
+              <CardTitle>GDPR Tools</CardTitle>
+              <CardDescription>
+                Export your store data and submit right-to-be-forgotten deletion requests.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4 space-y-3">
+                <p className="text-sm font-medium">Data Export</p>
+                <p className="text-xs text-muted-foreground">
+                  Generate and download a JSON export containing your store profile, products, orders, and customer data.
+                </p>
+                <Button type="button" variant="outline" size="sm" disabled={isExportingGdpr} onClick={handleGdprExport}>
+                  {isExportingGdpr ? 'Exporting...' : 'Export My Data'}
+                </Button>
+              </div>
+
+              <div className="rounded-lg border border-red-200 bg-red-50 p-4 space-y-3">
+                <p className="text-sm font-medium text-red-800">Right-to-be-Forgotten Request</p>
+                <p className="text-xs text-red-700">
+                  This submits a deletion request for your account/store data. Type DELETE to confirm.
+                </p>
+                <div className="space-y-2">
+                  <Label htmlFor="gdpr-delete-confirm">Type DELETE to confirm</Label>
+                  <Input
+                    id="gdpr-delete-confirm"
+                    value={gdprDeleteConfirm}
+                    onChange={(e) => setGdprDeleteConfirm(e.target.value)}
+                    placeholder="DELETE"
+                  />
+                </div>
+                <Button
+                  type="button"
+                  variant="destructive"
+                  size="sm"
+                  disabled={isRequestingGdprDelete}
+                  onClick={handleGdprDeleteRequest}
+                >
+                  {isRequestingGdprDelete ? 'Submitting...' : 'Request Deletion'}
+                </Button>
+              </div>
             </CardContent>
           </Card>
 

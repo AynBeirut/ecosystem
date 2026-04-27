@@ -14,14 +14,10 @@ Tag format used on each item:
 
 ### Security and Compliance (Optional, recommended hardening)
 - [ ] (Optional) Complete GDPR compliance tooling (`Size: 4 MB`, `Best: soon`)
-- [ ] (Optional) Add customer data export flow (GDPR) (`Size: 3 MB`, `Best: after GDPR API done`)
-- [ ] (Optional) Add right-to-be-forgotten flow (GDPR delete) (`Size: 3 MB`, `Best: after GDPR API done`)
 - [ ] (Optional) Add privacy policy generator flow (`Size: 2 MB`, `Best: soon`)
 
 ### GDPR API + UI
-- [ ] Implement `POST /gdpr/export` (`Size: 3 MB`, `Best: now`)
-- [ ] Implement `POST /gdpr/delete` (`Size: 3 MB`, `Best: now`)
-- [ ] Add admin UI and customer request UI for GDPR actions (`Size: 3 MB`, `Best: after GDPR API done`)
+- [ ] Add customer request UI for GDPR actions (`Size: 3 MB`, `Best: after GDPR API done`)
 
 ### Whish Production Go-Live
 - [ ] Finish Whish production cutover (sandbox -> production) (`Size: 3 MB`, `Best: now`)
