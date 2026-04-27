@@ -15,6 +15,7 @@ interface SEOHeadProps {
   robotsFollow?: boolean;
   twitterHandle?: string;
   facebookAppId?: string;
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
 const DEFAULT_DESCRIPTION = 'Grabio – Discover and shop from local stores in Lebanon. Browse products, place orders, and support local businesses.';
@@ -35,12 +36,13 @@ const SEOHead: React.FC<SEOHeadProps> = ({
   robotsFollow = true,
   twitterHandle,
   facebookAppId,
+  structuredData,
 }) => {
   const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
   const canonicalUrl = url || (typeof window !== 'undefined' ? window.location.href : 'https://grabio.space');
   const robotsContent = `${robotsIndex ? 'index' : 'noindex'}, ${robotsFollow ? 'follow' : 'nofollow'}`;
 
-  const schema =
+  const fallbackSchema =
     type === 'product' && price !== undefined
       ? JSON.stringify({
           '@context': 'https://schema.org',
@@ -62,6 +64,8 @@ const SEOHead: React.FC<SEOHeadProps> = ({
           url: canonicalUrl,
           description,
         });
+
+  const schema = structuredData ? JSON.stringify(structuredData) : fallbackSchema;
 
   return (
     <Helmet>

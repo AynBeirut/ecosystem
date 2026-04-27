@@ -127,8 +127,20 @@ export interface StoreSeoSettings {
   canonicalBaseUrl?: string;
   robotsIndex?: boolean;
   robotsFollow?: boolean;
+  robotsDisallowPaths?: string[];
+  robotsCustomDirectives?: string;
   ogImage?: string;
   twitterHandle?: string;
+  lastSitemapSubmission?: {
+    submittedAt?: string;
+    sitemapUrl?: string;
+    results?: Array<{
+      target: string;
+      ok: boolean;
+      status?: number;
+      detail?: string;
+    }>;
+  };
 }
 
 export interface MetaIntegrationSettings {
@@ -138,6 +150,21 @@ export interface MetaIntegrationSettings {
   facebookAppId?: string;
   catalogId?: string;
   conversionApiToken?: string;
+  conversionTrackingEnabled?: boolean;
+  lastConversionEventAt?: string;
+  lastConversionEventName?: string;
+  catalogFeedUrl?: string;
+  lastCatalogSyncAt?: string;
+  lastCatalogSyncJobId?: string;
+  lastCatalogProductCount?: number;
+  facebookShopEnabled?: boolean;
+  facebookShopStatus?: 'connected' | 'pending' | 'error' | 'not_connected';
+  facebookShopConnectedAt?: string;
+  facebookShopLastConnectionJobId?: string;
+  instagramShoppingEnabled?: boolean;
+  instagramShoppingStatus?: 'connected' | 'pending' | 'error' | 'not_connected';
+  instagramShoppingConnectedAt?: string;
+  instagramShoppingLastConnectionJobId?: string;
 }
 
 export interface ServiceCatalogSettings {

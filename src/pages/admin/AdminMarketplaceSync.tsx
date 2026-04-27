@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { getAuth } from 'firebase/auth';
 import {
   addDoc,
   doc,
@@ -23,7 +24,7 @@ import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { Globe, CheckCircle2, XCircle, RefreshCw, UploadCloud, Link2 } from 'lucide-react';
+import { Globe, CheckCircle2, XCircle, RefreshCw, UploadCloud, Link2, ExternalLink } from 'lucide-react';
 import { MarketplaceIntegrationSetting } from '@/types/storeProfile';
 import { Product } from '@/types/product';
 import {
@@ -88,6 +89,21 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const AVAILABLE_MAPPING_FIELDS = ['name', 'description', 'category', 'price', 'image', 'stock', 'sku'];
+const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
+
+type MetaCatalogState = {
+  catalogId?: string;
+  facebookPageUrl?: string;
+  catalogFeedUrl?: string;
+  lastCatalogSyncAt?: string;
+  lastCatalogProductCount?: number;
+  facebookShopEnabled?: boolean;
+  facebookShopStatus?: string;
+  facebookShopConnectedAt?: string;
+  instagramShoppingEnabled?: boolean;
+  instagramShoppingStatus?: string;
+  instagramShoppingConnectedAt?: string;
+};
 
 const toIsoSafe = (value: unknown): string => {
   if (!value) return '';
@@ -117,6 +133,11 @@ const AdminMarketplaceSync: React.FC = () => {
   const [savingSettings, setSavingSettings] = useState<string | null>(null);
   const [validationBusy, setValidationBusy] = useState<string | null>(null);
   const [retryBusy, setRetryBusy] = useState<string | null>(null);
+  const [metaSyncBusy, setMetaSyncBusy] = useState(false);
+  const [shopConnectBusy, setShopConnectBusy] = useState(false);
+  const [instagramConnectBusy, setInstagramConnectBusy] = useState(false);
+  const [shopOnboardingUrl, setShopOnboardingUrl] = useState('');
+  const [metaCatalog, setMetaCatalog] = useState<MetaCatalogState>({});
   const [search, setSearch] = useState('');
 
   const storeId = getActualStoreId(user || undefined);
@@ -148,6 +169,7 @@ const AdminMarketplaceSync: React.FC = () => {
       const loadedIntegrations = Array.isArray(profileData?.marketplaceIntegrations)
         ? (profileData?.marketplaceIntegrations as MarketplaceIntegrationSetting[])
         : [];
+      const loadedMeta = ((profileData?.metaIntegrationSettings || {}) as MetaCatalogState) || {};
 
       const productRows = productsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() } as Product));
 
@@ -205,6 +227,24 @@ const AdminMarketplaceSync: React.FC = () => {
       }, {} as Record<string, ChannelSyncSettings>);
 
       setIntegrations(loadedIntegrations);
+      setMetaCatalog({
+        catalogId: String(loadedMeta.catalogId || '').trim(),
+        facebookPageUrl: String(loadedMeta.facebookPageUrl || '').trim(),
+        catalogFeedUrl: String(loadedMeta.catalogFeedUrl || '').trim(),
+        lastCatalogSyncAt: String(loadedMeta.lastCatalogSyncAt || '').trim(),
+        lastCatalogProductCount: Number(loadedMeta.lastCatalogProductCount || 0),
+        facebookShopEnabled: Boolean(loadedMeta.facebookShopEnabled),
+        facebookShopStatus: String(loadedMeta.facebookShopStatus || '').trim(),
+        facebookShopConnectedAt: String(loadedMeta.facebookShopConnectedAt || '').trim(),
+        instagramShoppingEnabled: Boolean(loadedMeta.instagramShoppingEnabled),
+        instagramShoppingStatus: String(loadedMeta.instagramShoppingStatus || '').trim(),
+        instagramShoppingConnectedAt: String(loadedMeta.instagramShoppingConnectedAt || '').trim(),
+      });
+      if (String(loadedMeta.catalogId || '').trim()) {
+        setShopOnboardingUrl(`https://business.facebook.com/commerce_manager/catalogs/${encodeURIComponent(String(loadedMeta.catalogId || '').trim())}`);
+      } else {
+        setShopOnboardingUrl('');
+      }
       setProducts(productRows);
       setJobs(jobRows);
       setChannelSettings(settingRows);
@@ -598,6 +638,148 @@ const AdminMarketplaceSync: React.FC = () => {
     }
   };
 
+  const runMetaCatalogSync = async () => {
+    if (!storeId) return;
+    setMetaSyncBusy(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not authenticated');
+      const token = await currentUser.getIdToken();
+
+      const response = await fetch(`${API_URL}/meta/catalog/sync`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storeId }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Meta catalog sync failed');
+      }
+
+      setMetaCatalog((prev) => ({
+        ...prev,
+        catalogFeedUrl: String(data?.feedUrl || prev.catalogFeedUrl || ''),
+        lastCatalogSyncAt: String(data?.syncedAt || new Date().toISOString()),
+        lastCatalogProductCount: Number(data?.summary?.validProducts || 0),
+      }));
+
+      toast({
+        title: 'Meta catalog synced',
+        description: `Synced ${Number(data?.summary?.validProducts || 0)} valid product(s).`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Meta sync failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setMetaSyncBusy(false);
+    }
+  };
+
+  const connectFacebookShop = async () => {
+    if (!storeId) return;
+    setShopConnectBusy(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not authenticated');
+      const token = await currentUser.getIdToken();
+
+      const response = await fetch(`${API_URL}/meta/shop/connect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storeId }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Facebook Shop connection failed');
+      }
+
+      setMetaCatalog((prev) => ({
+        ...prev,
+        facebookShopEnabled: true,
+        facebookShopStatus: String(data?.status || 'connected'),
+        facebookShopConnectedAt: String(data?.connectedAt || new Date().toISOString()),
+        catalogFeedUrl: String(data?.feedUrl || prev.catalogFeedUrl || ''),
+      }));
+      setShopOnboardingUrl(String(data?.onboardingUrl || shopOnboardingUrl || ''));
+
+      toast({
+        title: 'Facebook Shop connected',
+        description: 'Integration is now linked. Open Commerce Manager to complete storefront setup.',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Facebook Shop connection failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setShopConnectBusy(false);
+    }
+  };
+
+  const connectInstagramShopping = async () => {
+    if (!storeId) return;
+    setInstagramConnectBusy(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not authenticated');
+      const token = await currentUser.getIdToken();
+
+      const response = await fetch(`${API_URL}/meta/instagram/connect`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storeId }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Instagram Shopping connection failed');
+      }
+
+      setMetaCatalog((prev) => ({
+        ...prev,
+        instagramShoppingEnabled: true,
+        instagramShoppingStatus: String(data?.status || 'connected'),
+        instagramShoppingConnectedAt: String(data?.connectedAt || new Date().toISOString()),
+        catalogFeedUrl: String(data?.feedUrl || prev.catalogFeedUrl || ''),
+      }));
+      setShopOnboardingUrl(String(data?.onboardingUrl || shopOnboardingUrl || ''));
+
+      toast({
+        title: 'Instagram Shopping connected',
+        description: 'Integration is now linked. Open Commerce Manager to complete Instagram setup.',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Instagram Shopping connection failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setInstagramConnectBusy(false);
+    }
+  };
+
   const statusBadgeClass = (status: SyncJobRow['status']) => {
     if (status === 'completed') return 'bg-green-100 text-green-800 hover:bg-green-100';
     if (status === 'failed') return 'bg-red-100 text-red-800 hover:bg-red-100';
@@ -677,6 +859,140 @@ const AdminMarketplaceSync: React.FC = () => {
               <div className="text-sm text-muted-foreground">
                 Matching products: <span className="font-semibold text-foreground">{filteredProducts.length}</span>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6 border-blue-200">
+          <CardHeader>
+            <CardTitle>Meta Catalog Sync</CardTitle>
+            <CardDescription>
+              Generate catalog feed and push the latest valid products for Facebook/Instagram commerce.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Catalog ID</p>
+                <p className="font-medium">{metaCatalog.catalogId || 'Not set (configure in Store Profile)'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Facebook Page URL</p>
+                <p className="font-medium break-all">{metaCatalog.facebookPageUrl || 'Not set'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Feed URL</p>
+                <p className="font-medium break-all">{metaCatalog.catalogFeedUrl || `${API_URL}/meta/catalog/feed?storeId=${storeId || ''}`}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Last Sync</p>
+                <p className="font-medium">{metaCatalog.lastCatalogSyncAt ? new Date(metaCatalog.lastCatalogSyncAt).toLocaleString() : 'Never'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Facebook Shop Status</p>
+                <p className="font-medium">
+                  {metaCatalog.facebookShopEnabled
+                    ? (metaCatalog.facebookShopStatus || 'connected')
+                    : 'Not connected'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Connected At</p>
+                <p className="font-medium">
+                  {metaCatalog.facebookShopConnectedAt
+                    ? new Date(metaCatalog.facebookShopConnectedAt).toLocaleString()
+                    : 'Not connected'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Instagram Shopping Status</p>
+                <p className="font-medium">
+                  {metaCatalog.instagramShoppingEnabled
+                    ? (metaCatalog.instagramShoppingStatus || 'connected')
+                    : 'Not connected'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Instagram Connected At</p>
+                <p className="font-medium">
+                  {metaCatalog.instagramShoppingConnectedAt
+                    ? new Date(metaCatalog.instagramShoppingConnectedAt).toLocaleString()
+                    : 'Not connected'}
+                </p>
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={!storeId}
+                onClick={() => window.open(`${API_URL}/meta/catalog/feed?storeId=${storeId}`, '_blank', 'noopener,noreferrer')}
+              >
+                <Link2 className="h-4 w-4 mr-2" />
+                Open Feed
+              </Button>
+              <Button
+                type="button"
+                onClick={runMetaCatalogSync}
+                disabled={metaSyncBusy || !storeId || !metaCatalog.catalogId}
+              >
+                {metaSyncBusy ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Syncing...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="h-4 w-4 mr-2" />
+                    Sync Meta Catalog
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={connectFacebookShop}
+                disabled={shopConnectBusy || !storeId || !metaCatalog.catalogId || !metaCatalog.facebookPageUrl || !metaCatalog.lastCatalogSyncAt}
+              >
+                {shopConnectBusy ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Connect Facebook Shop
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={connectInstagramShopping}
+                disabled={instagramConnectBusy || !storeId || !metaCatalog.catalogId || !metaCatalog.facebookPageUrl || !metaCatalog.lastCatalogSyncAt}
+              >
+                {instagramConnectBusy ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Connecting IG...
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle2 className="h-4 w-4 mr-2" />
+                    Connect Instagram Shopping
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!shopOnboardingUrl}
+                onClick={() => window.open(shopOnboardingUrl, '_blank', 'noopener,noreferrer')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open Commerce Manager
+              </Button>
             </div>
           </CardContent>
         </Card>

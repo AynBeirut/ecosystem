@@ -67,6 +67,7 @@ const AdminProducts: React.FC = () => {
     category: '',
     deliveryTime: '',
     image: '',
+    imageAlt: '',
     imageFile: null as File | null,
     stock: '',
     productType: 'simple' as ProductType,
@@ -285,6 +286,7 @@ const AdminProducts: React.FC = () => {
         category: newProduct.category,
         deliveryTime: newProduct.deliveryTime || '3-5 days',
         image: imageUrl || `https://placehold.co/400x300/38B2AC/fff?text=${encodeURIComponent(newProduct.name)}`,
+        imageAlt: String(newProduct.imageAlt || newProduct.name || '').trim(),
         storeId: user?.storeId || '',
         slug: productSlug,
         ...getStockPayload(newProduct.productType, 0),
@@ -321,7 +323,7 @@ const AdminProducts: React.FC = () => {
       setProducts(productsList);
       
     setNewProduct({
-      name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '',
+      name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageAlt: '', imageFile: null, stock: '',
       productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: '',
       expiryTracking: false, expiryDate: '', expiryAlertDays: 30,
     });
@@ -362,6 +364,7 @@ const AdminProducts: React.FC = () => {
       category: product.category || '',
       deliveryTime: product.deliveryTime || '',
       image: product.image || '',
+      imageAlt: product.imageAlt || product.name || '',
       imageFile: null,
       stock: typeof product.stock === 'number' ? product.stock.toString() : '',
       productType: product.productType || 'simple',
@@ -477,6 +480,7 @@ const AdminProducts: React.FC = () => {
         category: newProduct.category,
         deliveryTime: newProduct.deliveryTime,
         image: imageUrl || editingProduct.image,
+        imageAlt: String(newProduct.imageAlt || newProduct.name || '').trim(),
         storeId: editingProduct.storeId,
         slug: productSlug,
         // NOTE: stock is NOT updated here — it is controlled only by purchase entries and damage/waste records
@@ -530,7 +534,7 @@ const AdminProducts: React.FC = () => {
       setProducts(products.map(p => p.id === editingProduct.id ? { id: editingProduct.id, ...updatedProduct } : p));
       setEditingProduct(null);
   setNewProduct({
-    name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageFile: null, stock: '',
+    name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageAlt: '', imageFile: null, stock: '',
     productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: '',
     expiryTracking: false, expiryDate: '', expiryAlertDays: 30,
   });
@@ -773,6 +777,13 @@ const AdminProducts: React.FC = () => {
                       onChange={(e) => setNewProduct(prev => ({ ...prev, image: e.target.value }))}
                       placeholder="https://example.com/image.jpg"
                     />
+                    <Label htmlFor="imageAlt" className="mt-2 block">Image Alt Text</Label>
+                    <Input
+                      id="imageAlt"
+                      value={newProduct.imageAlt}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, imageAlt: e.target.value }))}
+                      placeholder="Describe this product image for accessibility"
+                    />
                     <Label htmlFor="imageFile" className="mt-2 block">Or upload image</Label>
                     <div className="flex gap-2 items-center">
                       <Input
@@ -869,7 +880,7 @@ const AdminProducts: React.FC = () => {
               <CardContent>
                 <img 
                   src={product.image || (product as any).imageUrl} 
-                  alt={product.name}
+                  alt={product.imageAlt || product.name}
                   className="w-full h-32 object-cover rounded-md mb-3"
                 />
                 
@@ -1192,6 +1203,13 @@ const AdminProducts: React.FC = () => {
                 value={newProduct.image}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, image: e.target.value }))}
                 placeholder="https://example.com/image.jpg"
+              />
+              <Label htmlFor="edit-imageAlt" className="mt-2 block">Image Alt Text</Label>
+              <Input
+                id="edit-imageAlt"
+                value={newProduct.imageAlt}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, imageAlt: e.target.value }))}
+                placeholder="Describe this product image for accessibility"
               />
             </div>
           </div>

@@ -8,6 +8,7 @@ export type Product = {
   description: string;
   price: number;
   image: string;
+  imageAlt?: string;
   storeId: string;
   category: string;
   deliveryTime: string;
@@ -93,6 +94,8 @@ export type Store = {
     canonicalBaseUrl?: string;
     robotsIndex?: boolean;
     robotsFollow?: boolean;
+    robotsDisallowPaths?: string[];
+    robotsCustomDirectives?: string;
     ogImage?: string;
     twitterHandle?: string;
   };

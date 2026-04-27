@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, runTransaction, orderBy, serverTimestamp } from 'firebase/firestore';
 import SEOHead from '@/components/SEOHead';
@@ -23,6 +23,7 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { generateSlug } from '@/lib/slugify';
 
 // ── Store-level contact form (sends message to storeContactMessages/{storeId}/messages) ──
 const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { cardSoft: string; sectionTitle: string; mutedText: string }; formStyle?: 1 | 2 | 3 | 4 | 5 | 6 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 }> = ({ storeId, storeName, theme, formStyle = 1 }) => {
@@ -274,7 +275,7 @@ const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { 
 };
 
 const StoreDetail: React.FC = () => {
-  const { id, slug } = useParams<{ id?: string; slug?: string }>();
+  const { id, slug, categorySlug } = useParams<{ id?: string; slug?: string; categorySlug?: string }>();
   const navigate = useNavigate();
   const [storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
@@ -302,6 +303,21 @@ const StoreDetail: React.FC = () => {
   const [readMoreContent, setReadMoreContent] = useState<{ title: string; text: string } | null>(null);
   // Page navigation state
   const [activePage, setActivePage] = useState<string>('home');
+
+  const normalizedCategorySlug = String(categorySlug || '').trim().toLowerCase();
+  const productCategories = useMemo(
+    () => Array.from(new Set(products.map((product) => String(product.category || '').trim()).filter(Boolean))),
+    [products]
+  );
+  const selectedCategory = useMemo(
+    () => productCategories.find((category) => generateSlug(category) === normalizedCategorySlug) || null,
+    [productCategories, normalizedCategorySlug]
+  );
+  const filteredProducts = useMemo(
+    () => (selectedCategory ? products.filter((product) => product.category === selectedCategory) : products),
+    [products, selectedCategory]
+  );
+  const storeBasePath = store?.slug ? `/${store.slug}` : storeId ? `/store/id/${storeId}` : '';
 
   // Derive banner images safely (store may be null before load)
   const bannerImagesCount = React.useMemo(() => {
@@ -736,6 +752,56 @@ const StoreDetail: React.FC = () => {
     backgroundColor: tColors.background
   } as React.CSSProperties : colorStyle;
 
+  const storeStructuredData: Array<Record<string, unknown>> = [
+    {
+      '@context': 'https://schema.org',
+      '@type': 'Store',
+      name: store.name,
+      description: store.seoSettings?.metaDescription || store.description || store.slogan || '',
+      image: store.seoSettings?.ogImage || store.logo,
+      url: store.seoSettings?.canonicalBaseUrl || `https://grabio.space/${store.slug || storeId}`,
+      telephone: store.contactInfo?.phone || undefined,
+      email: store.contactInfo?.email || undefined,
+      address: store.location || undefined,
+      sameAs: [
+        store.socialLinks?.facebook,
+        store.socialLinks?.instagram,
+        store.socialLinks?.twitter,
+      ].filter(Boolean),
+      ...(avgRating && reviews.length > 0
+        ? {
+            aggregateRating: {
+              '@type': 'AggregateRating',
+              ratingValue: Number(avgRating.toFixed(1)),
+              reviewCount: reviews.length,
+            },
+          }
+        : {}),
+    },
+    {
+      '@context': 'https://schema.org',
+      '@type': 'ItemList',
+      itemListElement: filteredProducts.slice(0, 50).map((product, index) => ({
+        '@type': 'ListItem',
+        position: index + 1,
+        url: `https://grabio.space/${store.slug || store.id}/product/${product.slug || product.id}`,
+        item: {
+          '@type': 'Product',
+          name: product.name,
+          image: product.image,
+          description: product.description,
+          category: product.category,
+          offers: {
+            '@type': 'Offer',
+            price: Number(product.price || 0).toFixed(2),
+            priceCurrency: store.mainCurrency || 'USD',
+            availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+          },
+        },
+      })),
+    },
+  ];
+
   // Hero banner style - uses heroBg color or primary as fallback
   const heroBannerStyle = tColors?.heroBg ? {
     backgroundColor: tColors.heroBg,
@@ -922,6 +988,43 @@ const StoreDetail: React.FC = () => {
     }
   };
 
+  const renderCategoryFilters = () => {
+    if (!storeBasePath || productCategories.length === 0) return null;
+
+    return (
+      <div className="mb-4 flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => navigate(storeBasePath)}
+          className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+            !selectedCategory
+              ? 'bg-gray-900 text-white border-gray-900'
+              : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+          }`}
+        >
+          All
+        </button>
+        {productCategories.map((category) => {
+          const isActive = selectedCategory === category;
+          return (
+            <button
+              type="button"
+              key={category}
+              onClick={() => navigate(`${storeBasePath}/category/${generateSlug(category)}`)}
+              className={`px-3 py-1 rounded-full text-xs border transition-colors ${
+                isActive
+                  ? 'bg-gray-900 text-white border-gray-900'
+                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
+              }`}
+            >
+              {category}
+            </button>
+          );
+        })}
+      </div>
+    );
+  };
+
   // Render individual section by ID
   const renderSection = (sectionId: StoreSectionId) => {
     switch (sectionId) {
@@ -979,9 +1082,10 @@ const StoreDetail: React.FC = () => {
         return (
           <div>
             <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Products</h2>
-            {products.length > 0 ? (
+            {renderCategoryFilters()}
+            {filteredProducts.length > 0 ? (
               <div className={productGridClass}>
-                {products.map((product, index) => (
+                {filteredProducts.map((product, index) => (
                   <div key={product.id} className={productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
                     <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
                   </div>
@@ -990,7 +1094,7 @@ const StoreDetail: React.FC = () => {
             ) : (
               <Card>
                 <CardContent className="flex items-center justify-center h-40">
-                  <p className="text-gray-500">This store doesn't have any products yet.</p>
+                  <p className="text-gray-500">No products found for this category.</p>
                 </CardContent>
               </Card>
             )}
@@ -1166,15 +1270,20 @@ const StoreDetail: React.FC = () => {
       `}</style>
       {store && (
         <SEOHead
-          title={store.seoSettings?.metaTitleSuffix ? `${store.name} ${store.seoSettings.metaTitleSuffix}` : store.name}
+          title={store.seoSettings?.metaTitleSuffix
+            ? `${selectedCategory ? `${store.name} - ${selectedCategory}` : store.name} ${store.seoSettings.metaTitleSuffix}`
+            : (selectedCategory ? `${store.name} - ${selectedCategory}` : store.name)}
           description={store.seoSettings?.metaDescription || store.description || store.slogan || `Shop at ${store.name} on Grabio`}
           image={store.seoSettings?.ogImage || store.logo}
-          url={store.seoSettings?.canonicalBaseUrl || `https://grabio.space/${store.slug || storeId}`}
+          url={store.seoSettings?.canonicalBaseUrl || (selectedCategory
+            ? `https://grabio.space/${store.slug || storeId}/category/${generateSlug(selectedCategory)}`
+            : `https://grabio.space/${store.slug || storeId}`)}
           keywords={store.seoSettings?.keywords}
           robotsIndex={store.seoSettings?.robotsIndex ?? true}
           robotsFollow={store.seoSettings?.robotsFollow ?? true}
           twitterHandle={store.seoSettings?.twitterHandle}
           facebookAppId={store.metaIntegrationSettings?.facebookAppId}
+          structuredData={storeStructuredData}
         />
       )}
       {/* Read More Modal */}
@@ -1407,9 +1516,10 @@ const StoreDetail: React.FC = () => {
         {activePage === 'products' && (
           <div className="space-y-4">
             <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>Products</h2>
-            {products.length > 0 ? (
+            {renderCategoryFilters()}
+            {filteredProducts.length > 0 ? (
               <div className={productGridClass}>
-                {products.map((product, index) => (
+                {filteredProducts.map((product, index) => (
                   <div key={product.id} className={productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
                   <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
                   </div>
@@ -1418,7 +1528,7 @@ const StoreDetail: React.FC = () => {
             ) : (
               <Card className={currentTheme.card}>
                 <CardContent className="flex items-center justify-center h-40">
-                  <p className="text-gray-500">This store doesn't have any products yet.</p>
+                  <p className="text-gray-500">No products found for this category.</p>
                 </CardContent>
               </Card>
             )}

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
@@ -63,6 +64,8 @@ const defaultProfile: StoreProfile = {
     canonicalBaseUrl: '',
     robotsIndex: true,
     robotsFollow: true,
+    robotsDisallowPaths: [],
+    robotsCustomDirectives: '',
     ogImage: '',
     twitterHandle: '',
   },
@@ -168,7 +171,98 @@ const AdminProfile: React.FC = () => {
   const [slugAvailable, setSlugAvailable] = useState(false);
   const [newPageName, setNewPageName] = useState<string>('');
   const [isRegisteringDomain, setIsRegisteringDomain] = useState(false);
+  const [isSubmittingSitemap, setIsSubmittingSitemap] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
+
+  const robotsTxtPreview = (() => {
+    const slugPrefix = formData.slug ? `/${String(formData.slug).trim().replace(/^\/+|\/+$/g, '')}` : '';
+    const disallowPaths = (formData.seoSettings?.robotsDisallowPaths || [])
+      .map((path) => String(path || '').trim())
+      .filter((path) => path.length > 0)
+      .map((path) => {
+        const normalized = path.startsWith('/') ? path : `/${path}`;
+        return slugPrefix ? `${slugPrefix}${normalized}` : normalized;
+      });
+
+    const customDirectives = String(formData.seoSettings?.robotsCustomDirectives || '').trim();
+    const lines = [
+      'User-agent: *',
+      'Allow: /',
+      ...disallowPaths.map((path) => `Disallow: ${path}`),
+      'Sitemap: https://grabio.space/sitemap.xml',
+      ...(customDirectives ? ['', customDirectives] : []),
+    ];
+    return lines.join('\n');
+  })();
+
+  const handleCopyRobotsTxt = async () => {
+    try {
+      await navigator.clipboard.writeText(robotsTxtPreview);
+      toast({ title: 'Copied', description: 'robots.txt preview copied to clipboard.' });
+    } catch (_err) {
+      toast({ title: 'Copy failed', description: 'Could not copy robots.txt preview.', variant: 'destructive' });
+    }
+  };
+
+  const handleSitemapSubmission = async () => {
+    const storeId = getActualStoreId(user);
+    if (!storeId) {
+      toast({ title: 'Store not found', description: 'Please refresh and try again.', variant: 'destructive' });
+      return;
+    }
+
+    setIsSubmittingSitemap(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) {
+        throw new Error('Not authenticated');
+      }
+      const token = await currentUser.getIdToken();
+
+      const response = await fetch(`${API_URL}/seo/sitemap/submit`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ storeId }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to submit sitemap');
+      }
+
+      const successCount = Number(data?.summary?.successCount || 0);
+      const total = Number(data?.summary?.total || 0);
+      toast({
+        title: 'Sitemap submitted',
+        description: `Submission finished (${successCount}/${total} successful).`,
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        seoSettings: {
+          ...(prev.seoSettings || {}),
+          lastSitemapSubmission: {
+            submittedAt: String(data?.submittedAt || new Date().toISOString()),
+            sitemapUrl: String(data?.sitemapUrl || ''),
+            results: Array.isArray(data?.results) ? data.results : [],
+          },
+        },
+      }));
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast({
+        title: 'Sitemap submission failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setIsSubmittingSitemap(false);
+    }
+  };
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -933,6 +1027,76 @@ const AdminProfile: React.FC = () => {
                     />
                   </div>
                 </div>
+
+                <div className="rounded-md border p-4 space-y-3">
+                  <p className="text-sm font-medium">Robots.txt Management</p>
+                  <div>
+                    <Label htmlFor="robotsDisallowPaths">Disallow Paths (one per line)</Label>
+                    <Textarea
+                      id="robotsDisallowPaths"
+                      rows={3}
+                      value={(formData.seoSettings?.robotsDisallowPaths || []).join('\n')}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        seoSettings: {
+                          ...(prev.seoSettings || {}),
+                          robotsDisallowPaths: e.target.value
+                            .split('\n')
+                            .map((line) => line.trim())
+                            .filter((line) => line.length > 0),
+                        },
+                      }))}
+                      placeholder="/admin\n/private"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="robotsCustomDirectives">Custom Directives (optional)</Label>
+                    <Textarea
+                      id="robotsCustomDirectives"
+                      rows={4}
+                      value={formData.seoSettings?.robotsCustomDirectives || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        seoSettings: {
+                          ...(prev.seoSettings || {}),
+                          robotsCustomDirectives: e.target.value,
+                        },
+                      }))}
+                      placeholder="User-agent: AdsBot-Google\nDisallow: /"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="robotsPreview">Preview</Label>
+                    <Textarea id="robotsPreview" rows={7} value={robotsTxtPreview} readOnly className="font-mono text-xs" />
+                  </div>
+                  <div className="flex justify-end">
+                    <Button type="button" variant="outline" onClick={handleCopyRobotsTxt}>Copy robots.txt</Button>
+                  </div>
+                </div>
+
+                <div className="rounded-md border p-4 space-y-3">
+                  <div>
+                    <p className="text-sm font-medium">Sitemap Submission</p>
+                    <p className="text-xs text-muted-foreground">
+                      Notify search engines after major catalog updates.
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={handleSitemapSubmission}
+                      disabled={isSubmittingSitemap}
+                    >
+                      {isSubmittingSitemap ? 'Submitting sitemap...' : 'Submit Sitemap to Search Engines'}
+                    </Button>
+                    {formData.seoSettings?.lastSitemapSubmission?.submittedAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Last submitted: {new Date(formData.seoSettings.lastSitemapSubmission.submittedAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                </div>
               </div>
 
               <div className="space-y-4">
@@ -1010,6 +1174,38 @@ const AdminProfile: React.FC = () => {
                         },
                       }))}
                       placeholder="Catalog ID"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="metaConversionApiToken">Meta Conversion API Token</Label>
+                    <Input
+                      id="metaConversionApiToken"
+                      type="password"
+                      value={formData.metaIntegrationSettings?.conversionApiToken || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        metaIntegrationSettings: {
+                          ...(prev.metaIntegrationSettings || {}),
+                          conversionApiToken: e.target.value,
+                        },
+                      }))}
+                      placeholder="EAAB..."
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="metaLastConversionEvent">Last Conversion Event</Label>
+                    <Input
+                      id="metaLastConversionEvent"
+                      value={formData.metaIntegrationSettings?.lastConversionEventName || 'No events yet'}
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="metaLastConversionAt">Last Conversion Timestamp</Label>
+                    <Input
+                      id="metaLastConversionAt"
+                      value={formData.metaIntegrationSettings?.lastConversionEventAt ? new Date(formData.metaIntegrationSettings.lastConversionEventAt).toLocaleString() : 'No events yet'}
+                      readOnly
                     />
                   </div>
                 </div>

@@ -20,7 +20,7 @@ import { PaymentMethod } from '@/types/product';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
-import { pixelAddToCart, pixelPurchase } from '@/lib/metaPixel';
+import { pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
 
 type StorePaymentMethods = {
   creditCard: boolean;
@@ -531,11 +531,35 @@ const Cart: React.FC = () => {
       return;
     }
     
+    const itemsByStore = items.reduce((acc, item) => {
+      const key = item.product.storeId;
+      acc[key] = acc[key] || [];
+      acc[key].push(item);
+      return acc;
+    }, {} as Record<string, typeof items>);
+
     // Place order via server-side checkout (supports both guest and registered users)
     try {
       const auth = getAuth();
       const currentUser = auth.currentUser;
       const idToken = currentUser ? await currentUser.getIdToken() : null;
+
+      for (const [storeId, storeItems] of Object.entries(itemsByStore)) {
+        const storeValue = storeItems.reduce((sum, item) => sum + Number(item.product.price || 0) * Number(item.quantity || 1), 0);
+        const contentIds = storeItems.map((item) => item.product.id);
+        void trackMetaConversionEvent({
+          storeId,
+          eventName: 'InitiateCheckout',
+          value: storeValue,
+          currency: 'USD',
+          contentIds,
+          userData: {
+            externalId: String(user?.id || ''),
+            email: String(user?.email || deliveryInfo.email || ''),
+            phone: String(deliveryInfo.phone || ''),
+          },
+        });
+      }
 
       // Use an env-configurable API base so production can point to the deployed
       // Cloud Function URL (set VITE_API_BASE) while development uses '/api' and
@@ -608,6 +632,24 @@ const Cart: React.FC = () => {
       if (paymentMethod === 'cash') {
         toast.success('Order placed successfully! The store will contact you soon.');
         pixelPurchase({ value: subtotal, contentIds: items.map(i => i.product.id) });
+
+        for (const [storeId, storeItems] of Object.entries(itemsByStore)) {
+          const storeValue = storeItems.reduce((sum, item) => sum + Number(item.product.price || 0) * Number(item.quantity || 1), 0);
+          const contentIds = storeItems.map((item) => item.product.id);
+          void trackMetaConversionEvent({
+            storeId,
+            eventName: 'Purchase',
+            value: storeValue,
+            currency: 'USD',
+            contentIds,
+            userData: {
+              externalId: String(user?.id || ''),
+              email: String(user?.email || deliveryInfo.email || ''),
+              phone: String(deliveryInfo.phone || ''),
+            },
+          });
+        }
+
         clearCart();
         
         // For guest users, redirect to tracking page with order ID; for logged-in users, go to orders

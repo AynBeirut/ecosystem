@@ -3,7 +3,7 @@ import React, { useEffect, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import SEOHead from '@/components/SEOHead';
-import { pixelViewContent } from '@/lib/metaPixel';
+import { pixelAddToCart, pixelViewContent, trackMetaConversionEvent } from '@/lib/metaPixel';
 import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
@@ -18,6 +18,7 @@ import ShareButtons from '@/components/ui/ShareButtons';
 import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/context/useAuth';
 import { toast } from '@/components/ui/sonner';
+import { generateSlug } from '@/lib/slugify';
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
@@ -267,6 +268,28 @@ const ProductDetail: React.FC = () => {
     loadCustomerReviewState();
   }, [user?.id, product?.id]);
 
+  useEffect(() => {
+    if (!product) return;
+    pixelViewContent({
+      contentId: product.id,
+      contentName: product.name,
+      value: Number(product.price || 0),
+      currency: 'USD',
+    });
+    void trackMetaConversionEvent({
+      storeId: product.storeId,
+      eventName: 'ViewContent',
+      contentIds: [product.id],
+      contentName: product.name,
+      value: Number(product.price || 0),
+      currency: 'USD',
+      userData: {
+        externalId: String(user?.id || ''),
+        email: String(user?.email || ''),
+      },
+    });
+  }, [product?.id, user?.id]);
+
   const handleSubmitReview = async () => {
     if (!user?.id || !product || !store?.id) {
       toast.error('Please sign in first.');
@@ -320,11 +343,23 @@ const ProductDetail: React.FC = () => {
   const handleAddToCart = () => {
     if (product) {
       addToCart(product, quantity);
-      pixelViewContent({
+      pixelAddToCart({
         contentId: product.id,
         contentName: product.name,
         value: product.price,
         currency: 'USD',
+      });
+      void trackMetaConversionEvent({
+        storeId: product.storeId,
+        eventName: 'AddToCart',
+        contentIds: [product.id],
+        contentName: product.name,
+        value: Number(product.price || 0),
+        currency: 'USD',
+        userData: {
+          externalId: String(user?.id || ''),
+          email: String(user?.email || ''),
+        },
       });
     }
   };
@@ -355,6 +390,48 @@ const ProductDetail: React.FC = () => {
       addToFavorites(product);
     }
   };
+
+  const productStructuredData: Array<Record<string, unknown>> = product
+    ? [
+        {
+          '@context': 'https://schema.org',
+          '@type': 'Product',
+          name: product.name,
+          description: store?.seoSettings?.metaDescription || product.description || '',
+          image: store?.seoSettings?.ogImage || product.image,
+          sku: product.sku || undefined,
+          category: product.category,
+          brand: store?.name ? { '@type': 'Brand', name: store.name } : undefined,
+          offers: {
+            '@type': 'Offer',
+            url: store?.slug
+              ? `https://grabio.space/${store.slug}/product/${product.slug || product.id}`
+              : `https://grabio.space/product/id/${product.id}`,
+            priceCurrency: store?.mainCurrency || 'USD',
+            price: Number(product.price || 0).toFixed(2),
+            availability: product.inStock ? 'https://schema.org/InStock' : 'https://schema.org/OutOfStock',
+          },
+        },
+        {
+          '@context': 'https://schema.org',
+          '@type': 'BreadcrumbList',
+          itemListElement: [
+            { '@type': 'ListItem', position: 1, name: 'Marketplace', item: 'https://grabio.space/' },
+            ...(store?.slug
+              ? [{ '@type': 'ListItem', position: 2, name: store.name || 'Store', item: `https://grabio.space/${store.slug}` }]
+              : []),
+            {
+              '@type': 'ListItem',
+              position: store?.slug ? 3 : 2,
+              name: product.name,
+              item: store?.slug
+                ? `https://grabio.space/${store.slug}/product/${product.slug || product.id}`
+                : `https://grabio.space/product/id/${product.id}`,
+            },
+          ],
+        },
+      ]
+    : [];
 
   if (isLoading) {
     return (
@@ -430,6 +507,7 @@ const ProductDetail: React.FC = () => {
         robotsFollow={store?.seoSettings?.robotsFollow ?? true}
         twitterHandle={store?.seoSettings?.twitterHandle}
         facebookAppId={store?.metaIntegrationSettings?.facebookAppId}
+        structuredData={productStructuredData}
       />
       <Header
         storeName={store?.name}
@@ -448,7 +526,7 @@ const ProductDetail: React.FC = () => {
               <div className="bg-white rounded-lg overflow-hidden shadow-sm">
                 <img 
                   src={product.image} 
-                  alt={product.name} 
+                  alt={product.imageAlt || product.name} 
                   className="w-full h-auto object-cover"
                 />
               </div>
@@ -458,7 +536,13 @@ const ProductDetail: React.FC = () => {
             <div>
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <div className="mb-2">
-                  <span className="text-sm text-gray-500">{product.category}</span>
+                  {store?.slug ? (
+                    <Link to={`/${store.slug}/category/${generateSlug(product.category || 'general')}`} className="text-sm text-gray-500 hover:underline">
+                      {product.category}
+                    </Link>
+                  ) : (
+                    <span className="text-sm text-gray-500">{product.category}</span>
+                  )}
                 </div>
                 
                 <h1 className="text-3xl font-bold mb-2">{product.name}</h1>

@@ -53,18 +53,18 @@ Tag format used on each item:
 - [ ] Chatbot / auto-reply flows (`Size: 4 MB`, `Best: after WhatsApp core workflow done`)
 
 ### SEO and Discoverability (advanced)
-- [ ] XML sitemap generation endpoint and submission workflow (`Size: 3 MB`, `Best: soon`)
-- [ ] Structured data (Schema.org) for product/store pages (`Size: 3 MB`, `Best: after sitemap workflow done`)
-- [ ] Custom URLs for products/categories (`Size: 3 MB`, `Best: soon`)
-- [ ] Alt text workflow for uploaded images (`Size: 2 MB`, `Best: soon`)
-- [ ] Robots.txt management controls (`Size: 2 MB`, `Best: soon`)
+- [x] XML sitemap generation endpoint and submission workflow (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
+- [x] Structured data (Schema.org) for product/store pages (`Size: 3 MB`, `Best: after sitemap workflow done`) _(completed 2026-04-27)_
+- [x] Custom URLs for products/categories (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
+- [x] Alt text workflow for uploaded images (`Size: 2 MB`, `Best: soon`) _(completed 2026-04-27)_
+- [x] Robots.txt management controls (`Size: 2 MB`, `Best: soon`) _(completed 2026-04-27)_
 
 ### Meta Ecosystem (advanced)
-- [ ] Meta Catalog sync completion (`Size: 4 MB`, `Best: after SEO baseline done`)
-- [ ] Facebook Shop integration (`Size: 3 MB`, `Best: after Meta catalog sync done`)
-- [ ] Instagram Shopping integration (`Size: 3 MB`, `Best: after Meta catalog sync done`)
+- [x] Meta Catalog sync completion (`Size: 4 MB`, `Best: after SEO baseline done`) _(completed 2026-04-27)_
+- [x] Facebook Shop integration (`Size: 3 MB`, `Best: after Meta catalog sync done`) _(completed 2026-04-27)_
+- [x] Instagram Shopping integration (`Size: 3 MB`, `Best: after Meta catalog sync done`) _(completed 2026-04-27)_
 - [ ] Meta Ads campaign creation flow (`Size: 4 MB`, `Best: after conversion tracking done`)
-- [ ] Conversion tracking completion (`Size: 3 MB`, `Best: soon`)
+- [x] Conversion tracking completion (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
 - [ ] Dynamic product ads support (`Size: 4 MB`, `Best: after Meta Ads flow done`)
 
 ### Domain and White-label Growth

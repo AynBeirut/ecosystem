@@ -68,6 +68,7 @@ const checkout_1 = require("./api/checkout");
 const stripeCheckout_1 = require("./api/stripeCheckout");
 const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
+const metaCatalog_1 = require("./api/metaCatalog");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
 const orderNotifications_1 = require("./services/orderNotifications");
@@ -150,6 +151,14 @@ app.post('/contact/send', contact_1.sendContactEmail);
 app.post('/domain/register', domain_1.registerCustomDomain);
 // Sitemap for SEO
 app.get('/sitemap.xml', sitemap_1.getSitemap);
+app.get('/robots.txt', sitemap_1.getRobotsTxt);
+app.post('/seo/sitemap/submit', sitemap_1.submitSitemap);
+// Meta catalog sync
+app.get('/meta/catalog/feed', metaCatalog_1.getMetaCatalogFeed);
+app.post('/meta/catalog/sync', metaCatalog_1.syncMetaCatalog);
+app.post('/meta/shop/connect', metaCatalog_1.connectFacebookShop);
+app.post('/meta/instagram/connect', metaCatalog_1.connectInstagramShopping);
+app.post('/meta/conversion/track', metaCatalog_1.trackMetaConversionEvent);
 // Email marketing
 app.post('/marketing/subscribe', marketing_1.subscribeToStore);
 app.post('/marketing/unsubscribe', marketing_1.unsubscribeFromStore);

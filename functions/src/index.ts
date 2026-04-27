@@ -29,7 +29,8 @@ import { processCheckout, handleCheckoutCallback } from './api/checkout';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
 import { sendContactEmail } from './api/contact';
 import { registerCustomDomain } from './api/domain';
-import { getSitemap } from './api/sitemap';
+import { connectFacebookShop, connectInstagramShopping, getMetaCatalogFeed, syncMetaCatalog, trackMetaConversionEvent } from './api/metaCatalog';
+import { getRobotsTxt, getSitemap, submitSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
 import { dispatchOrderNotifications, retryOrderNotification } from './services/orderNotifications';
 import {
@@ -126,6 +127,15 @@ app.post('/domain/register', registerCustomDomain);
 
 // Sitemap for SEO
 app.get('/sitemap.xml', getSitemap);
+app.get('/robots.txt', getRobotsTxt);
+app.post('/seo/sitemap/submit', submitSitemap);
+
+// Meta catalog sync
+app.get('/meta/catalog/feed', getMetaCatalogFeed);
+app.post('/meta/catalog/sync', syncMetaCatalog);
+app.post('/meta/shop/connect', connectFacebookShop);
+app.post('/meta/instagram/connect', connectInstagramShopping);
+app.post('/meta/conversion/track', trackMetaConversionEvent);
 
 // Email marketing
 app.post('/marketing/subscribe', subscribeToStore);

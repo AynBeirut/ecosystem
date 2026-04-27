@@ -1,6 +1,6 @@
 
 import React from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Heart } from 'lucide-react';
 import { Product } from '@/types/product';
 import { Button } from '@/components/ui/button';
@@ -9,6 +9,8 @@ import { useFavorites } from '@/context/FavoritesContext';
 import { useCart } from '@/context/CartContext';
 import { Badge } from '@/components/ui/badge';
 import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
+import { generateSlug } from '@/lib/slugify';
+import { pixelAddToCart, trackMetaConversionEvent } from '@/lib/metaPixel';
 
   type ProductDisplayType = 'grid-standard' | 'grid-large' | 'list' | 'masonry' | 'spotlight';
   type ProductCardAnimation = 'none' | 'parallax' | 'lift-3d' | 'glow-pulse' | 'slide-reveal' | 'zoom-tilt';
@@ -24,6 +26,7 @@ import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
   };
 
 const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsappNumber, storeName, currency, displayType = 'grid-standard', animation = 'none' }) => {
+  const navigate = useNavigate();
   const { addToCart } = useCart();
   const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
   const favorite = isFavorite(product.id);
@@ -42,6 +45,29 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
     e.preventDefault();
     e.stopPropagation();
     addToCart(product);
+    pixelAddToCart({
+      contentId: product.id,
+      contentName: product.name,
+      value: Number(product.price || 0),
+      currency: 'USD',
+    });
+    void trackMetaConversionEvent({
+      storeId: product.storeId,
+      eventName: 'AddToCart',
+      contentIds: [product.id],
+      contentName: product.name,
+      value: Number(product.price || 0),
+      currency: 'USD',
+    });
+  };
+
+  const handleCategoryClick = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const storeSlug = product.store?.slug;
+    const category = String(product.category || '').trim();
+    if (!storeSlug || !category) return;
+    navigate(`/${storeSlug}/category/${generateSlug(category)}`);
   };
 
   const handleWhatsAppOrder = (e: React.MouseEvent) => {
@@ -68,14 +94,24 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
         <Card className="overflow-hidden card-hover">
           <div className="flex gap-0">
             <div className="relative flex-shrink-0 w-32 sm:w-40">
-              <img src={product.image} alt={product.name} className="h-full w-full object-cover min-h-[96px]" />
+              <img src={product.image} alt={product.imageAlt || product.name} className="h-full w-full object-cover min-h-[96px]" />
               {!product.inStock && (
                 <Badge variant="destructive" className="absolute top-2 left-2 text-[10px]">Out of Stock</Badge>
               )}
             </div>
             <div className="flex flex-col flex-1 p-3 justify-between">
               <div>
-                <div className="text-xs text-gray-500 mb-0.5">{product.category}</div>
+                {product.store?.slug ? (
+                  <button
+                    type="button"
+                    onClick={handleCategoryClick}
+                    className="mb-1 rounded-full border px-2 py-0.5 text-[10px] text-gray-600 hover:border-gray-500"
+                  >
+                    {product.category}
+                  </button>
+                ) : (
+                  <div className="text-xs text-gray-500 mb-0.5">{product.category}</div>
+                )}
                 <h3 className="font-semibold text-sm mb-1 line-clamp-2">{product.name}</h3>
                 {(product.rating ?? 0) > 0 && (product.ratingCount ?? 0) > 0 && (
                   <div className="text-xs text-amber-600 mb-1">
@@ -125,7 +161,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
         <div className="relative">
           <img 
             src={product.image} 
-            alt={product.name} 
+            alt={product.imageAlt || product.name} 
             className={imgClass}
           />
           <button
@@ -146,8 +182,18 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
           )}
         </div>
         <CardContent className="pt-4">
-          <div className="mb-1 text-xs text-gray-500">
-            {product.category}
+          <div className="mb-2">
+            {product.store?.slug ? (
+              <button
+                type="button"
+                onClick={handleCategoryClick}
+                className="rounded-full border px-2 py-0.5 text-[11px] text-gray-600 hover:border-gray-500"
+              >
+                {product.category}
+              </button>
+            ) : (
+              <span className="text-xs text-gray-500">{product.category}</span>
+            )}
           </div>
           <h3 className="font-semibold text-base mb-1 text-left">{product.name}</h3>
           {(product.rating ?? 0) > 0 && (product.ratingCount ?? 0) > 0 && (

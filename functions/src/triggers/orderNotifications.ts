@@ -1,5 +1,6 @@
 import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { trackOrderPurchaseConversion } from '../services/metaConversion';
 
 const db = admin.firestore;
 
@@ -94,6 +95,14 @@ export const onOrderStatusChanged = onDocumentUpdated(
           await sendOwnerNotification(storeId, orderId, msg.title, msg.body(orderId), `payment_${after.paymentStatus}`);
         } catch (err) {
           console.warn('FCM payment status notification failed:', err);
+        }
+      }
+
+      if (after.paymentStatus === 'paid') {
+        try {
+          await trackOrderPurchaseConversion(orderId, after as Record<string, unknown>);
+        } catch (err) {
+          console.warn('Meta purchase conversion tracking failed:', err);
         }
       }
     }

@@ -112,8 +112,10 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                           <>
                             <Route path="/" element={<CustomDomainStore hostname={_hostname} />} />
                             <Route path="/store/:slug" element={<StoreDetail />} />
+                            <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
                             <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
                             <Route path="/store/id/:id" element={<StoreDetail />} />
+                            <Route path="/store/id/:id/category/:categorySlug" element={<StoreDetail />} />
                             <Route path="/product/id/:id" element={<ProductDetail />} />
                             <Route path="/cart" element={<Cart />} />
                             <Route path="/favorites" element={<Favorites />} />
@@ -134,9 +136,11 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/" element={<Marketplace />} />
                         <Route path="/search" element={<Marketplace />} />
                         <Route path="/store/:slug" element={<StoreDetail />} />
+                        <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
                         <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
                         {/* Backward compatibility routes */}
                         <Route path="/store/id/:id" element={<StoreDetail />} />
+                        <Route path="/store/id/:id/category/:categorySlug" element={<StoreDetail />} />
                         <Route path="/product/id/:id" element={<ProductDetail />} />
                         {/* Public routes (use localStorage, work for guests) */}
                         <Route path="/cart" element={<Cart />} />
@@ -203,6 +207,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />
                         {/* Short store URLs: /:slug and /:slug/product/:productSlug */}
                         <Route path="/:slug" element={<StoreDetail />} />
+                        <Route path="/:slug/category/:categorySlug" element={<StoreDetail />} />
                         <Route path="/:storeSlug/product/:productSlug" element={<ProductDetail />} />
                         <Route path="/privacy" element={<PrivacyPolicy />} />
                         {/* 404 catch-all route */}

@@ -1,4 +1,5 @@
 const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID as string | undefined;
+const META_API_URL = (import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api').replace(/\/$/, '');
 
 type FbqFunction = ((...args: unknown[]) => void) & {
   callMethod?: (...args: unknown[]) => void;
@@ -98,4 +99,49 @@ export function pixelPurchase(params: {
     currency: params.currency || 'USD',
     content_ids: params.contentIds || [],
   });
+}
+
+export async function trackMetaConversionEvent(params: {
+  storeId: string;
+  eventName: 'PageView' | 'ViewContent' | 'AddToCart' | 'InitiateCheckout' | 'Purchase';
+  eventId?: string;
+  value?: number;
+  currency?: string;
+  contentIds?: string[];
+  contentName?: string;
+  userData?: {
+    email?: string;
+    phone?: string;
+    externalId?: string;
+  };
+}): Promise<void> {
+  if (!params.storeId || !params.eventName) return;
+
+  try {
+    const response = await fetch(`${META_API_URL}/meta/conversion/track`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        storeId: params.storeId,
+        eventName: params.eventName,
+        eventId: params.eventId,
+        value: params.value,
+        currency: params.currency || 'USD',
+        contentIds: params.contentIds || [],
+        contentName: params.contentName,
+        eventSourceUrl: typeof window !== 'undefined' ? window.location.href : '',
+        userData: params.userData || {},
+      }),
+      keepalive: true,
+    });
+
+    if (!response.ok) {
+      const text = await response.text();
+      console.warn('Meta conversion API rejected event', response.status, text);
+    }
+  } catch (error) {
+    console.warn('Meta conversion API call failed', error);
+  }
 }
