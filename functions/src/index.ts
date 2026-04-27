@@ -30,6 +30,7 @@ import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripe
 import { sendContactEmail } from './api/contact';
 import { checkCustomDomainStatus, registerCustomDomain } from './api/domain';
 import { exportGdprData, requestGdprDelete } from './api/gdpr';
+import { getAiModels, saveAiSettings } from './api/ai';
 import { connectFacebookShop, connectInstagramShopping, createMetaAdsCampaign, enableDynamicProductAds, getMetaCatalogFeed, syncMetaCatalog, trackMetaConversionEvent } from './api/metaCatalog';
 import { getRobotsTxt, getSitemap, submitSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
@@ -130,6 +131,10 @@ app.post('/domain/status', checkCustomDomainStatus);
 // GDPR tooling
 app.post('/gdpr/export', exportGdprData);
 app.post('/gdpr/delete', requestGdprDelete);
+
+// AI integration
+app.post('/ai/models', getAiModels);
+app.post('/ai/settings', saveAiSettings);
 
 // Sitemap for SEO
 app.get('/sitemap.xml', getSitemap);

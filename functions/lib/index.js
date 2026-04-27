@@ -69,6 +69,7 @@ const stripeCheckout_1 = require("./api/stripeCheckout");
 const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
 const gdpr_1 = require("./api/gdpr");
+const ai_1 = require("./api/ai");
 const metaCatalog_1 = require("./api/metaCatalog");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
@@ -154,6 +155,9 @@ app.post('/domain/status', domain_1.checkCustomDomainStatus);
 // GDPR tooling
 app.post('/gdpr/export', gdpr_1.exportGdprData);
 app.post('/gdpr/delete', gdpr_1.requestGdprDelete);
+// AI integration
+app.post('/ai/models', ai_1.getAiModels);
+app.post('/ai/settings', ai_1.saveAiSettings);
 // Sitemap for SEO
 app.get('/sitemap.xml', sitemap_1.getSitemap);
 app.get('/robots.txt', sitemap_1.getRobotsTxt);

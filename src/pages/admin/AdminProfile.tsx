@@ -17,7 +17,7 @@ import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting } from '../../types/storeProfile';
+import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting, AiModelPricingSetting } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
 
@@ -32,6 +32,17 @@ type DomainStatusDetails = {
   domainStatus: 'active' | 'pending' | 'error';
   sslStatus: 'active' | 'pending' | 'error';
   dnsRecords: DomainDnsRecord[];
+};
+
+type AiCatalogModel = {
+  id: string;
+  label: string;
+  provider: string;
+  creditsPerUnit: number;
+  unitLabel: string;
+  costPerCreditUsd: number;
+  active: boolean;
+  description?: string;
 };
 
 const getFallbackDnsRecords = (domain: string): DomainDnsRecord[] => {
@@ -121,7 +132,15 @@ const defaultProfile: StoreProfile = {
     renewalGraceDays: 7,
     invoiceLeadDays: 3,
     preferredRenewalGateway: 'whish',
-  }
+  },
+  aiIntegrationSettings: {
+    enabled: false,
+    assistantAccessMode: 'owner-account',
+    apiBaseUrl: '',
+    apiKey: '',
+    defaultModelId: '',
+    modelPricing: [],
+  },
 };
 
 const AdminProfile: React.FC = () => {
@@ -174,6 +193,10 @@ const AdminProfile: React.FC = () => {
                 ...defaultProfile.subscriptionBillingSettings,
                 ...(data.subscriptionBillingSettings || {}),
               },
+              aiIntegrationSettings: {
+                ...defaultProfile.aiIntegrationSettings,
+                ...(data.aiIntegrationSettings || {}),
+              },
             });
             setLogoPreview(data.logo || '');
           } else {
@@ -215,6 +238,10 @@ const AdminProfile: React.FC = () => {
   const [isRequestingGdprDelete, setIsRequestingGdprDelete] = useState(false);
   const [gdprDeleteConfirm, setGdprDeleteConfirm] = useState('');
   const [generatedPrivacyPolicy, setGeneratedPrivacyPolicy] = useState('');
+  const [isLoadingAiCatalog, setIsLoadingAiCatalog] = useState(false);
+  const [isSavingAiSettings, setIsSavingAiSettings] = useState(false);
+  const [aiCatalog, setAiCatalog] = useState<AiCatalogModel[]>([]);
+  const [aiCatalogUpdatedAt, setAiCatalogUpdatedAt] = useState('');
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
   const refreshMfaStatus = async () => {
@@ -545,6 +572,115 @@ const AdminProfile: React.FC = () => {
       });
     } finally {
       setIsSubmittingSitemap(false);
+    }
+  };
+
+  const upsertAiModelPricing = (model: AiCatalogModel) => {
+    setFormData((prev) => {
+      const current = prev.aiIntegrationSettings?.modelPricing || [];
+      const existingIndex = current.findIndex((item) => item.modelId === model.id);
+      const nextEntry: AiModelPricingSetting = {
+        modelId: model.id,
+        label: model.label,
+        provider: model.provider,
+        creditsPerUnit: model.creditsPerUnit,
+        unitLabel: model.unitLabel,
+        costPerCreditUsd: Number(model.costPerCreditUsd || 0),
+        active: Boolean(model.active),
+      };
+
+      const nextPricing = existingIndex >= 0
+        ? current.map((item, index) => (index === existingIndex ? { ...item, ...nextEntry } : item))
+        : [...current, nextEntry];
+
+      return {
+        ...prev,
+        aiIntegrationSettings: {
+          ...(prev.aiIntegrationSettings || {}),
+          assistantAccessMode: 'owner-account',
+          modelPricing: nextPricing,
+        },
+      };
+    });
+  };
+
+  const handleLoadAiCatalog = async () => {
+    setIsLoadingAiCatalog(true);
+    try {
+      const storeId = getActualStoreId(user);
+      if (!storeId) throw new Error('Store not found.');
+
+      const response = await fetch(`${API_URL}/ai/models`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || 'Failed to load model catalog.');
+
+      const models = Array.isArray(payload.models) ? payload.models as AiCatalogModel[] : [];
+      setAiCatalog(models);
+      setAiCatalogUpdatedAt(String(payload.updatedAt || new Date().toISOString()));
+
+      models.forEach((model) => upsertAiModelPricing(model));
+
+      toast({
+        title: 'AI catalog loaded',
+        description: `${models.length} models loaded with credit cost information.`,
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast({ title: 'AI catalog failed', description: message, variant: 'destructive' });
+    } finally {
+      setIsLoadingAiCatalog(false);
+    }
+  };
+
+  const handleSaveAiSettings = async () => {
+    setIsSavingAiSettings(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('You must be signed in.');
+
+      const storeId = getActualStoreId(user);
+      if (!storeId) throw new Error('Store not found.');
+
+      const token = await currentUser.getIdToken();
+      const response = await fetch(`${API_URL}/ai/settings`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeId,
+          aiIntegrationSettings: {
+            ...(formData.aiIntegrationSettings || {}),
+            assistantAccessMode: 'owner-account',
+          },
+        }),
+      });
+
+      const payload = await response.json();
+      if (!response.ok) throw new Error(payload.message || 'Failed to save AI settings.');
+
+      setFormData((prev) => ({
+        ...prev,
+        aiIntegrationSettings: {
+          ...(prev.aiIntegrationSettings || {}),
+          ...(payload.aiIntegrationSettings || {}),
+          assistantAccessMode: 'owner-account',
+        },
+      }));
+
+      toast({ title: 'AI settings saved', description: 'API integration and model credit pricing were saved.' });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      toast({ title: 'Save failed', description: message, variant: 'destructive' });
+    } finally {
+      setIsSavingAiSettings(false);
     }
   };
 
@@ -2061,6 +2197,175 @@ const AdminProfile: React.FC = () => {
                     </div>
                   </div>
                 ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* AI API Integration */}
+          <Card>
+            <CardHeader>
+              <CardTitle>AI API Integration</CardTitle>
+              <CardDescription>
+                Connect your external AI account. Assistant access stays on your account, while customers use prepaid credits by selected model.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                <div>
+                  <Label htmlFor="aiIntegrationEnabled">Enable AI API integration</Label>
+                  <p className="text-xs text-muted-foreground">No in-app sidekick is created here. Requests are routed to your external AI API.</p>
+                </div>
+                <Switch
+                  id="aiIntegrationEnabled"
+                  checked={formData.aiIntegrationSettings?.enabled ?? false}
+                  onCheckedChange={(checked) => setFormData((prev) => ({
+                    ...prev,
+                    aiIntegrationSettings: {
+                      ...(prev.aiIntegrationSettings || {}),
+                      enabled: checked,
+                      assistantAccessMode: 'owner-account',
+                    },
+                  }))}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="aiApiBaseUrl">AI API Base URL</Label>
+                  <Input
+                    id="aiApiBaseUrl"
+                    value={formData.aiIntegrationSettings?.apiBaseUrl || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      aiIntegrationSettings: {
+                        ...(prev.aiIntegrationSettings || {}),
+                        apiBaseUrl: e.target.value,
+                        assistantAccessMode: 'owner-account',
+                      },
+                    }))}
+                    placeholder="https://your-ai-gateway.example.com"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="aiApiKey">AI API Key</Label>
+                  <Input
+                    id="aiApiKey"
+                    type="password"
+                    value={formData.aiIntegrationSettings?.apiKey || ''}
+                    onChange={(e) => setFormData((prev) => ({
+                      ...prev,
+                      aiIntegrationSettings: {
+                        ...(prev.aiIntegrationSettings || {}),
+                        apiKey: e.target.value,
+                        assistantAccessMode: 'owner-account',
+                      },
+                    }))}
+                    placeholder="sk_live_..."
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <Button type="button" variant="outline" onClick={handleLoadAiCatalog} disabled={isLoadingAiCatalog}>
+                  {isLoadingAiCatalog ? 'Loading models...' : 'Load AI Model Catalog'}
+                </Button>
+                {aiCatalogUpdatedAt && (
+                  <p className="text-xs text-muted-foreground">Catalog updated: {new Date(aiCatalogUpdatedAt).toLocaleString()}</p>
+                )}
+              </div>
+
+              {(formData.aiIntegrationSettings?.modelPricing || []).length > 0 && (
+                <div className="rounded-md border p-4 space-y-3">
+                  <p className="text-sm font-medium">Model Selection and Credit Pricing (USD)</p>
+                  <div className="space-y-3">
+                    {(formData.aiIntegrationSettings?.modelPricing || []).map((model) => (
+                      <div key={model.modelId} className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end border rounded-md p-3">
+                        <div className="md:col-span-4">
+                          <Label className="text-xs">Model</Label>
+                          <div className="text-sm font-medium">{model.label}</div>
+                          <p className="text-xs text-muted-foreground">{model.provider} • {model.creditsPerUnit} credits / {model.unitLabel}</p>
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label className="text-xs">Active</Label>
+                          <div className="pt-2">
+                            <Switch
+                              checked={model.active}
+                              onCheckedChange={(checked) => setFormData((prev) => ({
+                                ...prev,
+                                aiIntegrationSettings: {
+                                  ...(prev.aiIntegrationSettings || {}),
+                                  assistantAccessMode: 'owner-account',
+                                  modelPricing: (prev.aiIntegrationSettings?.modelPricing || []).map((item) =>
+                                    item.modelId === model.modelId ? { ...item, active: checked } : item,
+                                  ),
+                                },
+                              }))}
+                            />
+                          </div>
+                        </div>
+                        <div className="md:col-span-3">
+                          <Label htmlFor={`cost-${model.modelId}`} className="text-xs">Cost per credit (USD)</Label>
+                          <Input
+                            id={`cost-${model.modelId}`}
+                            type="number"
+                            min="0"
+                            step="0.001"
+                            value={model.costPerCreditUsd}
+                            onChange={(e) => {
+                              const value = Number(e.target.value || 0);
+                              setFormData((prev) => ({
+                                ...prev,
+                                aiIntegrationSettings: {
+                                  ...(prev.aiIntegrationSettings || {}),
+                                  assistantAccessMode: 'owner-account',
+                                  modelPricing: (prev.aiIntegrationSettings?.modelPricing || []).map((item) =>
+                                    item.modelId === model.modelId ? { ...item, costPerCreditUsd: value } : item,
+                                  ),
+                                },
+                              }));
+                            }}
+                          />
+                        </div>
+                        <div className="md:col-span-3">
+                          <Label className="text-xs">Cost per {model.unitLabel}</Label>
+                          <Input value={`$${(model.creditsPerUnit * model.costPerCreditUsd).toFixed(3)}`} readOnly />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div>
+                    <Label htmlFor="defaultAiModelId">Default model for prepaid credit usage</Label>
+                    <select
+                      id="defaultAiModelId"
+                      value={formData.aiIntegrationSettings?.defaultModelId || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        aiIntegrationSettings: {
+                          ...(prev.aiIntegrationSettings || {}),
+                          assistantAccessMode: 'owner-account',
+                          defaultModelId: e.target.value,
+                        },
+                      }))}
+                      className="w-full p-2 border rounded-md"
+                    >
+                      <option value="">Select default model</option>
+                      {(formData.aiIntegrationSettings?.modelPricing || [])
+                        .filter((model) => model.active)
+                        .map((model) => (
+                          <option key={model.modelId} value={model.modelId}>
+                            {model.label} ({model.provider})
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex justify-end">
+                <Button type="button" onClick={handleSaveAiSettings} disabled={isSavingAiSettings}>
+                  {isSavingAiSettings ? 'Saving AI settings...' : 'Save AI Integration'}
+                </Button>
               </div>
             </CardContent>
           </Card>

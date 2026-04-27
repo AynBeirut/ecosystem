@@ -198,6 +198,25 @@ export interface SubscriptionBillingSettings {
   preferredRenewalGateway?: 'whish' | 'stripe' | 'paypal' | 'manual';
 }
 
+export interface AiModelPricingSetting {
+  modelId: string;
+  label: string;
+  provider: string;
+  creditsPerUnit: number;
+  unitLabel: string;
+  costPerCreditUsd: number;
+  active: boolean;
+}
+
+export interface AiIntegrationSettings {
+  enabled?: boolean;
+  assistantAccessMode?: 'owner-account';
+  apiBaseUrl?: string;
+  apiKey?: string;
+  defaultModelId?: string;
+  modelPricing?: AiModelPricingSetting[];
+}
+
 export interface StoreProfile {
   name: string;
   slug?: string; // URL-friendly store identifier (e.g., 'tech-gadgets')
@@ -316,6 +335,7 @@ export interface StoreProfile {
   metaIntegrationSettings?: MetaIntegrationSettings;
   serviceCatalogSettings?: ServiceCatalogSettings;
   subscriptionBillingSettings?: SubscriptionBillingSettings;
+  aiIntegrationSettings?: AiIntegrationSettings;
   // Migration tracking
   migrationVersion?: number;
   lastMigrationDate?: string;

@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-27
+Last updated: 2026-04-27 (AI roadmap scope updated)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -13,8 +13,10 @@ Tag format used on each item:
 ## 1) Immediate Execution (P0)
 
 ### Security and Compliance (Optional, recommended hardening)
+- [ ] (Optional) Complete GDPR compliance tooling (`Size: 4 MB`, `Best: soon`)
 
 ### GDPR API + UI
+- [ ] Add customer request UI for GDPR actions (`Size: 3 MB`, `Best: after GDPR API done`)
 
 ### Whish Production Go-Live
 - [ ] Finish Whish production cutover (sandbox -> production) (`Size: 3 MB`, `Best: now`)
@@ -25,10 +27,10 @@ Tag format used on each item:
 
 ## 2) Core Upgrades (P1)
 
-### AI Roadmap (from active platform backlog)
-- [ ] AI assistant (Sidekick-style) for merchant operations (`Size: 4 MB`, `Best: after stability sprint done`)
-- [ ] AI image editing/generation workflow for products (`Size: 4 MB`, `Best: after 50 clients`)
-- [ ] AI-assisted live chat response system (`Size: 5 MB`, `Best: after AI assistant done`)
+### AI Roadmap (API integration + prepaid credit model)
+- [ ] Prepaid AI credit wallet and top-up flow (`Size: 4 MB`, `Best: soon`)
+- [ ] AI image editing/generation workflow for products (`Size: 4 MB`, `Best: after prepaid AI credits done`)
+- [ ] AI-assisted live chat response system (`Size: 5 MB`, `Best: after AI model usage telemetry done`)
 
 ## 3) Commerce and Growth Upgrades (P2)
 
