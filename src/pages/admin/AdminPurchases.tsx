@@ -1508,7 +1508,7 @@ const AdminPurchases: React.FC = () => {
         }
         
         // Handle raw material items (for composed products)
-        let material = rawMaterials.find(m => m.id === item.rawMaterialId);
+        const material = rawMaterials.find(m => m.id === item.rawMaterialId);
         
         console.log(`Material found:`, material ? `${material.name} (ID: ${material.id})` : 'NOT FOUND');
         

@@ -69,7 +69,7 @@ export const hasArabicCharacters = (text: string): boolean => {
  * @param text - The text to clean
  */
 export const cleanTextForPDF = (text: string): string => {
-  return text.replace(/[^\x00-\x7F]/g, '?');
+  return text.replace(/[^\u0000-\u007F]/g, '?');
 };
 
 /**

@@ -64,7 +64,7 @@ export async function generateUniqueSlug(
   collectionName: 'storeProfiles' | 'products',
   excludeId?: string
 ): Promise<string> {
-  let slug = generateSlug(text);
+  const slug = generateSlug(text);
   const { available, suggestions } = await checkSlugAvailability(slug, collectionName, excludeId);
   
   if (available) {

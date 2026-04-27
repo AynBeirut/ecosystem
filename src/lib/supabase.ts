@@ -2,7 +2,7 @@
 // import { createClient } from '@supabase/supabase-js';
 
 // Placeholder - will be configured when Supabase is installed
-export const supabase: any = null;
+export const supabase: null = null;
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;

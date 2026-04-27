@@ -11,6 +11,7 @@ This folder centralizes project markdown documentation.
 ### deployment
 - deployment, rollback, routing, and hosting fixes
 - [DEPLOYMENT_CHECKLIST.md](deployment/DEPLOYMENT_CHECKLIST.md)
+- [FIREBASE_BUDGET_ALERTS.md](deployment/FIREBASE_BUDGET_ALERTS.md)
 - [ROLLBACK_PROCEDURE.md](deployment/ROLLBACK_PROCEDURE.md)
 - [FIREBASE_DOMAINS_FIX.md](deployment/FIREBASE_DOMAINS_FIX.md)
 - [FRIENDLY_URLS.md](deployment/FRIENDLY_URLS.md)
@@ -36,7 +37,8 @@ This folder centralizes project markdown documentation.
 
 ### planning
 - planning notes and temporary handoff docs
-- [FUTURE_FEATURES.md](planning/FUTURE_FEATURES.md)
+- [FUTURE_FEATURES.md](planning/FUTURE_FEATURES.md) (pointer to merged roadmap)
+- [STABILITY_COST_CONTROL_SPRINT.md](planning/STABILITY_COST_CONTROL_SPRINT.md)
 - [CONTINUE_HERE.md](planning/CONTINUE_HERE.md)
 - [MOBILE_APP_SCOPE.md](planning/MOBILE_APP_SCOPE.md)
 - [TODAYS_CHANGES.md](planning/TODAYS_CHANGES.md)
@@ -47,7 +49,7 @@ This folder centralizes project markdown documentation.
 
 ### product
 - product-facing references
-- [PRODUCT_DESCRIPTION.md](product/PRODUCT_DESCRIPTION.md)
+- [PRODUCT_DESCRIPTION.md](product/PRODUCT_DESCRIPTION.md) (canonical product description + merged feature roadmap)
 - [GoogleSignInIssueReport.md](product/GoogleSignInIssueReport.md)
 
 ### templates

@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
 import { initGA, trackPageView } from './lib/analytics';
@@ -32,58 +32,59 @@ import Cart from "./pages/Cart";
 import Favorites from "./pages/Favorites";
 import UpgradeToAdmin from "./pages/UpgradeToAdmin";
 import ProtectedRoute from "./components/ProtectedRoute";
-import AdminDashboard from "./pages/admin/AdminDashboard";
-import SubAccountDashboard from "./pages/admin/SubAccountDashboard";
-import AdminProducts from "./pages/admin/AdminProducts";
-import AdminProfile from "./pages/admin/AdminProfile";
-import AdminPayments from "./pages/admin/AdminPayments";
-import AdminDelivery from "./pages/admin/AdminDelivery";
-import AdminTemplates from "./pages/admin/AdminTemplates";
-import AdminAnnouncements from "./pages/admin/AdminAnnouncements";
-import AdminAnalytics from "./pages/admin/AdminAnalytics";
-import AdminRevenue from "./pages/admin/AdminRevenue";
-import AdminMarketing from "./pages/admin/AdminMarketing";
-import AdminOrders from "./pages/admin/AdminOrders";
 import OrderTracking from "./pages/OrderTracking";
 import GuestOrderTracking from "./pages/GuestOrderTracking";
 import CustomerProfile from "./pages/CustomerProfile";
 import DebugConsole from './components/DebugConsole';
 import Footer from './components/Footer';
 import OrderConfirmation from "./pages/OrderConfirmation";
-import AdminSuppliers from "./pages/admin/AdminSuppliers";
-import AdminSupplierStatements from "./pages/admin/AdminSupplierStatements";
-import AdminRawMaterials from "./pages/admin/AdminRawMaterials";
-import AdminRecipes from "./pages/admin/AdminRecipes";
-import AdminComposedProducts from "./pages/admin/AdminComposedProducts";
-import AdminPurchases from "./pages/admin/AdminPurchases";
-import AdminSupplierCredits from "./pages/admin/AdminSupplierCredits";
 import SupplierReturns from "./pages/admin/SupplierReturns";
 import SalesReturns from "./pages/admin/SalesReturns";
-import AdminStaff from "./pages/admin/AdminStaff";
-import AdminSalaries from "./pages/admin/AdminSalaries";
-import AdminSubAccounts from "./pages/admin/AdminSubAccounts";
-import AdminExpenses from "./pages/admin/AdminExpenses";
-import AdminReports from "./pages/admin/AdminReports";
-import AdminCustomers from "./pages/admin/AdminCustomers";
-import AdminInventory from "./pages/admin/AdminInventory";
-import AdminProduction from "./pages/admin/AdminProduction";
-import AdminAccountStatement from "./pages/admin/AdminAccountStatement";
-import AdminBankReconciliation from "./pages/admin/AdminBankReconciliation";
-import AdminFinanceSuite from "./pages/admin/AdminFinanceSuite";
-import AdminMarketplaceSync from "./pages/admin/AdminMarketplaceSync";
-import AdminProductReviews from "./pages/admin/AdminProductReviews";
-import AdminOrderNotifications from "./pages/admin/AdminOrderNotifications";
-import AdminServiceRenewals from "./pages/admin/AdminServiceRenewals";
-import AdminAuditLogs from "./pages/admin/AdminAuditLogs";
-import AdminReturns from "./pages/admin/AdminReturns";
-import AdminFinishedGoods from "./pages/admin/AdminFinishedGoods";
-import Subscription from "./pages/admin/Subscription";
 import PaymentSuccess from "./pages/payment/Success";
 import PaymentFailed from "./pages/payment/Failed";
 import Blocked from "./pages/Blocked";
 import ContactUs from "./pages/ContactUs";
 import CustomDomainStore from "./pages/CustomDomainStore";
 import CookieConsent from "./components/CookieConsent";
+
+const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
+const SubAccountDashboard = lazy(() => import("./pages/admin/SubAccountDashboard"));
+const AdminProducts = lazy(() => import("./pages/admin/AdminProducts"));
+const AdminProfile = lazy(() => import("./pages/admin/AdminProfile"));
+const AdminPayments = lazy(() => import("./pages/admin/AdminPayments"));
+const AdminDelivery = lazy(() => import("./pages/admin/AdminDelivery"));
+const AdminTemplates = lazy(() => import("./pages/admin/AdminTemplates"));
+const AdminAnnouncements = lazy(() => import("./pages/admin/AdminAnnouncements"));
+const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
+const AdminRevenue = lazy(() => import("./pages/admin/AdminRevenue"));
+const AdminMarketing = lazy(() => import("./pages/admin/AdminMarketing"));
+const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
+const AdminSuppliers = lazy(() => import("./pages/admin/AdminSuppliers"));
+const AdminSupplierStatements = lazy(() => import("./pages/admin/AdminSupplierStatements"));
+const AdminRawMaterials = lazy(() => import("./pages/admin/AdminRawMaterials"));
+const AdminRecipes = lazy(() => import("./pages/admin/AdminRecipes"));
+const AdminComposedProducts = lazy(() => import("./pages/admin/AdminComposedProducts"));
+const AdminPurchases = lazy(() => import("./pages/admin/AdminPurchases"));
+const AdminSupplierCredits = lazy(() => import("./pages/admin/AdminSupplierCredits"));
+const AdminStaff = lazy(() => import("./pages/admin/AdminStaff"));
+const AdminSalaries = lazy(() => import("./pages/admin/AdminSalaries"));
+const AdminSubAccounts = lazy(() => import("./pages/admin/AdminSubAccounts"));
+const AdminExpenses = lazy(() => import("./pages/admin/AdminExpenses"));
+const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
+const AdminCustomers = lazy(() => import("./pages/admin/AdminCustomers"));
+const AdminInventory = lazy(() => import("./pages/admin/AdminInventory"));
+const AdminProduction = lazy(() => import("./pages/admin/AdminProduction"));
+const AdminAccountStatement = lazy(() => import("./pages/admin/AdminAccountStatement"));
+const AdminBankReconciliation = lazy(() => import("./pages/admin/AdminBankReconciliation"));
+const AdminFinanceSuite = lazy(() => import("./pages/admin/AdminFinanceSuite"));
+const AdminMarketplaceSync = lazy(() => import("./pages/admin/AdminMarketplaceSync"));
+const AdminProductReviews = lazy(() => import("./pages/admin/AdminProductReviews"));
+const AdminOrderNotifications = lazy(() => import("./pages/admin/AdminOrderNotifications"));
+const AdminServiceRenewals = lazy(() => import("./pages/admin/AdminServiceRenewals"));
+const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
+const AdminReturns = lazy(() => import("./pages/admin/AdminReturns"));
+const AdminFinishedGoods = lazy(() => import("./pages/admin/AdminFinishedGoods"));
+const Subscription = lazy(() => import("./pages/admin/Subscription"));
 
 const PLATFORM_HOSTS = ['localhost', '127.0.0.1', 'grabio.space', 'www.grabio.space', 'market-flow-7b074.web.app'];
 const _hostname = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -104,6 +105,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                       }}
                     >
                       <RouteTracker />
+                      <Suspense fallback={<div className="min-h-[40vh]" />}>
                       <Routes>
                         {/* ── Custom domain: serve the matched store, then only public/cart routes ── */}
                         {isCustomDomain && (
@@ -208,6 +210,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                           </>
                         )}
                       </Routes>
+                      </Suspense>
                       <Footer />
                       <Toaster />
                       <DebugConsole />

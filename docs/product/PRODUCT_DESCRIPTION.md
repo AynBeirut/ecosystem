@@ -69,6 +69,39 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **Mobile Quantity Input**: Improved number input behavior for touch devices
 ✨ **Smart Staff Management**: Automatic cleanup of future salary expenses on termination
 
+## Planned Feature Roadmap (Merged Feature List)
+
+This section merges the future feature list into the product description so there is one main product and features reference.
+
+### Commerce and Growth
+- WhatsApp Business API automation (order confirmations, abandoned cart recovery, delivery updates, chatbot flows)
+- SEO expansion (XML sitemap, Schema.org markup, custom product and category URLs, alt text workflow, robots controls)
+- Meta ecosystem expansion (catalog sync, Facebook Shop, Instagram Shopping, conversion tracking, dynamic ads)
+- Domain and white-label growth (custom domains, SSL provisioning, DNS wizard, domain verification)
+
+### Payments and Subscriptions
+- Additional gateways (Square, OMT, BOB Finance)
+- Billing enhancements (live currency rates, split payments, refunds, retry, reminders, receipts)
+- Subscription platform completion (engine completion, customer portal, admin management)
+
+### Storefront and Operations
+- New storefront themes (minimal, classic, fashion, food, tech)
+- Branding controls expansion (logo positioning, notification email template controls)
+- Customer experience upgrades (related products, recently viewed, back-in-stock, gift cards, marketing integrations)
+- Order operations enhancements (shipping calculation refinements, order notes and internal comments)
+
+### Analytics and Notifications
+- Analytics depth upgrades (behavior, traffic sources, funnels, custom ranges, PDF and Excel export)
+- Notification channels completion (SMS and full WhatsApp Business API workflow)
+
+### Localization and Mobile
+- Language packs and locale behavior (English, Arabic RTL, French, language switcher, locale-based currency and date formatting)
+- Mobile platform apps (iOS, Android, owner dashboard, customer app, offline mode, barcode scanner)
+
+### Security and Compliance
+- 2FA and admin hardening (MFA, enrollment flow, authenticator QR, optional IP allowlist)
+- GDPR flows (data export, delete workflow, privacy tooling)
+
 ## Technology Stack
 - **Frontend**: React 18 with TypeScript
 - **Styling**: Tailwind CSS with custom components

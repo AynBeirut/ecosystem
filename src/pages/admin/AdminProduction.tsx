@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Factory, Plus, Edit2, Trash2, CheckCircle, Clock, AlertCircle, Package, RefreshCw, Download, FileDown } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { ProductionBatch, ProductionBatchStatus, ComposedProduct, RawMaterial, Recipe } from '@/types/inventory';
 import { FinishedGoodsItem } from '@/types/finishedGoods';
@@ -23,10 +24,10 @@ import autoTable from 'jspdf-autotable';
 
 // Helper to clean non-ASCII characters for PDF export
 const cleanTextForPDF = (text: string): string => {
-  return text.replace(/[^\x00-\x7F]/g, '?');
+  return text.replace(/[^\u0000-\u007F]/g, '?');
 };
 
-const STATUS_CONFIG: Record<ProductionBatchStatus, { label: string; color: string; icon: any }> = {
+const STATUS_CONFIG: Record<ProductionBatchStatus, { label: string; color: string; icon: LucideIcon }> = {
   planned: { label: 'Planned', color: 'bg-blue-100 text-blue-800', icon: Clock },
   in_progress: { label: 'In Progress', color: 'bg-yellow-100 text-yellow-800', icon: Factory },
   completed: { label: 'Completed', color: 'bg-green-100 text-green-800', icon: CheckCircle },
@@ -37,9 +38,16 @@ const PRODUCTION_COMPLETION_LOCKDOWN = false;
 const PRODUCTION_COMPLETION_LOCKDOWN_REASON = 'Temporarily disabled during raw-material integrity audit.';
 
 // Move ProductionForm outside to prevent re-creation on every render
+type ProductionFormBatch = {
+  productId: string;
+  quantity: number;
+  productionDate: string;
+  notes?: string;
+};
+
 const ProductionForm: React.FC<{ 
-  batch: any, 
-  onChange: (updates: any) => void,
+  batch: ProductionFormBatch,
+  onChange: (updates: Partial<ProductionFormBatch>) => void,
   isEdit?: boolean,
   products: ComposedProduct[]
 }> = ({ batch, onChange, isEdit = false, products }) => (

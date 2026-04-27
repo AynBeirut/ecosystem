@@ -208,12 +208,15 @@ const AdminRawMaterials: React.FC = () => {
       const recipesRef = collection(db, 'recipes');
       const recipesQuery = query(recipesRef, where('storeId', '==', user?.storeId));
       const recipesSnapshot = await getDocs(recipesQuery);
+
+      type RecipeIngredient = { rawMaterialId?: string };
+      type RecipeDoc = { ingredients?: RecipeIngredient[]; name?: string };
       
-      let usedInRecipes: string[] = [];
+      const usedInRecipes: string[] = [];
       recipesSnapshot.docs.forEach(doc => {
-        const recipe = doc.data();
+        const recipe = doc.data() as RecipeDoc;
         if (recipe.ingredients && Array.isArray(recipe.ingredients)) {
-          const isUsed = recipe.ingredients.some((ing: any) => ing.rawMaterialId === materialId);
+          const isUsed = recipe.ingredients.some((ing) => ing.rawMaterialId === materialId);
           if (isUsed) {
             usedInRecipes.push(recipe.name || 'Unknown Recipe');
           }

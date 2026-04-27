@@ -1,9 +1,17 @@
 const PIXEL_ID = import.meta.env.VITE_META_PIXEL_ID as string | undefined;
 
+type FbqFunction = ((...args: unknown[]) => void) & {
+  callMethod?: (...args: unknown[]) => void;
+  queue: unknown[][];
+  push: FbqFunction;
+  loaded: boolean;
+  version: string;
+};
+
 declare global {
   interface Window {
-    fbq?: (...args: any[]) => void;
-    _fbq?: (...args: any[]) => void;
+    fbq?: FbqFunction;
+    _fbq?: FbqFunction;
   }
 }
 
@@ -17,9 +25,13 @@ export function initMetaPixel(): void {
   } catch { return; }
 
   // Inject fbq stub
-  const fbq: any = function (...args: any[]) {
-    fbq.callMethod ? fbq.callMethod(...args) : fbq.queue.push(args);
-  };
+  const fbq = ((...args: unknown[]) => {
+    if (fbq.callMethod) {
+      fbq.callMethod(...args);
+      return;
+    }
+    fbq.queue.push(args);
+  }) as FbqFunction;
   fbq.push = fbq;
   fbq.loaded = true;
   fbq.version = '2.0';
