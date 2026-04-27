@@ -67,6 +67,7 @@ const webhooks_1 = require("./api/webhooks");
 const checkout_1 = require("./api/checkout");
 const stripeCheckout_1 = require("./api/stripeCheckout");
 const squareCheckout_1 = require("./api/squareCheckout");
+const omtCheckout_1 = require("./api/omtCheckout");
 const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
 const gdpr_1 = require("./api/gdpr");
@@ -112,6 +113,8 @@ app.get('/health', (req, res) => {
             '/payment/stripe/confirm',
             '/payment/square/checkout',
             '/payment/square/confirm',
+            '/payment/omt/checkout',
+            '/payment/omt/confirm',
             '/webhook/stripe',
             '/payment/callback',
             '/subscription/trial',
@@ -151,6 +154,8 @@ app.post('/payment/stripe/checkout', stripeCheckout_1.createStripeCheckoutSessio
 app.post('/payment/stripe/confirm', stripeCheckout_1.confirmStripeCheckoutSession);
 app.post('/payment/square/checkout', squareCheckout_1.createSquareCheckoutSession);
 app.post('/payment/square/confirm', squareCheckout_1.confirmSquareCheckoutSession);
+app.post('/payment/omt/checkout', omtCheckout_1.createOmtCheckoutSession);
+app.post('/payment/omt/confirm', omtCheckout_1.confirmOmtCheckoutSession);
 app.get('/payment/callback', checkout_1.handleCheckoutCallback);
 // Contact Us email endpoint
 app.post('/contact/send', contact_1.sendContactEmail);

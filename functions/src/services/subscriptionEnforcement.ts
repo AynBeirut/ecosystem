@@ -2,7 +2,7 @@ import * as admin from 'firebase-admin';
 
 const db = admin.firestore();
 
-type PaymentProvider = 'whish' | 'stripe' | 'square';
+type PaymentProvider = 'whish' | 'stripe' | 'square' | 'omt';
 
 type NormalizedTier = 'trial' | 'starter' | 'pro' | 'business';
 

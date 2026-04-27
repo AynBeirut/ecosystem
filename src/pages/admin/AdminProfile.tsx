@@ -90,11 +90,14 @@ const defaultProfile: StoreProfile = {
     whishEnabled: true,
     stripeEnabled: true,
     squareEnabled: false,
+    omtEnabled: false,
     paypalEnabled: false,
     bankTransferEnabled: false,
     cashOnDeliveryEnabled: true,
     preferredGateway: 'whish',
     squareLocationId: '',
+    omtReceiverName: '',
+    omtReceiverPhone: '',
   },
   seoSettings: {
     metaTitleSuffix: '',
@@ -2033,6 +2036,20 @@ const AdminProfile: React.FC = () => {
                       }))}
                     />
                   </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="gatewayOmtEnabled">Enable OMT</Label>
+                    <Switch
+                      id="gatewayOmtEnabled"
+                      checked={formData.paymentGatewaySettings?.omtEnabled ?? false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          omtEnabled: checked,
+                        },
+                      }))}
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -2051,6 +2068,36 @@ const AdminProfile: React.FC = () => {
                     />
                   </div>
                   <div>
+                    <Label htmlFor="omtReceiverName">OMT Receiver Name</Label>
+                    <Input
+                      id="omtReceiverName"
+                      value={formData.paymentGatewaySettings?.omtReceiverName || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          omtReceiverName: e.target.value,
+                        },
+                      }))}
+                      placeholder="Store Owner"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="omtReceiverPhone">OMT Receiver Phone</Label>
+                    <Input
+                      id="omtReceiverPhone"
+                      value={formData.paymentGatewaySettings?.omtReceiverPhone || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          omtReceiverPhone: e.target.value,
+                        },
+                      }))}
+                      placeholder="+961..."
+                    />
+                  </div>
+                  <div>
                     <Label htmlFor="preferredCheckoutGateway">Preferred Checkout Gateway</Label>
                     <select
                       id="preferredCheckoutGateway"
@@ -2059,7 +2106,7 @@ const AdminProfile: React.FC = () => {
                         ...prev,
                         paymentGatewaySettings: {
                           ...(prev.paymentGatewaySettings || {}),
-                          preferredGateway: e.target.value as 'whish' | 'stripe' | 'square' | 'paypal' | 'manual',
+                          preferredGateway: e.target.value as 'whish' | 'stripe' | 'square' | 'omt' | 'paypal' | 'manual',
                         },
                       }))}
                       className="w-full p-2 border rounded-md"
@@ -2067,6 +2114,7 @@ const AdminProfile: React.FC = () => {
                       <option value="whish">Whish</option>
                       <option value="stripe">Stripe</option>
                       <option value="square">Square</option>
+                      <option value="omt">OMT</option>
                       <option value="paypal">PayPal</option>
                       <option value="manual">Manual</option>
                     </select>

@@ -66,6 +66,7 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **AI Integration Foundation Completed**: External AI API integration settings, model catalog loading, model selection, and per-model prepaid credit cost configuration in admin.
 ✨ **Storefront Commerce Upgrade Completed**: Floating WhatsApp chat widget added to storefront and product pages for direct customer messaging.
 ✨ **Square Gateway Integration Completed**: Square checkout session creation, return confirmation handling, inventory deduction linkage, and admin Square gateway controls.
+✨ **OMT Gateway Integration Completed**: OMT transfer checkout initialization, transfer-reference generation, admin OMT receiver controls, and order confirmation workflow hooks.
 
 ### Latest Features (January 2026)
 ✨ **Swipe Gesture Navigation**: Navigate back with intuitive right-swipe gesture on mobile
@@ -85,7 +86,7 @@ This section merges the future feature list into the product description so ther
 - Domain and white-label growth (custom domains, SSL provisioning, DNS wizard, domain verification)
 
 ### Payments and Subscriptions
-- Additional gateways (OMT, BOB Finance)
+- Additional gateways (BOB Finance)
 - Billing enhancements (live currency rates, split payments, refunds, retry, reminders, receipts)
 - Subscription platform completion (engine completion, customer portal, admin management)
 

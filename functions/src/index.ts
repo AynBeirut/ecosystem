@@ -28,6 +28,7 @@ import { handleWhishWebhook } from './api/webhooks';
 import { processCheckout, handleCheckoutCallback } from './api/checkout';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
 import { createSquareCheckoutSession, confirmSquareCheckoutSession } from './api/squareCheckout';
+import { createOmtCheckoutSession, confirmOmtCheckoutSession } from './api/omtCheckout';
 import { sendContactEmail } from './api/contact';
 import { checkCustomDomainStatus, registerCustomDomain } from './api/domain';
 import { exportGdprData, requestGdprDelete } from './api/gdpr';
@@ -81,6 +82,8 @@ app.get('/health', (req, res) => {
       '/payment/stripe/confirm',
       '/payment/square/checkout',
       '/payment/square/confirm',
+      '/payment/omt/checkout',
+      '/payment/omt/confirm',
       '/webhook/stripe',
       '/payment/callback',
       '/subscription/trial',
@@ -124,6 +127,8 @@ app.post('/payment/stripe/checkout', createStripeCheckoutSession);
 app.post('/payment/stripe/confirm', confirmStripeCheckoutSession);
 app.post('/payment/square/checkout', createSquareCheckoutSession);
 app.post('/payment/square/confirm', confirmSquareCheckoutSession);
+app.post('/payment/omt/checkout', createOmtCheckoutSession);
+app.post('/payment/omt/confirm', confirmOmtCheckoutSession);
 app.get('/payment/callback', handleCheckoutCallback);
 
 // Contact Us email endpoint
