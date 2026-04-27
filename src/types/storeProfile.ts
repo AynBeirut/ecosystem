@@ -313,7 +313,7 @@ export interface StoreProfile {
   invoiceNumberPrefix?: string; // Default: "INV"
   lastInvoiceNumber?: number; // Last used invoice number
   invoiceTemplate?: 'modern' | 'classic' | 'vibrant'; // Invoice design template
-  template?: 'default' | 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic'; // Storefront template
+  template?: 'default' | 'modern' | 'minimalist' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic'; // Storefront template
   storeBackgroundImage?: string;
   carouselImages?: string[];
   galleryImages?: string[];

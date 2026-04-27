@@ -24,7 +24,7 @@ import type {
 } from '@/types/storeProfile';
 
 // ── types ────────────────────────────────────────────────────────────────────
-type TemplateId = 'modern' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic' | 'custom';
+type TemplateId = 'modern' | 'minimalist' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic' | 'custom';
 type TabId = 'templates' | 'colors' | 'layout' | 'sections';
 
 type TemplateLayoutConfig = {
@@ -64,6 +64,18 @@ const COLOR_PRESETS: Record<TemplateId, Array<{ name: string; palette: Required<
     { name: 'Slate',         palette: { primary:'#718096', secondary:'#2D3748', accent:'#38B2AC', background:'#F7FAFC', surface:'#ffffff', textColor:'#1A202C', highlight:'#CBD5E0' } },
     { name: 'Lime Fresh',    palette: { primary:'#68D391', secondary:'#2F855A', accent:'#F6AD55', background:'#F0FFF4', surface:'#ffffff', textColor:'#1A202C', highlight:'#C6F6D5' } },
     { name: 'Violet Dreams', palette: { primary:'#9F7AEA', secondary:'#553C9A', accent:'#F6AD55', background:'#FAF5FF', surface:'#ffffff', textColor:'#1A202C', highlight:'#D6BCFA' } },
+  ],
+  minimalist: [
+    { name: 'Sandstone',      palette: { primary:'#6B7280', secondary:'#111827', accent:'#C08457', background:'#F8F6F1', surface:'#FFFFFF', textColor:'#111827', highlight:'#E7E5E4' } },
+    { name: 'Cloud White',    palette: { primary:'#4B5563', secondary:'#0F172A', accent:'#94A3B8', background:'#FAFAFA', surface:'#FFFFFF', textColor:'#1F2937', highlight:'#E5E7EB' } },
+    { name: 'Nordic Soft',    palette: { primary:'#334155', secondary:'#0B1120', accent:'#A8A29E', background:'#F5F7FA', surface:'#FFFFFF', textColor:'#111827', highlight:'#CBD5E1' } },
+    { name: 'Clay Neutral',   palette: { primary:'#57534E', secondary:'#292524', accent:'#CA8A04', background:'#F7F5F2', surface:'#FFFFFF', textColor:'#1C1917', highlight:'#E7E5E4' } },
+    { name: 'Mist Grey',      palette: { primary:'#6B7280', secondary:'#1F2937', accent:'#9CA3AF', background:'#F3F4F6', surface:'#FFFFFF', textColor:'#111827', highlight:'#D1D5DB' } },
+    { name: 'Olive Paper',    palette: { primary:'#4D5D53', secondary:'#1F2937', accent:'#A16207', background:'#F7F8F4', surface:'#FFFFFF', textColor:'#111827', highlight:'#D9E2D3' } },
+    { name: 'Latte Mono',     palette: { primary:'#6F6256', secondary:'#2E2A27', accent:'#B45309', background:'#FAF7F2', surface:'#FFFFFF', textColor:'#1F2937', highlight:'#E5D7C7' } },
+    { name: 'Graphite Calm',  palette: { primary:'#374151', secondary:'#111827', accent:'#6B7280', background:'#F9FAFB', surface:'#FFFFFF', textColor:'#111827', highlight:'#E5E7EB' } },
+    { name: 'Linen Blue',     palette: { primary:'#475569', secondary:'#0F172A', accent:'#64748B', background:'#F7FAFC', surface:'#FFFFFF', textColor:'#111827', highlight:'#CBD5E1' } },
+    { name: 'Concrete',       palette: { primary:'#52525B', secondary:'#18181B', accent:'#71717A', background:'#FAFAFA', surface:'#FFFFFF', textColor:'#18181B', highlight:'#D4D4D8' } },
   ],
   minimal: [
     { name: 'Pure White',    palette: { primary:'#4A5568', secondary:'#2D3748', accent:'#718096', background:'#ffffff', surface:'#F7FAFC', textColor:'#1A202C', highlight:'#E2E8F0' } },
@@ -317,6 +329,27 @@ const AdminTemplates: React.FC = () => {
       }
     },
     { 
+      id: 'minimalist',
+      name: 'Modern Minimalist',
+      description: 'Editorial minimal design with calm neutrals, generous spacing, and subtle contrast',
+      colors: ['#6B7280','#111827','#C08457'],
+      features: ['Editorial Spacing','Calm Neutral Palette','Subtle Contrast UI'],
+      isPremium: false,
+      defaultPalette: COLOR_PRESETS.minimalist[0].palette,
+      layoutConfig: {
+        heroLayout: 'centered',
+        productDisplayType: 'grid-large',
+        productCardAnimation: 'none',
+        menuStyle: 'centered',
+        aboutLayout: 'centered',
+        contactFormStyle: 8,
+        ratingDisplayType: 'minimal',
+        pageLayout: 'contained',
+        storeCardStyle: 'minimal',
+        visualStyle: 'mixed',
+      }
+    },
+    {
       id: 'minimal', 
       name: 'Minimal', 
       description: 'Simple, elegant design with centered layout and minimal hero',
@@ -504,6 +537,7 @@ const AdminTemplates: React.FC = () => {
   // ── template handlers ────────────────────────────────────────────────────
   const previewStyles: Record<TemplateId, { shell: string; header: string; block: string; title: string }> = {
     modern:       { shell: 'bg-gradient-to-br from-cyan-100 via-blue-50 to-indigo-100', header: 'bg-gradient-to-r from-cyan-500 to-blue-600 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-cyan-200', title: 'text-white drop-shadow-sm' },
+    minimalist:   { shell: 'bg-gradient-to-br from-stone-100 via-zinc-50 to-neutral-100', header: 'bg-white/95 border border-stone-300 shadow-sm', block: 'bg-white shadow-sm hover:shadow-md transition-shadow border border-stone-200', title: 'text-zinc-800 tracking-wide' },
     minimal:      { shell: 'bg-gradient-to-br from-gray-50 to-slate-100', header: 'bg-white shadow-md border-2 border-gray-300', block: 'bg-white shadow-sm hover:shadow-md transition-shadow border border-gray-200', title: 'text-gray-800' },
     classic:      { shell: 'bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100', header: 'bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-blue-300', title: 'text-white font-bold drop-shadow' },
     vibrant:      { shell: 'bg-gradient-to-br from-orange-200 via-pink-200 to-fuchsia-200', header: 'bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 shadow-xl', block: 'bg-white shadow-lg hover:shadow-xl transition-all border-2 border-pink-300', title: 'text-white font-extrabold drop-shadow-lg' },

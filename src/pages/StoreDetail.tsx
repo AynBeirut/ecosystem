@@ -578,7 +578,7 @@ const StoreDetail: React.FC = () => {
     );
   }
 
-  const allowedTemplates = new Set(['default', 'modern', 'minimal', 'classic', 'vibrant', 'professional', 'artistic']);
+  const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'vibrant', 'professional', 'artistic']);
   const resolvedTemplate = typeof store.template === 'string' && allowedTemplates.has(store.template)
     ? store.template
     : 'modern';
@@ -627,6 +627,18 @@ const StoreDetail: React.FC = () => {
       link: 'text-cyan-700 hover:text-cyan-900',
       actionButton: 'border-cyan-300 text-cyan-800 hover:bg-cyan-50',
       reviewCard: 'bg-white border border-cyan-100',
+    },
+    minimalist: {
+      pageBg: 'bg-gradient-to-b from-stone-50 via-zinc-50 to-white',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-zinc-700 via-stone-700 to-neutral-800',
+      headerCard: 'bg-white/95 border border-stone-200 shadow-sm',
+      sectionTitle: 'text-zinc-900',
+      card: 'bg-white border border-stone-200 shadow-sm',
+      cardSoft: 'bg-white/95 border border-stone-200 shadow-sm',
+      mutedText: 'text-zinc-600',
+      link: 'text-zinc-800 hover:text-black',
+      actionButton: 'border-stone-300 text-zinc-800 hover:bg-stone-50',
+      reviewCard: 'bg-white border border-stone-200 shadow-sm',
     },
     minimal: {
       pageBg: 'bg-white',
