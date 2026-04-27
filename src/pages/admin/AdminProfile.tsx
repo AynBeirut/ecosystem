@@ -91,6 +91,7 @@ const defaultProfile: StoreProfile = {
     stripeEnabled: true,
     squareEnabled: false,
     omtEnabled: false,
+    bobEnabled: false,
     paypalEnabled: false,
     bankTransferEnabled: false,
     cashOnDeliveryEnabled: true,
@@ -98,6 +99,8 @@ const defaultProfile: StoreProfile = {
     squareLocationId: '',
     omtReceiverName: '',
     omtReceiverPhone: '',
+    bobReceiverName: '',
+    bobReceiverPhone: '',
   },
   seoSettings: {
     metaTitleSuffix: '',
@@ -2050,6 +2053,20 @@ const AdminProfile: React.FC = () => {
                       }))}
                     />
                   </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="gatewayBobEnabled">Enable BOB Finance</Label>
+                    <Switch
+                      id="gatewayBobEnabled"
+                      checked={formData.paymentGatewaySettings?.bobEnabled ?? false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          bobEnabled: checked,
+                        },
+                      }))}
+                    />
+                  </div>
                 </div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
@@ -2098,6 +2115,36 @@ const AdminProfile: React.FC = () => {
                     />
                   </div>
                   <div>
+                    <Label htmlFor="bobReceiverName">BOB Receiver Name</Label>
+                    <Input
+                      id="bobReceiverName"
+                      value={formData.paymentGatewaySettings?.bobReceiverName || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          bobReceiverName: e.target.value,
+                        },
+                      }))}
+                      placeholder="Store Owner"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="bobReceiverPhone">BOB Receiver Phone</Label>
+                    <Input
+                      id="bobReceiverPhone"
+                      value={formData.paymentGatewaySettings?.bobReceiverPhone || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          bobReceiverPhone: e.target.value,
+                        },
+                      }))}
+                      placeholder="+961..."
+                    />
+                  </div>
+                  <div>
                     <Label htmlFor="preferredCheckoutGateway">Preferred Checkout Gateway</Label>
                     <select
                       id="preferredCheckoutGateway"
@@ -2106,7 +2153,7 @@ const AdminProfile: React.FC = () => {
                         ...prev,
                         paymentGatewaySettings: {
                           ...(prev.paymentGatewaySettings || {}),
-                          preferredGateway: e.target.value as 'whish' | 'stripe' | 'square' | 'omt' | 'paypal' | 'manual',
+                          preferredGateway: e.target.value as 'whish' | 'stripe' | 'square' | 'omt' | 'bob' | 'paypal' | 'manual',
                         },
                       }))}
                       className="w-full p-2 border rounded-md"
@@ -2115,6 +2162,7 @@ const AdminProfile: React.FC = () => {
                       <option value="stripe">Stripe</option>
                       <option value="square">Square</option>
                       <option value="omt">OMT</option>
+                      <option value="bob">BOB Finance</option>
                       <option value="paypal">PayPal</option>
                       <option value="manual">Manual</option>
                     </select>

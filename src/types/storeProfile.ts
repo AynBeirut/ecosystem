@@ -115,14 +115,17 @@ export interface PaymentGatewaySettings {
   stripeEnabled?: boolean;
   squareEnabled?: boolean;
   omtEnabled?: boolean;
+  bobEnabled?: boolean;
   paypalEnabled?: boolean;
   bankTransferEnabled?: boolean;
   cashOnDeliveryEnabled?: boolean;
-  preferredGateway?: 'whish' | 'stripe' | 'square' | 'omt' | 'paypal' | 'manual';
+  preferredGateway?: 'whish' | 'stripe' | 'square' | 'omt' | 'bob' | 'paypal' | 'manual';
   stripePublishableKey?: string;
   squareLocationId?: string;
   omtReceiverName?: string;
   omtReceiverPhone?: string;
+  bobReceiverName?: string;
+  bobReceiverPhone?: string;
   paypalClientId?: string;
 }
 

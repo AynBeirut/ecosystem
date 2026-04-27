@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT integration completed)
+Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB integration completed)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -36,7 +36,6 @@ Tag format used on each item:
 ## 4) Payments, Billing, Subscription Expansion (P2)
 
 ### Payment Gateways
-- [ ] Add BOB Finance integration (`Size: 3 MB`, `Best: after 50 clients`)
 - [ ] Complete production-grade Whish payment ops checklist (`Size: 3 MB`, `Best: now`)
 
 ### Billing Features

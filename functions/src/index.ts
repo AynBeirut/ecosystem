@@ -29,6 +29,7 @@ import { processCheckout, handleCheckoutCallback } from './api/checkout';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
 import { createSquareCheckoutSession, confirmSquareCheckoutSession } from './api/squareCheckout';
 import { createOmtCheckoutSession, confirmOmtCheckoutSession } from './api/omtCheckout';
+import { createBobCheckoutSession, confirmBobCheckoutSession } from './api/bobCheckout';
 import { sendContactEmail } from './api/contact';
 import { checkCustomDomainStatus, registerCustomDomain } from './api/domain';
 import { exportGdprData, requestGdprDelete } from './api/gdpr';
@@ -84,6 +85,8 @@ app.get('/health', (req, res) => {
       '/payment/square/confirm',
       '/payment/omt/checkout',
       '/payment/omt/confirm',
+      '/payment/bob/checkout',
+      '/payment/bob/confirm',
       '/webhook/stripe',
       '/payment/callback',
       '/subscription/trial',
@@ -129,6 +132,8 @@ app.post('/payment/square/checkout', createSquareCheckoutSession);
 app.post('/payment/square/confirm', confirmSquareCheckoutSession);
 app.post('/payment/omt/checkout', createOmtCheckoutSession);
 app.post('/payment/omt/confirm', confirmOmtCheckoutSession);
+app.post('/payment/bob/checkout', createBobCheckoutSession);
+app.post('/payment/bob/confirm', confirmBobCheckoutSession);
 app.get('/payment/callback', handleCheckoutCallback);
 
 // Contact Us email endpoint

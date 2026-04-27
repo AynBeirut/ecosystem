@@ -83,14 +83,17 @@ export type Store = {
     stripeEnabled?: boolean;
     squareEnabled?: boolean;
     omtEnabled?: boolean;
+    bobEnabled?: boolean;
     paypalEnabled?: boolean;
     bankTransferEnabled?: boolean;
     cashOnDeliveryEnabled?: boolean;
-    preferredGateway?: 'whish' | 'stripe' | 'square' | 'omt' | 'paypal' | 'manual';
+    preferredGateway?: 'whish' | 'stripe' | 'square' | 'omt' | 'bob' | 'paypal' | 'manual';
     stripePublishableKey?: string;
     squareLocationId?: string;
     omtReceiverName?: string;
     omtReceiverPhone?: string;
+    bobReceiverName?: string;
+    bobReceiverPhone?: string;
     paypalClientId?: string;
   };
   seoSettings?: {
@@ -139,7 +142,7 @@ export type Store = {
   ratingCount?: number; // number of reviews
 };
 
-export type PaymentMethod = 'visa' | 'mastercard' | 'square' | 'omt' | 'paypal' | 'cash' | 'apple_pay' | 'google_pay' | 'bank_transfer';
+export type PaymentMethod = 'visa' | 'mastercard' | 'square' | 'omt' | 'bob' | 'paypal' | 'cash' | 'apple_pay' | 'google_pay' | 'bank_transfer';
 
 export type StoreAnnouncement = {
   id: string;

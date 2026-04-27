@@ -27,6 +27,7 @@ type StorePaymentMethods = {
   debitCard: boolean;
   square: boolean;
   omt: boolean;
+  bob: boolean;
   paypal: boolean;
   applePay: boolean;
   googlePay: boolean;
@@ -62,6 +63,7 @@ const Cart: React.FC = () => {
     debitCard: false,
     square: false,
     omt: false,
+    bob: false,
     paypal: false,
     applePay: false,
     googlePay: false,
@@ -249,13 +251,14 @@ const Cart: React.FC = () => {
           const storeDoc = await getDoc(doc(db, 'storeProfiles', storeId));
           if (storeDoc.exists()) {
             const storeData = storeDoc.data();
-            const gatewaySettings = (storeData.paymentGatewaySettings || {}) as { squareEnabled?: boolean; omtEnabled?: boolean; stripeEnabled?: boolean; paypalEnabled?: boolean };
+            const gatewaySettings = (storeData.paymentGatewaySettings || {}) as { squareEnabled?: boolean; omtEnabled?: boolean; bobEnabled?: boolean; stripeEnabled?: boolean; paypalEnabled?: boolean };
             // If store has payment methods configured, use them; otherwise allow all
             if (storeData.paymentMethods) {
               storePaymentSettings.push({
                 ...storeData.paymentMethods,
                 square: Boolean(gatewaySettings.squareEnabled),
                 omt: Boolean(gatewaySettings.omtEnabled),
+                bob: Boolean(gatewaySettings.bobEnabled),
                 creditCard: storeData.paymentMethods.creditCard && (gatewaySettings.stripeEnabled ?? true),
                 paypal: storeData.paymentMethods.paypal && (gatewaySettings.paypalEnabled ?? true),
               });
@@ -266,6 +269,7 @@ const Cart: React.FC = () => {
                 debitCard: gatewaySettings.stripeEnabled ?? true,
                 square: Boolean(gatewaySettings.squareEnabled),
                 omt: Boolean(gatewaySettings.omtEnabled),
+                bob: Boolean(gatewaySettings.bobEnabled),
                 paypal: gatewaySettings.paypalEnabled ?? true,
                 applePay: true,
                 googlePay: true,
@@ -281,6 +285,7 @@ const Cart: React.FC = () => {
               debitCard: true,
               square: false,
               omt: false,
+              bob: false,
               paypal: true,
               applePay: true,
               googlePay: true,
@@ -297,6 +302,7 @@ const Cart: React.FC = () => {
             debitCard: true,
             square: false,
             omt: false,
+            bob: false,
             paypal: true,
             applePay: true,
             googlePay: true,
@@ -313,6 +319,7 @@ const Cart: React.FC = () => {
         debitCard: storePaymentSettings.every(s => s.debitCard),
         square: storePaymentSettings.every(s => s.square),
         omt: storePaymentSettings.every(s => s.omt),
+        bob: storePaymentSettings.every(s => s.bob),
         paypal: storePaymentSettings.every(s => s.paypal),
         applePay: storePaymentSettings.every(s => s.applePay),
         googlePay: storePaymentSettings.every(s => s.googlePay),
@@ -334,6 +341,8 @@ const Cart: React.FC = () => {
         setPaymentMethod('square');
       } else if (commonMethods.omt) {
         setPaymentMethod('omt');
+      } else if (commonMethods.bob) {
+        setPaymentMethod('bob');
       } else if (commonMethods.paypal) {
         setPaymentMethod('paypal');
       } else if (commonMethods.applePay) {
@@ -776,12 +785,15 @@ const Cart: React.FC = () => {
       const useStripeForCards = paymentMethod === 'visa' || paymentMethod === 'mastercard';
       const useSquareCheckout = paymentMethod === 'square';
       const useOmtCheckout = paymentMethod === 'omt';
+      const useBobCheckout = paymentMethod === 'bob';
       const paymentUrl = useStripeForCards
         ? `${API_BASE.replace(/\/$/, '')}/payment/stripe/checkout`
         : useSquareCheckout
           ? `${API_BASE.replace(/\/$/, '')}/payment/square/checkout`
         : useOmtCheckout
           ? `${API_BASE.replace(/\/$/, '')}/payment/omt/checkout`
+        : useBobCheckout
+          ? `${API_BASE.replace(/\/$/, '')}/payment/bob/checkout`
         : `${API_BASE.replace(/\/$/, '')}/payment/checkout`;
       const paymentResp = await fetch(paymentUrl, {
         method: 'POST',
@@ -810,14 +822,14 @@ const Cart: React.FC = () => {
       // Redirect to payment page (Stripe for cards, Whish for other online methods)
       const paymentPageUrl = paymentBody?.paymentUrl;
       if (paymentPageUrl) {
-        toast.success(useStripeForCards ? 'Redirecting to Stripe...' : useSquareCheckout ? 'Redirecting to Square...' : useOmtCheckout ? 'Opening OMT transfer instructions...' : 'Redirecting to payment...');
-        if (paymentBody?.message && useOmtCheckout) {
+        toast.success(useStripeForCards ? 'Redirecting to Stripe...' : useSquareCheckout ? 'Redirecting to Square...' : useOmtCheckout ? 'Opening OMT transfer instructions...' : useBobCheckout ? 'Opening BOB transfer instructions...' : 'Redirecting to payment...');
+        if (paymentBody?.message && (useOmtCheckout || useBobCheckout)) {
           toast.info(paymentBody.message);
         }
         // Clear cart before redirecting (order is already created)
         clearCart();
         // Redirect to payment
-        if (useOmtCheckout) {
+        if (useOmtCheckout || useBobCheckout) {
           navigate(paymentPageUrl.replace(/^https?:\/\/[^/]+/, ''));
         } else {
           window.location.href = paymentPageUrl;
@@ -1028,6 +1040,15 @@ const Cart: React.FC = () => {
                           <Label htmlFor="omt" className="flex items-center">
                             <img src="https://placehold.co/40x25/1A365D/fff?text=OMT" alt="OMT" className="mr-2 h-6" />
                             OMT Transfer
+                          </Label>
+                        </div>
+                      )}
+                      {availablePaymentMethods.bob && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="bob" id="bob" />
+                          <Label htmlFor="bob" className="flex items-center">
+                            <img src="https://placehold.co/40x25/0C4A6E/fff?text=BOB" alt="BOB Finance" className="mr-2 h-6" />
+                            BOB Finance
                           </Label>
                         </div>
                       )}
