@@ -301,6 +301,8 @@ export interface StoreProfile {
   proEmail?: string;         // Email address to receive Contact Us messages
   customDomain?: string;     // Custom domain (e.g. "shop.client.com")
   customDomainStatus?: 'pending' | 'active' | 'error'; // Status of custom domain verification
+  adminIpWhitelistEnabled?: boolean;
+  adminIpAllowlist?: string[];
   // Product settings
   productCategories?: string[]; // Categories for composed products
   priceMultiplier?: number; // Default price multiplier for composed products (default: 2.5)

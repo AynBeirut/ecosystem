@@ -13,7 +13,6 @@ Tag format used on each item:
 ## 1) Immediate Execution (P0)
 
 ### Security and Compliance (Optional, recommended hardening)
-- [ ] (Optional) Add IP whitelist for admin panel (`Size: 3 MB`, `Best: after 20 clients`)
 - [ ] (Optional) Complete GDPR compliance tooling (`Size: 4 MB`, `Best: soon`)
 - [ ] (Optional) Add customer data export flow (GDPR) (`Size: 3 MB`, `Best: after GDPR API done`)
 - [ ] (Optional) Add right-to-be-forgotten flow (GDPR delete) (`Size: 3 MB`, `Best: after GDPR API done`)

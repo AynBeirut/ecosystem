@@ -111,6 +111,8 @@ const defaultProfile: StoreProfile = {
     minimumServiceDurationMinutes: 30,
     defaultRenewalReminderDays: 7,
   },
+  adminIpWhitelistEnabled: false,
+  adminIpAllowlist: [],
   logoPosition: 'left',
   subscriptionBillingSettings: {
     autoRenewEnabled: true,
@@ -2190,6 +2192,43 @@ const AdminProfile: React.FC = () => {
                       </div>
                     </div>
                   )}
+
+                  <div className="rounded-lg border p-4 space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium">Admin IP Allowlist</p>
+                        <p className="text-xs text-muted-foreground">
+                          Restrict admin routes to specific public IP addresses.
+                        </p>
+                      </div>
+                      <Switch
+                        checked={!!formData.adminIpWhitelistEnabled}
+                        onCheckedChange={(checked) => setFormData(prev => ({ ...prev, adminIpWhitelistEnabled: checked }))}
+                      />
+                    </div>
+
+                    {formData.adminIpWhitelistEnabled && (
+                      <div className="space-y-2">
+                        <Label htmlFor="admin-ip-allowlist">Allowed Public IPs (one per line)</Label>
+                        <Textarea
+                          id="admin-ip-allowlist"
+                          value={(formData.adminIpAllowlist || []).join('\n')}
+                          onChange={(e) => {
+                            const entries = e.target.value
+                              .split('\n')
+                              .map((line) => line.trim())
+                              .filter((line) => line.length > 0);
+                            setFormData(prev => ({ ...prev, adminIpAllowlist: entries }));
+                          }}
+                          placeholder={`203.0.113.10\n198.51.100.27`}
+                          rows={4}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Keep at least one valid public IP to avoid locking yourself out. Localhost is always allowed during development.
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </>
               )}
             </CardContent>

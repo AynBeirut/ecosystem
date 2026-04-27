@@ -1,7 +1,8 @@
 
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from '@/context/useAuth';
-import { Navigate } from 'react-router-dom';
+import { Navigate, Link } from 'react-router-dom';
+import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
 
 const ProtectedRoute: React.FC<{ 
@@ -10,6 +11,118 @@ const ProtectedRoute: React.FC<{
   requiredPermission?: string;
 }> = ({ children, allowedRoles, requiredPermission }) => {
   const { user, isLoading } = useAuth();
+  const [ipCheckState, setIpCheckState] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
+  const [ipCheckMessage, setIpCheckMessage] = useState('');
+
+  const requiresAdminIpCheck = useMemo(() => {
+    return Boolean(allowedRoles && allowedRoles.includes('admin') && user?.role === 'admin');
+  }, [allowedRoles, user?.role]);
+
+  useEffect(() => {
+    if (!user || !requiresAdminIpCheck) {
+      setIpCheckState('idle');
+      setIpCheckMessage('');
+      return;
+    }
+
+    let cancelled = false;
+
+    const verifyIpAllowlist = async () => {
+      setIpCheckState('checking');
+      setIpCheckMessage('');
+
+      try {
+        const db = getFirestore();
+        const storeId = user.storeId || user.id;
+        const profileSnap = await getDoc(doc(db, 'storeProfiles', storeId));
+
+        if (!profileSnap.exists()) {
+          if (!cancelled) setIpCheckState('allowed');
+          return;
+        }
+
+        const profile = profileSnap.data() as {
+          adminIpWhitelistEnabled?: boolean;
+          adminIpAllowlist?: string[];
+        };
+
+        if (!profile.adminIpWhitelistEnabled) {
+          if (!cancelled) setIpCheckState('allowed');
+          return;
+        }
+
+        const allowlist = (profile.adminIpAllowlist || [])
+          .map((entry) => String(entry || '').trim())
+          .filter((entry) => entry.length > 0);
+
+        if (allowlist.length === 0) {
+          if (!cancelled) {
+            setIpCheckState('blocked');
+            setIpCheckMessage('Admin IP allowlist is enabled but empty.');
+          }
+          return;
+        }
+
+        const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+        if (hostname === 'localhost' || hostname === '127.0.0.1') {
+          if (!cancelled) setIpCheckState('allowed');
+          return;
+        }
+
+        let currentIp = '';
+        try {
+          const raw = localStorage.getItem('adminCurrentIpCache');
+          if (raw) {
+            const cached = JSON.parse(raw) as { ip?: string; ts?: number };
+            if (cached.ip && cached.ts && (Date.now() - cached.ts) < 5 * 60 * 1000) {
+              currentIp = cached.ip;
+            }
+          }
+        } catch (_err) {
+          // ignore local cache parsing issues
+        }
+
+        if (!currentIp) {
+          const response = await fetch('https://api.ipify.org?format=json', { cache: 'no-store' });
+          const data = await response.json() as { ip?: string };
+          currentIp = String(data.ip || '').trim();
+          if (currentIp) {
+            localStorage.setItem('adminCurrentIpCache', JSON.stringify({ ip: currentIp, ts: Date.now() }));
+          }
+        }
+
+        if (!currentIp) {
+          if (!cancelled) {
+            setIpCheckState('blocked');
+            setIpCheckMessage('Could not verify your public IP address.');
+          }
+          return;
+        }
+
+        const ipAllowed = allowlist.includes(currentIp);
+        if (!cancelled) {
+          if (ipAllowed) {
+            setIpCheckState('allowed');
+          } else {
+            setIpCheckState('blocked');
+            setIpCheckMessage(`Current IP ${currentIp} is not in the admin allowlist.`);
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          const msg = err instanceof Error ? err.message : 'IP check failed';
+          setIpCheckState('blocked');
+          setIpCheckMessage(msg);
+        }
+      }
+    };
+
+    verifyIpAllowlist();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, requiresAdminIpCheck]);
 
   // Wait for auth state to finish loading before making redirect decisions
   if (isLoading) {
@@ -19,6 +132,27 @@ const ProtectedRoute: React.FC<{
 
   if (!user) {
     return <Navigate to="/login" replace />;
+  }
+
+  if (requiresAdminIpCheck && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
+    return null;
+  }
+
+  if (requiresAdminIpCheck && ipCheckState === 'blocked') {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center px-4">
+        <div className="max-w-lg w-full border rounded-lg p-6 space-y-3 bg-white">
+          <h2 className="text-lg font-semibold">Admin Access Restricted</h2>
+          <p className="text-sm text-gray-600">
+            Admin IP allowlist blocked this session.
+          </p>
+          {ipCheckMessage ? <p className="text-xs text-red-600">{ipCheckMessage}</p> : null}
+          <div className="flex gap-2">
+            <Link to="/" className="inline-flex items-center px-3 py-2 rounded-md border text-sm">Go to Marketplace</Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   // Check role-based access
