@@ -7,6 +7,25 @@ const SITE_ID = 'market-flow-7b074';
 // Basic domain validation: at least one dot, no spaces, no scheme
 const DOMAIN_REGEX = /^(?!https?:\/\/)[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?(\.[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?)+$/i;
 
+function mapHostingDomainStatus(payload: unknown): 'active' | 'pending' | 'error' {
+  const raw = JSON.stringify(payload).toUpperCase();
+
+  if (
+    raw.includes('"ACTIVE"') ||
+    raw.includes('CERT_ACTIVE') ||
+    raw.includes('DOMAIN_ACTIVE') ||
+    raw.includes('PROVISIONED')
+  ) {
+    return 'active';
+  }
+
+  if (raw.includes('FAILED') || raw.includes('ERROR') || raw.includes('INVALID')) {
+    return 'error';
+  }
+
+  return 'pending';
+}
+
 export async function registerCustomDomain(req: Request, res: Response): Promise<void> {
   const { storeId, customDomain } = req.body as { storeId?: string; customDomain?: string };
 
@@ -90,6 +109,88 @@ export async function registerCustomDomain(req: Request, res: Response): Promise
   } catch (err) {
     const msg = err instanceof Error ? err.message : 'Unexpected error';
     console.error('[registerCustomDomain]', err);
+    res.status(500).json({ success: false, message: msg });
+  }
+}
+
+export async function checkCustomDomainStatus(req: Request, res: Response): Promise<void> {
+  const { storeId, customDomain } = req.body as { storeId?: string; customDomain?: string };
+
+  if (!storeId || typeof storeId !== 'string') {
+    res.status(400).json({ message: 'storeId is required' });
+    return;
+  }
+  if (!customDomain || typeof customDomain !== 'string' || !DOMAIN_REGEX.test(customDomain)) {
+    res.status(400).json({ message: 'Invalid domain name' });
+    return;
+  }
+
+  const normalizedDomain = customDomain.toLowerCase();
+  const db = admin.firestore();
+
+  try {
+    const storeRef = db.collection('storeProfiles').doc(storeId);
+    const storeSnap = await storeRef.get();
+    if (!storeSnap.exists()) {
+      res.status(404).json({ message: 'Store not found' });
+      return;
+    }
+
+    const credential = admin.app().options.credential;
+    if (!credential) {
+      res.json({ success: true, status: 'pending', message: 'Credential unavailable in emulator mode.' });
+      return;
+    }
+
+    let accessToken: string;
+    try {
+      const cred = credential as { getAccessToken(): Promise<{ access_token: string }> };
+      const tokenResult = await cred.getAccessToken();
+      accessToken = tokenResult.access_token;
+    } catch (_tokenErr) {
+      res.json({ success: true, status: 'pending', message: 'Skipped Hosting API call in local mode.' });
+      return;
+    }
+
+    const hostingApiUrl =
+      `https://firebasehosting.googleapis.com/v1beta1/sites/${SITE_ID}/domains/${encodeURIComponent(normalizedDomain)}`;
+
+    let status: 'active' | 'pending' | 'error' = 'pending';
+    let apiMessage = 'Domain status fetched.';
+
+    try {
+      const response = await axios.get(hostingApiUrl, {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      status = mapHostingDomainStatus(response.data);
+    } catch (apiErr: unknown) {
+      if (axios.isAxiosError(apiErr)) {
+        const responseStatus = apiErr.response?.status;
+        const msg = apiErr.response?.data?.error?.message || apiErr.message;
+        apiMessage = msg;
+
+        if (responseStatus === 404) {
+          status = 'pending';
+        } else {
+          status = 'error';
+        }
+      } else {
+        status = 'error';
+      }
+    }
+
+    await storeRef.update({
+      customDomain: normalizedDomain,
+      customDomainStatus: status,
+    });
+
+    res.json({ success: true, status, message: apiMessage });
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : 'Unexpected error';
+    console.error('[checkCustomDomainStatus]', err);
     res.status(500).json({ success: false, message: msg });
   }
 }

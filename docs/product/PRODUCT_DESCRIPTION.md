@@ -59,6 +59,9 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **Billing Currency Support**: Multi-currency support currently available for USD and LBP.
 ✨ **Order Operations**: Expanded shipping option matrix for broader delivery setup coverage.
 ✨ **Analytics Upgrade**: Google Analytics 4 deep integration with expanded sales and product performance reporting.
+✨ **SEO Delivery Completed**: XML sitemap generation + submission workflow, Schema.org product/store structured data, custom product/category URLs, image alt-text workflow, and robots.txt management controls.
+✨ **Meta Ecosystem Completed**: Meta catalog feed + sync, Facebook Shop integration, Instagram Shopping integration, conversion tracking completion, Meta Ads campaign creation flow, and dynamic product ads support.
+✨ **Domain Enablement Completed**: Custom domain registration for stores, DNS onboarding instructions, custom-domain storefront routing, and admin domain status verification checks.
 
 ### Latest Features (January 2026)
 ✨ **Swipe Gesture Navigation**: Navigate back with intuitive right-swipe gesture on mobile
@@ -75,8 +78,6 @@ This section merges the future feature list into the product description so ther
 
 ### Commerce and Growth
 - WhatsApp Business API automation (order confirmations, abandoned cart recovery, delivery updates, chatbot flows)
-- SEO expansion (XML sitemap, Schema.org markup, custom product and category URLs, alt text workflow, robots controls)
-- Meta ecosystem expansion (catalog sync, Facebook Shop, Instagram Shopping, conversion tracking, dynamic ads)
 - Domain and white-label growth (custom domains, SSL provisioning, DNS wizard, domain verification)
 
 ### Payments and Subscriptions

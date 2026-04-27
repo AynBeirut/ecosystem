@@ -149,6 +149,7 @@ app.get('/payment/callback', checkout_1.handleCheckoutCallback);
 app.post('/contact/send', contact_1.sendContactEmail);
 // Custom domain management
 app.post('/domain/register', domain_1.registerCustomDomain);
+app.post('/domain/status', domain_1.checkCustomDomainStatus);
 // Sitemap for SEO
 app.get('/sitemap.xml', sitemap_1.getSitemap);
 app.get('/robots.txt', sitemap_1.getRobotsTxt);
@@ -160,6 +161,7 @@ app.post('/meta/shop/connect', metaCatalog_1.connectFacebookShop);
 app.post('/meta/instagram/connect', metaCatalog_1.connectInstagramShopping);
 app.post('/meta/conversion/track', metaCatalog_1.trackMetaConversionEvent);
 app.post('/meta/ads/campaign/create', metaCatalog_1.createMetaAdsCampaign);
+app.post('/meta/ads/dynamic/enable', metaCatalog_1.enableDynamicProductAds);
 // Email marketing
 app.post('/marketing/subscribe', marketing_1.subscribeToStore);
 app.post('/marketing/unsubscribe', marketing_1.unsubscribeFromStore);

@@ -172,6 +172,7 @@ const AdminProfile: React.FC = () => {
   const [slugAvailable, setSlugAvailable] = useState(false);
   const [newPageName, setNewPageName] = useState<string>('');
   const [isRegisteringDomain, setIsRegisteringDomain] = useState(false);
+  const [isCheckingDomainStatus, setIsCheckingDomainStatus] = useState(false);
   const [isSubmittingSitemap, setIsSubmittingSitemap] = useState(false);
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
@@ -1809,6 +1810,45 @@ const AdminProfile: React.FC = () => {
                 {formData.customDomainStatus === 'active' && <Badge className="bg-green-100 text-green-800">Active</Badge>}
                 {formData.customDomainStatus === 'pending' && <Badge variant="secondary">Pending Verification</Badge>}
                 {formData.customDomainStatus === 'error' && <Badge variant="destructive">Error</Badge>}
+                {formData.customDomain && (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    disabled={isCheckingDomainStatus}
+                    onClick={async () => {
+                      setIsCheckingDomainStatus(true);
+                      try {
+                        const storeId = getActualStoreId(user!);
+                        const res = await fetch(`${API_URL}/domain/status`, {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({ storeId, customDomain: formData.customDomain }),
+                        });
+                        const data = await res.json();
+                        if (!res.ok) throw new Error(data.message || 'Status check failed');
+
+                        setFormData(prev => ({
+                          ...prev,
+                          customDomainStatus: (data.status === 'active' || data.status === 'error') ? data.status : 'pending',
+                        }));
+
+                        const statusLabel = data.status === 'active' ? 'active' : data.status === 'error' ? 'error' : 'pending';
+                        toast({
+                          title: 'Domain status updated',
+                          description: `Current status: ${statusLabel}`,
+                        });
+                      } catch (err) {
+                        const msg = err instanceof Error ? err.message : 'Unknown error';
+                        toast({ title: 'Status check failed', description: msg, variant: 'destructive' });
+                      } finally {
+                        setIsCheckingDomainStatus(false);
+                      }
+                    }}
+                  >
+                    {isCheckingDomainStatus ? 'Checking...' : 'Check Status'}
+                  </Button>
+                )}
                 {formData.customDomain && (
                   <Button
                     type="button"

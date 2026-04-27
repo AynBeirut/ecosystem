@@ -52,26 +52,9 @@ Tag format used on each item:
 - [ ] WhatsApp product catalog sync (`Size: 4 MB`, `Best: after catalog sync quality done`)
 - [ ] Chatbot / auto-reply flows (`Size: 4 MB`, `Best: after WhatsApp core workflow done`)
 
-### SEO and Discoverability (advanced)
-- [x] XML sitemap generation endpoint and submission workflow (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
-- [x] Structured data (Schema.org) for product/store pages (`Size: 3 MB`, `Best: after sitemap workflow done`) _(completed 2026-04-27)_
-- [x] Custom URLs for products/categories (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
-- [x] Alt text workflow for uploaded images (`Size: 2 MB`, `Best: soon`) _(completed 2026-04-27)_
-- [x] Robots.txt management controls (`Size: 2 MB`, `Best: soon`) _(completed 2026-04-27)_
-
-### Meta Ecosystem (advanced)
-- [x] Meta Catalog sync completion (`Size: 4 MB`, `Best: after SEO baseline done`) _(completed 2026-04-27)_
-- [x] Facebook Shop integration (`Size: 3 MB`, `Best: after Meta catalog sync done`) _(completed 2026-04-27)_
-- [x] Instagram Shopping integration (`Size: 3 MB`, `Best: after Meta catalog sync done`) _(completed 2026-04-27)_
-- [x] Meta Ads campaign creation flow (`Size: 4 MB`, `Best: after conversion tracking done`) _(completed 2026-04-27)_
-- [x] Conversion tracking completion (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
-- [x] Dynamic product ads support (`Size: 4 MB`, `Best: after Meta Ads flow done`) _(completed 2026-04-27)_
-
 ### Domain and White-label Growth
-- [ ] Allow stores to use own domains (`store.com`) (`Size: 4 MB`, `Best: after 20 clients`)
 - [ ] SSL auto-provisioning (`Size: 3 MB`, `Best: after custom domains done`)
 - [ ] DNS configuration wizard (`Size: 3 MB`, `Best: after custom domains done`)
-- [ ] Domain verification system (`Size: 3 MB`, `Best: after custom domains done`)
 
 ## 4) Payments, Billing, Subscription Expansion (P2)
 
