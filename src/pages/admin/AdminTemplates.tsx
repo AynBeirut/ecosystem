@@ -24,7 +24,7 @@ import type {
 } from '@/types/storeProfile';
 
 // ── types ────────────────────────────────────────────────────────────────────
-type TemplateId = 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'vibrant' | 'professional' | 'artistic' | 'custom';
+type TemplateId = 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'fashion_boutique' | 'vibrant' | 'professional' | 'artistic' | 'custom';
 type TabId = 'templates' | 'colors' | 'layout' | 'sections';
 
 type TemplateLayoutConfig = {
@@ -112,6 +112,18 @@ const COLOR_PRESETS: Record<TemplateId, Array<{ name: string; palette: Required<
     { name: 'Tradition',     palette: { primary:'#2F4858', secondary:'#1F3440', accent:'#B7791F', background:'#F5F8FA', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#D6E4ED' } },
     { name: 'Classic Ink',   palette: { primary:'#1F2937', secondary:'#111827', accent:'#A16207', background:'#F6F7F9', surface:'#FFFFFF', textColor:'#111827', highlight:'#D1D5DB' } },
     { name: 'Commerce Tan',  palette: { primary:'#4B5563', secondary:'#1F2937', accent:'#B97A31', background:'#FAF8F4', surface:'#FFFFFF', textColor:'#1F2937', highlight:'#EAD9C2' } },
+  ],
+  fashion_boutique: [
+    { name: 'Runway Rose',    palette: { primary:'#8B5E7A', secondary:'#2E2330', accent:'#D4A373', background:'#FFF8FB', surface:'#FFFFFF', textColor:'#2A2230', highlight:'#F3D9E5' } },
+    { name: 'Velvet Noir',    palette: { primary:'#5B3A59', secondary:'#1F1722', accent:'#C08A5B', background:'#FAF7FB', surface:'#FFFFFF', textColor:'#241C28', highlight:'#E8D8EA' } },
+    { name: 'Champagne',      palette: { primary:'#9A7B5F', secondary:'#3B2F2A', accent:'#B86B77', background:'#FFFDF8', surface:'#FFFFFF', textColor:'#2E2522', highlight:'#F3E4D2' } },
+    { name: 'Paris Plum',     palette: { primary:'#6D4A6F', secondary:'#2B1F2E', accent:'#C58F5A', background:'#FBF8FD', surface:'#FFFFFF', textColor:'#2A2230', highlight:'#E6DDEE' } },
+    { name: 'Dusty Blush',    palette: { primary:'#A56A84', secondary:'#402C3A', accent:'#C38D62', background:'#FFF9FA', surface:'#FFFFFF', textColor:'#33242D', highlight:'#F4DFE7' } },
+    { name: 'Monaco Taupe',   palette: { primary:'#7C6A5E', secondary:'#2F2925', accent:'#B76E79', background:'#FCFAF8', surface:'#FFFFFF', textColor:'#2D2622', highlight:'#E8DED5' } },
+    { name: 'Silk Berry',     palette: { primary:'#7A3E63', secondary:'#261828', accent:'#D19A66', background:'#FFF8FC', surface:'#FFFFFF', textColor:'#2A1F2B', highlight:'#EEDBE7' } },
+    { name: 'Midnight Satin', palette: { primary:'#4A3B5C', secondary:'#1B1721', accent:'#C48A5A', background:'#F9F8FC', surface:'#FFFFFF', textColor:'#211C28', highlight:'#DDD9EA' } },
+    { name: 'Rosewood',       palette: { primary:'#87586C', secondary:'#2E1F28', accent:'#BE7C57', background:'#FFF9FB', surface:'#FFFFFF', textColor:'#2D2129', highlight:'#F1DFE7' } },
+    { name: 'Boutique Sand',  palette: { primary:'#8A6F5A', secondary:'#312822', accent:'#B35E74', background:'#FFFCF9', surface:'#FFFFFF', textColor:'#2E2622', highlight:'#EADFCC' } },
   ],
   vibrant: [
     { name: 'Sunset',        palette: { primary:'#ED8936', secondary:'#DD6B20', accent:'#E53E3E', background:'#FFFAF0', surface:'#ffffff', textColor:'#1A202C', highlight:'#FBD38D' } },
@@ -424,6 +436,27 @@ const AdminTemplates: React.FC = () => {
         visualStyle: 'rounded',
       }
     },
+    {
+      id: 'fashion_boutique',
+      name: 'Fashion / Boutique',
+      description: 'Elegant boutique storefront with editorial visuals, premium palette, and style-first layout defaults',
+      colors: ['#8B5E7A','#2E2330','#D4A373'],
+      features: ['Editorial Hero','Boutique Cards','Luxury Palette'],
+      isPremium: false,
+      defaultPalette: COLOR_PRESETS.fashion_boutique[0].palette,
+      layoutConfig: {
+        heroLayout: 'fullscreen',
+        productDisplayType: 'grid-large',
+        productCardAnimation: 'lift-3d',
+        menuStyle: 'centered',
+        aboutLayout: 'with-image',
+        contactFormStyle: 5,
+        ratingDisplayType: 'pill',
+        pageLayout: 'hybrid',
+        storeCardStyle: 'split',
+        visualStyle: 'rounded',
+      }
+    },
     { 
       id: 'vibrant', 
       name: 'Vibrant', 
@@ -574,6 +607,7 @@ const AdminTemplates: React.FC = () => {
     minimal:      { shell: 'bg-gradient-to-br from-gray-50 to-slate-100', header: 'bg-white shadow-md border-2 border-gray-300', block: 'bg-white shadow-sm hover:shadow-md transition-shadow border border-gray-200', title: 'text-gray-800' },
     classic:      { shell: 'bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100', header: 'bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-blue-300', title: 'text-white font-bold drop-shadow' },
     classic_ecom: { shell: 'bg-gradient-to-br from-slate-100 via-blue-50 to-stone-100', header: 'bg-gradient-to-r from-[#1E3A5F] to-[#0F2942] shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-slate-300', title: 'text-white font-semibold tracking-wide' },
+    fashion_boutique: { shell: 'bg-gradient-to-br from-rose-100 via-fuchsia-50 to-amber-100', header: 'bg-gradient-to-r from-[#8B5E7A] to-[#2E2330] shadow-lg', block: 'bg-white shadow-md hover:shadow-xl transition-all border-rose-200', title: 'text-white font-semibold tracking-wide' },
     vibrant:      { shell: 'bg-gradient-to-br from-orange-200 via-pink-200 to-fuchsia-200', header: 'bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 shadow-xl', block: 'bg-white shadow-lg hover:shadow-xl transition-all border-2 border-pink-300', title: 'text-white font-extrabold drop-shadow-lg' },
     professional: { shell: 'bg-gradient-to-br from-slate-200 via-gray-100 to-zinc-200', header: 'bg-gradient-to-r from-slate-700 to-gray-800 shadow-xl', block: 'bg-white shadow-md hover:shadow-xl transition-all border-slate-300', title: 'text-white tracking-wide font-semibold' },
     artistic:     { shell: 'bg-gradient-to-tr from-violet-200 via-fuchsia-100 to-amber-200', header: 'bg-gradient-to-r from-violet-600 via-purple-500 to-pink-500 shadow-2xl', block: 'bg-white/95 shadow-lg hover:shadow-2xl transition-all border-2 border-violet-300 backdrop-blur-sm', title: 'text-white font-bold drop-shadow-xl' },

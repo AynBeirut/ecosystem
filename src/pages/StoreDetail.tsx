@@ -578,7 +578,7 @@ const StoreDetail: React.FC = () => {
     );
   }
 
-  const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'classic_ecom', 'vibrant', 'professional', 'artistic']);
+  const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'classic_ecom', 'fashion_boutique', 'vibrant', 'professional', 'artistic']);
   const resolvedTemplate = typeof store.template === 'string' && allowedTemplates.has(store.template)
     ? store.template
     : 'modern';
@@ -675,6 +675,18 @@ const StoreDetail: React.FC = () => {
       link: 'text-slate-800 hover:text-slate-900',
       actionButton: 'border-slate-300 text-slate-800 hover:bg-slate-100',
       reviewCard: 'bg-white border border-slate-200 shadow-sm',
+    },
+    fashion_boutique: {
+      pageBg: 'bg-gradient-to-b from-rose-50 via-white to-amber-50',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-[#8B5E7A] via-[#A56A84] to-[#2E2330]',
+      headerCard: 'bg-white/95 border border-rose-200 shadow-sm',
+      sectionTitle: 'text-rose-950',
+      card: 'bg-white border border-rose-200 shadow-sm',
+      cardSoft: 'bg-gradient-to-r from-rose-50/80 to-amber-50/80 border border-rose-200',
+      mutedText: 'text-rose-700',
+      link: 'text-rose-800 hover:text-rose-950',
+      actionButton: 'border-rose-300 text-rose-900 hover:bg-rose-50',
+      reviewCard: 'bg-white border border-rose-200 shadow-sm',
     },
     vibrant: {
       pageBg: 'bg-gradient-to-br from-orange-50 via-pink-50 to-violet-100',

@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + auto currency rates + split payments + refund management workflow + modern minimalist theme + classic e-commerce theme completed)
+Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + auto currency rates + split payments + refund management workflow + modern minimalist theme + classic e-commerce theme + fashion boutique theme completed)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -52,7 +52,6 @@ Tag format used on each item:
 ## 5) Storefront and Theme Expansion (P3)
 
 ### Templates and Branding
-- [ ] Fashion/boutique theme (`Size: 3 MB`, `Best: after 50 clients`)
 - [ ] Food/restaurant theme (`Size: 3 MB`, `Best: after 50 clients`)
 - [ ] Tech/electronics theme (`Size: 3 MB`, `Best: after classic theme done`)
 
