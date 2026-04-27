@@ -46,42 +46,92 @@ async function fetchCollectionByStoreId(
   return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 }
 
+async function fetchCollectionByField(
+  db: FirebaseFirestore.Firestore,
+  collectionName: string,
+  field: string,
+  value: string,
+  limit = 500,
+): Promise<Array<Record<string, unknown>>> {
+  const snap = await db
+    .collection(collectionName)
+    .where(field, '==', value)
+    .limit(limit)
+    .get();
+
+  return snap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+}
+
 export async function exportGdprData(req: Request, res: Response): Promise<void> {
   try {
-    const { storeId } = await resolveAuthContext(req);
+    const { uid, storeId } = await resolveAuthContext(req);
     const db = admin.firestore();
 
     const storeProfileSnap = await db.collection('storeProfiles').doc(storeId).get();
-    if (!storeProfileSnap.exists) {
-      res.status(404).json({ success: false, message: 'Store profile not found' });
+    const userSnap = await db.collection('users').doc(uid).get();
+
+    if (storeProfileSnap.exists) {
+      const [products, orders, customers, subscribers] = await Promise.all([
+        fetchCollectionByStoreId(db, 'products', storeId),
+        fetchCollectionByStoreId(db, 'orders', storeId),
+        fetchCollectionByStoreId(db, 'customers', storeId),
+        fetchCollectionByStoreId(db, 'marketingSubscribers', storeId),
+      ]);
+
+      const payload = {
+        generatedAt: new Date().toISOString(),
+        actorType: 'store_owner',
+        storeId,
+        storeProfile: { id: storeProfileSnap.id, ...storeProfileSnap.data() },
+        products,
+        orders,
+        customers,
+        marketingSubscribers: subscribers,
+        summary: {
+          products: products.length,
+          orders: orders.length,
+          customers: customers.length,
+          marketingSubscribers: subscribers.length,
+        },
+      };
+
+      await db.collection('gdprRequests').add({
+        storeId,
+        requestedBy: uid,
+        actorType: 'store_owner',
+        type: 'export',
+        status: 'completed',
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+        completedAt: admin.firestore.FieldValue.serverTimestamp(),
+        summary: payload.summary,
+      });
+
+      res.json({ success: true, data: payload });
       return;
     }
 
-    const [products, orders, customers, subscribers] = await Promise.all([
-      fetchCollectionByStoreId(db, 'products', storeId),
-      fetchCollectionByStoreId(db, 'orders', storeId),
-      fetchCollectionByStoreId(db, 'customers', storeId),
-      fetchCollectionByStoreId(db, 'marketingSubscribers', storeId),
+    const [customerOrders, customerSubscriptions] = await Promise.all([
+      fetchCollectionByField(db, 'orders', 'customerId', uid),
+      fetchCollectionByField(db, 'customerSubscriptions', 'customerId', uid),
     ]);
 
     const payload = {
       generatedAt: new Date().toISOString(),
-      storeId,
-      storeProfile: { id: storeProfileSnap.id, ...storeProfileSnap.data() },
-      products,
-      orders,
-      customers,
-      marketingSubscribers: subscribers,
+      actorType: 'customer',
+      userId: uid,
+      userProfile: userSnap.exists ? { id: userSnap.id, ...userSnap.data() } : { id: uid },
+      orders: customerOrders,
+      subscriptions: customerSubscriptions,
       summary: {
-        products: products.length,
-        orders: orders.length,
-        customers: customers.length,
-        marketingSubscribers: subscribers.length,
+        orders: customerOrders.length,
+        subscriptions: customerSubscriptions.length,
       },
     };
 
     await db.collection('gdprRequests').add({
       storeId,
+      requestedBy: uid,
+      actorType: 'customer',
       type: 'export',
       status: 'completed',
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -99,7 +149,7 @@ export async function exportGdprData(req: Request, res: Response): Promise<void>
 
 export async function requestGdprDelete(req: Request, res: Response): Promise<void> {
   try {
-    const { storeId } = await resolveAuthContext(req);
+    const { uid, storeId } = await resolveAuthContext(req);
     const confirmDelete = Boolean(req.body?.confirmDelete);
 
     if (!confirmDelete) {
@@ -111,23 +161,36 @@ export async function requestGdprDelete(req: Request, res: Response): Promise<vo
     const storeRef = db.collection('storeProfiles').doc(storeId);
     const storeSnap = await storeRef.get();
 
-    if (!storeSnap.exists) {
-      res.status(404).json({ success: false, message: 'Store profile not found' });
-      return;
+    const deleteRequestPayload: Record<string, unknown> = {
+      storeId,
+      requestedBy: uid,
+      type: 'delete',
+      status: 'pending',
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      actorType: storeSnap.exists ? 'store_owner' : 'customer',
+    };
+
+    const writes: Array<Promise<unknown>> = [
+      db.collection('gdprRequests').add(deleteRequestPayload),
+    ];
+
+    if (storeSnap.exists) {
+      writes.push(
+        storeRef.update({
+          gdprDeletionRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
+          gdprDeletionStatus: 'pending',
+        }),
+      );
+    } else {
+      writes.push(
+        db.collection('users').doc(uid).set({
+          gdprDeletionRequestedAt: new Date().toISOString(),
+          gdprDeletionStatus: 'pending',
+        }, { merge: true }),
+      );
     }
 
-    await Promise.all([
-      db.collection('gdprRequests').add({
-        storeId,
-        type: 'delete',
-        status: 'pending',
-        createdAt: admin.firestore.FieldValue.serverTimestamp(),
-      }),
-      storeRef.update({
-        gdprDeletionRequestedAt: admin.firestore.FieldValue.serverTimestamp(),
-        gdprDeletionStatus: 'pending',
-      }),
-    ]);
+    await Promise.all(writes);
 
     res.json({
       success: true,
