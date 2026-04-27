@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,6 +28,10 @@ const AdminPayments: React.FC = () => {
   });
   const [isSavingCreds, setIsSavingCreds] = useState(false);
   const [isSavingGateways, setIsSavingGateways] = useState(false);
+  const [isRunningWhishChecklist, setIsRunningWhishChecklist] = useState(false);
+  const [whishChecklist, setWhishChecklist] = useState<Array<{ id: string; label: string; status: 'pass' | 'warn' | 'fail'; detail: string; action?: string }>>([]);
+  const [whishChecklistScore, setWhishChecklistScore] = useState<{ value: number; max: number; percentage: number } | null>(null);
+  const [whishChecklistStatus, setWhishChecklistStatus] = useState<'pass' | 'warn' | 'fail' | null>(null);
 
   // Load credentials from Firestore on mount
   useEffect(() => {
@@ -197,6 +202,59 @@ const AdminPayments: React.FC = () => {
       });
     } finally {
       setIsSavingGateways(false);
+    }
+  };
+
+  const handleRunWhishOpsChecklist = async () => {
+    if (!user?.id) return;
+
+    setIsRunningWhishChecklist(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const idToken = currentUser ? await currentUser.getIdToken() : null;
+      if (!idToken) {
+        toast({ title: 'Authentication required', description: 'Please sign in again to run the checklist.', variant: 'destructive' });
+        return;
+      }
+
+      const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+      const response = await fetch(`${API_BASE.replace(/\/$/, '')}/payment/whish/ops-checklist`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ storeId: user.id }),
+      });
+
+      const payload = await response.json();
+
+      if (!response.ok || !payload?.success) {
+        toast({
+          title: 'Checklist failed',
+          description: payload?.message || 'Unable to run Whish production checklist.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      setWhishChecklist(Array.isArray(payload.checklist) ? payload.checklist : []);
+      setWhishChecklistScore(payload.score || null);
+      setWhishChecklistStatus(payload.overallStatus || null);
+
+      toast({
+        title: 'Whish checklist completed',
+        description: `Readiness score: ${payload?.score?.percentage ?? 0}%`,
+      });
+    } catch (error) {
+      toast({
+        title: 'Checklist error',
+        description: 'Failed to run Whish production checklist.',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsRunningWhishChecklist(false);
     }
   };
 
@@ -487,6 +545,51 @@ const AdminPayments: React.FC = () => {
                 <Button onClick={handleSaveGatewaySettings} className="w-full" disabled={isSavingGateways}>
                   {isSavingGateways ? 'Saving...' : 'Save Gateway Controls'}
                 </Button>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle>Whish Production Ops Checklist</CardTitle>
+                <CardDescription>
+                  Validate production readiness for Whish cutover, callback flow, and order finalization.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <Button onClick={handleRunWhishOpsChecklist} className="w-full" disabled={isRunningWhishChecklist}>
+                  {isRunningWhishChecklist ? 'Running checklist...' : 'Run Whish Ops Checklist'}
+                </Button>
+
+                {whishChecklistScore && (
+                  <div className="p-3 border rounded-md bg-muted/30">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">Readiness Score</span>
+                      <Badge variant={whishChecklistStatus === 'pass' ? 'default' : 'outline'}>
+                        {whishChecklistStatus ? whishChecklistStatus.toUpperCase() : 'UNKNOWN'}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {whishChecklistScore.value}/{whishChecklistScore.max} ({whishChecklistScore.percentage}%)
+                    </p>
+                  </div>
+                )}
+
+                {whishChecklist.length > 0 && (
+                  <div className="space-y-2">
+                    {whishChecklist.map((item) => (
+                      <div key={item.id} className="p-3 border rounded-md">
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium">{item.label}</p>
+                          <Badge variant={item.status === 'pass' ? 'default' : 'outline'}>
+                            {item.status.toUpperCase()}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground mt-1">{item.detail}</p>
+                        {item.action && <p className="text-xs text-amber-600 mt-1">Action: {item.action}</p>}
+                      </div>
+                    ))}
+                  </div>
+                )}
               </CardContent>
             </Card>
             

@@ -26,6 +26,7 @@ if (process.env.NODE_ENV !== 'production') {
 import { startTrial, subscribe, subscribeStripe, cancelSubscription, getSubscriptionInfo } from './api/subscription';
 import { handleWhishWebhook } from './api/webhooks';
 import { processCheckout, handleCheckoutCallback } from './api/checkout';
+import { runWhishOpsChecklist } from './api/whishOps';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
 import { createSquareCheckoutSession, confirmSquareCheckoutSession } from './api/squareCheckout';
 import { createOmtCheckoutSession, confirmOmtCheckoutSession } from './api/omtCheckout';
@@ -79,6 +80,7 @@ app.get('/health', (req, res) => {
     endpoints: [
       '/checkout',
       '/payment/checkout',
+      '/payment/whish/ops-checklist',
       '/payment/stripe/checkout',
       '/payment/stripe/confirm',
       '/payment/square/checkout',
@@ -126,6 +128,7 @@ app.post('/webhook/whish', handleWhishWebhook);
 
 // Checkout payment endpoints (using store owner's Whish Money account)
 app.post('/payment/checkout', processCheckout);
+app.post('/payment/whish/ops-checklist', runWhishOpsChecklist);
 app.post('/payment/stripe/checkout', createStripeCheckoutSession);
 app.post('/payment/stripe/confirm', confirmStripeCheckoutSession);
 app.post('/payment/square/checkout', createSquareCheckoutSession);

@@ -328,6 +328,11 @@ export interface StoreProfile {
   proEmail?: string;         // Email address to receive Contact Us messages
   customDomain?: string;     // Custom domain (e.g. "shop.client.com")
   customDomainStatus?: 'pending' | 'active' | 'error'; // Status of custom domain verification
+  whishMode?: 'sandbox' | 'production';
+  whishSuccessCallbackUrl?: string;
+  whishFailureCallbackUrl?: string;
+  whishLastCallbackValidationAt?: string;
+  whishLastSmokeTestAt?: string;
   sslAutoProvisioningEnabled?: boolean;
   sslAutoProvisioningLastCheckedAt?: string;
   sslAutoProvisioningLastStatus?: 'pending' | 'active' | 'error';

@@ -68,6 +68,7 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **Square Gateway Integration Completed**: Square checkout session creation, return confirmation handling, inventory deduction linkage, and admin Square gateway controls.
 ✨ **OMT Gateway Integration Completed**: OMT transfer checkout initialization, transfer-reference generation, admin OMT receiver controls, and order confirmation workflow hooks.
 ✨ **BOB Finance Integration Completed**: BOB transfer checkout initialization, transfer-reference generation, admin receiver controls, and order confirmation workflow hooks.
+✨ **Whish Production Ops Checklist Completed**: Admin checklist runner now validates cutover readiness, callback references, live credential quality signals, payment success/failure evidence, and order finalization coverage.
 
 ### Latest Features (January 2026)
 ✨ **Swipe Gesture Navigation**: Navigate back with intuitive right-swipe gesture on mobile
