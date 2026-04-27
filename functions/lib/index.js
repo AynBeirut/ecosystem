@@ -68,6 +68,7 @@ const checkout_1 = require("./api/checkout");
 const stripeCheckout_1 = require("./api/stripeCheckout");
 const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
+const gdpr_1 = require("./api/gdpr");
 const metaCatalog_1 = require("./api/metaCatalog");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
@@ -150,6 +151,9 @@ app.post('/contact/send', contact_1.sendContactEmail);
 // Custom domain management
 app.post('/domain/register', domain_1.registerCustomDomain);
 app.post('/domain/status', domain_1.checkCustomDomainStatus);
+// GDPR tooling
+app.post('/gdpr/export', gdpr_1.exportGdprData);
+app.post('/gdpr/delete', gdpr_1.requestGdprDelete);
 // Sitemap for SEO
 app.get('/sitemap.xml', sitemap_1.getSitemap);
 app.get('/robots.txt', sitemap_1.getRobotsTxt);
