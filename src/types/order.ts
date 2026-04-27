@@ -48,7 +48,7 @@ export interface Order {
   assignedDeliveryPerson?: string
   assignedDeliveryPersonName?: string
   // Payment tracking
-  paymentStatus?: 'unpaid' | 'partial' | 'paid'
+  paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded'
   amountPaid?: number
   paymentDate?: string
   paymentMethod?: string
@@ -74,6 +74,7 @@ export interface Order {
 export interface PaymentRecord {
   id: string
   amount: number
+  entryType?: 'payment' | 'refund'
   date: string
   method: string
   notes?: string

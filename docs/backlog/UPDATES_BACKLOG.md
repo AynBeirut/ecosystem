@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + auto currency rates + split payments completed)
+Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + auto currency rates + split payments + refund management workflow completed)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -39,7 +39,6 @@ Tag format used on each item:
 
 
 ### Billing Features
-- [ ] Refund management workflow (`Size: 3 MB`, `Best: soon`)
 - [ ] Payment retry for failed transactions (`Size: 3 MB`, `Best: after primary gateway stability done`)
 - [ ] Subscription recurring payments completion (`Size: 4 MB`, `Best: after subscription engine done`)
 - [ ] Payment reminder emails (`Size: 2 MB`, `Best: after recurring payments done`)

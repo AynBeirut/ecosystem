@@ -141,6 +141,7 @@ const AdminOrders: React.FC = () => {
   const [editingOrder, setEditingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
   const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
+  const [refundingOrder, setRefundingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: PaymentRecord } | null>(null);
   const [voidingPayment, setVoidingPayment] = useState<(Order & { id: string }) | null>(null);
   const [splittingOrder, setSplittingOrder] = useState<(Order & { id: string }) | null>(null);
@@ -159,6 +160,12 @@ const AdminOrders: React.FC = () => {
     paymentDate: new Date().toISOString().split('T')[0],
     paymentMethod: 'cash',
     paymentNotes: '',
+  });
+  const [refundData, setRefundData] = useState({
+    amount: 0,
+    refundDate: new Date().toISOString().split('T')[0],
+    refundMethod: 'cash',
+    refundNotes: '',
   });
   
   const [newOrder, setNewOrder] = useState({
@@ -188,6 +195,7 @@ const AdminOrders: React.FC = () => {
   const isCreatingOrderRef = useRef(false);
   const isVoidingPaymentRef = useRef(false);
   const isPayingOrderRef = useRef(false);
+  const isRefundingOrderRef = useRef(false);
 
   const isOrderEligibleForSplitMerge = (order: Order & { id: string }) => {
     const allowedStatuses = ['pending', 'confirmed', 'processing', 'ready'];
@@ -204,6 +212,7 @@ const AdminOrders: React.FC = () => {
     const rawStatus = String(order.paymentStatus || '').toLowerCase();
     if (rawStatus === 'paid' || rawStatus === 'completed') return 'paid';
     if (rawStatus === 'partial') return 'partial';
+    if (rawStatus === 'refunded') return 'refunded';
     if (rawStatus === 'failed') return 'unpaid';
 
     const total = Number(order.total || 0);
@@ -1762,7 +1771,7 @@ const AdminOrders: React.FC = () => {
 
       const newAmountPaid = Math.round((currentPaid + sanitizedAmount) * 100) / 100;
 
-      let paymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
+      let paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded' = 'unpaid';
       if (newAmountPaid >= totalAmount) {
         paymentStatus = 'paid';
       } else if (newAmountPaid > 0) {
@@ -1773,6 +1782,7 @@ const AdminOrders: React.FC = () => {
       const paymentRecord = {
         id: `PMT-${Date.now()}`,
         amount: sanitizedAmount,
+        entryType: 'payment' as const,
         date: paymentData.paymentDate,
         method: paymentData.paymentMethod,
         notes: paymentData.paymentNotes,
@@ -1846,11 +1856,149 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+  const handleRefundOrder = async () => {
+    if (isRefundingOrderRef.current) {
+      console.log('⚠️ Refund operation already in progress');
+      return;
+    }
+
+    if (!refundingOrder || !user?.storeId) return;
+
+    isRefundingOrderRef.current = true;
+    let operationSucceeded = false;
+
+    try {
+      const db = getFirestore();
+      const orderRef = doc(db, 'orders', refundingOrder.id);
+
+      const currentPaid = Math.max(0, Number(refundingOrder.amountPaid || 0));
+      const totalAmount = Math.max(0, Number(refundingOrder.total || 0));
+      const enteredAmount = Number(refundData.amount || 0);
+
+      if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
+        toast({ title: 'Invalid Refund Amount', description: 'Refund amount must be greater than zero.', variant: 'destructive' });
+        return;
+      }
+
+      if (!refundData.refundDate) {
+        toast({ title: 'Missing Refund Date', description: 'Please select the refund date.', variant: 'destructive' });
+        return;
+      }
+
+      if (!refundData.refundMethod) {
+        toast({ title: 'Missing Refund Method', description: 'Please select a refund method.', variant: 'destructive' });
+        return;
+      }
+
+      const sanitizedRefundAmount = Math.round(enteredAmount * 100) / 100;
+      if (sanitizedRefundAmount > currentPaid + 0.0001) {
+        toast({
+          title: 'Amount Exceeds Paid Balance',
+          description: `Maximum refundable is $${currentPaid.toFixed(2)} for this order.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const newAmountPaid = Math.max(0, Math.round((currentPaid - sanitizedRefundAmount) * 100) / 100);
+
+      let paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded' = 'unpaid';
+      if (newAmountPaid >= totalAmount && totalAmount > 0) {
+        paymentStatus = 'paid';
+      } else if (newAmountPaid > 0) {
+        paymentStatus = 'partial';
+      } else if (sanitizedRefundAmount > 0 && currentPaid > 0) {
+        paymentStatus = 'refunded';
+      }
+
+      const refundRecord: PaymentRecord = {
+        id: `RFD-${Date.now()}`,
+        amount: -sanitizedRefundAmount,
+        entryType: 'refund',
+        date: refundData.refundDate,
+        method: refundData.refundMethod,
+        notes: refundData.refundNotes,
+        recordedBy: user.name,
+        recordedAt: new Date().toISOString(),
+      };
+
+      const existingHistory = refundingOrder.paymentHistory || [];
+      const updatedHistory = [...existingHistory, refundRecord];
+
+      await updateDoc(orderRef, {
+        paymentStatus,
+        amountPaid: newAmountPaid,
+        remainingAmount: Math.max(0, Math.round((totalAmount - newAmountPaid) * 100) / 100),
+        paymentDate: refundData.refundDate,
+        paymentMethod: refundData.refundMethod,
+        paymentNotes: refundData.refundNotes,
+        paymentHistory: updatedHistory,
+      });
+
+      const updatedOrder = {
+        ...refundingOrder,
+        paymentStatus,
+        amountPaid: newAmountPaid,
+        paymentDate: refundData.refundDate,
+        paymentMethod: refundData.refundMethod,
+        paymentNotes: refundData.refundNotes,
+        paymentHistory: updatedHistory,
+      };
+
+      setOrders(orders.map((o) => o.id === refundingOrder.id ? updatedOrder : o));
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'order_refund',
+        refundingOrder.id,
+        {
+          oldValue: { amountPaid: currentPaid, paymentStatus: refundingOrder.paymentStatus },
+          newValue: { amountPaid: newAmountPaid, paymentStatus, refundAmount: sanitizedRefundAmount, ...refundData },
+        },
+        user.storeId,
+      );
+
+      operationSucceeded = true;
+
+      toast({
+        title: 'Success',
+        description: `Refund processed! Status: ${paymentStatus === 'refunded' ? 'Fully Refunded' : paymentStatus === 'partial' ? 'Partially Paid' : paymentStatus === 'paid' ? 'Fully Paid' : 'Unpaid'}`,
+      });
+
+      setViewingPaymentVoucher({ order: updatedOrder, payment: refundRecord });
+    } catch (error) {
+      console.error('Error processing refund:', error);
+      toast({ title: 'Error', description: 'Failed to process refund', variant: 'destructive' });
+    } finally {
+      isRefundingOrderRef.current = false;
+
+      if (operationSucceeded) {
+        setRefundingOrder(null);
+        setRefundData({
+          amount: 0,
+          refundDate: new Date().toISOString().split('T')[0],
+          refundMethod: 'cash',
+          refundNotes: '',
+        });
+      }
+    }
+  };
+
   const generatePaymentVoucherHTML = (order: Order & { id: string }, payment: PaymentRecord) => {
+    const isRefund = payment.entryType === 'refund' || Number(payment.amount || 0) < 0;
+    const transactionTitle = isRefund ? 'REFUND RECEIPT' : 'PAYMENT RECEIPT';
+    const amountLabel = isRefund ? 'REFUND AMOUNT' : 'PAYMENT AMOUNT';
+    const amountColor = isRefund ? '#ef4444' : '#10b981';
+    const paymentAmount = Math.abs(Number(payment.amount || 0));
+    const previousNetPaid = Math.max(0, Number(order.amountPaid || 0) - Number(payment.amount || 0));
+
     return `
       <div class="voucher-container" style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 30px;">
-          <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">PAYMENT RECEIPT</h1>
+          <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">${transactionTitle}</h1>
           <p style="margin: 5px 0; color: #666; font-size: 14px;">Receipt #${payment.id}</p>
         </div>
 
@@ -1885,12 +2033,12 @@ const AdminOrders: React.FC = () => {
             </div>
             <div style="text-align: right;">
               <p style="margin: 0; color: #666; font-size: 12px;">Previous Payments</p>
-              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${((order.amountPaid || 0) - payment.amount).toFixed(2)}</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${previousNetPaid.toFixed(2)}</p>
             </div>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; text-align: center;">
-            <p style="margin: 0; color: #666; font-size: 14px;">PAYMENT AMOUNT</p>
-            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #10b981;">$${payment.amount.toFixed(2)}</p>
+            <p style="margin: 0; color: #666; font-size: 14px;">${amountLabel}</p>
+            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: ${amountColor};">$${paymentAmount.toFixed(2)}</p>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; margin-top: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
@@ -1965,8 +2113,8 @@ const AdminOrders: React.FC = () => {
     if (navigator.share) {
       try {
         await navigator.share({
-          title: `Payment Receipt ${payment.id}`,
-          text: `Payment of $${payment.amount.toFixed(2)} received for Invoice ${order.invoiceNumber || order.orderNumber}`,
+          title: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} Receipt ${payment.id}`,
+          text: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} of $${Math.abs(payment.amount).toFixed(2)} for Invoice ${order.invoiceNumber || order.orderNumber}`,
         });
       } catch (error) {
         console.error('Error sharing:', error);
@@ -2826,6 +2974,7 @@ const AdminOrders: React.FC = () => {
       paid: { color: 'bg-green-100 text-green-800', label: 'Paid' },
       partial: { color: 'bg-yellow-100 text-yellow-800', label: 'Partial' },
       unpaid: { color: 'bg-red-100 text-red-800', label: 'Unpaid' },
+      refunded: { color: 'bg-slate-100 text-slate-800', label: 'Refunded' },
     };
     
     if (order.status === 'cancelled') {
@@ -2848,6 +2997,12 @@ const AdminOrders: React.FC = () => {
   const selectedEligibleCount = getSelectedShippingOrders().length;
   const payingOrderRemainingAmount = payingOrder
     ? Math.max(0, Math.round(((payingOrder.total || 0) - (payingOrder.amountPaid || 0)) * 100) / 100)
+    : 0;
+  const refundingOrderMaxAmount = refundingOrder
+    ? Math.max(0, Math.round((refundingOrder.amountPaid || 0) * 100) / 100)
+    : 0;
+  const projectedRefundedPaidAmount = refundingOrder
+    ? Math.max(0, Math.round(((refundingOrder.amountPaid || 0) - Number(refundData.amount || 0)) * 100) / 100)
     : 0;
   const projectedAmountPaid = payingOrder
     ? Math.round(((payingOrder.amountPaid || 0) + Number(paymentData.amountPaid || 0)) * 100) / 100
@@ -3362,6 +3517,7 @@ const AdminOrders: React.FC = () => {
               <SelectItem value="paid">Paid</SelectItem>
               <SelectItem value="partial">Partial</SelectItem>
               <SelectItem value="unpaid">Unpaid</SelectItem>
+              <SelectItem value="refunded">Refunded</SelectItem>
             </SelectContent>
           </Select>
           <Select
@@ -3601,15 +3757,36 @@ const AdminOrders: React.FC = () => {
                             </Button>
                           )}
                           {(order.paymentStatus === 'paid' || order.paymentStatus === 'partial' || (order.amountPaid || 0) > 0) && (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => setVoidingPayment(order)}
-                              title="Void all payments to allow editing"
-                            >
-                              <Trash2 className="h-4 w-4 mr-1" />
-                              Void Payments
-                            </Button>
+                            <>
+                              {(order.amountPaid || 0) > 0 && (
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => {
+                                    const refundable = Math.max(0, Math.round((order.amountPaid || 0) * 100) / 100);
+                                    setRefundingOrder(order);
+                                    setRefundData({
+                                      amount: refundable,
+                                      refundDate: new Date().toISOString().split('T')[0],
+                                      refundMethod: 'cash',
+                                      refundNotes: '',
+                                    });
+                                  }}
+                                  title="Record a customer refund"
+                                >
+                                  Refund
+                                </Button>
+                              )}
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setVoidingPayment(order)}
+                                title="Void all payments to allow editing"
+                              >
+                                <Trash2 className="h-4 w-4 mr-1" />
+                                Void Payments
+                              </Button>
+                            </>
                           )}
                         </>
                       )}
@@ -3734,11 +3911,13 @@ const AdminOrders: React.FC = () => {
                       <p className="text-sm font-semibold mb-2">Payment History:</p>
                       <div className="space-y-2">
                         {order.paymentHistory.map((payment, idx) => (
-                          <div key={idx} className="flex items-center justify-between p-2 bg-green-50 rounded border border-green-200">
+                          <div key={idx} className={`flex items-center justify-between p-2 rounded border ${payment.entryType === 'refund' || payment.amount < 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                             <div className="flex-1">
-                              <p className="text-sm font-medium">${payment.amount.toFixed(2)} - {payment.method}</p>
+                              <p className="text-sm font-medium">
+                                {payment.entryType === 'refund' || payment.amount < 0 ? '-$' : '$'}{Math.abs(payment.amount).toFixed(2)} - {payment.method}
+                              </p>
                               <p className="text-xs text-gray-600">
-                                {new Date(payment.date).toLocaleDateString()} by {payment.recordedBy}
+                                {new Date(payment.date).toLocaleDateString()} by {payment.recordedBy} ({payment.entryType === 'refund' || payment.amount < 0 ? 'Refund' : 'Payment'})
                               </p>
                             </div>
                             <div className="flex gap-1">
@@ -4146,6 +4325,128 @@ const AdminOrders: React.FC = () => {
           </Dialog>
         )}
 
+        {/* Refund Dialog */}
+        {refundingOrder && (
+          <Dialog open={!!refundingOrder} onOpenChange={() => setRefundingOrder(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle>Record Refund</DialogTitle>
+                <DialogDescription>
+                  Order: {refundingOrder.invoiceNumber || `#${refundingOrder.id.slice(0, 8)}`}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded">
+                  <div>
+                    <p className="text-sm text-gray-500">Total Amount</p>
+                    <p className="font-bold">${(refundingOrder.total || 0).toFixed(2)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-gray-500">Currently Paid</p>
+                    <p className="font-bold text-green-600">${(refundingOrder.amountPaid || 0).toFixed(2)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-gray-500">Max Refundable</p>
+                    <p className="font-bold text-red-600">${refundingOrderMaxAmount.toFixed(2)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="refundAmount">Refund Amount *</Label>
+                  <Input
+                    id="refundAmount"
+                    type="number"
+                    min="0"
+                    max={refundingOrderMaxAmount}
+                    step="0.01"
+                    value={refundData.amount || ''}
+                    onChange={(e) => {
+                      const nextAmount = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      const boundedAmount = Number.isFinite(nextAmount)
+                        ? Math.max(0, Math.min(refundingOrderMaxAmount, nextAmount))
+                        : 0;
+                      setRefundData({ ...refundData, amount: boundedAmount });
+                    }}
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRefundData({ ...refundData, amount: Math.round((refundingOrderMaxAmount * 0.25) * 100) / 100 })}
+                    >
+                      25%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRefundData({ ...refundData, amount: Math.round((refundingOrderMaxAmount * 0.5) * 100) / 100 })}
+                    >
+                      50%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setRefundData({ ...refundData, amount: refundingOrderMaxAmount })}
+                    >
+                      Full Paid
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    After this refund: paid ${projectedRefundedPaidAmount.toFixed(2)}
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="refundDate">Refund Date *</Label>
+                  <Input
+                    id="refundDate"
+                    type="date"
+                    value={refundData.refundDate}
+                    onChange={(e) => setRefundData({ ...refundData, refundDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="refundMethod">Refund Method *</Label>
+                  <Select
+                    value={refundData.refundMethod}
+                    onValueChange={(value) => setRefundData({ ...refundData, refundMethod: value })}
+                  >
+                    <SelectTrigger id="refundMethod">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
+                      <SelectItem value="check">Check</SelectItem>
+                      <SelectItem value="credit_card">Credit Card</SelectItem>
+                      <SelectItem value="mobile_payment">Mobile Payment</SelectItem>
+                      <SelectItem value="store_credit">Store Credit</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div>
+                  <Label htmlFor="refundNotes">Notes (optional)</Label>
+                  <Textarea
+                    id="refundNotes"
+                    placeholder="Refund reason, transaction reference, etc."
+                    value={refundData.refundNotes}
+                    onChange={(e) => setRefundData({ ...refundData, refundNotes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setRefundingOrder(null)}>Cancel</Button>
+                <Button variant="destructive" onClick={handleRefundOrder}>Record Refund</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
         {/* Void Payment Confirmation Dialog */}
         {voidingPayment && (
           <Dialog open={!!voidingPayment} onOpenChange={() => setVoidingPayment(null)}>
@@ -4190,8 +4491,8 @@ const AdminOrders: React.FC = () => {
           <Dialog open={!!viewingPaymentVoucher} onOpenChange={() => setViewingPaymentVoucher(null)}>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
-                <DialogTitle>Payment Receipt - {viewingPaymentVoucher.payment.id}</DialogTitle>
-                <DialogDescription>Payment receipt and details</DialogDescription>
+                <DialogTitle>{viewingPaymentVoucher.payment.entryType === 'refund' ? 'Refund' : 'Payment'} Receipt - {viewingPaymentVoucher.payment.id}</DialogTitle>
+                <DialogDescription>{viewingPaymentVoucher.payment.entryType === 'refund' ? 'Refund' : 'Payment'} receipt and details</DialogDescription>
               </DialogHeader>
               <div dangerouslySetInnerHTML={{ __html: generatePaymentVoucherHTML(viewingPaymentVoucher.order, viewingPaymentVoucher.payment) }} />
               <DialogFooter className="flex gap-2">
