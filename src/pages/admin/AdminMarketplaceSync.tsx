@@ -92,6 +92,7 @@ const AVAILABLE_MAPPING_FIELDS = ['name', 'description', 'category', 'price', 'i
 const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
 type MetaCatalogState = {
+  pixelId?: string;
   catalogId?: string;
   facebookPageUrl?: string;
   catalogFeedUrl?: string;
@@ -103,6 +104,12 @@ type MetaCatalogState = {
   instagramShoppingEnabled?: boolean;
   instagramShoppingStatus?: string;
   instagramShoppingConnectedAt?: string;
+  adAccountId?: string;
+  metaAdsEnabled?: boolean;
+  lastMetaAdsCampaignId?: string;
+  lastMetaAdsCampaignName?: string;
+  lastMetaAdsCampaignAt?: string;
+  lastMetaAdsCampaignStatus?: string;
 };
 
 const toIsoSafe = (value: unknown): string => {
@@ -136,7 +143,12 @@ const AdminMarketplaceSync: React.FC = () => {
   const [metaSyncBusy, setMetaSyncBusy] = useState(false);
   const [shopConnectBusy, setShopConnectBusy] = useState(false);
   const [instagramConnectBusy, setInstagramConnectBusy] = useState(false);
+  const [metaAdsBusy, setMetaAdsBusy] = useState(false);
   const [shopOnboardingUrl, setShopOnboardingUrl] = useState('');
+  const [adsManagerUrl, setAdsManagerUrl] = useState('');
+  const [adsCampaignName, setAdsCampaignName] = useState('Meta Product Campaign');
+  const [adsObjective, setAdsObjective] = useState('SALES');
+  const [adsDailyBudget, setAdsDailyBudget] = useState(20);
   const [metaCatalog, setMetaCatalog] = useState<MetaCatalogState>({});
   const [search, setSearch] = useState('');
 
@@ -228,6 +240,7 @@ const AdminMarketplaceSync: React.FC = () => {
 
       setIntegrations(loadedIntegrations);
       setMetaCatalog({
+        pixelId: String(loadedMeta.pixelId || '').trim(),
         catalogId: String(loadedMeta.catalogId || '').trim(),
         facebookPageUrl: String(loadedMeta.facebookPageUrl || '').trim(),
         catalogFeedUrl: String(loadedMeta.catalogFeedUrl || '').trim(),
@@ -239,11 +252,22 @@ const AdminMarketplaceSync: React.FC = () => {
         instagramShoppingEnabled: Boolean(loadedMeta.instagramShoppingEnabled),
         instagramShoppingStatus: String(loadedMeta.instagramShoppingStatus || '').trim(),
         instagramShoppingConnectedAt: String(loadedMeta.instagramShoppingConnectedAt || '').trim(),
+        adAccountId: String(loadedMeta.adAccountId || '').trim(),
+        metaAdsEnabled: Boolean(loadedMeta.metaAdsEnabled),
+        lastMetaAdsCampaignId: String(loadedMeta.lastMetaAdsCampaignId || '').trim(),
+        lastMetaAdsCampaignName: String(loadedMeta.lastMetaAdsCampaignName || '').trim(),
+        lastMetaAdsCampaignAt: String(loadedMeta.lastMetaAdsCampaignAt || '').trim(),
+        lastMetaAdsCampaignStatus: String(loadedMeta.lastMetaAdsCampaignStatus || '').trim(),
       });
       if (String(loadedMeta.catalogId || '').trim()) {
         setShopOnboardingUrl(`https://business.facebook.com/commerce_manager/catalogs/${encodeURIComponent(String(loadedMeta.catalogId || '').trim())}`);
       } else {
         setShopOnboardingUrl('');
+      }
+      if (String(loadedMeta.adAccountId || '').trim()) {
+        setAdsManagerUrl(`https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${encodeURIComponent(String(loadedMeta.adAccountId || '').trim())}`);
+      } else {
+        setAdsManagerUrl('');
       }
       setProducts(productRows);
       setJobs(jobRows);
@@ -780,6 +804,64 @@ const AdminMarketplaceSync: React.FC = () => {
     }
   };
 
+  const createMetaAdsCampaign = async () => {
+    if (!storeId) return;
+    setMetaAdsBusy(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not authenticated');
+      const token = await currentUser.getIdToken();
+
+      const promotedProductIds = filteredProducts.slice(0, 50).map((product) => product.id);
+      const response = await fetch(`${API_URL}/meta/ads/campaign/create`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeId,
+          name: adsCampaignName,
+          objective: adsObjective,
+          dailyBudget: adsDailyBudget,
+          currency: 'USD',
+          promotedProductIds,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to create Meta Ads campaign');
+      }
+
+      setMetaCatalog((prev) => ({
+        ...prev,
+        metaAdsEnabled: true,
+        lastMetaAdsCampaignId: String(data?.campaignId || ''),
+        lastMetaAdsCampaignName: String(data?.summary?.name || adsCampaignName),
+        lastMetaAdsCampaignAt: String(data?.createdAt || new Date().toISOString()),
+        lastMetaAdsCampaignStatus: String(data?.status || 'draft_created'),
+      }));
+
+      setAdsManagerUrl(String(data?.adsManagerUrl || adsManagerUrl || ''));
+
+      toast({
+        title: 'Meta Ads campaign created',
+        description: `Campaign draft created for ${promotedProductIds.length} product(s).`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Meta Ads campaign failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setMetaAdsBusy(false);
+    }
+  };
+
   const statusBadgeClass = (status: SyncJobRow['status']) => {
     if (status === 'completed') return 'bg-green-100 text-green-800 hover:bg-green-100';
     if (status === 'failed') return 'bg-red-100 text-red-800 hover:bg-red-100';
@@ -992,6 +1074,103 @@ const AdminMarketplaceSync: React.FC = () => {
               >
                 <ExternalLink className="h-4 w-4 mr-2" />
                 Open Commerce Manager
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6 border-indigo-200">
+          <CardHeader>
+            <CardTitle>Meta Ads Campaign</CardTitle>
+            <CardDescription>
+              Create a campaign draft from your synced catalog products and continue setup in Ads Manager.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Ad Account ID</p>
+                <p className="font-medium">{metaCatalog.adAccountId || 'Not set (configure in Store Profile)'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Last Campaign</p>
+                <p className="font-medium">{metaCatalog.lastMetaAdsCampaignName || 'None'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Last Campaign Status</p>
+                <p className="font-medium">{metaCatalog.lastMetaAdsCampaignStatus || 'None'}</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Last Campaign At</p>
+                <p className="font-medium">
+                  {metaCatalog.lastMetaAdsCampaignAt
+                    ? new Date(metaCatalog.lastMetaAdsCampaignAt).toLocaleString()
+                    : 'Never'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="adsCampaignName">Campaign Name</Label>
+                <Input
+                  id="adsCampaignName"
+                  value={adsCampaignName}
+                  onChange={(e) => setAdsCampaignName(e.target.value)}
+                  placeholder="Meta Product Campaign"
+                />
+              </div>
+              <div>
+                <Label htmlFor="adsObjective">Objective</Label>
+                <select
+                  id="adsObjective"
+                  value={adsObjective}
+                  onChange={(e) => setAdsObjective(e.target.value)}
+                  className="w-full h-10 rounded-md border border-input bg-background px-3 py-2 text-sm"
+                >
+                  <option value="SALES">Sales</option>
+                  <option value="TRAFFIC">Traffic</option>
+                  <option value="AWARENESS">Awareness</option>
+                </select>
+              </div>
+              <div>
+                <Label htmlFor="adsDailyBudget">Daily Budget (USD)</Label>
+                <Input
+                  id="adsDailyBudget"
+                  type="number"
+                  min={1}
+                  value={adsDailyBudget}
+                  onChange={(e) => setAdsDailyBudget(Number(e.target.value || 20))}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={createMetaAdsCampaign}
+                disabled={metaAdsBusy || !storeId || !metaCatalog.adAccountId || !metaCatalog.catalogId || !metaCatalog.pixelId}
+              >
+                {metaAdsBusy ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Creating Campaign...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="h-4 w-4 mr-2" />
+                    Create Meta Ads Campaign
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!adsManagerUrl}
+                onClick={() => window.open(adsManagerUrl, '_blank', 'noopener,noreferrer')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open Ads Manager
               </Button>
             </div>
           </CardContent>

@@ -159,6 +159,7 @@ app.post('/meta/catalog/sync', metaCatalog_1.syncMetaCatalog);
 app.post('/meta/shop/connect', metaCatalog_1.connectFacebookShop);
 app.post('/meta/instagram/connect', metaCatalog_1.connectInstagramShopping);
 app.post('/meta/conversion/track', metaCatalog_1.trackMetaConversionEvent);
+app.post('/meta/ads/campaign/create', metaCatalog_1.createMetaAdsCampaign);
 // Email marketing
 app.post('/marketing/subscribe', marketing_1.subscribeToStore);
 app.post('/marketing/unsubscribe', marketing_1.unsubscribeFromStore);

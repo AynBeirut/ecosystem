@@ -153,6 +153,12 @@ export interface MetaIntegrationSettings {
   conversionTrackingEnabled?: boolean;
   lastConversionEventAt?: string;
   lastConversionEventName?: string;
+  adAccountId?: string;
+  metaAdsEnabled?: boolean;
+  lastMetaAdsCampaignId?: string;
+  lastMetaAdsCampaignName?: string;
+  lastMetaAdsCampaignAt?: string;
+  lastMetaAdsCampaignStatus?: string;
   catalogFeedUrl?: string;
   lastCatalogSyncAt?: string;
   lastCatalogSyncJobId?: string;

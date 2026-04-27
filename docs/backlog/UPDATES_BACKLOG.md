@@ -63,7 +63,7 @@ Tag format used on each item:
 - [x] Meta Catalog sync completion (`Size: 4 MB`, `Best: after SEO baseline done`) _(completed 2026-04-27)_
 - [x] Facebook Shop integration (`Size: 3 MB`, `Best: after Meta catalog sync done`) _(completed 2026-04-27)_
 - [x] Instagram Shopping integration (`Size: 3 MB`, `Best: after Meta catalog sync done`) _(completed 2026-04-27)_
-- [ ] Meta Ads campaign creation flow (`Size: 4 MB`, `Best: after conversion tracking done`)
+- [x] Meta Ads campaign creation flow (`Size: 4 MB`, `Best: after conversion tracking done`) _(completed 2026-04-27)_
 - [x] Conversion tracking completion (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
 - [ ] Dynamic product ads support (`Size: 4 MB`, `Best: after Meta Ads flow done`)
 

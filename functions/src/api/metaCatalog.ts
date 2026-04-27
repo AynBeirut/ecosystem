@@ -469,3 +469,120 @@ export async function trackMetaConversionEvent(req: Request, res: Response): Pro
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to track conversion event' });
   }
 }
+
+/**
+ * POST /meta/ads/campaign/create
+ * Body: { storeId, name, objective, dailyBudget, currency, promotedProductIds }
+ * Creates a Meta Ads campaign job record and updates store meta ads state.
+ */
+export async function createMetaAdsCampaign(req: Request, res: Response): Promise<void> {
+  try {
+    const user = await authenticateRequest(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized: missing or invalid token' });
+      return;
+    }
+
+    const storeId = String(req.body?.storeId || '').trim();
+    if (!storeId) {
+      res.status(400).json({ error: 'Missing required field: storeId' });
+      return;
+    }
+
+    const hasAccess = await canAccessStore(user, storeId);
+    if (!hasAccess) {
+      res.status(403).json({ error: 'Forbidden: no access to this store' });
+      return;
+    }
+
+    const db = admin.firestore();
+    const storeSnap = await db.collection('storeProfiles').doc(storeId).get();
+    if (!storeSnap.exists) {
+      res.status(404).json({ error: 'Store not found' });
+      return;
+    }
+
+    const storeData = storeSnap.data() as Record<string, unknown>;
+    const metaIntegrationSettings = (storeData.metaIntegrationSettings || {}) as Record<string, unknown>;
+
+    const adAccountId = String(metaIntegrationSettings.adAccountId || '').trim();
+    const catalogId = String(metaIntegrationSettings.catalogId || '').trim();
+    const pixelId = String(metaIntegrationSettings.pixelId || '').trim();
+    const lastCatalogSyncAt = String(metaIntegrationSettings.lastCatalogSyncAt || '').trim();
+
+    const missingFields: string[] = [];
+    if (!adAccountId) missingFields.push('adAccountId');
+    if (!catalogId) missingFields.push('catalogId');
+    if (!pixelId) missingFields.push('pixelId');
+    if (!lastCatalogSyncAt) missingFields.push('lastCatalogSyncAt');
+
+    if (missingFields.length > 0) {
+      res.status(400).json({
+        error: 'Meta Ads prerequisites are incomplete',
+        missingFields,
+        hint: 'Set ad account, pixel, and catalog in profile, then run catalog sync once.',
+      });
+      return;
+    }
+
+    const name = String(req.body?.name || 'Meta Product Campaign').trim();
+    const objective = String(req.body?.objective || 'SALES').trim();
+    const dailyBudgetRaw = Number(req.body?.dailyBudget || 0);
+    const dailyBudget = Number.isFinite(dailyBudgetRaw) && dailyBudgetRaw > 0 ? dailyBudgetRaw : 20;
+    const currency = String(req.body?.currency || 'USD').trim() || 'USD';
+    const promotedProductIds = Array.isArray(req.body?.promotedProductIds)
+      ? (req.body.promotedProductIds as unknown[]).map((value) => String(value || '').trim()).filter(Boolean)
+      : [];
+
+    const createdAt = new Date().toISOString();
+    const adsManagerUrl = `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${encodeURIComponent(adAccountId)}`;
+
+    const campaignRef = await db.collection('metaAdsCampaignJobs').add({
+      storeId,
+      adAccountId,
+      catalogId,
+      pixelId,
+      name,
+      objective,
+      dailyBudget,
+      currency,
+      promotedProductIds,
+      promotedProductCount: promotedProductIds.length,
+      status: 'draft_created',
+      createdAt,
+      createdBy: user.uid,
+      adsManagerUrl,
+      notes: 'Campaign flow created in Grabio. Final launch/config happens in Meta Ads Manager.',
+      serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('storeProfiles').doc(storeId).set({
+      metaIntegrationSettings: {
+        metaAdsEnabled: true,
+        lastMetaAdsCampaignId: campaignRef.id,
+        lastMetaAdsCampaignName: name,
+        lastMetaAdsCampaignAt: createdAt,
+        lastMetaAdsCampaignStatus: 'draft_created',
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.status(200).json({
+      ok: true,
+      campaignId: campaignRef.id,
+      status: 'draft_created',
+      createdAt,
+      adsManagerUrl,
+      summary: {
+        name,
+        objective,
+        dailyBudget,
+        currency,
+        promotedProductCount: promotedProductIds.length,
+      },
+    });
+  } catch (err) {
+    console.error('Meta ads campaign creation error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to create Meta Ads campaign' });
+  }
+}

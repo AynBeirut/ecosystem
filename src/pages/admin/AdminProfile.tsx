@@ -76,6 +76,7 @@ const defaultProfile: StoreProfile = {
     facebookAppId: '',
     catalogId: '',
     conversionApiToken: '',
+    adAccountId: '',
   },
   serviceCatalogSettings: {
     allowServiceProducts: true,
@@ -1174,6 +1175,21 @@ const AdminProfile: React.FC = () => {
                         },
                       }))}
                       placeholder="Catalog ID"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="metaAdAccountId">Meta Ad Account ID</Label>
+                    <Input
+                      id="metaAdAccountId"
+                      value={formData.metaIntegrationSettings?.adAccountId || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        metaIntegrationSettings: {
+                          ...(prev.metaIntegrationSettings || {}),
+                          adAccountId: e.target.value,
+                        },
+                      }))}
+                      placeholder="123456789012345"
                     />
                   </div>
                   <div>
