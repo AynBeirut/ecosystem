@@ -1,14 +1,26 @@
 import axios from 'axios';
 
 const WHISH_CONFIG = {
-  channel: process.env.WHISH_CHANNEL || '10198838',
-  secret: process.env.WHISH_SECRET || '009ca52d70e54fe0971b9143fe3e2b3a',
+  channel: String(process.env.WHISH_CHANNEL || '').trim(),
+  secret: String(process.env.WHISH_SECRET || '').trim(),
   defaultWebsiteUrl: process.env.WHISH_WEBSITE_URL || 'grabio.space', // Default domain; overridden per-request
-  baseUrl: process.env.WHISH_BASE_URL || 'https://api.sandbox.whish.money/itel-service/api', // Sandbox — switch to production when confirmed
-  // baseUrl: 'https://api.whish.money/itel-service/api', // Production (confirm URL with Steven before enabling)
-  // allowedDomains: both grabio.space and aynbeirut.com are registered with Whish Money channel 10198838
+  baseUrl: process.env.WHISH_BASE_URL || 'https://api.whish.money/itel-service/api',
   userAgent: 'Whish/1.0 (https://whish.money; support@whish.money)'
 };
+
+function getWhishHeaders(websiteUrl: string) {
+  if (!WHISH_CONFIG.channel || !WHISH_CONFIG.secret) {
+    throw new Error('Whish credentials are not configured: set WHISH_CHANNEL and WHISH_SECRET');
+  }
+
+  return {
+    'Content-Type': 'application/json',
+    channel: WHISH_CONFIG.channel,
+    secret: WHISH_CONFIG.secret,
+    websiteUrl,
+    'User-Agent': WHISH_CONFIG.userAgent,
+  };
+}
 
 /** Allowed merchant domains — both should be registered with Whish (ask Steven to whitelist both) */
 const ALLOWED_WHISH_DOMAINS = ['grabio.space', 'aynbeirut.com'];
@@ -88,13 +100,7 @@ export async function initiatePayment(
         failureRedirectUrl: request.failureRedirectUrl
       },
       {
-        headers: {
-          'Content-Type': 'application/json',
-          'channel': WHISH_CONFIG.channel,
-          'secret': WHISH_CONFIG.secret,
-          'websiteUrl': request.websiteUrl || WHISH_CONFIG.defaultWebsiteUrl,
-          'User-Agent': WHISH_CONFIG.userAgent
-        },
+        headers: getWhishHeaders(request.websiteUrl || WHISH_CONFIG.defaultWebsiteUrl),
         timeout: 30000 // 30 second timeout
       }
     );
@@ -142,13 +148,7 @@ export async function checkPaymentStatus(
         externalId
       },
       {
-        headers: {
-          'Content-Type': 'application/json',
-          'channel': WHISH_CONFIG.channel,
-          'secret': WHISH_CONFIG.secret,
-          'websiteUrl': WHISH_CONFIG.defaultWebsiteUrl,
-          'User-Agent': WHISH_CONFIG.userAgent
-        },
+        headers: getWhishHeaders(WHISH_CONFIG.defaultWebsiteUrl),
         timeout: 30000
       }
     );
@@ -173,12 +173,7 @@ export async function getBalance(currency: 'USD' | 'LBP' = 'USD'): Promise<numbe
       `${WHISH_CONFIG.baseUrl}/payment/account/balance`,
       {
         params: { currency },
-        headers: {
-          'channel': WHISH_CONFIG.channel,
-          'secret': WHISH_CONFIG.secret,
-          'websiteUrl': WHISH_CONFIG.defaultWebsiteUrl,
-          'User-Agent': WHISH_CONFIG.userAgent
-        },
+        headers: getWhishHeaders(WHISH_CONFIG.defaultWebsiteUrl),
         timeout: 30000
       }
     );

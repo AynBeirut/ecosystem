@@ -508,6 +508,8 @@ const AdminCustomers: React.FC = () => {
 
         <div className="flex gap-4 mb-6">
           <Input
+            id="customer-search"
+            name="customerSearch"
             placeholder="Search by name, email, or phone..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}

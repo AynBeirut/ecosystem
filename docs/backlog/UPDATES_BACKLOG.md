@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + auto currency rates + split payments + refund management workflow + modern minimalist theme + classic e-commerce theme + fashion boutique theme completed)
+Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + Whish production cutover + auto currency rates + split payments + refund management workflow + modern minimalist theme + classic e-commerce theme + fashion boutique theme + food/restaurant theme + tech/electronics theme completed)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -13,7 +13,6 @@ Tag format used on each item:
 ## 1) Immediate Execution (P0)
 
 ### Whish Production Go-Live
-- [ ] Finish Whish production cutover (sandbox -> production) (`Size: 3 MB`, `Best: now`)
 - [ ] Confirm authorized live domain and production callback URLs (`Size: 2 MB`, `Best: now`)
 - [ ] Replace sandbox credentials with live credentials (`Size: 2 MB`, `Best: now`)
 - [ ] Validate production payment callback and order finalization end-to-end (`Size: 3 MB`, `Best: after Whish cutover done`)
@@ -52,8 +51,7 @@ Tag format used on each item:
 ## 5) Storefront and Theme Expansion (P3)
 
 ### Templates and Branding
-- [ ] Food/restaurant theme (`Size: 3 MB`, `Best: after 50 clients`)
-- [ ] Tech/electronics theme (`Size: 3 MB`, `Best: after classic theme done`)
+
 
 ### Document and Invoice UX
 - [ ] Email template controls for notifications (`Size: 3 MB`, `Best: soon`)

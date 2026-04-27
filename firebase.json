@@ -36,15 +36,37 @@
     ],
     "rewrites": [
       {
-        "source": "/robots.txt",
-        "function": {
-          "functionId": "api",
-          "region": "us-central1"
-        }
-      },
-      {
         "source": "!/@(sg|sd|grabio-product-description).html",
         "destination": "/index.html"
+      }
+    ],
+    "headers": [
+      {
+        "source": "/index.html",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
+          }
+        ]
+      },
+      {
+        "source": "/robots.txt",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=300"
+          }
+        ]
+      },
+      {
+        "source": "/assets/**",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=31536000, immutable"
+          }
+        ]
       }
     ],
     "cleanUrls": true

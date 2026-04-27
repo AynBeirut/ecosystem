@@ -578,7 +578,7 @@ const StoreDetail: React.FC = () => {
     );
   }
 
-  const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'classic_ecom', 'fashion_boutique', 'vibrant', 'professional', 'artistic']);
+  const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'classic_ecom', 'fashion_boutique', 'food_restaurant', 'tech_electronics', 'vibrant', 'professional', 'artistic']);
   const resolvedTemplate = typeof store.template === 'string' && allowedTemplates.has(store.template)
     ? store.template
     : 'modern';
@@ -687,6 +687,30 @@ const StoreDetail: React.FC = () => {
       link: 'text-rose-800 hover:text-rose-950',
       actionButton: 'border-rose-300 text-rose-900 hover:bg-rose-50',
       reviewCard: 'bg-white border border-rose-200 shadow-sm',
+    },
+    food_restaurant: {
+      pageBg: 'bg-gradient-to-b from-amber-50 via-white to-lime-50',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-[#6B8E23] via-[#8F6A3E] to-[#2F3E2D]',
+      headerCard: 'bg-white/95 border border-amber-200 shadow-sm',
+      sectionTitle: 'text-amber-950',
+      card: 'bg-white border border-amber-200 shadow-sm',
+      cardSoft: 'bg-gradient-to-r from-amber-50/80 to-lime-50/80 border border-amber-200',
+      mutedText: 'text-amber-700',
+      link: 'text-amber-800 hover:text-amber-950',
+      actionButton: 'border-amber-300 text-amber-900 hover:bg-amber-50',
+      reviewCard: 'bg-white border border-amber-200 shadow-sm',
+    },
+    tech_electronics: {
+      pageBg: 'bg-gradient-to-b from-slate-100 via-white to-cyan-50',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-[#0EA5E9] via-[#1E40AF] to-[#0F172A]',
+      headerCard: 'bg-white/95 border border-cyan-200 shadow-sm',
+      sectionTitle: 'text-slate-950',
+      card: 'bg-white border border-cyan-200 shadow-sm',
+      cardSoft: 'bg-gradient-to-r from-cyan-50/80 to-slate-50/80 border border-cyan-200',
+      mutedText: 'text-slate-700',
+      link: 'text-cyan-800 hover:text-cyan-950',
+      actionButton: 'border-cyan-300 text-cyan-900 hover:bg-cyan-50',
+      reviewCard: 'bg-white border border-cyan-200 shadow-sm',
     },
     vibrant: {
       pageBg: 'bg-gradient-to-br from-orange-50 via-pink-50 to-violet-100',

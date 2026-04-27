@@ -58,7 +58,7 @@ export type Store = {
   aboutUs?: string;
   mission?: string;
   vision?: string;
-  template: 'default' | 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'fashion_boutique' | 'vibrant' | 'professional' | 'artistic';
+  template: 'default' | 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'fashion_boutique' | 'food_restaurant' | 'tech_electronics' | 'vibrant' | 'professional' | 'artistic';
   storeBackgroundImage?: string;
   carouselImages?: string[];
   galleryImages?: string[];

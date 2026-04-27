@@ -1,7 +1,7 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from '@/context/useAuth';
-import { Navigate, Link } from 'react-router-dom';
+import { Navigate, Link, useLocation } from 'react-router-dom';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 
 
@@ -11,8 +11,24 @@ const ProtectedRoute: React.FC<{
   requiredPermission?: string;
 }> = ({ children, allowedRoles, requiredPermission }) => {
   const { user, isLoading } = useAuth();
+  const location = useLocation();
   const [ipCheckState, setIpCheckState] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
   const [ipCheckMessage, setIpCheckMessage] = useState('');
+
+  const loadingTitle = useMemo(() => {
+    const path = location.pathname;
+    if (path === '/admin/customers') return 'Customer Management (CRM)';
+    if (path.startsWith('/admin')) return 'Admin Panel';
+    if (path.startsWith('/team')) return 'Team Dashboard';
+    return 'Loading';
+  }, [location.pathname]);
+
+  const LoadingShell = () => (
+    <main className="container mx-auto px-4 py-8">
+      <h1 className="text-2xl font-bold">{loadingTitle}</h1>
+      <div className="mt-4 h-5 w-48 animate-pulse rounded bg-gray-200" />
+    </main>
+  );
 
   const requiresAdminIpCheck = useMemo(() => {
     return Boolean(allowedRoles && allowedRoles.includes('admin') && user?.role === 'admin');
@@ -126,8 +142,7 @@ const ProtectedRoute: React.FC<{
 
   // Wait for auth state to finish loading before making redirect decisions
   if (isLoading) {
-    // Optionally, show a loading spinner or null
-    return null;
+    return <LoadingShell />;
   }
 
   if (!user) {
@@ -135,7 +150,7 @@ const ProtectedRoute: React.FC<{
   }
 
   if (requiresAdminIpCheck && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
-    return null;
+    return <LoadingShell />;
   }
 
   if (requiresAdminIpCheck && ipCheckState === 'blocked') {

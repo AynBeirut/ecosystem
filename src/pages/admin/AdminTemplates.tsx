@@ -24,7 +24,7 @@ import type {
 } from '@/types/storeProfile';
 
 // ── types ────────────────────────────────────────────────────────────────────
-type TemplateId = 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'fashion_boutique' | 'vibrant' | 'professional' | 'artistic' | 'custom';
+type TemplateId = 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'fashion_boutique' | 'food_restaurant' | 'tech_electronics' | 'vibrant' | 'professional' | 'artistic' | 'custom';
 type TabId = 'templates' | 'colors' | 'layout' | 'sections';
 
 type TemplateLayoutConfig = {
@@ -124,6 +124,30 @@ const COLOR_PRESETS: Record<TemplateId, Array<{ name: string; palette: Required<
     { name: 'Midnight Satin', palette: { primary:'#4A3B5C', secondary:'#1B1721', accent:'#C48A5A', background:'#F9F8FC', surface:'#FFFFFF', textColor:'#211C28', highlight:'#DDD9EA' } },
     { name: 'Rosewood',       palette: { primary:'#87586C', secondary:'#2E1F28', accent:'#BE7C57', background:'#FFF9FB', surface:'#FFFFFF', textColor:'#2D2129', highlight:'#F1DFE7' } },
     { name: 'Boutique Sand',  palette: { primary:'#8A6F5A', secondary:'#312822', accent:'#B35E74', background:'#FFFCF9', surface:'#FFFFFF', textColor:'#2E2622', highlight:'#EADFCC' } },
+  ],
+  food_restaurant: [
+    { name: 'Olive Bistro',   palette: { primary:'#6B8E23', secondary:'#2F3E2D', accent:'#D4A373', background:'#FFFCF7', surface:'#FFFFFF', textColor:'#2B2B2B', highlight:'#E8DCCB' } },
+    { name: 'Tomato Basil',   palette: { primary:'#B7410E', secondary:'#3A1F1A', accent:'#E9C46A', background:'#FFF8F3', surface:'#FFFFFF', textColor:'#2D1F1B', highlight:'#F2D7C7' } },
+    { name: 'Saffron Night',  palette: { primary:'#C17B1A', secondary:'#2C2A28', accent:'#8E5A3C', background:'#FFFBF2', surface:'#FFFFFF', textColor:'#2A2520', highlight:'#F1E2B8' } },
+    { name: 'Terra Oven',     palette: { primary:'#A64B2A', secondary:'#3C2A24', accent:'#D9A066', background:'#FFF7F1', surface:'#FFFFFF', textColor:'#2E221D', highlight:'#EED5C0' } },
+    { name: 'Seafood Blue',   palette: { primary:'#2C6E91', secondary:'#1B2E3A', accent:'#E2A458', background:'#F5FAFC', surface:'#FFFFFF', textColor:'#1F2A33', highlight:'#D6EAF3' } },
+    { name: 'Espresso Bar',   palette: { primary:'#6F4E37', secondary:'#2F241F', accent:'#C0894A', background:'#FBF7F3', surface:'#FFFFFF', textColor:'#2B221D', highlight:'#E7D5C5' } },
+    { name: 'Garden Fresh',   palette: { primary:'#3F7D20', secondary:'#23412A', accent:'#D99E4F', background:'#F8FCF5', surface:'#FFFFFF', textColor:'#243022', highlight:'#DCEBCF' } },
+    { name: 'Sunset Grill',   palette: { primary:'#C85A2E', secondary:'#3B2620', accent:'#F4B860', background:'#FFF7EF', surface:'#FFFFFF', textColor:'#2D211D', highlight:'#F6DFC4' } },
+    { name: 'Mediterranean',  palette: { primary:'#1F6F78', secondary:'#1E2A3A', accent:'#E3A93C', background:'#F4FBFC', surface:'#FFFFFF', textColor:'#1F2A30', highlight:'#D0E9EC' } },
+    { name: 'Brick Kitchen',  palette: { primary:'#8B3A3A', secondary:'#2D1E1E', accent:'#D9A066', background:'#FFF8F7', surface:'#FFFFFF', textColor:'#2B1F1F', highlight:'#EFD5D0' } },
+  ],
+  tech_electronics: [
+    { name: 'Neon Circuit',   palette: { primary:'#0EA5E9', secondary:'#0F172A', accent:'#22D3EE', background:'#F4FBFF', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#D1F3FF' } },
+    { name: 'Graphite Neon',  palette: { primary:'#2563EB', secondary:'#111827', accent:'#10B981', background:'#F8FAFC', surface:'#FFFFFF', textColor:'#111827', highlight:'#D7FBEF' } },
+    { name: 'Cyber Purple',   palette: { primary:'#7C3AED', secondary:'#1F1147', accent:'#06B6D4', background:'#F8F5FF', surface:'#FFFFFF', textColor:'#1E1B4B', highlight:'#E0D6FF' } },
+    { name: 'Silicon Orange', palette: { primary:'#0F172A', secondary:'#111827', accent:'#F97316', background:'#F8FAFC', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#FFE2CC' } },
+    { name: 'Electric Lime',  palette: { primary:'#1D4ED8', secondary:'#0B1220', accent:'#84CC16', background:'#F6FAFF', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#E8F8C8' } },
+    { name: 'Quantum Blue',   palette: { primary:'#1E40AF', secondary:'#0A1A3A', accent:'#38BDF8', background:'#F2F8FF', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#CDEBFF' } },
+    { name: 'Chipset Grey',   palette: { primary:'#334155', secondary:'#111827', accent:'#0EA5E9', background:'#F8FAFC', surface:'#FFFFFF', textColor:'#1F2937', highlight:'#D8E5F5' } },
+    { name: 'Matrix Teal',    palette: { primary:'#0F766E', secondary:'#102A43', accent:'#22D3EE', background:'#F2FCFC', surface:'#FFFFFF', textColor:'#102A43', highlight:'#CFF3F1' } },
+    { name: 'Aurora Mint',    palette: { primary:'#0284C7', secondary:'#082F49', accent:'#34D399', background:'#F2FBFF', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#D2F9EE' } },
+    { name: 'Infrared',       palette: { primary:'#1F2937', secondary:'#0B1020', accent:'#EF4444', background:'#F9FAFB', surface:'#FFFFFF', textColor:'#111827', highlight:'#FFD4D4' } },
   ],
   vibrant: [
     { name: 'Sunset',        palette: { primary:'#ED8936', secondary:'#DD6B20', accent:'#E53E3E', background:'#FFFAF0', surface:'#ffffff', textColor:'#1A202C', highlight:'#FBD38D' } },
@@ -457,6 +481,48 @@ const AdminTemplates: React.FC = () => {
         visualStyle: 'rounded',
       }
     },
+    {
+      id: 'food_restaurant',
+      name: 'Food / Restaurant',
+      description: 'Menu-first dining storefront with warm appetite-driven visuals and reservation-friendly section defaults',
+      colors: ['#6B8E23','#2F3E2D','#D4A373'],
+      features: ['Menu Spotlight','Warm Culinary Palette','Reservation-Friendly Contact'],
+      isPremium: false,
+      defaultPalette: COLOR_PRESETS.food_restaurant[0].palette,
+      layoutConfig: {
+        heroLayout: 'fullscreen',
+        productDisplayType: 'list',
+        productCardAnimation: 'slide-reveal',
+        menuStyle: 'bold',
+        aboutLayout: 'with-image',
+        contactFormStyle: 11,
+        ratingDisplayType: 'pill',
+        pageLayout: 'contained',
+        storeCardStyle: 'standard',
+        visualStyle: 'rounded',
+      }
+    },
+    {
+      id: 'tech_electronics',
+      name: 'Tech / Electronics',
+      description: 'High-clarity commerce layout for gadgets with spec-friendly cards and modern digital visual language',
+      colors: ['#0EA5E9','#0F172A','#22D3EE'],
+      features: ['Spec-Ready Grid','Digital Contrast UI','High-Tech Hero'],
+      isPremium: false,
+      defaultPalette: COLOR_PRESETS.tech_electronics[0].palette,
+      layoutConfig: {
+        heroLayout: 'split',
+        productDisplayType: 'grid-standard',
+        productCardAnimation: 'zoom-tilt',
+        menuStyle: 'sticky-glass',
+        aboutLayout: 'left',
+        contactFormStyle: 12,
+        ratingDisplayType: 'number',
+        pageLayout: 'hybrid',
+        storeCardStyle: 'split',
+        visualStyle: 'sharp',
+      }
+    },
     { 
       id: 'vibrant', 
       name: 'Vibrant', 
@@ -608,6 +674,8 @@ const AdminTemplates: React.FC = () => {
     classic:      { shell: 'bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100', header: 'bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-blue-300', title: 'text-white font-bold drop-shadow' },
     classic_ecom: { shell: 'bg-gradient-to-br from-slate-100 via-blue-50 to-stone-100', header: 'bg-gradient-to-r from-[#1E3A5F] to-[#0F2942] shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-slate-300', title: 'text-white font-semibold tracking-wide' },
     fashion_boutique: { shell: 'bg-gradient-to-br from-rose-100 via-fuchsia-50 to-amber-100', header: 'bg-gradient-to-r from-[#8B5E7A] to-[#2E2330] shadow-lg', block: 'bg-white shadow-md hover:shadow-xl transition-all border-rose-200', title: 'text-white font-semibold tracking-wide' },
+    food_restaurant: { shell: 'bg-gradient-to-br from-lime-100 via-amber-50 to-orange-100', header: 'bg-gradient-to-r from-[#6B8E23] to-[#2F3E2D] shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-all border-amber-200', title: 'text-white font-semibold tracking-wide' },
+    tech_electronics: { shell: 'bg-gradient-to-br from-cyan-100 via-slate-50 to-blue-100', header: 'bg-gradient-to-r from-[#0EA5E9] to-[#0F172A] shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-all border-cyan-200', title: 'text-white font-semibold tracking-wide' },
     vibrant:      { shell: 'bg-gradient-to-br from-orange-200 via-pink-200 to-fuchsia-200', header: 'bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 shadow-xl', block: 'bg-white shadow-lg hover:shadow-xl transition-all border-2 border-pink-300', title: 'text-white font-extrabold drop-shadow-lg' },
     professional: { shell: 'bg-gradient-to-br from-slate-200 via-gray-100 to-zinc-200', header: 'bg-gradient-to-r from-slate-700 to-gray-800 shadow-xl', block: 'bg-white shadow-md hover:shadow-xl transition-all border-slate-300', title: 'text-white tracking-wide font-semibold' },
     artistic:     { shell: 'bg-gradient-to-tr from-violet-200 via-fuchsia-100 to-amber-200', header: 'bg-gradient-to-r from-violet-600 via-purple-500 to-pink-500 shadow-2xl', block: 'bg-white/95 shadow-lg hover:shadow-2xl transition-all border-2 border-violet-300 backdrop-blur-sm', title: 'text-white font-bold drop-shadow-xl' },
