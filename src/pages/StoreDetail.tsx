@@ -17,6 +17,7 @@ import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
 import Header from '@/components/Header';
 import ProductCard from '@/components/ProductCard';
+import WhatsAppChatWidget from '@/components/WhatsAppChatWidget';
 import { MapPin, Globe, Facebook, Instagram, Twitter, Phone, Mail } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -1803,6 +1804,10 @@ const StoreDetail: React.FC = () => {
         )}
         </div>{/* End content wrapper for full-width layout */}
       </main>
+      <WhatsAppChatWidget
+        phone={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined}
+        storeName={store.name}
+      />
     </div>
   );
 };

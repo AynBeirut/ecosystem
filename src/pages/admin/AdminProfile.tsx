@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { getAuth, multiFactor, TotpMultiFactorGenerator, type MultiFactorInfo, type TotpSecret } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
@@ -89,10 +89,12 @@ const defaultProfile: StoreProfile = {
   paymentGatewaySettings: {
     whishEnabled: true,
     stripeEnabled: true,
+    squareEnabled: false,
     paypalEnabled: false,
     bankTransferEnabled: false,
     cashOnDeliveryEnabled: true,
     preferredGateway: 'whish',
+    squareLocationId: '',
   },
   seoSettings: {
     metaTitleSuffix: '',
@@ -133,6 +135,7 @@ const defaultProfile: StoreProfile = {
     invoiceLeadDays: 3,
     preferredRenewalGateway: 'whish',
   },
+  sslAutoProvisioningEnabled: true,
   aiIntegrationSettings: {
     enabled: false,
     assistantAccessMode: 'owner-account',
@@ -242,6 +245,7 @@ const AdminProfile: React.FC = () => {
   const [isSavingAiSettings, setIsSavingAiSettings] = useState(false);
   const [aiCatalog, setAiCatalog] = useState<AiCatalogModel[]>([]);
   const [aiCatalogUpdatedAt, setAiCatalogUpdatedAt] = useState('');
+  const autoProvisionAttemptRef = useRef(0);
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
   const refreshMfaStatus = async () => {
@@ -683,6 +687,126 @@ const AdminProfile: React.FC = () => {
       setIsSavingAiSettings(false);
     }
   };
+
+  const applyDomainStatusPayload = (data: unknown): 'active' | 'pending' | 'error' => {
+    const payload = (data || {}) as {
+      status?: string;
+      details?: DomainStatusDetails;
+    };
+
+    const status: 'active' | 'pending' | 'error' = payload.status === 'active' || payload.status === 'error'
+      ? payload.status
+      : 'pending';
+
+    setFormData(prev => ({
+      ...prev,
+      customDomainStatus: status,
+    }));
+
+    const details = payload.details;
+    if (details && Array.isArray(details.dnsRecords)) {
+      setDomainStatusDetails({
+        domainStatus: details.domainStatus === 'active' || details.domainStatus === 'error' ? details.domainStatus : 'pending',
+        sslStatus: details.sslStatus === 'active' || details.sslStatus === 'error' ? details.sslStatus : 'pending',
+        dnsRecords: details.dnsRecords,
+      });
+    } else {
+      setDomainStatusDetails(null);
+    }
+
+    return status;
+  };
+
+  const handleCheckDomainStatus = async (silent = false): Promise<'active' | 'pending' | 'error' | null> => {
+    if (!formData.customDomain) return null;
+    if (!silent) setIsCheckingDomainStatus(true);
+
+    try {
+      const storeId = getActualStoreId(user!);
+      const res = await fetch(`${API_URL}/domain/status`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId, customDomain: formData.customDomain }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Status check failed');
+
+      const status = applyDomainStatusPayload(data);
+      if (!silent) {
+        toast({
+          title: 'Domain status updated',
+          description: `Current status: ${status}`,
+        });
+      }
+      return status;
+    } catch (err) {
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        toast({ title: 'Status check failed', description: msg, variant: 'destructive' });
+      }
+      return null;
+    } finally {
+      if (!silent) setIsCheckingDomainStatus(false);
+    }
+  };
+
+  const handleRegisterDomain = async (silent = false): Promise<boolean> => {
+    if (!formData.customDomain) return false;
+    if (!silent) setIsRegisteringDomain(true);
+
+    try {
+      const storeId = getActualStoreId(user!);
+      const res = await fetch(`${API_URL}/domain/register`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId, customDomain: formData.customDomain }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.message || 'Registration failed');
+
+      setFormData(prev => ({ ...prev, customDomainStatus: 'pending' }));
+      setDomainStatusDetails(null);
+      if (!silent) {
+        toast({ title: 'Domain submitted', description: 'Status is pending — SSL provisioning will continue automatically.' });
+      }
+      return true;
+    } catch (err) {
+      if (!silent) {
+        const msg = err instanceof Error ? err.message : 'Unknown error';
+        toast({ title: 'Registration failed', description: msg, variant: 'destructive' });
+      }
+      return false;
+    } finally {
+      if (!silent) setIsRegisteringDomain(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!formData.customDomain || !formData.sslAutoProvisioningEnabled) return;
+    if (formData.customDomainStatus === 'active') return;
+
+    const interval = setInterval(async () => {
+      if (isCheckingDomainStatus || isRegisteringDomain) return;
+
+      const status = await handleCheckDomainStatus(true);
+      if (!status || status === 'active') return;
+
+      autoProvisionAttemptRef.current += 1;
+      const shouldRetryRegistration = status === 'error' || autoProvisionAttemptRef.current % 5 === 0;
+      if (shouldRetryRegistration) {
+        await handleRegisterDomain(true);
+      }
+    }, 90_000);
+
+    return () => clearInterval(interval);
+  }, [
+    formData.customDomain,
+    formData.customDomainStatus,
+    formData.sslAutoProvisioningEnabled,
+    isCheckingDomainStatus,
+    isRegisteringDomain,
+  ]);
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -1849,6 +1973,106 @@ const AdminProfile: React.FC = () => {
                   </div>
                 </div>
               </div>
+
+              <div className="space-y-4">
+                <h4 className="text-sm font-semibold">Payment Gateway Control Center</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="gatewayWhishEnabled">Enable Whish</Label>
+                    <Switch
+                      id="gatewayWhishEnabled"
+                      checked={formData.paymentGatewaySettings?.whishEnabled ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          whishEnabled: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="gatewayStripeEnabled">Enable Stripe</Label>
+                    <Switch
+                      id="gatewayStripeEnabled"
+                      checked={formData.paymentGatewaySettings?.stripeEnabled ?? true}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          stripeEnabled: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="gatewaySquareEnabled">Enable Square</Label>
+                    <Switch
+                      id="gatewaySquareEnabled"
+                      checked={formData.paymentGatewaySettings?.squareEnabled ?? false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          squareEnabled: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border rounded-md px-3 py-2">
+                    <Label htmlFor="gatewayPaypalEnabled">Enable PayPal</Label>
+                    <Switch
+                      id="gatewayPaypalEnabled"
+                      checked={formData.paymentGatewaySettings?.paypalEnabled ?? false}
+                      onCheckedChange={(checked) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          paypalEnabled: checked,
+                        },
+                      }))}
+                    />
+                  </div>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="squareLocationId">Square Location ID</Label>
+                    <Input
+                      id="squareLocationId"
+                      value={formData.paymentGatewaySettings?.squareLocationId || ''}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          squareLocationId: e.target.value,
+                        },
+                      }))}
+                      placeholder="LXXXXXXXXXXXX"
+                    />
+                  </div>
+                  <div>
+                    <Label htmlFor="preferredCheckoutGateway">Preferred Checkout Gateway</Label>
+                    <select
+                      id="preferredCheckoutGateway"
+                      value={formData.paymentGatewaySettings?.preferredGateway || 'whish'}
+                      onChange={(e) => setFormData((prev) => ({
+                        ...prev,
+                        paymentGatewaySettings: {
+                          ...(prev.paymentGatewaySettings || {}),
+                          preferredGateway: e.target.value as 'whish' | 'stripe' | 'square' | 'paypal' | 'manual',
+                        },
+                      }))}
+                      className="w-full p-2 border rounded-md"
+                    >
+                      <option value="whish">Whish</option>
+                      <option value="stripe">Stripe</option>
+                      <option value="square">Square</option>
+                      <option value="paypal">PayPal</option>
+                      <option value="manual">Manual</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
             </CardContent>
           </Card>
 
@@ -2385,9 +2609,28 @@ const AdminProfile: React.FC = () => {
                   autoComplete="off"
                   placeholder="shop.yourbrand.com"
                   value={formData.customDomain || ''}
-                  onChange={e => setFormData(prev => ({ ...prev, customDomain: e.target.value.trim().toLowerCase() }))}
+                  onChange={e => {
+                    autoProvisionAttemptRef.current = 0;
+                    setDomainStatusDetails(null);
+                    setFormData(prev => ({ ...prev, customDomain: e.target.value.trim().toLowerCase() }));
+                  }}
                 />
                 <p className="text-xs text-muted-foreground">Enter without https:// (e.g. <code>shop.yourbrand.com</code>)</p>
+              </div>
+
+              <div className="flex items-center justify-between border rounded-md p-3">
+                <div>
+                  <Label htmlFor="sslAutoProvisioningEnabled">SSL Auto-Provisioning</Label>
+                  <p className="text-xs text-muted-foreground">Automatically checks domain/SSL status and retries provisioning while pending.</p>
+                </div>
+                <Switch
+                  id="sslAutoProvisioningEnabled"
+                  checked={formData.sslAutoProvisioningEnabled ?? true}
+                  onCheckedChange={(checked) => {
+                    autoProvisionAttemptRef.current = 0;
+                    setFormData(prev => ({ ...prev, sslAutoProvisioningEnabled: checked }));
+                  }}
+                />
               </div>
 
               {formData.customDomain && (
@@ -2414,52 +2657,16 @@ const AdminProfile: React.FC = () => {
                 {formData.customDomainStatus === 'active' && <Badge className="bg-green-100 text-green-800">Active</Badge>}
                 {formData.customDomainStatus === 'pending' && <Badge variant="secondary">Pending Verification</Badge>}
                 {formData.customDomainStatus === 'error' && <Badge variant="destructive">Error</Badge>}
+                {formData.sslAutoProvisioningEnabled && formData.customDomainStatus !== 'active' && (
+                  <Badge className="bg-blue-100 text-blue-800">Auto-Provisioning On</Badge>
+                )}
                 {formData.customDomain && (
                   <Button
                     type="button"
                     variant="secondary"
                     size="sm"
                     disabled={isCheckingDomainStatus}
-                    onClick={async () => {
-                      setIsCheckingDomainStatus(true);
-                      try {
-                        const storeId = getActualStoreId(user!);
-                        const res = await fetch(`${API_URL}/domain/status`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ storeId, customDomain: formData.customDomain }),
-                        });
-                        const data = await res.json();
-                        if (!res.ok) throw new Error(data.message || 'Status check failed');
-
-                        setFormData(prev => ({
-                          ...prev,
-                          customDomainStatus: (data.status === 'active' || data.status === 'error') ? data.status : 'pending',
-                        }));
-
-                        const details = data.details as DomainStatusDetails | undefined;
-                        if (details && Array.isArray(details.dnsRecords)) {
-                          setDomainStatusDetails({
-                            domainStatus: details.domainStatus === 'active' || details.domainStatus === 'error' ? details.domainStatus : 'pending',
-                            sslStatus: details.sslStatus === 'active' || details.sslStatus === 'error' ? details.sslStatus : 'pending',
-                            dnsRecords: details.dnsRecords,
-                          });
-                        } else {
-                          setDomainStatusDetails(null);
-                        }
-
-                        const statusLabel = data.status === 'active' ? 'active' : data.status === 'error' ? 'error' : 'pending';
-                        toast({
-                          title: 'Domain status updated',
-                          description: `Current status: ${statusLabel}`,
-                        });
-                      } catch (err) {
-                        const msg = err instanceof Error ? err.message : 'Unknown error';
-                        toast({ title: 'Status check failed', description: msg, variant: 'destructive' });
-                      } finally {
-                        setIsCheckingDomainStatus(false);
-                      }
-                    }}
+                    onClick={() => void handleCheckDomainStatus(false)}
                   >
                     {isCheckingDomainStatus ? 'Checking...' : 'Check Status'}
                   </Button>
@@ -2470,27 +2677,7 @@ const AdminProfile: React.FC = () => {
                     variant="outline"
                     size="sm"
                     disabled={isRegisteringDomain}
-                    onClick={async () => {
-                      setIsRegisteringDomain(true);
-                      try {
-                        const storeId = getActualStoreId(user!);
-                        const res = await fetch(`${API_URL}/domain/register`, {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ storeId, customDomain: formData.customDomain }),
-                        });
-                        const data = await res.json();
-                        if (!res.ok) throw new Error(data.message || 'Registration failed');
-                        setFormData(prev => ({ ...prev, customDomainStatus: 'pending' }));
-                        setDomainStatusDetails(null);
-                        toast({ title: 'Domain submitted', description: 'Status is pending — check back after DNS propagates.' });
-                      } catch (err) {
-                        const msg = err instanceof Error ? err.message : 'Unknown error';
-                        toast({ title: 'Registration failed', description: msg, variant: 'destructive' });
-                      } finally {
-                        setIsRegisteringDomain(false);
-                      }
-                    }}
+                    onClick={() => void handleRegisterDomain(false)}
                   >
                     {isRegisteringDomain ? 'Submitting...' : 'Register Domain'}
                   </Button>

@@ -61,7 +61,11 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **Analytics Upgrade**: Google Analytics 4 deep integration with expanded sales and product performance reporting.
 ✨ **SEO Delivery Completed**: XML sitemap generation + submission workflow, Schema.org product/store structured data, custom product/category URLs, image alt-text workflow, and robots.txt management controls.
 ✨ **Meta Ecosystem Completed**: Meta catalog feed + sync, Facebook Shop integration, Instagram Shopping integration, conversion tracking completion, Meta Ads campaign creation flow, and dynamic product ads support.
-✨ **Domain Enablement Completed**: Custom domain registration for stores, DNS onboarding instructions, custom-domain storefront routing, and admin domain status verification checks.
+✨ **Domain Enablement Completed**: Custom domain registration for stores, DNS onboarding instructions, custom-domain storefront routing, admin domain status verification checks, and SSL auto-provisioning with automatic retry/status polling.
+✨ **Security and GDPR Tooling Completed**: Admin TOTP MFA, optional admin IP allowlist, GDPR export/delete request APIs, admin GDPR controls, customer GDPR request UI, and privacy policy generator flow.
+✨ **AI Integration Foundation Completed**: External AI API integration settings, model catalog loading, model selection, and per-model prepaid credit cost configuration in admin.
+✨ **Storefront Commerce Upgrade Completed**: Floating WhatsApp chat widget added to storefront and product pages for direct customer messaging.
+✨ **Square Gateway Integration Completed**: Square checkout session creation, return confirmation handling, inventory deduction linkage, and admin Square gateway controls.
 
 ### Latest Features (January 2026)
 ✨ **Swipe Gesture Navigation**: Navigate back with intuitive right-swipe gesture on mobile
@@ -81,7 +85,7 @@ This section merges the future feature list into the product description so ther
 - Domain and white-label growth (custom domains, SSL provisioning, DNS wizard, domain verification)
 
 ### Payments and Subscriptions
-- Additional gateways (Square, OMT, BOB Finance)
+- Additional gateways (OMT, BOB Finance)
 - Billing enhancements (live currency rates, split payments, refunds, retry, reminders, receipts)
 - Subscription platform completion (engine completion, customer portal, admin management)
 

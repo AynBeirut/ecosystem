@@ -81,11 +81,13 @@ export type Store = {
   paymentGatewaySettings?: {
     whishEnabled?: boolean;
     stripeEnabled?: boolean;
+    squareEnabled?: boolean;
     paypalEnabled?: boolean;
     bankTransferEnabled?: boolean;
     cashOnDeliveryEnabled?: boolean;
-    preferredGateway?: 'whish' | 'stripe' | 'paypal' | 'manual';
+    preferredGateway?: 'whish' | 'stripe' | 'square' | 'paypal' | 'manual';
     stripePublishableKey?: string;
+    squareLocationId?: string;
     paypalClientId?: string;
   };
   seoSettings?: {
@@ -134,7 +136,7 @@ export type Store = {
   ratingCount?: number; // number of reviews
 };
 
-export type PaymentMethod = 'visa' | 'mastercard' | 'paypal' | 'cash';
+export type PaymentMethod = 'visa' | 'mastercard' | 'square' | 'paypal' | 'cash';
 
 export type StoreAnnouncement = {
   id: string;

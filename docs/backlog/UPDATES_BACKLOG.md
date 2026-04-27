@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-27 (AI roadmap scope updated)
+Last updated: 2026-04-27 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square integration completed)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -12,12 +12,6 @@ Tag format used on each item:
 
 ## 1) Immediate Execution (P0)
 
-### Security and Compliance (Optional, recommended hardening)
-- [ ] (Optional) Complete GDPR compliance tooling (`Size: 4 MB`, `Best: soon`)
-
-### GDPR API + UI
-- [ ] Add customer request UI for GDPR actions (`Size: 3 MB`, `Best: after GDPR API done`)
-
 ### Whish Production Go-Live
 - [ ] Finish Whish production cutover (sandbox -> production) (`Size: 3 MB`, `Best: now`)
 - [ ] Confirm authorized live domain and production callback URLs (`Size: 2 MB`, `Best: now`)
@@ -27,10 +21,7 @@ Tag format used on each item:
 
 ## 2) Core Upgrades (P1)
 
-### AI Roadmap (API integration + prepaid credit model)
-- [ ] Prepaid AI credit wallet and top-up flow (`Size: 4 MB`, `Best: soon`)
-- [ ] AI image editing/generation workflow for products (`Size: 4 MB`, `Best: after prepaid AI credits done`)
-- [ ] AI-assisted live chat response system (`Size: 5 MB`, `Best: after AI model usage telemetry done`)
+- No pending items.
 
 ## 3) Commerce and Growth Upgrades (P2)
 
@@ -38,18 +29,13 @@ Tag format used on each item:
 - [ ] Automated order confirmation messages via WhatsApp (`Size: 3 MB`, `Best: after Whish go-live done`)
 - [ ] Abandoned cart recovery notifications via WhatsApp (`Size: 3 MB`, `Best: after conversion tracking done`)
 - [ ] Delivery status updates via WhatsApp (`Size: 3 MB`, `Best: after order status automation done`)
-- [ ] WhatsApp chat widget on storefront (`Size: 2 MB`, `Best: soon`)
 - [ ] Broadcast campaigns to opted-in customers (`Size: 4 MB`, `Best: after opt-in compliance done`)
 - [ ] WhatsApp product catalog sync (`Size: 4 MB`, `Best: after catalog sync quality done`)
 - [ ] Chatbot / auto-reply flows (`Size: 4 MB`, `Best: after WhatsApp core workflow done`)
 
-### Domain and White-label Growth
-- [ ] SSL auto-provisioning (`Size: 3 MB`, `Best: after custom domains done`)
-
 ## 4) Payments, Billing, Subscription Expansion (P2)
 
 ### Payment Gateways
-- [ ] Add Square integration (`Size: 4 MB`, `Best: after Whish production checklist done`)
 - [ ] Add OMT integration (`Size: 3 MB`, `Best: after 50 clients`)
 - [ ] Add BOB Finance integration (`Size: 3 MB`, `Best: after 50 clients`)
 - [ ] Complete production-grade Whish payment ops checklist (`Size: 3 MB`, `Best: now`)

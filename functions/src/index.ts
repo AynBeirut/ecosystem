@@ -27,6 +27,7 @@ import { startTrial, subscribe, subscribeStripe, cancelSubscription, getSubscrip
 import { handleWhishWebhook } from './api/webhooks';
 import { processCheckout, handleCheckoutCallback } from './api/checkout';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
+import { createSquareCheckoutSession, confirmSquareCheckoutSession } from './api/squareCheckout';
 import { sendContactEmail } from './api/contact';
 import { checkCustomDomainStatus, registerCustomDomain } from './api/domain';
 import { exportGdprData, requestGdprDelete } from './api/gdpr';
@@ -78,6 +79,8 @@ app.get('/health', (req, res) => {
       '/payment/checkout',
       '/payment/stripe/checkout',
       '/payment/stripe/confirm',
+      '/payment/square/checkout',
+      '/payment/square/confirm',
       '/webhook/stripe',
       '/payment/callback',
       '/subscription/trial',
@@ -119,6 +122,8 @@ app.post('/webhook/whish', handleWhishWebhook);
 app.post('/payment/checkout', processCheckout);
 app.post('/payment/stripe/checkout', createStripeCheckoutSession);
 app.post('/payment/stripe/confirm', confirmStripeCheckoutSession);
+app.post('/payment/square/checkout', createSquareCheckoutSession);
+app.post('/payment/square/confirm', confirmSquareCheckoutSession);
 app.get('/payment/callback', handleCheckoutCallback);
 
 // Contact Us email endpoint

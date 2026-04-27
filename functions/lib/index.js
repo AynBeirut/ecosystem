@@ -66,6 +66,7 @@ const subscription_1 = require("./api/subscription");
 const webhooks_1 = require("./api/webhooks");
 const checkout_1 = require("./api/checkout");
 const stripeCheckout_1 = require("./api/stripeCheckout");
+const squareCheckout_1 = require("./api/squareCheckout");
 const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
 const gdpr_1 = require("./api/gdpr");
@@ -109,6 +110,8 @@ app.get('/health', (req, res) => {
             '/payment/checkout',
             '/payment/stripe/checkout',
             '/payment/stripe/confirm',
+            '/payment/square/checkout',
+            '/payment/square/confirm',
             '/webhook/stripe',
             '/payment/callback',
             '/subscription/trial',
@@ -146,6 +149,8 @@ app.post('/webhook/whish', webhooks_1.handleWhishWebhook);
 app.post('/payment/checkout', checkout_1.processCheckout);
 app.post('/payment/stripe/checkout', stripeCheckout_1.createStripeCheckoutSession);
 app.post('/payment/stripe/confirm', stripeCheckout_1.confirmStripeCheckoutSession);
+app.post('/payment/square/checkout', squareCheckout_1.createSquareCheckoutSession);
+app.post('/payment/square/confirm', squareCheckout_1.confirmSquareCheckoutSession);
 app.get('/payment/callback', checkout_1.handleCheckoutCallback);
 // Contact Us email endpoint
 app.post('/contact/send', contact_1.sendContactEmail);

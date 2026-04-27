@@ -19,7 +19,7 @@ function resolveOrderItemProductKey(item: OrderItemLike): string {
 
 export async function applyPaidOrderInventoryDeduction(
   orderId: string,
-  paymentSource: 'whish' | 'stripe' | 'manual' = 'manual'
+  paymentSource: 'whish' | 'stripe' | 'square' | 'manual' = 'manual'
 ): Promise<{ updated: number; skippedAlreadyApplied: number; missingMatches: number }> {
   const orderRef = db.collection('orders').doc(orderId);
   const orderSnap = await orderRef.get();

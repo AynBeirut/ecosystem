@@ -113,11 +113,13 @@ export interface DropshippingPartnerSetting {
 export interface PaymentGatewaySettings {
   whishEnabled?: boolean;
   stripeEnabled?: boolean;
+  squareEnabled?: boolean;
   paypalEnabled?: boolean;
   bankTransferEnabled?: boolean;
   cashOnDeliveryEnabled?: boolean;
-  preferredGateway?: 'whish' | 'stripe' | 'paypal' | 'manual';
+  preferredGateway?: 'whish' | 'stripe' | 'square' | 'paypal' | 'manual';
   stripePublishableKey?: string;
+  squareLocationId?: string;
   paypalClientId?: string;
 }
 
@@ -320,6 +322,9 @@ export interface StoreProfile {
   proEmail?: string;         // Email address to receive Contact Us messages
   customDomain?: string;     // Custom domain (e.g. "shop.client.com")
   customDomainStatus?: 'pending' | 'active' | 'error'; // Status of custom domain verification
+  sslAutoProvisioningEnabled?: boolean;
+  sslAutoProvisioningLastCheckedAt?: string;
+  sslAutoProvisioningLastStatus?: 'pending' | 'active' | 'error';
   adminIpWhitelistEnabled?: boolean;
   adminIpAllowlist?: string[];
   // Product settings

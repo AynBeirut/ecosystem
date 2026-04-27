@@ -8,6 +8,7 @@ import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
 import Header from '@/components/Header';
+import WhatsAppChatWidget from '@/components/WhatsAppChatWidget';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
 import { useFavorites } from '@/context/FavoritesContext';
@@ -720,6 +721,10 @@ const ProductDetail: React.FC = () => {
           </div>
         </div>
       </main>
+      <WhatsAppChatWidget
+        phone={store?.subscriptionTier !== 'trial' ? store?.whatsappBusiness : undefined}
+        storeName={store?.name}
+      />
     </div>
   );
 };

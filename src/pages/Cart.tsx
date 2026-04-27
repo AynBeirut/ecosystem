@@ -25,6 +25,7 @@ import { pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
 type StorePaymentMethods = {
   creditCard: boolean;
   debitCard: boolean;
+  square: boolean;
   paypal: boolean;
   applePay: boolean;
   googlePay: boolean;
@@ -57,6 +58,7 @@ const Cart: React.FC = () => {
   const [availablePaymentMethods, setAvailablePaymentMethods] = useState({
     creditCard: false,
     debitCard: false,
+    square: false,
     paypal: false,
     applePay: false,
     googlePay: false,
@@ -86,6 +88,7 @@ const Cart: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const stripeHandledRef = useRef<string | null>(null);
+  const squareHandledRef = useRef<string | null>(null);
 
   // Load saved delivery info from localStorage on mount
   useEffect(() => {
@@ -243,15 +246,22 @@ const Cart: React.FC = () => {
           const storeDoc = await getDoc(doc(db, 'storeProfiles', storeId));
           if (storeDoc.exists()) {
             const storeData = storeDoc.data();
+            const gatewaySettings = (storeData.paymentGatewaySettings || {}) as { squareEnabled?: boolean; stripeEnabled?: boolean; paypalEnabled?: boolean };
             // If store has payment methods configured, use them; otherwise allow all
             if (storeData.paymentMethods) {
-              storePaymentSettings.push(storeData.paymentMethods);
-            } else {
-              // Default: all methods enabled if not configured
               storePaymentSettings.push({
-                creditCard: true,
-                debitCard: true,
-                paypal: true,
+                ...storeData.paymentMethods,
+                square: Boolean(gatewaySettings.squareEnabled),
+                creditCard: storeData.paymentMethods.creditCard && (gatewaySettings.stripeEnabled ?? true),
+                paypal: storeData.paymentMethods.paypal && (gatewaySettings.paypalEnabled ?? true),
+              });
+            } else {
+              // Default baseline when payment methods are not configured
+              storePaymentSettings.push({
+                creditCard: gatewaySettings.stripeEnabled ?? true,
+                debitCard: gatewaySettings.stripeEnabled ?? true,
+                square: Boolean(gatewaySettings.squareEnabled),
+                paypal: gatewaySettings.paypalEnabled ?? true,
                 applePay: true,
                 googlePay: true,
                 bankTransfer: true,
@@ -264,6 +274,7 @@ const Cart: React.FC = () => {
             storePaymentSettings.push({
               creditCard: true,
               debitCard: true,
+              square: false,
               paypal: true,
               applePay: true,
               googlePay: true,
@@ -278,6 +289,7 @@ const Cart: React.FC = () => {
           storePaymentSettings.push({
             creditCard: true,
             debitCard: true,
+            square: false,
             paypal: true,
             applePay: true,
             googlePay: true,
@@ -292,6 +304,7 @@ const Cart: React.FC = () => {
       const commonMethods = {
         creditCard: storePaymentSettings.every(s => s.creditCard),
         debitCard: storePaymentSettings.every(s => s.debitCard),
+        square: storePaymentSettings.every(s => s.square),
         paypal: storePaymentSettings.every(s => s.paypal),
         applePay: storePaymentSettings.every(s => s.applePay),
         googlePay: storePaymentSettings.every(s => s.googlePay),
@@ -309,6 +322,8 @@ const Cart: React.FC = () => {
         setPaymentMethod('visa');
       } else if (commonMethods.debitCard) {
         setPaymentMethod('visa');
+      } else if (commonMethods.square) {
+        setPaymentMethod('square');
       } else if (commonMethods.paypal) {
         setPaymentMethod('paypal');
       } else if (commonMethods.applePay) {
@@ -409,6 +424,90 @@ const Cart: React.FC = () => {
     };
 
     void confirmStripe();
+  }, [location.search, navigate, clearCart, user]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const squareState = params.get('square');
+    const orderId = params.get('orderId');
+
+    if (!squareState || !orderId) {
+      return;
+    }
+
+    const token = `${squareState}:${orderId}`;
+    if (squareHandledRef.current === token) {
+      return;
+    }
+    squareHandledRef.current = token;
+
+    const clearSquareQuery = () => {
+      navigate('/cart', { replace: true });
+    };
+
+    if (squareState === 'cancel') {
+      toast.error('Square payment was canceled. You can try again.');
+      clearSquareQuery();
+      return;
+    }
+
+    if (squareState !== 'success') {
+      toast.error('Invalid Square return parameters.');
+      clearSquareQuery();
+      return;
+    }
+
+    const confirmSquare = async () => {
+      try {
+        const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+        const auth = getAuth();
+        const currentUser = auth.currentUser;
+        const idToken = currentUser ? await currentUser.getIdToken() : null;
+
+        const response = await fetch(`${API_BASE.replace(/\/$/, '')}/payment/square/confirm`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+          },
+          body: JSON.stringify({ orderId }),
+        });
+
+        let payload: { error?: string; success?: boolean; status?: string } | null = null;
+        try {
+          payload = await response.json();
+        } catch (error) {
+          console.error('Failed to parse Square confirm response', error);
+        }
+
+        if (response.status === 202 || payload?.status === 'pending') {
+          toast.message('Square payment is still processing. Check your orders in a moment.');
+          clearSquareQuery();
+          return;
+        }
+
+        if (!response.ok || !payload?.success) {
+          toast.error(payload?.error || 'Square payment confirmation failed.');
+          clearSquareQuery();
+          return;
+        }
+
+        toast.success('Payment completed successfully.');
+        clearCart();
+
+        if (user) {
+          navigate('/orders');
+        } else {
+          navigate(`/track-order?orderId=${orderId}`);
+        }
+      } catch (error) {
+        console.error('Square confirmation error', error);
+        toast.error('Failed to verify Square payment. Please contact support if charged.');
+        clearSquareQuery();
+      }
+    };
+
+    void confirmSquare();
   }, [location.search, navigate, clearCart, user]);
 
   const handleClearSavedInfo = () => {
@@ -665,8 +764,11 @@ const Cart: React.FC = () => {
       
       // Create payment for the order (only for online payment methods)
       const useStripeForCards = paymentMethod === 'visa' || paymentMethod === 'mastercard';
+      const useSquareCheckout = paymentMethod === 'square';
       const paymentUrl = useStripeForCards
         ? `${API_BASE.replace(/\/$/, '')}/payment/stripe/checkout`
+        : useSquareCheckout
+          ? `${API_BASE.replace(/\/$/, '')}/payment/square/checkout`
         : `${API_BASE.replace(/\/$/, '')}/payment/checkout`;
       const paymentResp = await fetch(paymentUrl, {
         method: 'POST',
@@ -695,7 +797,7 @@ const Cart: React.FC = () => {
       // Redirect to payment page (Stripe for cards, Whish for other online methods)
       const paymentPageUrl = paymentBody?.paymentUrl;
       if (paymentPageUrl) {
-        toast.success(useStripeForCards ? 'Redirecting to Stripe...' : 'Redirecting to payment...');
+        toast.success(useStripeForCards ? 'Redirecting to Stripe...' : useSquareCheckout ? 'Redirecting to Square...' : 'Redirecting to payment...');
         // Clear cart before redirecting (order is already created)
         clearCart();
         // Redirect to payment
@@ -888,6 +990,15 @@ const Cart: React.FC = () => {
                           <Label htmlFor="paypal" className="flex items-center">
                             <img src="https://placehold.co/40x25/38B2AC/fff?text=PP" alt="PayPal" className="mr-2 h-6" />
                             PayPal
+                          </Label>
+                        </div>
+                      )}
+                      {availablePaymentMethods.square && (
+                        <div className="flex items-center space-x-2">
+                          <RadioGroupItem value="square" id="square" />
+                          <Label htmlFor="square" className="flex items-center">
+                            <img src="https://placehold.co/40x25/0F172A/fff?text=SQ" alt="Square" className="mr-2 h-6" />
+                            Square
                           </Label>
                         </div>
                       )}
