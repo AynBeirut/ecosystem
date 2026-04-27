@@ -26,6 +26,7 @@ export type ProductDisplayType = 'grid-standard' | 'grid-large' | 'list' | 'maso
 export type ProductCardAnimation = 'none' | 'parallax' | 'lift-3d' | 'glow-pulse' | 'slide-reveal' | 'zoom-tilt';
 export type HeroLayout = 'fullscreen' | 'split' | 'minimal' | 'centered';
 export type MenuStyle = 'classic' | 'centered' | 'bold' | 'sticky-glass' | 'hamburger';
+export type LogoPosition = 'left' | 'center' | 'right';
 export type ContactFormStyle = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
 export type RatingDisplayType = 'stars' | 'pill' | 'number' | 'card' | 'minimal';
 export type AboutLayout = 'off' | 'left' | 'centered' | 'with-image';
@@ -288,6 +289,7 @@ export interface StoreProfile {
   productCardAnimation?: ProductCardAnimation;
   heroLayout?: HeroLayout;
   menuStyle?: MenuStyle;
+  logoPosition?: LogoPosition;
   contactFormStyle?: ContactFormStyle;
   ratingDisplayType?: RatingDisplayType;
   aboutLayout?: AboutLayout;

@@ -85,7 +85,6 @@ Tag format used on each item:
 - [ ] Fashion/boutique theme (`Size: 3 MB`, `Best: after 50 clients`)
 - [ ] Food/restaurant theme (`Size: 3 MB`, `Best: after 50 clients`)
 - [ ] Tech/electronics theme (`Size: 3 MB`, `Best: after classic theme done`)
-- [ ] Logo positioning controls (`Size: 2 MB`, `Best: now`)
 
 ### Document and Invoice UX
 - [ ] Email template controls for notifications (`Size: 3 MB`, `Best: soon`)

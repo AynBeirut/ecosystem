@@ -440,6 +440,7 @@ const ProductDetail: React.FC = () => {
           storeName={store?.name}
           storeLogo={store?.logo}
           storeSlug={store?.slug}
+          logoPosition={store?.logoPosition}
           primaryColor={store?.templateColors?.primary}
           subscriptionTier={store?.subscriptionTier}
           hasCustomDomain={!!store?.customDomain}
@@ -471,6 +472,7 @@ const ProductDetail: React.FC = () => {
           storeName={store?.name}
           storeLogo={store?.logo}
           storeSlug={store?.slug}
+          logoPosition={store?.logoPosition}
           primaryColor={store?.templateColors?.primary}
           subscriptionTier={store?.subscriptionTier}
           hasCustomDomain={!!store?.customDomain}
@@ -513,6 +515,7 @@ const ProductDetail: React.FC = () => {
         storeName={store?.name}
         storeLogo={store?.logo}
         storeSlug={store?.slug}
+        logoPosition={store?.logoPosition}
         primaryColor={store?.templateColors?.primary}
         subscriptionTier={store?.subscriptionTier}
         hasCustomDomain={!!store?.customDomain}

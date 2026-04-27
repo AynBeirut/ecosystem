@@ -111,6 +111,7 @@ const defaultProfile: StoreProfile = {
     minimumServiceDurationMinutes: 30,
     defaultRenewalReminderDays: 7,
   },
+  logoPosition: 'left',
   subscriptionBillingSettings: {
     autoRenewEnabled: true,
     retryFailedPayments: true,
@@ -657,6 +658,23 @@ const AdminProfile: React.FC = () => {
                   </Label>
                   <p className="text-xs text-muted-foreground">
                     PNG, JPG or JPEG (max 5MB)
+                  </p>
+                </div>
+
+                <div className="w-full max-w-xs space-y-2">
+                  <Label htmlFor="logoPosition">Logo Position</Label>
+                  <select
+                    id="logoPosition"
+                    value={formData.logoPosition || 'left'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, logoPosition: e.target.value as 'left' | 'center' | 'right' }))}
+                    className="w-full p-2 border rounded-md"
+                  >
+                    <option value="left">Left of Store Name</option>
+                    <option value="center">Centered Above Store Name</option>
+                    <option value="right">Right of Store Name</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground">
+                    Controls how your logo is positioned in the storefront header.
                   </p>
                 </div>
               </div>
@@ -1937,6 +1955,14 @@ const AdminProfile: React.FC = () => {
                     <li>Wait for DNS propagation (usually minutes, up to 24 hours).</li>
                     <li>Click <span className="font-medium text-foreground">Check Status</span> to verify domain and SSL activation.</li>
                   </ol>
+
+                  {((domainStatusDetails?.domainStatus || formData.customDomainStatus || 'pending') === 'error' ||
+                    (domainStatusDetails?.sslStatus || 'pending') === 'error') && (
+                    <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                      Verification error detected. Re-check DNS records, click <span className="font-medium">Register Domain</span> to retry provisioning,
+                      then click <span className="font-medium">Check Status</span> again.
+                    </div>
+                  )}
 
                   <div className="font-mono text-xs bg-background border rounded p-3 space-y-1">
                     <div className="grid grid-cols-4 gap-2 text-muted-foreground font-sans text-xs uppercase mb-1">

@@ -69,6 +69,7 @@ export type Store = {
   productCardAnimation?: 'none' | 'parallax' | 'lift-3d' | 'glow-pulse' | 'slide-reveal' | 'zoom-tilt';
   heroLayout?: 'fullscreen' | 'split' | 'minimal' | 'centered';
   menuStyle?: 'classic' | 'centered' | 'bold' | 'sticky-glass' | 'hamburger';
+  logoPosition?: 'left' | 'center' | 'right';
   contactFormStyle?: 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
   ratingDisplayType?: 'stars' | 'pill' | 'number' | 'card' | 'minimal';
   aboutLayout?: 'off' | 'left' | 'centered' | 'with-image';

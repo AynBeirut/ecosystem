@@ -46,6 +46,7 @@ interface HeaderProps {
   storeName?: string;
   storeLogo?: string;
   storeSlug?: string;
+  logoPosition?: 'left' | 'center' | 'right';
   primaryColor?: string;
   subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
   hasCustomDomain?: boolean;
@@ -56,6 +57,7 @@ const Header: React.FC<HeaderProps> = ({
   storeName, 
   storeLogo, 
   storeSlug, 
+  logoPosition = 'left',
   primaryColor,
   subscriptionTier,
   hasCustomDomain = false,
@@ -86,13 +88,18 @@ const Header: React.FC<HeaderProps> = ({
   const textColor = isLightBg ? 'text-gray-900' : 'text-white';
   const hoverColor = isLightBg ? 'hover:text-gray-700' : 'hover:text-white/80';
   const iconBg = isLightBg ? 'text-gray-600 hover:bg-gray-100' : 'text-white hover:bg-white/10';
+  const logoContainerClass = logoPosition === 'center'
+    ? 'flex-col items-center text-center'
+    : logoPosition === 'right'
+      ? 'flex-row-reverse'
+      : 'flex-row';
 
   return (
     <header className="shadow-sm sticky top-0 z-50" style={{ backgroundColor: headerBgColor }}>
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to={useWhiteLabel && storeSlug ? `/${storeSlug}` : '/'} className="flex items-center gap-2">
+          <Link to={useWhiteLabel && storeSlug ? `/${storeSlug}` : '/'} className={`flex items-center gap-2 ${logoContainerClass}`}>
             {useWhiteLabel && storeLogo && (
               <img src={storeLogo} alt={storeName} className="h-8 w-8 object-cover rounded" />
             )}
