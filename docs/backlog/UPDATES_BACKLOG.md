@@ -14,7 +14,6 @@ Tag format used on each item:
 
 ### Security and Compliance (Optional, recommended hardening)
 - [ ] (Optional) Complete GDPR compliance tooling (`Size: 4 MB`, `Best: soon`)
-- [ ] (Optional) Add privacy policy generator flow (`Size: 2 MB`, `Best: soon`)
 
 ### GDPR API + UI
 - [ ] Add customer request UI for GDPR actions (`Size: 3 MB`, `Best: after GDPR API done`)

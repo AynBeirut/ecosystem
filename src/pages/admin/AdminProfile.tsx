@@ -214,6 +214,7 @@ const AdminProfile: React.FC = () => {
   const [isExportingGdpr, setIsExportingGdpr] = useState(false);
   const [isRequestingGdprDelete, setIsRequestingGdprDelete] = useState(false);
   const [gdprDeleteConfirm, setGdprDeleteConfirm] = useState('');
+  const [generatedPrivacyPolicy, setGeneratedPrivacyPolicy] = useState('');
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
   const refreshMfaStatus = async () => {
@@ -387,6 +388,66 @@ const AdminProfile: React.FC = () => {
     } finally {
       setIsRequestingGdprDelete(false);
     }
+  };
+
+  const generatePrivacyPolicyText = () => {
+    const storeName = formData.name || 'Your Store';
+    const contactEmail = formData.email || 'support@example.com';
+    const contactPhone = formData.phone || '';
+    const website = formData.website || `https://grabio.space/${formData.slug || ''}`;
+    const today = new Date().toISOString().slice(0, 10);
+
+    const policy = [
+      `${storeName} Privacy Policy`,
+      `Last updated: ${today}`,
+      '',
+      '1. Information We Collect',
+      '- Account information (name, email, phone, address).',
+      '- Order and transaction data needed to process purchases.',
+      '- Device and usage information for security and analytics.',
+      '',
+      '2. How We Use Information',
+      '- Process and fulfill orders.',
+      '- Provide customer support and service updates.',
+      '- Improve store performance, security, and user experience.',
+      '',
+      '3. Data Sharing',
+      '- We share only what is necessary with payment, delivery, and technical service providers.',
+      '- We do not sell personal data.',
+      '',
+      '4. Data Retention',
+      '- We retain personal data only as long as needed for business, legal, and compliance requirements.',
+      '',
+      '5. Your Rights',
+      '- Request access to your personal data.',
+      '- Request correction or deletion of personal data where applicable.',
+      '- Request data export in a portable format.',
+      '',
+      '6. Contact',
+      `- Email: ${contactEmail}`,
+      ...(contactPhone ? [`- Phone: ${contactPhone}`] : []),
+      `- Website: ${website}`,
+    ].join('\n');
+
+    setGeneratedPrivacyPolicy(policy);
+  };
+
+  const downloadPrivacyPolicy = () => {
+    if (!generatedPrivacyPolicy.trim()) {
+      toast({ title: 'No policy generated', description: 'Generate the policy first.', variant: 'destructive' });
+      return;
+    }
+
+    const fileName = `${(formData.name || 'store').toLowerCase().replace(/[^a-z0-9]+/g, '-')}-privacy-policy.txt`;
+    const blob = new Blob([generatedPrivacyPolicy], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
   };
 
   useEffect(() => {
@@ -2355,6 +2416,27 @@ const AdminProfile: React.FC = () => {
                 >
                   {isRequestingGdprDelete ? 'Submitting...' : 'Request Deletion'}
                 </Button>
+              </div>
+
+              <div className="rounded-lg border p-4 space-y-3">
+                <p className="text-sm font-medium">Privacy Policy Generator</p>
+                <p className="text-xs text-muted-foreground">
+                  Generate a starter privacy policy from your store profile details and download it for review.
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={generatePrivacyPolicyText}>
+                    Generate Policy
+                  </Button>
+                  <Button type="button" size="sm" onClick={downloadPrivacyPolicy}>
+                    Download Policy
+                  </Button>
+                </div>
+                <Textarea
+                  value={generatedPrivacyPolicy}
+                  onChange={(e) => setGeneratedPrivacyPolicy(e.target.value)}
+                  rows={10}
+                  placeholder="Generated privacy policy will appear here..."
+                />
               </div>
             </CardContent>
           </Card>
