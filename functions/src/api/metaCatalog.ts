@@ -586,3 +586,119 @@ export async function createMetaAdsCampaign(req: Request, res: Response): Promis
     res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to create Meta Ads campaign' });
   }
 }
+
+/**
+ * POST /meta/ads/dynamic/enable
+ * Body: { storeId, audienceName, retargetingWindowDays, minimumEventCount }
+ * Enables dynamic product ads support and stores retargeting configuration.
+ */
+export async function enableDynamicProductAds(req: Request, res: Response): Promise<void> {
+  try {
+    const user = await authenticateRequest(req);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized: missing or invalid token' });
+      return;
+    }
+
+    const storeId = String(req.body?.storeId || '').trim();
+    if (!storeId) {
+      res.status(400).json({ error: 'Missing required field: storeId' });
+      return;
+    }
+
+    const hasAccess = await canAccessStore(user, storeId);
+    if (!hasAccess) {
+      res.status(403).json({ error: 'Forbidden: no access to this store' });
+      return;
+    }
+
+    const db = admin.firestore();
+    const storeSnap = await db.collection('storeProfiles').doc(storeId).get();
+    if (!storeSnap.exists) {
+      res.status(404).json({ error: 'Store not found' });
+      return;
+    }
+
+    const storeData = storeSnap.data() as Record<string, unknown>;
+    const metaIntegrationSettings = (storeData.metaIntegrationSettings || {}) as Record<string, unknown>;
+
+    const adAccountId = String(metaIntegrationSettings.adAccountId || '').trim();
+    const catalogId = String(metaIntegrationSettings.catalogId || '').trim();
+    const pixelId = String(metaIntegrationSettings.pixelId || '').trim();
+    const lastMetaAdsCampaignId = String(metaIntegrationSettings.lastMetaAdsCampaignId || '').trim();
+
+    const missingFields: string[] = [];
+    if (!adAccountId) missingFields.push('adAccountId');
+    if (!catalogId) missingFields.push('catalogId');
+    if (!pixelId) missingFields.push('pixelId');
+    if (!lastMetaAdsCampaignId) missingFields.push('lastMetaAdsCampaignId');
+
+    if (missingFields.length > 0) {
+      res.status(400).json({
+        error: 'Dynamic product ads prerequisites are incomplete',
+        missingFields,
+        hint: 'Create a Meta Ads campaign first, then enable dynamic product ads.',
+      });
+      return;
+    }
+
+    const audienceName = String(req.body?.audienceName || 'Recent Product Viewers').trim();
+    const retargetingWindowDaysRaw = Number(req.body?.retargetingWindowDays || 14);
+    const retargetingWindowDays = Number.isFinite(retargetingWindowDaysRaw) && retargetingWindowDaysRaw >= 1
+      ? Math.min(retargetingWindowDaysRaw, 180)
+      : 14;
+    const minimumEventCountRaw = Number(req.body?.minimumEventCount || 100);
+    const minimumEventCount = Number.isFinite(minimumEventCountRaw) && minimumEventCountRaw >= 1
+      ? Math.min(minimumEventCountRaw, 10000)
+      : 100;
+
+    const enabledAt = new Date().toISOString();
+    const adsManagerUrl = `https://adsmanager.facebook.com/adsmanager/manage/campaigns?act=${encodeURIComponent(adAccountId)}`;
+
+    const jobRef = await db.collection('metaDynamicAdsJobs').add({
+      storeId,
+      adAccountId,
+      catalogId,
+      pixelId,
+      baseCampaignId: lastMetaAdsCampaignId,
+      audienceName,
+      retargetingWindowDays,
+      minimumEventCount,
+      status: 'enabled',
+      enabledAt,
+      enabledBy: user.uid,
+      adsManagerUrl,
+      productSetFilter: 'in_stock=true',
+      serverTimestamp: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    await db.collection('storeProfiles').doc(storeId).set({
+      metaIntegrationSettings: {
+        dynamicProductAdsEnabled: true,
+        dynamicProductAdsStatus: 'enabled',
+        dynamicProductAdsAudienceName: audienceName,
+        dynamicProductAdsRetargetingWindowDays: retargetingWindowDays,
+        dynamicProductAdsMinimumEventCount: minimumEventCount,
+        lastDynamicProductAdsJobId: jobRef.id,
+        lastDynamicProductAdsAt: enabledAt,
+      },
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.status(200).json({
+      ok: true,
+      jobId: jobRef.id,
+      status: 'enabled',
+      enabledAt,
+      adsManagerUrl,
+      summary: {
+        audienceName,
+        retargetingWindowDays,
+        minimumEventCount,
+      },
+    });
+  } catch (err) {
+    console.error('Dynamic product ads enable error:', err);
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Failed to enable dynamic product ads' });
+  }
+}

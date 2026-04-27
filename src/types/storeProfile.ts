@@ -159,6 +159,13 @@ export interface MetaIntegrationSettings {
   lastMetaAdsCampaignName?: string;
   lastMetaAdsCampaignAt?: string;
   lastMetaAdsCampaignStatus?: string;
+  dynamicProductAdsEnabled?: boolean;
+  dynamicProductAdsStatus?: 'enabled' | 'disabled' | 'error';
+  dynamicProductAdsAudienceName?: string;
+  dynamicProductAdsRetargetingWindowDays?: number;
+  dynamicProductAdsMinimumEventCount?: number;
+  lastDynamicProductAdsJobId?: string;
+  lastDynamicProductAdsAt?: string;
   catalogFeedUrl?: string;
   lastCatalogSyncAt?: string;
   lastCatalogSyncJobId?: string;

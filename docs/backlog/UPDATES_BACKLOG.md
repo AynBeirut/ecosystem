@@ -65,7 +65,7 @@ Tag format used on each item:
 - [x] Instagram Shopping integration (`Size: 3 MB`, `Best: after Meta catalog sync done`) _(completed 2026-04-27)_
 - [x] Meta Ads campaign creation flow (`Size: 4 MB`, `Best: after conversion tracking done`) _(completed 2026-04-27)_
 - [x] Conversion tracking completion (`Size: 3 MB`, `Best: soon`) _(completed 2026-04-27)_
-- [ ] Dynamic product ads support (`Size: 4 MB`, `Best: after Meta Ads flow done`)
+- [x] Dynamic product ads support (`Size: 4 MB`, `Best: after Meta Ads flow done`) _(completed 2026-04-27)_
 
 ### Domain and White-label Growth
 - [ ] Allow stores to use own domains (`store.com`) (`Size: 4 MB`, `Best: after 20 clients`)

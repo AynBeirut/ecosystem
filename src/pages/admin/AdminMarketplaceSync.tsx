@@ -110,6 +110,12 @@ type MetaCatalogState = {
   lastMetaAdsCampaignName?: string;
   lastMetaAdsCampaignAt?: string;
   lastMetaAdsCampaignStatus?: string;
+  dynamicProductAdsEnabled?: boolean;
+  dynamicProductAdsStatus?: string;
+  dynamicProductAdsAudienceName?: string;
+  dynamicProductAdsRetargetingWindowDays?: number;
+  dynamicProductAdsMinimumEventCount?: number;
+  lastDynamicProductAdsAt?: string;
 };
 
 const toIsoSafe = (value: unknown): string => {
@@ -144,11 +150,15 @@ const AdminMarketplaceSync: React.FC = () => {
   const [shopConnectBusy, setShopConnectBusy] = useState(false);
   const [instagramConnectBusy, setInstagramConnectBusy] = useState(false);
   const [metaAdsBusy, setMetaAdsBusy] = useState(false);
+  const [dynamicAdsBusy, setDynamicAdsBusy] = useState(false);
   const [shopOnboardingUrl, setShopOnboardingUrl] = useState('');
   const [adsManagerUrl, setAdsManagerUrl] = useState('');
   const [adsCampaignName, setAdsCampaignName] = useState('Meta Product Campaign');
   const [adsObjective, setAdsObjective] = useState('SALES');
   const [adsDailyBudget, setAdsDailyBudget] = useState(20);
+  const [dynamicAudienceName, setDynamicAudienceName] = useState('Recent Product Viewers');
+  const [dynamicWindowDays, setDynamicWindowDays] = useState(14);
+  const [dynamicMinEvents, setDynamicMinEvents] = useState(100);
   const [metaCatalog, setMetaCatalog] = useState<MetaCatalogState>({});
   const [search, setSearch] = useState('');
 
@@ -258,6 +268,12 @@ const AdminMarketplaceSync: React.FC = () => {
         lastMetaAdsCampaignName: String(loadedMeta.lastMetaAdsCampaignName || '').trim(),
         lastMetaAdsCampaignAt: String(loadedMeta.lastMetaAdsCampaignAt || '').trim(),
         lastMetaAdsCampaignStatus: String(loadedMeta.lastMetaAdsCampaignStatus || '').trim(),
+        dynamicProductAdsEnabled: Boolean(loadedMeta.dynamicProductAdsEnabled),
+        dynamicProductAdsStatus: String(loadedMeta.dynamicProductAdsStatus || '').trim(),
+        dynamicProductAdsAudienceName: String(loadedMeta.dynamicProductAdsAudienceName || '').trim(),
+        dynamicProductAdsRetargetingWindowDays: Number(loadedMeta.dynamicProductAdsRetargetingWindowDays || 14),
+        dynamicProductAdsMinimumEventCount: Number(loadedMeta.dynamicProductAdsMinimumEventCount || 100),
+        lastDynamicProductAdsAt: String(loadedMeta.lastDynamicProductAdsAt || '').trim(),
       });
       if (String(loadedMeta.catalogId || '').trim()) {
         setShopOnboardingUrl(`https://business.facebook.com/commerce_manager/catalogs/${encodeURIComponent(String(loadedMeta.catalogId || '').trim())}`);
@@ -269,6 +285,9 @@ const AdminMarketplaceSync: React.FC = () => {
       } else {
         setAdsManagerUrl('');
       }
+      setDynamicAudienceName(String(loadedMeta.dynamicProductAdsAudienceName || 'Recent Product Viewers'));
+      setDynamicWindowDays(Number(loadedMeta.dynamicProductAdsRetargetingWindowDays || 14));
+      setDynamicMinEvents(Number(loadedMeta.dynamicProductAdsMinimumEventCount || 100));
       setProducts(productRows);
       setJobs(jobRows);
       setChannelSettings(settingRows);
@@ -862,6 +881,62 @@ const AdminMarketplaceSync: React.FC = () => {
     }
   };
 
+  const enableDynamicProductAds = async () => {
+    if (!storeId) return;
+    setDynamicAdsBusy(true);
+    try {
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      if (!currentUser) throw new Error('Not authenticated');
+      const token = await currentUser.getIdToken();
+
+      const response = await fetch(`${API_URL}/meta/ads/dynamic/enable`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          storeId,
+          audienceName: dynamicAudienceName,
+          retargetingWindowDays: dynamicWindowDays,
+          minimumEventCount: dynamicMinEvents,
+        }),
+      });
+
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(data?.error || 'Failed to enable dynamic product ads');
+      }
+
+      setMetaCatalog((prev) => ({
+        ...prev,
+        dynamicProductAdsEnabled: true,
+        dynamicProductAdsStatus: String(data?.status || 'enabled'),
+        dynamicProductAdsAudienceName: String(data?.summary?.audienceName || dynamicAudienceName),
+        dynamicProductAdsRetargetingWindowDays: Number(data?.summary?.retargetingWindowDays || dynamicWindowDays),
+        dynamicProductAdsMinimumEventCount: Number(data?.summary?.minimumEventCount || dynamicMinEvents),
+        lastDynamicProductAdsAt: String(data?.enabledAt || new Date().toISOString()),
+      }));
+
+      setAdsManagerUrl(String(data?.adsManagerUrl || adsManagerUrl || ''));
+
+      toast({
+        title: 'Dynamic product ads enabled',
+        description: 'Retargeting audience settings were saved successfully.',
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      toast({
+        title: 'Dynamic product ads failed',
+        description: message,
+        variant: 'destructive',
+      });
+    } finally {
+      setDynamicAdsBusy(false);
+    }
+  };
+
   const statusBadgeClass = (status: SyncJobRow['status']) => {
     if (status === 'completed') return 'bg-green-100 text-green-800 hover:bg-green-100';
     if (status === 'failed') return 'bg-red-100 text-red-800 hover:bg-red-100';
@@ -1160,6 +1235,98 @@ const AdminMarketplaceSync: React.FC = () => {
                   <>
                     <UploadCloud className="h-4 w-4 mr-2" />
                     Create Meta Ads Campaign
+                  </>
+                )}
+              </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                disabled={!adsManagerUrl}
+                onClick={() => window.open(adsManagerUrl, '_blank', 'noopener,noreferrer')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Open Ads Manager
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card className="mb-6 border-emerald-200">
+          <CardHeader>
+            <CardTitle>Dynamic Product Ads</CardTitle>
+            <CardDescription>
+              Configure retargeting audience rules for dynamic catalog ads using your existing campaign setup.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
+              <div>
+                <p className="text-muted-foreground">Status</p>
+                <p className="font-medium">
+                  {metaCatalog.dynamicProductAdsEnabled
+                    ? (metaCatalog.dynamicProductAdsStatus || 'enabled')
+                    : 'Not enabled'}
+                </p>
+              </div>
+              <div>
+                <p className="text-muted-foreground">Last Enabled At</p>
+                <p className="font-medium">
+                  {metaCatalog.lastDynamicProductAdsAt
+                    ? new Date(metaCatalog.lastDynamicProductAdsAt).toLocaleString()
+                    : 'Never'}
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              <div>
+                <Label htmlFor="dynamicAudienceName">Audience Name</Label>
+                <Input
+                  id="dynamicAudienceName"
+                  value={dynamicAudienceName}
+                  onChange={(e) => setDynamicAudienceName(e.target.value)}
+                  placeholder="Recent Product Viewers"
+                />
+              </div>
+              <div>
+                <Label htmlFor="dynamicWindowDays">Retargeting Window (days)</Label>
+                <Input
+                  id="dynamicWindowDays"
+                  type="number"
+                  min={1}
+                  max={180}
+                  value={dynamicWindowDays}
+                  onChange={(e) => setDynamicWindowDays(Number(e.target.value || 14))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="dynamicMinEvents">Minimum Conversion Events</Label>
+                <Input
+                  id="dynamicMinEvents"
+                  type="number"
+                  min={1}
+                  max={10000}
+                  value={dynamicMinEvents}
+                  onChange={(e) => setDynamicMinEvents(Number(e.target.value || 100))}
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={enableDynamicProductAds}
+                disabled={dynamicAdsBusy || !storeId || !metaCatalog.adAccountId || !metaCatalog.catalogId || !metaCatalog.pixelId || !metaCatalog.lastMetaAdsCampaignId}
+              >
+                {dynamicAdsBusy ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Enabling...
+                  </>
+                ) : (
+                  <>
+                    <UploadCloud className="h-4 w-4 mr-2" />
+                    Enable Dynamic Product Ads
                   </>
                 )}
               </Button>
