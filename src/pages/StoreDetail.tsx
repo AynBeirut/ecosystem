@@ -578,7 +578,7 @@ const StoreDetail: React.FC = () => {
     );
   }
 
-  const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'vibrant', 'professional', 'artistic']);
+  const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'classic_ecom', 'vibrant', 'professional', 'artistic']);
   const resolvedTemplate = typeof store.template === 'string' && allowedTemplates.has(store.template)
     ? store.template
     : 'modern';
@@ -663,6 +663,18 @@ const StoreDetail: React.FC = () => {
       link: 'text-blue-700 hover:text-blue-900',
       actionButton: 'border-blue-300 text-blue-800 hover:bg-blue-50',
       reviewCard: 'bg-white border border-blue-100',
+    },
+    classic_ecom: {
+      pageBg: 'bg-gradient-to-b from-slate-50 via-white to-stone-50',
+      heroBg: isWhiteLabel ? whiteLabelHeroBg : 'bg-gradient-to-r from-[#1E3A5F] via-[#1D4E89] to-[#0F2942]',
+      headerCard: 'bg-white border border-slate-200 shadow-sm',
+      sectionTitle: 'text-slate-900',
+      card: 'bg-white border border-slate-200 shadow-sm',
+      cardSoft: 'bg-slate-50/70 border border-slate-200',
+      mutedText: 'text-slate-700',
+      link: 'text-slate-800 hover:text-slate-900',
+      actionButton: 'border-slate-300 text-slate-800 hover:bg-slate-100',
+      reviewCard: 'bg-white border border-slate-200 shadow-sm',
     },
     vibrant: {
       pageBg: 'bg-gradient-to-br from-orange-50 via-pink-50 to-violet-100',

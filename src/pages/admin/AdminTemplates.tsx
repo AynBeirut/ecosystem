@@ -24,7 +24,7 @@ import type {
 } from '@/types/storeProfile';
 
 // ── types ────────────────────────────────────────────────────────────────────
-type TemplateId = 'modern' | 'minimalist' | 'minimal' | 'classic' | 'vibrant' | 'professional' | 'artistic' | 'custom';
+type TemplateId = 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'vibrant' | 'professional' | 'artistic' | 'custom';
 type TabId = 'templates' | 'colors' | 'layout' | 'sections';
 
 type TemplateLayoutConfig = {
@@ -100,6 +100,18 @@ const COLOR_PRESETS: Record<TemplateId, Array<{ name: string; palette: Required<
     { name: 'Charcoal',      palette: { primary:'#2D3748', secondary:'#1A202C', accent:'#C05621', background:'#EDF2F7', surface:'#ffffff', textColor:'#1A202C', highlight:'#A0AEC0' } },
     { name: 'Hunter',        palette: { primary:'#285E61', secondary:'#1D4044', accent:'#B7791F', background:'#E6FFFA', surface:'#ffffff', textColor:'#1A202C', highlight:'#81E6D9' } },
     { name: 'Plum',          palette: { primary:'#553C9A', secondary:'#44337A', accent:'#C05621', background:'#FAF5FF', surface:'#ffffff', textColor:'#1A202C', highlight:'#D6BCFA' } },
+  ],
+  classic_ecom: [
+    { name: 'Heritage Navy', palette: { primary:'#1E3A5F', secondary:'#0F2942', accent:'#C28B36', background:'#F5F7FA', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#D1E2F5' } },
+    { name: 'Merchant Blue', palette: { primary:'#1D4E89', secondary:'#123561', accent:'#D19A3E', background:'#F2F6FB', surface:'#FFFFFF', textColor:'#111827', highlight:'#C7DBF2' } },
+    { name: 'Old Gold',      palette: { primary:'#2C3E50', secondary:'#1B2A38', accent:'#B8872F', background:'#F8F7F3', surface:'#FFFFFF', textColor:'#111827', highlight:'#E9DFC6' } },
+    { name: 'Regal Slate',   palette: { primary:'#334155', secondary:'#1E293B', accent:'#A16207', background:'#F8FAFC', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#D7E1EA' } },
+    { name: 'Ivory Shop',    palette: { primary:'#3F4E5E', secondary:'#2A3642', accent:'#C08457', background:'#FBFAF6', surface:'#FFFFFF', textColor:'#1F2937', highlight:'#EADAC8' } },
+    { name: 'Royal Shop',    palette: { primary:'#1E40AF', secondary:'#1E3A8A', accent:'#D97706', background:'#F3F6FD', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#CCD8F8' } },
+    { name: 'Graphite Gold', palette: { primary:'#374151', secondary:'#1F2937', accent:'#B45309', background:'#F9FAFB', surface:'#FFFFFF', textColor:'#111827', highlight:'#E5D6BE' } },
+    { name: 'Tradition',     palette: { primary:'#2F4858', secondary:'#1F3440', accent:'#B7791F', background:'#F5F8FA', surface:'#FFFFFF', textColor:'#0F172A', highlight:'#D6E4ED' } },
+    { name: 'Classic Ink',   palette: { primary:'#1F2937', secondary:'#111827', accent:'#A16207', background:'#F6F7F9', surface:'#FFFFFF', textColor:'#111827', highlight:'#D1D5DB' } },
+    { name: 'Commerce Tan',  palette: { primary:'#4B5563', secondary:'#1F2937', accent:'#B97A31', background:'#FAF8F4', surface:'#FFFFFF', textColor:'#1F2937', highlight:'#EAD9C2' } },
   ],
   vibrant: [
     { name: 'Sunset',        palette: { primary:'#ED8936', secondary:'#DD6B20', accent:'#E53E3E', background:'#FFFAF0', surface:'#ffffff', textColor:'#1A202C', highlight:'#FBD38D' } },
@@ -391,6 +403,27 @@ const AdminTemplates: React.FC = () => {
         visualStyle: 'rounded',
       }
     },
+    {
+      id: 'classic_ecom',
+      name: 'Classic E-Commerce',
+      description: 'Storefront-first classic commerce layout with trusted colors and conversion-focused structure',
+      colors: ['#1E3A5F','#0F2942','#C28B36'],
+      features: ['Conversion Hero','Catalog Grid','Trust-First Styling'],
+      isPremium: false,
+      defaultPalette: COLOR_PRESETS.classic_ecom[0].palette,
+      layoutConfig: {
+        heroLayout: 'split',
+        productDisplayType: 'grid-standard',
+        productCardAnimation: 'slide-reveal',
+        menuStyle: 'classic',
+        aboutLayout: 'left',
+        contactFormStyle: 3,
+        ratingDisplayType: 'stars',
+        pageLayout: 'contained',
+        storeCardStyle: 'standard',
+        visualStyle: 'rounded',
+      }
+    },
     { 
       id: 'vibrant', 
       name: 'Vibrant', 
@@ -540,6 +573,7 @@ const AdminTemplates: React.FC = () => {
     minimalist:   { shell: 'bg-gradient-to-br from-stone-100 via-zinc-50 to-neutral-100', header: 'bg-white/95 border border-stone-300 shadow-sm', block: 'bg-white shadow-sm hover:shadow-md transition-shadow border border-stone-200', title: 'text-zinc-800 tracking-wide' },
     minimal:      { shell: 'bg-gradient-to-br from-gray-50 to-slate-100', header: 'bg-white shadow-md border-2 border-gray-300', block: 'bg-white shadow-sm hover:shadow-md transition-shadow border border-gray-200', title: 'text-gray-800' },
     classic:      { shell: 'bg-gradient-to-br from-blue-100 via-indigo-50 to-purple-100', header: 'bg-gradient-to-r from-blue-600 to-indigo-700 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-blue-300', title: 'text-white font-bold drop-shadow' },
+    classic_ecom: { shell: 'bg-gradient-to-br from-slate-100 via-blue-50 to-stone-100', header: 'bg-gradient-to-r from-[#1E3A5F] to-[#0F2942] shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-slate-300', title: 'text-white font-semibold tracking-wide' },
     vibrant:      { shell: 'bg-gradient-to-br from-orange-200 via-pink-200 to-fuchsia-200', header: 'bg-gradient-to-r from-orange-500 via-pink-500 to-purple-600 shadow-xl', block: 'bg-white shadow-lg hover:shadow-xl transition-all border-2 border-pink-300', title: 'text-white font-extrabold drop-shadow-lg' },
     professional: { shell: 'bg-gradient-to-br from-slate-200 via-gray-100 to-zinc-200', header: 'bg-gradient-to-r from-slate-700 to-gray-800 shadow-xl', block: 'bg-white shadow-md hover:shadow-xl transition-all border-slate-300', title: 'text-white tracking-wide font-semibold' },
     artistic:     { shell: 'bg-gradient-to-tr from-violet-200 via-fuchsia-100 to-amber-200', header: 'bg-gradient-to-r from-violet-600 via-purple-500 to-pink-500 shadow-2xl', block: 'bg-white/95 shadow-lg hover:shadow-2xl transition-all border-2 border-violet-300 backdrop-blur-sm', title: 'text-white font-bold drop-shadow-xl' },

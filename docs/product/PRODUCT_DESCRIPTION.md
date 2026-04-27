@@ -73,6 +73,7 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **Split Payments Completed**: Admin order billing now supports controlled partial payments with remaining-balance guardrails, payment history tracking, and receipt voucher generation for each payment event.
 ✨ **Refund Management Workflow Completed**: Admin order billing now includes structured refund processing with amount/date/method validation, partial or full refund support, automatic paid-balance recalculation, refunded status visibility, and refund entries in payment history.
 ✨ **Modern Minimalist Theme Completed**: Added a dedicated storefront template with editorial spacing, neutral palettes, centered layout defaults, and minimalist product/review presentation from Admin Templates through storefront rendering.
+✨ **Classic E-Commerce Theme Completed**: Added a conversion-focused classic storefront template with trusted commerce styling, catalog-first layout defaults, and dedicated palette presets available directly in Admin Templates.
 
 ### Latest Features (January 2026)
 ✨ **Swipe Gesture Navigation**: Navigate back with intuitive right-swipe gesture on mobile
@@ -97,7 +98,7 @@ This section merges the future feature list into the product description so ther
 - Subscription platform completion (engine completion, customer portal, admin management)
 
 ### Storefront and Operations
-- New storefront themes (modern minimalist completed; remaining: classic, fashion, food, tech)
+- New storefront themes (modern minimalist and classic e-commerce completed; remaining: fashion, food, tech)
 - Branding controls expansion (logo positioning, notification email template controls)
 - Customer experience upgrades (related products, recently viewed, back-in-stock, gift cards, marketing integrations)
 - Order operations enhancements (shipping calculation refinements, order notes and internal comments)
