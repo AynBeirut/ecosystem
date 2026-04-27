@@ -1730,9 +1730,37 @@ const AdminOrders: React.FC = () => {
       const db = getFirestore();
       const orderRef = doc(db, 'orders', payingOrder.id);
 
-      const currentPaid = payingOrder.amountPaid || 0;
-      const newAmountPaid = currentPaid + paymentData.amountPaid;
-      const totalAmount = payingOrder.total || 0;
+      const currentPaid = Number(payingOrder.amountPaid || 0);
+      const totalAmount = Number(payingOrder.total || 0);
+      const remainingAmount = Math.max(0, Math.round((totalAmount - currentPaid) * 100) / 100);
+      const enteredAmount = Number(paymentData.amountPaid || 0);
+
+      if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
+        toast({ title: 'Invalid Amount', description: 'Payment amount must be greater than zero.', variant: 'destructive' });
+        return;
+      }
+
+      if (!paymentData.paymentDate) {
+        toast({ title: 'Missing Payment Date', description: 'Please select the payment date.', variant: 'destructive' });
+        return;
+      }
+
+      if (!paymentData.paymentMethod) {
+        toast({ title: 'Missing Payment Method', description: 'Please select a payment method.', variant: 'destructive' });
+        return;
+      }
+
+      const sanitizedAmount = Math.round(enteredAmount * 100) / 100;
+      if (sanitizedAmount > remainingAmount + 0.0001) {
+        toast({
+          title: 'Amount Exceeds Balance Due',
+          description: `Maximum allowed is $${remainingAmount.toFixed(2)} for this order.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const newAmountPaid = Math.round((currentPaid + sanitizedAmount) * 100) / 100;
 
       let paymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
       if (newAmountPaid >= totalAmount) {
@@ -1744,7 +1772,7 @@ const AdminOrders: React.FC = () => {
       // Create payment record
       const paymentRecord = {
         id: `PMT-${Date.now()}`,
-        amount: paymentData.amountPaid,
+        amount: sanitizedAmount,
         date: paymentData.paymentDate,
         method: paymentData.paymentMethod,
         notes: paymentData.paymentNotes,
@@ -1758,6 +1786,7 @@ const AdminOrders: React.FC = () => {
       await updateDoc(orderRef, {
         paymentStatus,
         amountPaid: newAmountPaid,
+        remainingAmount: Math.max(0, Math.round((totalAmount - newAmountPaid) * 100) / 100),
         paymentDate: paymentData.paymentDate,
         paymentMethod: paymentData.paymentMethod,
         paymentNotes: paymentData.paymentNotes,
@@ -2817,6 +2846,13 @@ const AdminOrders: React.FC = () => {
   const selectedDeliveryOption = deliveryOptions.find((o) => o.value === newOrder.deliveryMethod);
   const filteredOrders = getFilteredOrders();
   const selectedEligibleCount = getSelectedShippingOrders().length;
+  const payingOrderRemainingAmount = payingOrder
+    ? Math.max(0, Math.round(((payingOrder.total || 0) - (payingOrder.amountPaid || 0)) * 100) / 100)
+    : 0;
+  const projectedAmountPaid = payingOrder
+    ? Math.round(((payingOrder.amountPaid || 0) + Number(paymentData.amountPaid || 0)) * 100) / 100
+    : 0;
+  const projectedRemainingAmount = Math.max(0, Math.round((payingOrderRemainingAmount - Number(paymentData.amountPaid || 0)) * 100) / 100);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -4021,11 +4057,46 @@ const AdminOrders: React.FC = () => {
                     id="paymentAmount"
                     type="number"
                     min="0"
-                    max={Math.round(((payingOrder.total || 0) - (payingOrder.amountPaid || 0)) * 100) / 100}
+                    max={payingOrderRemainingAmount}
                     step="0.01"
                     value={paymentData.amountPaid || ''}
-                    onChange={(e) => setPaymentData({ ...paymentData, amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value) })}
+                    onChange={(e) => {
+                      const nextAmount = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      const boundedAmount = Number.isFinite(nextAmount)
+                        ? Math.max(0, Math.min(payingOrderRemainingAmount, nextAmount))
+                        : 0;
+                      setPaymentData({ ...paymentData, amountPaid: boundedAmount });
+                    }}
                   />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPaymentData({ ...paymentData, amountPaid: Math.round((payingOrderRemainingAmount * 0.25) * 100) / 100 })}
+                    >
+                      25%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPaymentData({ ...paymentData, amountPaid: Math.round((payingOrderRemainingAmount * 0.5) * 100) / 100 })}
+                    >
+                      50%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPaymentData({ ...paymentData, amountPaid: payingOrderRemainingAmount })}
+                    >
+                      Full Due
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-gray-500">
+                    After this payment: paid ${projectedAmountPaid.toFixed(2)} | remaining ${projectedRemainingAmount.toFixed(2)}
+                  </p>
                 </div>
 
                 <div>
