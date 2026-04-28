@@ -1213,9 +1213,9 @@ export default function Subscription() {
       <Dialog open={!!pendingPayment} onOpenChange={(open) => { if (!open) setPendingPayment(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Choose Payment Method</DialogTitle>
+            <DialogTitle>Complete Payment</DialogTitle>
             <DialogDescription>
-              {pendingPayment?.label}
+              {pendingPayment?.label} via Whish Money
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4">
@@ -1230,22 +1230,6 @@ export default function Subscription() {
               <div>
                 <p className="font-semibold">Whish Money</p>
                 <p className="text-sm text-gray-500">Pay with your Whish wallet or phone</p>
-              </div>
-            </button>
-
-            <button
-              onClick={handleSubscribeStripe}
-              disabled={processingPayment}
-              className="flex items-center gap-4 border-2 rounded-lg p-4 hover:border-primary hover:bg-primary/5 transition-colors text-left w-full disabled:opacity-50"
-            >
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-                <svg className="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" />
-                </svg>
-              </div>
-              <div>
-                <p className="font-semibold">Credit / Debit Card</p>
-                <p className="text-sm text-gray-500">Visa, Mastercard, or any card via Stripe</p>
               </div>
             </button>
           </div>
