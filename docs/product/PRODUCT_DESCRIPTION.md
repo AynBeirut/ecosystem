@@ -166,6 +166,7 @@ This section is a complete platform capability snapshot, including legacy and cu
 ✨ **Whish Production Ops Checklist Completed**: Admin checklist runner now validates cutover readiness, callback references, live credential quality signals, payment success/failure evidence, and order finalization coverage.
 ✨ **Whish Production Cutover Completed**: Functions now default to Whish production API endpoints, sandbox fallback credentials were removed, and Whish credentials are enforced through secure runtime environment variables.
 ✨ **Authorized Callback Domain Configuration Completed**: Checkout now resolves and validates live callback/redirect domains from store payment settings, supports secure success/failure callback URL overrides, and removes hardcoded production redirect hosts.
+✨ **Whish Callback Validation Automation Completed**: Added a production audit script that validates callback URL persistence, failed callback handling, credentials readiness, and order-finalization evidence from Firestore with timestamped reports.
 ✨ **Exchange Rate Automation Completed**: USD→LBP now supports optional auto-refresh mode with persisted provider metadata, one-click refresh, and manual override fallback.
 ✨ **Split Payments Completed**: Admin order billing now supports controlled partial payments with remaining-balance guardrails, payment history tracking, and receipt voucher generation for each payment event.
 ✨ **Refund Management Workflow Completed**: Admin order billing now includes structured refund processing with amount/date/method validation, partial or full refund support, automatic paid-balance recalculation, refunded status visibility, and refund entries in payment history.
@@ -190,7 +191,6 @@ This section reflects all remaining backlog items and marks each pending capabil
 It is maintained as an end-to-end mirror of the pending feature backlog so no incomplete item is left out.
 
 ### Immediate Execution (P0)
-- Coming Soon: Replace sandbox credentials with live credentials.
 - Coming Soon: Validate production payment callback and order finalization end-to-end.
 - Coming Soon: Final production smoke test for success/failure payment flows.
 

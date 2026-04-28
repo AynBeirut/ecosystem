@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-28 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + Whish production cutover + authorized live domain/callback URL confirmation + auto currency rates + split payments + refund management workflow + modern minimalist theme + classic e-commerce theme + fashion boutique theme + food/restaurant theme + tech/electronics theme completed)
+Last updated: 2026-04-28 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + Whish production cutover + authorized live domain/callback URL confirmation + Whish callback validation automation + auto currency rates + split payments + refund management workflow + modern minimalist theme + classic e-commerce theme + fashion boutique theme + food/restaurant theme + tech/electronics theme completed)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -13,8 +13,7 @@ Tag format used on each item:
 ## 1) Immediate Execution (P0)
 
 ### Whish Production Go-Live
-- [ ] Replace sandbox credentials with live credentials (`Size: 2 MB`, `Best: now`)
-- [ ] Validate production payment callback and order finalization end-to-end (`Size: 3 MB`, `Best: after Whish cutover done`)
+- [ ] Validate production payment callback and order finalization end-to-end (`Size: 3 MB`, `Best: after Whish cutover done`) - Automated validation report + failed callback smoke path completed; waiting first successful paid Whish order evidence for full pass.
 - [ ] Final production smoke test for success/failure payment flows (`Size: 2 MB`, `Best: after Whish callback validation done`)
 
 ## 2) Core Upgrades (P1)
