@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
 import { Package, Mail, Phone, MapPin } from 'lucide-react';
+import BackButton from '@/components/BackButton';
 
 type Order = {
   id: string;
@@ -139,6 +140,9 @@ const GuestOrderTracking: React.FC = () => {
       <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
+          <div className="mb-4">
+            <BackButton to="/" label="Back" />
+          </div>
           <h1 className="text-2xl font-bold mb-6">Track Your Order</h1>
           
           {/* Search Form */}

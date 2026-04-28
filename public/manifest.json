@@ -1,6 +1,6 @@
 {
-  "name": "Market Flow",
-  "short_name": "MarketFlow",
+  "name": "Grabio",
+  "short_name": "Grabio",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

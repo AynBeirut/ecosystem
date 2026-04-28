@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { Button } from '@/components/ui/button';
@@ -23,7 +23,10 @@ import {
   Mail,
   Globe,
   Star,
-  Bell
+  Bell,
+  ChevronDown,
+  Settings2,
+  Layers
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { fetchUsdToLbpRateFresh, getUsdToLbpRate, formatLbp } from '@/lib/currency';
@@ -59,6 +62,7 @@ const AdminDashboard: React.FC = () => {
   })();
   const { user } = (auth as MinimalAuth) || { user: null };
   const navigate = useNavigate();
+  const location = useLocation();
   const [store, setStore] = useState<Record<string, unknown> | null>(null);
   const [productCount, setProductCount] = useState(0);
   const [orderCount, setOrderCount] = useState(0);
@@ -132,6 +136,73 @@ const AdminDashboard: React.FC = () => {
   const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
   const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
 
+  const [openMenuGroups, setOpenMenuGroups] = useState<Record<string, boolean>>({
+    daily_stock: false,
+    daily_sales: false,
+    setup_profile: false,
+    setup_system: false,
+  });
+
+  const toggleMenuGroup = (groupId: string) => {
+    setOpenMenuGroups((prev) => ({
+      ...prev,
+      [groupId]: !prev[groupId],
+    }));
+  };
+
+  const isRouteActive = (route: string) => location.pathname === route;
+
+  const menuGroups = {
+    daily: [
+      {
+        id: 'daily_stock',
+        title: 'Stock & Catalog',
+        items: [
+          { to: user?.role === 'admin' ? '/admin/inventory' : '/admin/products', label: user?.role === 'admin' ? 'Inventory Overview' : 'Products', icon: Package, visible: canViewInventory },
+          { to: '/admin/products', label: 'Products', icon: Package, visible: canViewInventory },
+          { to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: canManageInventory },
+          { to: '/admin/delivery', label: 'Delivery', icon: Clock, visible: canManageDeliveries },
+        ],
+      },
+      {
+        id: 'daily_sales',
+        title: 'Sales & Customers',
+        items: [
+          { to: '/admin/orders', label: 'Orders', icon: Package, visible: true },
+          { to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
+          { to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: canProcessPayments },
+          { to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: canViewReports },
+        ],
+      },
+    ],
+    setup: [
+      {
+        id: 'setup_profile',
+        title: 'Profile & Store Setup',
+        items: [
+          { to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
+          { to: '/admin/payments', label: 'Payment Settings', icon: CreditCard, visible: user?.role === 'admin' && canProcessPayments },
+          { to: '/admin/templates', label: 'Templates & Store Logos', icon: Palette, visible: user?.role === 'admin' },
+          { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
+          { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
+        ],
+      },
+      {
+        id: 'setup_system',
+        title: 'Business Tools',
+        items: [
+          { to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
+          { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
+          { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
+          { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
+          { to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' },
+          { to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' },
+          { to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: user?.role === 'admin' },
+        ],
+      },
+    ],
+  };
+
   // Set document title based on user role
   useEffect(() => {
     document.title = user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard';
@@ -198,15 +269,22 @@ const AdminDashboard: React.FC = () => {
         } else {
           setStore(null);
         }
-        // Products count
         const productsRef = collection(db, 'products');
-        const productsQuery = query(productsRef, where('storeId', '==', actualStoreId));
-        const productsSnap = await getDocs(productsQuery);
-        setProductCount(productsSnap.size);
-        // Orders
         const ordersRef = collection(db, 'orders');
+        const announcementsRef = collection(db, 'announcements');
+
+        const productsQuery = query(productsRef, where('storeId', '==', actualStoreId));
         const ordersQuery = query(ordersRef, where('storeId', '==', actualStoreId));
-        const ordersSnap = await getDocs(ordersQuery);
+        const recentAnnouncementsQuery = query(announcementsRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(1));
+
+        // Fetch dashboard datasets in parallel for faster page load.
+        const [productsSnap, ordersSnap, recentAnnouncementsSnap] = await Promise.all([
+          getDocs(productsQuery),
+          getDocs(ordersQuery),
+          getDocs(recentAnnouncementsQuery),
+        ]);
+
+        setProductCount(productsSnap.size);
         setOrderCount(ordersSnap.size);
         // Revenue and customers
         let totalRevenue = 0;
@@ -235,32 +313,38 @@ const AdminDashboard: React.FC = () => {
           });
         }
         setCustomerCount(customerSet.size);
-        // Recent Activity: fetch last 5 events (products, orders, announcements)
-  const events: RecentEvent[] = [];
-        // Recent products
-        const recentProductsQuery = query(productsRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(2));
-        const recentProductsSnap = await getDocs(recentProductsQuery);
-        recentProductsSnap.forEach(doc => {
+        // Recent Activity: derive from fetched docs to avoid duplicate Firestore reads.
+        const events: RecentEvent[] = [];
+        productsSnap.docs
+          .sort((a, b) => {
+            const ta = a.data().createdAt?.toDate?.()?.getTime?.() || new Date(String(a.data().createdAt || 0)).getTime() || 0;
+            const tb = b.data().createdAt?.toDate?.()?.getTime?.() || new Date(String(b.data().createdAt || 0)).getTime() || 0;
+            return tb - ta;
+          })
+          .slice(0, 2)
+          .forEach(doc => {
           events.push({
             type: 'product',
             name: doc.data().name,
             createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
           });
         });
-        // Recent orders
-        const recentOrdersQuery = query(ordersRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(2));
-        const recentOrdersSnap = await getDocs(recentOrdersQuery);
-        recentOrdersSnap.forEach(doc => {
+
+        ordersSnap.docs
+          .sort((a, b) => {
+            const ta = a.data().createdAt?.toDate?.()?.getTime?.() || new Date(String(a.data().createdAt || 0)).getTime() || 0;
+            const tb = b.data().createdAt?.toDate?.()?.getTime?.() || new Date(String(b.data().createdAt || 0)).getTime() || 0;
+            return tb - ta;
+          })
+          .slice(0, 2)
+          .forEach(doc => {
           events.push({
             type: 'order',
             total: doc.data().total,
             createdAt: doc.data().createdAt?.toDate?.() || doc.data().createdAt,
           });
         });
-        // Recent announcements
-        const announcementsRef = collection(db, 'announcements');
-        const recentAnnouncementsQuery = query(announcementsRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(1));
-        const recentAnnouncementsSnap = await getDocs(recentAnnouncementsQuery);
+
         recentAnnouncementsSnap.forEach(doc => {
           events.push({
             type: 'announcement',
@@ -316,272 +400,127 @@ const AdminDashboard: React.FC = () => {
     <div className="min-h-screen bg-gray-50">
     {isMobile && <MobileHeader title={user?.role === 'sub_account' ? "Seller Dashboard" : "Admin Dashboard"} showBackButton={false} showHomeButton={true} />}
     <div className="md:hidden px-4 pt-3 pb-2 bg-white border-b">
-      <div className="flex items-center gap-3 overflow-x-auto">
-        <Link to={user?.role === 'admin' ? "/admin/inventory" : "/admin/products"} className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-700">
-            <Package className="h-4 w-4" />
+      <div className="space-y-3">
+        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Daily Operations</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link to={user?.role === 'admin' ? '/admin/inventory' : '/admin/products'} className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Inventory</Link>
+            <Link to="/admin/orders" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Orders</Link>
+            <Link to="/admin/customers" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Customers</Link>
+            {canProcessPayments && <Link to="/admin/payments" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Payments</Link>}
           </div>
-          <span className="text-xs text-gray-700 mt-1">{user?.role === 'admin' ? 'Inventory' : 'Products'}</span>
-        </Link>
+        </div>
 
-        <Link to="/admin/products" className="relative flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-market-primary">
-            <Package className="h-4 w-4" />
+        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
+          <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Setup & Settings</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <Link to="/admin/profile" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Profile</Link>
+            <Link to="/admin/templates" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Templates & Store Logos</Link>
+            <Link to="/admin/announcements" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Announcements</Link>
+            <Link to="/admin/marketing" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Email Marketing</Link>
           </div>
-          {productCount > 0 && <span className="absolute -top-1 -right-1 bg-market-primary text-white text-[10px] px-1 rounded-full">{productCount}</span>}
-          <span className="text-xs text-gray-700 mt-1">Products</span>
-        </Link>
+        </div>
 
-        <Link to="/admin/purchases" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-blue-600">
-            <ShoppingCart className="h-4 w-4" />
-          </div>
-          <span className="text-xs text-gray-700 mt-1">Purchases</span>
-        </Link>
-
-        <Link to="/admin/orders" className="relative flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-market-accent">
-            <Clock className="h-4 w-4" />
-          </div>
-          {orderCount > 0 && <span className="absolute -top-1 -right-1 bg-market-primary text-white text-[10px] px-1 rounded-full">{orderCount}</span>}
-          <span className="text-xs text-gray-700 mt-1">Orders</span>
-        </Link>
-
-        <Link to="/admin/announcements" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-            <Megaphone className="h-4 w-4" />
-          </div>
-          <span className="text-xs text-gray-700 mt-1">Announcements</span>
-        </Link>
-
-        <Link to="/admin/expenses" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-orange-600">
-            <CreditCard className="h-4 w-4" />
-          </div>
-          <span className="text-xs text-gray-700 mt-1">Expenses</span>
-        </Link>
-
-        <Link to="/admin/finance" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
-            <DollarSign className="h-4 w-4" />
-          </div>
-          <span className="text-xs text-gray-700 mt-1">Finance</span>
-        </Link>
-
-        {user?.role === 'admin' && (
-          <Link to="/admin/marketplace" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-amber-200 shadow-sm hover:shadow-md transition">
-            <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
-              <Globe className="h-4 w-4" />
-            </div>
-            <span className="text-xs text-gray-700 mt-1">Marketplace</span>
-          </Link>
-        )}
-
-        {user?.role === 'admin' && (
-          <Link to="/admin/product-reviews" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-yellow-200 shadow-sm hover:shadow-md transition">
-            <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700">
-              <Star className="h-4 w-4" />
-            </div>
-            <span className="text-xs text-gray-700 mt-1">Reviews</span>
-          </Link>
-        )}
-
-        {user?.role === 'admin' && (
-          <Link to="/admin/order-notifications" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-sky-200 shadow-sm hover:shadow-md transition">
-            <div className="h-8 w-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700">
-              <Bell className="h-4 w-4" />
-            </div>
-            <span className="text-xs text-gray-700 mt-1">Notif Logs</span>
-          </Link>
-        )}
-
-        <Link to="/admin/delivery" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-            <Package className="h-4 w-4" />
-          </div>
-          <span className="text-xs text-gray-700 mt-1">Delivery</span>
-        </Link>
-
-        <Link to="/admin/analytics" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-white border border-gray-100 shadow-sm hover:shadow-md transition">
-          <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-            <BarChart className="h-4 w-4" />
-          </div>
-          <span className="text-xs text-gray-700 mt-1">Analytics</span>
-        </Link>
-
-        <button onClick={handleStatusToggle} className="flex flex-col items-center shrink-0 px-3 py-2 rounded-md hover:bg-gray-100">
-          <div className={`h-5 w-5 rounded-full ${store?.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`} />
-          <span className="text-xs text-gray-600 mt-1">{store?.status === 'online' ? 'Online' : 'Offline'}</span>
-        </button>
-
-        <Link to="/admin/profile" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-md hover:bg-gray-100">
-          <User className="h-5 w-5 text-gray-700" />
-          <span className="text-xs text-gray-600 mt-1">Profile</span>
-        </Link>
-
-        <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="flex flex-col items-center shrink-0 px-3 py-2 rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition">
-          <FileText className="h-5 w-5 text-indigo-600" />
-          <span className="text-xs text-indigo-700 mt-1 font-semibold">Guide</span>
-        </a>
+        <div className="flex items-center justify-between">
+          <button onClick={handleStatusToggle} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-100">
+            <div className={`h-3 w-3 rounded-full ${store?.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`} />
+            <span>{store?.status === 'online' ? 'Store Online' : 'Store Offline'}</span>
+          </button>
+          <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-indigo-700">Open Guide</a>
+        </div>
       </div>
     </div>
   <div className="flex">
   <aside className="hidden lg:flex lg:flex-col w-64 bg-white shadow-sm h-screen sticky top-0">
         <div className="p-6 flex-shrink-0">
-          <Link to="/" className="text-2xl font-bold text-market-primary">Market Flow</Link>
+          <Link to="/" className="text-2xl font-bold text-market-primary">Grabio</Link>
           <p className="text-gray-500 text-sm mt-1">{user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}</p>
         </div>
         <nav className="mt-6 flex-1 overflow-y-auto pb-32">
-          <ul className="space-y-2 px-4">
-            <li>
-              <Link to="/admin/dashboard" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <StoreIcon className="h-5 w-5 mr-3 text-market-primary" />
-                <span className="font-medium">Dashboard</span>
-              </Link>
-            </li>
-            {canViewInventory && (
-              <li>
-                <Link to={user?.role === 'admin' ? "/admin/inventory" : "/admin/products"} className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <Package className="h-5 w-5 mr-3 text-purple-600" />
-                  <span className="font-medium">{user?.role === 'admin' ? 'Inventory Overview' : 'Products'}</span>
-                </Link>
-              </li>
-            )}
-            <li>
-              <Link to="/admin/orders" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <Package className="h-5 w-5 mr-3" />
-                <span>Orders</span>
-              </Link>
-            </li>
-            {canProcessPayments && (
-              <li>
-                <Link to="/admin/payments" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <CreditCard className="h-5 w-5 mr-3" />
-                  <span>Payments</span>
-                </Link>
-              </li>
-            )}
-            {user?.role === 'admin' && (
-              <li>
-                <Link to="/admin/finance" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-green-50 border border-green-200 hover:shadow-sm transition">
-                  <DollarSign className="h-5 w-5 mr-3 text-green-700" />
-                  <span className="font-medium">Finance Suite</span>
-                </Link>
-              </li>
-            )}
-            {user?.role === 'admin' && (
-              <li>
-                <Link to="/admin/marketplace" className="flex items-center px-3 py-2 text-gray-700 rounded-lg bg-amber-50 border border-amber-200 hover:shadow-sm transition">
-                  <Globe className="h-5 w-5 mr-3 text-amber-700" />
-                  <span className="font-medium">Marketplace Sync</span>
-                </Link>
-              </li>
-            )}
-            {user?.role === 'admin' && (
-              <li>
-                <Link to="/admin/account-statement" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <FileText className="h-5 w-5 mr-3" />
-                  <span>Account Statement</span>
-                </Link>
-              </li>
-            )}
-            {user?.role === 'admin' && (
-              <li>
-                <Link to="/admin/cash-collection" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <DollarSign className="h-5 w-5 mr-3" />
-                  <span>Cash Collection</span>
-                </Link>
-              </li>
-            )}
-            {user?.role === 'admin' && (
-              <li>
-                <Link to="/admin/service-renewals" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <Clock className="h-5 w-5 mr-3" />
-                  <span>Service Renewals</span>
-                </Link>
-              </li>
-            )}
-            {user?.role === 'admin' && (
-              <li>
-                <Link to="/admin/audit-logs" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <FileText className="h-5 w-5 mr-3" />
-                  <span>System Logs</span>
-                </Link>
-              </li>
-            )}
-            {canManageDeliveries && (
-              <li>
-                <Link to="/admin/delivery" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                  <Clock className="h-5 w-5 mr-3" />
-                  <span>Delivery</span>
-                </Link>
-              </li>
-            )}
-            {user?.role === 'admin' && (
-              <>
-                <li>
-                  <Link to="/admin/profile" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                    <User className="h-5 w-5 mr-3" />
-                    <span>Store Profile</span>
-                  </Link>
-                </li>
-                <li className="ml-4">
-                  <Link to="/admin/templates" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                    <Palette className="h-5 w-5 mr-3" />
-                    <span>Templates</span>
-                  </Link>
-                </li>
-              </>
-            )}
-            <li>
-              <Link to="/admin/announcements" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                <Megaphone className="h-5 w-5 mr-3" />
-                <span>Announcements</span>
-              </Link>
-            </li>
-            {canViewReports && (
-              <>
-                <li>
-                  <Link to="/admin/analytics" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                    <BarChart className="h-5 w-5 mr-3" />
-                    <span>Analytics</span>
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/admin/revenue" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                    <DollarSign className="h-5 w-5 mr-3" />
-                    <span>Revenue</span>
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/admin/marketing" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                    <Mail className="h-5 w-5 mr-3" />
-                    <span>Email Marketing</span>
-                  </Link>
-                </li>
-              </>
-            )}
-            {user?.role === 'admin' && (
-              <>
-                <li>
-                  <Link to="/admin/staff" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-gray-100 hover:shadow-sm transition">
-                    <Users className="h-5 w-5 mr-3" />
-                    <span>Staff (Payroll)</span>
-                  </Link>
-                </li>
-                <li>
-                  <Link to="/admin/sub-accounts" className="flex items-center px-3 py-2 text-gray-600 rounded-lg bg-white border border-green-200 hover:shadow-sm transition">
-                    <Users className="h-5 w-5 mr-3 text-green-600" />
-                    <span className="font-medium">Sub-Accounts (Login)</span>
-                  </Link>
-                </li>
-              </>
-            )}            <li>
-              <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="flex items-center px-3 py-2 text-indigo-700 font-semibold rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition">
-                <FileText className="h-5 w-5 mr-3 text-indigo-600" />
-                <span>Store Owner Guide</span>
-              </a>
-            </li>          </ul>
+          <div className="px-4 space-y-4">
+            <Link to="/admin/dashboard" className={`flex items-center px-3 py-2 rounded-lg border transition ${isRouteActive('/admin/dashboard') ? 'bg-market-primary/10 text-market-primary border-market-primary/20' : 'bg-white text-gray-700 border-gray-100 hover:shadow-sm'}`}>
+              <StoreIcon className="h-5 w-5 mr-3" />
+              <span className="font-medium">Dashboard Home</span>
+            </Link>
+
+            <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-2">
+              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Daily Operations</div>
+              <div className="space-y-2">
+                {menuGroups.daily.map((group) => (
+                  <div key={group.id} className="rounded-lg border border-emerald-200/70 bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-gray-800"
+                      onClick={() => toggleMenuGroup(group.id)}
+                    >
+                      <span>{group.title}</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${openMenuGroups[group.id] ? 'rotate-180' : ''}`} />
+                    </button>
+                    {openMenuGroups[group.id] && (
+                      <div className="space-y-1 px-2 pb-2">
+                        {group.items.filter((item) => item.visible).map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.to}
+                              to={item.to}
+                              className={`flex items-center rounded-md px-2 py-2 text-sm transition ${isRouteActive(item.to) ? 'bg-emerald-100 text-emerald-900' : 'text-gray-600 hover:bg-emerald-50'}`}
+                            >
+                              <Icon className="mr-2 h-4 w-4" />
+                              <span>{item.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-2">
+              <div className="flex items-center gap-2 px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
+                <Settings2 className="h-3.5 w-3.5" />
+                <span>Setup & Settings</span>
+              </div>
+              <div className="space-y-2">
+                {menuGroups.setup.map((group) => (
+                  <div key={group.id} className="rounded-lg border border-indigo-200/70 bg-white">
+                    <button
+                      type="button"
+                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-gray-800"
+                      onClick={() => toggleMenuGroup(group.id)}
+                    >
+                      <span>{group.title}</span>
+                      <ChevronDown className={`h-4 w-4 transition-transform ${openMenuGroups[group.id] ? 'rotate-180' : ''}`} />
+                    </button>
+                    {openMenuGroups[group.id] && (
+                      <div className="space-y-1 px-2 pb-2">
+                        {group.items.filter((item) => item.visible).map((item) => {
+                          const Icon = item.icon;
+                          return (
+                            <Link
+                              key={item.to}
+                              to={item.to}
+                              className={`flex items-center rounded-md px-2 py-2 text-sm transition ${isRouteActive(item.to) ? 'bg-indigo-100 text-indigo-900' : 'text-gray-600 hover:bg-indigo-50'}`}
+                            >
+                              <Icon className="mr-2 h-4 w-4" />
+                              <span>{item.label}</span>
+                            </Link>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="flex items-center px-3 py-2 text-indigo-700 font-semibold rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition">
+              <FileText className="h-5 w-5 mr-3 text-indigo-600" />
+              <span>Store Owner Guide</span>
+            </a>
+          </div>
         </nav>
           <div className="px-6 py-4 absolute bottom-0 w-full border-t bg-white">
           <div className="flex items-center">
@@ -859,15 +798,6 @@ const AdminDashboard: React.FC = () => {
                   <span className="font-medium">Orders</span>
                 </Link>
 
-                {canProcessPayments && (
-                  <Link to="/admin/payments" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-                      <CreditCard className="h-4 w-4" />
-                    </div>
-                    <span className="font-medium">Payments</span>
-                  </Link>
-                )}
-
                 {user?.role === 'admin' && (
                   <Link to="/admin/account-statement" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-indigo-600/20 shadow-sm hover:shadow-md transition">
                     <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
@@ -927,7 +857,7 @@ const AdminDashboard: React.FC = () => {
                     <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700">
                       <FileText className="h-4 w-4" />
                     </div>
-                    <span className="text-sm font-medium">System Logs</span>
+                    <span className="text-sm font-medium">Store Logs</span>
                   </Link>
                 )}
 
@@ -956,22 +886,6 @@ const AdminDashboard: React.FC = () => {
                   </Link>
                 )}
 
-                {user?.role === 'admin' && (
-                  <>
-                    <Link to="/admin/sub-accounts" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
-                      <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
-                        <Users className="h-4 w-4" />
-                      </div>
-                      <span className="font-medium">Sub-Accounts</span>
-                    </Link>
-                    <Link to="/admin/staff" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-green-200 shadow-sm hover:shadow-md transition">
-                      <div className="h-8 w-8 rounded-full bg-green-100 flex items-center justify-center text-green-700">
-                        <Users className="h-4 w-4" />
-                      </div>
-                      <span className="font-medium">Team (5+5)</span>
-                    </Link>
-                  </>
-                )}
               </div>
             </div>
           </div>

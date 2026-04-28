@@ -30,6 +30,14 @@ type OrderNotificationContext = {
   createdAt?: unknown;
 };
 
+function normalizeEmail(value?: string): string {
+  return String(value || '').trim().toLowerCase();
+}
+
+function normalizePhone(value?: string): string {
+  return String(value || '').replace(/\s+/g, '').trim();
+}
+
 async function createNotificationLog(input: {
   storeId: string;
   orderId: string;
@@ -109,6 +117,119 @@ async function sendOrderEmail(ctx: OrderNotificationContext): Promise<{ status: 
   }
 }
 
+async function sendOwnerOrderEmail(
+  ctx: OrderNotificationContext,
+  storeData: FirebaseFirestore.DocumentData,
+): Promise<{ status: NotificationLogStatus; reason?: string; provider: string }> {
+  try {
+    const ownerSnap = await db.collection('users').where('storeId', '==', ctx.storeId).limit(1).get();
+    if (ownerSnap.empty) {
+      return { status: 'skipped', reason: 'Store owner not found', provider: 'smtp' };
+    }
+
+    const owner = ownerSnap.docs[0].data() || {};
+    const ownerEmail = normalizeEmail(String(owner.email || ''));
+    if (!ownerEmail) {
+      return { status: 'skipped', reason: 'Store owner email missing', provider: 'smtp' };
+    }
+
+    const storeName = String(storeData.storeName || storeData.name || 'Your Store');
+    const orderDate = formatOrderDate(ctx.createdAt);
+    const transporter = nodemailer.createTransport(SMTP_CONFIG);
+    await transporter.sendMail({
+      from: SMTP_FROM,
+      to: ownerEmail,
+      subject: `New Online Order ${ctx.invoiceNumber || ctx.orderId.slice(-8)}`,
+      html: `
+        <html>
+          <body style="font-family: Arial, sans-serif; color: #1f2937; line-height:1.5;">
+            <div style="max-width: 640px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
+              <h2 style="margin: 0 0 12px; color:#0f172a;">New Online Order Received</h2>
+              <p style="margin:0 0 8px;"><strong>Store:</strong> ${storeName}</p>
+              <p style="margin:0 0 8px;"><strong>Order:</strong> ${ctx.invoiceNumber || ctx.orderId}</p>
+              <p style="margin:0 0 8px;"><strong>Customer:</strong> ${ctx.customerName || 'Customer'}</p>
+              <p style="margin:0 0 8px;"><strong>Phone:</strong> ${ctx.customerPhone || 'N/A'}</p>
+              <p style="margin:0 0 8px;"><strong>Email:</strong> ${ctx.customerEmail || 'N/A'}</p>
+              <p style="margin:0 0 8px;"><strong>Date:</strong> ${orderDate}</p>
+              <p style="margin:0 0 8px;"><strong>Total:</strong> $${Number(ctx.total || 0).toFixed(2)}</p>
+              <p style="margin:16px 0 0;">Open your dashboard to process this order.</p>
+            </div>
+          </body>
+        </html>
+      `,
+    });
+
+    return { status: 'sent', provider: 'smtp' };
+  } catch (error) {
+    console.error('Owner order email send failed', error);
+    return {
+      status: 'failed',
+      reason: error instanceof Error ? error.message : 'Owner email send failed',
+      provider: 'smtp',
+    };
+  }
+}
+
+async function upsertCustomerFromOrder(ctx: OrderNotificationContext): Promise<void> {
+  const email = normalizeEmail(ctx.customerEmail);
+  const phone = normalizePhone(ctx.customerPhone);
+
+  if (!ctx.storeId || (!email && !phone)) {
+    return;
+  }
+
+  const customersRef = db.collection('customers');
+  let existingSnap: FirebaseFirestore.QuerySnapshot<FirebaseFirestore.DocumentData> | null = null;
+
+  if (email) {
+    existingSnap = await customersRef
+      .where('storeId', '==', ctx.storeId)
+      .where('email', '==', email)
+      .limit(1)
+      .get();
+  }
+
+  if ((!existingSnap || existingSnap.empty) && phone) {
+    existingSnap = await customersRef
+      .where('storeId', '==', ctx.storeId)
+      .where('phone', '==', phone)
+      .limit(1)
+      .get();
+  }
+
+  const orderTotal = Number(ctx.total || 0);
+  const safeOrderTotal = Number.isFinite(orderTotal) && orderTotal > 0 ? orderTotal : 0;
+
+  if (existingSnap && !existingSnap.empty) {
+    await existingSnap.docs[0].ref.set(
+      {
+        name: ctx.customerName || existingSnap.docs[0].get('name') || 'Customer',
+        ...(email ? { email } : {}),
+        ...(phone ? { phone } : {}),
+        totalOrders: admin.firestore.FieldValue.increment(1),
+        lifetimeValue: admin.firestore.FieldValue.increment(safeOrderTotal),
+        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    return;
+  }
+
+  await customersRef.add({
+    storeId: ctx.storeId,
+    name: ctx.customerName || 'Customer',
+    email,
+    phone,
+    totalOrders: 1,
+    lifetimeValue: safeOrderTotal,
+    creditLimit: 0,
+    loyaltyPoints: 0,
+    status: 'active',
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+}
+
 async function sendOrderWhatsApp(ctx: OrderNotificationContext, storeData: FirebaseFirestore.DocumentData): Promise<{ status: NotificationLogStatus; reason?: string; provider: string }> {
   const whatsappWebhookUrl = String(storeData.whatsappWebhookUrl || '').trim();
   const whatsappWebhookToken = String(storeData.whatsappWebhookToken || '').trim();
@@ -182,6 +303,23 @@ async function sendAllOrderNotifications(orderId: string): Promise<void> {
   if (!loaded) return;
 
   const { ctx, storeData } = loaded;
+
+  try {
+    await upsertCustomerFromOrder(ctx);
+  } catch (error) {
+    console.error('Customer auto-upsert failed', error);
+  }
+
+  const ownerEmailResult = await sendOwnerOrderEmail(ctx, storeData);
+  await createNotificationLog({
+    storeId: ctx.storeId,
+    orderId: ctx.orderId,
+    channel: 'email',
+    recipient: 'store-owner',
+    provider: ownerEmailResult.provider,
+    status: ownerEmailResult.status,
+    reason: ownerEmailResult.reason,
+  });
 
   const emailResult = await sendOrderEmail(ctx);
   await createNotificationLog({

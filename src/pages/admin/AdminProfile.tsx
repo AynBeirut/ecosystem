@@ -1103,7 +1103,7 @@ const AdminProfile: React.FC = () => {
   return (
     <div className="min-h-screen bg-background">
       {isMobile && <MobileHeader title="Store Profile" />}
-      <div className="p-4 md:p-6">
+      <div className="p-4 md:p-6 max-w-6xl mx-auto">
         <BackButton />
         <div className="mb-6">
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -1114,7 +1114,7 @@ const AdminProfile: React.FC = () => {
         </div>
 
         {/* Subscription Card */}
-        <Card className="max-w-2xl mb-6 border-2 border-primary">
+        <Card className="mb-6 border-2 border-primary">
           <CardHeader>
             <CardTitle>Subscription Plan</CardTitle>
             <CardDescription>
@@ -1144,7 +1144,7 @@ const AdminProfile: React.FC = () => {
           </CardContent>
         </Card>
 
-        <form onSubmit={handleSubmit} className="max-w-2xl space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-6">
           {/* Logo Upload Section */}
           <Card>
             <CardHeader>
@@ -3155,6 +3155,14 @@ const AdminProfile: React.FC = () => {
           </Card>
 
           <div className="flex justify-end space-x-4">
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => window.open(`/store/${formData.slug}`, '_blank', 'noopener,noreferrer')}
+              disabled={!formData.slug}
+            >
+              Visit Store Profile
+            </Button>
             <Button type="button" variant="outline" disabled={isSaving}>
               Cancel
             </Button>

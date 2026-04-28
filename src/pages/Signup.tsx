@@ -64,7 +64,7 @@ const Signup = () => {
         <CardHeader className="space-y-1">
           <CardTitle className="text-2xl text-center">Create Account</CardTitle>
           <CardDescription className="text-center">
-            Join Market Flow and start exploring amazing stores
+            Join Grabio and start exploring amazing stores
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">

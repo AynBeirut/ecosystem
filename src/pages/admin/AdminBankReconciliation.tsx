@@ -39,6 +39,7 @@ const AdminBankReconciliation: React.FC = () => {
   const [filterFrom, setFilterFrom] = useState('');
   const [filterTo, setFilterTo] = useState('');
   const [selectedDateFilter, setSelectedDateFilter] = useState(new Date().toISOString().split('T')[0]);
+  const [orderSearch, setOrderSearch] = useState('');
 
   const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = typeof value === 'number' ? value : Number(value);
@@ -168,6 +169,17 @@ const AdminBankReconciliation: React.FC = () => {
     return eligibleOrders.filter((order) => selectedSet.has(order.id));
   }, [eligibleOrders, selectedOrderIds]);
 
+  const visibleEligibleOrders = useMemo(() => {
+    const term = orderSearch.trim().toLowerCase();
+    if (!term) return eligibleOrders;
+    return eligibleOrders.filter((order) => {
+      return (
+        String(order.invoiceNumber || '').toLowerCase().includes(term) ||
+        String(order.customerName || '').toLowerCase().includes(term)
+      );
+    });
+  }, [eligibleOrders, orderSearch]);
+
   const selectedTotal = selectedOrders.reduce((sum, order) => sum + order.remainingCash, 0);
 
   const totalCashReceived = useMemo(() => {
@@ -230,7 +242,7 @@ const AdminBankReconciliation: React.FC = () => {
   };
 
   const selectAllEligible = () => {
-    setSelectedOrderIds(eligibleOrders.map((order) => order.id));
+    setSelectedOrderIds(visibleEligibleOrders.map((order) => order.id));
   };
 
   const clearSelection = () => {
@@ -322,7 +334,7 @@ const AdminBankReconciliation: React.FC = () => {
 
         <div>
           <h1 className="text-2xl font-bold">Cash Collection</h1>
-          <p className="text-sm text-gray-600">Track cash deposited to bank and link each deposit to collected orders.</p>
+          <p className="text-sm text-gray-600">Record bank deposits from cash orders in 3 steps: pick orders, add deposit details, then save.</p>
         </div>
 
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
@@ -366,7 +378,14 @@ const AdminBankReconciliation: React.FC = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <div className="bg-white border rounded p-4 space-y-4 lg:col-span-1">
-            <h2 className="text-lg font-semibold">New Bank Deposit</h2>
+            <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+              <p className="font-semibold mb-1">How to record a deposit</p>
+              <p>1) Select the orders from the table.</p>
+              <p>2) Enter bank account and reference.</p>
+              <p>3) Save to lock this deposit record.</p>
+            </div>
+
+            <h2 className="text-lg font-semibold">Record New Bank Deposit</h2>
 
             <div>
               <label className="block text-sm text-gray-600 mb-1">Collection Date</label>
@@ -420,7 +439,7 @@ const AdminBankReconciliation: React.FC = () => {
               disabled={saving || loading}
               className="w-full bg-blue-600 text-white rounded py-2 font-medium hover:bg-blue-700 disabled:opacity-50"
             >
-              {saving ? 'Saving...' : 'Save Cash Collection'}
+              {saving ? 'Saving...' : 'Record Deposit'}
             </button>
           </div>
 
@@ -428,15 +447,27 @@ const AdminBankReconciliation: React.FC = () => {
             <div className="flex justify-between items-center mb-3 flex-wrap gap-2">
               <h2 className="text-lg font-semibold">Orders with Undeposited Cash</h2>
               <div className="flex gap-2">
-                <button onClick={selectAllEligible} className="px-3 py-1 border rounded text-sm hover:bg-gray-50">Select All</button>
+                <button onClick={selectAllEligible} className="px-3 py-1 border rounded text-sm hover:bg-gray-50">Select All Shown</button>
                 <button onClick={clearSelection} className="px-3 py-1 border rounded text-sm hover:bg-gray-50">Clear</button>
+              </div>
+            </div>
+
+            <div className="mb-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+              <input
+                value={orderSearch}
+                onChange={(e) => setOrderSearch(e.target.value)}
+                placeholder="Search by invoice or customer"
+                className="w-full border rounded px-3 py-2 text-sm"
+              />
+              <div className="rounded border bg-gray-50 px-3 py-2 text-sm text-gray-700">
+                {selectedOrders.length} order(s) selected • ${selectedTotal.toFixed(2)} ready to deposit
               </div>
             </div>
 
             {loading ? (
               <div className="text-sm text-gray-600">Loading orders...</div>
-            ) : eligibleOrders.length === 0 ? (
-              <div className="text-sm text-gray-600">No undeposited cash found.</div>
+            ) : visibleEligibleOrders.length === 0 ? (
+              <div className="text-sm text-gray-600">No matching orders found{orderSearch ? ' for this search' : ''}.</div>
             ) : (
               <div className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -451,7 +482,7 @@ const AdminBankReconciliation: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {eligibleOrders.map((order) => (
+                    {visibleEligibleOrders.map((order) => (
                       <tr key={order.id} className="border-t">
                         <td className="px-3 py-2">
                           <input

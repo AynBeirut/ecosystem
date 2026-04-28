@@ -551,14 +551,14 @@ const AdminProducts: React.FC = () => {
     const updatedStock = !product.inStock;
     await updateDoc(doc(db, 'products', product.id), { inStock: updatedStock });
     setProducts(products.map(p => p.id === product.id ? { ...p, inStock: updatedStock } : p));
-    toast({ title: 'Stock Updated', description: `Product is now ${updatedStock ? 'in stock' : 'out of stock'}.` });
+    toast({ title: 'Storefront Visibility Updated', description: `Product is now ${updatedStock ? 'visible online' : 'hidden online'}.` });
   };
 
   return (
     <div className="min-h-screen bg-background">
       {isMobile && <MobileHeader title="Manage Products" />}
       <div className="p-4 md:p-6">
-        <BackButton label="Back to Dashboard" />
+        <BackButton to={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'} label="Back to Inventory" />
         <div className="mb-6">
           <div className="flex items-center justify-between">
             <div>
@@ -917,12 +917,12 @@ const AdminProducts: React.FC = () => {
                   <span>Delivery: {product.deliveryTime}</span>
                   <span>•</span>
                   <span className={product.inStock ? "text-green-600" : "text-red-600"}>
-                    {product.inStock ? "In Stock" : "Out of Stock"}
+                    {product.inStock ? "Visible Online" : "Hidden Online"}
                   </span>
                   {canManageInventory && (
                     <>
                       <Switch checked={product.inStock} onCheckedChange={() => handleToggleStock(product)} className="ml-2" />
-                      <span className="ml-1">Toggle</span>
+                      <span className="ml-1">Display Online</span>
                     </>
                   )}
                 </div>

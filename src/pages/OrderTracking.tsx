@@ -14,6 +14,7 @@ import { Order } from '@/types/order';
 import { ReturnReason, ItemCondition, ExchangeItem } from '@/types/returns';
 import type { ProductReview } from '@/types/product';
 import { toast } from '@/components/ui/sonner';
+import BackButton from '@/components/BackButton';
 
 type StoreProfile = Record<string, unknown>;
 type ProductInfo = { id: string; name: string; price: number };
@@ -387,6 +388,9 @@ const OrderTracking: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-background p-4">
+      <div className="mb-4">
+        <BackButton label="Back" />
+      </div>
       <Card>
         <CardHeader>
           <CardTitle>Track Your Orders</CardTitle>

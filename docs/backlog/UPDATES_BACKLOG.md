@@ -130,3 +130,32 @@ Tag format used on each item:
 ## Notes
 - This backlog intentionally contains pending work only.
 - If an item is completed elsewhere, mark it done here and remove duplicates from old planning docs in the same PR.
+- Update policy: feature status source of truth is markdown docs (`UPDATES_BACKLOG.md` and `PRODUCT_DESCRIPTION.md`) plus runtime indicators inside the app.
+- Guide policy: the Store Owner Guide and sales collateral are presented as full-feature ready for sales/demo flow and are not used as pending-status source.
+- Sales collateral status:
+	- Sales Guide (`https://grabio.space/sg.html`) is Ready (full feature).
+	- Sales Deal (`https://grabio.space/sd.html`) is Ready (full feature).
+
+### Latest Verification Evidence (2026-04-28)
+- Build verification: `npm run build` passed after dashboard performance fetch optimization and branding/wording fixes.
+- Functions verification: `npm --prefix functions run build` passed after order notification service enhancements.
+- Build verification: `npm run build` passed after dashboard/inventory UX refactor and follow-up navigation changes.
+- Build verification: `npm run build` passed after terminology cleanup and cash collection UX improvements.
+- Build verification: `npm run build` passed after profile layout width fix and product-card visibility wording cleanup.
+- Dashboard UX evidence:
+	- Category-based grouped navigation with separate `Daily Operations` and `Setup & Settings` flows implemented.
+	- Sidebar dropdown groups are collapsed by default on load.
+	- Quick Actions cleanup applied: removed `Payments`, `Sub-Accounts`, and `Team` entries.
+	- Technical label cleanup applied: `Templates & App Logos` renamed to `Templates & Store Logos`.
+- Inventory UX evidence:
+	- Main `Inventory Activity Dashboard` added with priority actions and stock health summary.
+	- Product card status/toggle wording improved for clarity: visibility text now shows only `Visible Online / Hidden Online` (stock remains in separate stock indicator block) with `Display Online` switch label.
+- End-of-flow UX evidence:
+	- `Visit Store Profile` CTA added at the end of Profile Settings flow.
+	- `Visit Store Profile` CTA added at the end of Templates flow.
+	- Cash Collection page made more user-friendly: 3-step helper guidance, order search (invoice/customer), clearer selection summary, and `Select All Shown` workflow.
+	- Profile settings layout fixed to remove empty right-side space by expanding content container/form width.
+	- Product page back action now returns to Inventory for admins (`Back to Inventory`) and team dashboard for sub-accounts.
+	- Dashboard wording cleanup applied: `System Logs` renamed to `Store Logs`; sidebar brand label now `Grabio`.
+	- Dashboard data fetch optimized: products/orders/announcements loaded in parallel and recent activity derived without duplicate queries.
+	- Order automation improved: customer auto-upsert to `customers` on order notifications flow, plus owner order email delivery and customer confirmation email dispatch logging.

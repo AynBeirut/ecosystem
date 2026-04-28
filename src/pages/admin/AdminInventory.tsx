@@ -5,13 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2, Factory, ChefHat, Clock } from 'lucide-react';
+import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2, Factory, ChefHat, Clock, Activity, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import SwipeableLayout from '@/components/SwipeableLayout';
-import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
+import { getDaysUntilExpiry } from '@/lib/expiryUtils';
 
 const AdminInventory: React.FC = () => {
   const { user } = useAuth();
@@ -160,6 +160,11 @@ const AdminInventory: React.FC = () => {
 
   const totalInventoryValue = stats.simpleProducts.totalValue + stats.composedProducts.totalValue + stats.rawMaterials.totalValue + stats.finishedGoods.totalValue;
   const totalLowStock = stats.simpleProducts.lowStock + stats.rawMaterials.lowStock + stats.finishedGoods.lowStock;
+  const totalTrackedItems = stats.simpleProducts.count + stats.composedProducts.count + stats.rawMaterials.count + stats.finishedGoods.count;
+  const attentionCount = totalLowStock + expiryStats.expired + expiryStats.expiringSoon;
+  const inventoryHealthScore = totalTrackedItems > 0
+    ? Math.max(0, Math.round(((totalTrackedItems - Math.min(totalTrackedItems, attentionCount)) / totalTrackedItems) * 100))
+    : 100;
 
   return (
     <SwipeableLayout>
@@ -363,6 +368,85 @@ const AdminInventory: React.FC = () => {
                 )}
               </div>
               <p className="text-xs text-muted-foreground">Items expiring or expired</p>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Inventory Activity Dashboard */}
+        <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <Card className="lg:col-span-2">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5 text-market-primary" />
+                Inventory Activity Dashboard
+              </CardTitle>
+              <CardDescription>Quick activity snapshot so staff can act without searching through tabs.</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Reorder Queue</p>
+                  <p className="mt-1 text-2xl font-bold text-orange-800">{totalLowStock}</p>
+                  <p className="text-xs text-orange-700">Low stock items pending purchase</p>
+                </div>
+                <div className="rounded-lg border border-red-200 bg-red-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Expiry Risk</p>
+                  <p className="mt-1 text-2xl font-bold text-red-800">{expiryStats.expired + expiryStats.expiringSoon}</p>
+                  <p className="text-xs text-red-700">Expired or expiring items</p>
+                </div>
+                <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Healthy Items</p>
+                  <p className="mt-1 text-2xl font-bold text-emerald-800">{Math.max(0, totalTrackedItems - attentionCount)}</p>
+                  <p className="text-xs text-emerald-700">Items not in alert state</p>
+                </div>
+              </div>
+
+              <div className="mt-4 rounded-lg border bg-muted/30 p-3">
+                <p className="text-sm font-medium mb-2">Priority Actions</p>
+                <div className="space-y-2 text-sm">
+                  {totalLowStock > 0 && (
+                    <div className="flex items-center justify-between rounded-md border bg-white p-2">
+                      <span className="flex items-center gap-2 text-orange-700"><AlertTriangle className="h-4 w-4" /> Restock low-stock items</span>
+                      <Button size="sm" variant="outline" onClick={() => navigate('/admin/purchases')}>Create PO</Button>
+                    </div>
+                  )}
+                  {(expiryStats.expired + expiryStats.expiringSoon) > 0 && (
+                    <div className="flex items-center justify-between rounded-md border bg-white p-2">
+                      <span className="flex items-center gap-2 text-red-700"><ShieldAlert className="h-4 w-4" /> Review expiry items</span>
+                      <Button size="sm" variant="outline" onClick={() => navigate('/admin/finished-goods')}>Open Expiry View</Button>
+                    </div>
+                  )}
+                  {totalLowStock === 0 && (expiryStats.expired + expiryStats.expiringSoon) === 0 && (
+                    <div className="flex items-center gap-2 rounded-md border bg-white p-2 text-emerald-700">
+                      <CheckCircle2 className="h-4 w-4" /> No urgent inventory actions right now.
+                    </div>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle>Stock Health</CardTitle>
+              <CardDescription>Overall status for this store</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div>
+                  <p className="text-sm text-muted-foreground">Health score</p>
+                  <p className="text-3xl font-bold">{inventoryHealthScore}%</p>
+                </div>
+                <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+                  <div className={`h-full ${inventoryHealthScore >= 80 ? 'bg-emerald-500' : inventoryHealthScore >= 60 ? 'bg-amber-500' : 'bg-red-500'}`} style={{ width: `${inventoryHealthScore}%` }} />
+                </div>
+                <div className="text-xs text-muted-foreground space-y-1">
+                  <div>Tracked items: {totalTrackedItems}</div>
+                  <div>Attention needed: {attentionCount}</div>
+                  <div>Expired: {expiryStats.expired}</div>
+                  <div>Expiring soon: {expiryStats.expiringSoon}</div>
+                </div>
+              </div>
             </CardContent>
           </Card>
         </div>

@@ -82,7 +82,7 @@ export async function sendLegacyUserEmail(email: string, name: string): Promise<
             
             <p><strong>No action needed</strong> - your account is already activated!</p>
             
-            <p>Login now: <a href="https://market-flow-7b074.web.app" style="color: #2563eb;">market-flow-7b074.web.app</a></p>
+            <p>Login now: <a href="https://grabio.space" style="color: #2563eb;">grabio.space</a></p>
             
             <p style="margin-top: 30px;">Questions? Reply to this email.</p>
             
@@ -135,7 +135,7 @@ export async function sendTrialActivatedEmail(email: string, tier: string): Prom
               <li>Start selling!</li>
             </ol>
             
-            <p><a href="https://market-flow-7b074.web.app/admin" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Go to Dashboard</a></p>
+            <p><a href="https://grabio.space/admin" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Go to Dashboard</a></p>
             
             <p>After your trial ends, you'll be able to choose a monthly or yearly plan.</p>
             
@@ -197,7 +197,7 @@ export async function sendSubscriptionActivatedEmail(
               </ul>
             `}
             
-            <p><a href="https://market-flow-7b074.web.app/admin" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Go to Dashboard</a></p>
+            <p><a href="https://grabio.space/admin" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Go to Dashboard</a></p>
             
             <p style="margin-top: 30px;">
               Best regards,<br>
@@ -231,7 +231,7 @@ export async function sendPaymentFailedEmail(email: string, type: string): Promi
               <p style="margin: 0;"><strong>Please update your payment method and try again.</strong></p>
             </div>
             
-            <p><a href="https://market-flow-7b074.web.app/subscription" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Update Payment Method</a></p>
+            <p><a href="https://grabio.space/subscription" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Update Payment Method</a></p>
             
             <p>If you need help, please reply to this email.</p>
             
@@ -272,7 +272,7 @@ export async function sendExpiringReminderEmail(
               <p style="margin: 10px 0 0 0;">Renew now to continue using all features.</p>
             </div>
             
-            <p><a href="https://market-flow-7b074.web.app/subscription" style="display: inline-block; background: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Renew Subscription</a></p>
+            <p><a href="https://grabio.space/subscription" style="display: inline-block; background: #f59e0b; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Renew Subscription</a></p>
             
             <p style="margin-top: 30px;">
               Best regards,<br>
@@ -310,7 +310,7 @@ export async function sendGracePeriodEmail(
               <p style="margin: 10px 0 0 0;">Renew now to avoid losing access to your store and data.</p>
             </div>
             
-            <p><a href="https://market-flow-7b074.web.app/subscription" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Renew Now</a></p>
+            <p><a href="https://grabio.space/subscription" style="display: inline-block; background: #dc2626; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0;">Renew Now</a></p>
             
             <p><strong>What happens after the grace period?</strong></p>
             <ul>

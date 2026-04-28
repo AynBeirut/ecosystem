@@ -309,6 +309,7 @@ const AdminTemplates: React.FC = () => {
   const [backgroundImage, setBackgroundImage] = useState('');
   const [carouselImages, setCarouselImages] = useState<string[]>([]);
   const [galleryImages, setGalleryImages] = useState<string[]>([]);
+  const [storeSlug, setStoreSlug] = useState<string>('');
   const [uploadingSection, setUploadingSection] = useState<'background' | 'carousel' | 'gallery' | null>(null);
   const [draggingItem, setDraggingItem] = useState<{ mode: 'carousel' | 'gallery'; index: number } | null>(null);
 
@@ -609,6 +610,7 @@ const AdminTemplates: React.FC = () => {
         setSelectedTemplate(d.template as TemplateId);
         setPreviewTemplate(d.template as TemplateId);
       }
+      setStoreSlug(typeof d.slug === 'string' ? d.slug : '');
       setBackgroundImage(typeof d.storeBackgroundImage === 'string' ? d.storeBackgroundImage : '');
       setCarouselImages(Array.isArray(d.carouselImages) ? d.carouselImages.filter((u: unknown) => typeof u === 'string') : []);
       setGalleryImages(Array.isArray(d.galleryImages) ? d.galleryImages.filter((u: unknown) => typeof u === 'string') : []);
@@ -2531,6 +2533,17 @@ const AdminTemplates: React.FC = () => {
             </div>
           </div>
         )}
+
+        <div className="mt-6 flex justify-end">
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => window.open(`/store/${storeSlug}`, '_blank', 'noopener,noreferrer')}
+            disabled={!storeSlug}
+          >
+            Visit Store Profile
+          </Button>
+        </div>
       </div>
     </div>
   );

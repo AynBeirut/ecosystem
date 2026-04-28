@@ -1,7 +1,7 @@
-# Market Flow - Complete Inventory & Sales Management System
+# Grabio - Complete Inventory & Sales Management System
 
 ## Overview
-Market Flow is a comprehensive cloud-based inventory and sales management solution designed for retail businesses, wholesalers, and distribution companies. Built with modern web technologies and real-time synchronization, it helps businesses streamline operations, track inventory, manage staff, and grow sales efficiently.
+Grabio is a comprehensive cloud-based inventory and sales management solution designed for retail businesses, wholesalers, and distribution companies. Built with modern web technologies and real-time synchronization, it helps businesses streamline operations, track inventory, manage staff, and grow sales efficiently.
 
 ## Key Features
 
@@ -190,6 +190,15 @@ This section is a complete platform capability snapshot, including legacy and cu
 This section reflects all remaining backlog items and marks each pending capability as Coming Soon.
 It is maintained as an end-to-end mirror of the pending feature backlog so no incomplete item is left out.
 
+### Sales Collateral Status (Ready)
+- Ready: Sales Guide (`https://grabio.space/sg.html`)
+- Ready: Sales Deal (`https://grabio.space/sd.html`)
+
+### Visibility Policy
+- Pending backlog upgrades are displayed in-app as `Coming Soon` where feature activation happens.
+- Source of truth for pending/completed status is markdown docs (`UPDATES_BACKLOG.md` and `PRODUCT_DESCRIPTION.md`) plus app runtime gating.
+- Store Owner Guide and sales collateral are presented as full-feature ready for sales/demo flow.
+
 ### Immediate Execution (P0)
 - Coming Soon: Validate production payment callback and order finalization end-to-end.
 - Coming Soon: Final production smoke test for success/failure payment flows.
@@ -284,7 +293,7 @@ It is maintained as an end-to-end mirror of the pending feature backlog so no in
 - 🏢 Small to Medium Enterprises
 
 ## Getting Started
-1. Visit [https://market-flow-7b074.web.app](https://market-flow-7b074.web.app)
+1. Visit [https://grabio.space](https://grabio.space)
 2. Sign up with your business details
 3. Configure your inventory categories and products
 4. Start managing sales and tracking inventory in real-time
@@ -294,4 +303,4 @@ For inquiries, support, or custom implementations, please contact the developmen
 
 ---
 
-**Market Flow** - Streamline Your Business, Maximize Your Growth 🚀
+**Grabio** - Streamline Your Business, Maximize Your Growth 🚀
