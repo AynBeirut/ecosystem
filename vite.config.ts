@@ -67,8 +67,8 @@ export default defineConfig(({ mode }) => ({
       },
       includeAssets: ['icon-192x192.png', 'icon-512x512.png'],
       manifest: {
-        name: 'Market Flow',
-        short_name: 'MarketFlow',
+        name: 'Grabio',
+        short_name: 'Grabio',
         description: 'Modern marketplace platform for stores and products',
         theme_color: '#38B2AC',
         background_color: '#ffffff',
