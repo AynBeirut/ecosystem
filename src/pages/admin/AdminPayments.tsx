@@ -24,7 +24,9 @@ const AdminPayments: React.FC = () => {
   const [credentials, setCredentials] = useState({
     whishChannel: '',
     whishSecret: '',
-    websiteUrl: ''
+    websiteUrl: '',
+    whishSuccessCallbackUrl: '',
+    whishFailureCallbackUrl: '',
   });
   const [isSavingCreds, setIsSavingCreds] = useState(false);
   const [isSavingGateways, setIsSavingGateways] = useState(false);
@@ -45,7 +47,9 @@ const AdminPayments: React.FC = () => {
           setCredentials({
             whishChannel: (data.whishChannel as string) || '',
             whishSecret: (data.whishSecret as string) || '',
-            websiteUrl: (data.websiteUrl as string) || ''
+            websiteUrl: (data.websiteUrl as string) || '',
+            whishSuccessCallbackUrl: (data.whishSuccessCallbackUrl as string) || '',
+            whishFailureCallbackUrl: (data.whishFailureCallbackUrl as string) || '',
           });
         }
       }
@@ -438,6 +442,30 @@ const AdminPayments: React.FC = () => {
                     placeholder="https://grabio.space"
                   />
                   <p className="text-xs text-gray-500 mt-1">Your store's public URL for payment redirects</p>
+                </div>
+                <div>
+                  <Label htmlFor="whishSuccessCallbackUrl">Whish Success Callback URL (optional override)</Label>
+                  <Input
+                    id="whishSuccessCallbackUrl"
+                    name="whishSuccessCallbackUrl"
+                    type="url"
+                    value={credentials.whishSuccessCallbackUrl}
+                    onChange={handleCredsChange}
+                    placeholder="https://api.yourdomain.com/payment/callback"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Leave empty to use the default API callback endpoint.</p>
+                </div>
+                <div>
+                  <Label htmlFor="whishFailureCallbackUrl">Whish Failure Callback URL (optional override)</Label>
+                  <Input
+                    id="whishFailureCallbackUrl"
+                    name="whishFailureCallbackUrl"
+                    type="url"
+                    value={credentials.whishFailureCallbackUrl}
+                    onChange={handleCredsChange}
+                    placeholder="https://api.yourdomain.com/payment/callback?status=failed"
+                  />
+                  <p className="text-xs text-gray-500 mt-1">Leave empty to auto-generate from the default callback endpoint.</p>
                 </div>
                 <Button onClick={handleSaveCreds} className="w-full" disabled={isSavingCreds}>
                   {isSavingCreds ? 'Saving...' : 'Save Payment Credentials'}

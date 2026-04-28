@@ -51,10 +51,105 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 - **Data Isolation**: Store-specific data segregation
 - **Cloud Backup**: Automatic data backup and recovery
 
+## Full Feature Catalog (End-to-End)
+
+This section is a complete platform capability snapshot, including legacy and currently active modules beyond backlog-only items.
+
+### Customer Experience and Storefront
+- Marketplace browsing and store discovery
+- SEO-friendly store and product routes (`/:slug`, category pages, product pages)
+- Custom-domain storefront support
+- Product details, image/gallery presentation, and review display
+- Shopping cart and favorites flows
+- Guest order tracking and authenticated order history
+- Order confirmation page
+- Customer profile area
+- Contact page and store contact forms with multiple styles
+- Cookie consent and marketing-script gating
+- WhatsApp storefront chat widget
+
+### Store Design and Branding System
+- Template system with multiple storefront themes
+- Advanced color palette controls and preset palettes
+- Layout controls (hero, menus, product display, section styles)
+- Section visibility/order management
+- Drag-and-drop for section ordering
+- Drag-and-drop for carousel/gallery media ordering
+- Store media management (background, carousel, gallery)
+- Custom design import/export and white-label support
+
+### Admin Core Operations
+- Admin dashboard and operational summaries
+- Product management
+- Inventory management (raw materials, composed products, finished goods)
+- Recipes and production management
+- Purchases and supplier workflows
+- Sales returns and supplier returns
+- Supplier credits and supplier statements
+- Delivery operations and service renewals
+
+### Orders, Payments, and Billing
+- Full order management lifecycle
+- Partial payments (split payments)
+- Refund workflow with history tracking
+- Payment status tracking and reconciliation views
+- Account statement and cash/bank reconciliation
+- Payment gateway controls in admin
+- Whish checkout and callback pipeline
+- Additional gateway integrations (Square, OMT, BOB)
+
+### Subscription and Access Monetization
+- Subscription plans and subscription page flows
+- Trial activation and enforcement flows
+- Subscription status handling and renewals
+- Service subscription and recurring-service hooks
+- Billing and payment linkage for subscription state changes
+
+### CRM, Reviews, and Communications
+- Customer management (CRM)
+- Product review administration
+- Marketing subscriber and campaign tooling
+- Order notification system and retry handling
+- Admin announcements module
+
+### Analytics, Reporting, and Finance
+- Revenue and analytics dashboards
+- Reports module and export-oriented workflows
+- Finance suite and expense tracking
+- Salary management and payroll-related operations
+- Staff lifecycle and termination-safe payroll behavior
+
+### Team and Permissions
+- Sub-account management
+- Role-specific dashboards (admin and sub-account)
+- Permission-gated route access by capability
+- Sales and delivery sub-role support
+
+### Integrations, SEO, and Growth Tooling
+- Google Analytics and Meta tracking integrations
+- Meta catalog and campaign-related tooling
+- SEO controls (sitemap/robots/structured data support)
+- Custom domain onboarding and status workflows
+- Marketplace sync capabilities
+
+### Security, Audit, and Compliance
+- Authentication and protected route enforcement
+- Admin IP allowlist controls
+- Audit logs module
+- GDPR export/delete support and related controls
+- Privacy-policy support flows
+
+### Platform Infrastructure
+- Firebase hosting/functions/firestore-backed architecture
+- API endpoints for checkout, callbacks, webhooks, subscriptions, marketing, and SEO
+- PWA assets and service-worker support
+- Mobile-responsive UI across admin and storefront surfaces
+
 ## Recent Updates
 
 ### Recently Completed Platform Features (April 2026)
 ✨ **Storefront Templates Enhancements**: Template preview before apply, more custom color controls, and extended banner customization.
+✨ **Custom Design Import Completed**: Stores can import full design configurations (template, colors, layout, and section settings) and run in white-label mode for a fully customized storefront identity.
 ✨ **Invoice UX Improvements**: Multiple invoice designs with custom branding and PDF customization options.
 ✨ **Billing Currency Support**: Multi-currency support currently available for USD and LBP.
 ✨ **Order Operations**: Expanded shipping option matrix for broader delivery setup coverage.
@@ -70,6 +165,7 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **BOB Finance Integration Completed**: BOB transfer checkout initialization, transfer-reference generation, admin receiver controls, and order confirmation workflow hooks.
 ✨ **Whish Production Ops Checklist Completed**: Admin checklist runner now validates cutover readiness, callback references, live credential quality signals, payment success/failure evidence, and order finalization coverage.
 ✨ **Whish Production Cutover Completed**: Functions now default to Whish production API endpoints, sandbox fallback credentials were removed, and Whish credentials are enforced through secure runtime environment variables.
+✨ **Authorized Callback Domain Configuration Completed**: Checkout now resolves and validates live callback/redirect domains from store payment settings, supports secure success/failure callback URL overrides, and removes hardcoded production redirect hosts.
 ✨ **Exchange Rate Automation Completed**: USD→LBP now supports optional auto-refresh mode with persisted provider metadata, one-click refresh, and manual override fallback.
 ✨ **Split Payments Completed**: Admin order billing now supports controlled partial payments with remaining-balance guardrails, payment history tracking, and receipt voucher generation for each payment event.
 ✨ **Refund Management Workflow Completed**: Admin order billing now includes structured refund processing with amount/date/method validation, partial or full refund support, automatic paid-balance recalculation, refunded status visibility, and refund entries in payment history.
@@ -88,36 +184,88 @@ Market Flow is a comprehensive cloud-based inventory and sales management soluti
 ✨ **Mobile Quantity Input**: Improved number input behavior for touch devices
 ✨ **Smart Staff Management**: Automatic cleanup of future salary expenses on termination
 
-## Planned Feature Roadmap (Merged Feature List)
+## Product Roadmap (Coming Soon)
 
-This section merges the future feature list into the product description so there is one main product and features reference.
+This section reflects all remaining backlog items and marks each pending capability as Coming Soon.
+It is maintained as an end-to-end mirror of the pending feature backlog so no incomplete item is left out.
 
-### Commerce and Growth
-- WhatsApp Business API automation (order confirmations, abandoned cart recovery, delivery updates, chatbot flows)
-- Domain and white-label growth (custom domains, SSL provisioning, DNS wizard, domain verification)
+### Immediate Execution (P0)
+- Coming Soon: Replace sandbox credentials with live credentials.
+- Coming Soon: Validate production payment callback and order finalization end-to-end.
+- Coming Soon: Final production smoke test for success/failure payment flows.
 
-### Payments and Subscriptions
-- Additional gateways completed (Square, OMT, BOB Finance)
-- Billing enhancements (live currency rates, split payments, refunds, retry, reminders, receipts)
-- Subscription platform completion (engine completion, customer portal, admin management)
+### Commerce and Growth Upgrades (P2)
+- Coming Soon: Automated order confirmation messages via WhatsApp.
+- Coming Soon: Abandoned cart recovery notifications via WhatsApp.
+- Coming Soon: Delivery status updates via WhatsApp.
+- Coming Soon: Broadcast campaigns to opted-in customers.
+- Coming Soon: WhatsApp product catalog sync.
+- Coming Soon: Chatbot / auto-reply flows.
 
-### Storefront and Operations
-- New storefront themes completed (modern minimalist, classic e-commerce, fashion/boutique, food/restaurant, and tech/electronics)
-- Branding controls expansion (logo positioning, notification email template controls)
-- Customer experience upgrades (related products, recently viewed, back-in-stock, gift cards, marketing integrations)
-- Order operations enhancements (shipping calculation refinements, order notes and internal comments)
+### Payments, Billing, and Subscription Expansion (P2)
+- Coming Soon: Payment retry for failed transactions.
+- Coming Soon: Subscription recurring payments completion.
+- Coming Soon: Payment reminder emails.
+- Coming Soon: Payment receipts (email/SMS).
+- Coming Soon: Subscription engine completion.
+- Coming Soon: Customer subscription portal.
+- Coming Soon: Admin subscription management completion.
 
-### Analytics and Notifications
-- Analytics depth upgrades (behavior, traffic sources, funnels, custom ranges, PDF and Excel export)
-- Notification channels completion (SMS and full WhatsApp Business API workflow)
+### Storefront and Theme Expansion (P3)
+- Coming Soon: Email template controls for notifications.
 
-### Localization and Mobile
-- Language packs and locale behavior (English, Arabic RTL, French, language switcher, locale-based currency and date formatting)
-- Mobile platform apps (iOS, Android, owner dashboard, customer app, offline mode, barcode scanner)
+### Customer and Order Experience (P3)
+- Coming Soon: Related products suggestions.
+- Coming Soon: Recently viewed products.
+- Coming Soon: Back-in-stock notifications.
+- Coming Soon: Gift cards.
+- Coming Soon: Expanded discount codes management.
+- Coming Soon: Abandoned cart recovery (email/web).
+- Coming Soon: Email marketing integrations (Mailchimp, etc.).
+- Coming Soon: Shipping rate calculation enhancements.
+- Coming Soon: Order notes and internal comments.
 
-### Security and Compliance
-- 2FA and admin hardening (MFA, enrollment flow, authenticator QR, optional IP allowlist)
-- GDPR flows (data export, delete workflow, privacy tooling)
+### Analytics and Reporting Expansion (P3)
+- Coming Soon: Customer behavior tracking.
+- Coming Soon: Traffic source analytics.
+- Coming Soon: Conversion funnel visualization.
+- Coming Soon: Custom date-range reports.
+- Coming Soon: Export reports to PDF/Excel completion.
+
+### Notification Infrastructure Expansion (P3)
+- Coming Soon: SMS notification channel.
+- Coming Soon: Full WhatsApp Business API workflow.
+
+### Localization and Mobile Platform (P4)
+- Coming Soon: English localization package completion.
+- Coming Soon: Arabic RTL completion.
+- Coming Soon: French localization package.
+- Coming Soon: Language switcher.
+- Coming Soon: Currency by location.
+- Coming Soon: Date/time formatting by locale.
+- Coming Soon: React Native iOS app.
+- Coming Soon: React Native Android app.
+- Coming Soon: Store owner dashboard app.
+- Coming Soon: Customer shopping app.
+- Coming Soon: Mobile push notifications.
+- Coming Soon: Offline mode.
+- Coming Soon: Barcode scanner for inventory.
+
+### Legacy Pending QA and Triage
+- Coming Soon: Complete Production dialog: open/action/state/error/success behavior checks.
+- Coming Soon: Verify stock movement and status updates for production completion.
+- Coming Soon: Verify Receive Items flow updates raw material stock and PO status.
+- Coming Soon: Fix filtered totals in sales/revenue views.
+- Coming Soon: Fix net amount print calculation issues.
+- Coming Soon: Validate decimal input behavior and validation edge cases.
+- Coming Soon: Review and fix revenue calculation logic for all order statuses.
+- Coming Soon: Add recipe edit impact dialog (new production vs update existing inventory).
+- Coming Soon: Add order search UX (ID/customer/product + clear search).
+- Coming Soon: Add low stock push trigger in `checkExpiringStock`.
+- Coming Soon: Verify mobile upload storage rules.
+- Coming Soon: Verify Firestore `products` write rules for store owner mobile flow.
+- Coming Soon: Approve production-only reconciliation implementation.
+- Coming Soon: Approve no-apply current order-based dry-run result.
 
 ## Technology Stack
 - **Frontend**: React 18 with TypeScript

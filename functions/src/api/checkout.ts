@@ -23,6 +23,78 @@ interface WhishPaymentResponse {
   error?: string;
 }
 
+function toHttpsUrl(input: string): string {
+  const trimmed = String(input || '').trim();
+  if (!trimmed) return '';
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return `https://${trimmed}`;
+}
+
+function isPublicHttps(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    const host = parsed.hostname.toLowerCase();
+    if (parsed.protocol !== 'https:') return false;
+    return host !== 'localhost' && host !== '127.0.0.1';
+  } catch {
+    return false;
+  }
+}
+
+function getApiBaseUrl(req: Request): string {
+  const configured = String(process.env.API_BASE_URL || '').trim();
+  if (configured) {
+    return configured.replace(/\/$/, '');
+  }
+
+  const host = req.get('host') || 'us-central1-market-flow-7b074.cloudfunctions.net';
+  const proto = req.get('x-forwarded-proto') || req.protocol || 'https';
+  return `${proto}://${host}`.replace(/\/$/, '');
+}
+
+function appendRequiredParams(baseUrl: string, externalId: number, orderId: string, failed = false): string {
+  try {
+    const parsed = new URL(baseUrl);
+    parsed.searchParams.set('externalId', String(externalId));
+    parsed.searchParams.set('orderId', orderId);
+    if (failed) parsed.searchParams.set('status', 'failed');
+    return parsed.toString();
+  } catch {
+    return baseUrl;
+  }
+}
+
+function resolveWhishUrls(req: Request, storeData: Record<string, any>, storeSlug: string, externalId: number, orderId: string) {
+  const apiBase = getApiBaseUrl(req);
+  const defaultSuccessCallback = `${apiBase}/payment/callback?externalId=${externalId}&orderId=${orderId}`;
+  const defaultFailureCallback = `${apiBase}/payment/callback?externalId=${externalId}&orderId=${orderId}&status=failed`;
+
+  const configuredSuccess = toHttpsUrl(String(storeData?.whishSuccessCallbackUrl || ''));
+  const configuredFailure = toHttpsUrl(String(storeData?.whishFailureCallbackUrl || ''));
+
+  const successCallbackUrl = isPublicHttps(configuredSuccess)
+    ? appendRequiredParams(configuredSuccess, externalId, orderId, false)
+    : defaultSuccessCallback;
+  const failureCallbackUrl = isPublicHttps(configuredFailure)
+    ? appendRequiredParams(configuredFailure, externalId, orderId, true)
+    : defaultFailureCallback;
+
+  const websiteCandidate = toHttpsUrl(String(storeData?.websiteUrl || ''));
+  const frontendBase = isPublicHttps(websiteCandidate)
+    ? websiteCandidate.replace(/\/$/, '')
+    : 'https://grabio.space';
+
+  const successRedirectUrl = `${frontendBase}/${storeSlug}?order=success&orderId=${orderId}`;
+  const failureRedirectUrl = `${frontendBase}/${storeSlug}?order=failed&orderId=${orderId}`;
+
+  return {
+    successCallbackUrl,
+    failureCallbackUrl,
+    successRedirectUrl,
+    failureRedirectUrl,
+  };
+}
+
 /**
  * Initialize payment using store owner's Whish Money credentials
  */
@@ -215,9 +287,17 @@ export async function processCheckout(req: Request, res: Response) {
       updatedAt: new Date().toISOString()
     });
 
-    // Get store name/slug for redirects
-    const storeName = storeData?.storeName || 'store';
+    // Get store slug for redirects
     const storeSlug = storeData?.slug || storeId;
+    const urls = resolveWhishUrls(req, storeData || {}, String(storeSlug), externalId, String(orderId));
+
+    await orderRef.update({
+      whishSuccessCallbackUrl: urls.successCallbackUrl,
+      whishFailureCallbackUrl: urls.failureCallbackUrl,
+      whishSuccessRedirectUrl: urls.successRedirectUrl,
+      whishFailureRedirectUrl: urls.failureRedirectUrl,
+      whishCallbackConfiguredAt: new Date().toISOString(),
+    });
 
     // Initialize payment with store owner's Whish Money account
     const payment = await initiateStorePayment(
@@ -225,10 +305,10 @@ export async function processCheckout(req: Request, res: Response) {
       amountInCents,
       invoice,
       externalId,
-      `https://us-central1-market-flow-7b074.cloudfunctions.net/api/payment/callback?externalId=${externalId}&orderId=${orderId}`,
-      `https://us-central1-market-flow-7b074.cloudfunctions.net/api/payment/callback?externalId=${externalId}&orderId=${orderId}&status=failed`,
-      `https://grabio.space/${storeSlug}?order=success&orderId=${orderId}`,
-      `https://grabio.space/${storeSlug}?order=failed&orderId=${orderId}`
+      urls.successCallbackUrl,
+      urls.failureCallbackUrl,
+      urls.successRedirectUrl,
+      urls.failureRedirectUrl
     );
 
     if (!payment.status || !payment.data?.collectUrl) {
@@ -290,6 +370,7 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
 
     const storeData = storeSnap.data();
     const storeSlug = storeData?.slug || storeId;
+    const urls = resolveWhishUrls(req, storeData || {}, String(storeSlug), Number(externalId), String(orderId));
     
     const credentials: WhishCredentials = {
       whishChannel: storeData?.whishChannel,
@@ -306,7 +387,7 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
         updatedAt: new Date().toISOString()
       });
       
-      return res.redirect(`https://grabio.space/${storeSlug}?order=failed&orderId=${orderId}`);
+      return res.redirect(urls.failureRedirectUrl);
     }
 
     // Verify payment status with Whish Money
@@ -342,7 +423,7 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
       await activateRecurringServiceSubscriptionsFromOrder(String(orderId));
 
       // Redirect to success page
-      return res.redirect(`https://grabio.space/${storeSlug}?order=success&orderId=${orderId}`);
+      return res.redirect(urls.successRedirectUrl);
     } else if (statusCheck.collectStatus === 'failed') {
       // Payment failed
       await orderRef.update({
@@ -352,7 +433,7 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
         updatedAt: new Date().toISOString()
       });
 
-      return res.redirect(`https://grabio.space/${storeSlug}?order=failed&orderId=${orderId}`);
+      return res.redirect(urls.failureRedirectUrl);
     } else {
       // Payment still pending
       console.log('Payment still pending:', { externalId, orderId });
