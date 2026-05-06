@@ -22,7 +22,7 @@ const PublicFooter: React.FC = () => (
             <li><Link to="/features" className="hover:text-white transition-colors">Features</Link></li>
             <li><Link to="/pricing" className="hover:text-white transition-colors">Pricing</Link></li>
             <li><Link to="/use-cases" className="hover:text-white transition-colors">Use Cases</Link></li>
-            <li><Link to="/marketplace" className="hover:text-white transition-colors">Marketplace</Link></li>
+            <li><Link to="/search" className="hover:text-white transition-colors">Marketplace</Link></li>
           </ul>
         </div>
 
@@ -41,11 +41,11 @@ const PublicFooter: React.FC = () => (
         <div>
           <h3 className="text-white font-semibold text-sm mb-4">Get Started</h3>
           <ul className="space-y-2 text-sm list-none p-0 m-0">
-            <li><Link to="/signup" className="hover:text-white transition-colors">Create Account</Link></li>
+            <li><Link to="/login?tab=signup" className="hover:text-white transition-colors">Create Account</Link></li>
             <li><Link to="/login" className="hover:text-white transition-colors">Sign In</Link></li>
           </ul>
           <Link
-            to="/signup"
+            to="/login?tab=signup"
             className="mt-5 inline-block px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-500 rounded-lg transition-colors"
           >
             Get Started Free →

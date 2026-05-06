@@ -84,8 +84,15 @@ const ContactUs: React.FC = () => {
                     <Phone className="h-5 w-5" />
                   </div>
                   <div>
-                    <p className="font-semibold text-gray-800 text-sm">Phone</p>
-                    <p className="text-sm text-gray-500">+961 XX XXX XXX</p>
+                    <p className="font-semibold text-gray-800 text-sm">Phone &amp; WhatsApp</p>
+                    <a
+                      href="https://wa.me/96171110952"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-sm text-green-600 hover:underline"
+                    >
+                      +961 71 110 952
+                    </a>
                   </div>
                 </div>
 

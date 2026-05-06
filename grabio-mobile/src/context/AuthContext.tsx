@@ -116,7 +116,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         }
       } else {
         setUser(null);
-        setIsGuest(false);
+        // Do NOT reset isGuest here — guest mode is set intentionally by the user
+        // and should only be cleared via exitGuestMode() (e.g. tapping "Sign In" in Profile)
       }
       setLoading(false);
     });

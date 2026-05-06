@@ -801,7 +801,7 @@ const AdminDashboard: React.FC = () => {
             <Link to="/admin/inventory" className="h-full">
               <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-md bg-market-primary text-white flex items-center justify-center">
+                  <div className="h-12 w-12 shrink-0 rounded-md bg-market-primary text-white flex items-center justify-center">
                     <Package className="h-5 w-5" />
                   </div>
                   <div>
@@ -815,7 +815,7 @@ const AdminDashboard: React.FC = () => {
             <Link to="/admin/orders" className="h-full">
               <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-md bg-market-accent text-white flex items-center justify-center">
+                  <div className="h-12 w-12 shrink-0 rounded-md bg-market-accent text-white flex items-center justify-center">
                     <Clock className="h-5 w-5" />
                   </div>
                   <div>
@@ -829,7 +829,7 @@ const AdminDashboard: React.FC = () => {
             <Link to="/admin/revenue" className="h-full">
               <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-md bg-green-500 text-white flex items-center justify-center">
+                  <div className="h-12 w-12 shrink-0 rounded-md bg-green-500 text-white flex items-center justify-center">
                     <CreditCard className="h-5 w-5" />
                   </div>
                   <div>
@@ -856,7 +856,7 @@ const AdminDashboard: React.FC = () => {
             <Link to="/admin/customers" className="h-full">
               <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
                 <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-md bg-indigo-500 text-white flex items-center justify-center">
+                  <div className="h-12 w-12 shrink-0 rounded-md bg-indigo-500 text-white flex items-center justify-center">
                     <User className="h-5 w-5" />
                   </div>
                   <div>
@@ -962,7 +962,7 @@ const AdminDashboard: React.FC = () => {
               <div>
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-lg font-semibold">Recent Activity</h3>
-                  <Link to="/admin/announcements" className="text-sm text-market-primary">View all</Link>
+                  <Link to="/admin/audit-logs" className="text-sm text-market-primary">View all</Link>
                 </div>
                 {recentEvents.length === 0 ? (
                   <div className="text-sm text-gray-500">No recent activity.</div>

@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import AuthCTA from '@/components/public/AuthCTA';
 import { ShoppingBag, Coffee, Truck, Wrench, Factory, Building2, ArrowRight, CheckCircle } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
@@ -242,9 +243,7 @@ const UseCases: React.FC = () => {
               Start free and configure Grabio for how your business actually operates.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/signup" className="px-8 py-4 font-semibold bg-white text-teal-700 rounded-xl hover:bg-teal-50 transition-colors">
-                Get Started Free
-              </Link>
+              <AuthCTA className="px-8 py-4 font-semibold bg-white text-teal-700 rounded-xl hover:bg-teal-50 transition-colors" />
               <Link to="/features" className="px-8 py-4 font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors">
                 Explore Features
               </Link>

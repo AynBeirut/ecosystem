@@ -6,72 +6,120 @@ import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
 import PublicNav from '@/components/public/PublicNav';
 import PublicFooter from '@/components/public/PublicFooter';
 
-type BillingCycle = 'monthly' | 'annual';
-
-interface PlanFeature {
-  label: string;
-  starter: boolean | string;
-  pro: boolean | string;
-  enterprise: boolean | string;
-}
-
-const FEATURES: PlanFeature[] = [
-  { label: 'Online store & marketplace listing', starter: true, pro: true, enterprise: true },
-  { label: 'Products', starter: '50 products', pro: 'Unlimited', enterprise: 'Unlimited' },
-  { label: 'Point of Sale (POS)', starter: true, pro: true, enterprise: true },
-  { label: 'Orders per month', starter: '200', pro: 'Unlimited', enterprise: 'Unlimited' },
-  { label: 'Inventory management', starter: true, pro: true, enterprise: true },
-  { label: 'Invoicing & billing', starter: true, pro: true, enterprise: true },
-  { label: 'Customer management', starter: false, pro: true, enterprise: true },
-  { label: 'Staff sub-accounts', starter: false, pro: '3 staff', enterprise: 'Unlimited' },
-  { label: 'Raw materials & production', starter: false, pro: true, enterprise: true },
-  { label: 'Supplier & purchase orders', starter: false, pro: true, enterprise: true },
-  { label: 'Analytics & reports', starter: 'Basic', pro: 'Advanced', enterprise: 'Full + Custom' },
-  { label: 'Dual currency support', starter: false, pro: true, enterprise: true },
-  { label: 'Custom store domain', starter: false, pro: true, enterprise: true },
-  { label: 'Finance suite (P&L, reconciliation)', starter: false, pro: false, enterprise: true },
-  { label: 'API access', starter: false, pro: false, enterprise: true },
-  { label: 'Priority support', starter: false, pro: false, enterprise: true },
-];
+type BillingCycle = 'monthly' | 'yearly';
 
 const PLANS = [
   {
-    name: 'Starter',
-    key: 'starter' as const,
-    monthly: 0,
-    annual: 0,
-    description: 'For businesses just getting started.',
-    cta: 'Start Free',
-    href: '/signup',
+    name: 'Trial',
+    monthly: null,
+    yearly: null,
+    priceLabel: { monthly: '$0 + 20% of sales', yearly: 'Up to 3 months' },
+    description: 'Pay As You Go — Free to start',
+    badge: 'FREE TO START',
     highlight: false,
+    cta: 'Start Free Trial',
+    features: [
+      'Up to 10 products',
+      'Simple products & services only',
+      '500 MB storage',
+      '30 operations/month',
+      'yourstore.grabio.space subdomain',
+      'OMT & Stripe checkout',
+      'Multi-currency checkout',
+      'Basic inventory & analytics',
+      'Email notifications + 3 basic themes',
+    ],
+    restrictions: [
+      'No custom domain',
+      'No manufacturing features',
+      '20% revenue share',
+      'Powered by Grabio footer shown',
+    ],
+  },
+  {
+    name: 'Starter',
+    monthly: 10,
+    yearly: 100,
+    priceLabel: { monthly: '$10/month', yearly: '$100/year (Save $20)' },
+    description: 'Most chosen for growing stores',
+    badge: 'POPULAR',
+    highlight: true,
+    cta: 'Choose Starter',
+    features: [
+      'Up to 8 products',
+      'All product types',
+      '5 GB storage',
+      'Unlimited operations',
+      '0% revenue share — keep 100%',
+      'Everything in Trial',
+      'Discount codes & basic SEO tools',
+      'Email marketing (200/month)',
+      'Priority email support',
+    ],
+    restrictions: [],
   },
   {
     name: 'Pro',
-    key: 'pro' as const,
-    monthly: 29,
-    annual: 23,
-    description: 'For growing businesses that need the full stack.',
-    cta: 'Start 14-Day Trial',
-    href: '/signup?plan=pro',
-    highlight: true,
+    monthly: 20,
+    yearly: 200,
+    priceLabel: { monthly: '$20/month', yearly: '$200/year (Save $40)' },
+    description: 'For advanced operations',
+    badge: undefined,
+    highlight: false,
+    cta: 'Choose Pro',
+    features: [
+      'Up to 20 products',
+      'All types + Manufacturing',
+      '10 GB storage',
+      'Unlimited operations',
+      '0% revenue share',
+      'Everything in Starter',
+      'Composed products & services',
+      'Advanced analytics & reports',
+      'Email marketing (1,000/month)',
+      'Multi-location inventory + API access',
+    ],
+    restrictions: [],
   },
   {
-    name: 'Enterprise',
-    key: 'enterprise' as const,
-    monthly: null,
-    annual: null,
-    description: 'For multi-branch operations with custom requirements.',
-    cta: 'Contact Us',
-    href: '/contact',
+    name: 'Business',
+    monthly: 30,
+    yearly: 300,
+    priceLabel: { monthly: '$30/month', yearly: '$300/year (Save $60)' },
+    description: 'Best value for scaling brands',
+    badge: 'BEST VALUE',
     highlight: false,
+    cta: 'Choose Business',
+    features: [
+      'Up to 50 products',
+      'All types + Manufacturing',
+      '20 GB storage',
+      'Unlimited operations',
+      '0% revenue share',
+      'Everything in Pro',
+      'Email marketing (5,000/month)',
+      'Multi-user access (up to 10)',
+      'Meta shop integration + advanced SEO',
+      'Dedicated account manager',
+    ],
+    restrictions: [],
   },
 ];
 
-const FeatureCell: React.FC<{ value: boolean | string }> = ({ value }) => {
-  if (value === true) return <CheckCircle className="h-5 w-5 text-teal-500 mx-auto" />;
-  if (value === false) return <X className="h-4 w-4 text-gray-300 mx-auto" />;
-  return <span className="text-sm text-gray-700 font-medium">{value}</span>;
-};
+const COMPARISON_ROWS = [
+  { feature: 'Monthly Cost',      trial: '$0 + 20%', starter: '$10',    pro: '$20',    business: '$30' },
+  { feature: 'Yearly Cost',       trial: 'N/A',      starter: '$100',   pro: '$200',   business: '$300' },
+  { feature: 'Products',          trial: '10',       starter: '8',      pro: '20',     business: '50' },
+  { feature: 'Product Types',     trial: 'Simple',   starter: 'All',    pro: 'All',    business: 'All' },
+  { feature: 'Storage',           trial: '500 MB',   starter: '5 GB',   pro: '10 GB',  business: '20 GB' },
+  { feature: 'Operations/month',  trial: '30',       starter: '∞',      pro: '∞',      business: '∞' },
+  { feature: 'Revenue Share',     trial: '20%',      starter: '0%',     pro: '0%',     business: '0%' },
+  { feature: 'Custom Domain',     trial: 'No',       starter: '+$15',   pro: '+$15',   business: '+$15' },
+  { feature: 'Manufacturing',     trial: 'No',       starter: 'No',     pro: 'Yes',    business: 'Yes' },
+  { feature: 'Email Marketing',   trial: 'No',       starter: '200/mo', pro: '1K/mo',  business: '5K/mo' },
+  { feature: 'Multi-user',        trial: 'No',       starter: 'No',     pro: 'No',     business: '10 users' },
+  { feature: 'Support',           trial: 'Email',    starter: 'Priority', pro: 'Phone', business: 'Dedicated' },
+];
 
 const Pricing: React.FC = () => {
   const [billing, setBilling] = useState<BillingCycle>('monthly');
@@ -84,13 +132,13 @@ const Pricing: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Grabio Pricing — Free, Pro, and Enterprise Plans"
-        description="Grabio offers a free plan for businesses getting started, a Pro plan for full-featured operations, and Enterprise for multi-branch businesses. No hidden fees."
+        title="Grabio Pricing — Trial, Starter, Pro, Business Plans"
+        description="Start free with Grabio's Trial plan (pay 20% of sales only), then upgrade to Starter ($10/mo), Pro ($20/mo), or Business ($30/mo). No hidden fees."
         url="/pricing"
         keywords={[
+          'Grabio pricing',
           'business management software pricing',
-          'POS system pricing',
-          'invoicing software pricing',
+          'POS system pricing Lebanon',
           'small business platform cost',
         ]}
       />
@@ -106,32 +154,26 @@ const Pricing: React.FC = () => {
                 Simple, Transparent Pricing
               </h1>
               <p className="text-lg text-gray-500 mb-8">
-                Start free. Upgrade when you are ready. No contracts. No hidden fees.
+                Start free — no credit card required. Upgrade when you're ready.
               </p>
-
-              {/* Billing toggle */}
               <div className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5">
                 <button
                   onClick={() => setBilling('monthly')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    billing === 'monthly'
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'text-gray-500 hover:text-gray-900'
+                    billing === 'monthly' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
                   }`}
                 >
                   Monthly
                 </button>
                 <button
-                  onClick={() => setBilling('annual')}
+                  onClick={() => setBilling('yearly')}
                   className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                    billing === 'annual'
-                      ? 'bg-teal-600 text-white shadow-sm'
-                      : 'text-gray-500 hover:text-gray-900'
+                    billing === 'yearly' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
                   }`}
                 >
-                  Annual
-                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${billing === 'annual' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-700'}`}>
-                    Save 20%
+                  Yearly
+                  <span className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${billing === 'yearly' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-700'}`}>
+                    Save ~$20–60
                   </span>
                 </button>
               </div>
@@ -139,48 +181,51 @@ const Pricing: React.FC = () => {
           </section>
 
           {/* ── Plan cards ── */}
-          <section className="max-w-6xl mx-auto px-4 sm:px-6 py-12">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <section className="max-w-7xl mx-auto px-4 sm:px-6 py-12">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
               {PLANS.map((plan) => (
                 <div
                   key={plan.name}
-                  className={`rounded-2xl border p-8 flex flex-col ${
+                  className={`rounded-2xl border p-6 flex flex-col relative ${
                     plan.highlight
-                      ? 'border-teal-500 ring-2 ring-teal-500/20 bg-gradient-to-b from-teal-50/50 to-white relative'
+                      ? 'border-teal-500 ring-2 ring-teal-500/20 bg-gradient-to-b from-teal-50/50 to-white'
                       : 'border-gray-200 bg-white'
                   }`}
                 >
-                  {plan.highlight && (
+                  {plan.badge && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                      <span className="bg-teal-600 text-white text-xs font-bold px-3 py-1 rounded-full">
-                        Most Popular
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full ${plan.highlight ? 'bg-teal-600 text-white' : 'bg-gray-800 text-white'}`}>
+                        {plan.badge}
                       </span>
                     </div>
                   )}
 
-                  <div className="mb-6">
-                    <h2 className="text-xl font-bold text-gray-900">{plan.name}</h2>
-                    <p className="text-sm text-gray-500 mt-1">{plan.description}</p>
+                  <div className="mb-4">
+                    <h2 className="text-lg font-bold text-gray-900">{plan.name}</h2>
+                    <p className="text-xs text-gray-500 mt-1">{plan.description}</p>
                   </div>
 
-                  <div className="mb-8">
+                  <div className="mb-6">
                     {plan.monthly === null ? (
-                      <p className="text-4xl font-extrabold text-gray-900">Custom</p>
-                    ) : plan.monthly === 0 ? (
-                      <p className="text-4xl font-extrabold text-gray-900">Free</p>
+                      <p className="text-2xl font-extrabold text-gray-900">Free to start</p>
                     ) : (
-                      <div className="flex items-end gap-2">
-                        <p className="text-4xl font-extrabold text-gray-900">
-                          ${billing === 'annual' ? plan.annual : plan.monthly}
+                      <div>
+                        <p className="text-3xl font-extrabold text-gray-900">
+                          ${billing === 'yearly' ? plan.yearly : plan.monthly}
+                          <span className="text-sm font-normal text-gray-500">/{billing === 'yearly' ? 'yr' : 'mo'}</span>
                         </p>
-                        <p className="text-gray-500 text-sm mb-1.5">/mo{billing === 'annual' ? ', billed annually' : ''}</p>
+                        {billing === 'yearly' && (
+                          <p className="text-xs text-teal-600 mt-0.5">
+                            Save ${(plan.monthly! * 12) - plan.yearly!} vs monthly
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>
 
                   <Link
-                    to={plan.href}
-                    className={`w-full text-center py-3 rounded-xl font-semibold text-sm transition-colors mb-6 ${
+                    to="/login?tab=signup"
+                    className={`w-full text-center py-2.5 rounded-xl font-semibold text-sm transition-colors mb-5 ${
                       plan.highlight
                         ? 'bg-teal-600 text-white hover:bg-teal-700'
                         : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
@@ -189,16 +234,17 @@ const Pricing: React.FC = () => {
                     {plan.cta} <ArrowRight className="inline ml-1 h-3.5 w-3.5" />
                   </Link>
 
-                  <ul className="space-y-3 mt-auto">
-                    {FEATURES.filter((f) => f[plan.key] !== false).slice(0, 8).map((f) => (
-                      <li key={f.label} className="flex items-start gap-2.5 text-sm text-gray-600">
+                  <ul className="space-y-2 text-sm text-gray-600">
+                    {plan.features.map((f) => (
+                      <li key={f} className="flex items-start gap-2">
                         <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
-                        <span>
-                          {f.label}
-                          {typeof f[plan.key] === 'string' && f[plan.key] !== 'true' && (
-                            <span className="text-gray-400 ml-1">({f[plan.key]})</span>
-                          )}
-                        </span>
+                        {f}
+                      </li>
+                    ))}
+                    {plan.restrictions.map((r) => (
+                      <li key={r} className="flex items-start gap-2 text-gray-400">
+                        <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                        {r}
                       </li>
                     ))}
                   </ul>
@@ -207,30 +253,46 @@ const Pricing: React.FC = () => {
             </div>
           </section>
 
-          {/* ── Full comparison table ── */}
+          {/* ── Add-ons ── */}
+          <section className="max-w-4xl mx-auto px-4 sm:px-6 pb-12">
+            <h2 className="text-xl font-bold text-gray-900 mb-4 text-center">Optional Add-ons</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+              {[
+                { name: 'Custom Domain Package', monthly: '$15/mo', yearly: '$150/yr', note: 'Available on Starter and above' },
+                { name: 'WhatsApp Business', monthly: '$10/mo', yearly: '$100/yr', note: 'Available on all plans' },
+                { name: 'Extra Storage (per 5 GB)', monthly: '$2/mo', yearly: '$24/yr', note: 'Available on Starter and above' },
+              ].map((addon) => (
+                <div key={addon.name} className="border border-gray-200 rounded-xl p-4">
+                  <p className="font-semibold text-gray-900 text-sm mb-1">{addon.name}</p>
+                  <p className="text-teal-600 font-bold">{billing === 'yearly' ? addon.yearly : addon.monthly}</p>
+                  <p className="text-xs text-gray-400 mt-1">{addon.note}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {/* ── Comparison table ── */}
           <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-16">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Full Feature Comparison</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Full Plan Comparison</h2>
             <div className="overflow-x-auto rounded-2xl border border-gray-200">
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-6 py-4 font-semibold text-gray-700 w-1/2">Feature</th>
-                    {PLANS.map((p) => (
-                      <th key={p.name} className={`px-4 py-4 text-center font-semibold ${p.highlight ? 'text-teal-600' : 'text-gray-700'}`}>
-                        {p.name}
-                      </th>
-                    ))}
+                    <th className="text-left px-6 py-4 font-semibold text-gray-700 w-2/5">Feature</th>
+                    <th className="px-4 py-4 text-center font-semibold text-gray-700">Trial</th>
+                    <th className="px-4 py-4 text-center font-semibold text-teal-600">Starter</th>
+                    <th className="px-4 py-4 text-center font-semibold text-gray-700">Pro</th>
+                    <th className="px-4 py-4 text-center font-semibold text-gray-700">Business</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {FEATURES.map((feature, i) => (
-                    <tr key={feature.label} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                      <td className="px-6 py-3 text-gray-700">{feature.label}</td>
-                      {PLANS.map((p) => (
-                        <td key={p.name} className="px-4 py-3 text-center">
-                          <FeatureCell value={feature[p.key]} />
-                        </td>
-                      ))}
+                  {COMPARISON_ROWS.map((row, i) => (
+                    <tr key={row.feature} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
+                      <td className="px-6 py-3 text-gray-700">{row.feature}</td>
+                      <td className="px-4 py-3 text-center text-gray-600">{row.trial}</td>
+                      <td className="px-4 py-3 text-center font-medium text-teal-700">{row.starter}</td>
+                      <td className="px-4 py-3 text-center text-gray-600">{row.pro}</td>
+                      <td className="px-4 py-3 text-center text-gray-600">{row.business}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -244,11 +306,11 @@ const Pricing: React.FC = () => {
               <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">Frequently Asked Questions</h2>
               <dl className="space-y-6">
                 {[
-                  { q: 'Is there a free trial for the Pro plan?', a: 'Yes. All Pro plan features are available free for 14 days. No credit card required to start.' },
-                  { q: 'Can I switch plans at any time?', a: 'Yes. You can upgrade or downgrade at any point. Upgrades take effect immediately; downgrades apply at the next billing cycle.' },
-                  { q: 'Is my data safe if I cancel?', a: 'Your data remains accessible for 60 days after cancellation. You can export it at any time.' },
-                  { q: 'Does the Starter plan have any time limits?', a: 'No. The Starter plan is free indefinitely, with the feature limits noted above.' },
-                  { q: 'What payment methods do you accept?', a: 'We accept all major credit cards. Enterprise customers can arrange invoice-based billing.' },
+                  { q: 'What is the Trial plan?', a: 'The Trial plan is free to start — you pay nothing upfront. Instead, Grabio takes 20% of your sales revenue. It\'s a pay-as-you-go model for up to 3 months, after which you choose a paid plan.' },
+                  { q: 'Can I switch plans at any time?', a: 'Yes. You can upgrade at any point from your store\'s subscription settings. Upgrades take effect immediately.' },
+                  { q: 'What is the Custom Domain add-on?', a: 'The Domain Package ($15/mo) lets you connect your own domain (e.g. mystore.com) instead of using yourstore.grabio.space. Available on Starter and above.' },
+                  { q: 'Is the yearly billing a one-time payment?', a: 'Yes. Yearly billing is charged once a year at the discounted rate shown. Starter saves $20, Pro saves $40, Business saves $60 vs monthly.' },
+                  { q: 'What payment methods are accepted?', a: 'We accept OMT (local Lebanese transfer) and Stripe (international cards). Both are available from day one on all plans.' },
                 ].map(({ q, a }) => (
                   <div key={q}>
                     <dt className="font-semibold text-gray-900 mb-2">{q}</dt>
