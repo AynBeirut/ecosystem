@@ -29,7 +29,7 @@ import {
   Settings2,
   Layers
 } from 'lucide-react';
-import { getFirestore, doc, getDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { fetchUsdToLbpRateFresh, getUsdToLbpRate, formatLbp } from '@/lib/currency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -56,6 +56,22 @@ type QuickActionStoragePayload = {
   selectedQuickActionIds: string[];
   customQuickActions: QuickActionItem[];
 };
+
+const MAX_QUICK_ACTIONS = 12;
+const DEFAULT_QUICK_ACTION_IDS = [
+  'inventory',
+  'orders',
+  'account-statement',
+  'cash-collection',
+  'service-renewals',
+  'marketplace-sync',
+  'product-reviews',
+  'notification-logs',
+  'store-logs',
+  'delivery',
+  'announcements',
+  'analytics',
+];
 
 const QUICK_ACTION_COLORS: Record<string, { border: string; iconBg: string; iconText: string }> = {
   inventory: { border: 'border-purple-600/20', iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
@@ -176,6 +192,12 @@ const AdminDashboard: React.FC = () => {
     return `dashboardQuickActions:${ownerKey}`;
   }, [user]);
 
+  const quickActionPreferenceRef = useMemo(() => {
+    if (!user?.id) return null;
+    const db = getFirestore();
+    return doc(db, 'users', user.id);
+  }, [user?.id]);
+
   const quickActionItems = useMemo<QuickActionItem[]>(() => [
     {
       id: 'inventory',
@@ -219,58 +241,106 @@ const AdminDashboard: React.FC = () => {
     [customQuickActions, visibleQuickActionItems],
   );
 
-  useEffect(() => {
+  const defaultQuickActionIds = useMemo(() => {
     const visibleIds = visibleQuickActionItems.map((item) => item.id);
-    if (visibleIds.length === 0) {
-      setSelectedQuickActionIds([]);
-      setQuickActionsLoaded(true);
-      return;
-    }
+    const preferred = DEFAULT_QUICK_ACTION_IDS.filter((id) => visibleIds.includes(id));
+    const fallback = visibleIds.filter((id) => !preferred.includes(id));
+    return [...preferred, ...fallback].slice(0, MAX_QUICK_ACTIONS);
+  }, [visibleQuickActionItems]);
 
-    try {
-      const raw = localStorage.getItem(quickActionStorageKey);
-      const parsed = raw ? JSON.parse(raw) : null;
+  useEffect(() => {
+    const sanitizeCustomActions = (items: unknown): QuickActionItem[] => {
+      if (!Array.isArray(items)) return [];
+      return items.filter((item): item is QuickActionItem => {
+        if (!item || typeof item !== 'object') return false;
+        const candidate = item as Partial<QuickActionItem>;
+        return typeof candidate.id === 'string' && typeof candidate.to === 'string' && typeof candidate.label === 'string';
+      }).map((item) => ({
+        ...item,
+        visible: true,
+        icon: Layers,
+      }));
+    };
 
-      let storedIds: string[] = [];
-      let storedCustomActions: QuickActionItem[] = [];
+    const loadQuickActionPreferences = async () => {
+      const visibleIds = visibleQuickActionItems.map((item) => item.id);
+      if (visibleIds.length === 0) {
+        setSelectedQuickActionIds([]);
+        setQuickActionsLoaded(true);
+        return;
+      }
 
-      if (Array.isArray(parsed)) {
-        storedIds = parsed;
-      } else if (parsed && typeof parsed === 'object') {
-        const payload = parsed as Partial<QuickActionStoragePayload>;
-        if (Array.isArray(payload.selectedQuickActionIds)) {
-          storedIds = payload.selectedQuickActionIds;
-        }
-        if (Array.isArray(payload.customQuickActions)) {
-          storedCustomActions = payload.customQuickActions.filter((item): item is QuickActionItem => {
-            return !!item && typeof item.id === 'string' && typeof item.to === 'string' && typeof item.label === 'string';
-          }).map((item) => ({
-            ...item,
-            visible: true,
-            icon: Layers,
-          }));
+      let serverIds: string[] = [];
+      let serverCustomActions: QuickActionItem[] = [];
+
+      if (quickActionPreferenceRef) {
+        try {
+          const prefSnap = await getDoc(quickActionPreferenceRef);
+          if (prefSnap.exists()) {
+            const data = prefSnap.data() as { dashboardQuickActions?: Partial<QuickActionStoragePayload> };
+            const dashboardPrefs = data.dashboardQuickActions;
+            if (dashboardPrefs && Array.isArray(dashboardPrefs.selectedQuickActionIds)) {
+              serverIds = dashboardPrefs.selectedQuickActionIds;
+            }
+            serverCustomActions = sanitizeCustomActions(dashboardPrefs?.customQuickActions);
+          }
+        } catch (error) {
+          console.warn('Failed to load quick action preferences from Firestore', error);
         }
       }
 
-      setCustomQuickActions(storedCustomActions);
-      const storedCustomIds = storedCustomActions.map((item) => item.id);
-      const sanitized = storedIds.filter((id) => visibleIds.includes(id) || storedCustomIds.includes(id));
-      setSelectedQuickActionIds(sanitized.length > 0 ? sanitized : visibleIds);
-    } catch {
-      setCustomQuickActions([]);
-      setSelectedQuickActionIds(visibleIds);
-    }
-    setQuickActionsLoaded(true);
-  }, [quickActionStorageKey, visibleQuickActionItems]);
+      let localIds: string[] = [];
+      let localCustomActions: QuickActionItem[] = [];
+
+      try {
+        const raw = localStorage.getItem(quickActionStorageKey);
+        const parsed = raw ? JSON.parse(raw) : null;
+
+        if (Array.isArray(parsed)) {
+          localIds = parsed;
+        } else if (parsed && typeof parsed === 'object') {
+          const payload = parsed as Partial<QuickActionStoragePayload>;
+          if (Array.isArray(payload.selectedQuickActionIds)) {
+            localIds = payload.selectedQuickActionIds;
+          }
+          localCustomActions = sanitizeCustomActions(payload.customQuickActions);
+        }
+      } catch {
+        localIds = [];
+        localCustomActions = [];
+      }
+
+      const mergedCustomActions = serverCustomActions.length > 0 ? serverCustomActions : localCustomActions;
+      const customIds = mergedCustomActions.map((item) => item.id);
+      const preferredIds = serverIds.length > 0 ? serverIds : localIds;
+      const sanitizedIds = preferredIds
+        .filter((id) => visibleIds.includes(id) || customIds.includes(id))
+        .slice(0, MAX_QUICK_ACTIONS);
+
+      setCustomQuickActions(mergedCustomActions);
+      setSelectedQuickActionIds(sanitizedIds.length > 0 ? sanitizedIds : defaultQuickActionIds);
+      setQuickActionsLoaded(true);
+    };
+
+    void loadQuickActionPreferences();
+  }, [defaultQuickActionIds, quickActionPreferenceRef, quickActionStorageKey, visibleQuickActionItems]);
 
   useEffect(() => {
     if (!quickActionsLoaded) return;
     const payload: QuickActionStoragePayload = {
-      selectedQuickActionIds,
+      selectedQuickActionIds: selectedQuickActionIds.slice(0, MAX_QUICK_ACTIONS),
       customQuickActions: customQuickActions.map((item) => ({ ...item, icon: Layers, visible: true })),
     };
     localStorage.setItem(quickActionStorageKey, JSON.stringify(payload));
-  }, [customQuickActions, quickActionStorageKey, quickActionsLoaded, selectedQuickActionIds]);
+
+    if (!quickActionPreferenceRef) return;
+    void setDoc(quickActionPreferenceRef, {
+      dashboardQuickActions: payload,
+      dashboardQuickActionsUpdatedAt: new Date().toISOString(),
+    }, { merge: true }).catch((error) => {
+      console.warn('Failed to save quick action preferences to Firestore', error);
+    });
+  }, [customQuickActions, quickActionPreferenceRef, quickActionStorageKey, quickActionsLoaded, selectedQuickActionIds]);
 
   const selectedQuickActions = useMemo(
     () => allQuickActionItems.filter((item) => selectedQuickActionIds.includes(item.id)),
@@ -278,12 +348,19 @@ const AdminDashboard: React.FC = () => {
   );
 
   const addableQuickActions = useMemo(
-    () => visibleQuickActionItems.filter((item) => !selectedQuickActionIds.includes(item.id)),
+    () => {
+      if (selectedQuickActionIds.length >= MAX_QUICK_ACTIONS) return [];
+      return visibleQuickActionItems.filter((item) => !selectedQuickActionIds.includes(item.id));
+    },
     [selectedQuickActionIds, visibleQuickActionItems],
   );
 
   const handleAddQuickAction = (actionId: string) => {
-    setSelectedQuickActionIds((prev) => (prev.includes(actionId) ? prev : [...prev, actionId]));
+    setSelectedQuickActionIds((prev) => {
+      if (prev.includes(actionId)) return prev;
+      if (prev.length >= MAX_QUICK_ACTIONS) return prev;
+      return [...prev, actionId];
+    });
     setQuickActionToAdd('');
   };
 
@@ -607,7 +684,7 @@ const AdminDashboard: React.FC = () => {
           <Link to="/" className="text-2xl font-bold text-market-primary">Grabio</Link>
           <p className="text-gray-500 text-sm mt-1">{user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}</p>
         </div>
-        <nav className="mt-6 flex-1 overflow-y-auto pb-24">
+        <nav className="mt-1.5 flex-1 overflow-y-auto pb-24">
           <div className="px-4 space-y-4">
             <Link to="/admin/dashboard" className={`flex items-center px-3 py-2 rounded-lg border transition ${isRouteActive('/admin/dashboard') ? 'bg-market-primary/10 text-market-primary border-market-primary/20' : 'bg-white text-gray-700 border-gray-100 hover:shadow-sm'}`}>
               <StoreIcon className="h-5 w-5 mr-3" />
@@ -693,7 +770,7 @@ const AdminDashboard: React.FC = () => {
             </a>
           </div>
         </nav>
-          <div className="absolute inset-x-0 -bottom-3 border-t bg-white px-6 pt-3 pb-3">
+          <div className="absolute inset-x-0 -bottom-5 border-t bg-white px-6 pt-3 pb-3">
           <div className="flex items-center">
             <div className="h-10 w-10 rounded-full bg-market-primary flex items-center justify-center text-white">
               {user?.name ? String(user.name).charAt(0) : 'G'}
@@ -836,7 +913,11 @@ const AdminDashboard: React.FC = () => {
                     </div>
 
                     {addableQuickActions.length === 0 ? (
-                      <div className="text-sm text-gray-500">All quick actions are already added.</div>
+                      <div className="text-sm text-gray-500">
+                        {selectedQuickActionIds.length >= MAX_QUICK_ACTIONS
+                          ? `Maximum ${MAX_QUICK_ACTIONS} quick actions selected. Remove one to add another.`
+                          : 'All quick actions are already added.'}
+                      </div>
                     ) : null}
                   </div>
                 )}
