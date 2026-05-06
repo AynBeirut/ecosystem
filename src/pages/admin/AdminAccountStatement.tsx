@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
-import { FileDown, Download, ArrowLeft } from 'lucide-react';
+import { FileDown, Download, ArrowLeft, PlusCircle } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { exportToCSV } from '@/lib/exportUtils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -149,7 +150,7 @@ const AdminAccountStatement: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
-  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales' | 'cashCollections'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales' | 'cashCollections' | 'payments'>('customers');
   const [loading, setLoading] = useState(true);
   
   const [customers, setCustomers] = useState<CustomerBalance[]>([]);
@@ -180,6 +181,39 @@ const AdminAccountStatement: React.FC = () => {
   // Separate date filters for cash collections tab
   const [cashFilterStart, setCashFilterStart] = useState('');
   const [cashFilterEnd, setCashFilterEnd] = useState('');
+
+  // Customer list filters
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [customerBalanceFilter, setCustomerBalanceFilter] = useState<'all' | 'active' | 'zero'>('all');
+  const [expandedCustomerLedger, setExpandedCustomerLedger] = useState<string | null>(null);
+
+  // Account-level payments (debit/credit system)
+  const [accountPayments, setAccountPayments] = useState<Array<{
+    id: string;
+    accountId: string;
+    accountName: string;
+    accountType: 'customer' | 'supplier';
+    direction: 'in' | 'out';
+    amount: number;
+    date: string;
+    method: string;
+    notes: string;
+    createdAt: string;
+  }>>([]);
+  const [paymentModal, setPaymentModal] = useState<{
+    open: boolean;
+    accountId: string;
+    accountName: string;
+    accountType: 'customer' | 'supplier';
+    direction: 'in' | 'out';
+  } | null>(null);
+  const [newPayment, setNewPayment] = useState({
+    amount: '',
+    date: new Date().toISOString().slice(0, 10),
+    method: 'cash',
+    notes: '',
+  });
+  const [savingPayment, setSavingPayment] = useState(false);
 
   // Expanded ledger rows for sales / purchases
   const [expandedSalesCustomer, setExpandedSalesCustomer] = useState<string | null>(null);
@@ -263,7 +297,8 @@ const AdminAccountStatement: React.FC = () => {
         fetchPurchases(),
         fetchExpenses(),
         fetchSales(),
-        fetchCashCollections()
+        fetchCashCollections(),
+        fetchAccountPaymentsData(),
       ]);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -381,38 +416,21 @@ const AdminAccountStatement: React.FC = () => {
       });
       
       // Add credited returns to supplier payments (only for returns linked to existing purchases)
-      console.log('Processing supplier returns, count:', returnsSnapshot.size);
       returnsSnapshot.forEach(doc => {
         const returnDoc = doc.data();
         const purchaseId = returnDoc.purchaseId || returnDoc.originalPurchaseId;
         
         // Only count returns that reference valid purchases
-        if (!purchaseId || !validPurchaseIds.has(purchaseId)) {
-          console.log('Skipping orphaned return:', doc.id, 'purchaseId:', purchaseId);
-          return;
-        }
+        if (!purchaseId || !validPurchaseIds.has(purchaseId)) return;
         
         const supplierId = returnDoc.supplierId || 'unknown';
         const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
         
-        console.log('Return doc:', {
-          id: doc.id,
-          supplierId,
-          creditAmount,
-          purchaseId,
-          status: returnDoc.status,
-          hasSupplier: supplierMap.has(supplierId)
-        });
-        
         if (supplierMap.has(supplierId)) {
           const supplier = supplierMap.get(supplierId)!;
-          console.log('Before credit:', supplier.name, 'totalPayments:', supplier.totalPayments);
           // Add credit to payments (returns reduce what we owe, like making a payment)
           supplier.totalPayments += creditAmount;
           supplier.balance = supplier.totalPurchases - supplier.totalPayments;
-          console.log('After credit:', supplier.name, 'totalPayments:', supplier.totalPayments);
-        } else {
-          console.warn('Supplier not found in map:', supplierId);
         }
       });
       
@@ -812,6 +830,65 @@ const AdminAccountStatement: React.FC = () => {
     setNetBalance(net);
   }, [customerBalances, suppliers, totalExpenses]);
 
+  const fetchAccountPaymentsData = async () => {
+    if (!user?.storeId) return;
+    try {
+      const db = getFirestore();
+      const q = query(collection(db, 'accountPayments'), where('storeId', '==', user.storeId));
+      const snap = await getDocs(q);
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
+      list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      setAccountPayments(list);
+    } catch (err) {
+      console.error('Error fetching account payments:', err);
+    }
+  };
+
+  const handleSaveAccountPayment = async () => {
+    if (!paymentModal || !user?.storeId) return;
+    const amount = parseFloat(newPayment.amount);
+    if (!amount || amount <= 0) { alert('Enter a valid amount'); return; }
+    if (!newPayment.date) { alert('Select a date'); return; }
+    setSavingPayment(true);
+    try {
+      const db = getFirestore();
+      const paymentDoc = {
+        storeId: user.storeId,
+        accountId: paymentModal.accountId,
+        accountName: paymentModal.accountName,
+        accountType: paymentModal.accountType,
+        direction: paymentModal.direction,
+        amount,
+        date: newPayment.date,
+        method: newPayment.method,
+        notes: newPayment.notes,
+        createdAt: new Date().toISOString(),
+        createdBy: user.id,
+        createdByName: user.name || '',
+      };
+      const ref = await addDoc(collection(db, 'accountPayments'), paymentDoc);
+      setAccountPayments(prev => [{ id: ref.id, ...paymentDoc }, ...prev]);
+      setPaymentModal(null);
+      setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
+    } catch (err) {
+      console.error('Error saving payment:', err);
+      alert('Failed to save payment. Please try again.');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
+  const openPaymentModal = (accountId: string, accountName: string, accountType: 'customer' | 'supplier') => {
+    setPaymentModal({
+      open: true,
+      accountId,
+      accountName,
+      accountType,
+      direction: accountType === 'customer' ? 'in' : 'out',
+    });
+    setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
+  };
+
   const generateDetailedStatement = async (type: 'supplier' | 'customer', id: string, name: string) => {
     if (!user?.storeId) return;
     
@@ -871,10 +948,7 @@ const AdminAccountStatement: React.FC = () => {
           const purchaseId = returnDoc.purchaseId || returnDoc.originalPurchaseId;
           
           // Skip orphaned returns (returns without valid purchase references)
-          if (!purchaseId || !validPurchaseIds.has(purchaseId)) {
-            console.log('Skipping orphaned return in detailed statement:', doc.id, 'purchaseId:', purchaseId);
-            return;
-          }
+          if (!purchaseId || !validPurchaseIds.has(purchaseId)) return;
           
           const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
           
@@ -2729,6 +2803,16 @@ const AdminAccountStatement: React.FC = () => {
             >
               Cash Collections ({cashCollections.length})
             </button>
+            <button
+              onClick={() => setActiveTab('payments')}
+              className={`px-6 py-3 font-medium whitespace-nowrap ${
+                activeTab === 'payments'
+                  ? 'border-b-2 border-green-600 text-green-600'
+                  : 'text-gray-600 hover:text-gray-800'
+              }`}
+            >
+              Payments ({accountPayments.length})
+            </button>
           </div>
         </div>
 
@@ -2780,54 +2864,190 @@ const AdminAccountStatement: React.FC = () => {
                   </button>
                 </div>
               </div>
+              {/* Search and balance filter */}
+              <div className="flex gap-2 flex-wrap items-center mb-3">
+                <input
+                  type="text"
+                  placeholder="Search by name..."
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  className="border rounded px-3 py-1.5 text-sm w-48"
+                />
+                <div className="flex gap-1">
+                  {(['all', 'active', 'zero'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setCustomerBalanceFilter(f)}
+                      className={`px-3 py-1 text-sm rounded border ${
+                        customerBalanceFilter === f
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {f === 'all' ? 'All' : f === 'active' ? 'Active Balance' : 'Zero Balance'}
+                    </button>
+                  ))}
+                </div>
+                {(customerSearch || customerBalanceFilter !== 'all') && (
+                  <button
+                    onClick={() => { setCustomerSearch(''); setCustomerBalanceFilter('all'); }}
+                    className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
               <div className="overflow-x-auto -mx-6 px-6">
                 <table className="min-w-full border-collapse">
                   <thead className="bg-gray-50">
                     <tr>
-                      <th className="border px-4 py-2 text-left whitespace-nowrap">Customer Name</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Debit</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Net</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">VAT</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Credit</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Balance</th>
-                      <th className="border px-4 py-2 text-center whitespace-nowrap">Actions</th>
+                      <th className="border px-3 py-2 text-left text-xs whitespace-nowrap">Customer Name</th>
+                      <th className="border px-3 py-2 text-right text-xs whitespace-nowrap">Invoices</th>
+                      <th className="border px-3 py-2 text-right text-xs whitespace-nowrap">Total Invoiced (Dr)</th>
+                      <th className="border px-3 py-2 text-right text-xs whitespace-nowrap">Total Paid (Cr)</th>
+                      <th className="border px-3 py-2 text-right text-xs whitespace-nowrap">Balance</th>
+                      <th className="border px-3 py-2 text-center text-xs whitespace-nowrap">Ledger</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {customers.map(customer => {
-                      const netAmount = customer.totalPurchases;
-                      const vatAmount = 0;
+                    {customers.filter(customer => {
+                      if (customerSearch && !customer.name.toLowerCase().includes(customerSearch.toLowerCase())) return false;
+                      if (customerBalanceFilter === 'active' && customer.balance <= 0) return false;
+                      if (customerBalanceFilter === 'zero' && customer.balance > 0) return false;
+                      return true;
+                    }).map(customer => {
+                      const acctPaymentsCredit = accountPayments
+                        .filter(p => p.accountId === customer.id && p.direction === 'in')
+                        .reduce((s, p) => s + p.amount, 0);
+                      const displayBalance = customer.balance - acctPaymentsCredit;
+                      const isExpanded = expandedCustomerLedger === customer.id;
                       return (
-                        <tr key={customer.id} className="border-b hover:bg-gray-50">
-                          <td className="border px-4 py-2">{customer.name}</td>
-                          <td className="border px-4 py-2 text-right">{customer.totalPurchases.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{netAmount.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{vatAmount.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right text-green-600">{customer.totalPayments.toFixed(2)}</td>
-                          <td className={`border px-4 py-2 text-right font-semibold ${customer.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {customer.balance.toFixed(2)}
-                          </td>
-                          <td className="border px-4 py-2 text-center">
-                            <button
-                              onClick={() => generateDetailedStatement('customer', customer.id, customer.name)}
-                              className="text-blue-600 hover:text-blue-800 text-sm underline"
-                            >
-                              View Statement
-                            </button>
-                          </td>
-                        </tr>
+                        <React.Fragment key={customer.id}>
+                          <tr className={`border-b hover:bg-gray-50 ${isExpanded ? 'bg-blue-50' : ''}`}>
+                            <td className="border px-3 py-2 font-medium">{customer.name}</td>
+                            <td className="border px-3 py-2 text-right">{sales.filter(s => s.customer === customer.name).length}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{customer.totalPurchases.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{(customer.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
+                            <td className={`border px-3 py-2 text-right font-bold ${displayBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
+                              {displayBalance.toFixed(2)}
+                              {displayBalance > 0 && <span className="ml-1 text-xs font-normal">(due)</span>}
+                            </td>
+                            <td className="border px-3 py-2 text-center">
+                              <div className="flex gap-1 justify-center flex-wrap">
+                                <button
+                                  onClick={() => setExpandedCustomerLedger(isExpanded ? null : customer.id)}
+                                  className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
+                                >
+                                  {isExpanded ? 'Hide' : 'View Ledger'}
+                                </button>
+                                <button
+                                  onClick={() => openPaymentModal(customer.id, customer.name, 'customer')}
+                                  className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium flex items-center gap-1"
+                                >
+                                  <PlusCircle size={11} /> Payment
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                          {isExpanded && (
+                            <tr>
+                              <td colSpan={6} className="border px-0 py-0 bg-gray-50">
+                                <div className="px-6 py-3">
+                                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Ledger — {customer.name}</p>
+                                  {(() => {
+                                    const customerInvoices = sales.filter(s => s.customer === customer.name);
+                                    const acctPmts = accountPayments.filter(p => p.accountId === customer.id && p.direction === 'in');
+                                    if (customerInvoices.length === 0 && acctPmts.length === 0) {
+                                      return <p className="text-xs text-gray-400 italic">No invoice records found for this customer.</p>;
+                                    }
+                                    return (
+                                      <table className="min-w-full text-xs border-collapse">
+                                        <thead className="bg-white">
+                                          <tr>
+                                            <th className="border px-2 py-1 text-left">Date</th>
+                                            <th className="border px-2 py-1 text-left">Ref / Type</th>
+                                            <th className="border px-2 py-1 text-right">Debit (Invoice)</th>
+                                            <th className="border px-2 py-1 text-right">Credit (Payment)</th>
+                                            <th className="border px-2 py-1 text-right">Running Balance</th>
+                                            <th className="border px-2 py-1 text-left">Status</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {(() => {
+                                            let running = 0;
+                                            const rows: React.ReactNode[] = [];
+                                            // Merge invoices and account payments, sort by date
+                                            const combined = [
+                                              ...customerInvoices.map(inv => ({ date: inv.date, type: 'invoice' as const, data: inv })),
+                                              ...acctPmts.map(p => ({ date: p.date, type: 'payment' as const, data: p })),
+                                            ].sort((a, b) => new Date(String(a.date)).getTime() - new Date(String(b.date)).getTime());
+
+                                            combined.forEach((item, idx) => {
+                                              if (item.type === 'invoice') {
+                                                const inv = item.data as any;
+                                                running += (inv.total - inv.amountPaid);
+                                                rows.push(
+                                                  <tr key={`inv-${inv.id}`} className="border-b hover:bg-white">
+                                                    <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
+                                                    <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
+                                                    <td className="border px-2 py-1 text-right font-semibold text-blue-700">{inv.total.toFixed(2)}</td>
+                                                    <td className="border px-2 py-1 text-right text-green-600">{inv.amountPaid > 0 ? inv.amountPaid.toFixed(2) : '-'}</td>
+                                                    <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
+                                                    <td className="border px-2 py-1">
+                                                      <span className={`px-1 py-0.5 rounded text-xs ${
+                                                        inv.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
+                                                        inv.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-700' :
+                                                        'bg-red-100 text-red-700'
+                                                      }`}>{inv.paymentStatus || 'unpaid'}</span>
+                                                    </td>
+                                                  </tr>
+                                                );
+                                              } else {
+                                                const p = item.data as any;
+                                                running -= p.amount;
+                                                rows.push(
+                                                  <tr key={`pmt-${p.id || idx}`} className="border-b bg-green-50 hover:bg-green-100">
+                                                    <td className="border px-2 py-1">{p.date}</td>
+                                                    <td className="border px-2 py-1 text-green-700 font-medium">Payment ({p.method}){p.notes ? ` — ${p.notes}` : ''}</td>
+                                                    <td className="border px-2 py-1 text-right">-</td>
+                                                    <td className="border px-2 py-1 text-right text-green-700 font-bold">{p.amount.toFixed(2)}</td>
+                                                    <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
+                                                    <td className="border px-2 py-1"><span className="px-1 py-0.5 rounded text-xs bg-green-100 text-green-700">payment</span></td>
+                                                  </tr>
+                                                );
+                                              }
+                                            });
+                                            return rows;
+                                          })()}
+                                        </tbody>
+                                        <tfoot className="bg-white font-semibold">
+                                          <tr>
+                                            <td colSpan={2} className="border px-2 py-1">Total</td>
+                                            <td className="border px-2 py-1 text-right text-blue-700">{customer.totalPurchases.toFixed(2)}</td>
+                                            <td className="border px-2 py-1 text-right text-green-600">{(customer.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
+                                            <td className={`border px-2 py-1 text-right ${displayBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{displayBalance.toFixed(2)}</td>
+                                            <td className="border px-2 py-1"></td>
+                                          </tr>
+                                        </tfoot>
+                                      </table>
+                                    );
+                                  })()}
+                                </div>
+                              </td>
+                            </tr>
+                          )}
+                        </React.Fragment>
                       );
                     })}
                   </tbody>
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
-                      <td className="border px-4 py-3">TOTAL</td>
-                      <td className="border px-4 py-3 text-right text-blue-600">{customers.reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{customers.reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">0.00</td>
-                      <td className="border px-4 py-3 text-right text-green-600">{customers.reduce((sum, c) => sum + c.totalPayments, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right text-blue-600">{customers.reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3"></td>
+                      <td className="border px-3 py-3">TOTAL</td>
+                      <td className="border px-3 py-3 text-right">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).length}</td>
+                      <td className="border px-3 py-3 text-right text-blue-600">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
+                      <td className="border px-3 py-3 text-right text-green-600">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).reduce((sum, c) => sum + c.totalPayments, 0).toFixed(2)}</td>
+                      <td className="border px-3 py-3 text-right text-blue-600">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</td>
+                      <td className="border px-3 py-3"></td>
                     </tr>
                   </tfoot>
                 </table>
@@ -2897,25 +3117,35 @@ const AdminAccountStatement: React.FC = () => {
                   </thead>
                   <tbody>
                     {suppliers.map(supplier => {
-                      const netAmount = supplier.totalPurchases;
-                      const vatAmount = 0;
+                      const acctPaymentsCredit = accountPayments
+                        .filter(p => p.accountId === supplier.id && p.direction === 'out')
+                        .reduce((s, p) => s + p.amount, 0);
+                      const displayBalance = supplier.balance - acctPaymentsCredit;
                       return (
                         <tr key={supplier.id} className="border-b hover:bg-gray-50">
                           <td className="border px-4 py-2">{supplier.name}</td>
-                          <td className="border px-4 py-2 text-right text-green-600">{supplier.totalPayments.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{supplier.totalPayments.toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right text-green-600">{(supplier.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
+                          <td className="border px-4 py-2 text-right">{(supplier.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
                           <td className="border px-4 py-2 text-right">0.00</td>
                           <td className="border px-4 py-2 text-right">{supplier.totalPurchases.toFixed(2)}</td>
-                          <td className={`border px-4 py-2 text-right font-semibold ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {supplier.balance.toFixed(2)}
+                          <td className={`border px-4 py-2 text-right font-semibold ${displayBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                            {displayBalance.toFixed(2)}
                           </td>
                           <td className="border px-4 py-2 text-center">
-                            <button
-                              onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
-                              className="text-blue-600 hover:text-blue-800 text-sm underline"
-                            >
-                              View Statement
-                            </button>
+                            <div className="flex gap-1 justify-center">
+                              <button
+                                onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
+                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded"
+                              >
+                                Ledger
+                              </button>
+                              <button
+                                onClick={() => openPaymentModal(supplier.id, supplier.name, 'supplier')}
+                                className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium flex items-center gap-1"
+                              >
+                                <PlusCircle size={11} /> Payment
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -3652,9 +3882,183 @@ const AdminAccountStatement: React.FC = () => {
               </div>
             </div>
           )}
+
+          {activeTab === 'payments' && (
+            <div>
+              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
+                <h2 className="text-xl font-semibold">Account Payments</h2>
+                <div className="flex gap-2 flex-wrap">
+                  <button
+                    onClick={() => openPaymentModal('', '', 'customer')}
+                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
+                  >
+                    <PlusCircle size={16} /> Payment In (Customer)
+                  </button>
+                  <button
+                    onClick={() => openPaymentModal('', '', 'supplier')}
+                    className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 text-sm"
+                  >
+                    <PlusCircle size={16} /> Payment Out (Supplier)
+                  </button>
+                </div>
+              </div>
+              {accountPayments.length === 0 ? (
+                <div className="text-center py-12 text-gray-400">
+                  <p className="text-lg">No payments recorded yet.</p>
+                  <p className="text-sm mt-1">Use the buttons above or the "+ Payment" button on any customer/supplier row.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <table className="min-w-full border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="border px-3 py-2 text-left text-xs">Date</th>
+                        <th className="border px-3 py-2 text-left text-xs">Account</th>
+                        <th className="border px-3 py-2 text-left text-xs">Type</th>
+                        <th className="border px-3 py-2 text-left text-xs">Direction</th>
+                        <th className="border px-3 py-2 text-left text-xs">Method</th>
+                        <th className="border px-3 py-2 text-right text-xs">Amount</th>
+                        <th className="border px-3 py-2 text-left text-xs">Notes</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {accountPayments.map(p => (
+                        <tr key={p.id} className="border-b hover:bg-gray-50">
+                          <td className="border px-3 py-2 text-sm">{p.date}</td>
+                          <td className="border px-3 py-2 text-sm font-medium">{p.accountName}</td>
+                          <td className="border px-3 py-2 text-sm">
+                            <span className={`px-2 py-0.5 rounded text-xs ${p.accountType === 'customer' ? 'bg-blue-100 text-blue-700' : 'bg-purple-100 text-purple-700'}`}>
+                              {p.accountType}
+                            </span>
+                          </td>
+                          <td className="border px-3 py-2 text-sm">
+                            <span className={`px-2 py-0.5 rounded text-xs font-medium ${p.direction === 'in' ? 'bg-green-100 text-green-700' : 'bg-orange-100 text-orange-700'}`}>
+                              {p.direction === 'in' ? '↓ Received' : '↑ Paid Out'}
+                            </span>
+                          </td>
+                          <td className="border px-3 py-2 text-sm capitalize">{p.method}</td>
+                          <td className="border px-3 py-2 text-right font-bold text-green-700">{p.amount.toFixed(2)}</td>
+                          <td className="border px-3 py-2 text-sm text-gray-500">{p.notes || '-'}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-100 font-bold">
+                      <tr>
+                        <td colSpan={5} className="border px-3 py-3">TOTAL</td>
+                        <td className="border px-3 py-3 text-right text-green-700">{accountPayments.reduce((s, p) => s + p.amount, 0).toFixed(2)}</td>
+                        <td className="border px-3 py-3"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
+            </div>
+          )}
+
         </div>
       </div>
-      
+
+      {/* Payment Entry Modal */}
+      {paymentModal && (
+        <Dialog open={!!paymentModal} onOpenChange={() => setPaymentModal(null)}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>
+                {paymentModal.direction === 'in' ? 'Payment In — Received from Customer' : 'Payment Out — Paid to Supplier'}
+              </DialogTitle>
+            </DialogHeader>
+            <div className="grid gap-4 py-2">
+              {/* Account picker (show when opened from Payments tab with no pre-selected account) */}
+              {paymentModal.accountId === '' ? (
+                <div>
+                  <label className="text-sm font-medium block mb-1">
+                    {paymentModal.accountType === 'customer' ? 'Select Customer' : 'Select Supplier'}
+                  </label>
+                  <select
+                    className="w-full border rounded px-3 py-2 text-sm"
+                    onChange={e => {
+                      const name = e.target.options[e.target.selectedIndex].text;
+                      setPaymentModal(m => m ? { ...m, accountId: e.target.value, accountName: name } : m);
+                    }}
+                  >
+                    <option value="">-- Select --</option>
+                    {paymentModal.accountType === 'customer'
+                      ? customers.map(c => <option key={c.id} value={c.id}>{c.name}</option>)
+                      : suppliers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)
+                    }
+                  </select>
+                </div>
+              ) : (
+                <div className="p-3 bg-gray-50 rounded">
+                  <span className="text-sm text-gray-500">Account: </span>
+                  <span className="font-semibold">{paymentModal.accountName}</span>
+                </div>
+              )}
+              <div>
+                <label className="text-sm font-medium block mb-1">Amount *</label>
+                <input
+                  type="number"
+                  min="0.01"
+                  step="0.01"
+                  placeholder="0.00"
+                  value={newPayment.amount}
+                  onChange={e => setNewPayment(p => ({ ...p, amount: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                  autoFocus
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Date *</label>
+                <input
+                  type="date"
+                  value={newPayment.date}
+                  onChange={e => setNewPayment(p => ({ ...p, date: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Method</label>
+                <select
+                  value={newPayment.method}
+                  onChange={e => setNewPayment(p => ({ ...p, method: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                >
+                  <option value="cash">Cash</option>
+                  <option value="bank_transfer">Bank Transfer</option>
+                  <option value="cheque">Cheque</option>
+                  <option value="other">Other</option>
+                </select>
+              </div>
+              <div>
+                <label className="text-sm font-medium block mb-1">Notes</label>
+                <input
+                  type="text"
+                  placeholder="Optional..."
+                  value={newPayment.notes}
+                  onChange={e => setNewPayment(p => ({ ...p, notes: e.target.value }))}
+                  className="w-full border rounded px-3 py-2 text-sm"
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <button
+                onClick={() => setPaymentModal(null)}
+                className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleSaveAccountPayment}
+                disabled={savingPayment}
+                className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+              >
+                {savingPayment ? 'Saving...' : 'Save Payment'}
+              </button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
+
       {/* Detailed Statement Modal */}
       {viewingDetailedStatement && detailedStatement && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

@@ -1671,7 +1671,7 @@ const AdminFinishedGoods: React.FC = () => {
               <h3 className="font-semibold mb-2">All Transactions</h3>
               {viewingHistory && viewingHistory.transactions.length > 0 ? (
                 <div className="space-y-2">
-                  {[...viewingHistory.transactions].reverse().map((txn) => (
+                  {[...viewingHistory.transactions].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map((txn) => (
                     <div key={txn.id} className="border rounded-lg p-3">
                       <div className="flex justify-between items-start mb-2">
                         <div>

@@ -42,20 +42,12 @@ const AdminPurchases: React.FC = () => {
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [receivingPurchase, setReceivingPurchase] = useState<Purchase | null>(null);
-  const [payingPurchase, setPayingPurchase] = useState<Purchase | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ purchase: Purchase; payment: any } | null>(null);
   
   // Loading states for button disabling
   const [isCreatingPO, setIsCreatingPO] = useState(false);
   const [isReceivingPO, setIsReceivingPO] = useState(false);
-  const [isPayingPO, setIsPayingPO] = useState(false);
   
-  const [paymentData, setPaymentData] = useState({
-    amountPaid: 0,
-    paymentDate: new Date().toISOString().split('T')[0],
-    paymentMethod: 'cash',
-    paymentNotes: '',
-  });
   const [newPurchase, setNewPurchase] = useState({
     supplierId: '',
     supplierName: '',
@@ -1652,118 +1644,6 @@ const AdminPurchases: React.FC = () => {
     }
   };
 
-  const handlePayPurchase = async () => {
-    if (isPayingRef.current) {
-      console.log('⚠️ Payment operation already in progress');
-      return;
-    }
-
-    if (!payingPurchase || !user?.storeId) return;
-
-    isPayingRef.current = true;
-    setIsPayingPO(true);
-    let operationSucceeded = false;
-
-    try {
-      const db = getFirestore();
-      const purchaseRef = doc(db, 'purchases', payingPurchase.id);
-
-      const currentPaid = payingPurchase.amountPaid || 0;
-      const newAmountPaid = currentPaid + paymentData.amountPaid;
-      const totalAmount = payingPurchase.totalAmount || payingPurchase.total || 0;
-
-      let paymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
-      if (newAmountPaid >= totalAmount) {
-        paymentStatus = 'paid';
-      } else if (newAmountPaid > 0) {
-        paymentStatus = 'partial';
-      }
-
-      // Create payment record
-      const paymentRecord = {
-        id: `PMT-${Date.now()}`,
-        amount: paymentData.amountPaid,
-        date: paymentData.paymentDate,
-        method: paymentData.paymentMethod,
-        notes: paymentData.paymentNotes,
-        recordedBy: user.name,
-        recordedAt: new Date().toISOString(),
-      };
-
-      const existingHistory = payingPurchase.paymentHistory || [];
-      const updatedHistory = [...existingHistory, paymentRecord];
-
-      await updateDoc(purchaseRef, {
-        paymentStatus,
-        amountPaid: newAmountPaid,
-        paymentDate: paymentData.paymentDate,
-        paymentMethod: paymentData.paymentMethod,
-        paymentNotes: paymentData.paymentNotes,
-        paymentHistory: updatedHistory,
-        updatedAt: new Date().toISOString(),
-      });
-
-      // Mark operation as succeeded immediately after payment recorded
-      operationSucceeded = true;
-
-      // Refetch purchases
-      const purchasesRef = collection(db, 'purchases');
-      const purchasesQuery = query(purchasesRef, where('storeId', '==', user.storeId));
-      const purchasesSnapshot = await getDocs(purchasesQuery);
-      const purchasesList: Purchase[] = purchasesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Purchase));
-      setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
-
-      // Audit log (don't block dialog close if this fails)
-      try {
-        await logAction(
-          user.id,
-          user.name,
-          user.role,
-          'update',
-          'purchase_payment',
-          payingPurchase.id,
-          { 
-            oldValue: { amountPaid: currentPaid, paymentStatus: payingPurchase.paymentStatus },
-            newValue: { amountPaid: newAmountPaid, paymentStatus, ...paymentData }
-          },
-          user.storeId
-        );
-      } catch (logError) {
-        console.error('Audit log failed:', logError);
-      }
-
-      toast({ 
-        title: "Success", 
-        description: `Payment recorded! Status: ${paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Unpaid'}` 
-      });
-
-      // Show voucher after successful payment
-      const updatedPurchase = purchasesList.find(p => p.id === payingPurchase.id);
-      if (updatedPurchase) {
-        setViewingPaymentVoucher({ purchase: updatedPurchase, payment: paymentRecord });
-      }
-    } catch (error) {
-      console.error('Error recording payment:', error);
-      toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
-    } finally {
-      isPayingRef.current = false;
-      setIsPayingPO(false);
-      
-      if (operationSucceeded) {
-        setPayingPurchase(null);
-        setPaymentData({
-          amountPaid: 0,
-          paymentDate: new Date().toISOString().split('T')[0],
-          paymentMethod: 'cash',
-          paymentNotes: '',
-        });
-      }
-    }
-  };
-
   const generatePaymentVoucherHTML = (purchase: Purchase, payment: any) => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     return `
@@ -2350,25 +2230,6 @@ const AdminPurchases: React.FC = () => {
                         )}
                         {purchase.status === 'received' && (
                           <>
-                            {(!purchase.paymentStatus || purchase.paymentStatus !== 'paid') && (
-                              <Button
-                                variant="default"
-                                size="sm"
-                                onClick={() => {
-                                  const remaining = (purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0);
-                                  setPayingPurchase(purchase);
-                                  setPaymentData({
-                                    amountPaid: remaining,
-                                    paymentDate: new Date().toISOString().split('T')[0],
-                                    paymentMethod: 'cash',
-                                    paymentNotes: '',
-                                  });
-                                }}
-                              >
-                                <DollarSign className="h-4 w-4 mr-1" />
-                                Record Payment
-                              </Button>
-                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -2569,96 +2430,6 @@ const AdminPurchases: React.FC = () => {
                 <Button variant="outline" onClick={() => setReceivingPurchase(null)} disabled={isReceivingPO}>Cancel</Button>
                 <Button onClick={handleReceivePurchase} disabled={isReceivingPO}>
                   {isReceivingPO ? 'Receiving...' : 'Receive & Update Stock'}
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
-
-        {/* Payment Dialog */}
-        {payingPurchase && (
-          <Dialog open={!!payingPurchase} onOpenChange={() => setPayingPurchase(null)}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Record Payment</DialogTitle>
-                <DialogDescription>
-                  Purchase Order: {payingPurchase.invoiceNumber || payingPurchase.poNumber}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4">
-                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Amount</p>
-                    <p className="font-bold">${(payingPurchase.totalAmount || payingPurchase.total || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Already Paid</p>
-                    <p className="font-bold text-green-600">${(payingPurchase.amountPaid || 0).toFixed(2)}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm text-gray-500">Amount Due</p>
-                    <p className="font-bold text-red-600">
-                      ${((payingPurchase.totalAmount || payingPurchase.total || 0) - (payingPurchase.amountPaid || 0)).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentAmount">Payment Amount *</Label>
-                  <Input
-                    id="paymentAmount"
-                    type="number"
-                    min="0"
-                    max={(payingPurchase.totalAmount || payingPurchase.total || 0) - (payingPurchase.amountPaid || 0)}
-                    step="0.01"
-                    value={paymentData.amountPaid || ''}
-                    onChange={(e) => setPaymentData(prev => ({ ...prev, amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value) }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentDate">Payment Date *</Label>
-                  <Input
-                    id="paymentDate"
-                    type="date"
-                    value={paymentData.paymentDate}
-                    onChange={(e) => setPaymentData(prev => ({ ...prev, paymentDate: e.target.value }))}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentMethod">Payment Method *</Label>
-                  <Select
-                    value={paymentData.paymentMethod}
-                    onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
-                  >
-                    <SelectTrigger id="paymentMethod">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                      <SelectItem value="check">Check</SelectItem>
-                      <SelectItem value="credit_card">Credit Card</SelectItem>
-                      <SelectItem value="mobile_payment">Mobile Payment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentNotes">Notes (optional)</Label>
-                  <Textarea
-                    id="paymentNotes"
-                    placeholder="Transaction reference, check number, etc."
-                    value={paymentData.paymentNotes}
-                    onChange={(e) => setPaymentData(prev => ({ ...prev, paymentNotes: e.target.value }))}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setPayingPurchase(null)} disabled={isPayingPO}>Cancel</Button>
-                <Button onClick={handlePayPurchase} disabled={isPayingPO}>
-                  {isPayingPO ? 'Processing...' : 'Record Payment'}
                 </Button>
               </DialogFooter>
             </DialogContent>

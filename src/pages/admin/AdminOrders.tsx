@@ -140,7 +140,7 @@ const AdminOrders: React.FC = () => {
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [editingOrder, setEditingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
-  const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
+  // payingOrder removed — payments handled in Account Statement
   const [refundingOrder, setRefundingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: PaymentRecord } | null>(null);
   const [voidingPayment, setVoidingPayment] = useState<(Order & { id: string }) | null>(null);
@@ -154,12 +154,6 @@ const AdminOrders: React.FC = () => {
     pickupDate: new Date().toISOString().split('T')[0],
     carrier: 'in_house',
     notes: '',
-  });
-  const [paymentData, setPaymentData] = useState({
-    amountPaid: 0,
-    paymentDate: new Date().toISOString().split('T')[0],
-    paymentMethod: 'cash',
-    paymentNotes: '',
   });
   const [refundData, setRefundData] = useState({
     amount: 0,
@@ -194,7 +188,7 @@ const AdminOrders: React.FC = () => {
   // Double-click prevention locks
   const isCreatingOrderRef = useRef(false);
   const isVoidingPaymentRef = useRef(false);
-  const isPayingOrderRef = useRef(false);
+
   const isRefundingOrderRef = useRef(false);
 
   const isOrderEligibleForSplitMerge = (order: Order & { id: string }) => {
@@ -248,7 +242,8 @@ const AdminOrders: React.FC = () => {
     idempotencyKey: string,
     reason: string,
     referenceId: string,
-    referenceNumber: string
+    referenceNumber: string,
+    requiredPriorKey?: string  // If set, skip restore if the matching consume key is NOT found
   ) => {
     if (!productId || quantity <= 0 || !user?.id) return;
 
@@ -271,6 +266,11 @@ const AdminOrders: React.FC = () => {
     const transactions = Array.isArray(productData.stockTransactions) ? productData.stockTransactions : [];
     const alreadyApplied = transactions.some((tx: ProductStockTransaction) => tx?.idempotencyKey === idempotencyKey);
     if (alreadyApplied) return;
+    // Guard: skip restore if the matching deduction never happened
+    if (requiredPriorKey && mode === 'restore') {
+      const priorExists = transactions.some((tx: ProductStockTransaction) => tx?.idempotencyKey === requiredPriorKey);
+      if (!priorExists) return;
+    }
 
     const currentStock = Number(productData.stock || 0);
     const safeCurrentStock = Number.isFinite(currentStock) ? currentStock : 0;
@@ -1026,15 +1026,19 @@ const AdminOrders: React.FC = () => {
       quantitySold: number;
       totalValue: number;
       transaction: Record<string, unknown>;
-    } | null
+    } | null,
+    requiredPriorKey?: string  // If set, skip operation if this key is NOT found (ensures restore only happens if deduction happened)
   ) => {
     const fgRef = doc(db, 'finishedGoodsInventory', fgDocId);
     await runTransaction(db, async (tx) => {
       const snap = await tx.get(fgRef);
       if (!snap.exists()) return;
       const fgData = snap.data() as Record<string, unknown>;
-      // Idempotency check inside the transaction for safety
-      if (hasInventoryEvent((fgData.transactions as InventoryTransaction[]) || [], idempotencyKey)) return;
+      const txList = (fgData.transactions as InventoryTransaction[]) || [];
+      // Idempotency check: skip if already applied
+      if (hasInventoryEvent(txList, idempotencyKey)) return;
+      // Guard: skip restore if the matching deduction never happened
+      if (requiredPriorKey && !hasInventoryEvent(txList, requiredPriorKey)) return;
       const update = buildUpdate(fgData);
       if (!update) return;
       tx.update(fgRef, {
@@ -1059,6 +1063,10 @@ const AdminOrders: React.FC = () => {
         return;
       }
       
+      // Version counter to make idempotency keys unique across multiple deliver→rollback→deliver cycles
+      const currentDeliveryCount = Number((order as any)._stockDeliveryCount || 0);
+      let nextDeliveryCount = currentDeliveryCount;
+
       // Handle rollback from counted sale state to non-sale state
       if (isCountedSaleStatus(order.status) && !isCountedSaleStatus(newStatus)) {
         // Reversing status - need to restore finished goods
@@ -1073,7 +1081,10 @@ const AdminOrders: React.FC = () => {
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
 
-          const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `${order.status}->${newStatus}:line${lineIdx}`);
+          // Use currentDeliveryCount so this rollback cancels exactly the vN delivery
+          const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
+          // The matching delivery key that MUST exist before we restore — prevents phantom restores
+          const requiredDeliveryKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
@@ -1101,7 +1112,7 @@ const AdminOrders: React.FC = () => {
                   idempotencyKey,
                 },
               };
-            });
+            }, requiredDeliveryKey);
           } else {
             await applySimpleProductStockChange(
               db,
@@ -1112,6 +1123,7 @@ const AdminOrders: React.FC = () => {
               `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
               orderId,
               order.invoiceNumber || orderId,
+              requiredDeliveryKey,
             );
           }
         }
@@ -1123,6 +1135,9 @@ const AdminOrders: React.FC = () => {
       
       // If marking as delivered, deduct from finished goods inventory
       if (isCountedSaleStatus(newStatus) && !isCountedSaleStatus(order.status)) {
+        // Increment version so each re-delivery gets a fresh unique idempotency key
+        nextDeliveryCount = currentDeliveryCount + 1;
+
         const fgQuery = query(
           collection(db, 'finishedGoodsInventory'),
           where('storeId', '==', user.storeId)
@@ -1134,7 +1149,8 @@ const AdminOrders: React.FC = () => {
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
 
-          const idempotencyKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `${order.status}->${newStatus}:line${lineIdx}`);
+          // Use nextDeliveryCount so 2nd delivery generates a new key never seen before
+          const idempotencyKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${nextDeliveryCount}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
@@ -1182,8 +1198,13 @@ const AdminOrders: React.FC = () => {
         }
       }
       
-      await updateDoc(orderRef, { status: newStatus, updatedAt: new Date().toISOString() });
-      setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus } : o));
+      await updateDoc(orderRef, {
+        status: newStatus,
+        updatedAt: new Date().toISOString(),
+        // Persist version counter so next rollback/re-deliver cycle uses correct keys
+        ...(nextDeliveryCount !== currentDeliveryCount ? { _stockDeliveryCount: nextDeliveryCount } : {}),
+      });
+      setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus, _stockDeliveryCount: nextDeliveryCount } as typeof o : o));
       
       await logAction(user.id, user.name, user.role, 'update', 'order', orderId, {
         oldValue: { status: order.status },
@@ -1507,7 +1528,10 @@ const AdminOrders: React.FC = () => {
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
 
+          const deleteCount = Number((order as any)._stockDeliveryCount || 0);
           const idempotencyKey = buildInventoryEventKey('order-delete', orderId, itemProductId, `${order.status || 'unknown'}:line${lineIdx}`);
+          // Only restore if the matching delivery transaction actually exists
+          const requiredDeliveryKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${deleteCount}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
@@ -1535,7 +1559,7 @@ const AdminOrders: React.FC = () => {
                   idempotencyKey,
                 },
               };
-            });
+            }, requiredDeliveryKey);
           } else {
             await applySimpleProductStockChange(
               db,
@@ -1546,6 +1570,7 @@ const AdminOrders: React.FC = () => {
               `Reversal: Order ${order.invoiceNumber || orderId} deleted`,
               orderId,
               order.invoiceNumber || orderId,
+              requiredDeliveryKey,
             );
           }
         }
@@ -1720,138 +1745,6 @@ const AdminOrders: React.FC = () => {
       
       if (operationSucceeded) {
         setVoidingPayment(null);
-      }
-    }
-  };
-
-  const handlePayOrder = async () => {
-    if (isPayingOrderRef.current) {
-      console.log('⚠️ Payment operation already in progress');
-      return;
-    }
-
-    if (!payingOrder || !user?.storeId) return;
-
-    isPayingOrderRef.current = true;
-    let operationSucceeded = false;
-
-    try {
-      const db = getFirestore();
-      const orderRef = doc(db, 'orders', payingOrder.id);
-
-      const currentPaid = Number(payingOrder.amountPaid || 0);
-      const totalAmount = Number(payingOrder.total || 0);
-      const remainingAmount = Math.max(0, Math.round((totalAmount - currentPaid) * 100) / 100);
-      const enteredAmount = Number(paymentData.amountPaid || 0);
-
-      if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
-        toast({ title: 'Invalid Amount', description: 'Payment amount must be greater than zero.', variant: 'destructive' });
-        return;
-      }
-
-      if (!paymentData.paymentDate) {
-        toast({ title: 'Missing Payment Date', description: 'Please select the payment date.', variant: 'destructive' });
-        return;
-      }
-
-      if (!paymentData.paymentMethod) {
-        toast({ title: 'Missing Payment Method', description: 'Please select a payment method.', variant: 'destructive' });
-        return;
-      }
-
-      const sanitizedAmount = Math.round(enteredAmount * 100) / 100;
-      if (sanitizedAmount > remainingAmount + 0.0001) {
-        toast({
-          title: 'Amount Exceeds Balance Due',
-          description: `Maximum allowed is $${remainingAmount.toFixed(2)} for this order.`,
-          variant: 'destructive',
-        });
-        return;
-      }
-
-      const newAmountPaid = Math.round((currentPaid + sanitizedAmount) * 100) / 100;
-
-      let paymentStatus: 'unpaid' | 'partial' | 'paid' | 'refunded' = 'unpaid';
-      if (newAmountPaid >= totalAmount) {
-        paymentStatus = 'paid';
-      } else if (newAmountPaid > 0) {
-        paymentStatus = 'partial';
-      }
-
-      // Create payment record
-      const paymentRecord = {
-        id: `PMT-${Date.now()}`,
-        amount: sanitizedAmount,
-        entryType: 'payment' as const,
-        date: paymentData.paymentDate,
-        method: paymentData.paymentMethod,
-        notes: paymentData.paymentNotes,
-        recordedBy: user.name,
-        recordedAt: new Date().toISOString(),
-      };
-
-      const existingHistory = payingOrder.paymentHistory || [];
-      const updatedHistory = [...existingHistory, paymentRecord];
-
-      await updateDoc(orderRef, {
-        paymentStatus,
-        amountPaid: newAmountPaid,
-        remainingAmount: Math.max(0, Math.round((totalAmount - newAmountPaid) * 100) / 100),
-        paymentDate: paymentData.paymentDate,
-        paymentMethod: paymentData.paymentMethod,
-        paymentNotes: paymentData.paymentNotes,
-        paymentHistory: updatedHistory,
-      });
-
-      const updatedOrder = { 
-        ...payingOrder, 
-        paymentStatus, 
-        amountPaid: newAmountPaid,
-        paymentDate: paymentData.paymentDate,
-        paymentMethod: paymentData.paymentMethod,
-        paymentNotes: paymentData.paymentNotes,
-        paymentHistory: updatedHistory,
-      };
-
-      setOrders(orders.map(o => o.id === payingOrder.id ? updatedOrder : o));
-
-      await logAction(
-        user.id,
-        user.name,
-        user.role,
-        'update',
-        'order_payment',
-        payingOrder.id,
-        { 
-          oldValue: { amountPaid: currentPaid, paymentStatus: payingOrder.paymentStatus },
-          newValue: { amountPaid: newAmountPaid, paymentStatus, ...paymentData }
-        },
-        user.storeId
-      );
-
-      operationSucceeded = true;
-
-      toast({ 
-        title: "Success", 
-        description: `Payment recorded! Status: ${paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Unpaid'}` 
-      });
-
-      // Show voucher after successful payment
-      setViewingPaymentVoucher({ order: updatedOrder, payment: paymentRecord });
-    } catch (error) {
-      console.error('Error recording payment:', error);
-      toast({ title: "Error", description: "Failed to record payment", variant: "destructive" });
-    } finally {
-      isPayingOrderRef.current = false;
-      
-      if (operationSucceeded) {
-        setPayingOrder(null);
-        setPaymentData({
-          amountPaid: 0,
-          paymentDate: new Date().toISOString().split('T')[0],
-          paymentMethod: 'cash',
-          paymentNotes: '',
-        });
       }
     }
   };
@@ -2995,19 +2888,12 @@ const AdminOrders: React.FC = () => {
   const selectedDeliveryOption = deliveryOptions.find((o) => o.value === newOrder.deliveryMethod);
   const filteredOrders = getFilteredOrders();
   const selectedEligibleCount = getSelectedShippingOrders().length;
-  const payingOrderRemainingAmount = payingOrder
-    ? Math.max(0, Math.round(((payingOrder.total || 0) - (payingOrder.amountPaid || 0)) * 100) / 100)
-    : 0;
   const refundingOrderMaxAmount = refundingOrder
     ? Math.max(0, Math.round((refundingOrder.amountPaid || 0) * 100) / 100)
     : 0;
   const projectedRefundedPaidAmount = refundingOrder
     ? Math.max(0, Math.round(((refundingOrder.amountPaid || 0) - Number(refundData.amount || 0)) * 100) / 100)
     : 0;
-  const projectedAmountPaid = payingOrder
-    ? Math.round(((payingOrder.amountPaid || 0) + Number(paymentData.amountPaid || 0)) * 100) / 100
-    : 0;
-  const projectedRemainingAmount = Math.max(0, Math.round((payingOrderRemainingAmount - Number(paymentData.amountPaid || 0)) * 100) / 100);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -3737,25 +3623,6 @@ const AdminOrders: React.FC = () => {
                       )}
                       {order.status !== 'cancelled' && (
                         <>
-                          {(!order.paymentStatus || order.paymentStatus !== 'paid') && (
-                            <Button
-                              variant="default"
-                              size="sm"
-                              onClick={() => {
-                                const remaining = Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100;
-                                setPayingOrder(order);
-                                setPaymentData({
-                                  amountPaid: Math.max(0, remaining),
-                                  paymentDate: new Date().toISOString().split('T')[0],
-                                  paymentMethod: 'cash',
-                                  paymentNotes: '',
-                                });
-                              }}
-                            >
-                              <DollarSign className="h-4 w-4 mr-1" />
-                              Record Payment
-                            </Button>
-                          )}
                           {(order.paymentStatus === 'paid' || order.paymentStatus === 'partial' || (order.amountPaid || 0) > 0) && (
                             <>
                               {(order.amountPaid || 0) > 0 && (
@@ -4201,129 +4068,6 @@ const AdminOrders: React.FC = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
-
-        {/* Payment Dialog */}
-        {payingOrder && (
-          <Dialog open={!!payingOrder} onOpenChange={() => setPayingOrder(null)}>
-            <DialogContent className="max-w-md">
-              <DialogHeader>
-                <DialogTitle>Record Payment</DialogTitle>
-                <DialogDescription>
-                  Order: {payingOrder.invoiceNumber || `#${payingOrder.id.slice(0, 8)}`}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4">
-                <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded">
-                  <div>
-                    <p className="text-sm text-gray-500">Total Amount</p>
-                    <p className="font-bold">${(payingOrder.total || 0).toFixed(2)}</p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-500">Already Paid</p>
-                    <p className="font-bold text-green-600">${(payingOrder.amountPaid || 0).toFixed(2)}</p>
-                  </div>
-                  <div className="col-span-2">
-                    <p className="text-sm text-gray-500">Amount Due</p>
-                    <p className="font-bold text-red-600">
-                      ${(Math.round(((payingOrder.total || 0) - (payingOrder.amountPaid || 0)) * 100) / 100).toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentAmount">Payment Amount *</Label>
-                  <Input
-                    id="paymentAmount"
-                    type="number"
-                    min="0"
-                    max={payingOrderRemainingAmount}
-                    step="0.01"
-                    value={paymentData.amountPaid || ''}
-                    onChange={(e) => {
-                      const nextAmount = e.target.value === '' ? 0 : parseFloat(e.target.value);
-                      const boundedAmount = Number.isFinite(nextAmount)
-                        ? Math.max(0, Math.min(payingOrderRemainingAmount, nextAmount))
-                        : 0;
-                      setPaymentData({ ...paymentData, amountPaid: boundedAmount });
-                    }}
-                  />
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPaymentData({ ...paymentData, amountPaid: Math.round((payingOrderRemainingAmount * 0.25) * 100) / 100 })}
-                    >
-                      25%
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPaymentData({ ...paymentData, amountPaid: Math.round((payingOrderRemainingAmount * 0.5) * 100) / 100 })}
-                    >
-                      50%
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setPaymentData({ ...paymentData, amountPaid: payingOrderRemainingAmount })}
-                    >
-                      Full Due
-                    </Button>
-                  </div>
-                  <p className="mt-2 text-xs text-gray-500">
-                    After this payment: paid ${projectedAmountPaid.toFixed(2)} | remaining ${projectedRemainingAmount.toFixed(2)}
-                  </p>
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentDate">Payment Date *</Label>
-                  <Input
-                    id="paymentDate"
-                    type="date"
-                    value={paymentData.paymentDate}
-                    onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
-                  />
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentMethod">Payment Method *</Label>
-                  <Select
-                    value={paymentData.paymentMethod}
-                    onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
-                  >
-                    <SelectTrigger id="paymentMethod">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="cash">Cash</SelectItem>
-                      <SelectItem value="bank_transfer">Bank Transfer</SelectItem>
-                      <SelectItem value="check">Check</SelectItem>
-                      <SelectItem value="credit_card">Credit Card</SelectItem>
-                      <SelectItem value="mobile_payment">Mobile Payment</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div>
-                  <Label htmlFor="paymentNotes">Notes (optional)</Label>
-                  <Textarea
-                    id="paymentNotes"
-                    placeholder="Transaction reference, check number, etc."
-                    value={paymentData.paymentNotes}
-                    onChange={(e) => setPaymentData({ ...paymentData, paymentNotes: e.target.value })}
-                  />
-                </div>
-              </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setPayingOrder(null)}>Cancel</Button>
-                <Button onClick={handlePayOrder}>Record Payment</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
 
         {/* Refund Dialog */}
         {refundingOrder && (
