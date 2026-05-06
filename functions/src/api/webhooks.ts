@@ -6,6 +6,11 @@ import { sendTrialActivatedEmail, sendSubscriptionActivatedEmail, sendPaymentFai
 
 const db = admin.firestore();
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'Unknown error';
+}
+
 /**
  * Handle Whish payment callback (GET request)
  * Whish calls this URL after payment: ?externalId=123&type=trial&userId=abc&status=success/failed
@@ -45,9 +50,9 @@ export async function handleWhishWebhook(req: Request, res: Response) {
     }
 
     res.json({ success: true, message: 'Callback processed' });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Callback error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }
 

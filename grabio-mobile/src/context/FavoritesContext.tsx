@@ -7,7 +7,7 @@ interface FavoriteStore {
   name: string;
   logoUrl?: string;
   description?: string;
-  addedAt: any;
+  addedAt: unknown;
 }
 
 interface FavoriteProduct {
@@ -19,7 +19,7 @@ interface FavoriteProduct {
   currency?: string;
   imageUrl?: string;
   unit?: string;
-  addedAt: any;
+  addedAt: unknown;
 }
 
 interface FavoritesContextType {
@@ -147,4 +147,5 @@ export function FavoritesProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useFavorites = () => useContext(FavoritesContext);

@@ -108,7 +108,7 @@ export interface ProductionBatch {
   startDate?: string; // alias for productionDate
   staffId?: string;
   staffName?: string;
-  assignedStaff?: any[]; // staff assignments
+  assignedStaff?: unknown[]; // staff assignments
   rawMaterialsUsed: BatchMaterial[];
   qualityStatus: 'pending' | 'passed' | 'failed';
   expiryDate?: string;

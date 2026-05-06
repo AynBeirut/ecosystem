@@ -60,7 +60,7 @@ export interface Order {
   total: number;
   currency: string;
   status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
-  createdAt: any;
+  createdAt: unknown;
   paymentMethod: string;
 }
 

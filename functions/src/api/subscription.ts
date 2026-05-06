@@ -8,7 +8,7 @@ const db = admin.firestore();
 const STRIPE_SECRET_KEY = process.env.STRIPE_SECRET_KEY || '';
 const FRONTEND_BASE_URL = (process.env.FRONTEND_BASE_URL || 'https://grabio.space').replace(/\/$/, '');
 const stripe = STRIPE_SECRET_KEY
-  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' as any })
+  ? new Stripe(STRIPE_SECRET_KEY, { apiVersion: '2026-02-25.clover' as Stripe.LatestApiVersion })
   : null;
 
 type SubscriptionTier = 'trial' | 'starter' | 'pro' | 'business';
@@ -165,6 +165,11 @@ function calculateAmount(tier: PaidTier, billing: Billing, addOnsInput: unknown)
   return { amount, description, addOns };
 }
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) return error.message;
+  return 'Unknown error';
+}
+
 /**
  * Start trial subscription
  */
@@ -200,9 +205,9 @@ export async function startTrial(req: Request, res: Response) {
       trialGraceDays: TRIAL_GRACE_DAYS,
       cardVerificationRequired: true,
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Start trial error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }
 
@@ -263,9 +268,9 @@ export async function subscribe(req: Request, res: Response) {
       externalId,
       amount: amount // Already in dollars
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Subscribe error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }
 
@@ -339,7 +344,7 @@ export async function activateSubscription(
   paymentId: string,
   tier: string,
   billing: Billing,
-  addOns: any,
+  addOns: unknown,
   amount: number
 ) {
   const storeRef = db.collection('storeProfiles').doc(userId);
@@ -439,9 +444,9 @@ export async function cancelSubscription(req: Request, res: Response) {
       message: 'Subscription cancelled. Access will continue until ' + 
         new Date(data?.subscriptionEndsAt).toLocaleDateString()
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Cancel subscription error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }
 
@@ -516,9 +521,9 @@ export async function getSubscriptionInfo(req: Request, res: Response) {
         billingHistory: data?.billingHistory || []
       }
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Get subscription info error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }
 
@@ -581,8 +586,8 @@ export async function subscribeStripe(req: Request, res: Response) {
     }, { merge: true });
 
     res.json({ success: true, paymentUrl: session.url, amount });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Subscribe Stripe error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }

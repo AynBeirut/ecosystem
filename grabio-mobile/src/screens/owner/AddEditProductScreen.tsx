@@ -109,7 +109,7 @@ export default function AddEditProductScreen() {
         imageUrl = await uploadImage(imageUri);
       }
 
-      const data: Record<string, any> = {
+      const data: Record<string, unknown> = {
         name: name.trim(),
         description: description.trim() || null,
         price: priceNum,
@@ -132,8 +132,8 @@ export default function AddEditProductScreen() {
       }
 
       navigation.goBack();
-    } catch (err: any) {
-      Alert.alert('Save failed', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Save failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }

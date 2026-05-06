@@ -77,7 +77,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             if (userDoc.exists()) {
-              const userData = userDoc.data() as any;
+              const userData = userDoc.data() as { role?: string; subAccountRole?: AuthUser['subAccountRole']; subAccountId?: string; storeId?: string };
               if (userData.role === 'sub_account') {
                 subAccountRole = userData.subAccountRole;
                 storeId = userData.subAccountId || userData.storeId;
@@ -87,7 +87,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 else userRole = 'sub_seller';
               }
             }
-          } catch (_) {}
+          } catch {
+            // Ignore sub-account lookup failures and continue as buyer
+          }
         }
 
         setUser({
@@ -131,4 +133,5 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useAuth = () => useContext(AuthContext);

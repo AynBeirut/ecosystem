@@ -1,0 +1,39 @@
+name: Inventory Health Gate
+
+on:
+  pull_request:
+    paths:
+      - src/pages/admin/AdminOrders.tsx
+      - src/pages/admin/AdminFinishedGoods.tsx
+      - src/pages/admin/AdminPurchases.tsx
+      - src/__tests__/inventoryTransitionInvariants.test.ts
+      - scripts/health/**
+      - .ci/inventory-lint-baseline.json
+      - package.json
+      - package-lock.json
+      - bun.lockb
+      - tsconfig.app.json
+      - eslint.config.js
+      - .github/workflows/inventory-health.yml
+
+jobs:
+  inventory-health:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Inventory lint and type gate
+        run: npm run health:inventory
+
+      - name: Inventory invariant tests
+        run: npm run test:inventory-invariants

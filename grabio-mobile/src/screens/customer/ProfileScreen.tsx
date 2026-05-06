@@ -14,6 +14,12 @@ const PAYMENT_OPTIONS = [
   { key: 'whatsapp', label: '💬 WhatsApp' },
 ];
 
+type ProfileDoc = {
+  phone?: string;
+  location?: string;
+  preferredPayment?: string;
+};
+
 export default function ProfileScreen() {
   const { user, signOut, isGuest, exitGuestMode } = useAuth();
 
@@ -28,7 +34,7 @@ export default function ProfileScreen() {
     const db = getFirestore();
     getDoc(doc(db, 'users', user.uid)).then((snap) => {
       if (snap.exists()) {
-        const d = snap.data() as any;
+        const d = snap.data() as ProfileDoc;
         if (d.phone) setPhone(d.phone);
         if (d.location) setLocation(d.location);
         if (d.preferredPayment) setPreferredPayment(d.preferredPayment);

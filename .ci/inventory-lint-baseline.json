@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-05-06T10:06:50.128Z",
+  "targetFiles": [
+    "src/pages/admin/AdminOrders.tsx",
+    "src/pages/admin/AdminFinishedGoods.tsx",
+    "src/pages/admin/AdminPurchases.tsx"
+  ],
+  "issues": [
+    {
+      "file": "src/pages/admin/AdminFinishedGoods.tsx",
+      "line": 107,
+      "column": 6,
+      "endLine": 107,
+      "endColumn": 21,
+      "severity": 1,
+      "ruleId": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has missing dependencies: 'fetchFinishedGoods' and 'fetchMonthlyServiceCosts'. Either include them or remove the dependency array."
+    },
+    {
+      "file": "src/pages/admin/AdminPurchases.tsx",
+      "line": 107,
+      "column": 6,
+      "endLine": 107,
+      "endColumn": 30,
+      "severity": 1,
+      "ruleId": "react-hooks/exhaustive-deps",
+      "message": "React Hook useEffect has a missing dependency: 'loadSupplierDates'. Either include it or remove the dependency array."
+    }
+  ]
+}

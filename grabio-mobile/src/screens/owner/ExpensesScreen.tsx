@@ -15,8 +15,8 @@ interface Expense {
   description?: string;
   amount: number;
   currency?: string;
-  date?: any;
-  createdAt?: any;
+  date?: unknown;
+  createdAt?: unknown;
   storeId: string;
 }
 
@@ -38,6 +38,7 @@ export default function ExpensesScreen() {
   useEffect(() => {
     if (!user?.storeId) { setLoading(false); return; }
     loadExpenses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.storeId, showAll]);
 
   const loadExpenses = useCallback(() => {
@@ -85,8 +86,8 @@ export default function ExpensesScreen() {
       setCategory('Other'); setDescription(''); setAmount(''); setCurrency('USD');
       setShowForm(false);
       Alert.alert('Saved', 'Expense recorded');
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }

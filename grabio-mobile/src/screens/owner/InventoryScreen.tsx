@@ -20,8 +20,8 @@ interface Purchase {
   totalAmount?: number;
   totalCost?: number;
   status?: string;
-  orderDate?: any;
-  createdAt?: any;
+  orderDate?: unknown;
+  createdAt?: unknown;
   storeId: string;
 }
 
@@ -65,6 +65,7 @@ export default function InventoryScreen() {
   useEffect(() => {
     if (!user?.storeId) return;
     fetchPurchases();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.storeId, showAllPurchases]);
 
   const fetchPurchases = useCallback(() => {
@@ -105,8 +106,8 @@ export default function InventoryScreen() {
         .update({ stock: firestore.FieldValue.increment(amount) });
       setReceivingQty((prev) => ({ ...prev, [product.id]: '' }));
       Alert.alert('Updated', `Added ${amount} units to ${product.name}`);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setReceivingId(null);
     }
@@ -131,8 +132,8 @@ export default function InventoryScreen() {
       setSupplier(''); setItemName(''); setQty(''); setCost('');
       setShowPurchaseForm(false);
       Alert.alert('Saved', 'Purchase recorded successfully');
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSavingPurchase(false);
     }

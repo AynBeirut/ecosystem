@@ -109,8 +109,8 @@ export default function CreateOrderScreen() {
       Alert.alert('Order Created', `Order for ${customerName || 'Walk-in'} placed successfully.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
-    } catch (err: any) {
-      Alert.alert('Error', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }

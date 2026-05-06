@@ -39,7 +39,7 @@ export default function StoreDetailScreen() {
       });
 
     return () => { unsubStore(); unsubProd(); };
-  }, [params.storeId]);
+  }, [navigation, params.storeId, params.storeName]);
 
   const waPhone = (store?.whatsappBusiness || store?.whatsappNumber || '').replace(/\D/g, '');
 

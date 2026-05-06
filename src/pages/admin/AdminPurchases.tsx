@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Purchase, PurchaseItem, Supplier, RawMaterial } from '@/types/inventory';
+import { Purchase, PurchaseItem, Supplier, RawMaterial, PaymentRecord } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
 import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
@@ -42,7 +42,7 @@ const AdminPurchases: React.FC = () => {
   const [isAddingPurchase, setIsAddingPurchase] = useState(false);
   const [editingPurchase, setEditingPurchase] = useState<Purchase | null>(null);
   const [receivingPurchase, setReceivingPurchase] = useState<Purchase | null>(null);
-  const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ purchase: Purchase; payment: any } | null>(null);
+  const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ purchase: Purchase; payment: PaymentRecord } | null>(null);
   
   // Loading states for button disabling
   const [isCreatingPO, setIsCreatingPO] = useState(false);
@@ -104,6 +104,7 @@ const AdminPurchases: React.FC = () => {
     if (newPurchase.supplierId) {
       loadSupplierDates(newPurchase.supplierId);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newPurchase.supplierId]);
 
   const [isCreatingNewSupplier, setIsCreatingNewSupplier] = useState(false);
@@ -223,10 +224,22 @@ const AdminPurchases: React.FC = () => {
     return usd;
   };
 
+  const parseNumberish = (value: unknown): number => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+    const parsed = Number.parseFloat(String(value ?? ''));
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const resolveItemUnitPrice = (item: PurchaseItem & { unitCost?: unknown; unitPrice?: unknown }): number => {
+    if (typeof item.unitPrice === 'number') return item.unitPrice;
+    if (typeof item.unitCost === 'number') return item.unitCost;
+    return parseNumberish(item.unitPrice ?? item.unitCost);
+  };
+
   const calculateTotal = (items: PurchaseItem[], taxType: string = 'none', taxRate: number = 0): number => {
     const subtotal = items.reduce((sum, item) => {
-      const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
-      const price = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
+      const qty = parseNumberish(item.quantity);
+      const price = parseNumberish(item.unitPrice);
       return sum + (qty * price);
     }, 0);
     
@@ -276,22 +289,21 @@ const AdminPurchases: React.FC = () => {
     const storeTaxNumber = storeProfile?.taxNumber || '';
     const poNum = purchase.invoiceNumber || purchase.poNumber || purchase.purchaseOrderNumber || purchase.id.slice(0, 8).toUpperCase();
     const subtotalFromItems = purchase.items?.reduce((sum, item) => {
-      const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
-      const price = typeof item.unitPrice === 'number'
-        ? item.unitPrice
-        : (typeof item.unitCost === 'number' ? item.unitCost : (parseFloat((item as any).unitPrice || item.unitCost as any) || 0));
+      const qty = parseNumberish(item.quantity);
+      const price = resolveItemUnitPrice(item);
       return sum + (qty * price);
     }, 0) || 0;
     const subtotal = typeof purchase.subtotal === 'number' ? purchase.subtotal : subtotalFromItems;
     const totalAmount = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
+    const purchaseMeta = purchase as Purchase & { vat?: number; taxType?: string; taxRate?: number };
     const taxAmountRaw = typeof purchase.taxAmount === 'number'
       ? purchase.taxAmount
-      : (typeof (purchase as any).vat === 'number' ? (purchase as any).vat : 0);
+      : (typeof purchaseMeta.vat === 'number' ? purchaseMeta.vat : 0);
     const taxAmount = taxAmountRaw > 0 ? taxAmountRaw : Math.max(0, totalAmount - subtotal);
     const hasTax = taxAmount > 0.0001;
-    const taxType = (purchase as any).taxType || (hasTax ? 'VAT' : 'none');
-    const taxRate = (typeof (purchase as any).taxRate === 'number' && (purchase as any).taxRate > 0)
-      ? (purchase as any).taxRate
+    const taxType = purchaseMeta.taxType || (hasTax ? 'VAT' : 'none');
+    const taxRate = (typeof purchaseMeta.taxRate === 'number' && purchaseMeta.taxRate > 0)
+      ? purchaseMeta.taxRate
       : (hasTax && subtotal > 0 ? (taxAmount / subtotal) * 100 : 0);
     const taxLabel = taxType === 'none' ? 'VAT' : taxType;
     const taxMultiplier = hasTax && subtotal > 0 ? (1 + (taxAmount / subtotal)) : 1;
@@ -302,10 +314,8 @@ const AdminPurchases: React.FC = () => {
       const product = simpleProducts.find(p => p.id === item.productId);
       const itemName = material?.name || product?.name || item.materialName || 'Item';
       const itemUnit = material?.unit || item.unit || 'unit';
-      const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
-      const unitPrice = typeof item.unitPrice === 'number'
-        ? item.unitPrice
-        : (typeof item.unitCost === 'number' ? item.unitCost : (parseFloat((item as any).unitPrice || item.unitCost as any) || 0));
+      const qty = parseNumberish(item.quantity);
+      const unitPrice = resolveItemUnitPrice(item);
       const unitPriceWithTax = unitPrice * taxMultiplier;
       const lineTotalWithTax = qty * unitPriceWithTax;
       return `
@@ -1208,7 +1218,18 @@ const AdminPurchases: React.FC = () => {
       ...newPurchase,
       items: [
         ...newPurchase.items,
-        { itemType: 'raw_material', rawMaterialId: '', productId: '', quantity: '' as any, unitPrice: '' as any, receivedQuantity: 0, materialName: '', sku: '' }
+        {
+          itemType: 'raw_material',
+          rawMaterialId: '',
+          productId: '',
+          quantity: 0,
+          unitPrice: 0,
+          unitCost: 0,
+          subtotal: 0,
+          receivedQuantity: 0,
+          materialName: '',
+          sku: ''
+        }
       ]
     });
   };
@@ -1220,9 +1241,9 @@ const AdminPurchases: React.FC = () => {
     });
   };
 
-  const updateItem = (index: number, field: keyof PurchaseItem, value: any) => {
+  const updateItem = (index: number, field: keyof PurchaseItem, value: unknown) => {
     const updated = [...newPurchase.items];
-    updated[index] = { ...updated[index], [field]: value };
+    updated[index] = { ...updated[index], [field]: value as PurchaseItem[keyof PurchaseItem] };
     
     // Auto-fill unit price and details from material or product
     if (field === 'rawMaterialId' && value) {
@@ -1287,10 +1308,10 @@ const AdminPurchases: React.FC = () => {
       
       // Ensure all numeric values are properly converted
       const normalizedItems = newPurchase.items.map(item => {
-        const unitPrice = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
+        const unitPrice = parseNumberish(item.unitPrice);
         return {
           ...item,
-          quantity: typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0),
+          quantity: parseNumberish(item.quantity),
           unitPrice,
           unitCost: unitPrice, // Ensure unitCost is also set for compatibility
         };
@@ -1644,7 +1665,7 @@ const AdminPurchases: React.FC = () => {
     }
   };
 
-  const generatePaymentVoucherHTML = (purchase: Purchase, payment: any) => {
+  const generatePaymentVoucherHTML = (purchase: Purchase, payment: PaymentRecord) => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     return `
       <div class="voucher-container" style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
@@ -1720,7 +1741,7 @@ const AdminPurchases: React.FC = () => {
     `;
   };
 
-  const downloadPaymentVoucher = async (purchase: Purchase, payment: any) => {
+  const downloadPaymentVoucher = async (purchase: Purchase, payment: PaymentRecord) => {
     try {
       const tempDiv = document.createElement('div');
       tempDiv.innerHTML = generatePaymentVoucherHTML(purchase, payment);
@@ -1746,7 +1767,7 @@ const AdminPurchases: React.FC = () => {
     }
   };
 
-  const printPaymentVoucher = (purchase: Purchase, payment: any) => {
+  const printPaymentVoucher = (purchase: Purchase, payment: PaymentRecord) => {
     const printWindow = window.open('', '', 'height=600,width=800');
     if (printWindow) {
       printWindow.document.write('<html><head><title>Payment Voucher</title></head><body>');
@@ -1761,7 +1782,7 @@ const AdminPurchases: React.FC = () => {
     }
   };
 
-  const sharePaymentVoucher = async (purchase: Purchase, payment: any) => {
+  const sharePaymentVoucher = async (purchase: Purchase, payment: PaymentRecord) => {
     if (navigator.share) {
       try {
         await navigator.share({
@@ -1812,7 +1833,7 @@ const AdminPurchases: React.FC = () => {
   };
 
   const getStatusBadge = (status: Purchase['status']) => {
-    const variants: Record<string, { variant: any; label: string }> = {
+    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string }> = {
       draft: { variant: 'secondary', label: 'Draft' },
       sent: { variant: 'default', label: 'Sent' },
       confirmed: { variant: 'default', label: 'Confirmed' },
@@ -1825,7 +1846,7 @@ const AdminPurchases: React.FC = () => {
 
   const getPaymentBadge = (purchase: Purchase) => {
     const paymentStatus = purchase.paymentStatus || 'unpaid';
-    const variants: Record<string, { variant: any; label: string; color: string }> = {
+    const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; color: string }> = {
       paid: { variant: 'default', label: 'Paid', color: 'bg-green-100 text-green-800' },
       partial: { variant: 'secondary', label: 'Partial', color: 'bg-yellow-100 text-yellow-800' },
       unpaid: { variant: 'destructive', label: 'Unpaid', color: 'bg-red-100 text-red-800' },
@@ -1972,8 +1993,8 @@ const AdminPurchases: React.FC = () => {
                   {newPurchase.items.map((item, index) => {
                     const material = rawMaterials.find(m => m.id === item.rawMaterialId);
                     const product = simpleProducts.find(p => p.id === item.productId);
-                    const qty = typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity as any) || 0);
-                    const price = typeof item.unitPrice === 'number' ? item.unitPrice : (parseFloat(item.unitPrice as any) || 0);
+                    const qty = parseNumberish(item.quantity);
+                    const price = parseNumberish(item.unitPrice);
                     const lineTotal = qty * price;
 
                     return (
@@ -1983,7 +2004,7 @@ const AdminPurchases: React.FC = () => {
                             <Label className="text-xs">Item Type</Label>
                             <Select
                               value={item.itemType || 'raw_material'}
-                              onValueChange={(value: any) => {
+                              onValueChange={(value: 'raw_material' | 'product') => {
                                 const updated = [...newPurchase.items];
                                 updated[index] = { ...updated[index], itemType: value, rawMaterialId: '', productId: '' };
                                 setNewPurchase({ ...newPurchase, items: updated });
@@ -2097,7 +2118,7 @@ const AdminPurchases: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label>Tax Type</Label>
-                    <Select value={newPurchase.taxType} onValueChange={(value: any) => setNewPurchase({ ...newPurchase, taxType: value })}>
+                    <Select value={newPurchase.taxType} onValueChange={(value: 'none' | 'VAT' | 'TTC') => setNewPurchase({ ...newPurchase, taxType: value })}>
                       <SelectTrigger>
                         <SelectValue />
                       </SelectTrigger>

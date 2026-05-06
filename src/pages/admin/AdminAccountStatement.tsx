@@ -836,8 +836,11 @@ const AdminAccountStatement: React.FC = () => {
       const db = getFirestore();
       const q = query(collection(db, 'accountPayments'), where('storeId', '==', user.storeId));
       const snap = await getDocs(q);
-      const list = snap.docs.map(d => ({ id: d.id, ...d.data() } as any));
-      list.sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+      const list = snap.docs.map(d => ({
+        id: d.id,
+        ...(d.data() as Omit<(typeof accountPayments)[number], 'id'>),
+      }));
+      list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
       setAccountPayments(list);
     } catch (err) {
       console.error('Error fetching account payments:', err);
@@ -2984,7 +2987,7 @@ const AdminAccountStatement: React.FC = () => {
 
                                             combined.forEach((item, idx) => {
                                               if (item.type === 'invoice') {
-                                                const inv = item.data as any;
+                                                const inv = item.data as SalesRecord;
                                                 running += (inv.total - inv.amountPaid);
                                                 rows.push(
                                                   <tr key={`inv-${inv.id}`} className="border-b hover:bg-white">
@@ -3003,7 +3006,7 @@ const AdminAccountStatement: React.FC = () => {
                                                   </tr>
                                                 );
                                               } else {
-                                                const p = item.data as any;
+                                                const p = item.data as (typeof accountPayments)[number];
                                                 running -= p.amount;
                                                 rows.push(
                                                   <tr key={`pmt-${p.id || idx}`} className="border-b bg-green-50 hover:bg-green-100">

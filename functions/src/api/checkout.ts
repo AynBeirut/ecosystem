@@ -16,11 +16,20 @@ interface WhishCredentials {
 interface WhishPaymentResponse {
   status: boolean;
   code?: string | null;
-  dialog?: any;
+  dialog?: { message?: string };
   data?: {
     collectUrl?: string;
   };
   error?: string;
+}
+
+function getErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const responseMessage = (error.response?.data as { dialog?: { message?: string } } | undefined)?.dialog?.message;
+    return responseMessage || error.message || 'Request failed';
+  }
+  if (error instanceof Error) return error.message;
+  return 'Unknown error';
 }
 
 function toHttpsUrl(input: string): string {
@@ -64,7 +73,7 @@ function appendRequiredParams(baseUrl: string, externalId: number, orderId: stri
   }
 }
 
-function resolveWhishUrls(req: Request, storeData: Record<string, any>, storeSlug: string, externalId: number, orderId: string) {
+function resolveWhishUrls(req: Request, storeData: Record<string, unknown>, storeSlug: string, externalId: number, orderId: string) {
   const apiBase = getApiBaseUrl(req);
   const defaultSuccessCallback = `${apiBase}/payment/callback?externalId=${externalId}&orderId=${orderId}`;
   const defaultFailureCallback = `${apiBase}/payment/callback?externalId=${externalId}&orderId=${orderId}&status=failed`;
@@ -155,11 +164,11 @@ async function initiateStorePayment(
       code: response.data.code || 'UNKNOWN_ERROR',
       error: response.data.dialog?.message || 'Payment initiation failed'
     };
-  } catch (error: any) {
-    console.error('Store payment error:', error.response?.data || error.message);
+  } catch (error: unknown) {
+    console.error('Store payment error:', error);
     return {
       status: false,
-      error: error.response?.data?.dialog?.message || error.message || 'Payment service unavailable'
+      error: getErrorMessage(error) || 'Payment service unavailable'
     };
   }
 }
@@ -199,11 +208,11 @@ async function checkStorePaymentStatus(
       collectStatus: response.data.data?.collectStatus,
       error: response.data.dialog?.message
     };
-  } catch (error: any) {
-    console.error('Store payment status error:', error.response?.data || error.message);
+  } catch (error: unknown) {
+    console.error('Store payment status error:', error);
     return {
       status: false,
-      error: error.message
+      error: getErrorMessage(error)
     };
   }
 }
@@ -276,7 +285,7 @@ export async function processCheckout(req: Request, res: Response) {
 
     // Create invoice description from order items
     const itemsSummary = items.length > 0 
-      ? items.map((item: any) => `${item.productId} x${item.quantity}`).join(', ')
+      ? items.map((item: { productId?: string; quantity?: number }) => `${item.productId || 'item'} x${item.quantity || 0}`).join(', ')
       : 'Order items';
     const invoice = `Order #${orderId}: ${itemsSummary}`;
 
@@ -331,9 +340,9 @@ export async function processCheckout(req: Request, res: Response) {
       orderId,
       externalId
     });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Checkout payment error:', error);
-    res.status(500).json({ error: error.message });
+    res.status(500).json({ error: getErrorMessage(error) });
   }
 }
 
@@ -439,7 +448,7 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
       console.log('Payment still pending:', { externalId, orderId });
       return res.status(202).send('Payment pending - please wait');
     }
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Payment callback error:', error);
     res.status(500).send('Callback processing failed');
   }

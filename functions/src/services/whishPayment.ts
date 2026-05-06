@@ -52,7 +52,7 @@ export interface WhishPaymentRequest {
 export interface WhishPaymentResponse {
   status: boolean;
   code?: string | null;
-  dialog?: any;
+  dialog?: { message?: string };
   data?: {
     collectUrl?: string; // The payment page URL
   };
@@ -71,6 +71,15 @@ export interface WhishStatusResponse {
     collectStatus: 'success' | 'failed' | 'pending';
     payerPhoneNumber?: string;
   };
+}
+
+function getAxiosErrorMessage(error: unknown): string {
+  if (axios.isAxiosError(error)) {
+    const responseMessage = (error.response?.data as { dialog?: { message?: string } } | undefined)?.dialog?.message;
+    return responseMessage || error.message || 'Request failed';
+  }
+  if (error instanceof Error) return error.message;
+  return 'Unknown error';
 }
 
 /**
@@ -122,11 +131,11 @@ export async function initiatePayment(
       code: response.data.code || 'UNKNOWN_ERROR',
       error: response.data.dialog?.message || 'Payment initiation failed'
     };
-  } catch (error: any) {
-    console.error('Whish payment error:', error.response?.data || error.message);
+  } catch (error: unknown) {
+    console.error('Whish payment error:', error);
     return {
       status: false,
-      error: error.response?.data?.dialog?.message || error.message || 'Payment service unavailable'
+      error: getAxiosErrorMessage(error) || 'Payment service unavailable'
     };
   }
 }
@@ -155,11 +164,13 @@ export async function checkPaymentStatus(
 
     console.log('Whish status response:', response.data);
     return response.data;
-  } catch (error: any) {
-    console.error('Whish status check error:', error.response?.data || error.message);
+  } catch (error: unknown) {
+    console.error('Whish status check error:', error);
     return {
       status: false,
-      code: error.response?.data?.code || 'STATUS_CHECK_ERROR'
+      code: axios.isAxiosError(error)
+        ? ((error.response?.data as { code?: string } | undefined)?.code || 'STATUS_CHECK_ERROR')
+        : 'STATUS_CHECK_ERROR'
     };
   }
 }
@@ -182,8 +193,8 @@ export async function getBalance(currency: 'USD' | 'LBP' = 'USD'): Promise<numbe
       return response.data.data.balance;
     }
     return null;
-  } catch (error: any) {
-    console.error('Whish balance check error:', error.response?.data || error.message);
+  } catch (error: unknown) {
+    console.error('Whish balance check error:', error);
     return null;
   }
 }

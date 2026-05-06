@@ -34,25 +34,24 @@ export default function OwnerOrdersScreen() {
   useEffect(() => {
     if (!user?.storeId) { setLoading(false); return; }
 
-    let baseQuery = firestore()
+    const baseQuery = firestore()
       .collection('storeProfiles')
       .doc(user.storeId)
       .collection('orders');
 
-    let query: any;
-    if (!showAll) {
+    const queryRef = !showAll
+      ? (() => {
       const now = new Date();
       const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      query = baseQuery
+      return baseQuery
         .where('createdAt', '>=', firestore.Timestamp.fromDate(startOfToday))
         .orderBy('createdAt', 'desc');
-    } else {
-      query = baseQuery.orderBy('createdAt', 'desc');
-    }
+      })()
+      : baseQuery.orderBy('createdAt', 'desc');
 
-    const unsub = query.onSnapshot((snap: any) => {
+    const unsub = queryRef.onSnapshot((snap) => {
       if (!snap) { setLoading(false); return; }
-      setOrders(snap.docs.map((d: any) => ({ id: d.id, ...d.data() } as Order)));
+      setOrders(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Order)));
       setLoading(false);
     });
     return unsub;

@@ -579,7 +579,9 @@ const AdminOrders: React.FC = () => {
         ]);
 
         const locationsSnapshot = await getDocs(query(collection(db, 'fulfillmentLocations'), where('storeId', '==', user.storeId)));
-        const locations: FulfillmentLocation[] = locationsSnapshot.docs.map((d) => ({ id: d.id, ...(d.data() as any) } as FulfillmentLocation));
+        const locations: FulfillmentLocation[] = locationsSnapshot.docs.map(
+          (d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) } as FulfillmentLocation)
+        );
         setFulfillmentLocations(locations);
 
         const viewsSnapshot = await getDocs(query(
@@ -588,7 +590,7 @@ const AdminOrders: React.FC = () => {
           where('userId', '==', user.id),
         ));
         const views = viewsSnapshot.docs
-          .map((viewDoc) => ({ id: viewDoc.id, ...(viewDoc.data() as any) } as SavedOrderView))
+          .map((viewDoc) => ({ id: viewDoc.id, ...(viewDoc.data() as Record<string, unknown>) } as SavedOrderView))
           .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
         setSavedOrderViews(views);
 
@@ -959,7 +961,8 @@ const AdminOrders: React.FC = () => {
         }
 
         // Auto-link customer to salesman on first order with that salesman
-        if (newOrder.assignedSalesPerson && customer && (customer as any).assignedSalesPerson !== newOrder.assignedSalesPerson) {
+        const customerAssignedSalesPerson = (customer as Customer & { assignedSalesPerson?: string })?.assignedSalesPerson;
+        if (newOrder.assignedSalesPerson && customer && customerAssignedSalesPerson !== newOrder.assignedSalesPerson) {
           try {
             const customerRef = doc(db, 'customers', customer.id);
             await updateDoc(customerRef, {
@@ -1064,7 +1067,7 @@ const AdminOrders: React.FC = () => {
       }
       
       // Version counter to make idempotency keys unique across multiple deliver→rollback→deliver cycles
-      const currentDeliveryCount = Number((order as any)._stockDeliveryCount || 0);
+      const currentDeliveryCount = Number((order as Order & { _stockDeliveryCount?: number })._stockDeliveryCount || 0);
       let nextDeliveryCount = currentDeliveryCount;
 
       // Handle rollback from counted sale state to non-sale state
@@ -1452,7 +1455,8 @@ const AdminOrders: React.FC = () => {
       await updateDoc(orderRef, orderData);
 
       // Auto-link customer to salesman if salesman was set/changed
-      if (newOrder.assignedSalesPerson && customer && (customer as any).assignedSalesPerson !== newOrder.assignedSalesPerson) {
+      const customerAssignedSalesPerson = (customer as Customer & { assignedSalesPerson?: string })?.assignedSalesPerson;
+      if (newOrder.assignedSalesPerson && customer && customerAssignedSalesPerson !== newOrder.assignedSalesPerson) {
         try {
           const customerRef = doc(db, 'customers', customer.id);
           await updateDoc(customerRef, {
@@ -1528,7 +1532,7 @@ const AdminOrders: React.FC = () => {
           const itemProductId = resolveOrderItemProductKey(item);
           if (!itemProductId) continue;
 
-          const deleteCount = Number((order as any)._stockDeliveryCount || 0);
+          const deleteCount = Number((order as Order & { _stockDeliveryCount?: number })._stockDeliveryCount || 0);
           const idempotencyKey = buildInventoryEventKey('order-delete', orderId, itemProductId, `${order.status || 'unknown'}:line${lineIdx}`);
           // Only restore if the matching delivery transaction actually exists
           const requiredDeliveryKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${deleteCount}`);
@@ -2991,10 +2995,11 @@ const AdminOrders: React.FC = () => {
                                     key={customer.id}
                                     value={`${customer.name} ${customer.phone}`}
                                     onSelect={() => {
-                                      const updates: any = { customerId: customer.id };
+                                      const updates: { customerId: string; assignedSalesPerson?: string } = { customerId: customer.id };
                                       // Auto-assign salesperson if the customer has one linked
-                                      if ((customer as any).assignedSalesPerson) {
-                                        updates.assignedSalesPerson = (customer as any).assignedSalesPerson;
+                                      const linkedSalesPerson = (customer as Customer & { assignedSalesPerson?: string }).assignedSalesPerson;
+                                      if (linkedSalesPerson) {
+                                        updates.assignedSalesPerson = linkedSalesPerson;
                                       }
                                       setNewOrder({ ...newOrder, ...updates });
                                       setCustomerSearchOpen(false);

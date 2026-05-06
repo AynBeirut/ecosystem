@@ -7,6 +7,11 @@ import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, RADIUS } from '../../theme';
 
+type AuthErrorLike = {
+  message?: string;
+  code?: string;
+};
+
 // Configure Google Sign-In (webClientId from Firebase Console > Authentication > Sign-in providers > Google)
 GoogleSignin.configure({
   webClientId: '997465465802-biu0r3k8ff880560gvgd8tao71361bp4.apps.googleusercontent.com',
@@ -32,8 +37,9 @@ export default function LoginScreen() {
       } else {
         await auth().signInWithEmailAndPassword(email.trim(), password);
       }
-    } catch (err: any) {
-      Alert.alert('Authentication Error', err.message);
+    } catch (err: unknown) {
+      const error = err as AuthErrorLike;
+      Alert.alert('Authentication Error', error.message || 'Unknown authentication error');
     } finally {
       setLoading(false);
     }
@@ -48,9 +54,10 @@ export default function LoginScreen() {
       if (!idToken) throw new Error('No ID token returned from Google Sign-In');
       const credential = auth.GoogleAuthProvider.credential(idToken);
       await auth().signInWithCredential(credential);
-    } catch (err: any) {
-      if (err.code !== 'SIGN_IN_CANCELLED') {
-        Alert.alert('Google Sign-In Error', err.message);
+    } catch (err: unknown) {
+      const error = err as AuthErrorLike;
+      if (error.code !== 'SIGN_IN_CANCELLED') {
+        Alert.alert('Google Sign-In Error', error.message || 'Unknown Google sign-in error');
       }
     } finally {
       setGoogleLoading(false);

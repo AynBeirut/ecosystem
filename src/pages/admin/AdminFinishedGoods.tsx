@@ -26,6 +26,28 @@ import { cleanTextForPDF } from '@/lib/arabicPDF';
 import { Switch } from '@/components/ui/switch';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 
+type SyncChange = {
+  productName: string;
+  oldQuantitySold: number;
+  newQuantitySold: number;
+  difference: number;
+};
+
+type SyncResult = {
+  success: boolean;
+  productsUpdated: number;
+  changes: SyncChange[];
+  errors: string[];
+};
+
+type IntegrityMismatch = {
+  productId: string;
+  productName: string;
+  recordedQuantity: number;
+  actualQuantity: number;
+  difference: number;
+};
+
 const AdminFinishedGoods: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -69,8 +91,8 @@ const AdminFinishedGoods: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isCheckingIntegrity, setIsCheckingIntegrity] = useState(false);
   const [showSyncDialog, setShowSyncDialog] = useState(false);
-  const [syncResults, setSyncResults] = useState<any>(null);
-  const [integrityResults, setIntegrityResults] = useState<any>(null);
+  const [syncResults, setSyncResults] = useState<SyncResult | null>(null);
+  const [integrityResults, setIntegrityResults] = useState<IntegrityMismatch[] | null>(null);
 
 
   // Edit state for manual data correction
@@ -82,6 +104,7 @@ const AdminFinishedGoods: React.FC = () => {
   useEffect(() => {
     fetchFinishedGoods();
     fetchMonthlyServiceCosts();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.storeId]);
 
   useEffect(() => {
@@ -769,7 +792,7 @@ const AdminFinishedGoods: React.FC = () => {
       const fgRef = doc(db, 'finishedGoodsInventory', editingItem.id);
       
       // Build update object, filtering out undefined values
-      const updateData: Record<string, any> = {
+      const updateData: Record<string, unknown> = {
         costPrice: editingItem.costPrice || 0,
         currentBalance: editingItem.currentBalance || 0,
         quantitySold: editingItem.quantitySold || 0,
@@ -810,9 +833,9 @@ const AdminFinishedGoods: React.FC = () => {
       toast.success("Item updated successfully");
       setEditingItem(null);
       fetchFinishedGoods();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Error updating item:", error);
-      toast.error(`Failed to update item: ${error.message}`);
+      toast.error(`Failed to update item: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -880,9 +903,9 @@ const AdminFinishedGoods: React.FC = () => {
       }
 
       await fetchFinishedGoods();
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Sync error:", error);
-      toast.error(`Sync failed: ${error.message}`);
+      toast.error(`Sync failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsSyncing(false);
     }
@@ -909,7 +932,7 @@ const AdminFinishedGoods: React.FC = () => {
       ordersSnapshot.forEach((orderDoc) => {
         const order = orderDoc.data();
         if (isCountedSaleStatus(order.status)) {
-          order.items?.forEach((item: any) => {
+          order.items?.forEach((item: { productName?: string; quantity?: number; productId?: string; composedProductId?: string; id?: string }) => {
             const key = resolveOrderItemProductKey(item);
             if (key) {
               const existing = actualSoldQuantities.get(key) || { quantity: 0, name: item.productName };
@@ -929,7 +952,7 @@ const AdminFinishedGoods: React.FC = () => {
       );
       const fgSnapshot = await getDocs(fgQuery);
 
-      const mismatches: any[] = [];
+      const mismatches: IntegrityMismatch[] = [];
       fgSnapshot.forEach((fgDoc) => {
         const fg = fgDoc.data();
         const productKey = resolveFinishedGoodsProductKey(fg);
@@ -954,9 +977,9 @@ const AdminFinishedGoods: React.FC = () => {
       } else {
         toast.warning(`Found ${mismatches.length} mismatches. Click 'Check Data Integrity' to see details.`);
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Integrity check error:", error);
-      toast.error(`Integrity check failed: ${error.message}`);
+      toast.error(`Integrity check failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setIsCheckingIntegrity(false);
     }
@@ -1044,9 +1067,9 @@ const AdminFinishedGoods: React.FC = () => {
         });
         await fetchFinishedGoods(); // Refresh the list
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error("Fix recipe links error:", error);
-      toast({ title: "Error", description: `Failed to fix recipe links: ${error.message}`, variant: "destructive" });
+      toast({ title: "Error", description: `Failed to fix recipe links: ${error instanceof Error ? error.message : 'Unknown error'}`, variant: "destructive" });
     } finally {
       setIsCheckingIntegrity(false);
     }
@@ -1525,7 +1548,13 @@ const AdminFinishedGoods: React.FC = () => {
                         type="number"
                         min="1"
                         value={editingItem.expiryAlertDays ?? 30}
-                        onChange={(e) => setEditingItem({ ...editingItem, expiryAlertDays: e.target.value === '' ? '' as any : parseInt(e.target.value) })}
+                        onChange={(e) => {
+                          const parsed = parseInt(e.target.value, 10);
+                          setEditingItem({
+                            ...editingItem,
+                            expiryAlertDays: Number.isFinite(parsed) ? parsed : undefined,
+                          });
+                        }}
                         onBlur={(e) => setEditingItem({ ...editingItem, expiryAlertDays: parseInt(e.target.value) || 30 })}
                         placeholder="30"
                       />
@@ -1599,7 +1628,10 @@ const AdminFinishedGoods: React.FC = () => {
               <Label>Reason</Label>
               <Select
                 value={adjustment.reason}
-                onValueChange={(value: any) => setAdjustment({ ...adjustment, reason: value })}
+                onValueChange={(value: string) => {
+                  const normalizedReason = value === 'production_damage' ? 'production_damage' : 'damage';
+                  setAdjustment({ ...adjustment, reason: normalizedReason });
+                }}
               >
                 <SelectTrigger>
                   <SelectValue />

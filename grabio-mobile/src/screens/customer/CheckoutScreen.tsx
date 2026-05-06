@@ -151,9 +151,9 @@ export default function CheckoutScreen() {
         },
         { enableHighAccuracy: true, timeout: 8000, maximumAge: 10000 },
       );
-    } catch (e: any) {
+    } catch (e: unknown) {
       setLocating(false);
-      Alert.alert('Error', e.message);
+      Alert.alert('Error', e instanceof Error ? e.message : 'Unknown error');
     }
   };
 
@@ -216,7 +216,11 @@ export default function CheckoutScreen() {
       if (!res.ok) {
         const errText = await res.text().catch(() => '');
         let errMsg = `Error ${res.status}`;
-        try { errMsg = JSON.parse(errText).error || JSON.parse(errText).message || errMsg; } catch {}
+        try {
+          errMsg = JSON.parse(errText).error || JSON.parse(errText).message || errMsg;
+        } catch {
+          // Ignore malformed error payload and keep fallback message
+        }
         console.error('Checkout failed:', res.status, errText);
         throw new Error(errMsg);
       }
@@ -230,8 +234,8 @@ export default function CheckoutScreen() {
         Alert.alert('Order placed!', 'Your order was submitted successfully.');
         navigation.goBack();
       }
-    } catch (err: any) {
-      Alert.alert('Checkout failed', err.message);
+    } catch (err: unknown) {
+      Alert.alert('Checkout failed', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setLoading(false);
     }

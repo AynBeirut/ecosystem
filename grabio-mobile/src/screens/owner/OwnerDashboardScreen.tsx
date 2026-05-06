@@ -55,7 +55,7 @@ export default function OwnerDashboardScreen() {
         let todayRev = 0;
         let todayCount = 0;
         let yesterdayRev = 0;
-        let currency = storeCurrency;
+        const currency = storeCurrency;
         const newOrders: Stats['newOrders'] = [];
 
         snap.docs.forEach((d) => {
