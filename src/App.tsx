@@ -1,5 +1,5 @@
 import { Suspense, lazy, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
 import { initGA, trackPageView } from './lib/analytics';
 import { initMetaPixel } from './lib/metaPixel';
@@ -81,6 +81,13 @@ const AdminMarketplaceSync = lazy(() => import("./pages/admin/AdminMarketplaceSy
 const AdminSEOAnalytics = lazy(() => import("./pages/admin/AdminSEOAnalytics"));
 const AdminSEOAudit = lazy(() => import("./pages/admin/AdminSEOAudit"));
 const GscCallback = lazy(() => import("./pages/auth/GscCallback"));
+const LandingPage = lazy(() => import("./pages/public/LandingPage"));
+const Features = lazy(() => import("./pages/public/Features"));
+const Pricing = lazy(() => import("./pages/public/Pricing"));
+const UseCases = lazy(() => import("./pages/public/UseCases"));
+const About = lazy(() => import("./pages/public/About"));
+const Blog = lazy(() => import("./pages/public/Blog"));
+const BlogPost = lazy(() => import("./pages/public/BlogPost"));
 const AdminProductReviews = lazy(() => import("./pages/admin/AdminProductReviews"));
 const AdminOrderNotifications = lazy(() => import("./pages/admin/AdminOrderNotifications"));
 const AdminServiceRenewals = lazy(() => import("./pages/admin/AdminServiceRenewals"));
@@ -133,11 +140,11 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         {!isCustomDomain && (
                           <>
                         <Route path="/login" element={<Login />} />
-                        <Route path="/signup" element={<Signup />} />
+                        <Route path="/signup" element={<Navigate to="/login?tab=signup" replace />} />
                         <Route path="/auth/callback" element={<AuthCallback />} />
                         <Route path="/auth/gsc-callback" element={<GscCallback />} />
                         {/* Main app routes */}
-                        <Route path="/" element={<Marketplace />} />
+                        <Route path="/" element={<Navigate to="/features" replace />} />
                         <Route path="/search" element={<Marketplace />} />
                         <Route path="/store/:slug" element={<StoreDetail />} />
                         <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
@@ -211,6 +218,13 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/admin/seo-audit" element={<ProtectedRoute allowedRoles={['admin']}><AdminSEOAudit /></ProtectedRoute>} />
                         {/* CRM */}
                         <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />
+                        {/* Public marketing pages — must be BEFORE /:slug */}
+                        <Route path="/features" element={<Features />} />
+                        <Route path="/pricing" element={<Pricing />} />
+                        <Route path="/use-cases" element={<UseCases />} />
+                        <Route path="/about" element={<About />} />
+                        <Route path="/blog" element={<Blog />} />
+                        <Route path="/blog/:slug" element={<BlogPost />} />
                         {/* Short store URLs: /:slug and /:slug/product/:productSlug */}
                         <Route path="/:slug" element={<StoreDetail />} />
                         <Route path="/:slug/category/:categorySlug" element={<StoreDetail />} />

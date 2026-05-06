@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import AuthCTA from '@/components/public/AuthCTA';
 import {
   ShoppingCart,
   BarChart2,
@@ -131,13 +132,11 @@ const LandingPage: React.FC = () => {
                 POS, inventory, invoicing, and marketplace in one platform. Built for small businesses that are serious about growth.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/signup"
+                <AuthCTA
                   className="px-8 py-4 text-base font-semibold bg-white text-teal-700 rounded-xl hover:bg-teal-50 transition-colors shadow-lg"
                   onClick={() => trackCTAClick('get_started_free')}
-                >
-                  Get Started Free <ArrowRight className="inline ml-1 h-4 w-4" />
-                </Link>
+                  showArrow
+                />
                 <Link
                   to="/features"
                   className="px-8 py-4 text-base font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors"
@@ -351,12 +350,9 @@ const LandingPage: React.FC = () => {
                 Join hundreds of businesses that replaced disconnected tools with one platform. Free to start. No credit card required.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Link
-                  to="/signup"
+                <AuthCTA
                   className="px-8 py-4 text-base font-semibold bg-white text-teal-700 rounded-xl hover:bg-teal-50 transition-colors shadow-lg"
-                >
-                  Get Started Free
-                </Link>
+                />
                 <Link
                   to="/contact"
                   className="px-8 py-4 text-base font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors"

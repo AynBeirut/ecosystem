@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import AuthCTA from '@/components/public/AuthCTA';
 import { Target, Heart, Zap, Globe, ArrowRight } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import PublicNav from '@/components/public/PublicNav';
@@ -114,9 +115,7 @@ const About: React.FC = () => (
               Start building your business on a platform that was made for businesses like yours.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Link to="/signup" className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors">
-                Get Started Free
-              </Link>
+              <AuthCTA className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors" />
               <Link to="/contact" className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:border-gray-400 transition-colors flex items-center gap-2">
                 Contact Us <ArrowRight className="h-4 w-4" />
               </Link>

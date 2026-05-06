@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Link, useParams, Navigate } from 'react-router-dom';
+import AuthCTA from '@/components/public/AuthCTA';
 import { ArrowLeft, ArrowRight, Clock, Calendar } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
@@ -239,12 +240,9 @@ const BlogPost: React.FC = () => {
               <p className="text-teal-100 mb-7 text-sm leading-relaxed">
                 Grabio gives you the tools described in this guide — POS, inventory, invoicing, and more — in one integrated platform.
               </p>
-              <Link
-                to="/signup"
+              <AuthCTA
                 className="px-6 py-3 bg-white text-teal-700 font-semibold rounded-xl hover:bg-teal-50 transition-colors"
-              >
-                Get Started Free
-              </Link>
+              />
             </div>
           </section>
 

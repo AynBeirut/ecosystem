@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import AuthCTA from '@/components/public/AuthCTA';
 import {
   ShoppingCart, Package, FileText, BarChart2, Users, Truck,
   Building2, CreditCard, ShieldCheck, Smartphone, Layers, Repeat,
@@ -277,9 +278,7 @@ const Features: React.FC = () => {
           <h2 className="text-3xl font-bold text-gray-900 mb-4">Ready to replace your tool stack?</h2>
           <p className="text-gray-500 mb-8">Start free. No credit card required. Full features available immediately.</p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
-            <Link to="/signup" className="px-8 py-4 font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors">
-              Get Started Free
-            </Link>
+            <AuthCTA className="px-8 py-4 font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-xl transition-colors" />
             <Link to="/pricing" className="px-8 py-4 font-semibold text-gray-700 border border-gray-300 hover:border-gray-400 rounded-xl transition-colors">
               View Pricing
             </Link>

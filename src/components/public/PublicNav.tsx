@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { Menu, X } from 'lucide-react';
+import { useAuth } from '@/context/useAuth';
 
 const NAV_LINKS = [
   { label: 'Features', href: '/features' },
@@ -13,6 +14,9 @@ const NAV_LINKS = [
 const PublicNav: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
+  const { user } = useAuth();
+  const isSignedIn = !!user;
+  const dashboardPath = user?.role === 'admin' ? '/admin' : user?.role === 'sub_account' ? '/team/dashboard' : '/';
 
   const isActive = (href: string) =>
     href === '/'
@@ -55,23 +59,34 @@ const PublicNav: React.FC = () => {
         {/* Desktop CTAs */}
         <div className="hidden md:flex items-center gap-2">
           <Link
-            to="/marketplace"
+            to="/search"
             className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
           >
             Marketplace
           </Link>
-          <Link
-            to="/login"
-            className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
-          >
-            Sign In
-          </Link>
-          <Link
-            to="/signup"
-            className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
-          >
-            Get Started Free
-          </Link>
+          {isSignedIn ? (
+            <Link
+              to={dashboardPath}
+              className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+            >
+              Dashboard
+            </Link>
+          ) : (
+            <>
+              <Link
+                to="/login"
+                className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+              >
+                Sign In
+              </Link>
+              <Link
+                to="/login?tab=signup"
+                className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+              >
+                Get Started Free
+              </Link>
+            </>
+          )}
         </div>
 
         {/* Mobile hamburger */}
@@ -106,31 +121,45 @@ const PublicNav: React.FC = () => {
             ))}
             <li className="pt-2 border-t border-gray-100 mt-2">
               <Link
-                to="/marketplace"
+                to="/search"
                 onClick={() => setMobileOpen(false)}
                 className="block px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50"
               >
                 Marketplace
               </Link>
             </li>
-            <li>
-              <Link
-                to="/login"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50"
-              >
-                Sign In
-              </Link>
-            </li>
-            <li>
-              <Link
-                to="/signup"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 text-center rounded-lg"
-              >
-                Get Started Free
-              </Link>
-            </li>
+            {isSignedIn ? (
+              <li>
+                <Link
+                  to={dashboardPath}
+                  onClick={() => setMobileOpen(false)}
+                  className="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 text-center rounded-lg"
+                >
+                  Dashboard
+                </Link>
+              </li>
+            ) : (
+              <>
+                <li>
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50"
+                  >
+                    Sign In
+                  </Link>
+                </li>
+                <li>
+                  <Link
+                    to="/login?tab=signup"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 text-center rounded-lg"
+                  >
+                    Get Started Free
+                  </Link>
+                </li>
+              </>
+            )}
           </ul>
         </div>
       )}

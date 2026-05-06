@@ -394,3 +394,86 @@ export async function sendExpiryAlertEmail(
 
   await sendEmail(template);
 }
+
+/**
+ * Send order confirmation + tracking code to customer (guest or registered)
+ */
+export async function sendOrderConfirmationEmail(params: {
+  to: string;
+  customerName: string;
+  orderId: string;
+  storeName: string;
+  items: Array<{ name?: string; productId?: string; quantity: number; price: number }>;
+  total: number;
+  currency: string;
+  deliveryAddress: string;
+}): Promise<void> {
+  const { to, customerName, orderId, storeName, items, total, currency, deliveryAddress } = params;
+  const shortCode = orderId.slice(-8).toUpperCase();
+  const trackUrl = `https://grabio.space/track/${orderId}`;
+
+  const itemRows = items
+    .map(
+      (i) =>
+        `<tr>
+          <td style="padding:6px 12px;border-bottom:1px solid #f0f0f0;color:#374151">${(i as Record<string, unknown>).name as string || i.productId || 'Item'} × ${i.quantity}</td>
+          <td style="padding:6px 12px;border-bottom:1px solid #f0f0f0;text-align:right;color:#374151">${currency} ${(i.price * i.quantity).toFixed(2)}</td>
+        </tr>`,
+    )
+    .join('');
+
+  const template: EmailTemplate = {
+    to,
+    subject: `Order confirmed — your code is ${shortCode}`,
+    html: `
+<!DOCTYPE html>
+<html>
+<body style="font-family:Arial,sans-serif;background:#f8fafc;margin:0;padding:20px">
+  <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08)">
+    <div style="background:#38B2AC;padding:24px 32px">
+      <h1 style="color:#fff;margin:0;font-size:22px">Order Confirmed ✅</h1>
+    </div>
+    <div style="padding:24px 32px">
+      <p style="color:#374151;margin-top:0">Hi <strong>${customerName}</strong>,</p>
+      <p style="color:#374151">Your order from <strong>${storeName}</strong> has been placed successfully.</p>
+
+      <div style="background:#f0fdf4;border:1.5px solid #38B2AC;border-radius:10px;padding:16px;margin:20px 0;text-align:center">
+        <p style="color:#6b7280;margin:0 0 6px 0;font-size:13px">Your order tracking code</p>
+        <p style="font-size:30px;font-weight:700;color:#38B2AC;letter-spacing:5px;margin:0">${shortCode}</p>
+        <p style="color:#9ca3af;font-size:11px;margin:8px 0 0 0">Enter this code in the Grabio app → Orders tab</p>
+      </div>
+
+      <table style="width:100%;border-collapse:collapse;margin-bottom:16px">
+        <thead>
+          <tr style="background:#f9fafb">
+            <th style="padding:8px 12px;text-align:left;font-size:13px;color:#6b7280;font-weight:600">Item</th>
+            <th style="padding:8px 12px;text-align:right;font-size:13px;color:#6b7280;font-weight:600">Price</th>
+          </tr>
+        </thead>
+        <tbody>${itemRows}</tbody>
+        <tfoot>
+          <tr>
+            <td style="padding:10px 12px;font-weight:700;color:#111827">Total</td>
+            <td style="padding:10px 12px;font-weight:700;color:#38B2AC;text-align:right">${currency} ${total.toFixed(2)}</td>
+          </tr>
+        </tfoot>
+      </table>
+
+      <p style="color:#6b7280;font-size:13px;margin-bottom:20px"><strong>Delivery to:</strong> ${deliveryAddress}</p>
+
+      <div style="text-align:center;margin:0 0 8px">
+        <a href="${trackUrl}" style="background:#38B2AC;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:15px;display:inline-block">
+          Track My Order →
+        </a>
+      </div>
+    </div>
+    <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb">
+      <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center">© 2026 Grabio · grabio.space</p>
+    </div>
+  </div>
+</body>
+</html>`,
+  };
+
+  await sendEmail(template);
+}

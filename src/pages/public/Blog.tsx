@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
+import AuthCTA from '@/components/public/AuthCTA';
 import { ArrowRight, Clock } from 'lucide-react';
 import SEOHead from '@/components/SEOHead';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
@@ -154,12 +155,9 @@ const Blog: React.FC = () => {
               <p className="text-gray-500 text-sm mb-6">
                 Grabio gives you the tools to run the operations described in these guides.
               </p>
-              <Link
-                to="/signup"
+              <AuthCTA
                 className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors"
-              >
-                Get Started Free
-              </Link>
+              />
             </div>
           </section>
         </main>

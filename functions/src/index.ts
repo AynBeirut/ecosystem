@@ -105,6 +105,36 @@ app.get('/health', (req, res) => {
   });
 });
 
+// Temporary SMTP diagnostic endpoint — remove after testing
+app.get('/test-smtp', async (req, res) => {
+  const smtpHost = process.env.SMTP_HOST || '(not set)';
+  const smtpUser = process.env.SMTP_USER || '(not set)';
+  const smtpPass = process.env.SMTP_PASS ? '(set, ' + process.env.SMTP_PASS.length + ' chars)' : '(NOT SET — empty)';
+  const toAddr = (req.query.to as string) || 'mooveelectro@gmail.com';
+  try {
+    const nodemailer = await import('nodemailer');
+    const transporter = nodemailer.default.createTransport({
+      host: process.env.SMTP_HOST || 'mail.grabio.space',
+      port: 587,
+      secure: false,
+      auth: {
+        user: process.env.SMTP_USER || 'no-reply@grabio.space',
+        pass: process.env.SMTP_PASS || '',
+      },
+    });
+    await transporter.verify();
+    const info = await transporter.sendMail({
+      from: 'Grabio <no-reply@grabio.space>',
+      to: toAddr,
+      subject: 'Grabio SMTP Test — ' + new Date().toISOString(),
+      html: '<p>This is a direct SMTP test from Cloud Run. If you see this, email delivery is working.</p>',
+    });
+    return res.json({ ok: true, smtpHost, smtpUser, smtpPass, messageId: info.messageId, accepted: info.accepted, rejected: info.rejected });
+  } catch (err) {
+    return res.json({ ok: false, smtpHost, smtpUser, smtpPass, error: err instanceof Error ? err.message : String(err) });
+  }
+});
+
 // Root endpoint
 app.get('/', (req, res) => {
   res.json({ 
@@ -403,7 +433,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
       for (const storeId of Object.keys(itemsByStore)) {
         const itemsForStore = itemsByStore[storeId];
         let storeSubtotal = 0;
-        const orderItems: Array<{ productId: string; price: number; quantity: number }> = [];
+        const orderItems: Array<{ productId: string; name: string; price: number; quantity: number; currency: string }> = [];
 
         // Read all products for this store
         for (const it of itemsForStore) {
@@ -432,7 +462,13 @@ app.post('/checkout', async (req: Request, res: Response) => {
             throw new Error(`Insufficient stock for product: ${it.productId}`);
           }
           
-          orderItems.push({ productId: it.productId, price: serverPrice, quantity: qty });
+          orderItems.push({
+            productId: it.productId,
+            name: typeof pData.name === 'string' ? pData.name : it.productId,
+            price: serverPrice,
+            quantity: qty,
+            currency: typeof pData.currency === 'string' ? pData.currency : 'USD',
+          });
           storeSubtotal += serverPrice * qty;
           
           // Prepare stock update - only if stock tracking is enabled
@@ -524,6 +560,11 @@ app.post('/checkout', async (req: Request, res: Response) => {
         const orderRef = db.collection('orders').doc();
         transaction.set(orderRef, {
           storeId: orderData.storeId,
+          storeName: (orderData.storeProfile as Record<string, unknown>)?.storeName
+            || (orderData.storeProfile as Record<string, unknown>)?.businessName
+            || (orderData.storeProfile as Record<string, unknown>)?.name
+            || '',
+          currency: (orderData.orderItems[0] as Record<string, unknown>)?.currency || 'USD',
           customerId: userId,
           customerName,
           customerPhone: deliveryInfo?.phone || customerPhone || '',
@@ -599,14 +640,59 @@ app.post('/checkout', async (req: Request, res: Response) => {
       }
     })();
 
-    // Fire-and-forget customer notifications (email + optional WhatsApp webhook)
-    (async () => {
+    // Send customer confirmation email directly (simple inline SMTP — reliable in Cloud Run)
+    const emailAddr = (deliveryInfo?.email || customerEmail || '').trim();
+    if (emailAddr && orderIds.length > 0) {
       try {
-        await dispatchOrderNotifications(orderIds);
-      } catch (notifyErr) {
-        console.warn('Order customer notification dispatch failed:', notifyErr);
+        const nodemailer = await import('nodemailer');
+        const transporter = nodemailer.default.createTransport({
+          host: process.env.SMTP_HOST || 'mail.grabio.space',
+          port: 587,
+          secure: false,
+          auth: {
+            user: process.env.SMTP_USER || 'no-reply@grabio.space',
+            pass: process.env.SMTP_PASS || '',
+          },
+        });
+        const shortCode = orderIds[0].slice(-8).toUpperCase();
+        const trackUrl = `https://grabio.space/track/${orderIds[0]}`;
+        await transporter.sendMail({
+          from: 'Grabio <no-reply@grabio.space>',
+          to: emailAddr,
+          subject: `Order confirmed — your code is ${shortCode}`,
+          html: `<html><body style="font-family:Arial,sans-serif;color:#1f2937;background:#f8fafc;margin:0;padding:20px;">
+            <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+              <div style="background:#38B2AC;padding:24px 32px;"><h1 style="color:#fff;margin:0;font-size:22px;">Order Confirmed ✅</h1></div>
+              <div style="padding:24px 32px;">
+                <p style="margin:0 0 8px;">Hi <strong>${customerName || 'Customer'}</strong>,</p>
+                <p style="margin:0 0 16px;">Your order has been placed successfully.</p>
+                <div style="background:#f0fdf4;border:1.5px solid #38B2AC;border-radius:10px;padding:16px;margin:0 0 20px;text-align:center;">
+                  <p style="color:#6b7280;margin:0 0 6px;font-size:13px;">Your order tracking code</p>
+                  <p style="font-size:30px;font-weight:700;color:#38B2AC;letter-spacing:5px;margin:0;">${shortCode}</p>
+                  <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;">Enter this code in the Grabio app → Orders tab</p>
+                </div>
+                <p style="margin:0 0 6px;"><strong>Order:</strong> ${orderIds[0]}</p>
+                <p style="margin:0 0 20px;"><strong>Order ID:</strong> ${orderIds[0]}</p>
+                <div style="text-align:center;margin:0 0 8px;">
+                  <a href="${trackUrl}" style="background:#38B2AC;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:15px;display:inline-block;">Track My Order →</a>
+                </div>
+              </div>
+              <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;">
+                <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center;">© 2026 Grabio · grabio.space</p>
+              </div>
+            </div>
+          </body></html>`,
+        });
+        console.log('Customer confirmation email sent to', emailAddr, 'for order', orderIds[0]);
+      } catch (emailErr) {
+        console.warn('Customer email send failed:', emailErr instanceof Error ? emailErr.message : emailErr);
       }
-    })();
+    }
+
+    // Also run full notification pipeline (owner email, WhatsApp, CRM) — best effort
+    dispatchOrderNotifications(orderIds).catch((notifyErr) => {
+      console.warn('Order notification dispatch failed:', notifyErr);
+    });
 
     return res.json({ ok: true, ordersCreated, orderIds });
   } catch (err) {

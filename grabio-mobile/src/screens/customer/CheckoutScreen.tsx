@@ -3,6 +3,7 @@ import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
   ActivityIndicator, Alert, Linking, PermissionsAndroid, Platform,
 } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -38,6 +39,21 @@ export default function CheckoutScreen() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [notes, setNotes] = useState('');
+
+  // Load saved delivery info on mount
+  useEffect(() => {
+    AsyncStorage.getItem('checkout_info').then((raw) => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        if (saved.name) setName(saved.name);
+        if (saved.phone) setPhone(saved.phone);
+        if (saved.email) setEmail(saved.email);
+        if (saved.address) setAddress(saved.address);
+        if (saved.city) setCity(saved.city);
+      } catch { /* ignore */ }
+    }).catch(() => {});
+  }, []);
   const [paymentMethod, setPaymentMethod] = useState<PaymentKey>('cashOnDelivery');
   const [availableMethods, setAvailableMethods] = useState<PaymentKey[]>(['cashOnDelivery']);
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
@@ -169,6 +185,9 @@ export default function CheckoutScreen() {
     if (items.length === 0) return;
     if (!name.trim()) { Alert.alert('Required', 'Please enter your name'); return; }
     if (!phone.trim()) { Alert.alert('Required', 'Please enter your phone number'); return; }
+    if (!email.trim()) { Alert.alert('Required', 'Please enter your email address'); return; }
+    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRe.test(email.trim())) { Alert.alert('Invalid email', 'Please enter a valid email address'); return; }
     if (!address.trim()) { Alert.alert('Required', 'Please enter your delivery address'); return; }
 
     if (paymentMethod === 'whatsapp') {
@@ -226,6 +245,11 @@ export default function CheckoutScreen() {
       }
 
       const data = await res.json();
+      // Save delivery info for next order
+      AsyncStorage.setItem('checkout_info', JSON.stringify({
+        name: name.trim(), phone: phone.trim(), email: email.trim(),
+        address: address.trim(), city: city.trim(),
+      })).catch(() => {});
       clearCart();
       const orderId = (data.orderIds && data.orderIds[0]) || data.orderId;
       if (orderId) {
@@ -270,9 +294,9 @@ export default function CheckoutScreen() {
       </View>
 
       <Text style={[styles.section, { marginTop: 20 }]}>Your Details</Text>
-      <TextInput style={styles.input} placeholder="Your name *" value={name} onChangeText={setName} />
-      <TextInput style={styles.input} placeholder="Phone number *" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-      <TextInput style={styles.input} placeholder="Email (optional)" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+      <TextInput style={styles.input} placeholder="Your name *" placeholderTextColor={COLORS.textMuted} value={name} onChangeText={setName} />
+      <TextInput style={styles.input} placeholder="Phone number *" placeholderTextColor={COLORS.textMuted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+      <TextInput style={styles.input} placeholder="Email *" placeholderTextColor={COLORS.textMuted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
       <Text style={[styles.section, { marginTop: 20 }]}>Delivery Address</Text>
       <TouchableOpacity style={styles.locateBtn} onPress={detectLocation} disabled={locating}>
@@ -280,9 +304,9 @@ export default function CheckoutScreen() {
           ? <ActivityIndicator size="small" color={COLORS.primary} />
           : <Text style={styles.locateBtnText}>📍 Detect my location</Text>}
       </TouchableOpacity>
-      <TextInput style={styles.input} placeholder="Street address *" value={address} onChangeText={setAddress} />
-      <TextInput style={styles.input} placeholder="City" value={city} onChangeText={setCity} />
-      <TextInput style={[styles.input, { height: 72 }]} placeholder="Delivery notes (optional)" value={notes} onChangeText={setNotes} multiline />
+      <TextInput style={styles.input} placeholder="Street address *" placeholderTextColor={COLORS.textMuted} value={address} onChangeText={setAddress} />
+      <TextInput style={styles.input} placeholder="City" placeholderTextColor={COLORS.textMuted} value={city} onChangeText={setCity} />
+      <TextInput style={[styles.input, { height: 72 }]} placeholder="Delivery notes (optional)" placeholderTextColor={COLORS.textMuted} value={notes} onChangeText={setNotes} multiline />
 
       <Text style={[styles.section, { marginTop: 20 }]}>Payment Method</Text>
       <View style={styles.pillsWrap}>
@@ -316,7 +340,7 @@ const styles = StyleSheet.create({
   summaryRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5, borderBottomWidth: 1, borderBottomColor: COLORS.light },
   summaryName: { fontSize: 14, color: COLORS.textSecondary, flex: 1 },
   summaryAmt: { fontSize: 14, color: COLORS.primary, fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, padding: 13, fontSize: 15, marginBottom: 10, backgroundColor: COLORS.background },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, padding: 13, fontSize: 15, marginBottom: 10, backgroundColor: COLORS.background, color: COLORS.textPrimary },
   pillsWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 20 },
   pill: { borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.full, paddingHorizontal: 14, paddingVertical: 8 },
   pillActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },

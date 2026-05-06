@@ -89,21 +89,42 @@ async function sendOrderEmail(ctx: OrderNotificationContext): Promise<{ status: 
   try {
     const transporter = nodemailer.createTransport(SMTP_CONFIG);
     const orderDate = formatOrderDate(ctx.createdAt);
+    const shortCode = ctx.orderId.slice(-8).toUpperCase();
+    const trackUrl = `https://grabio.space/track/${ctx.orderId}`;
     await transporter.sendMail({
       from: SMTP_FROM,
       to: ctx.customerEmail,
-      subject: `Order Confirmation #${ctx.invoiceNumber || ctx.orderId.slice(-8)}`,
+      subject: `Order confirmed — your code is ${shortCode}`,
       html: `
         <html>
-          <body style="font-family: Arial, sans-serif; color: #1f2937; line-height:1.5;">
-            <div style="max-width: 640px; margin: 0 auto; padding: 24px; border: 1px solid #e5e7eb; border-radius: 8px;">
-              <h2 style="margin: 0 0 12px; color:#0f172a;">Order Confirmed</h2>
-              <p style="margin:0 0 8px;">Hi ${ctx.customerName || 'Customer'},</p>
-              <p style="margin:0 0 8px;">Thanks for your order. We received it successfully.</p>
-              <p style="margin:0 0 8px;"><strong>Order:</strong> ${ctx.invoiceNumber || ctx.orderId}</p>
-              <p style="margin:0 0 8px;"><strong>Date:</strong> ${orderDate}</p>
-              <p style="margin:0 0 8px;"><strong>Total:</strong> $${Number(ctx.total || 0).toFixed(2)}</p>
-              <p style="margin:16px 0 0;">You can track your order in your Grabio account.</p>
+          <body style="font-family: Arial, sans-serif; color: #1f2937; line-height:1.5; background:#f8fafc; margin:0; padding:20px;">
+            <div style="max-width: 520px; margin: 0 auto; background:#fff; border-radius:12px; overflow:hidden; box-shadow:0 2px 8px rgba(0,0,0,0.08);">
+              <div style="background:#38B2AC; padding:24px 32px;">
+                <h1 style="color:#fff; margin:0; font-size:22px;">Order Confirmed ✅</h1>
+              </div>
+              <div style="padding:24px 32px;">
+                <p style="margin:0 0 8px;">Hi <strong>${ctx.customerName || 'Customer'}</strong>,</p>
+                <p style="margin:0 0 16px;">Your order has been placed successfully.</p>
+
+                <div style="background:#f0fdf4; border:1.5px solid #38B2AC; border-radius:10px; padding:16px; margin:0 0 20px; text-align:center;">
+                  <p style="color:#6b7280; margin:0 0 6px; font-size:13px;">Your order tracking code</p>
+                  <p style="font-size:30px; font-weight:700; color:#38B2AC; letter-spacing:5px; margin:0;">${shortCode}</p>
+                  <p style="color:#9ca3af; font-size:11px; margin:8px 0 0;">Enter this code in the Grabio app → Orders tab</p>
+                </div>
+
+                <p style="margin:0 0 6px;"><strong>Order:</strong> ${ctx.invoiceNumber || ctx.orderId}</p>
+                <p style="margin:0 0 6px;"><strong>Date:</strong> ${orderDate}</p>
+                <p style="margin:0 0 20px;"><strong>Total:</strong> $${Number(ctx.total || 0).toFixed(2)}</p>
+
+                <div style="text-align:center; margin:0 0 8px;">
+                  <a href="${trackUrl}" style="background:#38B2AC; color:#fff; text-decoration:none; padding:12px 28px; border-radius:8px; font-weight:700; font-size:15px; display:inline-block;">
+                    Track My Order →
+                  </a>
+                </div>
+              </div>
+              <div style="padding:16px 32px; background:#f9fafb; border-top:1px solid #e5e7eb;">
+                <p style="color:#9ca3af; font-size:12px; margin:0; text-align:center;">© 2026 Grabio · grabio.space</p>
+              </div>
             </div>
           </body>
         </html>

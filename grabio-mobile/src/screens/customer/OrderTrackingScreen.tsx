@@ -23,20 +23,45 @@ export default function OrderTrackingScreen() {
   const { params } = useRoute<Route>();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     const db = getFirestore();
     const orderRef = doc(db, 'orders', params.orderId);
-    const unsub = onSnapshot(orderRef, (snap) => {
-      if (snap.exists()) {
-        setOrder({ id: snap.id, ...snap.data() } as Order);
-      }
-      setLoading(false);
-    });
-    return unsub;
-  }, [params.orderId, params.storeId]);
+    const unsub = onSnapshot(
+      orderRef,
+      (snap) => {
+        if (snap.exists()) {
+          setOrder({ id: snap.id, ...snap.data() } as Order);
+        }
+        setLoading(false);
+      },
+      (err) => {
+        console.error('OrderTracking snapshot error:', err);
+        setError(err.message || 'Failed to load order');
+        setLoading(false);
+      },
+    );
+
+    // Timeout fallback: if onSnapshot hasn't resolved in 12 seconds, stop loading
+    const timeout = setTimeout(() => {
+      setLoading((prev) => {
+        if (prev) {
+          setError('Could not load order. Please check your connection.');
+          return false;
+        }
+        return prev;
+      });
+    }, 12000);
+
+    return () => {
+      unsub();
+      clearTimeout(timeout);
+    };
+  }, [params.orderId]);
 
   if (loading) return <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />;
+  if (error) return <View style={styles.center}><Text style={{ color: '#ef4444', textAlign: 'center', padding: 20 }}>⚠️ {error}</Text></View>;
   if (!order) return <View style={styles.center}><Text>Order not found</Text></View>;
 
   const currentStep = order.status === 'cancelled' ? -1 : STATUS_STEPS.indexOf(order.status);
@@ -44,7 +69,7 @@ export default function OrderTrackingScreen() {
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
       <Text style={styles.orderId}>Order #{order.id.slice(-6).toUpperCase()}</Text>
-      <Text style={styles.storeName}>{order.storeName}</Text>
+      {order.storeName ? <Text style={styles.storeName}>{order.storeName}</Text> : null}
 
       {order.status === 'cancelled' ? (
         <View style={styles.cancelledBox}>
@@ -71,15 +96,15 @@ export default function OrderTrackingScreen() {
       )}
 
       <Text style={styles.sectionTitle}>Items</Text>
-      {order.items.map((item, idx) => (
+      {(order.items || []).map((item, idx) => (
         <View key={idx} style={styles.itemRow}>
-          <Text style={styles.itemName}>{item.name} × {item.quantity}</Text>
-          <Text style={styles.itemPrice}>{order.currency} {(item.price * item.quantity).toFixed(2)}</Text>
+          <Text style={styles.itemName}>{(item as unknown as Record<string, unknown>).name as string || item.productId || 'Item'} × {item.quantity}</Text>
+          <Text style={styles.itemPrice}>{order.currency || ''} {(item.price * item.quantity).toFixed(2)}</Text>
         </View>
       ))}
       <View style={styles.totalRow}>
         <Text style={styles.totalLabel}>Total</Text>
-        <Text style={styles.totalAmount}>{order.currency} {order.total.toFixed(2)}</Text>
+        <Text style={styles.totalAmount}>{order.currency || ''} {typeof order.total === 'number' ? order.total.toFixed(2) : '—'}</Text>
       </View>
     </ScrollView>
   );
