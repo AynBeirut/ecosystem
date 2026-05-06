@@ -2,6 +2,8 @@ import { getMessaging, getToken, isSupported } from 'firebase/messaging';
 import { getFirestore, doc, setDoc } from 'firebase/firestore';
 import { initializeApp, getApps } from 'firebase/app';
 
+const FCM_PERMISSION_CHECKED_KEY = 'fcm-permission-checked';
+
 // Re-use the already-initialized Firebase app
 let _messaging: ReturnType<typeof getMessaging> | null = null;
 
@@ -22,13 +24,27 @@ export async function requestNotificationPermission(): Promise<string | null> {
   try {
     const supported = await isSupported();
     if (!supported) {
-      console.log('FCM not supported in this browser.');
+      return null;
+    }
+
+    // Avoid repeating the same permission request flow on every remount.
+    if (typeof window !== 'undefined' && sessionStorage.getItem(FCM_PERMISSION_CHECKED_KEY) === '1') {
+      return null;
+    }
+
+    if (Notification.permission === 'denied') {
+      if (typeof window !== 'undefined') {
+        sessionStorage.setItem(FCM_PERMISSION_CHECKED_KEY, '1');
+      }
       return null;
     }
 
     const permission = await Notification.requestPermission();
+    if (typeof window !== 'undefined') {
+      sessionStorage.setItem(FCM_PERMISSION_CHECKED_KEY, '1');
+    }
+
     if (permission !== 'granted') {
-      console.log('Notification permission denied.');
       return null;
     }
 
