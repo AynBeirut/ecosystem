@@ -97,6 +97,12 @@
 }
 
 @layer components {
+  .native-button-click-guard {
+    opacity: 0.55;
+    cursor: not-allowed;
+    pointer-events: none;
+  }
+
   .card-hover {
     @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
   }

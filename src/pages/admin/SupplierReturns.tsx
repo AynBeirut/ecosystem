@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
@@ -31,7 +31,12 @@ const SupplierReturns: React.FC = () => {
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [suppliers, setSuppliers] = useState<any[]>([]);
   const [isCreatingReturn, setIsCreatingReturn] = useState(false);
+  const [isCreatingReturnSubmitting, setIsCreatingReturnSubmitting] = useState(false);
   const [processingReturn, setProcessingReturn] = useState<SupplierReturn | null>(null);
+  const [isProcessingReturnSubmitting, setIsProcessingReturnSubmitting] = useState(false);
+
+  const isCreatingReturnRef = useRef(false);
+  const isProcessingReturnRef = useRef(false);
   
   const [newReturn, setNewReturn] = useState({
     purchaseId: '',
@@ -119,6 +124,10 @@ const SupplierReturns: React.FC = () => {
   };
 
   const handleCreateReturn = async () => {
+    if (isCreatingReturnRef.current) {
+      return;
+    }
+
     if (!newReturn.purchaseId || !user?.storeId) {
       toast({ title: "Error", description: "Please select a purchase order", variant: "destructive" });
       return;
@@ -153,6 +162,9 @@ const SupplierReturns: React.FC = () => {
         return;
       }
     }
+
+    isCreatingReturnRef.current = true;
+    setIsCreatingReturnSubmitting(true);
 
     try {
       const purchase = purchases.find(p => p.id === newReturn.purchaseId);
@@ -199,11 +211,21 @@ const SupplierReturns: React.FC = () => {
     } catch (error) {
       console.error('Error creating return:', error);
       toast({ title: "Error", description: "Failed to create return", variant: "destructive" });
+    } finally {
+      isCreatingReturnRef.current = false;
+      setIsCreatingReturnSubmitting(false);
     }
   };
 
   const handleProcessReturn = async (returnId: string, newStatus: SupplierReturnStatus, refundMethod?: string, refundAmount?: number) => {
+    if (isProcessingReturnRef.current) {
+      return;
+    }
+
     if (!user?.storeId) return;
+
+    isProcessingReturnRef.current = true;
+    setIsProcessingReturnSubmitting(true);
 
     try {
       const returnDoc = returns.find(r => r.id === returnId);
@@ -272,6 +294,9 @@ const SupplierReturns: React.FC = () => {
     } catch (error) {
       console.error('Error processing return:', error);
       toast({ title: "Error", description: "Failed to process return", variant: "destructive" });
+    } finally {
+      isProcessingReturnRef.current = false;
+      setIsProcessingReturnSubmitting(false);
     }
   };
 
@@ -314,7 +339,13 @@ const SupplierReturns: React.FC = () => {
         </div>
 
         {/* Create Return Dialog */}
-        <Dialog open={isCreatingReturn} onOpenChange={setIsCreatingReturn}>
+        <Dialog
+          open={isCreatingReturn}
+          onOpenChange={(open) => {
+            if (!open && isCreatingReturnSubmitting) return;
+            setIsCreatingReturn(open);
+          }}
+        >
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
             <DialogHeader>
               <DialogTitle className="text-xl md:text-2xl">Create Supplier Return</DialogTitle>
@@ -415,9 +446,9 @@ const SupplierReturns: React.FC = () => {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreatingReturn(false)}>Cancel</Button>
-              <Button onClick={handleCreateReturn} disabled={!newReturn.purchaseId || newReturn.items.filter(i => i.quantity > 0).length === 0}>
-                Create Return
+              <Button variant="outline" onClick={() => setIsCreatingReturn(false)} disabled={isCreatingReturnSubmitting}>Cancel</Button>
+              <Button onClick={handleCreateReturn} disabled={isCreatingReturnSubmitting || !newReturn.purchaseId || newReturn.items.filter(i => i.quantity > 0).length === 0}>
+                {isCreatingReturnSubmitting ? 'Creating...' : 'Create Return'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -425,7 +456,13 @@ const SupplierReturns: React.FC = () => {
 
         {/* Process Return Dialog */}
         {processingReturn && (
-          <Dialog open={!!processingReturn} onOpenChange={() => setProcessingReturn(null)}>
+          <Dialog
+            open={!!processingReturn}
+            onOpenChange={(open) => {
+              if (!open && isProcessingReturnSubmitting) return;
+              if (!open) setProcessingReturn(null);
+            }}
+          >
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Process Return - {processingReturn.sraNumber}</DialogTitle>
@@ -455,14 +492,14 @@ const SupplierReturns: React.FC = () => {
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setProcessingReturn(null)}>Cancel</Button>
-                <Button variant="destructive" onClick={() => handleProcessReturn(processingReturn.id, 'rejected')}>
+                <Button variant="outline" onClick={() => setProcessingReturn(null)} disabled={isProcessingReturnSubmitting}>Cancel</Button>
+                <Button variant="destructive" onClick={() => handleProcessReturn(processingReturn.id, 'rejected')} disabled={isProcessingReturnSubmitting}>
                   <XCircle className="h-4 w-4 mr-2" />
-                  Reject
+                  {isProcessingReturnSubmitting ? 'Processing...' : 'Reject'}
                 </Button>
-                <Button onClick={() => handleProcessReturn(processingReturn.id, 'credited', 'cash', processingReturn.totalClaimAmount || 0)}>
+                <Button onClick={() => handleProcessReturn(processingReturn.id, 'credited', 'cash', processingReturn.totalClaimAmount || 0)} disabled={isProcessingReturnSubmitting}>
                   <CheckCircle className="h-4 w-4 mr-2" />
-                  Complete & Refund
+                  {isProcessingReturnSubmitting ? 'Processing...' : 'Complete & Refund'}
                 </Button>
               </DialogFooter>
             </DialogContent>

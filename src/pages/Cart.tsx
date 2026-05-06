@@ -83,6 +83,7 @@ const Cart: React.FC = () => {
   });
   const [availableDeliveryPartners, setAvailableDeliveryPartners] = useState<DeliveryPartnerOption[]>([]);
   const [isGettingLocation, setIsGettingLocation] = useState(false);
+  const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [hasSavedInfo, setHasSavedInfo] = useState(false);
   const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
   const [whatsappStoreInfo, setWhatsappStoreInfo] = useState<{ number: string; name: string; currency?: string } | null>(null);
@@ -629,6 +630,7 @@ const Cart: React.FC = () => {
     localStorage.setItem('deliveryInfo', JSON.stringify(deliveryInfo));
     
     isCheckingOutRef.current = true;
+    setIsCheckingOut(true);
     
     // Check stock for all items
     const db = getFirestore();
@@ -639,6 +641,7 @@ const Cart: React.FC = () => {
         if (!productSnap.exists() || !productSnap.data().inStock) {
           toast.error(`Sorry, ${item.product.name} is out of stock.`);
           isCheckingOutRef.current = false;
+          setIsCheckingOut(false);
           return;
         }
       }
@@ -646,6 +649,7 @@ const Cart: React.FC = () => {
       console.error('Error checking stock:', stockError);
       toast.error('Failed to verify stock availability');
       isCheckingOutRef.current = false;
+      setIsCheckingOut(false);
       return;
     }
     
@@ -843,6 +847,7 @@ const Cart: React.FC = () => {
       toast.error(msg);
     } finally {
       isCheckingOutRef.current = false;
+      setIsCheckingOut(false);
     }
   };
 
@@ -1209,9 +1214,9 @@ const Cart: React.FC = () => {
                     <Button 
                       className="w-full"
                       onClick={handleCheckout}
-                      disabled={items.length === 0}
+                      disabled={items.length === 0 || isCheckingOut}
                     >
-                      {user ? 'Place Order' : 'Place Order as Guest'}
+                      {isCheckingOut ? 'Placing Order...' : (user ? 'Place Order' : 'Place Order as Guest')}
                     </Button>
                     {whatsappStoreInfo && (() => {
                       const waUrl = buildWhatsAppOrderURL(

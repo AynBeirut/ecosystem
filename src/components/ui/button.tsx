@@ -37,15 +37,49 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean
+  singleClick?: boolean
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, singleClick = true, onClick, disabled, ...props }, ref) => {
+    const [isPendingClick, setIsPendingClick] = React.useState(false)
     const Comp = asChild ? Slot : "button"
+
+    const handleClick = async (event: React.MouseEvent<HTMLButtonElement>) => {
+      if (!onClick) {
+        return
+      }
+
+      if (singleClick && isPendingClick) {
+        event.preventDefault()
+        return
+      }
+
+      if (!singleClick) {
+        onClick(event)
+        return
+      }
+
+      setIsPendingClick(true)
+      try {
+        const maybePromise = onClick(event)
+        if (maybePromise && typeof (maybePromise as Promise<unknown>).then === "function") {
+          await maybePromise
+        }
+      } finally {
+        setIsPendingClick(false)
+      }
+    }
+
+    const resolvedDisabled = disabled || (singleClick && isPendingClick)
+
     return (
       <Comp
         className={cn(buttonVariants({ variant, size, className }))}
         ref={ref}
+        onClick={handleClick}
+        disabled={resolvedDisabled}
+        aria-disabled={resolvedDisabled}
         {...props}
       />
     )

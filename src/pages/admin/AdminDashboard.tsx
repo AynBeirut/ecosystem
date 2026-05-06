@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
@@ -22,6 +22,7 @@ import {
   DollarSign,
   Mail,
   Globe,
+  TrendingUp,
   Star,
   Bell,
   ChevronDown,
@@ -41,6 +42,34 @@ type RecentEvent = {
   total?: number;
   title?: string;
   createdAt?: Date | number | string;
+};
+
+type QuickActionItem = {
+  id: string;
+  to: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  visible: boolean;
+};
+
+type QuickActionStoragePayload = {
+  selectedQuickActionIds: string[];
+  customQuickActions: QuickActionItem[];
+};
+
+const QUICK_ACTION_COLORS: Record<string, { border: string; iconBg: string; iconText: string }> = {
+  inventory: { border: 'border-purple-600/20', iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
+  orders: { border: 'border-orange-500/20', iconBg: 'bg-orange-100', iconText: 'text-orange-600' },
+  'account-statement': { border: 'border-indigo-600/20', iconBg: 'bg-indigo-100', iconText: 'text-indigo-600' },
+  'cash-collection': { border: 'border-emerald-600/20', iconBg: 'bg-emerald-100', iconText: 'text-emerald-700' },
+  'service-renewals': { border: 'border-blue-600/20', iconBg: 'bg-blue-100', iconText: 'text-blue-700' },
+  'marketplace-sync': { border: 'border-amber-600/20', iconBg: 'bg-amber-100', iconText: 'text-amber-700' },
+  'product-reviews': { border: 'border-yellow-600/20', iconBg: 'bg-yellow-100', iconText: 'text-yellow-700' },
+  'notification-logs': { border: 'border-sky-600/20', iconBg: 'bg-sky-100', iconText: 'text-sky-700' },
+  'store-logs': { border: 'border-slate-600/20', iconBg: 'bg-slate-100', iconText: 'text-slate-700' },
+  delivery: { border: 'border-gray-300/70', iconBg: 'bg-gray-100', iconText: 'text-gray-700' },
+  announcements: { border: 'border-rose-500/20', iconBg: 'bg-rose-100', iconText: 'text-rose-700' },
+  analytics: { border: 'border-cyan-600/20', iconBg: 'bg-cyan-100', iconText: 'text-cyan-700' },
 };
 
 const AdminDashboard: React.FC = () => {
@@ -78,6 +107,12 @@ const AdminDashboard: React.FC = () => {
   // Credits feature removed
   const [customerCount, setCustomerCount] = useState(0);
   const [recentEvents, setRecentEvents] = useState<RecentEvent[]>([]);
+  const [selectedQuickActionIds, setSelectedQuickActionIds] = useState<string[]>([]);
+  const [customQuickActions, setCustomQuickActions] = useState<QuickActionItem[]>([]);
+  const [showQuickActionManager, setShowQuickActionManager] = useState(false);
+  const [quickActionsLoaded, setQuickActionsLoaded] = useState(false);
+  const [newQuickActionLabel, setNewQuickActionLabel] = useState('');
+  const [newQuickActionPath, setNewQuickActionPath] = useState('');
 
   const syncAutoRateForStore = async (actualStoreId: string) => {
     setSyncingAutoRate(true);
@@ -136,6 +171,136 @@ const AdminDashboard: React.FC = () => {
   const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
   const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
 
+  const quickActionStorageKey = useMemo(() => {
+    if (!user?.id) return 'dashboardQuickActions:guest';
+    const ownerKey = getActualStoreId(user) || user.id;
+    return `dashboardQuickActions:${ownerKey}`;
+  }, [user]);
+
+  const quickActionItems = useMemo<QuickActionItem[]>(() => [
+    {
+      id: 'inventory',
+      to: user?.role === 'admin' ? '/admin/inventory' : '/admin/products',
+      label: user?.role === 'admin' ? 'Inventory' : 'Products',
+      icon: Package,
+      visible: canViewInventory,
+    },
+    { id: 'orders', to: '/admin/orders', label: 'Orders', icon: Clock, visible: true },
+    { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
+    { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
+    { id: 'service-renewals', to: '/admin/service-renewals', label: 'Service Renewals', icon: Clock, visible: user?.role === 'admin' },
+    { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' },
+    { id: 'product-reviews', to: '/admin/product-reviews', label: 'Product Reviews', icon: Star, visible: user?.role === 'admin' },
+    { id: 'notification-logs', to: '/admin/order-notifications', label: 'Notification Logs', icon: Bell, visible: user?.role === 'admin' },
+    { id: 'store-logs', to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: user?.role === 'admin' },
+    { id: 'delivery', to: '/admin/delivery', label: 'Delivery', icon: Package, visible: canManageDeliveries },
+    { id: 'announcements', to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
+    { id: 'analytics', to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: canViewReports },
+  ], [canManageDeliveries, canViewInventory, canViewReports, user]);
+
+  const visibleQuickActionItems = useMemo(
+    () => quickActionItems.filter((item) => item.visible),
+    [quickActionItems],
+  );
+
+  const allQuickActionItems = useMemo(
+    () => [...visibleQuickActionItems, ...customQuickActions],
+    [customQuickActions, visibleQuickActionItems],
+  );
+
+  useEffect(() => {
+    const visibleIds = visibleQuickActionItems.map((item) => item.id);
+    if (visibleIds.length === 0) {
+      setSelectedQuickActionIds([]);
+      setQuickActionsLoaded(true);
+      return;
+    }
+
+    try {
+      const raw = localStorage.getItem(quickActionStorageKey);
+      const parsed = raw ? JSON.parse(raw) : null;
+
+      let storedIds: string[] = [];
+      let storedCustomActions: QuickActionItem[] = [];
+
+      if (Array.isArray(parsed)) {
+        storedIds = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        const payload = parsed as Partial<QuickActionStoragePayload>;
+        if (Array.isArray(payload.selectedQuickActionIds)) {
+          storedIds = payload.selectedQuickActionIds;
+        }
+        if (Array.isArray(payload.customQuickActions)) {
+          storedCustomActions = payload.customQuickActions.filter((item): item is QuickActionItem => {
+            return !!item && typeof item.id === 'string' && typeof item.to === 'string' && typeof item.label === 'string';
+          }).map((item) => ({
+            ...item,
+            visible: true,
+            icon: Layers,
+          }));
+        }
+      }
+
+      setCustomQuickActions(storedCustomActions);
+      const storedCustomIds = storedCustomActions.map((item) => item.id);
+      const sanitized = storedIds.filter((id) => visibleIds.includes(id) || storedCustomIds.includes(id));
+      setSelectedQuickActionIds(sanitized.length > 0 ? sanitized : visibleIds);
+    } catch {
+      setCustomQuickActions([]);
+      setSelectedQuickActionIds(visibleIds);
+    }
+    setQuickActionsLoaded(true);
+  }, [quickActionStorageKey, visibleQuickActionItems]);
+
+  useEffect(() => {
+    if (!quickActionsLoaded) return;
+    const payload: QuickActionStoragePayload = {
+      selectedQuickActionIds,
+      customQuickActions: customQuickActions.map((item) => ({ ...item, icon: Layers, visible: true })),
+    };
+    localStorage.setItem(quickActionStorageKey, JSON.stringify(payload));
+  }, [customQuickActions, quickActionStorageKey, quickActionsLoaded, selectedQuickActionIds]);
+
+  const selectedQuickActions = useMemo(
+    () => allQuickActionItems.filter((item) => selectedQuickActionIds.includes(item.id)),
+    [allQuickActionItems, selectedQuickActionIds],
+  );
+
+  const addableQuickActions = useMemo(
+    () => visibleQuickActionItems.filter((item) => !selectedQuickActionIds.includes(item.id)),
+    [selectedQuickActionIds, visibleQuickActionItems],
+  );
+
+  const handleAddQuickAction = (actionId: string) => {
+    setSelectedQuickActionIds((prev) => (prev.includes(actionId) ? prev : [...prev, actionId]));
+  };
+
+  const handleRemoveQuickAction = (actionId: string) => {
+    setSelectedQuickActionIds((prev) => prev.filter((id) => id !== actionId));
+    setCustomQuickActions((prev) => prev.filter((item) => item.id !== actionId));
+  };
+
+  const handleAddCustomQuickAction = () => {
+    const label = newQuickActionLabel.trim();
+    const pathInput = newQuickActionPath.trim();
+    if (!label || !pathInput) return;
+
+    const normalizedPath = pathInput.startsWith('/') ? pathInput : `/${pathInput}`;
+    const actionId = `custom:${Date.now()}`;
+    const customAction: QuickActionItem = {
+      id: actionId,
+      to: normalizedPath,
+      label,
+      icon: Layers,
+      visible: true,
+    };
+
+    setCustomQuickActions((prev) => [...prev, customAction]);
+    setSelectedQuickActionIds((prev) => [...prev, actionId]);
+    setNewQuickActionLabel('');
+    setNewQuickActionPath('');
+  };
+
   const [openMenuGroups, setOpenMenuGroups] = useState<Record<string, boolean>>({
     daily_stock: false,
     daily_sales: false,
@@ -185,6 +350,8 @@ const AdminDashboard: React.FC = () => {
           { to: '/admin/templates', label: 'Templates & Store Logos', icon: Palette, visible: user?.role === 'admin' },
           { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
+          { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
+          { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
         ],
       },
       {
@@ -436,7 +603,7 @@ const AdminDashboard: React.FC = () => {
           <Link to="/" className="text-2xl font-bold text-market-primary">Grabio</Link>
           <p className="text-gray-500 text-sm mt-1">{user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}</p>
         </div>
-        <nav className="mt-6 flex-1 overflow-y-auto pb-32">
+        <nav className="mt-6 flex-1 overflow-y-auto pb-24">
           <div className="px-4 space-y-4">
             <Link to="/admin/dashboard" className={`flex items-center px-3 py-2 rounded-lg border transition ${isRouteActive('/admin/dashboard') ? 'bg-market-primary/10 text-market-primary border-market-primary/20' : 'bg-white text-gray-700 border-gray-100 hover:shadow-sm'}`}>
               <StoreIcon className="h-5 w-5 mr-3" />
@@ -522,7 +689,7 @@ const AdminDashboard: React.FC = () => {
             </a>
           </div>
         </nav>
-          <div className="px-6 py-4 absolute bottom-0 w-full border-t bg-white">
+          <div className="absolute inset-x-0 -bottom-3 border-t bg-white px-6 pt-3 pb-3">
           <div className="flex items-center">
             <div className="h-10 w-10 rounded-full bg-market-primary flex items-center justify-center text-white">
               {user?.name ? String(user.name).charAt(0) : 'G'}
@@ -532,7 +699,7 @@ const AdminDashboard: React.FC = () => {
               <p className="text-xs text-gray-500">{user?.email || ''}</p>
             </div>
           </div>
-          <Button variant="outline" className="w-full mt-4" onClick={() => navigate('/')}>View Marketplace</Button>
+          <Button variant="outline" className="w-full mt-3" onClick={() => navigate('/')}>View Marketplace</Button>
         </div>
       </aside>
       <div className="flex-1 p-6">
@@ -550,9 +717,9 @@ const AdminDashboard: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link to="/admin/inventory">
-              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="flex items-center gap-4">
+            <Link to="/admin/inventory" className="h-full">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4">
                   <div className="h-12 w-12 rounded-md bg-market-primary text-white flex items-center justify-center">
                     <Package className="h-5 w-5" />
                   </div>
@@ -564,9 +731,9 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </Link>
 
-            <Link to="/admin/orders">
-              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="flex items-center gap-4">
+            <Link to="/admin/orders" className="h-full">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4">
                   <div className="h-12 w-12 rounded-md bg-market-accent text-white flex items-center justify-center">
                     <Clock className="h-5 w-5" />
                   </div>
@@ -578,9 +745,9 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </Link>
 
-            <Link to="/admin/revenue">
-              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="flex items-center gap-4">
+            <Link to="/admin/revenue" className="h-full">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4">
                   <div className="h-12 w-12 rounded-md bg-green-500 text-white flex items-center justify-center">
                     <CreditCard className="h-5 w-5" />
                   </div>
@@ -591,7 +758,12 @@ const AdminDashboard: React.FC = () => {
                       <div className="text-xs text-orange-600">Quarantined orders: {quarantinedRevenueOrders}</div>
                     )}
                     {usdToLbpRate ? (
-                      <div className="text-xs text-gray-500">≈ {formatLbp(revenue, usdToLbpRate)} <span className="ml-2">{rateFetchedAt ? `(rate updated ${new Date(rateFetchedAt).toLocaleTimeString()})` : ''}</span></div>
+                      <div
+                        className="text-xs text-gray-500 truncate"
+                        title={`≈ ${formatLbp(revenue, usdToLbpRate)}`}
+                      >
+                        ≈ {formatLbp(revenue, usdToLbpRate)}
+                      </div>
                     ) : (
                       <div className="text-xs text-gray-500">LBP estimate unavailable</div>
                     )}
@@ -600,9 +772,9 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </Link>
 
-            <Link to="/admin/customers">
-              <Card className="p-4 cursor-pointer hover:shadow-md transition-shadow">
-                <CardContent className="flex items-center gap-4">
+            <Link to="/admin/customers" className="h-full">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4">
                   <div className="h-12 w-12 rounded-md bg-indigo-500 text-white flex items-center justify-center">
                     <User className="h-5 w-5" />
                   </div>
@@ -615,41 +787,134 @@ const AdminDashboard: React.FC = () => {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            <div className="lg:col-span-2">
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-lg font-semibold">Recent Activity</h3>
-                <Link to="/admin/announcements" className="text-sm text-market-primary">View all</Link>
-              </div>
-              {recentEvents.length === 0 ? (
-                <div className="text-sm text-gray-500">No recent activity.</div>
-              ) : (
-                <ul className="space-y-2">
-                  {recentEvents.map((ev, idx) => (
-                    <li key={idx} className="p-3 bg-white rounded-lg shadow-sm border">
-                      <div className="flex items-center gap-3">
-                        <div className="flex-1">
-                          <div className="text-sm font-medium text-gray-800">
-                            {ev.type === 'product' && `New product: ${ev.name}`}
-                            {ev.type === 'order' && `Order placed — $${ev.total}`}
-                            {ev.type === 'announcement' && `Announcement: ${ev.title}`}
-                          </div>
-                          <div className="text-xs text-gray-500 mt-1">{(ev.createdAt && new Date(String(ev.createdAt)).toLocaleString()) || '—'}</div>
-                        </div>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+            <div className="lg:col-span-2 space-y-3">
+              <div>
+                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+                  <h3 className="text-lg font-semibold">Quick Actions</h3>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowQuickActionManager((prev) => !prev)}
+                      disabled={addableQuickActions.length === 0 && !showQuickActionManager}
+                    >
+                      {showQuickActionManager ? 'Done' : 'Add Quick Action'}
+                    </Button>
+                  </div>
+                </div>
+
+                {showQuickActionManager && (
+                  <div className="mb-3 p-3 bg-white border rounded-lg">
+                    <div className="mb-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
+                      <input
+                        type="text"
+                        value={newQuickActionLabel}
+                        onChange={(event) => setNewQuickActionLabel(event.target.value)}
+                        placeholder="Button label (example: Raw Materials)"
+                        className="h-9 rounded-md border px-3 text-sm"
+                      />
+                      <input
+                        type="text"
+                        value={newQuickActionPath}
+                        onChange={(event) => setNewQuickActionPath(event.target.value)}
+                        placeholder="Route path (example: /admin/raw-materials)"
+                        className="h-9 rounded-md border px-3 text-sm"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={handleAddCustomQuickAction}
+                        disabled={!newQuickActionLabel.trim() || !newQuickActionPath.trim()}
+                      >
+                        Add Custom
+                      </Button>
+                    </div>
+
+                    {addableQuickActions.length === 0 ? (
+                      <div className="text-sm text-gray-500">All preset quick actions are already added.</div>
+                    ) : (
+                      <div className="flex flex-wrap gap-2">
+                        {addableQuickActions.map((item) => (
+                          <Button key={item.id} type="button" size="sm" variant="outline" onClick={() => handleAddQuickAction(item.id)}>
+                            Add {item.label}
+                          </Button>
+                        ))}
                       </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
+                    )}
+                  </div>
+                )}
+
+                {selectedQuickActions.length === 0 ? (
+                  <div className="text-sm text-gray-500">No quick actions selected. Use Add Quick Action.</div>
+                ) : (
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    {selectedQuickActions.map((item) => {
+                      const Icon = item.icon;
+                      const colors = QUICK_ACTION_COLORS[item.id] || {
+                        border: 'border-gray-200',
+                        iconBg: 'bg-gray-100',
+                        iconText: 'text-gray-700',
+                      };
+                      return (
+                        <Link key={item.id} to={item.to} className={`relative flex items-center gap-3 p-3 rounded-lg bg-white border ${colors.border} shadow-sm hover:shadow-md transition`}>
+                          {showQuickActionManager && (
+                            <button
+                              type="button"
+                              className="absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                              onClick={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                                handleRemoveQuickAction(item.id);
+                              }}
+                            >
+                              Remove
+                            </button>
+                          )}
+                          <div className={`h-8 w-8 rounded-full ${colors.iconBg} flex items-center justify-center ${colors.iconText}`}>
+                            <Icon className="h-4 w-4" />
+                          </div>
+                          <span className="text-sm font-medium">{item.label}</span>
+                        </Link>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-lg font-semibold">Recent Activity</h3>
+                  <Link to="/admin/announcements" className="text-sm text-market-primary">View all</Link>
+                </div>
+                {recentEvents.length === 0 ? (
+                  <div className="text-sm text-gray-500">No recent activity.</div>
+                ) : (
+                  <ul className="space-y-2">
+                    {recentEvents.map((ev, idx) => (
+                      <li key={idx} className="p-3 bg-white rounded-lg shadow-sm border">
+                        <div className="flex items-center gap-3">
+                          <div className="flex-1">
+                            <div className="text-sm font-medium text-gray-800">
+                              {ev.type === 'product' && `New product: ${ev.name}`}
+                              {ev.type === 'order' && `Order placed — $${ev.total}`}
+                              {ev.type === 'announcement' && `Announcement: ${ev.title}`}
+                            </div>
+                            <div className="text-xs text-gray-500 mt-1">{(ev.createdAt && new Date(String(ev.createdAt)).toLocaleString()) || '—'}</div>
+                          </div>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
 
-            <Card>
-              <CardHeader>
-                <CardTitle>Store Summary</CardTitle>
-                <CardDescription>Your store at a glance</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-2">
+            <div>
+              <h3 className="text-lg font-semibold mb-3">Store Summary</h3>
+              <Card className="min-h-[455px] mt-5">
+              <CardContent className="pt-4">
+                <div className="space-y-6">
                     <div><strong>Store Name</strong>: {storeName}</div>
                   <div><strong>Location</strong>: Lebanon</div>
                   <div><strong>Active Template</strong>: Vibrant</div>
@@ -777,120 +1042,12 @@ const AdminDashboard: React.FC = () => {
               <CardFooter>
                 <Button variant="ghost" onClick={() => navigate('/admin/profile')}>Edit Store Profile</Button>
               </CardFooter>
-            </Card>
-          </div>
-
-          <div>
-            <h3 className="text-lg font-semibold mb-3">Quick Actions</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
-                {canViewInventory && (
-                  <Link to={user?.role === 'admin' ? "/admin/inventory" : "/admin/products"} className="flex items-center gap-3 p-3 rounded-lg bg-white border border-purple-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-purple-100 flex items-center justify-center text-purple-600">
-                      <Package className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">{user?.role === 'admin' ? 'Inventory' : 'Products'}</span>
-                  </Link>
-                )}
-                <Link to="/admin/orders" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-market-accent/10 flex items-center justify-center text-market-accent">
-                    <Clock className="h-4 w-4" />
-                  </div>
-                  <span className="font-medium">Orders</span>
-                </Link>
-
-                {user?.role === 'admin' && (
-                  <Link to="/admin/account-statement" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-indigo-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-600">
-                      <FileText className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">Account Statement</span>
-                  </Link>
-                )}
-
-                {user?.role === 'admin' && (
-                  <Link to="/admin/cash-collection" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-emerald-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-700">
-                      <DollarSign className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">Cash Collection</span>
-                  </Link>
-                )}
-
-                {user?.role === 'admin' && (
-                  <Link to="/admin/service-renewals" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-blue-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-700">
-                      <Clock className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">Service Renewals</span>
-                  </Link>
-                )}
-
-                {user?.role === 'admin' && (
-                  <Link to="/admin/marketplace" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-amber-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-amber-100 flex items-center justify-center text-amber-700">
-                      <Globe className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">Marketplace Sync</span>
-                  </Link>
-                )}
-
-                {user?.role === 'admin' && (
-                  <Link to="/admin/product-reviews" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-yellow-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-yellow-100 flex items-center justify-center text-yellow-700">
-                      <Star className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">Product Reviews</span>
-                  </Link>
-                )}
-
-                {user?.role === 'admin' && (
-                  <Link to="/admin/order-notifications" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-sky-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-sky-100 flex items-center justify-center text-sky-700">
-                      <Bell className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">Notification Logs</span>
-                  </Link>
-                )}
-
-                {user?.role === 'admin' && (
-                  <Link to="/admin/audit-logs" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-slate-600/20 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-slate-100 flex items-center justify-center text-slate-700">
-                      <FileText className="h-4 w-4" />
-                    </div>
-                    <span className="text-sm font-medium">Store Logs</span>
-                  </Link>
-                )}
-
-                {canManageDeliveries && (
-                  <Link to="/admin/delivery" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-                      <Package className="h-4 w-4" />
-                    </div>
-                    <span className="font-medium">Delivery</span>
-                  </Link>
-                )}
-
-                <Link to="/admin/announcements" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                  <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-                    <Megaphone className="h-4 w-4" />
-                  </div>
-                  <span className="font-medium">Announcements</span>
-                </Link>
-
-                {canViewReports && (
-                  <Link to="/admin/analytics" className="flex items-center gap-3 p-3 rounded-lg bg-white border border-gray-200 shadow-sm hover:shadow-md transition">
-                    <div className="h-8 w-8 rounded-full bg-gray-100 flex items-center justify-center text-gray-700">
-                      <BarChart className="h-4 w-4" />
-                    </div>
-                    <span className="font-medium">Analytics</span>
-                  </Link>
-                )}
-
-              </div>
+              </Card>
             </div>
           </div>
         </div>
       </div>
+    </div>
     </div>
     </div>
   );

@@ -28,7 +28,9 @@ const SalesReturns: React.FC = () => {
   const [orders, setOrders] = useState<(Order & { id: string })[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [isCreatingReturn, setIsCreatingReturn] = useState(false);
+  const [isCreatingReturnSubmitting, setIsCreatingReturnSubmitting] = useState(false);
   const [processingReturn, setProcessingReturn] = useState<SalesReturn | null>(null);
+  const [isProcessingReturnSubmitting, setIsProcessingReturnSubmitting] = useState(false);
   
   // Double-click prevention locks
   const isCreatingReturnRef = useRef(false);
@@ -162,6 +164,7 @@ const SalesReturns: React.FC = () => {
     }
 
     isCreatingReturnRef.current = true;
+    setIsCreatingReturnSubmitting(true);
     let operationSucceeded = false;
 
     try {
@@ -217,6 +220,7 @@ const SalesReturns: React.FC = () => {
       toast({ title: "Error", description: "Failed to create return", variant: "destructive" });
     } finally {
       isCreatingReturnRef.current = false;
+      setIsCreatingReturnSubmitting(false);
       
       if (operationSucceeded) {
         setNewReturn({ orderId: '', restockItems: true, notes: '', items: [] });
@@ -234,6 +238,7 @@ const SalesReturns: React.FC = () => {
     if (!user?.storeId) return;
 
     isProcessingReturnRef.current = true;
+    setIsProcessingReturnSubmitting(true);
     let operationSucceeded = false;
 
     try {
@@ -403,6 +408,7 @@ const SalesReturns: React.FC = () => {
       toast({ title: "Error", description: "Failed to process return", variant: "destructive" });
     } finally {
       isProcessingReturnRef.current = false;
+      setIsProcessingReturnSubmitting(false);
       
       if (operationSucceeded) {
         setProcessingReturn(null);
@@ -440,7 +446,13 @@ const SalesReturns: React.FC = () => {
         </div>
 
         {/* Create Return Dialog */}
-        <Dialog open={isCreatingReturn} onOpenChange={setIsCreatingReturn}>
+        <Dialog
+          open={isCreatingReturn}
+          onOpenChange={(open) => {
+            if (!open && isCreatingReturnSubmitting) return;
+            setIsCreatingReturn(open);
+          }}
+        >
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto p-4 md:p-6">
             <DialogHeader>
               <DialogTitle className="text-xl md:text-2xl">Create Sales Return</DialogTitle>
@@ -548,9 +560,9 @@ const SalesReturns: React.FC = () => {
             </div>
 
             <DialogFooter>
-              <Button variant="outline" onClick={() => setIsCreatingReturn(false)}>Cancel</Button>
-              <Button onClick={handleCreateReturn} disabled={!newReturn.orderId || newReturn.items.filter(i => i.quantity > 0).length === 0}>
-                Create Return
+              <Button variant="outline" onClick={() => setIsCreatingReturn(false)} disabled={isCreatingReturnSubmitting}>Cancel</Button>
+              <Button onClick={handleCreateReturn} disabled={isCreatingReturnSubmitting || !newReturn.orderId || newReturn.items.filter(i => i.quantity > 0).length === 0}>
+                {isCreatingReturnSubmitting ? 'Creating...' : 'Create Return'}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -558,7 +570,13 @@ const SalesReturns: React.FC = () => {
 
         {/* Process Return Dialog */}
         {processingReturn && (
-          <Dialog open={!!processingReturn} onOpenChange={() => setProcessingReturn(null)}>
+          <Dialog
+            open={!!processingReturn}
+            onOpenChange={(open) => {
+              if (!open && isProcessingReturnSubmitting) return;
+              if (!open) setProcessingReturn(null);
+            }}
+          >
             <DialogContent>
               <DialogHeader>
                 <DialogTitle>Process Return - {processingReturn.returnNumber}</DialogTitle>
@@ -591,14 +609,14 @@ const SalesReturns: React.FC = () => {
               </div>
 
               <DialogFooter>
-                <Button variant="outline" onClick={() => setProcessingReturn(null)}>Cancel</Button>
-                <Button variant="destructive" onClick={() => handleProcessReturn(processingReturn.id, 'rejected')}>
+                <Button variant="outline" onClick={() => setProcessingReturn(null)} disabled={isProcessingReturnSubmitting}>Cancel</Button>
+                <Button variant="destructive" onClick={() => handleProcessReturn(processingReturn.id, 'rejected')} disabled={isProcessingReturnSubmitting}>
                   <XCircle className="h-4 w-4 mr-2" />
-                  Reject
+                  {isProcessingReturnSubmitting ? 'Processing...' : 'Reject'}
                 </Button>
-                <Button onClick={() => handleProcessReturn(processingReturn.id, 'completed', 'cash')}>
+                <Button onClick={() => handleProcessReturn(processingReturn.id, 'completed', 'cash')} disabled={isProcessingReturnSubmitting}>
                   <CheckCircle className="h-4 w-4 mr-2" />
-                  Complete & Refund
+                  {isProcessingReturnSubmitting ? 'Processing...' : 'Complete & Refund'}
                 </Button>
               </DialogFooter>
             </DialogContent>
