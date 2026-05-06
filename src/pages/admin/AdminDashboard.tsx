@@ -111,8 +111,7 @@ const AdminDashboard: React.FC = () => {
   const [customQuickActions, setCustomQuickActions] = useState<QuickActionItem[]>([]);
   const [showQuickActionManager, setShowQuickActionManager] = useState(false);
   const [quickActionsLoaded, setQuickActionsLoaded] = useState(false);
-  const [newQuickActionLabel, setNewQuickActionLabel] = useState('');
-  const [newQuickActionPath, setNewQuickActionPath] = useState('');
+  const [quickActionToAdd, setQuickActionToAdd] = useState('');
 
   const syncAutoRateForStore = async (actualStoreId: string) => {
     setSyncingAutoRate(true);
@@ -186,8 +185,20 @@ const AdminDashboard: React.FC = () => {
       visible: canViewInventory,
     },
     { id: 'orders', to: '/admin/orders', label: 'Orders', icon: Clock, visible: true },
+    { id: 'products', to: '/admin/products', label: 'Products', icon: Package, visible: canViewInventory },
+    { id: 'purchases', to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: canManageInventory },
+    { id: 'customers', to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
+    { id: 'payments', to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: canProcessPayments },
     { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
     { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
+    { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
+    { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
+    { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' },
+    { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
+    { id: 'templates', to: '/admin/templates', label: 'Templates & Store Logos', icon: Palette, visible: user?.role === 'admin' },
+    { id: 'marketing', to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
+    { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
+    { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
     { id: 'service-renewals', to: '/admin/service-renewals', label: 'Service Renewals', icon: Clock, visible: user?.role === 'admin' },
     { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' },
     { id: 'product-reviews', to: '/admin/product-reviews', label: 'Product Reviews', icon: Star, visible: user?.role === 'admin' },
@@ -273,6 +284,7 @@ const AdminDashboard: React.FC = () => {
 
   const handleAddQuickAction = (actionId: string) => {
     setSelectedQuickActionIds((prev) => (prev.includes(actionId) ? prev : [...prev, actionId]));
+    setQuickActionToAdd('');
   };
 
   const handleRemoveQuickAction = (actionId: string) => {
@@ -280,26 +292,18 @@ const AdminDashboard: React.FC = () => {
     setCustomQuickActions((prev) => prev.filter((item) => item.id !== actionId));
   };
 
-  const handleAddCustomQuickAction = () => {
-    const label = newQuickActionLabel.trim();
-    const pathInput = newQuickActionPath.trim();
-    if (!label || !pathInput) return;
+  useEffect(() => {
+    if (!showQuickActionManager) return;
+    if (addableQuickActions.length === 0) {
+      setQuickActionToAdd('');
+      return;
+    }
 
-    const normalizedPath = pathInput.startsWith('/') ? pathInput : `/${pathInput}`;
-    const actionId = `custom:${Date.now()}`;
-    const customAction: QuickActionItem = {
-      id: actionId,
-      to: normalizedPath,
-      label,
-      icon: Layers,
-      visible: true,
-    };
-
-    setCustomQuickActions((prev) => [...prev, customAction]);
-    setSelectedQuickActionIds((prev) => [...prev, actionId]);
-    setNewQuickActionLabel('');
-    setNewQuickActionPath('');
-  };
+    const stillValid = addableQuickActions.some((item) => item.id === quickActionToAdd);
+    if (!stillValid) {
+      setQuickActionToAdd(addableQuickActions[0].id);
+    }
+  }, [addableQuickActions, quickActionToAdd, showQuickActionManager]);
 
   const [openMenuGroups, setOpenMenuGroups] = useState<Record<string, boolean>>({
     daily_stock: false,
@@ -797,7 +801,6 @@ const AdminDashboard: React.FC = () => {
                       variant="outline"
                       size="sm"
                       onClick={() => setShowQuickActionManager((prev) => !prev)}
-                      disabled={addableQuickActions.length === 0 && !showQuickActionManager}
                     >
                       {showQuickActionManager ? 'Done' : 'Add Quick Action'}
                     </Button>
@@ -806,42 +809,35 @@ const AdminDashboard: React.FC = () => {
 
                 {showQuickActionManager && (
                   <div className="mb-3 p-3 bg-white border rounded-lg">
-                    <div className="mb-3 grid grid-cols-1 md:grid-cols-[1fr_1fr_auto] gap-2">
-                      <input
-                        type="text"
-                        value={newQuickActionLabel}
-                        onChange={(event) => setNewQuickActionLabel(event.target.value)}
-                        placeholder="Button label (example: Raw Materials)"
-                        className="h-9 rounded-md border px-3 text-sm"
-                      />
-                      <input
-                        type="text"
-                        value={newQuickActionPath}
-                        onChange={(event) => setNewQuickActionPath(event.target.value)}
-                        placeholder="Route path (example: /admin/raw-materials)"
-                        className="h-9 rounded-md border px-3 text-sm"
-                      />
+                    <div className="mb-3 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
+                      <select
+                        value={quickActionToAdd}
+                        onChange={(event) => setQuickActionToAdd(event.target.value)}
+                        className="h-9 rounded-md border px-3 text-sm bg-white"
+                        disabled={addableQuickActions.length === 0}
+                      >
+                        <option value="" disabled>
+                          {addableQuickActions.length === 0 ? 'No more quick actions available' : 'Select a quick action'}
+                        </option>
+                        {addableQuickActions.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.label}
+                          </option>
+                        ))}
+                      </select>
                       <Button
                         type="button"
                         size="sm"
-                        onClick={handleAddCustomQuickAction}
-                        disabled={!newQuickActionLabel.trim() || !newQuickActionPath.trim()}
+                        onClick={() => quickActionToAdd && handleAddQuickAction(quickActionToAdd)}
+                        disabled={!quickActionToAdd || addableQuickActions.length === 0}
                       >
-                        Add Custom
+                        Add Action
                       </Button>
                     </div>
 
                     {addableQuickActions.length === 0 ? (
-                      <div className="text-sm text-gray-500">All preset quick actions are already added.</div>
-                    ) : (
-                      <div className="flex flex-wrap gap-2">
-                        {addableQuickActions.map((item) => (
-                          <Button key={item.id} type="button" size="sm" variant="outline" onClick={() => handleAddQuickAction(item.id)}>
-                            Add {item.label}
-                          </Button>
-                        ))}
-                      </div>
-                    )}
+                      <div className="text-sm text-gray-500">All quick actions are already added.</div>
+                    ) : null}
                   </div>
                 )}
 

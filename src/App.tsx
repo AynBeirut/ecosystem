@@ -78,6 +78,9 @@ const AdminAccountStatement = lazy(() => import("./pages/admin/AdminAccountState
 const AdminBankReconciliation = lazy(() => import("./pages/admin/AdminBankReconciliation"));
 const AdminFinanceSuite = lazy(() => import("./pages/admin/AdminFinanceSuite"));
 const AdminMarketplaceSync = lazy(() => import("./pages/admin/AdminMarketplaceSync"));
+const AdminSEOAnalytics = lazy(() => import("./pages/admin/AdminSEOAnalytics"));
+const AdminSEOAudit = lazy(() => import("./pages/admin/AdminSEOAudit"));
+const GscCallback = lazy(() => import("./pages/auth/GscCallback"));
 const AdminProductReviews = lazy(() => import("./pages/admin/AdminProductReviews"));
 const AdminOrderNotifications = lazy(() => import("./pages/admin/AdminOrderNotifications"));
 const AdminServiceRenewals = lazy(() => import("./pages/admin/AdminServiceRenewals"));
@@ -132,6 +135,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<Signup />} />
                         <Route path="/auth/callback" element={<AuthCallback />} />
+                        <Route path="/auth/gsc-callback" element={<GscCallback />} />
                         {/* Main app routes */}
                         <Route path="/" element={<Marketplace />} />
                         <Route path="/search" element={<Marketplace />} />
@@ -203,6 +207,8 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
                         <Route path="/admin/service-renewals" element={<ProtectedRoute allowedRoles={['admin']}><AdminServiceRenewals /></ProtectedRoute>} />
                         <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
+                        <Route path="/admin/seo-analytics" element={<ProtectedRoute allowedRoles={['admin']}><AdminSEOAnalytics /></ProtectedRoute>} />
+                        <Route path="/admin/seo-audit" element={<ProtectedRoute allowedRoles={['admin']}><AdminSEOAudit /></ProtectedRoute>} />
                         {/* CRM */}
                         <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />
                         {/* Short store URLs: /:slug and /:slug/product/:productSlug */}

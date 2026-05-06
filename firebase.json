@@ -36,7 +36,7 @@
     ],
     "rewrites": [
       {
-        "source": "!/@(sg|sd|grabio-product-description).html",
+        "source": "!/@(sg|sd|grabio-product-description|seo-report).html",
         "destination": "/index.html"
       }
     ],
