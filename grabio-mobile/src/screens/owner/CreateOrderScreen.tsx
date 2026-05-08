@@ -122,6 +122,10 @@ export default function CreateOrderScreen() {
   const currency = orderItems[0]?.currency || 'USD';
 
   const submitOrder = async () => {
+    if (!customerName.trim()) {
+      Alert.alert('Missing', 'Customer name is required.');
+      return;
+    }
     if (orderItems.length === 0) {
       Alert.alert('Empty order', 'Add at least one product');
       return;
@@ -132,7 +136,7 @@ export default function CreateOrderScreen() {
       await firestore().collection('orders').add({
         storeId: user!.storeId,
         customerId: user!.uid,
-        customerName: customerName.trim() || 'Walk-in Customer',
+        customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || null,
         items: orderItems.map(({ productId, name, price, quantity }) => ({ productId, name, price, quantity })),
         total,
@@ -142,7 +146,7 @@ export default function CreateOrderScreen() {
         createdAt: firestore.FieldValue.serverTimestamp(),
         createdByOwner: true,
       });
-      Alert.alert('Order Created', `Order for ${customerName || 'Walk-in'} placed successfully.`, [
+          Alert.alert('Order Created', `Order for ${customerName} placed successfully.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
     } catch (err: unknown) {
@@ -157,10 +161,11 @@ export default function CreateOrderScreen() {
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
         {/* Customer Info */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>👤 Customer (optional)</Text>
+          <Text style={styles.sectionTitle}>👤 Customer *</Text>
           <TextInput
             style={styles.input}
             placeholder="Search customer by name or phone…"
+            placeholderTextColor="#9ca3af"
             value={customerSearch}
             onChangeText={(v) => {
               setCustomerSearch(v);
@@ -182,6 +187,7 @@ export default function CreateOrderScreen() {
           <TextInput
             style={styles.input}
             placeholder="Phone number (optional)"
+            placeholderTextColor="#9ca3af"
             keyboardType="phone-pad"
             value={customerPhone}
             onChangeText={setCustomerPhone}
@@ -212,6 +218,7 @@ export default function CreateOrderScreen() {
           <TextInput
             style={styles.input}
             placeholder="Search products…"
+            placeholderTextColor="#9ca3af"
             value={search}
             onChangeText={setSearch}
           />
@@ -287,7 +294,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   section: { backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, borderRadius: RADIUS.lg, padding: 16, ...SHADOW.sm },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10 },
-  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.background, marginBottom: 10 },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.background, marginBottom: 10, color: '#1A202C' },
   suggestions: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, marginTop: -8, marginBottom: 10, overflow: 'hidden' },
   suggestionRow: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
   suggestionName: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },

@@ -92,9 +92,9 @@ function OwnerTabs() {
   return (
     <Tab.Navigator screenOptions={{ ...TAB_HEADER, tabBarActiveTintColor: COLORS.primary }}>
       <Tab.Screen
-        name="OwnerHome"
-        component={MarketplaceScreen}
-        options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text>🏪</Text>, title: 'Marketplace', headerShown: false }}
+        name="OwnerDashboard"
+        component={OwnerDashboardScreen}
+        options={{ tabBarLabel: 'Dashboard', tabBarIcon: () => <Text>📊</Text>, title: 'Dashboard' }}
       />
       <Tab.Screen
         name="OwnerTab"
@@ -102,14 +102,14 @@ function OwnerTabs() {
         options={{ tabBarLabel: 'Orders', tabBarIcon: () => <Text>📋</Text>, title: 'Orders' }}
       />
       <Tab.Screen
-        name="OwnerCustomers"
-        component={CustomersScreen}
-        options={{ tabBarLabel: 'Customers', tabBarIcon: () => <Text>👥</Text>, title: 'Customers' }}
+        name="OwnerHome"
+        component={MarketplaceScreen}
+        options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text>🏪</Text>, title: 'Marketplace', headerShown: false }}
       />
       <Tab.Screen
-        name="OwnerDashboard"
-        component={OwnerDashboardScreen}
-        options={{ tabBarLabel: 'Dashboard', tabBarIcon: () => <Text>📊</Text>, title: 'Dashboard' }}
+        name="OwnerCustomers"
+        component={ProfileScreen}
+        options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text>👤</Text>, title: 'Profile' }}
       />
     </Tab.Navigator>
   );

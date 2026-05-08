@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getFirestore, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
 import { getAuth } from '@react-native-firebase/auth';
 import { RootStackParamList } from '../../types';
 import { useCart } from '../../context/CartContext';
@@ -48,8 +48,7 @@ export default function CheckoutScreen() {
       // Pre-fill from auth + Firestore profile
       setName(user.displayName || '');
       setEmail(user.email || '');
-      const db = getFirestore();
-      getDoc(doc(db, 'users', user.uid)).then((snap) => {
+      firestore().collection('users').doc(user.uid).get().then((snap) => {
         if (snap.exists()) {
           const d = snap.data()!;
           if (d.phone) setPhone(d.phone);
@@ -89,8 +88,7 @@ export default function CheckoutScreen() {
 
   useEffect(() => {
     if (!storeId) { setLoadingMethods(false); return; }
-    const db = getFirestore();
-    getDoc(doc(db, 'storeProfiles', storeId)).then((docSnap) => {
+    firestore().collection('storeProfiles').doc(storeId).get().then((docSnap) => {
       if (docSnap.exists()) {
         const data = docSnap.data()!;
         const pm = data.paymentMethods || {};
@@ -207,10 +205,7 @@ export default function CheckoutScreen() {
     if (items.length === 0) return;
     if (!name.trim()) { Alert.alert('Required', 'Please enter your name'); return; }
     if (!phone.trim()) { Alert.alert('Required', 'Please enter your phone number'); return; }
-    if (!email.trim()) { Alert.alert('Required', 'Please enter your email address'); return; }
-    const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRe.test(email.trim())) { Alert.alert('Invalid email', 'Please enter a valid email address'); return; }
-    if (!address.trim()) { Alert.alert('Required', 'Please enter your delivery address'); return; }
+    // email and address are optional — not required
 
     if (paymentMethod === 'whatsapp') {
       const waUrl = buildWhatsAppUrl();
@@ -270,8 +265,7 @@ export default function CheckoutScreen() {
       // Save delivery info for next order
       if (user && !isGuest) {
         // Logged-in: save to Firestore profile
-        const db = getFirestore();
-        setDoc(doc(db, 'users', user.uid), {
+        firestore().collection('users').doc(user.uid).set({
           phone: phone.trim(),
           address: address.trim(),
           city: city.trim(),
@@ -333,7 +327,7 @@ export default function CheckoutScreen() {
       <Text style={[styles.section, { marginTop: 20 }]}>Your Details</Text>
       <TextInput style={styles.input} placeholder="Your name *" placeholderTextColor={COLORS.textMuted} value={name} onChangeText={setName} />
       <TextInput style={styles.input} placeholder="Phone number *" placeholderTextColor={COLORS.textMuted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-      <TextInput style={styles.input} placeholder="Email *" placeholderTextColor={COLORS.textMuted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+      <TextInput style={styles.input} placeholder="Email (optional)" placeholderTextColor={COLORS.textMuted} value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
 
       <Text style={[styles.section, { marginTop: 20 }]}>Delivery Address</Text>
       <TouchableOpacity style={styles.locateBtn} onPress={detectLocation} disabled={locating}>
@@ -341,7 +335,7 @@ export default function CheckoutScreen() {
           ? <ActivityIndicator size="small" color={COLORS.primary} />
           : <Text style={styles.locateBtnText}>📍 Detect my location</Text>}
       </TouchableOpacity>
-      <TextInput style={styles.input} placeholder="Street address *" placeholderTextColor={COLORS.textMuted} value={address} onChangeText={setAddress} />
+      <TextInput style={styles.input} placeholder="Street address (optional)" placeholderTextColor={COLORS.textMuted} value={address} onChangeText={setAddress} />
       <TextInput style={styles.input} placeholder="City" placeholderTextColor={COLORS.textMuted} value={city} onChangeText={setCity} />
       <TextInput style={[styles.input, { height: 72 }]} placeholder="Delivery notes (optional)" placeholderTextColor={COLORS.textMuted} value={notes} onChangeText={setNotes} multiline />
 

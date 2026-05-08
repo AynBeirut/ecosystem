@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView,
-  Alert, ActivityIndicator, Image, Switch,
+  Alert, ActivityIndicator, Image, Switch, Modal, Pressable, Platform,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import storage from '@react-native-firebase/storage';
@@ -26,7 +26,11 @@ export default function AddEditProductScreen() {
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState('');
   const [productType, setProductType] = useState<'simple' | 'service'>('simple');
-  const [expiryDate, setExpiryDate] = useState('');
+  const [expiryTracking, setExpiryTracking] = useState(false);
+  const [expiryDate, setExpiryDate] = useState<Date | null>(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [tempDate, setTempDate] = useState<Date>(new Date());
+  const [expiryAlertDays, setExpiryAlertDays] = useState('30');
   const [lowStockThreshold, setLowStockThreshold] = useState('5');
   const [inStock, setInStock] = useState(true);
   const [currency, setCurrency] = useState('USD');
@@ -49,7 +53,12 @@ export default function AddEditProductScreen() {
           setPrice(String(d.price || ''));
           setUnit(d.unit || '');
           setProductType(d.productType === 'service' ? 'service' : 'simple');
-          setExpiryDate(d.expiryDate || '');
+          setExpiryTracking(!!d.expiryTracking);
+          setExpiryAlertDays(String(d.expiryAlertDays || 30));
+          if (d.expiryDate && typeof d.expiryDate === 'string') {
+            const parsed = new Date(d.expiryDate);
+            if (!isNaN(parsed.getTime())) { setExpiryDate(parsed); setTempDate(parsed); }
+          }
           setLowStockThreshold(String(d.lowStockThreshold || 5));
           setInStock(d.inStock !== false);
           setCurrency(d.currency || 'USD');
@@ -66,7 +75,7 @@ export default function AddEditProductScreen() {
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      mediaTypes: ['images'] as any,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.7,
@@ -94,7 +103,9 @@ export default function AddEditProductScreen() {
 
   const uploadImage = async (uri: string): Promise<string> => {
     const filename = `${Date.now()}.jpg`;
-    const ref = storage().ref(`products/images/${user!.uid}/${filename}`);
+    // Use storeId as the path segment (matches storage.rules)
+    const pathId = user!.storeId || user!.uid;
+    const ref = storage().ref(`products/images/${pathId}/${filename}`);
     await ref.putFile(uri);
     return ref.getDownloadURL();
   };
@@ -123,8 +134,21 @@ export default function AddEditProductScreen() {
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
       if (imageUrl) { data.imageUrl = imageUrl; data.image = imageUrl; }
-      if (lowStockThreshold !== '') data.lowStockThreshold = parseInt(lowStockThreshold, 10);
-      if (expiryDate.trim()) data.expiryDate = expiryDate.trim();
+      // Low stock threshold only for simple products
+      if (productType === 'simple' && lowStockThreshold !== '') {
+        data.lowStockThreshold = parseInt(lowStockThreshold, 10);
+      }
+      // Expiry tracking for both simple and service
+      data.expiryTracking = expiryTracking;
+      data.expiryAlertDays = parseInt(expiryAlertDays, 10) || 30;
+      if (expiryTracking && expiryDate) {
+        const y = expiryDate.getFullYear();
+        const m = String(expiryDate.getMonth() + 1).padStart(2, '0');
+        const d2 = String(expiryDate.getDate()).padStart(2, '0');
+        data.expiryDate = `${y}-${m}-${d2}`;
+      }
+      // Service is always in stock
+      if (productType === 'service') { data.inStock = true; }
 
       if (isEdit) {
         await firestore().collection('products').doc(params.productId).update(data);
@@ -167,24 +191,24 @@ export default function AddEditProductScreen() {
 
       {/* Form Fields */}
       <Text style={styles.label}>Product Name *</Text>
-      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="e.g. Fresh Tomatoes" />
+      <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="e.g. Fresh Tomatoes" placeholderTextColor="#9ca3af" />
 
       <Text style={styles.label}>Description</Text>
-      <TextInput style={[styles.input, { height: 70 }]} value={description} onChangeText={setDescription} placeholder="Optional description" multiline />
+      <TextInput style={[styles.input, { height: 70 }]} value={description} onChangeText={setDescription} placeholder="Optional description" multiline placeholderTextColor="#9ca3af" />
 
       <View style={styles.row}>
         <View style={{ flex: 2 }}>
           <Text style={styles.label}>Price *</Text>
-          <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0.00" />
+          <TextInput style={styles.input} value={price} onChangeText={setPrice} keyboardType="decimal-pad" placeholder="0.00" placeholderTextColor="#9ca3af" />
         </View>
         <View style={{ flex: 1, marginLeft: 10 }}>
           <Text style={styles.label}>Currency</Text>
-          <TextInput style={styles.input} value={currency} onChangeText={setCurrency} placeholder="USD" autoCapitalize="characters" />
+          <TextInput style={styles.input} value={currency} onChangeText={setCurrency} placeholder="USD" autoCapitalize="characters" placeholderTextColor="#9ca3af" />
         </View>
       </View>
 
       <Text style={styles.label}>Unit (optional)</Text>
-      <TextInput style={styles.input} value={unit} onChangeText={setUnit} placeholder="e.g. kg, piece, liter" />
+      <TextInput style={styles.input} value={unit} onChangeText={setUnit} placeholder="e.g. kg, piece, liter" placeholderTextColor="#9ca3af" />
 
       {/* Product Type */}
       <Text style={styles.label}>Product Type *</Text>
@@ -203,27 +227,91 @@ export default function AddEditProductScreen() {
         </TouchableOpacity>
       </View>
 
-      {/* Expiry Date — only for simple products */}
-      {productType === 'simple' && (
+      {/* Expiry Tracking */}
+      <View style={styles.switchRow}>
+        <Text style={styles.label}>Enable Expiry Tracking</Text>
+        <Switch value={expiryTracking} onValueChange={setExpiryTracking} trackColor={{ true: COLORS.primary }} />
+      </View>
+      {expiryTracking && (
         <>
-          <Text style={styles.label}>Expiry Date (optional)</Text>
-          <TextInput
-            style={styles.input}
-            value={expiryDate}
-            onChangeText={setExpiryDate}
-            placeholder="e.g. 2025-12-31"
-            keyboardType="default"
-          />
+          <Text style={styles.label}>Expiry Date</Text>
+          <TouchableOpacity style={styles.datePickerBtn} onPress={() => { setTempDate(expiryDate || new Date()); setShowDatePicker(true); }}>
+            <Text style={styles.datePickerBtnText}>
+              {expiryDate
+                ? `📅 ${String(expiryDate.getDate()).padStart(2,'0')}/${String(expiryDate.getMonth()+1).padStart(2,'0')}/${expiryDate.getFullYear()}`
+                : '📅 Select expiry date…'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Date Picker Modal */}
+          <Modal visible={showDatePicker} transparent animationType="slide">
+            <Pressable style={styles.dateModalOverlay} onPress={() => setShowDatePicker(false)}>
+              <Pressable style={styles.dateModalBox} onPress={() => {}}>
+                <Text style={styles.dateModalTitle}>Select Expiry Date</Text>
+                {/* Year / Month / Day pickers as scroll wheels */}
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 8 }}>
+                  {/* Day */}
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.dateColLabel}>Day</Text>
+                    <ScrollView style={styles.dateScroll} showsVerticalScrollIndicator={false}>
+                      {Array.from({ length: 31 }, (_, i) => i + 1).map((d) => (
+                        <TouchableOpacity key={d} style={[styles.dateCell, tempDate.getDate() === d && styles.dateCellActive]} onPress={() => { const nd = new Date(tempDate); nd.setDate(d); setTempDate(nd); }}>
+                          <Text style={[styles.dateCellText, tempDate.getDate() === d && styles.dateCellTextActive]}>{String(d).padStart(2,'0')}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                  {/* Month */}
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={styles.dateColLabel}>Month</Text>
+                    <ScrollView style={styles.dateScroll} showsVerticalScrollIndicator={false}>
+                      {['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'].map((mo, idx) => (
+                        <TouchableOpacity key={mo} style={[styles.dateCell, tempDate.getMonth() === idx && styles.dateCellActive]} onPress={() => { const nd = new Date(tempDate); nd.setMonth(idx); setTempDate(nd); }}>
+                          <Text style={[styles.dateCellText, tempDate.getMonth() === idx && styles.dateCellTextActive]}>{mo}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                  {/* Year */}
+                  <View style={{ flex: 1.2, alignItems: 'center' }}>
+                    <Text style={styles.dateColLabel}>Year</Text>
+                    <ScrollView style={styles.dateScroll} showsVerticalScrollIndicator={false}>
+                      {Array.from({ length: 10 }, (_, i) => new Date().getFullYear() + i).map((yr) => (
+                        <TouchableOpacity key={yr} style={[styles.dateCell, tempDate.getFullYear() === yr && styles.dateCellActive]} onPress={() => { const nd = new Date(tempDate); nd.setFullYear(yr); setTempDate(nd); }}>
+                          <Text style={[styles.dateCellText, tempDate.getFullYear() === yr && styles.dateCellTextActive]}>{yr}</Text>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+                  </View>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 10, marginTop: 16 }}>
+                  <TouchableOpacity style={[styles.dateModalBtn, { backgroundColor: '#f3f4f6' }]} onPress={() => setShowDatePicker(false)}>
+                    <Text style={{ color: COLORS.textSecondary, fontWeight: '700' }}>Cancel</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity style={[styles.dateModalBtn, { backgroundColor: COLORS.primary, flex: 2 }]} onPress={() => { setExpiryDate(new Date(tempDate)); setShowDatePicker(false); }}>
+                    <Text style={{ color: '#fff', fontWeight: '700' }}>Confirm</Text>
+                  </TouchableOpacity>
+                </View>
+              </Pressable>
+            </Pressable>
+          </Modal>
+
+          <Text style={styles.label}>Alert Days Before Expiry</Text>
+          <TextInput style={styles.input} value={expiryAlertDays} onChangeText={setExpiryAlertDays} keyboardType="number-pad" placeholder="30" placeholderTextColor="#9ca3af" />
         </>
       )}
 
-      <Text style={styles.label}>Low Stock Alert Threshold</Text>
-      <TextInput style={styles.input} value={lowStockThreshold} onChangeText={setLowStockThreshold} keyboardType="number-pad" placeholder="5" />
-
-      <View style={styles.switchRow}>
-        <Text style={styles.label}>In Stock</Text>
-        <Switch value={inStock} onValueChange={setInStock} trackColor={{ true: COLORS.primary }} />
-      </View>
+      {/* Low stock and in-stock only for simple products */}
+      {productType === 'simple' && (
+        <>
+          <Text style={styles.label}>Low Stock Alert Threshold</Text>
+          <TextInput style={styles.input} value={lowStockThreshold} onChangeText={setLowStockThreshold} keyboardType="number-pad" placeholder="5" placeholderTextColor="#9ca3af" />
+          <View style={styles.switchRow}>
+            <Text style={styles.label}>In Stock</Text>
+            <Switch value={inStock} onValueChange={setInStock} trackColor={{ true: COLORS.primary }} />
+          </View>
+        </>
+      )}
 
       <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
         {loading ? (
@@ -245,7 +333,7 @@ const styles = StyleSheet.create({
   imgBtn: { flex: 1, backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md, padding: 10, alignItems: 'center' },
   imgBtnText: { color: COLORS.primary, fontWeight: '600' },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 4, marginTop: 8 },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 12, fontSize: 15, backgroundColor: '#f9fafb' },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 12, fontSize: 15, backgroundColor: '#f9fafb', color: '#1A202C' },
   row: { flexDirection: 'row' },
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingVertical: 8 },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 24, marginBottom: 40, height: 52, justifyContent: 'center' },
@@ -255,4 +343,16 @@ const styles = StyleSheet.create({
   typeBtnActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
   typeBtnText: { fontSize: 14, color: '#6b7280', fontWeight: '600' },
   typeBtnTextActive: { color: COLORS.primary },
+  datePickerBtn: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 14, backgroundColor: '#f9fafb', marginBottom: 8 },
+  datePickerBtnText: { fontSize: 14, color: COLORS.textPrimary, fontWeight: '600' },
+  dateModalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.45)', justifyContent: 'flex-end' },
+  dateModalBox: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20, paddingBottom: 36 },
+  dateModalTitle: { fontSize: 16, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 16, textAlign: 'center' },
+  dateColLabel: { fontSize: 12, color: COLORS.textMuted, marginBottom: 4, fontWeight: '600' },
+  dateScroll: { height: 160, width: '100%' },
+  dateCell: { paddingVertical: 10, paddingHorizontal: 8, borderRadius: RADIUS.md, alignItems: 'center' },
+  dateCellActive: { backgroundColor: COLORS.primary },
+  dateCellText: { fontSize: 15, color: COLORS.textSecondary },
+  dateCellTextActive: { color: '#fff', fontWeight: '700' },
+  dateModalBtn: { flex: 1, padding: 14, borderRadius: RADIUS.md, alignItems: 'center' },
 });

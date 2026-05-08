@@ -202,7 +202,7 @@ const styles = StyleSheet.create({
   modalBox: { backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '90%' },
   modalTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 16 },
   label: { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 4, marginTop: 8 },
-  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: '#f9fafb' },
+  input: { borderWidth: 1, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: '#f9fafb', color: '#1A202C' },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 20, marginBottom: 8 },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
   cancelText: { color: COLORS.textMuted, textAlign: 'center', marginTop: 8, fontSize: 14, paddingBottom: 20 },
