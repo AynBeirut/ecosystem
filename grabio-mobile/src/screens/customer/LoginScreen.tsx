@@ -49,6 +49,8 @@ export default function LoginScreen() {
     setGoogleLoading(true);
     try {
       await GoogleSignin.hasPlayServices({ showPlayServicesUpdateDialog: true });
+      // Sign out first so Google always shows the account picker
+      await GoogleSignin.signOut();
       const signInResult = await GoogleSignin.signIn();
       const idToken = signInResult.data?.idToken;
       if (!idToken) throw new Error('No ID token returned from Google Sign-In');

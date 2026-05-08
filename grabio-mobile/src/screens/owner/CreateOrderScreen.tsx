@@ -20,6 +20,13 @@ interface OrderItem {
   currency: string;
 }
 
+interface Customer {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+}
+
 const PAYMENT_METHODS = ['Cash', 'Card', 'WhatsApp Pay', 'Bank Transfer', 'Other'];
 
 export default function CreateOrderScreen() {
@@ -34,6 +41,11 @@ export default function CreateOrderScreen() {
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
+  // Customer autocomplete
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showSuggestions, setShowSuggestions] = useState(false);
+
   useEffect(() => {
     if (!user?.storeId) { setLoading(false); return; }
     const unsub = firestore()
@@ -47,6 +59,33 @@ export default function CreateOrderScreen() {
       });
     return unsub;
   }, [user?.storeId]);
+
+  useEffect(() => {
+    if (!user?.storeId) return;
+    // Load customers for autocomplete
+    firestore()
+      .collection('customers')
+      .where('storeId', '==', user.storeId)
+      .get()
+      .then((snap) => {
+        setCustomers(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Customer)));
+      })
+      .catch(() => {});
+  }, [user?.storeId]);
+
+  const filteredCustomers = customerSearch.length > 0
+    ? customers.filter((c) =>
+        (c.name || '').toLowerCase().includes(customerSearch.toLowerCase()) ||
+        (c.phone || '').includes(customerSearch),
+      )
+    : [];
+
+  const selectCustomer = (c: Customer) => {
+    setCustomerName(c.name);
+    setCustomerPhone(c.phone || '');
+    setCustomerSearch(c.name);
+    setShowSuggestions(false);
+  };
 
   const filtered = search
     ? products.filter((p) => p.name.toLowerCase().includes(search.toLowerCase()))
@@ -89,23 +128,20 @@ export default function CreateOrderScreen() {
     }
     setSaving(true);
     try {
-      await firestore()
-        .collection('storeProfiles')
-        .doc(user!.storeId!)
-        .collection('orders')
-        .add({
-          storeId: user!.storeId,
-          customerId: user!.uid,
-          customerName: customerName.trim() || 'Walk-in Customer',
-          customerPhone: customerPhone.trim() || null,
-          items: orderItems.map(({ productId, name, price, quantity }) => ({ productId, name, price, quantity })),
-          total,
-          currency,
-          status: 'confirmed',
-          paymentMethod,
-          createdAt: firestore.FieldValue.serverTimestamp(),
-          createdByOwner: true,
-        });
+      // Write to top-level orders collection (matches Firestore rules)
+      await firestore().collection('orders').add({
+        storeId: user!.storeId,
+        customerId: user!.uid,
+        customerName: customerName.trim() || 'Walk-in Customer',
+        customerPhone: customerPhone.trim() || null,
+        items: orderItems.map(({ productId, name, price, quantity }) => ({ productId, name, price, quantity })),
+        total,
+        currency,
+        status: 'confirmed',
+        paymentMethod,
+        createdAt: firestore.FieldValue.serverTimestamp(),
+        createdByOwner: true,
+      });
       Alert.alert('Order Created', `Order for ${customerName || 'Walk-in'} placed successfully.`, [
         { text: 'OK', onPress: () => navigation.goBack() },
       ]);
@@ -124,10 +160,25 @@ export default function CreateOrderScreen() {
           <Text style={styles.sectionTitle}>👤 Customer (optional)</Text>
           <TextInput
             style={styles.input}
-            placeholder="Customer name"
-            value={customerName}
-            onChangeText={setCustomerName}
+            placeholder="Search customer by name or phone…"
+            value={customerSearch}
+            onChangeText={(v) => {
+              setCustomerSearch(v);
+              setCustomerName(v);
+              setShowSuggestions(true);
+            }}
+            onFocus={() => setShowSuggestions(true)}
           />
+          {showSuggestions && filteredCustomers.length > 0 && (
+            <View style={styles.suggestions}>
+              {filteredCustomers.slice(0, 5).map((c) => (
+                <TouchableOpacity key={c.id} style={styles.suggestionRow} onPress={() => selectCustomer(c)}>
+                  <Text style={styles.suggestionName}>{c.name}</Text>
+                  {c.phone ? <Text style={styles.suggestionPhone}>{c.phone}</Text> : null}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
           <TextInput
             style={styles.input}
             placeholder="Phone number (optional)"
@@ -237,6 +288,10 @@ const styles = StyleSheet.create({
   section: { backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 12, borderRadius: RADIUS.lg, padding: 16, ...SHADOW.sm },
   sectionTitle: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 10 },
   input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.background, marginBottom: 10 },
+  suggestions: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, marginTop: -8, marginBottom: 10, overflow: 'hidden' },
+  suggestionRow: { paddingHorizontal: 12, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  suggestionName: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
+  suggestionPhone: { fontSize: 12, color: COLORS.textSecondary, marginTop: 1 },
 
   paymentRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   paymentBtn: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: RADIUS.full, borderWidth: 1, borderColor: COLORS.border, backgroundColor: COLORS.background },

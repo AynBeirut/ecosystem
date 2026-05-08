@@ -35,11 +35,12 @@ export interface Product {
   image?: string;    // web field name
   imageUrl?: string; // mobile field name (both kept in sync)
   storeId: string;
-  productType: 'simple' | 'composed' | 'production' | 'finished_good';
+  productType: 'simple' | 'service' | 'composed' | 'production' | 'finished_good';
   inStock: boolean;
   stock?: number;
   lowStockThreshold?: number;
   unit?: string;
+  expiryDate?: string;
 }
 
 export interface CartItem {
@@ -59,7 +60,7 @@ export interface Order {
   items: Array<{ productId: string; name: string; price: number; quantity: number }>;
   total: number;
   currency: string;
-  status: 'pending' | 'confirmed' | 'preparing' | 'ready' | 'delivered' | 'cancelled';
+  status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'returned' | 'cancelled';
   createdAt: unknown;
   paymentMethod: string;
 }
@@ -80,6 +81,10 @@ export type RootStackParamList = {
   Inventory: undefined;
   Expenses: undefined;
   CreateOrder: undefined;
+  Customers: undefined;
+  Purchases: undefined;
+  Suppliers: undefined;
+  AccountStatement: undefined;
 };
 
 export type TabParamList = {
@@ -88,4 +93,8 @@ export type TabParamList = {
   MyOrders: undefined;
   Cart: undefined;
   OwnerTab: undefined;
+  // Owner-specific tabs
+  OwnerHome: undefined;
+  OwnerCustomers: undefined;
+  OwnerDashboard: undefined;
 };

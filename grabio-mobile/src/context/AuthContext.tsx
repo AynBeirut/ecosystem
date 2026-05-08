@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { getAuth, onAuthStateChanged, signOut as firebaseSignOut } from '@react-native-firebase/auth';
+import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
   getFirestore,
   FieldValue,
@@ -125,7 +126,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return unsubscribe;
   }, []);
 
-  const signOut = () => firebaseSignOut(getAuth());
+  const signOut = async () => {
+    try { await GoogleSignin.signOut(); } catch (_) {}
+    return firebaseSignOut(getAuth());
+  };
 
   return (
     <AuthContext.Provider value={{ user, loading, isGuest, enterGuestMode, exitGuestMode, signOut }}>

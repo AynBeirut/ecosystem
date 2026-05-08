@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onOrderStatusChanged = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onStoreAnnouncement = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -632,6 +632,13 @@ Object.defineProperty(exports, "checkSubscriptions", { enumerable: true, get: fu
 // Export the scheduled expiry stock checker
 var checkExpiringStock_1 = require("./scheduled/checkExpiringStock");
 Object.defineProperty(exports, "checkExpiringStock", { enumerable: true, get: function () { return checkExpiringStock_1.checkExpiringStock; } });
-// Export Firestore trigger: order status / payment status change notifications
+// Export the scheduled low stock FCM alert
+var checkLowStock_1 = require("./scheduled/checkLowStock");
+Object.defineProperty(exports, "checkLowStockAlert", { enumerable: true, get: function () { return checkLowStock_1.checkLowStockAlert; } });
+// Export Firestore triggers: new order + order status / payment status change notifications
 var orderNotifications_2 = require("./triggers/orderNotifications");
+Object.defineProperty(exports, "onOrderCreated", { enumerable: true, get: function () { return orderNotifications_2.onOrderCreated; } });
 Object.defineProperty(exports, "onOrderStatusChanged", { enumerable: true, get: function () { return orderNotifications_2.onOrderStatusChanged; } });
+// Export Firestore trigger: store announcements → notify customers who favorited the store
+var storeAnnouncements_1 = require("./triggers/storeAnnouncements");
+Object.defineProperty(exports, "onStoreAnnouncement", { enumerable: true, get: function () { return storeAnnouncements_1.onStoreAnnouncement; } });

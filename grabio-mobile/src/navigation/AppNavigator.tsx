@@ -47,6 +47,10 @@ import AddEditProductScreen from '../screens/owner/AddEditProductScreen';
 import InventoryScreen from '../screens/owner/InventoryScreen';
 import ExpensesScreen from '../screens/owner/ExpensesScreen';
 import CreateOrderScreen from '../screens/owner/CreateOrderScreen';
+import CustomersScreen from '../screens/owner/CustomersScreen';
+import PurchasesScreen from '../screens/owner/PurchasesScreen';
+import SuppliersScreen from '../screens/owner/SuppliersScreen';
+import AccountStatementScreen from '../screens/owner/AccountStatementScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -88,22 +92,22 @@ function OwnerTabs() {
   return (
     <Tab.Navigator screenOptions={{ ...TAB_HEADER, tabBarActiveTintColor: COLORS.primary }}>
       <Tab.Screen
-        name="Profile"
-        component={ProfileScreen}
-        options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text>👤</Text>, title: 'Profile' }}
-      />
-      <Tab.Screen
-        name="Marketplace"
-        component={OwnerProductsScreen}
-        options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text>🏠</Text>, title: 'My Store' }}
+        name="OwnerHome"
+        component={MarketplaceScreen}
+        options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text>🏪</Text>, title: 'Marketplace', headerShown: false }}
       />
       <Tab.Screen
         name="OwnerTab"
         component={OwnerOrdersScreen}
-        options={{ tabBarLabel: 'Orders', tabBarIcon: () => <Text>🛒</Text>, title: 'Orders' }}
+        options={{ tabBarLabel: 'Orders', tabBarIcon: () => <Text>📋</Text>, title: 'Orders' }}
       />
       <Tab.Screen
-        name="Favorites"
+        name="OwnerCustomers"
+        component={CustomersScreen}
+        options={{ tabBarLabel: 'Customers', tabBarIcon: () => <Text>👥</Text>, title: 'Customers' }}
+      />
+      <Tab.Screen
+        name="OwnerDashboard"
         component={OwnerDashboardScreen}
         options={{ tabBarLabel: 'Dashboard', tabBarIcon: () => <Text>📊</Text>, title: 'Dashboard' }}
       />
@@ -139,6 +143,10 @@ export default function AppNavigator() {
             <Stack.Screen name="Inventory" component={InventoryScreen} options={{ headerShown: true, title: 'Inventory' }} />
             <Stack.Screen name="Expenses" component={ExpensesScreen} options={{ headerShown: true, title: 'Expenses' }} />
             <Stack.Screen name="CreateOrder" component={CreateOrderScreen} options={{ headerShown: true, title: 'Create Order' }} />
+            <Stack.Screen name="Customers" component={CustomersScreen} options={{ headerShown: true, title: 'Customers' }} />
+            <Stack.Screen name="Purchases" component={PurchasesScreen} options={{ headerShown: true, title: 'Purchases' }} />
+            <Stack.Screen name="Suppliers" component={SuppliersScreen} options={{ headerShown: true, title: 'Suppliers' }} />
+            <Stack.Screen name="AccountStatement" component={AccountStatementScreen} options={{ headerShown: true, title: 'Account Statement' }} />
           </>
         )}
       </Stack.Navigator>

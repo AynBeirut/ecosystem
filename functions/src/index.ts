@@ -713,5 +713,9 @@ export const api = functions.https.onRequest(
 export { checkSubscriptions } from './scheduled/checkSubscriptions';
 // Export the scheduled expiry stock checker
 export { checkExpiringStock } from './scheduled/checkExpiringStock';
-// Export Firestore trigger: order status / payment status change notifications
-export { onOrderStatusChanged } from './triggers/orderNotifications';
+// Export the scheduled low stock FCM alert
+export { checkLowStockAlert } from './scheduled/checkLowStock';
+// Export Firestore triggers: new order + order status / payment status change notifications
+export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
+// Export Firestore trigger: store announcements → notify customers who favorited the store
+export { onStoreAnnouncement } from './triggers/storeAnnouncements';
