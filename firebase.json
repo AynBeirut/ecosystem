@@ -28,6 +28,7 @@
     }
   },
   "hosting": {
+    "target": "production",
     "public": "dist",
     "ignore": [
       "firebase.json",

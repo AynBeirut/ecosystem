@@ -14,14 +14,14 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const NEXT_STATUS: Record<string, string> = {
   pending: 'confirmed',
-  confirmed: 'preparing',
-  preparing: 'ready',
+  confirmed: 'processing',
+  processing: 'ready',
   ready: 'delivered',
 };
 
 const STATUS_COLORS: Record<string, string> = {
-  pending: '#f59e0b', confirmed: '#3b82f6', preparing: '#8b5cf6',
-  ready: '#10b981', delivered: '#6b7280', cancelled: '#ef4444',
+  pending: '#f59e0b', confirmed: '#3b82f6', processing: '#8b5cf6',
+  ready: '#10b981', delivered: '#6b7280', returned: '#f97316', cancelled: '#ef4444',
 };
 
 export default function OwnerOrdersScreen() {

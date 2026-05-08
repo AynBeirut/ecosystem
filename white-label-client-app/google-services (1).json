@@ -1,0 +1,108 @@
+{
+  "project_info": {
+    "project_number": "997465465802",
+    "project_id": "market-flow-7b074",
+    "storage_bucket": "market-flow-7b074.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:997465465802:android:ac4bd1b06714d33098e533",
+        "android_client_info": {
+          "package_name": "com.marketflow.emporium"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "997465465802-j67l62he3rc7nhivfvol848v6870v8cs.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.marketflow.emporium",
+            "certificate_hash": "6da96b8a187aa4cbf4054954195d892cab4682a1"
+          }
+        },
+        {
+          "client_id": "997465465802-biu0r3k8ff880560gvgd8tao71361bp4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoGXD7YqEbMFLq7p-jZEHY5uGv7k68zSE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "997465465802-biu0r3k8ff880560gvgd8tao71361bp4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "997465465802-7oa672e2h69ppv963krkv60tcmv6rljc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.marketflow.emporium",
+                "app_store_id": "997465465802"
+              }
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:997465465802:android:ea2b6ad417c240f398e533",
+        "android_client_info": {
+          "package_name": "space.grabio.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "997465465802-452f6m50f22dur311p3qth58uipe6qom.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "space.grabio.app",
+            "certificate_hash": "a76a5aeb13bc5fcaa48546e98e5d08147072aef4"
+          }
+        },
+        {
+          "client_id": "997465465802-o58auvsmh98l4b1kp735squ0vcof2fop.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "space.grabio.app",
+            "certificate_hash": "057e93364b739af7fa8c57acaa24f628571c506a"
+          }
+        },
+        {
+          "client_id": "997465465802-biu0r3k8ff880560gvgd8tao71361bp4.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCoGXD7YqEbMFLq7p-jZEHY5uGv7k68zSE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "997465465802-biu0r3k8ff880560gvgd8tao71361bp4.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "997465465802-7oa672e2h69ppv963krkv60tcmv6rljc.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.marketflow.emporium",
+                "app_store_id": "997465465802"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -39,7 +39,6 @@ import CheckoutScreen from '../screens/customer/CheckoutScreen';
 import OrderTrackingScreen from '../screens/customer/OrderTrackingScreen';
 import MyOrdersScreen from '../screens/customer/MyOrdersScreen';
 import ProfileScreen from '../screens/customer/ProfileScreen';
-import FavoritesScreen from '../screens/customer/FavoritesScreen';
 import OwnerDashboardScreen from '../screens/owner/OwnerDashboardScreen';
 import OwnerOrdersScreen from '../screens/owner/OwnerOrdersScreen';
 import OwnerProductsScreen from '../screens/owner/OwnerProductsScreen';
@@ -132,7 +131,6 @@ export default function AppNavigator() {
             <Stack.Screen name="Cart" component={CartScreen} options={{ headerShown: true, title: 'Cart' }} />
             <Stack.Screen name="Checkout" component={CheckoutScreen} options={{ headerShown: true, title: 'Checkout' }} />
             <Stack.Screen name="OrderTracking" component={OrderTrackingScreen} options={{ headerShown: true, title: 'Order Status' }} />
-            <Stack.Screen name="Favorites" component={FavoritesScreen} options={{ headerShown: true, title: 'My Favorites' }} />
             <Stack.Screen name="OwnerOrders" component={OwnerOrdersScreen} options={{ headerShown: true, title: 'Orders' }} />
             <Stack.Screen name="OwnerProducts" component={OwnerProductsScreen} options={{ headerShown: true, title: 'Products' }} />
             <Stack.Screen name="AddEditProduct" component={AddEditProductScreen} options={{ headerShown: true, title: 'Product' }} />

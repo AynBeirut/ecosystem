@@ -7,7 +7,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import Geolocation from '@react-native-community/geolocation';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { getFirestore, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
+import { getFirestore, doc, getDoc } from '@react-native-firebase/firestore';
 import { getAuth } from '@react-native-firebase/auth';
 import { RootStackParamList } from '../../types';
 import { useCart } from '../../context/CartContext';
@@ -41,41 +41,19 @@ export default function CheckoutScreen() {
   const [notes, setNotes] = useState('');
 
   // Load saved delivery info on mount
-  // Logged-in users: load from Firestore profile (overrides AsyncStorage)
-  // Guests: load from AsyncStorage only
   useEffect(() => {
-    if (user && !isGuest) {
-      // Pre-fill from auth + Firestore profile
-      setName(user.displayName || '');
-      setEmail(user.email || '');
-      const db = getFirestore();
-      getDoc(doc(db, 'users', user.uid)).then((snap) => {
-        if (snap.exists()) {
-          const d = snap.data()!;
-          if (d.phone) setPhone(d.phone);
-          if (d.address) setAddress(d.address);
-          if (d.city) setCity(d.city);
-          // Pre-select preferred payment if available
-          if (d.preferredPayment) {
-            setPaymentMethod(d.preferredPayment as PaymentKey);
-          }
-        }
-      }).catch(() => {});
-    } else {
-      // Guest: load from AsyncStorage
-      AsyncStorage.getItem('checkout_info').then((raw) => {
-        if (!raw) return;
-        try {
-          const saved = JSON.parse(raw);
-          if (saved.name) setName(saved.name);
-          if (saved.phone) setPhone(saved.phone);
-          if (saved.email) setEmail(saved.email);
-          if (saved.address) setAddress(saved.address);
-          if (saved.city) setCity(saved.city);
-        } catch { /* ignore */ }
-      }).catch(() => {});
-    }
-  }, [user, isGuest]);
+    AsyncStorage.getItem('checkout_info').then((raw) => {
+      if (!raw) return;
+      try {
+        const saved = JSON.parse(raw);
+        if (saved.name) setName(saved.name);
+        if (saved.phone) setPhone(saved.phone);
+        if (saved.email) setEmail(saved.email);
+        if (saved.address) setAddress(saved.address);
+        if (saved.city) setCity(saved.city);
+      } catch { /* ignore */ }
+    }).catch(() => {});
+  }, []);
   const [paymentMethod, setPaymentMethod] = useState<PaymentKey>('cashOnDelivery');
   const [availableMethods, setAvailableMethods] = useState<PaymentKey[]>(['cashOnDelivery']);
   const [whatsappNumber, setWhatsappNumber] = useState<string | null>(null);
@@ -268,25 +246,10 @@ export default function CheckoutScreen() {
 
       const data = await res.json();
       // Save delivery info for next order
-      if (user && !isGuest) {
-        // Logged-in: save to Firestore profile
-        const db = getFirestore();
-        setDoc(doc(db, 'users', user.uid), {
-          phone: phone.trim(),
-          address: address.trim(),
-          city: city.trim(),
-          preferredPayment: paymentMethod,
-          email: user.email,
-          displayName: user.displayName,
-          updatedAt: new Date().toISOString(),
-        }, { merge: true }).catch(() => {});
-      } else {
-        // Guest: save to AsyncStorage
-        AsyncStorage.setItem('checkout_info', JSON.stringify({
-          name: name.trim(), phone: phone.trim(), email: email.trim(),
-          address: address.trim(), city: city.trim(),
-        })).catch(() => {});
-      }
+      AsyncStorage.setItem('checkout_info', JSON.stringify({
+        name: name.trim(), phone: phone.trim(), email: email.trim(),
+        address: address.trim(), city: city.trim(),
+      })).catch(() => {});
       clearCart();
       const orderId = (data.orderIds && data.orderIds[0]) || data.orderId;
       if (orderId) {
