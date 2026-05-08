@@ -34,10 +34,6 @@ export default function InventoryScreen() {
   const [loadingPurchases, setLoadingPurchases] = useState(true);
   const [showAllPurchases, setShowAllPurchases] = useState(false);
 
-  // Receive stock state: productId -> qty string
-  const [receivingQty, setReceivingQty] = useState<Record<string, string>>({});
-  const [receivingId, setReceivingId] = useState<string | null>(null);
-
   // New purchase form
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [supplier, setSupplier] = useState('');
@@ -91,28 +87,6 @@ export default function InventoryScreen() {
     return unsub;
   }, [user?.storeId, showAllPurchases]);
 
-  const receiveStock = async (product: Product) => {
-    const qtyStr = receivingQty[product.id];
-    const amount = parseInt(qtyStr || '0', 10);
-    if (!amount || amount <= 0) {
-      Alert.alert('Invalid', 'Enter a valid quantity');
-      return;
-    }
-    setReceivingId(product.id);
-    try {
-      await firestore()
-        .collection('products')
-        .doc(product.id)
-        .update({ stock: firestore.FieldValue.increment(amount) });
-      setReceivingQty((prev) => ({ ...prev, [product.id]: '' }));
-      Alert.alert('Updated', `Added ${amount} units to ${product.name}`);
-    } catch (err: unknown) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
-    } finally {
-      setReceivingId(null);
-    }
-  };
-
   const addPurchase = async () => {
     if (!supplier.trim() || !itemName.trim() || !qty.trim()) {
       Alert.alert('Missing fields', 'Supplier, item name and quantity are required');
@@ -162,27 +136,7 @@ export default function InventoryScreen() {
         </View>
       </View>
 
-      {/* Receive stock inline */}
-      <View style={styles.receiveRow}>
-        <TextInput
-          style={styles.qtyInput}
-          placeholder="Qty to receive"
-          keyboardType="number-pad"
-          value={receivingQty[item.id] || ''}
-          onChangeText={(v) => setReceivingQty((prev) => ({ ...prev, [item.id]: v }))}
-        />
-        <TouchableOpacity
-          style={styles.receiveBtn}
-          onPress={() => receiveStock(item)}
-          disabled={receivingId === item.id}
-        >
-          {receivingId === item.id ? (
-            <ActivityIndicator color="#fff" size="small" />
-          ) : (
-            <Text style={styles.receiveBtnText}>+ Receive</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+
     </View>
   );
 
@@ -290,11 +244,6 @@ const styles = StyleSheet.create({
   productName: { fontSize: 14, fontWeight: '700', color: COLORS.textPrimary },
   productMeta: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
   lowAlert: { fontSize: 11, color: COLORS.error, marginTop: 2 },
-
-  receiveRow: { flexDirection: 'row', gap: 8, alignItems: 'center' },
-  qtyInput: { flex: 1, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, paddingHorizontal: 10, paddingVertical: 7, fontSize: 14, backgroundColor: COLORS.background },
-  receiveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 8 },
-  receiveBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   purchaseCard: { backgroundColor: COLORS.surface, marginHorizontal: 12, marginBottom: 8, borderRadius: RADIUS.lg, padding: 12, ...SHADOW.sm },
   purchaseRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },

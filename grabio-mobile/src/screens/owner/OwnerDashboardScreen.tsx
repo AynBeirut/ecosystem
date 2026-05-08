@@ -103,22 +103,6 @@ export default function OwnerDashboardScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        {/* Widget 1: New Orders */}
-        <TouchableOpacity style={[styles.widget, { borderLeftColor: COLORS.primary }]} onPress={() => navigation.navigate('OwnerOrders')} activeOpacity={0.85}>
-          <View style={styles.widgetHeader}>
-            <Text style={styles.widgetTitle}>📦 New Orders</Text>
-            {stats.pendingOrders > 0 && (
-              <View style={styles.badge}><Text style={styles.badgeText}>{stats.pendingOrders}</Text></View>
-            )}
-          </View>
-          {stats.newOrders.length > 0 ? stats.newOrders.map((o) => (
-            <View key={o.id} style={styles.orderRow}>
-              <Text style={styles.orderCustomer}>{o.customerName}</Text>
-              <Text style={styles.orderTotal}>{o.currency} {o.total.toFixed(0)}</Text>
-            </View>
-          )) : <Text style={styles.noData}>No pending orders</Text>}
-        </TouchableOpacity>
-
         {/* Widget 2: Today's Sales */}
         <View style={[styles.widget, { borderLeftColor: COLORS.success }]}>
           <Text style={styles.widgetTitle}>💰 Today's Sales</Text>
@@ -130,7 +114,7 @@ export default function OwnerDashboardScreen() {
 
         {/* Widget 3: Stock Alerts */}
         {stats.lowStockItems.length > 0 && (
-          <TouchableOpacity style={[styles.widget, { borderLeftColor: COLORS.warning }]} onPress={() => navigation.navigate('Favorites')} activeOpacity={0.85}>
+          <TouchableOpacity style={[styles.widget, { borderLeftColor: COLORS.warning }]} onPress={() => navigation.navigate('Inventory')} activeOpacity={0.85}>
             <View style={styles.widgetHeader}>
               <Text style={styles.widgetTitle}>⚠️ Stock Alerts</Text>
               <View style={[styles.badge, { backgroundColor: COLORS.warning }]}><Text style={styles.badgeText}>{stats.lowStockItems.length}</Text></View>
@@ -149,21 +133,33 @@ export default function OwnerDashboardScreen() {
         {/* Widget 4: Quick Actions */}
         <Text style={[styles.widgetTitle, { marginBottom: 10, marginTop: 4 }]}>⚡ Quick Actions</Text>
         <View style={styles.actionsGrid}>
-          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('OwnerOrders')}>
-            <Text style={styles.actionIcon}>📋</Text>
-            <Text style={styles.actionLabel}>Orders</Text>
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('CreateOrder')}>
+            <Text style={styles.actionIcon}>➕</Text>
+            <Text style={styles.actionLabel}>New Order</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#d1fae5' }]} onPress={() => navigation.navigate('AddEditProduct', {})}>
-            <Text style={styles.actionIcon}>➕</Text>
+            <Text style={styles.actionIcon}>📦</Text>
             <Text style={[styles.actionLabel, { color: '#065f46' }]}>Add Product</Text>
           </TouchableOpacity>
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: COLORS.primaryLight }]} onPress={() => navigation.navigate('Inventory')}>
-            <Text style={styles.actionIcon}>📦</Text>
+            <Text style={styles.actionIcon}>🏭</Text>
             <Text style={[styles.actionLabel, { color: COLORS.secondary }]}>Inventory</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fef3c7' }]} onPress={() => navigation.navigate('Expenses')}>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fef3c7' }]} onPress={() => navigation.navigate('Purchases')}>
+            <Text style={styles.actionIcon}>🛒</Text>
+            <Text style={[styles.actionLabel, { color: '#92400e' }]}>Purchases</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#ede9fe' }]} onPress={() => navigation.navigate('Suppliers')}>
+            <Text style={styles.actionIcon}>🤝</Text>
+            <Text style={[styles.actionLabel, { color: '#5b21b6' }]}>Suppliers</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fce7f3' }]} onPress={() => navigation.navigate('AccountStatement')}>
+            <Text style={styles.actionIcon}>📒</Text>
+            <Text style={[styles.actionLabel, { color: '#9d174d' }]}>Accounts</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#e0e7ff' }]} onPress={() => navigation.navigate('Expenses')}>
             <Text style={styles.actionIcon}>💸</Text>
-            <Text style={[styles.actionLabel, { color: '#92400e' }]}>Expenses</Text>
+            <Text style={[styles.actionLabel, { color: '#3730a3' }]}>Expenses</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

@@ -1,4 +1,4 @@
-import { onDocumentUpdated } from 'firebase-functions/v2/firestore';
+import { onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import { trackOrderPurchaseConversion } from '../services/metaConversion';
 
@@ -17,6 +17,31 @@ const PAYMENT_MESSAGES: Record<string, { title: string; body: (id: string) => st
   paid:     { title: '💳 Payment Received',  body: (id) => `Payment received for order #${id.slice(-6)}` },
   refunded: { title: '↩️ Payment Refunded',  body: (id) => `Refund issued for order #${id.slice(-6)}` },
 };
+
+async function getFcmTokens(userId: string): Promise<string[]> {
+  const fcmSnap = await admin.firestore()
+    .collection('users')
+    .doc(userId)
+    .collection('fcmTokens')
+    .get();
+  return fcmSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id).filter(Boolean);
+}
+
+async function sendFcm(
+  tokens: string[],
+  title: string,
+  body: string,
+  data: Record<string, string>,
+): Promise<void> {
+  if (tokens.length === 0) return;
+  await admin.messaging().sendEachForMulticast({
+    tokens,
+    notification: { title, body },
+    data,
+    android: { priority: 'high' },
+    apns: { payload: { aps: { sound: 'default', badge: 1 } } },
+  });
+}
 
 async function sendOwnerNotification(
   storeId: string,
@@ -37,29 +62,60 @@ async function sendOwnerNotification(
   if (ownerSnap.empty) return;
 
   const ownerId = ownerSnap.docs[0].id;
-  const fcmSnap = await admin.firestore()
-    .collection('users')
-    .doc(ownerId)
-    .collection('fcmTokens')
-    .get();
+  const tokens = await getFcmTokens(ownerId);
+  await sendFcm(tokens, title, body, { storeId, type, orderId });
+}
 
-  const tokens = fcmSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id).filter(Boolean);
-  if (tokens.length === 0) return;
-
-  await admin.messaging().sendEachForMulticast({
-    tokens,
-    notification: { title, body },
-    data: { storeId, type, orderId },
-    android: { priority: 'high' },
-    apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-  });
+async function sendCustomerNotification(
+  customerId: string,
+  orderId: string,
+  title: string,
+  body: string,
+  type: string,
+): Promise<void> {
+  if (!customerId) return;
+  const tokens = await getFcmTokens(customerId);
+  await sendFcm(tokens, title, body, { type, orderId });
 }
 
 /**
+ * Firestore trigger: fires when a new order document is created.
+ * Sends FCM push notification to the store owner.
+ */
+export const onOrderCreated = onDocumentCreated(
+  {
+    document: 'orders/{orderId}',
+    region: 'us-central1',
+  },
+  async (event) => {
+    const data = event.data?.data();
+    if (!data) return;
+
+    const orderId = event.params.orderId;
+    const storeId: string = data.storeId || '';
+    const customerName: string = data.customerName || 'A customer';
+    const total: number = data.total || 0;
+    const currency: string = data.currency || 'USD';
+
+    try {
+      await sendOwnerNotification(
+        storeId,
+        orderId,
+        '🛒 New Order Received',
+        `${customerName} placed an order for ${currency} ${total.toFixed(2)}`,
+        'new_order',
+      );
+    } catch (err) {
+      console.warn('FCM new order notification failed:', err);
+    }
+  },
+);
+
+/**
  * Firestore trigger: fires when an order document is updated.
- * Sends FCM push notifications to the store owner for:
- *   - Order status changes (confirmed, preparing, ready, delivered, cancelled)
- *   - Payment status changes (paid, refunded)
+ * Sends FCM push notifications to:
+ *   - Store owner: payment status changes
+ *   - Customer: order status changes
  */
 export const onOrderStatusChanged = onDocumentUpdated(
   {
@@ -74,20 +130,29 @@ export const onOrderStatusChanged = onDocumentUpdated(
 
     const orderId = event.params.orderId;
     const storeId: string = after.storeId || before.storeId || '';
+    const customerId: string = after.customerId || before.customerId || '';
 
-    // Check for order status change
+    // Notify customer of order status change
     if (before.status !== after.status && after.status) {
       const msg = STATUS_MESSAGES[after.status as string];
       if (msg) {
         try {
-          await sendOwnerNotification(storeId, orderId, msg.title, msg.body(orderId), `order_${after.status}`);
+          await sendCustomerNotification(customerId, orderId, msg.title, msg.body(orderId), `order_${after.status}`);
         } catch (err) {
-          console.warn('FCM order status notification failed:', err);
+          console.warn('FCM customer status notification failed:', err);
+        }
+        // Also notify owner for important status changes
+        if (['returned', 'cancelled'].includes(after.status as string)) {
+          try {
+            await sendOwnerNotification(storeId, orderId, msg.title, msg.body(orderId), `order_${after.status}`);
+          } catch (err) {
+            console.warn('FCM owner status notification failed:', err);
+          }
         }
       }
     }
 
-    // Check for payment status change
+    // Check for payment status change — notify owner
     if (before.paymentStatus !== after.paymentStatus && after.paymentStatus) {
       const msg = PAYMENT_MESSAGES[after.paymentStatus as string];
       if (msg) {

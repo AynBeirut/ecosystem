@@ -25,7 +25,8 @@ export default function AddEditProductScreen() {
   const [description, setDescription] = useState('');
   const [price, setPrice] = useState('');
   const [unit, setUnit] = useState('');
-  const [stock, setStock] = useState(''); // read-only: managed by purchases & damage entries
+  const [productType, setProductType] = useState<'simple' | 'service'>('simple');
+  const [expiryDate, setExpiryDate] = useState('');
   const [lowStockThreshold, setLowStockThreshold] = useState('5');
   const [inStock, setInStock] = useState(true);
   const [currency, setCurrency] = useState('USD');
@@ -47,7 +48,8 @@ export default function AddEditProductScreen() {
           setDescription(d.description || '');
           setPrice(String(d.price || ''));
           setUnit(d.unit || '');
-          setStock(d.stock !== undefined ? String(d.stock) : '');
+          setProductType(d.productType === 'service' ? 'service' : 'simple');
+          setExpiryDate(d.expiryDate || '');
           setLowStockThreshold(String(d.lowStockThreshold || 5));
           setInStock(d.inStock !== false);
           setCurrency(d.currency || 'USD');
@@ -114,15 +116,15 @@ export default function AddEditProductScreen() {
         description: description.trim() || null,
         price: priceNum,
         unit: unit.trim() || null,
+        productType,
         inStock,
         currency,
         storeId: user!.storeId,
-        productType: 'simple',
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
       if (imageUrl) { data.imageUrl = imageUrl; data.image = imageUrl; }
-      // NOTE: stock is NOT set here — it is controlled only by purchase entries and damage/waste records
       if (lowStockThreshold !== '') data.lowStockThreshold = parseInt(lowStockThreshold, 10);
+      if (expiryDate.trim()) data.expiryDate = expiryDate.trim();
 
       if (isEdit) {
         await firestore().collection('products').doc(params.productId).update(data);
@@ -184,13 +186,35 @@ export default function AddEditProductScreen() {
       <Text style={styles.label}>Unit (optional)</Text>
       <TextInput style={styles.input} value={unit} onChangeText={setUnit} placeholder="e.g. kg, piece, liter" />
 
-      {/* Stock is read-only — controlled by purchase entries & damage/waste records */}
-      {isEdit && stock !== '' && (
-        <View style={styles.stockInfoBox}>
-          <Text style={styles.stockInfoLabel}>Current Stock</Text>
-          <Text style={styles.stockInfoValue}>{stock} {unit || 'units'}</Text>
-          <Text style={styles.stockInfoHint}>Stock is updated automatically via Purchases and Damage entries.</Text>
-        </View>
+      {/* Product Type */}
+      <Text style={styles.label}>Product Type *</Text>
+      <View style={styles.typeRow}>
+        <TouchableOpacity
+          style={[styles.typeBtn, productType === 'simple' && styles.typeBtnActive]}
+          onPress={() => setProductType('simple')}
+        >
+          <Text style={[styles.typeBtnText, productType === 'simple' && styles.typeBtnTextActive]}>📦 Simple Product</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.typeBtn, productType === 'service' && styles.typeBtnActive]}
+          onPress={() => setProductType('service')}
+        >
+          <Text style={[styles.typeBtnText, productType === 'service' && styles.typeBtnTextActive]}>🔧 Service</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Expiry Date — only for simple products */}
+      {productType === 'simple' && (
+        <>
+          <Text style={styles.label}>Expiry Date (optional)</Text>
+          <TextInput
+            style={styles.input}
+            value={expiryDate}
+            onChangeText={setExpiryDate}
+            placeholder="e.g. 2025-12-31"
+            keyboardType="default"
+          />
+        </>
       )}
 
       <Text style={styles.label}>Low Stock Alert Threshold</Text>
@@ -226,8 +250,9 @@ const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingVertical: 8 },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 24, marginBottom: 40, height: 52, justifyContent: 'center' },
   saveBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
-  stockInfoBox: { backgroundColor: '#f0fdf4', borderWidth: 1, borderColor: '#bbf7d0', borderRadius: 10, padding: 14, marginBottom: 16 },
-  stockInfoLabel: { fontSize: 12, fontWeight: '600', color: '#15803d', marginBottom: 2 },
-  stockInfoValue: { fontSize: 22, fontWeight: '700', color: '#166534', marginBottom: 4 },
-  stockInfoHint: { fontSize: 11, color: '#4ade80' },
+  typeRow: { flexDirection: 'row', gap: 10, marginBottom: 8 },
+  typeBtn: { flex: 1, borderWidth: 1.5, borderColor: '#d1d5db', borderRadius: RADIUS.md, padding: 12, alignItems: 'center' },
+  typeBtnActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  typeBtnText: { fontSize: 14, color: '#6b7280', fontWeight: '600' },
+  typeBtnTextActive: { color: COLORS.primary },
 });
