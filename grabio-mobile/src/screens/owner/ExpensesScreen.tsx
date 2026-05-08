@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, TextInput, ScrollView, Modal, Pressable,
+  ActivityIndicator, Alert, TextInput, ScrollView, Modal, Pressable, RefreshControl,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -24,7 +24,13 @@ export default function ExpensesScreen() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useState(true); // default: last 30 days so webapp data is visible
+  const [refreshing, setRefreshing] = useState(false);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setTimeout(() => setRefreshing(false), 1200);
+  }, []);
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -35,34 +41,44 @@ export default function ExpensesScreen() {
   const [currency, setCurrency] = useState('USD');
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    if (!user?.storeId) { setLoading(false); return; }
-    loadExpenses();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.storeId, showAll]);
-
   const loadExpenses = useCallback(() => {
     if (!user?.storeId) return;
     setLoading(true);
-    const now = new Date();
-    let query = firestore().collection('expenses').where('storeId', '==', user.storeId);
 
-    if (!showAll) {
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      query = query.where('createdAt', '>=', firestore.Timestamp.fromDate(startOfToday));
-    } else {
-      const since30 = new Date(now);
-      since30.setDate(since30.getDate() - 30);
-      query = query.where('createdAt', '>=', firestore.Timestamp.fromDate(since30));
-    }
+    // Parse timestamp — handles Firestore Timestamp, ISO string, or number
+    const getTs = (val: unknown): number => {
+      if (!val) return 0;
+      if (typeof (val as any).toDate === 'function') return (val as any).toDate().getTime();
+      if (typeof val === 'string') return new Date(val).getTime();
+      if (typeof val === 'number') return val;
+      return 0;
+    };
 
-    const unsub = query.orderBy('createdAt', 'desc').onSnapshot((snap) => {
-      if (!snap) { setLoading(false); return; }
-      setExpenses(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Expense)));
-      setLoading(false);
-    });
+    const unsub = firestore()
+      .collection('expenses')
+      .where('storeId', '==', user.storeId)
+      .onSnapshot((snap) => {
+        if (!snap) { setLoading(false); return; }
+        let data: Expense[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
+        // Filter client-side — avoids composite Firestore index requirement
+        if (!showAll) {
+          const startOfToday = new Date();
+          startOfToday.setHours(0, 0, 0, 0);
+          data = data.filter(e => getTs(e.createdAt) >= startOfToday.getTime());
+        }
+        // showAll = no date restriction — show full history
+        data.sort((a, b) => getTs(b.createdAt) - getTs(a.createdAt));
+        setExpenses(data);
+        setLoading(false);
+      }, () => setLoading(false));
     return unsub;
   }, [user?.storeId, showAll]);
+
+  useEffect(() => {
+    if (!user?.storeId) { setLoading(false); return; }
+    const unsub = loadExpenses();
+    return () => { unsub?.(); };
+  }, [user?.storeId, showAll, loadExpenses]);
 
   const totalToday = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
@@ -111,16 +127,25 @@ export default function ExpensesScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
-        {/* Summary bar */}
-        <View style={styles.summaryBar}>
-          <View>
-            <Text style={styles.summaryLabel}>{showAll ? 'Last 30 Days' : "Today's"} Expenses</Text>
-            <Text style={styles.summaryAmount}>{expenses[0]?.currency || 'USD'} {totalToday.toFixed(2)}</Text>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}>
+        {/* Header row — matches PurchasesScreen style */}
+        <View style={styles.headerRow}>
+          <Text style={styles.headerTitle}>Expenses</Text>
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <TouchableOpacity style={styles.periodBtn} onPress={() => setShowAll(!showAll)}>
+              <Text style={styles.periodBtnText}>{showAll ? '📅 Last 30 days' : '📅 Today only'}</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm(!showForm)}>
+              <Text style={styles.addBtnText}>+ Add Expense</Text>
+            </TouchableOpacity>
           </View>
-          <TouchableOpacity style={styles.addBtn} onPress={() => setShowForm(!showForm)}>
-            <Text style={styles.addBtnText}>+ Add Expense</Text>
-          </TouchableOpacity>
+        </View>
+
+        {/* Summary card */}
+        <View style={styles.summaryCard}>
+          <Text style={styles.summaryLabel}>{showAll ? 'Last 30 Days' : "Today's"} Total</Text>
+          <Text style={styles.summaryAmount}>{expenses[0]?.currency || 'USD'} {totalToday.toFixed(2)}</Text>
         </View>
 
         {/* Add Expense Form */}
@@ -224,20 +249,21 @@ export default function ExpensesScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
-  summaryBar: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-    backgroundColor: COLORS.primary, padding: 16, marginBottom: 12,
-  },
+  headerRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, backgroundColor: COLORS.surface },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: COLORS.textPrimary },
+  periodBtn: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, paddingHorizontal: 12, paddingVertical: 8 },
+  periodBtnText: { fontSize: 12, color: COLORS.textSecondary, fontWeight: '600' },
+  addBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 8 },
+  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
+  summaryCard: { backgroundColor: COLORS.primary, marginHorizontal: 12, marginTop: 12, marginBottom: 4, borderRadius: RADIUS.lg, padding: 16 },
   summaryLabel: { fontSize: 13, color: 'rgba(255,255,255,0.85)', marginBottom: 2 },
   summaryAmount: { fontSize: 24, fontWeight: '800', color: '#fff' },
-  addBtn: { backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 8, borderWidth: 1, borderColor: 'rgba(255,255,255,0.5)' },
-  addBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
 
   form: { backgroundColor: COLORS.surface, marginHorizontal: 12, borderRadius: RADIUS.lg, padding: 16, marginBottom: 12, ...SHADOW.sm },
   formTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
   pickerBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, marginBottom: 10, backgroundColor: COLORS.background },
   pickerBtnText: { fontSize: 14, color: COLORS.textPrimary, fontWeight: '600' },
-  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.background, marginBottom: 10 },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.background, marginBottom: 10, color: '#1A202C' },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   cancelText: { color: COLORS.textMuted, textAlign: 'center', marginTop: 12, fontSize: 14 },

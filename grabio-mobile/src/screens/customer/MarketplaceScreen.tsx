@@ -80,12 +80,12 @@ export default function MarketplaceScreen() {
   }, []);
 
   const filteredProducts = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) ||
+    (p.name || '').toLowerCase().includes(search.toLowerCase()) ||
     (storeMap[p.storeId]?.name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const filteredStores = stores.filter((s) =>
-    s.name.toLowerCase().includes(search.toLowerCase())
+    (s.name || '').toLowerCase().includes(search.toLowerCase())
   );
 
   const renderProduct = ({ item }: { item: Product }) => {

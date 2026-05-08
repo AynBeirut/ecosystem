@@ -195,5 +195,5 @@ const styles = StyleSheet.create({
   modalSave: { fontSize: 16, color: COLORS.primary, fontWeight: '700' },
   modalBody: { padding: 20 },
   label: { fontSize: 13, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
-  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.surface },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.surface, color: '#1A202C' },
 });

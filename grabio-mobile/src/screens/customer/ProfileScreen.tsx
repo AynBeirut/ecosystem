@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, SafeAreaView,
-  Alert, TextInput, ScrollView, ActivityIndicator,
+  Alert, TextInput, ScrollView, ActivityIndicator, RefreshControl,
 } from 'react-native';
-import { getFirestore, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
+import firestore from '@react-native-firebase/firestore';
+import { getMessaging, requestPermission, AuthorizationStatus } from '@react-native-firebase/messaging';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
@@ -34,33 +35,66 @@ export default function ProfileScreen() {
   const [address, setAddress] = useState('');
   const [city, setCity] = useState('');
   const [preferredPayment, setPreferredPayment] = useState('cashOnDelivery');
+  const [notifPref, setNotifPref] = useState<'all' | 'gentle' | 'off'>('all');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
-  useEffect(() => {
-    if (!user) { setLoading(false); return; }
-    const db = getFirestore();
-    getDoc(doc(db, 'users', user.uid)).then((snap) => {
+  const loadProfile = (uid: string) => {
+    return firestore().collection('users').doc(uid).get().then((snap) => {
       if (snap.exists()) {
-        const d = snap.data() as ProfileDoc;
+        const d = snap.data() as ProfileDoc & { notifPref?: 'all' | 'gentle' | 'off' };
         if (d.phone) setPhone(d.phone);
         if (d.address) setAddress(d.address);
         if (d.city) setCity(d.city);
         if (d.preferredPayment) setPreferredPayment(d.preferredPayment);
+        if (d.notifPref) setNotifPref(d.notifPref);
       }
-    }).finally(() => setLoading(false));
+    }).catch(() => {});
+  };
+
+  const onRefresh = () => {
+    if (!user) return;
+    setRefreshing(true);
+    loadProfile(user.uid).finally(() => setRefreshing(false));
+  };
+
+  useEffect(() => {
+    if (!user) { setLoading(false); return; }
+    loadProfile(user.uid).finally(() => setLoading(false));
   }, [user]);
+
+  const handleNotifPref = async (pref: 'all' | 'gentle' | 'off') => {
+    setNotifPref(pref);
+    if (pref !== 'off') {
+      try {
+        const status = await requestPermission(getMessaging());
+        const enabled = status === AuthorizationStatus.AUTHORIZED
+          || status === AuthorizationStatus.PROVISIONAL;
+        if (!enabled) {
+          Alert.alert('Permission Denied', 'Enable notifications in your phone Settings to receive alerts.');
+          setNotifPref('off');
+          return;
+        }
+      } catch {
+        // Silently ignore permission errors
+      }
+    }
+    if (user) {
+      await firestore().collection('users').doc(user.uid).set({ notifPref: pref }, { merge: true });
+    }
+  };
 
   const handleSave = async () => {
     if (!user) return;
     setSaving(true);
     try {
-      const db = getFirestore();
-      await setDoc(doc(db, 'users', user.uid), {
+      await firestore().collection('users').doc(user.uid).set({
         phone: phone.trim(),
         address: address.trim(),
         city: city.trim(),
         preferredPayment,
+        notifPref,
         email: user.email,
         displayName: user.displayName,
         updatedAt: new Date().toISOString(),
@@ -85,7 +119,8 @@ export default function ProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={{ padding: 20 }}>
+      <ScrollView contentContainerStyle={{ padding: 20 }}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}>
         {/* Info card */}
         <View style={styles.card}>
           <Text style={styles.avatar}>👤</Text>
@@ -145,9 +180,29 @@ export default function ProfileScreen() {
             </TouchableOpacity>
 
             <Text style={styles.sectionTitle}>My Account</Text>
-            <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('Favorites' as never)}>
-              <Text style={styles.linkBtnText}>❤️  My Favorites</Text>
-            </TouchableOpacity>
+            {!user?.storeId && (
+              <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('Favorites' as never)}>
+                <Text style={styles.linkBtnText}>❤️  My Favorites</Text>
+              </TouchableOpacity>
+            )}
+
+            <Text style={styles.sectionTitle}>🔔 Notifications</Text>
+            <View style={styles.notifRow}>
+              {([
+                { key: 'all', label: '🔔 All', desc: 'Every update' },
+                { key: 'gentle', label: '🔕 Gentle', desc: 'Orders only' },
+                { key: 'off', label: '❌ Off', desc: 'No alerts' },
+              ] as const).map((opt) => (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.notifBtn, notifPref === opt.key && styles.notifBtnActive]}
+                  onPress={() => handleNotifPref(opt.key)}
+                >
+                  <Text style={[styles.notifBtnLabel, notifPref === opt.key && styles.notifBtnLabelActive]}>{opt.label}</Text>
+                  <Text style={styles.notifBtnDesc}>{opt.desc}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
           </>
         )}
 
@@ -179,4 +234,10 @@ const styles = StyleSheet.create({
   linkBtnText: { color: '#374151', fontWeight: '600', fontSize: 15 },
   signOutBtn: { borderWidth: 1.5, borderColor: '#ef4444', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8 },
   signOutText: { color: '#ef4444', fontWeight: '700', fontSize: 15 },
+  notifRow: { flexDirection: 'row', gap: 8, marginBottom: 20 },
+  notifBtn: { flex: 1, borderWidth: 1.5, borderColor: '#e5e7eb', borderRadius: 12, padding: 10, alignItems: 'center', backgroundColor: '#fff' },
+  notifBtnActive: { borderColor: COLORS.primary, backgroundColor: '#e0e7ff' },
+  notifBtnLabel: { fontSize: 13, fontWeight: '700', color: '#6b7280', marginBottom: 2 },
+  notifBtnLabelActive: { color: COLORS.primary },
+  notifBtnDesc: { fontSize: 10, color: '#9ca3af' },
 });

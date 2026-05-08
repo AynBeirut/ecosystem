@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, FlatList } from 'react-native';
+import React, { useEffect, useState, useCallback } from 'react';
+import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -28,6 +28,13 @@ export default function OwnerDashboardScreen() {
     yesterdayRevenue: 0, todayCount: 0, currency: 'USD', lowStockItems: [],
   });
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    setRefreshKey(k => k + 1);
+  }, []);
 
   useEffect(() => {
     if (!user?.storeId) { setLoading(false); return; }
@@ -88,11 +95,12 @@ export default function OwnerDashboardScreen() {
             setStats({ totalOrders: snap.size, pendingOrders: pending, newOrders: newOrders.slice(0, 3),
               todayRevenue: todayRev, yesterdayRevenue: yesterdayRev, todayCount, currency, lowStockItems: low.slice(0, 5) });
             setLoading(false);
+            setRefreshing(false);
           });
       });
 
     return unsubOrders;
-  }, [user?.storeId]);
+  }, [user?.storeId, refreshKey]);
 
   const trend = stats.yesterdayRevenue > 0
     ? Math.round((stats.todayRevenue - stats.yesterdayRevenue) / stats.yesterdayRevenue * 100)
@@ -102,7 +110,8 @@ export default function OwnerDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={styles.scroll}>
+      <ScrollView contentContainerStyle={styles.scroll}
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}>
         {/* Widget 2: Today's Sales */}
         <View style={[styles.widget, { borderLeftColor: COLORS.success }]}>
           <Text style={styles.widgetTitle}>💰 Today's Sales</Text>
@@ -160,6 +169,10 @@ export default function OwnerDashboardScreen() {
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#e0e7ff' }]} onPress={() => navigation.navigate('Expenses')}>
             <Text style={styles.actionIcon}>💸</Text>
             <Text style={[styles.actionLabel, { color: '#3730a3' }]}>Expenses</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#dcfce7' }]} onPress={() => navigation.navigate('Customers')}>
+            <Text style={styles.actionIcon}>👥</Text>
+            <Text style={[styles.actionLabel, { color: '#166534' }]}>Customers</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>

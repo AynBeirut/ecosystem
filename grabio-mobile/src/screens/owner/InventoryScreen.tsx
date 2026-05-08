@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, TextInput, Image, ScrollView, SectionList,
+  ActivityIndicator, Alert, TextInput, Image, ScrollView, SectionList, RefreshControl,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
@@ -15,6 +15,7 @@ type Nav = NativeStackNavigationProp<RootStackParamList>;
 interface Purchase {
   id: string;
   supplierName?: string;
+  supplierId?: string;
   items?: Array<{ name?: string; quantity?: number; unitCost?: number }>;
   total?: number;
   totalAmount?: number;
@@ -37,10 +38,14 @@ export default function InventoryScreen() {
   // New purchase form
   const [showPurchaseForm, setShowPurchaseForm] = useState(false);
   const [supplier, setSupplier] = useState('');
+  const [supplierNames, setSupplierNames] = useState<string[]>([]);
+  const [supplierMap, setSupplierMap] = useState<Map<string, string>>(new Map());
+  const [supplierSuggestions, setSupplierSuggestions] = useState<string[]>([]);
   const [itemName, setItemName] = useState('');
   const [qty, setQty] = useState('');
   const [cost, setCost] = useState('');
   const [savingPurchase, setSavingPurchase] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     if (!user?.storeId) { setLoadingProducts(false); setLoadingPurchases(false); return; }
@@ -60,30 +65,65 @@ export default function InventoryScreen() {
 
   useEffect(() => {
     if (!user?.storeId) return;
+    // Load supplier names for autocomplete + id→name map
+    firestore().collection('suppliers').where('storeId', '==', user.storeId).get()
+      .then(snap => {
+        const names: string[] = [];
+        const map = new Map<string, string>();
+        snap.docs.forEach(d => {
+          const name = (d.data().name as string) || '';
+          if (name) { names.push(name); map.set(d.id, name); }
+        });
+        setSupplierNames(names);
+        setSupplierMap(map);
+      })
+      .catch(() => {});
     fetchPurchases();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [user?.storeId, showAllPurchases]);
 
+  const onSupplierChange = (text: string) => {
+    setSupplier(text);
+    if (text.trim().length > 0) {
+      setSupplierSuggestions(supplierNames.filter(s => s.toLowerCase().includes(text.toLowerCase())));
+    } else {
+      setSupplierSuggestions([]);
+    }
+  };
+
   const fetchPurchases = useCallback(() => {
     if (!user?.storeId) return;
     setLoadingPurchases(true);
-    const now = new Date();
-    let query = firestore().collection('purchases').where('storeId', '==', user.storeId);
-
-    if (!showAllPurchases) {
-      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      query = query.where('createdAt', '>=', firestore.Timestamp.fromDate(startOfToday));
-    } else {
-      const since30 = new Date(now);
-      since30.setDate(since30.getDate() - 30);
-      query = query.where('createdAt', '>=', firestore.Timestamp.fromDate(since30));
-    }
-
-    const unsub = query.orderBy('createdAt', 'desc').onSnapshot((snap) => {
-      if (!snap) { setLoadingPurchases(false); return; }
-      setPurchases(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Purchase)));
-      setLoadingPurchases(false);
-    });
+    // Query by storeId only — sort/filter client-side to avoid composite index
+    const unsub = firestore()
+      .collection('purchases')
+      .where('storeId', '==', user.storeId)
+      .onSnapshot((snap) => {
+        if (!snap) { setLoadingPurchases(false); return; }
+        let data: Purchase[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Purchase));
+        const now = new Date();
+        if (!showAllPurchases) {
+          const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+          data = data.filter(p => {
+            const ts = (p.createdAt as any)?.toDate?.()?.getTime() ?? (p.orderDate as any)?.toDate?.()?.getTime() ?? 0;
+            return ts >= startOfToday.getTime();
+          });
+        } else {
+          const since30 = new Date(now);
+          since30.setDate(since30.getDate() - 30);
+          data = data.filter(p => {
+            const ts = (p.createdAt as any)?.toDate?.()?.getTime() ?? (p.orderDate as any)?.toDate?.()?.getTime() ?? 0;
+            return ts >= since30.getTime();
+          });
+        }
+        data.sort((a, b) => {
+          const ta = (a.createdAt as any)?.toDate?.()?.getTime() ?? 0;
+          const tb = (b.createdAt as any)?.toDate?.()?.getTime() ?? 0;
+          return tb - ta;
+        });
+        setPurchases(data);
+        setLoadingPurchases(false);
+      }, () => setLoadingPurchases(false));
     return unsub;
   }, [user?.storeId, showAllPurchases]);
 
@@ -103,7 +143,7 @@ export default function InventoryScreen() {
         createdAt: firestore.FieldValue.serverTimestamp(),
         orderDate: firestore.FieldValue.serverTimestamp(),
       });
-      setSupplier(''); setItemName(''); setQty(''); setCost('');
+      setSupplier(''); setSupplierSuggestions([]); setItemName(''); setQty(''); setCost('');
       setShowPurchaseForm(false);
       Alert.alert('Saved', 'Purchase recorded successfully');
     } catch (err: unknown) {
@@ -146,7 +186,7 @@ export default function InventoryScreen() {
     return (
       <View style={styles.purchaseCard}>
         <View style={styles.purchaseRow}>
-          <Text style={styles.supplierName}>{item.supplierName || 'Unknown supplier'}</Text>
+          <Text style={styles.supplierName}>{item.supplierName || (item.supplierId ? supplierMap.get(item.supplierId) : undefined) || 'No supplier'}</Text>
           <Text style={styles.purchaseTotal}>{total > 0 ? `$${total.toFixed(2)}` : '—'}</Text>
         </View>
         {item.items?.map((i, idx) => (
@@ -161,7 +201,8 @@ export default function InventoryScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <ScrollView contentContainerStyle={{ paddingBottom: 40 }}>
+      <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled"
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchPurchases(); setTimeout(() => setRefreshing(false), 1500); }} colors={[COLORS.primary]} />}>
         {/* Section: Stock */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>📦 Stock</Text>
@@ -196,11 +237,22 @@ export default function InventoryScreen() {
         {showPurchaseForm && (
           <View style={styles.form}>
             <Text style={styles.formTitle}>Record Purchase</Text>
-            <TextInput style={styles.input} placeholder="Supplier name" value={supplier} onChangeText={setSupplier} />
-            <TextInput style={styles.input} placeholder="Item / Material name" value={itemName} onChangeText={setItemName} />
+            <View style={{ marginBottom: 10 }}>
+              <TextInput style={styles.input} placeholder="Supplier name *" placeholderTextColor="#9ca3af" value={supplier} onChangeText={onSupplierChange} />
+              {supplierSuggestions.length > 0 && (
+                <View style={styles.suggestBox}>
+                  {supplierSuggestions.map((s) => (
+                    <TouchableOpacity key={s} style={styles.suggestItem} onPress={() => { setSupplier(s); setSupplierSuggestions([]); }}>
+                      <Text style={styles.suggestText}>🏭 {s}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+            </View>
+            <TextInput style={styles.input} placeholder="Item / Material name *" placeholderTextColor="#9ca3af" value={itemName} onChangeText={setItemName} />
             <View style={{ flexDirection: 'row', gap: 10 }}>
-              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Quantity" keyboardType="number-pad" value={qty} onChangeText={setQty} />
-              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Unit cost (optional)" keyboardType="decimal-pad" value={cost} onChangeText={setCost} />
+              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Quantity *" placeholderTextColor="#9ca3af" keyboardType="number-pad" value={qty} onChangeText={setQty} />
+              <TextInput style={[styles.input, { flex: 1 }]} placeholder="Unit cost (optional)" placeholderTextColor="#9ca3af" keyboardType="decimal-pad" value={cost} onChangeText={setCost} />
             </View>
             <TouchableOpacity style={styles.saveBtn} onPress={addPurchase} disabled={savingPurchase}>
               {savingPurchase ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Purchase</Text>}
@@ -254,11 +306,14 @@ const styles = StyleSheet.create({
 
   form: { backgroundColor: COLORS.surface, marginHorizontal: 12, borderRadius: RADIUS.lg, padding: 16, marginBottom: 12, ...SHADOW.sm },
   formTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
-  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.background, marginBottom: 10 },
+  input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, color: '#1A202C', backgroundColor: COLORS.background, marginBottom: 10 },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 14, alignItems: 'center', marginTop: 4 },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   cancelText: { color: COLORS.textMuted, textAlign: 'center', marginTop: 12, fontSize: 14 },
 
   loadMoreBtn: { marginHorizontal: 12, marginTop: 12, padding: 12, borderRadius: RADIUS.md, borderWidth: 1, borderColor: COLORS.border, alignItems: 'center' },
   loadMoreText: { color: COLORS.primary, fontWeight: '600', fontSize: 14 },
+  suggestBox: { backgroundColor: '#fff', borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, marginTop: -8, overflow: 'hidden' },
+  suggestItem: { paddingHorizontal: 14, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#f0f0f0' },
+  suggestText: { fontSize: 14, color: COLORS.textPrimary },
 });
