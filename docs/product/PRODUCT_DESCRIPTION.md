@@ -68,6 +68,18 @@ This section is a complete platform capability snapshot, including legacy and cu
 - Cookie consent and marketing-script gating
 - WhatsApp storefront chat widget
 
+### White Label Client App
+- Each Grabio store owner can get a **standalone branded mobile app** for their customers
+- App carries the client's own name, icon, splash screen, and domain (e.g. `orders.bakeryx.com`)
+- Shows only the client's store — no Grabio marketplace, no competitor stores visible
+- Customers of the store browse, add to cart, checkout (cash on delivery), and track orders
+- Deep link support: order confirmation email opens the app directly to the tracking screen
+- Client's customers never see the Grabio brand — fully white-labeled experience
+- Store owner manages everything from the same Grabio seller dashboard (no extra tooling)
+- Per-client customization: app name, icon, bundle ID, brand color, deep-link domain, Firebase credentials
+- Built on Expo / React Native — deployable to Play Store and App Store per client
+- Template source: `white-label-client-app/` folder (guest-mode screens only)
+
 ### Store Design and Branding System
 - Template system with multiple storefront themes
 - Advanced color palette controls and preset palettes
@@ -259,6 +271,15 @@ It is maintained as an end-to-end mirror of the pending feature backlog so no in
 - Coming Soon: Mobile push notifications.
 - Coming Soon: Offline mode.
 - Coming Soon: Barcode scanner for inventory.
+
+### White Label Client App (Future)
+- Coming Soon: `clientConfig.ts` — storeId injection per client build.
+- Coming Soon: Marketplace screen filtered to single store (no multi-store browsing).
+- Coming Soon: Branding variables extracted to config (app name, color, icon, domain).
+- Coming Soon: EAS build pipeline for per-client app builds.
+- Coming Soon: Per-client Firebase credentials injection.
+- Coming Soon: Play Store / App Store submission workflow per client.
+- Coming Soon: Admin panel to manage white-label client builds.
 
 ### Legacy Pending QA and Triage
 - Coming Soon: Complete Production dialog: open/action/state/error/success behavior checks.

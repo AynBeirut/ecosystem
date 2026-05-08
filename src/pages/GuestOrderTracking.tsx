@@ -122,17 +122,26 @@ const GuestOrderTracking: React.FC = () => {
     switch (status) {
       case 'pending': return 'bg-yellow-500';
       case 'confirmed': return 'bg-blue-500';
-      case 'preparing': return 'bg-purple-500';
+      case 'processing': return 'bg-purple-500';
       case 'ready': return 'bg-cyan-500';
-      case 'delivering': return 'bg-indigo-500';
       case 'delivered': return 'bg-green-500';
+      case 'returned': return 'bg-orange-500';
       case 'cancelled': return 'bg-red-500';
       default: return 'bg-gray-500';
     }
   };
 
   const getStatusText = (status: string) => {
-    return status.charAt(0).toUpperCase() + status.slice(1);
+    const labels: Record<string, string> = {
+      pending: 'Pending',
+      confirmed: 'Confirmed',
+      processing: 'Processing',
+      ready: 'Ready for Pickup',
+      delivered: 'Delivered',
+      returned: 'Returned',
+      cancelled: 'Cancelled',
+    };
+    return labels[status] ?? (status.charAt(0).toUpperCase() + status.slice(1));
   };
 
   return (
@@ -284,10 +293,21 @@ const GuestOrderTracking: React.FC = () => {
                   {/* Order Status Timeline */}
                   <div className="border-t pt-4">
                     <h3 className="font-semibold mb-3">Order Progress</h3>
+                    {order.status === 'cancelled' ? (
+                      <div className="flex items-center gap-3 p-3 bg-red-50 border border-red-200 rounded-lg">
+                        <span className="text-lg">❌</span>
+                        <span className="font-semibold text-red-700">Order Cancelled</span>
+                      </div>
+                    ) : order.status === 'returned' ? (
+                      <div className="flex items-center gap-3 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                        <span className="text-lg">↩️</span>
+                        <span className="font-semibold text-orange-700">Order Returned</span>
+                      </div>
+                    ) : (
                     <div className="space-y-2">
-                      {['pending', 'confirmed', 'preparing', 'delivering', 'delivered'].map((status, idx) => {
+                      {['pending', 'confirmed', 'processing', 'ready', 'delivered'].map((status, idx) => {
                         const isActive = order.status === status;
-                        const isPast = ['pending', 'confirmed', 'preparing', 'delivering', 'delivered'].indexOf(order.status) > idx;
+                        const isPast = ['pending', 'confirmed', 'processing', 'ready', 'delivered'].indexOf(order.status) > idx;
                         return (
                           <div key={status} className="flex items-center gap-3">
                             <div className={`w-4 h-4 rounded-full ${isActive ? 'bg-blue-500' : isPast ? 'bg-green-500' : 'bg-gray-300'}`} />
@@ -298,6 +318,7 @@ const GuestOrderTracking: React.FC = () => {
                         );
                       })}
                     </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>

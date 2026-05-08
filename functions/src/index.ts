@@ -655,7 +655,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           },
         });
         const shortCode = orderIds[0].slice(-8).toUpperCase();
-        const trackUrl = `https://grabio.space/track/${orderIds[0]}`;
+        const trackUrl = `https://grabio.space/track-order?orderId=${orderIds[0]}`;
         await transporter.sendMail({
           from: 'Grabio <no-reply@grabio.space>',
           to: emailAddr,

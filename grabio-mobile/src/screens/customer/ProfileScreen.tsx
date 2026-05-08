@@ -4,8 +4,13 @@ import {
   Alert, TextInput, ScrollView, ActivityIndicator,
 } from 'react-native';
 import { getFirestore, doc, getDoc, setDoc } from '@react-native-firebase/firestore';
+import { useNavigation } from '@react-navigation/native';
+import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
+import { RootStackParamList } from '../../types';
 import { COLORS } from '../../theme';
+
+type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 const PAYMENT_OPTIONS = [
   { key: 'cashOnDelivery', label: '💵 Cash on Delivery' },
@@ -16,15 +21,18 @@ const PAYMENT_OPTIONS = [
 
 type ProfileDoc = {
   phone?: string;
-  location?: string;
+  address?: string;
+  city?: string;
   preferredPayment?: string;
 };
 
 export default function ProfileScreen() {
   const { user, signOut, isGuest, exitGuestMode } = useAuth();
+  const navigation = useNavigation<Nav>();
 
   const [phone, setPhone] = useState('');
-  const [location, setLocation] = useState('');
+  const [address, setAddress] = useState('');
+  const [city, setCity] = useState('');
   const [preferredPayment, setPreferredPayment] = useState('cashOnDelivery');
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -36,7 +44,8 @@ export default function ProfileScreen() {
       if (snap.exists()) {
         const d = snap.data() as ProfileDoc;
         if (d.phone) setPhone(d.phone);
-        if (d.location) setLocation(d.location);
+        if (d.address) setAddress(d.address);
+        if (d.city) setCity(d.city);
         if (d.preferredPayment) setPreferredPayment(d.preferredPayment);
       }
     }).finally(() => setLoading(false));
@@ -49,7 +58,8 @@ export default function ProfileScreen() {
       const db = getFirestore();
       await setDoc(doc(db, 'users', user.uid), {
         phone: phone.trim(),
-        location: location.trim(),
+        address: address.trim(),
+        city: city.trim(),
         preferredPayment,
         email: user.email,
         displayName: user.displayName,
@@ -97,12 +107,21 @@ export default function ProfileScreen() {
               placeholderTextColor="#9ca3af"
             />
 
-            <Text style={styles.label}>Delivery Location</Text>
+            <Text style={styles.label}>Delivery Address</Text>
             <TextInput
               style={styles.input}
-              value={location}
-              onChangeText={setLocation}
-              placeholder="Street, city, area..."
+              value={address}
+              onChangeText={setAddress}
+              placeholder="Street, building, floor…"
+              placeholderTextColor="#9ca3af"
+            />
+
+            <Text style={styles.label}>City</Text>
+            <TextInput
+              style={styles.input}
+              value={city}
+              onChangeText={setCity}
+              placeholder="Beirut, Tripoli…"
               placeholderTextColor="#9ca3af"
             />
 
@@ -123,6 +142,11 @@ export default function ProfileScreen() {
 
             <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={saving}>
               <Text style={styles.saveBtnText}>{saving ? 'Saving…' : 'Save Changes'}</Text>
+            </TouchableOpacity>
+
+            <Text style={styles.sectionTitle}>My Account</Text>
+            <TouchableOpacity style={styles.linkBtn} onPress={() => navigation.navigate('Favorites' as never)}>
+              <Text style={styles.linkBtnText}>❤️  My Favorites</Text>
             </TouchableOpacity>
           </>
         )}
@@ -151,6 +175,8 @@ const styles = StyleSheet.create({
   paymentBtnTextActive: { color: COLORS.primary, fontWeight: '700' },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 12 },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
+  linkBtn: { backgroundColor: '#fff', borderRadius: 12, borderWidth: 1.5, borderColor: '#e5e7eb', padding: 14, alignItems: 'center', marginBottom: 10 },
+  linkBtnText: { color: '#374151', fontWeight: '600', fontSize: 15 },
   signOutBtn: { borderWidth: 1.5, borderColor: '#ef4444', borderRadius: 12, padding: 14, alignItems: 'center', marginTop: 8 },
   signOutText: { color: '#ef4444', fontWeight: '700', fontSize: 15 },
 });

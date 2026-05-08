@@ -13,18 +13,6 @@ import { COLORS, RADIUS, SHADOW } from '../../theme';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Route = RouteProp<RootStackParamList, 'StoreDetail'>;
 
-function ProductImage({ uri, style }: { uri: string; style: object }) {
-  const [error, setError] = React.useState(false);
-  if (error) {
-    return (
-      <View style={[style, { backgroundColor: '#f0f4f8', justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 28 }}>🛍️</Text>
-      </View>
-    );
-  }
-  return <Image source={{ uri }} style={style} resizeMode="cover" onError={() => setError(true)} />;
-}
-
 export default function StoreDetailScreen() {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Nav>();
@@ -70,7 +58,7 @@ export default function StoreDetailScreen() {
         onPress={() => navigation.navigate('ProductDetail', { product: item, storeName: params.storeName })}
       >
         {(item.image || item.imageUrl) ? (
-          <ProductImage uri={item.image || item.imageUrl!} style={styles.productImg} />
+          <Image source={{ uri: item.image || item.imageUrl }} style={styles.productImg} />
         ) : (
           <View style={[styles.productImg, styles.imgPlaceholder]}>
             <Text style={{ fontSize: 28 }}>🛍️</Text>

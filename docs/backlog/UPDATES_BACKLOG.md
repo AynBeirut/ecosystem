@@ -1,6 +1,6 @@
 # Updates Backlog (Master Remaining List)
 
-Last updated: 2026-04-28 (AI roadmap moved, GDPR removed, P2 SSL auto-provisioning + Square + OMT + BOB + Whish ops checklist + Whish production cutover + authorized live domain/callback URL confirmation + Whish callback validation automation + auto currency rates + split payments + refund management workflow + modern minimalist theme + classic e-commerce theme + fashion boutique theme + food/restaurant theme + tech/electronics theme completed)
+Last updated: 2026-05-08 (White label client app template created — guest-mode copy in `white-label-client-app/`. Tasks added below.)
 
 ## Purpose
 This is now the single source of truth for remaining updates.
@@ -159,3 +159,27 @@ Tag format used on each item:
 	- Dashboard wording cleanup applied: `System Logs` renamed to `Store Logs`; sidebar brand label now `Grabio`.
 	- Dashboard data fetch optimized: products/orders/announcements loaded in parallel and recent activity derived without duplicate queries.
 	- Order automation improved: customer auto-upsert to `customers` on order notifications flow, plus owner order email delivery and customer confirmation email dispatch logging.
+
+---
+
+## 9) White Label Client App (Future — P3)
+
+Template source is ready at `white-label-client-app/` (guest-mode screens only: Marketplace, StoreDetail, ProductDetail, Cart, Checkout, OrderTracking, MyOrders).
+
+### Build Infrastructure
+- [ ] Create `src/config/clientConfig.ts` — expose `storeId`, `brandName`, `primaryColor`, `deepLinkDomain` (`Size: 1 MB`, `Best: when first client ready`)
+- [ ] Filter MarketplaceScreen to show only the configured `storeId` store (`Size: 2 MB`, `Best: after clientConfig done`)
+- [ ] Extract hardcoded brand color from `theme.ts` into `clientConfig` (`Size: 1 MB`, `Best: after clientConfig done`)
+- [ ] EAS build profile per client (separate `eas.json` profiles) (`Size: 2 MB`, `Best: after clientConfig done`)
+- [ ] Per-client `google-services.json` + `GoogleService-Info.plist` injection script (`Size: 2 MB`, `Best: after EAS profile done`)
+
+### App Store Submission
+- [ ] Play Store listing workflow for first client (`Size: 3 MB`, `Best: after first client signed`)
+- [ ] App Store (iOS) listing workflow for first client (`Size: 3 MB`, `Best: after Play Store done`)
+
+### Admin Panel
+- [ ] Admin screen to manage white-label clients: name, storeId, domain, app status (`Size: 4 MB`, `Best: after 2 clients`)
+
+### Client Onboarding
+- [ ] Client-facing setup guide: what to provide (icon, name, domain, colors) (`Size: 1 MB`, `Best: before first client`)
+- [ ] Pricing page entry for white-label app add-on (`Size: 1 MB`, `Best: before sales pitch`)

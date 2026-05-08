@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { getFirestore, collection, query, where, getDocs, addDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { FileDown, Download, ArrowLeft, PlusCircle } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
@@ -199,6 +199,12 @@ const AdminAccountStatement: React.FC = () => {
     method: string;
     notes: string;
     createdAt: string;
+    orderAllocation?: {
+      appliedAmount: number;
+      remainingAmount: number;
+      appliedOrderIds: string[];
+      appliedAt: string;
+    };
   }>>([]);
   const [paymentModal, setPaymentModal] = useState<{
     open: boolean;
@@ -841,10 +847,145 @@ const AdminAccountStatement: React.FC = () => {
         ...(d.data() as Omit<(typeof accountPayments)[number], 'id'>),
       }));
       list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+
+      // Backfill: older payments may exist without order allocation metadata.
+      const pendingAllocations = list.filter((payment) => {
+        return payment.accountType === 'customer'
+          && payment.direction === 'in'
+          && toFiniteNumber(payment.amount, 0) > 0
+          && !payment.orderAllocation?.appliedAt;
+      });
+
+      for (const payment of pendingAllocations) {
+        const allocation = await allocateCustomerPaymentToOrders(
+          payment.id,
+          payment.accountId,
+          payment.accountName,
+          toFiniteNumber(payment.amount, 0),
+          payment.date,
+          payment.method,
+          payment.notes,
+        );
+
+        await updateDoc(doc(db, 'accountPayments', payment.id), {
+          orderAllocation: {
+            appliedAmount: allocation.appliedAmount,
+            remainingAmount: allocation.remainingAmount,
+            appliedOrderIds: allocation.appliedOrderIds,
+            appliedAt: new Date().toISOString(),
+          },
+        });
+      }
+
       setAccountPayments(list);
     } catch (err) {
       console.error('Error fetching account payments:', err);
     }
+  };
+
+  const allocateCustomerPaymentToOrders = async (
+    paymentId: string,
+    accountId: string,
+    accountName: string,
+    amount: number,
+    paymentDate: string,
+    paymentMethod: string,
+    paymentNotes: string,
+  ): Promise<{ appliedAmount: number; remainingAmount: number; appliedOrderIds: string[] }> => {
+    if (!user?.storeId || amount <= 0) {
+      return { appliedAmount: 0, remainingAmount: amount, appliedOrderIds: [] };
+    }
+
+    const db = getFirestore();
+    let remainingToAllocate = Math.round(amount * 100) / 100;
+    const appliedOrderIds: string[] = [];
+
+    const processSnapshots = async (snapshots: Awaited<ReturnType<typeof getDocs>>['docs']) => {
+      const orders = snapshots
+        .map((snapshot) => ({ id: snapshot.id, ...snapshot.data() as Record<string, unknown> }))
+        .filter((order) => isCountedSaleStatus(String(order.status || '')))
+        .map((order) => {
+          const total = toFiniteNumber(order.total, 0);
+          const currentPaid = toFiniteNumber(order.amountPaid, 0);
+          const due = Math.max(0, Math.round((total - currentPaid) * 100) / 100);
+          const createdAtValue = order.createdAt || order.date || '';
+          const createdAtMs = new Date(String(createdAtValue)).getTime() || 0;
+          return { order, total, currentPaid, due, createdAtMs };
+        })
+        .filter((entry) => entry.due > 0)
+        .sort((a, b) => a.createdAtMs - b.createdAtMs);
+
+      for (const entry of orders) {
+        if (remainingToAllocate <= 0) break;
+
+        const allocated = Math.min(entry.due, remainingToAllocate);
+        const roundedAllocated = Math.round(allocated * 100) / 100;
+        if (roundedAllocated <= 0) continue;
+
+        const newAmountPaid = Math.round((entry.currentPaid + roundedAllocated) * 100) / 100;
+        const newRemainingAmount = Math.max(0, Math.round((entry.total - newAmountPaid) * 100) / 100);
+        const paymentStatus = newRemainingAmount <= 0 ? 'paid' : 'partial';
+
+        const currentHistory = Array.isArray(entry.order.paymentHistory) ? entry.order.paymentHistory : [];
+        const allocationRecord = {
+          id: `AP-${paymentId}-${entry.order.id}`,
+          amount: roundedAllocated,
+          entryType: 'payment' as const,
+          date: paymentDate,
+          method: paymentMethod,
+          notes: paymentNotes || 'Payment In (Customer) from Account Statement',
+          recordedBy: user.name || 'System',
+          recordedAt: new Date().toISOString(),
+        };
+
+        await updateDoc(doc(db, 'orders', entry.order.id as string), {
+          amountPaid: newAmountPaid,
+          remainingAmount: newRemainingAmount,
+          paymentStatus,
+          paymentDate,
+          paymentMethod,
+          paymentNotes,
+          paymentHistory: [...currentHistory, allocationRecord],
+          updatedAt: new Date().toISOString(),
+        });
+
+        remainingToAllocate = Math.round((remainingToAllocate - roundedAllocated) * 100) / 100;
+        appliedOrderIds.push(entry.order.id as string);
+      }
+    };
+
+    const seenOrderIds = new Set<string>();
+    const dedupeDocs = (docs: Awaited<ReturnType<typeof getDocs>>['docs']) => {
+      return docs.filter((snapshot) => {
+        if (seenOrderIds.has(snapshot.id)) return false;
+        seenOrderIds.add(snapshot.id);
+        return true;
+      });
+    };
+
+    const byCustomerIdQuery = query(
+      collection(db, 'orders'),
+      where('storeId', '==', user.storeId),
+      where('customerId', '==', accountId)
+    );
+    const byCustomerIdSnap = await getDocs(byCustomerIdQuery);
+    await processSnapshots(dedupeDocs(byCustomerIdSnap.docs));
+
+    if (remainingToAllocate > 0) {
+      const byCustomerNameQuery = query(
+        collection(db, 'orders'),
+        where('storeId', '==', user.storeId),
+        where('customerName', '==', accountName)
+      );
+      const byCustomerNameSnap = await getDocs(byCustomerNameQuery);
+      await processSnapshots(dedupeDocs(byCustomerNameSnap.docs));
+    }
+
+    return {
+      appliedAmount: Math.round((amount - remainingToAllocate) * 100) / 100,
+      remainingAmount: remainingToAllocate,
+      appliedOrderIds,
+    };
   };
 
   const handleSaveAccountPayment = async () => {
@@ -870,6 +1011,29 @@ const AdminAccountStatement: React.FC = () => {
         createdByName: user.name || '',
       };
       const ref = await addDoc(collection(db, 'accountPayments'), paymentDoc);
+
+      // Customer payments should reduce due balances on existing unpaid orders.
+      if (paymentModal.accountType === 'customer' && paymentModal.direction === 'in') {
+        const allocation = await allocateCustomerPaymentToOrders(
+          ref.id,
+          paymentModal.accountId,
+          paymentModal.accountName,
+          amount,
+          newPayment.date,
+          newPayment.method,
+          newPayment.notes,
+        );
+
+        await updateDoc(doc(db, 'accountPayments', ref.id), {
+          orderAllocation: {
+            appliedAmount: allocation.appliedAmount,
+            remainingAmount: allocation.remainingAmount,
+            appliedOrderIds: allocation.appliedOrderIds,
+            appliedAt: new Date().toISOString(),
+          },
+        });
+      }
+
       setAccountPayments(prev => [{ id: ref.id, ...paymentDoc }, ...prev]);
       setPaymentModal(null);
       setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
@@ -2009,10 +2173,14 @@ const AdminAccountStatement: React.FC = () => {
     const doc = new jsPDF();
     let quarantinedExportRows = 0;
 
-    const validCustomers = customers.map((customer) => {
+    const validCustomers = sortedFilteredCustomers.map((customer) => {
+      const acctPaymentsCredit = accountPayments
+        .filter((payment) => payment.accountId === customer.id && payment.direction === 'in')
+        .reduce((sum, payment) => sum + payment.amount, 0);
+
       const totalPurchases = toFiniteNumber(customer.totalPurchases, Number.NaN);
-      const totalPayments = toFiniteNumber(customer.totalPayments, Number.NaN);
-      const balance = toFiniteNumber(customer.balance, Number.NaN);
+      const totalPayments = toFiniteNumber(customer.totalPayments + acctPaymentsCredit, Number.NaN);
+      const balance = toFiniteNumber(customer.balance - acctPaymentsCredit, Number.NaN);
       if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
         quarantinedExportRows += 1;
         return null;
@@ -2664,6 +2832,42 @@ const AdminAccountStatement: React.FC = () => {
     return acc;
   }, { quantity: 0, subtotal: 0, discount: 0, revenue: 0 });
 
+  const BALANCE_EPSILON = 0.005;
+
+  const getCustomerDisplayBalance = (customer: CustomerBalance) => {
+    const acctPaymentsCredit = accountPayments
+      .filter((p) => p.accountId === customer.id && p.direction === 'in')
+      .reduce((sum, payment) => sum + toFiniteNumber(payment.orderAllocation?.remainingAmount, payment.amount), 0);
+    return customer.balance - acctPaymentsCredit;
+  };
+
+  const isZeroBalance = (value: number) => Math.abs(value) < BALANCE_EPSILON;
+
+  const filteredCustomers = customers.filter((customer) => {
+    if (customerSearch && !customer.name.toLowerCase().includes(customerSearch.toLowerCase())) return false;
+    const displayBalance = getCustomerDisplayBalance(customer);
+    if (customerBalanceFilter === 'active') return displayBalance > BALANCE_EPSILON;
+    if (customerBalanceFilter === 'zero') return isZeroBalance(displayBalance);
+    return true;
+  });
+
+  const filteredCustomerTotals = filteredCustomers.reduce((acc, customer) => {
+    const acctPaymentsCredit = accountPayments
+      .filter((p) => p.accountId === customer.id && p.direction === 'in')
+      .reduce((sum, payment) => sum + toFiniteNumber(payment.orderAllocation?.remainingAmount, payment.amount), 0);
+
+    acc.invoiced += customer.totalPurchases;
+    acc.paid += customer.totalPayments + acctPaymentsCredit;
+    acc.balance += customer.balance - acctPaymentsCredit;
+    return acc;
+  }, { invoiced: 0, paid: 0, balance: 0 });
+
+  const sortedFilteredCustomers = [...filteredCustomers].sort((a, b) => {
+    const balanceDiff = getCustomerDisplayBalance(b) - getCustomerDisplayBalance(a);
+    if (Math.abs(balanceDiff) >= BALANCE_EPSILON) return balanceDiff;
+    return a.name.localeCompare(b.name);
+  });
+
   return (
     <div className="min-h-screen bg-background">
       {isMobile && <MobileHeader title="Account Statement" />}
@@ -2913,15 +3117,10 @@ const AdminAccountStatement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {customers.filter(customer => {
-                      if (customerSearch && !customer.name.toLowerCase().includes(customerSearch.toLowerCase())) return false;
-                      if (customerBalanceFilter === 'active' && customer.balance <= 0) return false;
-                      if (customerBalanceFilter === 'zero' && customer.balance > 0) return false;
-                      return true;
-                    }).map(customer => {
+                    {sortedFilteredCustomers.map(customer => {
                       const acctPaymentsCredit = accountPayments
                         .filter(p => p.accountId === customer.id && p.direction === 'in')
-                        .reduce((s, p) => s + p.amount, 0);
+                        .reduce((s, p) => s + toFiniteNumber(p.orderAllocation?.remainingAmount, p.amount), 0);
                       const displayBalance = customer.balance - acctPaymentsCredit;
                       const isExpanded = expandedCustomerLedger === customer.id;
                       return (
@@ -2960,6 +3159,8 @@ const AdminAccountStatement: React.FC = () => {
                                   {(() => {
                                     const customerInvoices = sales.filter(s => s.customer === customer.name);
                                     const acctPmts = accountPayments.filter(p => p.accountId === customer.id && p.direction === 'in');
+                                    const ledgerCreditTotal = acctPmts.reduce((sum, payment) => sum + payment.amount, 0);
+                                    const ledgerBalanceTotal = customer.totalPurchases - ledgerCreditTotal;
                                     if (customerInvoices.length === 0 && acctPmts.length === 0) {
                                       return <p className="text-xs text-gray-400 italic">No invoice records found for this customer.</p>;
                                     }
@@ -2988,13 +3189,13 @@ const AdminAccountStatement: React.FC = () => {
                                             combined.forEach((item, idx) => {
                                               if (item.type === 'invoice') {
                                                 const inv = item.data as SalesRecord;
-                                                running += (inv.total - inv.amountPaid);
+                                                running += inv.total;
                                                 rows.push(
                                                   <tr key={`inv-${inv.id}`} className="border-b hover:bg-white">
                                                     <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
                                                     <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
                                                     <td className="border px-2 py-1 text-right font-semibold text-blue-700">{inv.total.toFixed(2)}</td>
-                                                    <td className="border px-2 py-1 text-right text-green-600">{inv.amountPaid > 0 ? inv.amountPaid.toFixed(2) : '-'}</td>
+                                                    <td className="border px-2 py-1 text-right text-green-600">-</td>
                                                     <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
                                                     <td className="border px-2 py-1">
                                                       <span className={`px-1 py-0.5 rounded text-xs ${
@@ -3027,8 +3228,8 @@ const AdminAccountStatement: React.FC = () => {
                                           <tr>
                                             <td colSpan={2} className="border px-2 py-1">Total</td>
                                             <td className="border px-2 py-1 text-right text-blue-700">{customer.totalPurchases.toFixed(2)}</td>
-                                            <td className="border px-2 py-1 text-right text-green-600">{(customer.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
-                                            <td className={`border px-2 py-1 text-right ${displayBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{displayBalance.toFixed(2)}</td>
+                                            <td className="border px-2 py-1 text-right text-green-600">{ledgerCreditTotal.toFixed(2)}</td>
+                                            <td className={`border px-2 py-1 text-right ${ledgerBalanceTotal > 0 ? 'text-orange-600' : 'text-green-600'}`}>{ledgerBalanceTotal.toFixed(2)}</td>
                                             <td className="border px-2 py-1"></td>
                                           </tr>
                                         </tfoot>
@@ -3046,10 +3247,10 @@ const AdminAccountStatement: React.FC = () => {
                   <tfoot className="bg-gray-100 font-bold">
                     <tr>
                       <td className="border px-3 py-3">TOTAL</td>
-                      <td className="border px-3 py-3 text-right">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).length}</td>
-                      <td className="border px-3 py-3 text-right text-blue-600">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).reduce((sum, c) => sum + c.totalPurchases, 0).toFixed(2)}</td>
-                      <td className="border px-3 py-3 text-right text-green-600">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).reduce((sum, c) => sum + c.totalPayments, 0).toFixed(2)}</td>
-                      <td className="border px-3 py-3 text-right text-blue-600">{customers.filter(c => (!customerSearch || c.name.toLowerCase().includes(customerSearch.toLowerCase())) && (customerBalanceFilter === 'all' || (customerBalanceFilter === 'active' ? c.balance > 0 : c.balance <= 0))).reduce((sum, c) => sum + c.balance, 0).toFixed(2)}</td>
+                      <td className="border px-3 py-3 text-right">{filteredCustomers.length}</td>
+                      <td className="border px-3 py-3 text-right text-blue-600">{filteredCustomerTotals.invoiced.toFixed(2)}</td>
+                      <td className="border px-3 py-3 text-right text-green-600">{filteredCustomerTotals.paid.toFixed(2)}</td>
+                      <td className="border px-3 py-3 text-right text-blue-600">{filteredCustomerTotals.balance.toFixed(2)}</td>
                       <td className="border px-3 py-3"></td>
                     </tr>
                   </tfoot>

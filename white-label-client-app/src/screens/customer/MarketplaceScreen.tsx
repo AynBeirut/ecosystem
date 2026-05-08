@@ -15,18 +15,6 @@ import { COLORS, RADIUS, SHADOW } from '../../theme';
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 type Tab = 'products' | 'stores';
 
-function ProductImage({ uri, style }: { uri: string; style: object }) {
-  const [error, setError] = useState(false);
-  if (error) {
-    return (
-      <View style={[style, { backgroundColor: '#f0f4f8', justifyContent: 'center', alignItems: 'center' }]}>
-        <Text style={{ fontSize: 30 }}>🛍️</Text>
-      </View>
-    );
-  }
-  return <Image source={{ uri }} style={style} resizeMode="cover" onError={() => setError(true)} />;
-}
-
 function buildWhatsAppUrl(product: Product, store: Store): string | null {
   const rawPhone = store.whatsappBusiness || store.whatsappNumber;
   if (!rawPhone) return null;
@@ -98,7 +86,7 @@ export default function MarketplaceScreen() {
         onPress={() => navigation.navigate('StoreDetail', { storeId: item.storeId, storeName: store?.name || '' })}
       >
         {(item.image || item.imageUrl) ? (
-          <ProductImage uri={item.image || item.imageUrl!} style={styles.productImg} />
+          <Image source={{ uri: item.image || item.imageUrl }} style={styles.productImg} />
         ) : (
           <View style={[styles.productImg, styles.imgPlaceholder]}>
             <Text style={{ fontSize: 30 }}>🛍️</Text>
