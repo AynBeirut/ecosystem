@@ -181,11 +181,43 @@ const AdminAccountStatement: React.FC = () => {
   // Separate date filters for cash collections tab
   const [cashFilterStart, setCashFilterStart] = useState('');
   const [cashFilterEnd, setCashFilterEnd] = useState('');
+  const [cashSearch, setCashSearch] = useState('');
+
+  // Payment filters
+  const [paymentFilterStart, setPaymentFilterStart] = useState('');
+  const [paymentFilterEnd, setPaymentFilterEnd] = useState('');
+  const [paymentSearch, setPaymentSearch] = useState('');
+  const [paymentDirectionFilter, setPaymentDirectionFilter] = useState<'all' | 'in' | 'out'>('all');
 
   // Customer list filters
   const [customerSearch, setCustomerSearch] = useState('');
   const [customerBalanceFilter, setCustomerBalanceFilter] = useState<'all' | 'active' | 'zero'>('all');
   const [expandedCustomerLedger, setExpandedCustomerLedger] = useState<string | null>(null);
+
+  // Supplier list filters
+  const [supplierSearch, setSupplierSearch] = useState('');
+  const [supplierBalanceFilter, setSupplierBalanceFilter] = useState<'all' | 'active' | 'zero'>('all');
+  const [expandedSupplierLedger, setExpandedSupplierLedger] = useState<string | null>(null);
+
+  // Purchases filters
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const [purchaseBalanceFilter, setPurchaseBalanceFilter] = useState<'all' | 'active' | 'zero'>('all');
+
+  // Sales filters
+  const [salesSearch, setSalesSearch] = useState('');
+  const [salesBalanceFilter, setSalesBalanceFilter] = useState<'all' | 'active' | 'zero'>('all');
+
+  // Products filters
+  const [productSearch, setProductSearch] = useState('');
+  const [productCategoryFilter, setProductCategoryFilter] = useState<'all' | 'active' | 'zero'>('all');
+
+  // Expenses filters
+  const [expenseCategory, setExpenseCategory] = useState('');
+  const [expenseSearch, setExpenseSearch] = useState('');
+
+  // Expandable ledger states for grouped tabs
+  const [expandedPurchaseSupplier, setExpandedPurchaseSupplier] = useState<string | null>(null);
+  const [expandedSalesCustomer, setExpandedSalesCustomer] = useState<string | null>(null);
 
   // Account-level payments (debit/credit system)
   const [accountPayments, setAccountPayments] = useState<Array<{
@@ -221,10 +253,6 @@ const AdminAccountStatement: React.FC = () => {
   });
   const [savingPayment, setSavingPayment] = useState(false);
 
-  // Expanded ledger rows for sales / purchases
-  const [expandedSalesCustomer, setExpandedSalesCustomer] = useState<string | null>(null);
-  const [expandedPurchaseSupplier, setExpandedPurchaseSupplier] = useState<string | null>(null);
-
   const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = typeof value === 'number' ? value : Number(value);
     return Number.isFinite(parsed) ? parsed : fallback;
@@ -241,6 +269,34 @@ const AdminAccountStatement: React.FC = () => {
     if (Number.isNaN(parsed.getTime())) return 'N/A';
     return parsed.toLocaleDateString('en-GB');
   };
+
+  const filteredCashCollections = cashCollections.filter((entry) => {
+    if (cashFilterStart || cashFilterEnd) {
+      const date = typeof entry.collectionDate === 'string' ? entry.collectionDate.slice(0, 10) : '';
+      if (cashFilterStart && date < cashFilterStart) return false;
+      if (cashFilterEnd && date > cashFilterEnd) return false;
+    }
+    if (cashSearch) {
+      const lower = cashSearch.toLowerCase();
+      return [entry.bankAccount, entry.depositReference, entry.notes].some((item) =>
+        String(item || '').toLowerCase().includes(lower)
+      );
+    }
+    return true;
+  });
+
+  const filteredPayments = accountPayments.filter((payment) => {
+    if (paymentFilterStart && payment.date.slice(0, 10) < paymentFilterStart) return false;
+    if (paymentFilterEnd && payment.date.slice(0, 10) > paymentFilterEnd) return false;
+    if (paymentDirectionFilter !== 'all' && payment.direction !== paymentDirectionFilter) return false;
+    if (paymentSearch) {
+      const lower = paymentSearch.toLowerCase();
+      return [payment.accountName, payment.method, payment.notes].some((item) =>
+        String(item || '').toLowerCase().includes(lower)
+      );
+    }
+    return true;
+  });
 
   const buildPurchaseStatementRows = (sourcePurchases: PurchaseRecord[]): PurchaseStatementRow[] => {
     const filtered = sourcePurchases
@@ -2637,6 +2693,151 @@ const AdminAccountStatement: React.FC = () => {
     doc.save('expenses_statement.pdf');
   };
 
+  const exportCashCollectionsToExcel = () => {
+    const data: CsvRow[] = [
+      {
+        'Collection Date': 'Collection Date',
+        'Bank Account': 'Bank Account',
+        'Deposit Ref.': 'Deposit Ref.',
+        'Orders': 'Orders',
+        'Amount': 'Amount',
+        'Notes': 'Notes',
+      },
+      ...filteredCashCollections.map((entry) => ({
+        'Collection Date': toDateLabel(entry.collectionDate),
+        'Bank Account': toNonEmptyString(entry.bankAccount, '-'),
+        'Deposit Ref.': toNonEmptyString(entry.depositReference, '-'),
+        'Orders': Math.floor(toFiniteNumber(entry.ordersCount, 0)),
+        'Amount': toFiniteNumber(entry.totalAmount, 0).toFixed(2),
+        'Notes': toNonEmptyString(entry.notes, '-'),
+      })),
+      {
+        'Collection Date': 'TOTAL',
+        'Bank Account': '',
+        'Deposit Ref.': '',
+        'Orders': filteredCashCollections.reduce((sum, e) => sum + toFiniteNumber(e.ordersCount, 0), 0),
+        'Amount': filteredCashCollections.reduce((sum, e) => sum + toFiniteNumber(e.totalAmount, 0), 0).toFixed(2),
+        'Notes': '',
+      },
+    ];
+
+    exportToCSV(data, 'cash_collections_statement.csv');
+  };
+
+  const exportCashCollectionsToPDF = async () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    await initArabicPDF(doc);
+
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('CASH COLLECTION HISTORY', 148, 12, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 148, 18, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 24,
+      head: [['Collection Date', 'Bank Account', 'Deposit Ref.', 'Orders', 'Amount', 'Notes']],
+      body: filteredCashCollections.map((entry) => [
+        toDateLabel(entry.collectionDate),
+        toNonEmptyString(entry.bankAccount, '-'),
+        toNonEmptyString(entry.depositReference, '-'),
+        Math.floor(toFiniteNumber(entry.ordersCount, 0)).toString(),
+        toFiniteNumber(entry.totalAmount, 0).toFixed(2),
+        toNonEmptyString(entry.notes, '-'),
+      ]),
+      foot: [[
+        'TOTAL',
+        '',
+        '',
+        filteredCashCollections.reduce((sum, e) => sum + toFiniteNumber(e.ordersCount, 0), 0).toString(),
+        filteredCashCollections.reduce((sum, e) => sum + toFiniteNumber(e.totalAmount, 0), 0).toFixed(2),
+        '',
+      ]],
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 130, 246] },
+      footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold' },
+    });
+
+    doc.save('cash_collections_statement.pdf');
+  };
+
+  const exportPaymentsToExcel = () => {
+    const data: CsvRow[] = [
+      {
+        'Date': 'Date',
+        'Account': 'Account',
+        'Type': 'Type',
+        'Direction': 'Direction',
+        'Method': 'Method',
+        'Amount': 'Amount',
+        'Notes': 'Notes',
+      },
+      ...filteredPayments.map((payment) => ({
+        'Date': toDateLabel(payment.date),
+        'Account': toNonEmptyString(payment.accountName, '-'),
+        'Type': payment.accountType,
+        'Direction': payment.direction === 'in' ? 'Received' : 'Paid Out',
+        'Method': toNonEmptyString(payment.method, '-'),
+        'Amount': toFiniteNumber(payment.amount, 0).toFixed(2),
+        'Notes': toNonEmptyString(payment.notes, '-'),
+      })),
+      {
+        'Date': 'TOTAL',
+        'Account': '',
+        'Type': '',
+        'Direction': '',
+        'Method': '',
+        'Amount': filteredPayments.reduce((sum, p) => sum + toFiniteNumber(p.amount, 0), 0).toFixed(2),
+        'Notes': '',
+      },
+    ];
+
+    exportToCSV(data, 'account_payments_statement.csv');
+  };
+
+  const exportPaymentsToPDF = async () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    await initArabicPDF(doc);
+
+    doc.setFontSize(14);
+    doc.setFont(undefined, 'bold');
+    doc.text('ACCOUNT PAYMENTS', 148, 12, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 148, 18, { align: 'center' });
+
+    autoTable(doc, {
+      startY: 24,
+      head: [['Date', 'Account', 'Type', 'Direction', 'Method', 'Amount', 'Notes']],
+      body: filteredPayments.map((payment) => [
+        toDateLabel(payment.date),
+        toNonEmptyString(payment.accountName, '-'),
+        payment.accountType,
+        payment.direction === 'in' ? 'Received' : 'Paid Out',
+        toNonEmptyString(payment.method, '-'),
+        toFiniteNumber(payment.amount, 0).toFixed(2),
+        toNonEmptyString(payment.notes, '-'),
+      ]),
+      foot: [[
+        'TOTAL',
+        '',
+        '',
+        '',
+        '',
+        filteredPayments.reduce((sum, p) => sum + toFiniteNumber(p.amount, 0), 0).toFixed(2),
+        '',
+      ]],
+      theme: 'grid',
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [59, 130, 246] },
+      footStyles: { fillColor: [243, 244, 246], textColor: [17, 24, 39], fontStyle: 'bold' },
+    });
+
+    doc.save('account_payments_statement.pdf');
+  };
+
   const exportAllToExcel = () => {
     let quarantinedExportRows = 0;
 
@@ -2834,36 +3035,82 @@ const AdminAccountStatement: React.FC = () => {
 
   const BALANCE_EPSILON = 0.005;
 
-  const getCustomerDisplayBalance = (customer: CustomerBalance) => {
-    const acctPaymentsCredit = accountPayments
-      .filter((p) => p.accountId === customer.id && p.direction === 'in')
-      .reduce((sum, payment) => sum + toFiniteNumber(payment.orderAllocation?.remainingAmount, payment.amount), 0);
-    return customer.balance - acctPaymentsCredit;
+  const isZeroBalance = (value: number) => Math.abs(value) < BALANCE_EPSILON;
+
+  const inRangeSales = sales.filter((sale) => isDateInRange(sale.date, filterStartDate, filterEndDate));
+  const inRangeCustomerSalesMap = inRangeSales.reduce((map, sale) => {
+    const current = map.get(sale.customer) || [];
+    current.push(sale);
+    map.set(sale.customer, current);
+    return map;
+  }, new Map<string, SalesRecord[]>());
+
+  const inRangeCustomerPaymentsMap = accountPayments
+    .filter((payment) => payment.direction === 'in' && isDateInRange(payment.date, filterStartDate, filterEndDate))
+    .reduce((map, payment) => {
+      const current = map.get(payment.accountId) || [];
+      current.push(payment);
+      map.set(payment.accountId, current);
+      return map;
+    }, new Map<string, (typeof accountPayments)[number][]>());
+
+  const getUnappliedPaymentAmount = (payment: (typeof accountPayments)[number]) => {
+    if (payment.orderAllocation) {
+      return Math.max(0, toFiniteNumber(payment.orderAllocation.remainingAmount, 0));
+    }
+    return Math.max(0, toFiniteNumber(payment.amount, 0));
   };
 
-  const isZeroBalance = (value: number) => Math.abs(value) < BALANCE_EPSILON;
+  const getCustomerMetrics = (customer: CustomerBalance) => {
+    const invoices = inRangeCustomerSalesMap.get(customer.name) || [];
+    const payments = inRangeCustomerPaymentsMap.get(customer.id) || [];
+
+    const invoicePaid = invoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.amountPaid, 0), 0);
+    const unappliedPayments = payments
+      .map((payment) => ({
+        ...payment,
+        unappliedAmount: getUnappliedPaymentAmount(payment),
+      }))
+      .filter((payment) => payment.unappliedAmount > BALANCE_EPSILON);
+    const unappliedCredit = unappliedPayments.reduce((sum, payment) => sum + payment.unappliedAmount, 0);
+
+    const totalInvoiced = invoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.total, 0), 0);
+    const totalPaid = invoicePaid + unappliedCredit;
+    const balance = totalInvoiced - totalPaid;
+
+    return {
+      invoices,
+      payments: unappliedPayments,
+      invoicesCount: invoices.length,
+      totalInvoiced,
+      totalPaid,
+      balance,
+      hasActivity: invoices.length > 0 || unappliedPayments.length > 0,
+    };
+  };
 
   const filteredCustomers = customers.filter((customer) => {
     if (customerSearch && !customer.name.toLowerCase().includes(customerSearch.toLowerCase())) return false;
-    const displayBalance = getCustomerDisplayBalance(customer);
+    const metrics = getCustomerMetrics(customer);
+    const displayBalance = metrics.balance;
+
+    if ((filterStartDate || filterEndDate) && !metrics.hasActivity) return false;
     if (customerBalanceFilter === 'active') return displayBalance > BALANCE_EPSILON;
     if (customerBalanceFilter === 'zero') return isZeroBalance(displayBalance);
     return true;
   });
 
   const filteredCustomerTotals = filteredCustomers.reduce((acc, customer) => {
-    const acctPaymentsCredit = accountPayments
-      .filter((p) => p.accountId === customer.id && p.direction === 'in')
-      .reduce((sum, payment) => sum + toFiniteNumber(payment.orderAllocation?.remainingAmount, payment.amount), 0);
+    const metrics = getCustomerMetrics(customer);
 
-    acc.invoiced += customer.totalPurchases;
-    acc.paid += customer.totalPayments + acctPaymentsCredit;
-    acc.balance += customer.balance - acctPaymentsCredit;
+    acc.invoiced += metrics.totalInvoiced;
+    acc.paid += metrics.totalPaid;
+    acc.balance += metrics.balance;
     return acc;
   }, { invoiced: 0, paid: 0, balance: 0 });
 
   const sortedFilteredCustomers = [...filteredCustomers].sort((a, b) => {
-    const balanceDiff = getCustomerDisplayBalance(b) - getCustomerDisplayBalance(a);
+    const balanceDiff = getCustomerMetrics(b).balance - getCustomerMetrics(a).balance;
     if (Math.abs(balanceDiff) >= BALANCE_EPSILON) return balanceDiff;
     return a.name.localeCompare(b.name);
   });
@@ -3014,7 +3261,7 @@ const AdminAccountStatement: React.FC = () => {
               onClick={() => setActiveTab('payments')}
               className={`px-6 py-3 font-medium whitespace-nowrap ${
                 activeTab === 'payments'
-                  ? 'border-b-2 border-green-600 text-green-600'
+                  ? 'border-b-2 border-blue-600 text-blue-600'
                   : 'text-gray-600 hover:text-gray-800'
               }`}
             >
@@ -3118,18 +3365,16 @@ const AdminAccountStatement: React.FC = () => {
                   </thead>
                   <tbody>
                     {sortedFilteredCustomers.map(customer => {
-                      const acctPaymentsCredit = accountPayments
-                        .filter(p => p.accountId === customer.id && p.direction === 'in')
-                        .reduce((s, p) => s + toFiniteNumber(p.orderAllocation?.remainingAmount, p.amount), 0);
-                      const displayBalance = customer.balance - acctPaymentsCredit;
+                      const metrics = getCustomerMetrics(customer);
+                      const displayBalance = metrics.balance;
                       const isExpanded = expandedCustomerLedger === customer.id;
                       return (
                         <React.Fragment key={customer.id}>
                           <tr className={`border-b hover:bg-gray-50 ${isExpanded ? 'bg-blue-50' : ''}`}>
                             <td className="border px-3 py-2 font-medium">{customer.name}</td>
-                            <td className="border px-3 py-2 text-right">{sales.filter(s => s.customer === customer.name).length}</td>
-                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{customer.totalPurchases.toFixed(2)}</td>
-                            <td className="border px-3 py-2 text-right text-green-600">{(customer.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right">{metrics.invoicesCount}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{metrics.totalInvoiced.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{metrics.totalPaid.toFixed(2)}</td>
                             <td className={`border px-3 py-2 text-right font-bold ${displayBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
                               {displayBalance.toFixed(2)}
                               {displayBalance > 0 && <span className="ml-1 text-xs font-normal">(due)</span>}
@@ -3157,10 +3402,12 @@ const AdminAccountStatement: React.FC = () => {
                                 <div className="px-6 py-3">
                                   <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Ledger — {customer.name}</p>
                                   {(() => {
-                                    const customerInvoices = sales.filter(s => s.customer === customer.name);
-                                    const acctPmts = accountPayments.filter(p => p.accountId === customer.id && p.direction === 'in');
-                                    const ledgerCreditTotal = acctPmts.reduce((sum, payment) => sum + payment.amount, 0);
-                                    const ledgerBalanceTotal = customer.totalPurchases - ledgerCreditTotal;
+                                    const customerInvoices = metrics.invoices;
+                                    const acctPmts = metrics.payments;
+                                    const invoiceCreditTotal = customerInvoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.amountPaid, 0), 0);
+                                    const unappliedCreditTotal = acctPmts.reduce((sum, payment) => sum + getUnappliedPaymentAmount(payment), 0);
+                                    const ledgerCreditTotal = invoiceCreditTotal + unappliedCreditTotal;
+                                    const ledgerBalanceTotal = metrics.totalInvoiced - ledgerCreditTotal;
                                     if (customerInvoices.length === 0 && acctPmts.length === 0) {
                                       return <p className="text-xs text-gray-400 italic">No invoice records found for this customer.</p>;
                                     }
@@ -3189,13 +3436,15 @@ const AdminAccountStatement: React.FC = () => {
                                             combined.forEach((item, idx) => {
                                               if (item.type === 'invoice') {
                                                 const inv = item.data as SalesRecord;
-                                                running += inv.total;
+                                                const invoiceDebit = toFiniteNumber(inv.total, 0);
+                                                const invoiceCredit = toFiniteNumber(inv.amountPaid, 0);
+                                                running += invoiceDebit - invoiceCredit;
                                                 rows.push(
                                                   <tr key={`inv-${inv.id}`} className="border-b hover:bg-white">
                                                     <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
                                                     <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
-                                                    <td className="border px-2 py-1 text-right font-semibold text-blue-700">{inv.total.toFixed(2)}</td>
-                                                    <td className="border px-2 py-1 text-right text-green-600">-</td>
+                                                    <td className="border px-2 py-1 text-right font-semibold text-blue-700">{invoiceDebit.toFixed(2)}</td>
+                                                    <td className="border px-2 py-1 text-right text-green-600">{invoiceCredit > 0 ? invoiceCredit.toFixed(2) : '-'}</td>
                                                     <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
                                                     <td className="border px-2 py-1">
                                                       <span className={`px-1 py-0.5 rounded text-xs ${
@@ -3208,13 +3457,14 @@ const AdminAccountStatement: React.FC = () => {
                                                 );
                                               } else {
                                                 const p = item.data as (typeof accountPayments)[number];
-                                                running -= p.amount;
+                                                const unappliedAmount = getUnappliedPaymentAmount(p);
+                                                running -= unappliedAmount;
                                                 rows.push(
                                                   <tr key={`pmt-${p.id || idx}`} className="border-b bg-green-50 hover:bg-green-100">
-                                                    <td className="border px-2 py-1">{p.date}</td>
+                                                    <td className="border px-2 py-1">{toDateLabel(p.date)}</td>
                                                     <td className="border px-2 py-1 text-green-700 font-medium">Payment ({p.method}){p.notes ? ` — ${p.notes}` : ''}</td>
                                                     <td className="border px-2 py-1 text-right">-</td>
-                                                    <td className="border px-2 py-1 text-right text-green-700 font-bold">{p.amount.toFixed(2)}</td>
+                                                    <td className="border px-2 py-1 text-right text-green-700 font-bold">{unappliedAmount.toFixed(2)}</td>
                                                     <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
                                                     <td className="border px-2 py-1"><span className="px-1 py-0.5 rounded text-xs bg-green-100 text-green-700">payment</span></td>
                                                   </tr>
@@ -3227,7 +3477,7 @@ const AdminAccountStatement: React.FC = () => {
                                         <tfoot className="bg-white font-semibold">
                                           <tr>
                                             <td colSpan={2} className="border px-2 py-1">Total</td>
-                                            <td className="border px-2 py-1 text-right text-blue-700">{customer.totalPurchases.toFixed(2)}</td>
+                                            <td className="border px-2 py-1 text-right text-blue-700">{metrics.totalInvoiced.toFixed(2)}</td>
                                             <td className="border px-2 py-1 text-right text-green-600">{ledgerCreditTotal.toFixed(2)}</td>
                                             <td className={`border px-2 py-1 text-right ${ledgerBalanceTotal > 0 ? 'text-orange-600' : 'text-green-600'}`}>{ledgerBalanceTotal.toFixed(2)}</td>
                                             <td className="border px-2 py-1"></td>
@@ -3259,225 +3509,341 @@ const AdminAccountStatement: React.FC = () => {
             </div>
           )}
 
-          {activeTab === 'suppliers' && (
-            <div>
-              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Supplier Balances</h2>
-                <div className="flex gap-2 flex-wrap items-center">
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">From:</label>
-                    <input
-                      type="date"
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
+          {activeTab === 'suppliers' && (() => {
+            const filteredSuppliers = suppliers.filter((supplier) => {
+              if (supplierSearch && !supplier.name.toLowerCase().includes(supplierSearch.toLowerCase())) return false;
+              const acctPaymentsCredit = accountPayments
+                .filter((p) => p.accountId === supplier.id && p.direction === 'out')
+                .reduce((s, p) => s + p.amount, 0);
+              const displayBalance = supplier.balance - acctPaymentsCredit;
+              if (supplierBalanceFilter === 'active') return displayBalance > BALANCE_EPSILON;
+              if (supplierBalanceFilter === 'zero') return isZeroBalance(displayBalance);
+              return true;
+            });
+
+            const filteredSupplierTotals = filteredSuppliers.reduce((acc, supplier) => {
+              const acctPaymentsCredit = accountPayments
+                .filter((p) => p.accountId === supplier.id && p.direction === 'out')
+                .reduce((s, p) => s + p.amount, 0);
+              acc.purchased += supplier.totalPurchases;
+              acc.paid += supplier.totalPayments + acctPaymentsCredit;
+              acc.balance += supplier.balance - acctPaymentsCredit;
+              return acc;
+            }, { purchased: 0, paid: 0, balance: 0 });
+
+            const sortedFilteredSuppliers = [...filteredSuppliers].sort((a, b) => {
+              const aBalance = a.balance - accountPayments
+                .filter((p) => p.accountId === a.id && p.direction === 'out')
+                .reduce((s, p) => s + p.amount, 0);
+              const bBalance = b.balance - accountPayments
+                .filter((p) => p.accountId === b.id && p.direction === 'out')
+                .reduce((s, p) => s + p.amount, 0);
+              const balanceDiff = bBalance - aBalance;
+              if (Math.abs(balanceDiff) >= BALANCE_EPSILON) return balanceDiff;
+              return a.name.localeCompare(b.name);
+            });
+
+            return (
+              <div>
+                {/* Filters */}
+                <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
+                  <h2 className="text-xl font-semibold">Supplier Balances</h2>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">From:</label>
+                      <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">To:</label>
+                      <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    {(filterStartDate || filterEndDate) && (
+                      <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }} className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded">Clear Dates</button>
+                    )}
+                    <button onClick={exportSuppliersToExcel} className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm">
+                      <Download size={16} />{!isMobile && 'Export Excel'}
+                    </button>
+                    <button onClick={exportSuppliersToPDF} className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm">
+                      <FileDown size={16} />{!isMobile && 'Export PDF'}
+                    </button>
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">To:</label>
-                    <input
-                      type="date"
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
+                </div>
+
+                {/* Search and balance filter */}
+                <div className="flex gap-2 flex-wrap items-center mb-3">
+                  <input
+                    type="text"
+                    placeholder="Search by name..."
+                    value={supplierSearch}
+                    onChange={(e) => setSupplierSearch(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm w-48"
+                  />
+                  <div className="flex gap-1">
+                    {(['all', 'active', 'zero'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setSupplierBalanceFilter(f)}
+                        className={`px-3 py-1 text-sm rounded border ${
+                          supplierBalanceFilter === f
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {f === 'all' ? 'All' : f === 'active' ? 'Active Balance' : 'Zero Balance'}
+                      </button>
+                    ))}
                   </div>
-                  {(filterStartDate || filterEndDate) && (
+                  {(supplierSearch || supplierBalanceFilter !== 'all') && (
                     <button
-                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
-                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                      onClick={() => { setSupplierSearch(''); setSupplierBalanceFilter('all'); }}
+                      className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
                     >
-                      Clear Dates
+                      Clear
                     </button>
                   )}
-                  <button
-                    onClick={exportSuppliersToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
-                  >
-                    <Download size={16} />
-                    {!isMobile && 'Export Excel'}
-                  </button>
-                  <button
-                    onClick={exportSuppliersToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
-                  >
-                    <FileDown size={16} />
-                    {!isMobile && 'Export PDF'}
-                  </button>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-orange-50 border border-orange-200 rounded p-4">
+                    <div className="text-sm text-orange-600 font-medium">Total Purchased (Dr)</div>
+                    <div className="text-2xl font-bold text-orange-700">${filteredSupplierTotals.purchased.toFixed(2)}</div>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded p-4">
+                    <div className="text-sm text-green-600 font-medium">Total Paid (Cr)</div>
+                    <div className="text-2xl font-bold text-green-700">${filteredSupplierTotals.paid.toFixed(2)}</div>
+                  </div>
+                  <div className={`border rounded p-4 ${filteredSupplierTotals.balance > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
+                    <div className={`text-sm font-medium ${filteredSupplierTotals.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>Outstanding (Owed to Suppliers)</div>
+                    <div className={`text-2xl font-bold ${filteredSupplierTotals.balance > 0 ? 'text-red-700' : 'text-green-700'}`}>${filteredSupplierTotals.balance.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                {/* Supplier Table */}
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <table className="min-w-full border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="border px-3 py-2 text-left text-xs">Supplier Name</th>
+                        <th className="border px-3 py-2 text-right text-xs">Invoices</th>
+                        <th className="border px-3 py-2 text-right text-xs">Total Purchased (Dr)</th>
+                        <th className="border px-3 py-2 text-right text-xs">Total Paid (Cr)</th>
+                        <th className="border px-3 py-2 text-right text-xs">Outstanding</th>
+                        <th className="border px-3 py-2 text-center text-xs">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {sortedFilteredSuppliers.map(supplier => {
+                        const acctPaymentsCredit = accountPayments
+                          .filter(p => p.accountId === supplier.id && p.direction === 'out')
+                          .reduce((s, p) => s + p.amount, 0);
+                        const displayBalance = supplier.balance - acctPaymentsCredit;
+                        return (
+                          <tr key={supplier.id} className="border-b hover:bg-gray-50">
+                            <td className="border px-3 py-2 font-medium">{supplier.name}</td>
+                            <td className="border px-3 py-2 text-right">{purchases.filter(p => p.supplier === supplier.name).length}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{supplier.totalPurchases.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{(supplier.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
+                            <td className={`border px-3 py-2 text-right font-bold ${displayBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {displayBalance.toFixed(2)}
+                              {displayBalance > 0 && <span className="ml-1 text-xs font-normal">(owed)</span>}
+                            </td>
+                            <td className="border px-3 py-2 text-center">
+                              <div className="flex gap-1 justify-center">
+                                <button
+                                  onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
+                                  className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded"
+                                >
+                                  Ledger
+                                </button>
+                                <button
+                                  onClick={() => openPaymentModal(supplier.id, supplier.name, 'supplier')}
+                                  className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium flex items-center gap-1"
+                                >
+                                  <PlusCircle size={11} /> Payment
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-100 font-bold">
+                      <tr>
+                        <td className="border px-3 py-3">TOTAL</td>
+                        <td className="border px-3 py-3 text-right">{sortedFilteredSuppliers.reduce((sum, s) => sum + purchases.filter(p => p.supplier === s.name).length, 0)}</td>
+                        <td className="border px-3 py-3 text-right text-orange-700">{filteredSupplierTotals.purchased.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-green-600">{filteredSupplierTotals.paid.toFixed(2)}</td>
+                        <td className={`border px-3 py-3 text-right ${filteredSupplierTotals.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{filteredSupplierTotals.balance.toFixed(2)}</td>
+                        <td className="border px-3 py-3"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
-              <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full border-collapse">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="border px-4 py-2 text-left whitespace-nowrap">Supplier Name</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Debit</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Net</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">VAT</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Credit</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Balance</th>
-                      <th className="border px-4 py-2 text-center whitespace-nowrap">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {suppliers.map(supplier => {
-                      const acctPaymentsCredit = accountPayments
-                        .filter(p => p.accountId === supplier.id && p.direction === 'out')
-                        .reduce((s, p) => s + p.amount, 0);
-                      const displayBalance = supplier.balance - acctPaymentsCredit;
-                      return (
-                        <tr key={supplier.id} className="border-b hover:bg-gray-50">
-                          <td className="border px-4 py-2">{supplier.name}</td>
-                          <td className="border px-4 py-2 text-right text-green-600">{(supplier.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{(supplier.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">0.00</td>
-                          <td className="border px-4 py-2 text-right">{supplier.totalPurchases.toFixed(2)}</td>
-                          <td className={`border px-4 py-2 text-right font-semibold ${displayBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                            {displayBalance.toFixed(2)}
-                          </td>
-                          <td className="border px-4 py-2 text-center">
-                            <div className="flex gap-1 justify-center">
-                              <button
-                                onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
-                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded"
-                              >
-                                Ledger
-                              </button>
-                              <button
-                                onClick={() => openPaymentModal(supplier.id, supplier.name, 'supplier')}
-                                className="px-2 py-1 text-xs bg-green-100 hover:bg-green-200 text-green-700 rounded font-medium flex items-center gap-1"
-                              >
-                                <PlusCircle size={11} /> Payment
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-gray-100 font-bold">
-                    <tr>
-                      <td className="border px-4 py-3">TOTAL</td>
-                      <td className="border px-4 py-3 text-right text-green-600">{suppliers.reduce((sum, s) => sum + s.totalPayments, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{suppliers.reduce((sum, s) => sum + s.totalPayments, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">0.00</td>
-                      <td className="border px-4 py-3 text-right text-blue-600">{suppliers.reduce((sum, s) => sum + s.totalPurchases, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right text-blue-600">{suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}</td>
-                      <td className="border px-4 py-3"></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
-          {activeTab === 'products' && (
-            <div>
-              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Product Summary</h2>
-                {quarantinedProductSalesCount > 0 && (
-                  <div className="text-sm text-orange-600 font-medium">
-                    Quarantined rows: {quarantinedProductSalesCount}
+          {activeTab === 'products' && (() => {
+            const filteredProducts = filteredProductSummaries.filter((product) => {
+              if (productSearch && !product.name.toLowerCase().includes(productSearch.toLowerCase())) return false;
+              if (productCategoryFilter !== 'all') {
+                if (productCategoryFilter === 'active') return product.totalRevenue > BALANCE_EPSILON;
+                if (productCategoryFilter === 'zero') return isZeroBalance(product.totalRevenue);
+              }
+              return true;
+            });
+
+            const productTotals = filteredProducts.reduce((acc, product) => {
+              const discount = product.totalDiscount || 0;
+              const subtotal = product.totalRevenue + discount;
+              acc.quantity += product.totalSold;
+              acc.subtotal += subtotal;
+              acc.discount += discount;
+              acc.revenue += product.totalRevenue;
+              return acc;
+            }, { quantity: 0, subtotal: 0, discount: 0, revenue: 0 });
+
+            return (
+              <div>
+                {/* Filters */}
+                <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
+                  <h2 className="text-xl font-semibold">Product Summary</h2>
+                  {quarantinedProductSalesCount > 0 && (
+                    <div className="text-sm text-orange-600 font-medium">
+                      Quarantined rows: {quarantinedProductSalesCount}
+                    </div>
+                  )}
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">From:</label>
+                      <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">To:</label>
+                      <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    {(filterStartDate || filterEndDate) && (
+                      <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }} className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded">Clear Dates</button>
+                    )}
+                    <button onClick={exportProductsToExcel} className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm">
+                      <Download size={16} />{!isMobile && 'Export Excel'}
+                    </button>
+                    <button onClick={exportProductsToPDF} className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm">
+                      <FileDown size={16} />{!isMobile && 'Export PDF'}
+                    </button>
                   </div>
-                )}
-                <div className="flex gap-2 flex-wrap items-center">
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">From:</label>
-                    <input
-                      type="date"
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
+                </div>
+
+                {/* Search and category filter */}
+                <div className="flex gap-2 flex-wrap items-center mb-3">
+                  <input
+                    type="text"
+                    placeholder="Search by name..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm w-48"
+                  />
+                  <div className="flex gap-1">
+                    {(['all', 'active', 'zero'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setProductCategoryFilter(f)}
+                        className={`px-3 py-1 text-sm rounded border ${
+                          productCategoryFilter === f
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {f === 'all' ? 'All' : f === 'active' ? 'Active Sales' : 'Zero Sales'}
+                      </button>
+                    ))}
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">To:</label>
-                    <input
-                      type="date"
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  {(filterStartDate || filterEndDate) && (
+                  {(productSearch || productCategoryFilter !== 'all') && (
                     <button
-                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
-                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                      onClick={() => { setProductSearch(''); setProductCategoryFilter('all'); }}
+                      className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
                     >
-                      Clear Dates
+                      Clear
                     </button>
                   )}
-                  <button
-                    onClick={exportProductsToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
-                  >
-                    <Download size={16} />
-                    {!isMobile && 'Export Excel'}
-                  </button>
-                  <button
-                    onClick={exportProductsToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
-                  >
-                    <FileDown size={16} />
-                    {!isMobile && 'Export PDF'}
-                  </button>
+                </div>
+
+                {/* Summary Cards */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                  <div className="bg-purple-50 border border-purple-200 rounded p-4">
+                    <div className="text-sm text-purple-600 font-medium">Quantity Sold</div>
+                    <div className="text-2xl font-bold text-purple-700">{productTotals.quantity}</div>
+                  </div>
+                  <div className="bg-blue-50 border border-blue-200 rounded p-4">
+                    <div className="text-sm text-blue-600 font-medium">Subtotal</div>
+                    <div className="text-2xl font-bold text-blue-700">${productTotals.subtotal.toFixed(2)}</div>
+                  </div>
+                  <div className="bg-red-50 border border-red-200 rounded p-4">
+                    <div className="text-sm text-red-600 font-medium">Discount</div>
+                    <div className="text-2xl font-bold text-red-700">${productTotals.discount.toFixed(2)}</div>
+                  </div>
+                  <div className="bg-green-50 border border-green-200 rounded p-4">
+                    <div className="text-sm text-green-600 font-medium">Total Revenue</div>
+                    <div className="text-2xl font-bold text-green-700">${productTotals.revenue.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                {/* Product Table */}
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <table className="min-w-full border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="border px-3 py-2 text-left text-xs">Product Name</th>
+                        <th className="border px-3 py-2 text-left text-xs">Category</th>
+                        <th className="border px-3 py-2 text-right text-xs">Quantity Sold</th>
+                        <th className="border px-3 py-2 text-right text-xs">Subtotal</th>
+                        <th className="border px-3 py-2 text-right text-xs">Discount</th>
+                        <th className="border px-3 py-2 text-right text-xs">Total Revenue</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredProducts.map(product => {
+                        const discount = product.totalDiscount || 0;
+                        const subtotal = product.totalRevenue + discount;
+                        return (
+                          <tr key={product.id} className="border-b hover:bg-gray-50">
+                            <td className="border px-3 py-2 font-medium">{product.name}</td>
+                            <td className="border px-3 py-2">{product.category}</td>
+                            <td className="border px-3 py-2 text-right">{product.totalSold}</td>
+                            <td className="border px-3 py-2 text-right">${subtotal.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right text-red-600">{discount > 0 ? `-$${discount.toFixed(2)}` : '$0.00'}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-green-700">${product.totalRevenue.toFixed(2)}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                    <tfoot className="bg-gray-100 font-bold">
+                      <tr>
+                        <td className="border px-3 py-3" colSpan={2}>TOTAL</td>
+                        <td className="border px-3 py-3 text-right">{productTotals.quantity}</td>
+                        <td className="border px-3 py-3 text-right">${productTotals.subtotal.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-red-600">-${productTotals.discount.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-green-700">${productTotals.revenue.toFixed(2)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
-              <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full border-collapse">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="border px-4 py-2 text-left whitespace-nowrap">Product Name</th>
-                      <th className="border px-4 py-2 text-left whitespace-nowrap">Category</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Quantity Sold</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Subtotal</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Discount</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Total Revenue</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">Net</th>
-                      <th className="border px-4 py-2 text-right whitespace-nowrap">VAT</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredProductSummaries.map(product => {
-                      const discount = product.totalDiscount || 0;
-                      const subtotal = product.totalRevenue + discount;
-                      const netRevenue = product.totalRevenue;
-                      const vatRevenue = 0;
-
-                      return (
-                        <tr key={product.id} className="border-b hover:bg-gray-50">
-                          <td className="border px-4 py-2">{product.name}</td>
-                          <td className="border px-4 py-2">{product.category}</td>
-                          <td className="border px-4 py-2 text-right">{product.totalSold}</td>
-                          <td className="border px-4 py-2 text-right">{subtotal.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right text-red-600">{discount > 0 ? `-${discount.toFixed(2)}` : '0.00'}</td>
-                          <td className="border px-4 py-2 text-right font-semibold">{product.totalRevenue.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{netRevenue.toFixed(2)}</td>
-                          <td className="border px-4 py-2 text-right">{vatRevenue.toFixed(2)}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                  <tfoot className="bg-gray-100 font-bold">
-                    <tr>
-                      <td className="border px-4 py-3" colSpan={2}>TOTAL</td>
-                      <td className="border px-4 py-3 text-right">{productSummaryTotals.quantity}</td>
-                      <td className="border px-4 py-3 text-right">{productSummaryTotals.subtotal.toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right text-red-600">{productSummaryTotals.discount.toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right text-blue-600">{productSummaryTotals.revenue.toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">{productSummaryTotals.revenue.toFixed(2)}</td>
-                      <td className="border px-4 py-3 text-right">0.00</td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === 'purchases' && (() => {
-            const filteredPurchases = purchases.filter(p =>
-              isDateInRange(p.date, filterStartDate, filterEndDate)
-            );
+            const filteredPurchases = purchases.filter(p => {
+              if (!isDateInRange(p.date, filterStartDate, filterEndDate)) return false;
+              if (purchaseSearch) {
+                const lowerSearch = purchaseSearch.toLowerCase();
+                const matchesSupplier = p.supplier.toLowerCase().includes(lowerSearch);
+                const matchesInvoice = (p.invoiceNumber || '').toLowerCase().includes(lowerSearch);
+                if (!matchesSupplier && !matchesInvoice) return false;
+              }
+              return true;
+            });
 
             // Group by supplier
             const supplierMap = new Map<string, {
@@ -3498,8 +3864,13 @@ const AdminAccountStatement: React.FC = () => {
               entry.balance += (p.amount - p.amountPaid);
             });
             const supplierAccounts = Array.from(supplierMap.values()).sort((a, b) => b.balance - a.balance);
-            const totalDebit = supplierAccounts.reduce((s, c) => s + c.totalDebit, 0);
-            const totalCredit = supplierAccounts.reduce((s, c) => s + c.totalCredit, 0);
+            const filteredSupplierAccounts = supplierAccounts.filter(account => {
+              if (purchaseBalanceFilter === 'active') return account.balance > BALANCE_EPSILON;
+              if (purchaseBalanceFilter === 'zero') return isZeroBalance(account.balance);
+              return true;
+            });
+            const totalDebit = filteredSupplierAccounts.reduce((s, c) => s + c.totalDebit, 0);
+            const totalCredit = filteredSupplierAccounts.reduce((s, c) => s + c.totalCredit, 0);
             const totalBalance = totalDebit - totalCredit;
 
             return (
@@ -3526,6 +3897,40 @@ const AdminAccountStatement: React.FC = () => {
                       <FileDown size={16} />{!isMobile && 'Export PDF'}
                     </button>
                   </div>
+                </div>
+
+                {/* Search and balance filter */}
+                <div className="flex gap-2 flex-wrap items-center mb-3">
+                  <input
+                    type="text"
+                    placeholder="Search by supplier or invoice..."
+                    value={purchaseSearch}
+                    onChange={(e) => setPurchaseSearch(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm w-56"
+                  />
+                  <div className="flex gap-1">
+                    {(['all', 'active', 'zero'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setPurchaseBalanceFilter(f)}
+                        className={`px-3 py-1 text-sm rounded border ${
+                          purchaseBalanceFilter === f
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {f === 'all' ? 'All' : f === 'active' ? 'Active Balance' : 'Zero Balance'}
+                      </button>
+                    ))}
+                  </div>
+                  {(purchaseSearch || purchaseBalanceFilter !== 'all') && (
+                    <button
+                      onClick={() => { setPurchaseSearch(''); setPurchaseBalanceFilter('all'); }}
+                      className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
 
                 {/* Summary Cards */}
@@ -3559,10 +3964,10 @@ const AdminAccountStatement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {supplierAccounts.length === 0 && (
-                        <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No purchases found{(filterStartDate || filterEndDate) ? ' for the selected date range' : ''}.</td></tr>
+                      {filteredSupplierAccounts.length === 0 && (
+                        <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No purchases found{(filterStartDate || filterEndDate || purchaseSearch || purchaseBalanceFilter !== 'all') ? ' for the selected filters' : ''}.</td></tr>
                       )}
-                      {supplierAccounts.map(supplier => (
+                      {filteredSupplierAccounts.map(supplier => (
                         <React.Fragment key={supplier.name}>
                           <tr className={`border-b hover:bg-gray-50 ${expandedPurchaseSupplier === supplier.name ? 'bg-orange-50' : ''}`}>
                             <td className="border px-3 py-2 font-medium">{supplier.name}</td>
@@ -3645,7 +4050,7 @@ const AdminAccountStatement: React.FC = () => {
                     <tfoot className="bg-gray-100 font-bold">
                       <tr>
                         <td className="border px-3 py-3">TOTAL</td>
-                        <td className="border px-3 py-3 text-right">{filteredPurchases.length}</td>
+                        <td className="border px-3 py-3 text-right">{filteredSupplierAccounts.length}</td>
                         <td className="border px-3 py-3 text-right text-orange-700">{totalDebit.toFixed(2)}</td>
                         <td className="border px-3 py-3 text-right text-green-600">{totalCredit.toFixed(2)}</td>
                         <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>{totalBalance.toFixed(2)}</td>
@@ -3658,112 +4063,164 @@ const AdminAccountStatement: React.FC = () => {
             );
           })()}
 
-          {activeTab === 'expenses' && (
-            <div>
-              <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Expense History</h2>
-                <div className="flex gap-2 flex-wrap items-center">
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">From:</label>
-                    <input
-                      type="date"
-                      value={filterStartDate}
-                      onChange={(e) => setFilterStartDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
+          {activeTab === 'expenses' && (() => {
+            const filteredExpenses = expenses.filter(e => {
+              if (!isDateInRange(e.date, filterStartDate, filterEndDate)) return false;
+              if (expenseCategory && e.category !== expenseCategory) return false;
+              if (expenseSearch) {
+                const lowerSearch = expenseSearch.toLowerCase();
+                const matchesCategory = (e.category || '').toLowerCase().includes(lowerSearch);
+                const matchesDescription = (e.description || '').toLowerCase().includes(lowerSearch);
+                const matchesMethod = (e.paymentMethod || '').toLowerCase().includes(lowerSearch);
+                if (!matchesCategory && !matchesDescription && !matchesMethod) return false;
+              }
+              return true;
+            });
+
+            const expenseTotals = filteredExpenses.reduce((acc, e) => {
+              acc.total += e.amount;
+              acc.vat += e.taxAmount || 0;
+              return acc;
+            }, { total: 0, vat: 0 });
+
+            const categories = Array.from(new Set(expenses.map(e => e.category)));
+
+            return (
+              <div>
+                {/* Filters */}
+                <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
+                  <h2 className="text-xl font-semibold">Expense History</h2>
+                  <div className="flex gap-2 flex-wrap items-center">
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">From:</label>
+                      <input type="date" value={filterStartDate} onChange={(e) => setFilterStartDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    <div className="flex gap-2 items-center">
+                      <label className="text-sm text-gray-600">To:</label>
+                      <input type="date" value={filterEndDate} onChange={(e) => setFilterEndDate(e.target.value)} className="border rounded px-2 py-1 text-sm" />
+                    </div>
+                    {(filterStartDate || filterEndDate) && (
+                      <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }} className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded">Clear Dates</button>
+                    )}
+                    <button onClick={exportExpensesToExcel} className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm">
+                      <Download size={16} />{!isMobile && 'Export Excel'}
+                    </button>
+                    <button onClick={exportExpensesToPDF} className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm">
+                      <FileDown size={16} />{!isMobile && 'Export PDF'}
+                    </button>
                   </div>
-                  <div className="flex gap-2 items-center">
-                    <label className="text-sm text-gray-600">To:</label>
-                    <input
-                      type="date"
-                      value={filterEndDate}
-                      onChange={(e) => setFilterEndDate(e.target.value)}
-                      className="border rounded px-2 py-1 text-sm"
-                    />
-                  </div>
-                  {(filterStartDate || filterEndDate) && (
+                </div>
+
+                {/* Category filter */}
+                <div className="flex gap-2 flex-wrap items-center mb-3">
+                  <input
+                    type="text"
+                    placeholder="Search by category, description or method..."
+                    value={expenseSearch}
+                    onChange={(e) => setExpenseSearch(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm w-72"
+                  />
+                  <select
+                    value={expenseCategory}
+                    onChange={(e) => setExpenseCategory(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm"
+                  >
+                    <option value="">All Categories</option>
+                    {categories.sort().map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                  {(expenseCategory || expenseSearch) && (
                     <button
-                      onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
-                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                      onClick={() => { setExpenseCategory(''); setExpenseSearch(''); }}
+                      className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
                     >
-                      Clear Dates
+                      Clear
                     </button>
                   )}
-                  <button
-                    onClick={exportExpensesToExcel}
-                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
-                  >
-                    <Download size={16} />
-                    {!isMobile && 'Export Excel'}
-                  </button>
-                  <button
-                    onClick={exportExpensesToPDF}
-                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
-                  >
-                    <FileDown size={16} />
-                    {!isMobile && 'Export PDF'}
-                  </button>
+                </div>
+
+                {/* Summary Card */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                  <div className="bg-red-50 border border-red-200 rounded p-4">
+                    <div className="text-sm text-red-600 font-medium">Total Expenses</div>
+                    <div className="text-2xl font-bold text-red-700">${expenseTotals.total.toFixed(2)}</div>
+                    <div className="text-xs text-gray-500 mt-1">{filteredExpenses.length} record(s)</div>
+                  </div>
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
+                    <div className="text-sm text-yellow-600 font-medium">Net</div>
+                    <div className="text-2xl font-bold text-yellow-700">${(expenseTotals.total - expenseTotals.vat).toFixed(2)}</div>
+                  </div>
+                  <div className="bg-purple-50 border border-purple-200 rounded p-4">
+                    <div className="text-sm text-purple-600 font-medium">VAT</div>
+                    <div className="text-2xl font-bold text-purple-700">${expenseTotals.vat.toFixed(2)}</div>
+                  </div>
+                </div>
+
+                {/* Expenses Table */}
+                <div className="overflow-x-auto -mx-6 px-6">
+                  <table className="min-w-full border-collapse">
+                    <thead className="bg-gray-50">
+                      <tr>
+                        <th className="border px-3 py-2 text-left text-xs">Date</th>
+                        <th className="border px-3 py-2 text-left text-xs">Category</th>
+                        <th className="border px-3 py-2 text-left text-xs">Description</th>
+                        <th className="border px-3 py-2 text-right text-xs">Amount</th>
+                        <th className="border px-3 py-2 text-right text-xs">Net</th>
+                        <th className="border px-3 py-2 text-right text-xs">VAT</th>
+                        <th className="border px-3 py-2 text-left text-xs">Payment Method</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {filteredExpenses.length === 0 ? (
+                        <tr><td colSpan={7} className="border px-4 py-6 text-center text-gray-500">No expenses found{(filterStartDate || filterEndDate || expenseCategory || expenseSearch) ? ' for the selected filters' : ''}.</td></tr>
+                      ) : (
+                        filteredExpenses.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(expense => {
+                          const vat = expense.taxAmount || 0;
+                          const net = expense.amount - vat;
+                          return (
+                            <tr key={expense.id} className="border-b hover:bg-gray-50 text-sm">
+                              <td className="border px-3 py-2">{toDateLabel(expense.date)}</td>
+                              <td className="border px-3 py-2">{expense.category}</td>
+                              <td className="border px-3 py-2">{expense.description}</td>
+                              <td className="border px-3 py-2 text-right font-semibold text-red-600">${expense.amount.toFixed(2)}</td>
+                              <td className="border px-3 py-2 text-right">${net.toFixed(2)}</td>
+                              <td className="border px-3 py-2 text-right">${vat.toFixed(2)}</td>
+                              <td className="border px-3 py-2 text-xs">{expense.paymentMethod || '-'}</td>
+                            </tr>
+                          );
+                        })
+                      )}
+                    </tbody>
+                    <tfoot className="bg-gray-100 font-bold">
+                      <tr>
+                        <td className="border px-3 py-3" colSpan={3}>TOTAL</td>
+                        <td className="border px-3 py-3 text-right text-red-700">${expenseTotals.total.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right">${(expenseTotals.total - expenseTotals.vat).toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right">${expenseTotals.vat.toFixed(2)}</td>
+                        <td className="border px-3 py-3"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
                 </div>
               </div>
-              <div className="overflow-x-auto -mx-6 px-6">
-                <table className="min-w-full">
-                  <thead className="bg-gray-50">
-                    <tr>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Date</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Ref.</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Description</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Debit</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Net</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">VAT</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Credit</th>
-                      <th className="px-3 py-2 text-right whitespace-nowrap text-xs">Balance</th>
-                      <th className="px-3 py-2 text-left whitespace-nowrap text-xs">Payment</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {(() => {
-                      let runningBalance = 0;
-                      return expenses.map(expense => {
-                        const total = expense.amount;
-                        const vat = expense.taxAmount || 0;
-                        const net = total - vat;
-                        runningBalance += total;
-                        return (
-                          <tr key={expense.id} className="border-b hover:bg-gray-50 text-sm">
-                            <td className="px-3 py-2">{new Date(expense.date).toLocaleDateString('en-GB')}</td>
-                            <td className="px-3 py-2">{expense.reference || '-'}</td>
-                            <td className="px-3 py-2">{expense.category} - {expense.description}</td>
-                            <td className="px-3 py-2 text-right font-semibold text-red-600">{total.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right">{net.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right">{vat.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right text-green-600">{total.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-right font-semibold">{runningBalance.toFixed(2)}</td>
-                            <td className="px-3 py-2 text-xs">{expense.paymentMethod || '-'}</td>
-                          </tr>
-                        );
-                      });
-                    })()}
-                  </tbody>
-                  <tfoot className="bg-gray-100 font-bold">
-                    <tr>
-                      <td className="px-3 py-3" colSpan={3}>TOTAL</td>
-                      <td className="px-3 py-3 text-right text-blue-600">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">0.00</td>
-                      <td className="px-3 py-3 text-right text-green-600">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3 text-right">{expenses.reduce((sum, e) => sum + e.amount, 0).toFixed(2)}</td>
-                      <td className="px-3 py-3"></td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
-            </div>
-          )}
+            );
+          })()}
 
           {activeTab === 'sales' && (() => {
+            const uniqueSalesCustomers = Array.from(new Set(sales.map(s => s.customer))).sort();
+            const dropdownSalesCustomers = uniqueSalesCustomers.filter((customerName) =>
+              !filterCustomer || customerName.toLowerCase().includes(filterCustomer.toLowerCase())
+            );
+
             const filteredSales = sales.filter(s => {
               if (!isDateInRange(s.date, filterStartDate, filterEndDate)) return false;
-              if (filterCustomer && s.customer !== filterCustomer) return false;
+              if (filterCustomer && !s.customer.toLowerCase().includes(filterCustomer.toLowerCase())) return false;
+              if (salesSearch) {
+                const lowerSearch = salesSearch.toLowerCase();
+                const matchesInvoice = (s.invoiceNumber || '').toLowerCase().includes(lowerSearch);
+                if (!matchesInvoice) return false;
+              }
               return true;
             });
 
@@ -3786,8 +4243,13 @@ const AdminAccountStatement: React.FC = () => {
               entry.balance += (s.total - s.amountPaid);
             });
             const customerAccounts = Array.from(customerMap.values()).sort((a, b) => b.balance - a.balance);
-            const totalDebit = customerAccounts.reduce((sum, c) => sum + c.totalDebit, 0);
-            const totalCredit = customerAccounts.reduce((sum, c) => sum + c.totalCredit, 0);
+            const filteredCustomerAccounts = customerAccounts.filter(account => {
+              if (salesBalanceFilter === 'active') return account.balance > BALANCE_EPSILON;
+              if (salesBalanceFilter === 'zero') return isZeroBalance(account.balance);
+              return true;
+            });
+            const totalDebit = filteredCustomerAccounts.reduce((sum, c) => sum + c.totalDebit, 0);
+            const totalCredit = filteredCustomerAccounts.reduce((sum, c) => sum + c.totalCredit, 0);
             const totalBalance = totalDebit - totalCredit;
 
             return (
@@ -3806,12 +4268,21 @@ const AdminAccountStatement: React.FC = () => {
                     </div>
                     <div className="flex gap-2 items-center">
                       <label className="text-sm text-gray-600">Customer:</label>
-                      <select value={filterCustomer} onChange={(e) => setFilterCustomer(e.target.value)} className="border rounded px-2 py-1 text-sm">
-                        <option value="">All Customers</option>
-                        {Array.from(new Set(sales.map(s => s.customer))).sort().map(c => (
-                          <option key={c} value={c}>{c}</option>
-                        ))}
-                      </select>
+                      <div className="flex gap-2 items-center flex-wrap">
+                        <input
+                          list="sales-customer-options"
+                          type="text"
+                          placeholder="All Customers"
+                          value={filterCustomer}
+                          onChange={(e) => setFilterCustomer(e.target.value)}
+                          className="border rounded px-2 py-1 text-sm w-56"
+                        />
+                        <datalist id="sales-customer-options">
+                          {dropdownSalesCustomers.map(c => (
+                            <option key={c} value={c} />
+                          ))}
+                        </datalist>
+                      </div>
                     </div>
                     {(filterStartDate || filterEndDate || filterCustomer) && (
                       <button onClick={() => { setFilterStartDate(''); setFilterEndDate(''); setFilterCustomer(''); }} className="px-3 py-1 bg-gray-200 hover:bg-gray-300 rounded text-sm">Clear Filters</button>
@@ -3823,6 +4294,40 @@ const AdminAccountStatement: React.FC = () => {
                       <FileDown size={16} />{!isMobile && 'Export PDF'}
                     </button>
                   </div>
+                </div>
+
+                {/* Search and balance filter */}
+                <div className="flex gap-2 flex-wrap items-center mb-3">
+                  <input
+                    type="text"
+                    placeholder="Search by invoice..."
+                    value={salesSearch}
+                    onChange={(e) => setSalesSearch(e.target.value)}
+                    className="border rounded px-3 py-1.5 text-sm w-56"
+                  />
+                  <div className="flex gap-1">
+                    {(['all', 'active', 'zero'] as const).map(f => (
+                      <button
+                        key={f}
+                        onClick={() => setSalesBalanceFilter(f)}
+                        className={`px-3 py-1 text-sm rounded border ${
+                          salesBalanceFilter === f
+                            ? 'bg-blue-600 text-white border-blue-600'
+                            : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                        }`}
+                      >
+                        {f === 'all' ? 'All' : f === 'active' ? 'Active Balance' : 'Zero Balance'}
+                      </button>
+                    ))}
+                  </div>
+                  {(salesSearch || salesBalanceFilter !== 'all') && (
+                    <button
+                      onClick={() => { setSalesSearch(''); setSalesBalanceFilter('all'); }}
+                      className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
+                    >
+                      Clear
+                    </button>
+                  )}
                 </div>
 
                 {/* Summary Cards */}
@@ -3856,10 +4361,10 @@ const AdminAccountStatement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {customerAccounts.length === 0 && (
-                        <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No sales found{(filterStartDate || filterEndDate || filterCustomer) ? ' for the selected filters' : ''}.</td></tr>
+                      {filteredCustomerAccounts.length === 0 && (
+                        <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No sales found{(filterStartDate || filterEndDate || filterCustomer || salesSearch || salesBalanceFilter !== 'all') ? ' for the selected filters' : ''}.</td></tr>
                       )}
-                      {customerAccounts.map(customer => (
+                      {filteredCustomerAccounts.map(customer => (
                         <React.Fragment key={customer.name}>
                           <tr className={`border-b hover:bg-gray-50 ${expandedSalesCustomer === customer.name ? 'bg-blue-50' : ''}`}>
                             <td className="border px-3 py-2 font-medium">{customer.name}</td>
@@ -3941,7 +4446,7 @@ const AdminAccountStatement: React.FC = () => {
                     <tfoot className="bg-gray-100 font-bold">
                       <tr>
                         <td className="border px-3 py-3">TOTAL</td>
-                        <td className="border px-3 py-3 text-right">{filteredSales.length}</td>
+                        <td className="border px-3 py-3 text-right">{filteredCustomerAccounts.length}</td>
                         <td className="border px-3 py-3 text-right text-blue-700">{totalDebit.toFixed(2)}</td>
                         <td className="border px-3 py-3 text-right text-green-600">{totalCredit.toFixed(2)}</td>
                         <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{totalBalance.toFixed(2)}</td>
@@ -3986,21 +4491,37 @@ const AdminAccountStatement: React.FC = () => {
                       Clear Dates
                     </button>
                   )}
-                  <div className="text-sm text-gray-600 ml-2">
-                    Total: <span className="font-semibold text-emerald-600">
-                      ${cashCollections
-                        .filter(e => {
-                          if (!cashFilterStart && !cashFilterEnd) return true;
-                          const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
-                          if (!d) return true;
-                          if (cashFilterStart && d < cashFilterStart) return false;
-                          if (cashFilterEnd && d > cashFilterEnd) return false;
-                          return true;
-                        })
-                        .reduce((sum, e) => sum + e.totalAmount, 0).toFixed(2)}
-                    </span>
-                  </div>
+                  <button
+                    onClick={exportCashCollectionsToExcel}
+                    className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
+                  >
+                    <Download size={16} /> {!isMobile && 'Export Excel'}
+                  </button>
+                  <button
+                    onClick={exportCashCollectionsToPDF}
+                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
+                  >
+                    <FileDown size={16} /> {!isMobile && 'Export PDF'}
+                  </button>
                 </div>
+              </div>
+
+              <div className="flex gap-2 flex-wrap items-center mb-3">
+                <input
+                  type="text"
+                  placeholder="Search by bank, reference or notes..."
+                  value={cashSearch}
+                  onChange={(e) => setCashSearch(e.target.value)}
+                  className="border rounded px-3 py-1.5 text-sm w-56"
+                />
+                {(cashSearch) && (
+                  <button
+                    onClick={() => setCashSearch('')}
+                    className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Clear
+                  </button>
+                )}
               </div>
 
               <div className="overflow-x-auto -mx-6 px-6">
@@ -4016,16 +4537,7 @@ const AdminAccountStatement: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {cashCollections
-                      .filter(e => {
-                        if (!cashFilterStart && !cashFilterEnd) return true;
-                        const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
-                        if (!d) return true;
-                        if (cashFilterStart && d < cashFilterStart) return false;
-                        if (cashFilterEnd && d > cashFilterEnd) return false;
-                        return true;
-                      })
-                      .map((entry) => (
+                    {filteredCashCollections.map((entry) => (
                       <tr key={entry.id} className="border-b hover:bg-gray-50">
                         <td className="border px-4 py-2">{toDateLabel(entry.collectionDate)}</td>
                         <td className="border px-4 py-2">{entry.bankAccount}</td>
@@ -4035,19 +4547,12 @@ const AdminAccountStatement: React.FC = () => {
                         <td className="border px-4 py-2">{entry.notes || '-'}</td>
                       </tr>
                     ))}
-                    {cashCollections.filter(e => {
-                      if (!cashFilterStart && !cashFilterEnd) return true;
-                      const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
-                      if (!d) return true;
-                      if (cashFilterStart && d < cashFilterStart) return false;
-                      if (cashFilterEnd && d > cashFilterEnd) return false;
-                      return true;
-                    }).length === 0 && (
+                    {filteredCashCollections.length === 0 && (
                       <tr>
                         <td colSpan={6} className="border px-4 py-6 text-center text-gray-500">
                           {cashCollections.length === 0
                             ? 'No cash collections found. Create collections from the Cash Collection page.'
-                            : 'No records match the selected date range.'}
+                            : 'No records match the selected filters.'}
                         </td>
                       </tr>
                     )}
@@ -4056,28 +4561,10 @@ const AdminAccountStatement: React.FC = () => {
                     <tr>
                       <td className="border px-4 py-3" colSpan={3}>TOTAL</td>
                       <td className="border px-4 py-3 text-right">
-                        {cashCollections
-                          .filter(e => {
-                            if (!cashFilterStart && !cashFilterEnd) return true;
-                            const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
-                            if (!d) return true;
-                            if (cashFilterStart && d < cashFilterStart) return false;
-                            if (cashFilterEnd && d > cashFilterEnd) return false;
-                            return true;
-                          })
-                          .reduce((sum, e) => sum + e.ordersCount, 0)}
+                        {filteredCashCollections.reduce((sum, e) => sum + e.ordersCount, 0)}
                       </td>
                       <td className="border px-4 py-3 text-right text-emerald-600">
-                        {cashCollections
-                          .filter(e => {
-                            if (!cashFilterStart && !cashFilterEnd) return true;
-                            const d = typeof e.collectionDate === 'string' ? e.collectionDate.slice(0, 10) : '';
-                            if (!d) return true;
-                            if (cashFilterStart && d < cashFilterStart) return false;
-                            if (cashFilterEnd && d > cashFilterEnd) return false;
-                            return true;
-                          })
-                          .reduce((sum, e) => sum + e.totalAmount, 0).toFixed(2)}
+                        {filteredCashCollections.reduce((sum, e) => sum + e.totalAmount, 0).toFixed(2)}
                       </td>
                       <td className="border px-4 py-3"></td>
                     </tr>
@@ -4091,22 +4578,81 @@ const AdminAccountStatement: React.FC = () => {
             <div>
               <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
                 <h2 className="text-xl font-semibold">Account Payments</h2>
-                <div className="flex gap-2 flex-wrap">
+                <div className="flex gap-2 flex-wrap items-center">
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">From:</label>
+                    <input
+                      type="date"
+                      value={paymentFilterStart}
+                      onChange={(e) => setPaymentFilterStart(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  <div className="flex gap-2 items-center">
+                    <label className="text-sm text-gray-600">To:</label>
+                    <input
+                      type="date"
+                      value={paymentFilterEnd}
+                      onChange={(e) => setPaymentFilterEnd(e.target.value)}
+                      className="border rounded px-2 py-1 text-sm"
+                    />
+                  </div>
+                  {(paymentFilterStart || paymentFilterEnd) && (
+                    <button
+                      onClick={() => { setPaymentFilterStart(''); setPaymentFilterEnd(''); }}
+                      className="px-3 py-1 text-sm bg-gray-200 hover:bg-gray-300 rounded"
+                    >
+                      Clear Dates
+                    </button>
+                  )}
                   <button
-                    onClick={() => openPaymentModal('', '', 'customer')}
+                    onClick={exportPaymentsToExcel}
                     className="flex items-center gap-2 bg-green-600 text-white px-3 py-2 rounded hover:bg-green-700 text-sm"
                   >
-                    <PlusCircle size={16} /> Payment In (Customer)
+                    <Download size={16} /> {!isMobile && 'Export Excel'}
                   </button>
                   <button
-                    onClick={() => openPaymentModal('', '', 'supplier')}
-                    className="flex items-center gap-2 bg-blue-600 text-white px-3 py-2 rounded hover:bg-blue-700 text-sm"
+                    onClick={exportPaymentsToPDF}
+                    className="flex items-center gap-2 bg-red-600 text-white px-3 py-2 rounded hover:bg-red-700 text-sm"
                   >
-                    <PlusCircle size={16} /> Payment Out (Supplier)
+                    <FileDown size={16} /> {!isMobile && 'Export PDF'}
                   </button>
                 </div>
               </div>
-              {accountPayments.length === 0 ? (
+
+              <div className="flex gap-2 flex-wrap items-center mb-3">
+                <input
+                  type="text"
+                  placeholder="Search by account, method or notes..."
+                  value={paymentSearch}
+                  onChange={(e) => setPaymentSearch(e.target.value)}
+                  className="border rounded px-3 py-1.5 text-sm w-56"
+                />
+                <div className="flex gap-1">
+                  {(['all', 'in', 'out'] as const).map(f => (
+                    <button
+                      key={f}
+                      onClick={() => setPaymentDirectionFilter(f)}
+                      className={`px-3 py-1 text-sm rounded border ${
+                        paymentDirectionFilter === f
+                          ? 'bg-blue-600 text-white border-blue-600'
+                          : 'bg-white text-gray-600 border-gray-300 hover:bg-gray-50'
+                      }`}
+                    >
+                      {f === 'all' ? 'All' : f === 'in' ? 'Received' : 'Paid'}
+                    </button>
+                  ))}
+                </div>
+                {(paymentSearch || paymentDirectionFilter !== 'all') && (
+                  <button
+                    onClick={() => { setPaymentSearch(''); setPaymentDirectionFilter('all'); }}
+                    className="px-2 py-1 text-sm text-gray-500 hover:text-gray-700 underline"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              {filteredPayments.length === 0 ? (
                 <div className="text-center py-12 text-gray-400">
                   <p className="text-lg">No payments recorded yet.</p>
                   <p className="text-sm mt-1">Use the buttons above or the "+ Payment" button on any customer/supplier row.</p>
@@ -4126,7 +4672,7 @@ const AdminAccountStatement: React.FC = () => {
                       </tr>
                     </thead>
                     <tbody>
-                      {accountPayments.map(p => (
+                      {filteredPayments.map(p => (
                         <tr key={p.id} className="border-b hover:bg-gray-50">
                           <td className="border px-3 py-2 text-sm">{p.date}</td>
                           <td className="border px-3 py-2 text-sm font-medium">{p.accountName}</td>
@@ -4149,7 +4695,7 @@ const AdminAccountStatement: React.FC = () => {
                     <tfoot className="bg-gray-100 font-bold">
                       <tr>
                         <td colSpan={5} className="border px-3 py-3">TOTAL</td>
-                        <td className="border px-3 py-3 text-right text-green-700">{accountPayments.reduce((s, p) => s + p.amount, 0).toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-green-700">{filteredPayments.reduce((s, p) => s + p.amount, 0).toFixed(2)}</td>
                         <td className="border px-3 py-3"></td>
                       </tr>
                     </tfoot>
