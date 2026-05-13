@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, AlertTriangle, Package, FileDown } from 'lucide-react';
+import { Trash2, Plus, Edit3, AlertTriangle, Package, FileDown, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useToast } from '@/hooks/use-toast';
@@ -31,6 +31,9 @@ const AdminRawMaterials: React.FC = () => {
   const [isAddingMaterial, setIsAddingMaterial] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState<RawMaterial | null>(null);
   const [filterLowStock, setFilterLowStock] = useState(false);
+  const [damagedMaterial, setDamagedMaterial] = useState<RawMaterial | null>(null);
+  const [damagedQuantity, setDamagedQuantity] = useState('');
+  const [damagedReason, setDamagedReason] = useState('');
   const [newMaterial, setNewMaterial] = useState({
     name: '',
     unit: 'kg' as const,
@@ -272,6 +275,89 @@ const AdminRawMaterials: React.FC = () => {
     } catch (error) {
       console.error('Error deleting material:', error);
       toast({ title: "Error", description: "Failed to delete material", variant: "destructive" });
+    }
+  };
+
+  const handleDamagedAdjustment = async () => {
+    if (!damagedMaterial || !damagedQuantity || !user?.storeId) {
+      toast({ 
+        title: "Error", 
+        description: "Please enter a quantity", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    const qty = parseFloat(damagedQuantity);
+    if (qty <= 0) {
+      toast({ 
+        title: "Error", 
+        description: "Quantity must be greater than 0", 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    if (qty > damagedMaterial.currentStock) {
+      toast({ 
+        title: "Error", 
+        description: `Cannot mark ${qty} as damaged. Current stock is only ${damagedMaterial.currentStock} ${damagedMaterial.unit}`, 
+        variant: "destructive" 
+      });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const newStock = damagedMaterial.currentStock - qty;
+      const materialRef = doc(db, 'rawMaterials', damagedMaterial.id);
+
+      await updateDoc(materialRef, {
+        currentStock: newStock,
+        updatedAt: new Date().toISOString(),
+      });
+
+      // Update local state
+      setMaterials(materials.map(m => 
+        m.id === damagedMaterial.id 
+          ? { ...m, currentStock: newStock, updatedAt: new Date().toISOString() }
+          : m
+      ));
+
+      // Audit log
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'adjust',
+        'rawMaterial',
+        damagedMaterial.id,
+        { 
+          adjustmentType: 'damaged',
+          quantity: qty,
+          reason: damagedReason || 'Damaged/Wastage',
+          oldStock: damagedMaterial.currentStock,
+          newStock: newStock
+        },
+        user.storeId
+      );
+
+      toast({
+        title: "Success",
+        description: `Marked ${qty} ${damagedMaterial.unit} of ${damagedMaterial.name} as damaged. Stock reduced to ${newStock}.`
+      });
+
+      // Reset and close
+      setDamagedMaterial(null);
+      setDamagedQuantity('');
+      setDamagedReason('');
+    } catch (error) {
+      console.error('Error adjusting damaged stock:', error);
+      toast({ 
+        title: "Error", 
+        description: "Failed to adjust stock", 
+        variant: "destructive" 
+      });
     }
   };
 
@@ -564,6 +650,14 @@ const AdminRawMaterials: React.FC = () => {
                         <Button
                           variant="outline"
                           size="sm"
+                          className="text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                          onClick={() => setDamagedMaterial(material)}
+                        >
+                          <AlertCircle className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
                           onClick={() => handleDeleteMaterial(material.id)}
                         >
                           <Trash2 className="h-4 w-4" />
@@ -764,6 +858,60 @@ const AdminRawMaterials: React.FC = () => {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setEditingMaterial(null)}>Cancel</Button>
                 <Button onClick={handleUpdateMaterial}>Update Material</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {/* Damaged Stock Adjustment Dialog */}
+        {damagedMaterial && (
+          <Dialog open={!!damagedMaterial} onOpenChange={() => setDamagedMaterial(null)}>
+            <DialogContent className="max-w-md">
+              <DialogHeader>
+                <DialogTitle className="flex items-center gap-2">
+                  <AlertCircle className="h-5 w-5 text-orange-600" />
+                  Mark as Damaged/Wastage
+                </DialogTitle>
+                <DialogDescription>
+                  {damagedMaterial.name} (Current stock: {damagedMaterial.currentStock} {damagedMaterial.unit})
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div>
+                  <Label htmlFor="damaged-qty">Quantity to Mark as Damaged *</Label>
+                  <Input
+                    id="damaged-qty"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    max={damagedMaterial.currentStock}
+                    value={damagedQuantity}
+                    onChange={(e) => setDamagedQuantity(e.target.value)}
+                    placeholder={`Max: ${damagedMaterial.currentStock}`}
+                  />
+                  <p className="text-xs text-gray-500 mt-1">{damagedMaterial.unit}</p>
+                </div>
+                <div>
+                  <Label htmlFor="damaged-reason">Reason (Optional)</Label>
+                  <Input
+                    id="damaged-reason"
+                    value={damagedReason}
+                    onChange={(e) => setDamagedReason(e.target.value)}
+                    placeholder="e.g., Spoiled, Broken, Expired, Weather damage"
+                  />
+                </div>
+                <Alert>
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    This will reduce the stock by {damagedQuantity || '0'} {damagedMaterial.unit} and log it as damaged/wastage.
+                  </AlertDescription>
+                </Alert>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDamagedMaterial(null)}>Cancel</Button>
+                <Button onClick={handleDamagedAdjustment} className="bg-orange-600 hover:bg-orange-700">
+                  Confirm Damage
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
