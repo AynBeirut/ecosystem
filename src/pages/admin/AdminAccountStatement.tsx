@@ -63,6 +63,7 @@ interface ProductSummary {
 
 interface PurchaseRecord {
   id: string;
+  supplierId?: string;
   date: string;
   supplier: string;
   amount: number;
@@ -100,6 +101,7 @@ interface ExpenseRecord {
 
 interface SalesRecord {
   id: string;
+  customerId?: string;
   date: string;
   customer: string;
   invoiceNumber?: string;
@@ -611,6 +613,7 @@ const AdminAccountStatement: React.FC = () => {
         
         purchasesList.push({
           id: doc.id,
+          supplierId: purchase.supplierId || undefined,
           date: dateStr || '',
           supplier: supplierName,
           amount: purchase.totalCost || purchase.total || 0,
@@ -722,6 +725,7 @@ const AdminAccountStatement: React.FC = () => {
         
         salesList.push({
           id: doc.id,
+          customerId: order.customerId || undefined,
           date: dateStr,
           customer: order.customerName || 'Walk-in Customer',
           invoiceNumber: order.invoiceNumber,
@@ -1119,6 +1123,7 @@ const AdminAccountStatement: React.FC = () => {
       const db = getFirestore();
       const transactions: DetailedTransaction[] = [];
       let runningBalance = 0;
+      let phone = '';
       
       if (type === 'supplier') {
         // Fetch all purchases for this supplier
@@ -1195,7 +1200,7 @@ const AdminAccountStatement: React.FC = () => {
         allTxns.forEach(txn => {
           runningBalance += txn.debit - txn.credit;
           transactions.push({
-            date: new Date(txn.date).toLocaleDateString('en-GB'),
+            date: toStatementDateLabel(txn.date),
             ref: txn.ref,
             description: txn.description,
             debit: txn.debit,
@@ -1214,14 +1219,14 @@ const AdminAccountStatement: React.FC = () => {
         );
         const ordersSnap = await getDocs(ordersQuery);
         
-        // Fetch all sales returns for this customer
-        const returnsQuery = query(
-          collection(db, 'salesReturns'),
+        // Fetch account payments for this customer (payments recorded outside of orders)
+        const acctPaymentsQuery = query(
+          collection(db, 'accountPayments'),
           where('storeId', '==', user.storeId),
-          where('customerId', '==', id),
-          where('status', '==', 'completed')
+          where('accountId', '==', id),
+          where('accountType', '==', 'customer')
         );
-        const returnsSnap = await getDocs(returnsQuery);
+        const acctPaymentsSnap = await getDocs(acctPaymentsQuery);
         
         // Collect all transactions
         const allTxns: StatementTxn[] = [];
@@ -1229,17 +1234,25 @@ const AdminAccountStatement: React.FC = () => {
         ordersSnap.forEach(doc => {
           const order = doc.data();
           
-          // Skip cancelled orders
-          if (order.status === 'cancelled') {
+          // Match account statement page rules: count only finalized sale statuses
+          if (!isCountedSaleStatus(String(order.status || ''))) {
             return;
+          }
+
+          // Capture phone from the first available order
+          if (!phone) {
+            phone = order.customerPhone || order.deliveryPhone || order.phone || '';
           }
           
           const total = order.totalAmount || order.total || 0;
           const vat = order.taxAmount || order.vat || 0;
           const net = total - vat; // Net = Total - VAT
           
+          const orderDate = normalizeDateString(order.createdAt || order.date);
+          if (!orderDate) return;
+
           allTxns.push({
-            date: order.createdAt || order.date || '',
+            date: orderDate,
             type: 'order',
             ref: order.invoiceNumber || order.orderNumber || doc.id.substring(0, 8),
             description: `Sales Inv.${order.invoiceNumber || doc.id.substring(0, 6)}`,
@@ -1251,20 +1264,27 @@ const AdminAccountStatement: React.FC = () => {
           });
         });
         
-        returnsSnap.forEach(doc => {
-          const returnDoc = doc.data();
-          const creditAmount = returnDoc.refundAmount || returnDoc.subtotal || 0;
-          
+        // Add account payments as separate credit/debit lines
+        acctPaymentsSnap.forEach(doc => {
+          const payment = doc.data();
+          if (payment.direction !== 'in') return;
+          const amount = payment.orderAllocation
+            ? Math.max(0, toFiniteNumber(payment.orderAllocation.remainingAmount, 0))
+            : Math.max(0, toFiniteNumber(payment.amount, 0));
+          if (amount <= BALANCE_EPSILON) return;
+          const paymentDate = normalizeDateString(payment.date || payment.createdAt);
+          if (!paymentDate) return;
+          // Match customer page ledger: show only unapplied incoming payments as separate credit rows.
           allTxns.push({
-            date: returnDoc.returnDate || returnDoc.date || returnDoc.createdAt || '',
-            type: 'return',
-            ref: returnDoc.returnNumber || doc.id.substring(0, 8),
-            description: `Return Credit`,
+            date: paymentDate,
+            type: 'payment',
+            ref: doc.id.substring(0, 8),
+            description: `Payment - ${payment.method || 'cash'}`,
             debit: 0,
             net: 0,
             vat: 0,
-            credit: creditAmount,
-            data: returnDoc
+            credit: amount,
+            data: payment
           });
         });
         
@@ -1275,7 +1295,7 @@ const AdminAccountStatement: React.FC = () => {
         allTxns.forEach(txn => {
           runningBalance += txn.debit - txn.credit;
           transactions.push({
-            date: new Date(txn.date).toLocaleDateString('en-GB'),
+            date: toStatementDateLabel(txn.date),
             ref: txn.ref,
             description: txn.description,
             debit: txn.debit,
@@ -1292,7 +1312,7 @@ const AdminAccountStatement: React.FC = () => {
         accountName: name,
         currency: 'US',
         asOfDate: new Date().toLocaleDateString('en-GB'),
-        phone: '',
+        phone,
         attn: '',
         openingBalance: 0,
         transactions,
@@ -1372,10 +1392,11 @@ const AdminAccountStatement: React.FC = () => {
     return words.trim();
   };
 
-  const exportDetailedStatementToPDF = () => {
+  const exportDetailedStatementToPDF = async () => {
     if (!detailedStatement) return;
     
     const doc = new jsPDF();
+    await initArabicPDF(doc);
     let currentPage = 1;
     
     // Page number
@@ -1395,8 +1416,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.text(detailedStatement.accountNo, 50, y);
     y += 5;
     doc.text('A/c name:', 20, y);
-    const cleanAccName = cleanTextForPDF(detailedStatement.accountName);
-    doc.text(cleanAccName, 50, y);
+    writeText(doc, detailedStatement.accountName, 50, y);
     y += 5;
     doc.text('Attn:', 20, y);
     doc.text(detailedStatement.attn || '', 50, y);
@@ -1447,7 +1467,7 @@ const AdminAccountStatement: React.FC = () => {
       
       doc.text(txn.date, 20, y);
       doc.text(txn.ref.substring(0, 12), 40, y);
-      doc.text(txn.description.substring(0, 20), 65, y);
+      writeText(doc, txn.description.substring(0, 20), 65, y);
       if (txn.debit > 0) doc.text(txn.debit.toFixed(2), 105, y, { align: 'right' });
       if (txn.netVat > 0) doc.text(txn.netVat.toFixed(2), 120, y, { align: 'right' });
       if (txn.credit > 0) doc.text(txn.credit.toFixed(2), 150, y, { align: 'right' });
@@ -2313,7 +2333,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.save('customers_statement.pdf');
   };
 
-  const exportSuppliersToPDF = () => {
+  const exportSuppliersToPDF = async () => {
     const doc = new jsPDF();
     let quarantinedExportRows = 0;
 
@@ -2332,6 +2352,7 @@ const AdminAccountStatement: React.FC = () => {
         balance,
       };
     }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
+    await initArabicPDF(doc);
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text('SUPPLIER BALANCES STATEMENT', 105, 15, { align: 'center' });
@@ -2360,8 +2381,7 @@ const AdminAccountStatement: React.FC = () => {
         doc.addPage();
         y = 20;
       }
-      const cleanName = cleanTextForPDF(supplier.name).substring(0, 30);
-      doc.text(cleanName, 20, y);
+      writeText(doc, supplier.name.substring(0, 30), 20, y);
       doc.text(`$${supplier.totalPurchases.toFixed(2)}`, 90, y);
       doc.text(`$${supplier.totalPayments.toFixed(2)}`, 130, y);
       doc.text(`$${supplier.balance.toFixed(2)}`, 170, y);
@@ -2392,9 +2412,10 @@ const AdminAccountStatement: React.FC = () => {
     doc.save('suppliers_statement.pdf');
   };
 
-  const exportProductsToPDF = () => {
+  const exportProductsToPDF = async () => {
     const { summaries: filteredProducts } = getFilteredProductSummaries();
     const doc = new jsPDF();
+    await initArabicPDF(doc);
     doc.setFontSize(16);
     doc.setFont(undefined, 'bold');
     doc.text('PRODUCTS SUMMARY REPORT', 105, 15, { align: 'center' });
@@ -2431,7 +2452,7 @@ const AdminAccountStatement: React.FC = () => {
       if (y > 35) y += 5;
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
-      doc.text(`GROUP: ${category.toUpperCase()}`, 20, y);
+      writeText(doc, `GROUP: ${category.toUpperCase()}`, 20, y);
       y += 5;
       
       // Column headers
@@ -2455,10 +2476,8 @@ const AdminAccountStatement: React.FC = () => {
           doc.addPage();
           y = 20;
         }
-        const cleanName = cleanTextForPDF(product.name).substring(0, 30);
-        doc.text(cleanName, 20, y);
-        const cleanCat = cleanTextForPDF(product.category).substring(0, 15);
-        doc.text(cleanCat, 90, y);
+        writeText(doc, product.name.substring(0, 30), 20, y);
+        writeText(doc, product.category.substring(0, 15), 90, y);
         doc.text(product.totalSold.toString(), 130, y, { align: 'right' });
         doc.text(`$${product.totalRevenue.toFixed(2)}`, 170, y, { align: 'right' });
         y += 6;
@@ -2473,7 +2492,7 @@ const AdminAccountStatement: React.FC = () => {
       y += 5;
       doc.setFontSize(9);
       doc.setFont(undefined, 'bold');
-      doc.text(`SUBTOTAL - ${category}`, 20, y);
+      writeText(doc, `SUBTOTAL - ${category}`, 20, y);
       doc.text(categoryTotalSold.toString(), 130, y, { align: 'right' });
       doc.text(`$${categoryTotalRevenue.toFixed(2)}`, 170, y, { align: 'right' });
       y += 8;
@@ -2500,8 +2519,9 @@ const AdminAccountStatement: React.FC = () => {
     doc.save('products_summary.pdf');
   };
 
-  const exportPurchasesToPDF = () => {
+  const exportPurchasesToPDF = async () => {
     const doc = new jsPDF('l', 'mm', 'a4');
+    await initArabicPDF(doc);
     const rows = buildPurchaseStatementRows(purchases);
 
     const totalDebit = rows.reduce((sum, row) => sum + row.debit, 0);
@@ -2528,7 +2548,7 @@ const AdminAccountStatement: React.FC = () => {
       body: rows.map((row) => [
         row.dateLabel,
         row.ref,
-        cleanTextForPDF(row.description),
+        row.description,
         row.debit.toFixed(2),
         row.net.toFixed(2),
         row.vat.toFixed(2),
@@ -2569,8 +2589,9 @@ const AdminAccountStatement: React.FC = () => {
     doc.save('purchases_history.pdf');
   };
 
-  const exportExpensesToPDF = () => {
+  const exportExpensesToPDF = async () => {
     const doc = new jsPDF();
+    await initArabicPDF(doc);
     let quarantinedExportRows = 0;
 
     const validExpenses = expenses.map((expense) => {
@@ -2621,8 +2642,7 @@ const AdminAccountStatement: React.FC = () => {
       if (y > 35) y += 5;
       doc.setFontSize(10);
       doc.setFont(undefined, 'bold');
-      const cleanCategory = cleanTextForPDF(category);
-      doc.text(`CATEGORY: ${cleanCategory.toUpperCase()}`, 20, y);
+      writeText(doc, `CATEGORY: ${category.toUpperCase()}`, 20, y);
       y += 5;
       
       // Column headers
@@ -2646,10 +2666,8 @@ const AdminAccountStatement: React.FC = () => {
           y = 20;
         }
         doc.text(expense.date, 20, y);
-        const cleanCat = cleanTextForPDF(expense.category).substring(0, 12);
-        doc.text(cleanCat, 50, y);
-        const cleanDesc = cleanTextForPDF(expense.description).substring(0, 28);
-        doc.text(cleanDesc, 90, y);
+        writeText(doc, expense.category.substring(0, 12), 50, y);
+        writeText(doc, expense.description.substring(0, 28), 90, y);
         doc.text(`$${expense.amount.toFixed(2)}`, 170, y, { align: 'right' });
         y += 5;
         
@@ -2662,7 +2680,7 @@ const AdminAccountStatement: React.FC = () => {
       y += 4;
       doc.setFontSize(9);
       doc.setFont(undefined, 'bold');
-      doc.text(`SUBTOTAL - ${category}`, 90, y);
+      writeText(doc, `SUBTOTAL - ${category}`, 90, y);
       doc.text(`$${categoryTotal.toFixed(2)}`, 170, y, { align: 'right' });
       y += 7;
       
@@ -3061,6 +3079,14 @@ const AdminAccountStatement: React.FC = () => {
     return Math.max(0, toFiniteNumber(payment.amount, 0));
   };
 
+  const toStatementDateLabel = (value: unknown): string => {
+    const normalized = normalizeDateString(value as string | number | Date | { toDate?: () => Date } | null | undefined);
+    if (!normalized) return 'N/A';
+    const parsed = new Date(normalized);
+    if (Number.isNaN(parsed.getTime())) return 'N/A';
+    return parsed.toLocaleDateString('en-GB');
+  };
+
   const getCustomerMetrics = (customer: CustomerBalance) => {
     const invoices = inRangeCustomerSalesMap.get(customer.name) || [];
     const payments = inRangeCustomerPaymentsMap.get(customer.id) || [];
@@ -3382,10 +3408,10 @@ const AdminAccountStatement: React.FC = () => {
                             <td className="border px-3 py-2 text-center">
                               <div className="flex gap-1 justify-center flex-wrap">
                                 <button
-                                  onClick={() => setExpandedCustomerLedger(isExpanded ? null : customer.id)}
+                                  onClick={() => generateDetailedStatement('customer', customer.id, customer.name)}
                                   className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
                                 >
-                                  {isExpanded ? 'Hide' : 'View Ledger'}
+                                  Ledger
                                 </button>
                                 <button
                                   onClick={() => openPaymentModal(customer.id, customer.name, 'customer')}
@@ -3396,100 +3422,6 @@ const AdminAccountStatement: React.FC = () => {
                               </div>
                             </td>
                           </tr>
-                          {isExpanded && (
-                            <tr>
-                              <td colSpan={6} className="border px-0 py-0 bg-gray-50">
-                                <div className="px-6 py-3">
-                                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Ledger — {customer.name}</p>
-                                  {(() => {
-                                    const customerInvoices = metrics.invoices;
-                                    const acctPmts = metrics.payments;
-                                    const invoiceCreditTotal = customerInvoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.amountPaid, 0), 0);
-                                    const unappliedCreditTotal = acctPmts.reduce((sum, payment) => sum + getUnappliedPaymentAmount(payment), 0);
-                                    const ledgerCreditTotal = invoiceCreditTotal + unappliedCreditTotal;
-                                    const ledgerBalanceTotal = metrics.totalInvoiced - ledgerCreditTotal;
-                                    if (customerInvoices.length === 0 && acctPmts.length === 0) {
-                                      return <p className="text-xs text-gray-400 italic">No invoice records found for this customer.</p>;
-                                    }
-                                    return (
-                                      <table className="min-w-full text-xs border-collapse">
-                                        <thead className="bg-white">
-                                          <tr>
-                                            <th className="border px-2 py-1 text-left">Date</th>
-                                            <th className="border px-2 py-1 text-left">Ref / Type</th>
-                                            <th className="border px-2 py-1 text-right">Debit (Invoice)</th>
-                                            <th className="border px-2 py-1 text-right">Credit (Payment)</th>
-                                            <th className="border px-2 py-1 text-right">Running Balance</th>
-                                            <th className="border px-2 py-1 text-left">Status</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {(() => {
-                                            let running = 0;
-                                            const rows: React.ReactNode[] = [];
-                                            // Merge invoices and account payments, sort by date
-                                            const combined = [
-                                              ...customerInvoices.map(inv => ({ date: inv.date, type: 'invoice' as const, data: inv })),
-                                              ...acctPmts.map(p => ({ date: p.date, type: 'payment' as const, data: p })),
-                                            ].sort((a, b) => new Date(String(a.date)).getTime() - new Date(String(b.date)).getTime());
-
-                                            combined.forEach((item, idx) => {
-                                              if (item.type === 'invoice') {
-                                                const inv = item.data as SalesRecord;
-                                                const invoiceDebit = toFiniteNumber(inv.total, 0);
-                                                const invoiceCredit = toFiniteNumber(inv.amountPaid, 0);
-                                                running += invoiceDebit - invoiceCredit;
-                                                rows.push(
-                                                  <tr key={`inv-${inv.id}`} className="border-b hover:bg-white">
-                                                    <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
-                                                    <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
-                                                    <td className="border px-2 py-1 text-right font-semibold text-blue-700">{invoiceDebit.toFixed(2)}</td>
-                                                    <td className="border px-2 py-1 text-right text-green-600">{invoiceCredit > 0 ? invoiceCredit.toFixed(2) : '-'}</td>
-                                                    <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
-                                                    <td className="border px-2 py-1">
-                                                      <span className={`px-1 py-0.5 rounded text-xs ${
-                                                        inv.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
-                                                        inv.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-700' :
-                                                        'bg-red-100 text-red-700'
-                                                      }`}>{inv.paymentStatus || 'unpaid'}</span>
-                                                    </td>
-                                                  </tr>
-                                                );
-                                              } else {
-                                                const p = item.data as (typeof accountPayments)[number];
-                                                const unappliedAmount = getUnappliedPaymentAmount(p);
-                                                running -= unappliedAmount;
-                                                rows.push(
-                                                  <tr key={`pmt-${p.id || idx}`} className="border-b bg-green-50 hover:bg-green-100">
-                                                    <td className="border px-2 py-1">{toDateLabel(p.date)}</td>
-                                                    <td className="border px-2 py-1 text-green-700 font-medium">Payment ({p.method}){p.notes ? ` — ${p.notes}` : ''}</td>
-                                                    <td className="border px-2 py-1 text-right">-</td>
-                                                    <td className="border px-2 py-1 text-right text-green-700 font-bold">{unappliedAmount.toFixed(2)}</td>
-                                                    <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
-                                                    <td className="border px-2 py-1"><span className="px-1 py-0.5 rounded text-xs bg-green-100 text-green-700">payment</span></td>
-                                                  </tr>
-                                                );
-                                              }
-                                            });
-                                            return rows;
-                                          })()}
-                                        </tbody>
-                                        <tfoot className="bg-white font-semibold">
-                                          <tr>
-                                            <td colSpan={2} className="border px-2 py-1">Total</td>
-                                            <td className="border px-2 py-1 text-right text-blue-700">{metrics.totalInvoiced.toFixed(2)}</td>
-                                            <td className="border px-2 py-1 text-right text-green-600">{ledgerCreditTotal.toFixed(2)}</td>
-                                            <td className={`border px-2 py-1 text-right ${ledgerBalanceTotal > 0 ? 'text-orange-600' : 'text-green-600'}`}>{ledgerBalanceTotal.toFixed(2)}</td>
-                                            <td className="border px-2 py-1"></td>
-                                          </tr>
-                                        </tfoot>
-                                      </table>
-                                    );
-                                  })()}
-                                </div>
-                              </td>
-                            </tr>
-                          )}
                         </React.Fragment>
                       );
                     })}
@@ -3968,8 +3900,7 @@ const AdminAccountStatement: React.FC = () => {
                         <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No purchases found{(filterStartDate || filterEndDate || purchaseSearch || purchaseBalanceFilter !== 'all') ? ' for the selected filters' : ''}.</td></tr>
                       )}
                       {filteredSupplierAccounts.map(supplier => (
-                        <React.Fragment key={supplier.name}>
-                          <tr className={`border-b hover:bg-gray-50 ${expandedPurchaseSupplier === supplier.name ? 'bg-orange-50' : ''}`}>
+                        <tr key={supplier.name} className="border-b hover:bg-gray-50">
                             <td className="border px-3 py-2 font-medium">{supplier.name}</td>
                             <td className="border px-3 py-2 text-right">{supplier.invoices.length}</td>
                             <td className="border px-3 py-2 text-right font-semibold text-orange-700">{supplier.totalDebit.toFixed(2)}</td>
@@ -3980,71 +3911,18 @@ const AdminAccountStatement: React.FC = () => {
                             </td>
                             <td className="border px-3 py-2 text-center">
                               <button
-                                onClick={() => setExpandedPurchaseSupplier(expandedPurchaseSupplier === supplier.name ? null : supplier.name)}
-                                className="px-2 py-1 text-xs bg-orange-100 hover:bg-orange-200 text-orange-700 rounded font-medium"
+                                onClick={() => {
+                                  const found = supplier.invoices.find((p) => p.supplierId);
+                                  const supplierId = found?.supplierId || suppliers.find(s => s.name === supplier.name)?.id;
+                                  if (!supplierId) return;
+                                  generateDetailedStatement('supplier', supplierId, supplier.name);
+                                }}
+                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
                               >
-                                {expandedPurchaseSupplier === supplier.name ? 'Hide' : 'View Ledger'}
+                                Ledger
                               </button>
                             </td>
                           </tr>
-                          {expandedPurchaseSupplier === supplier.name && (
-                            <tr>
-                              <td colSpan={6} className="border px-0 py-0 bg-gray-50">
-                                <div className="px-6 py-3">
-                                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Ledger — {supplier.name}</p>
-                                  <table className="min-w-full text-xs border-collapse">
-                                    <thead className="bg-white">
-                                      <tr>
-                                        <th className="border px-2 py-1 text-left">Date</th>
-                                        <th className="border px-2 py-1 text-left">Ref</th>
-                                        <th className="border px-2 py-1 text-left">Items</th>
-                                        <th className="border px-2 py-1 text-right">Debit (Invoice)</th>
-                                        <th className="border px-2 py-1 text-right">Credit (Paid)</th>
-                                        <th className="border px-2 py-1 text-right">Running Balance</th>
-                                        <th className="border px-2 py-1 text-left">Status</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {(() => {
-                                        let running = 0;
-                                        return [...supplier.invoices]
-                                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                                          .map(inv => {
-                                            running += (inv.amount - inv.amountPaid);
-                                            return (
-                                              <tr key={inv.id} className="border-b hover:bg-white">
-                                                <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
-                                                <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
-                                                <td className="border px-2 py-1">{inv.items?.length ?? 0} item(s)</td>
-                                                <td className="border px-2 py-1 text-right font-semibold text-orange-700">{inv.amount.toFixed(2)}</td>
-                                                <td className="border px-2 py-1 text-right text-green-600">{inv.amountPaid.toFixed(2)}</td>
-                                                <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-red-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
-                                                <td className="border px-2 py-1">
-                                                  <span className={`px-1 py-0.5 rounded text-xs ${
-                                                    inv.status === 'received' || inv.status === 'completed' ? 'bg-green-100 text-green-700' :
-                                                    inv.status === 'confirmed' ? 'bg-blue-100 text-blue-700' : 'bg-yellow-100 text-yellow-700'
-                                                  }`}>{inv.status}</span>
-                                                </td>
-                                              </tr>
-                                            );
-                                          });
-                                      })()}
-                                    </tbody>
-                                    <tfoot className="bg-white font-semibold">
-                                      <tr>
-                                        <td colSpan={3} className="border px-2 py-1">Total</td>
-                                        <td className="border px-2 py-1 text-right text-orange-700">{supplier.totalDebit.toFixed(2)}</td>
-                                        <td className="border px-2 py-1 text-right text-green-600">{supplier.totalCredit.toFixed(2)}</td>
-                                        <td className={`border px-2 py-1 text-right ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{supplier.balance.toFixed(2)}</td>
-                                        <td className="border px-2 py-1"></td>
-                                      </tr>
-                                    </tfoot>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
                       ))}
                     </tbody>
                     <tfoot className="bg-gray-100 font-bold">
@@ -4231,16 +4109,20 @@ const AdminAccountStatement: React.FC = () => {
               totalDebit: number;
               totalCredit: number;
               balance: number;
+              customerId?: string;
             }>();
             filteredSales.forEach(s => {
               if (!customerMap.has(s.customer)) {
-                customerMap.set(s.customer, { name: s.customer, invoices: [], totalDebit: 0, totalCredit: 0, balance: 0 });
+                customerMap.set(s.customer, { name: s.customer, invoices: [], totalDebit: 0, totalCredit: 0, balance: 0, customerId: s.customerId });
               }
               const entry = customerMap.get(s.customer)!;
               entry.invoices.push(s);
               entry.totalDebit += s.total;
               entry.totalCredit += s.amountPaid;
               entry.balance += (s.total - s.amountPaid);
+              if (!entry.customerId && s.customerId) {
+                entry.customerId = s.customerId;
+              }
             });
             const customerAccounts = Array.from(customerMap.values()).sort((a, b) => b.balance - a.balance);
             const filteredCustomerAccounts = customerAccounts.filter(account => {
@@ -4365,8 +4247,7 @@ const AdminAccountStatement: React.FC = () => {
                         <tr><td colSpan={6} className="border px-4 py-6 text-center text-gray-500">No sales found{(filterStartDate || filterEndDate || filterCustomer || salesSearch || salesBalanceFilter !== 'all') ? ' for the selected filters' : ''}.</td></tr>
                       )}
                       {filteredCustomerAccounts.map(customer => (
-                        <React.Fragment key={customer.name}>
-                          <tr className={`border-b hover:bg-gray-50 ${expandedSalesCustomer === customer.name ? 'bg-blue-50' : ''}`}>
+                          <tr key={customer.name} className="border-b hover:bg-gray-50">
                             <td className="border px-3 py-2 font-medium">{customer.name}</td>
                             <td className="border px-3 py-2 text-right">{customer.invoices.length}</td>
                             <td className="border px-3 py-2 text-right font-semibold text-blue-700">{customer.totalDebit.toFixed(2)}</td>
@@ -4377,70 +4258,17 @@ const AdminAccountStatement: React.FC = () => {
                             </td>
                             <td className="border px-3 py-2 text-center">
                               <button
-                                onClick={() => setExpandedSalesCustomer(expandedSalesCustomer === customer.name ? null : customer.name)}
+                                onClick={() => {
+                                  const customerId = customer.customerId || customers.find(c => c.name === customer.name)?.id;
+                                  if (!customerId) return;
+                                  generateDetailedStatement('customer', customerId, customer.name);
+                                }}
                                 className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
                               >
-                                {expandedSalesCustomer === customer.name ? 'Hide' : 'View Ledger'}
+                                Ledger
                               </button>
                             </td>
                           </tr>
-                          {expandedSalesCustomer === customer.name && (
-                            <tr>
-                              <td colSpan={6} className="border px-0 py-0 bg-gray-50">
-                                <div className="px-6 py-3">
-                                  <p className="text-xs font-semibold text-gray-500 uppercase mb-2">Ledger — {customer.name}</p>
-                                  <table className="min-w-full text-xs border-collapse">
-                                    <thead className="bg-white">
-                                      <tr>
-                                        <th className="border px-2 py-1 text-left">Date</th>
-                                        <th className="border px-2 py-1 text-left">Invoice Ref</th>
-                                        <th className="border px-2 py-1 text-right">Debit (Invoice)</th>
-                                        <th className="border px-2 py-1 text-right">Credit (Paid)</th>
-                                        <th className="border px-2 py-1 text-right">Running Balance</th>
-                                        <th className="border px-2 py-1 text-left">Payment Status</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {(() => {
-                                        let running = 0;
-                                        return [...customer.invoices]
-                                          .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-                                          .map(inv => {
-                                            running += (inv.total - inv.amountPaid);
-                                            return (
-                                              <tr key={inv.id} className="border-b hover:bg-white">
-                                                <td className="border px-2 py-1">{toDateLabel(inv.date)}</td>
-                                                <td className="border px-2 py-1">{inv.invoiceNumber || '-'}</td>
-                                                <td className="border px-2 py-1 text-right font-semibold text-blue-700">{inv.total.toFixed(2)}</td>
-                                                <td className="border px-2 py-1 text-right text-green-600">{inv.amountPaid.toFixed(2)}</td>
-                                                <td className={`border px-2 py-1 text-right font-bold ${running > 0 ? 'text-orange-600' : 'text-green-600'}`}>{running.toFixed(2)}</td>
-                                                <td className="border px-2 py-1">
-                                                  <span className={`px-1 py-0.5 rounded text-xs ${
-                                                    inv.paymentStatus === 'paid' ? 'bg-green-100 text-green-700' :
-                                                    inv.paymentStatus === 'partial' ? 'bg-yellow-100 text-yellow-700' :
-                                                    'bg-red-100 text-red-700'
-                                                  }`}>{inv.paymentStatus || 'unpaid'}</span>
-                                                </td>
-                                              </tr>
-                                            );
-                                          });
-                                      })()}
-                                    </tbody>
-                                    <tfoot className="bg-white font-semibold">
-                                      <tr>
-                                        <td colSpan={2} className="border px-2 py-1">Total</td>
-                                        <td className="border px-2 py-1 text-right text-blue-700">{customer.totalDebit.toFixed(2)}</td>
-                                        <td className="border px-2 py-1 text-right text-green-600">{customer.totalCredit.toFixed(2)}</td>
-                                        <td className={`border px-2 py-1 text-right ${customer.balance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{customer.balance.toFixed(2)}</td>
-                                        <td className="border px-2 py-1"></td>
-                                      </tr>
-                                    </tfoot>
-                                  </table>
-                                </div>
-                              </td>
-                            </tr>
-                          )}
-                        </React.Fragment>
                       ))}
                     </tbody>
                     <tfoot className="bg-gray-100 font-bold">
