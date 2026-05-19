@@ -492,12 +492,30 @@ const AdminAccountStatement: React.FC = () => {
         
         if (supplierMap.has(supplierId)) {
           const supplier = supplierMap.get(supplierId)!;
-          // Add credit to payments (returns reduce what we owe, like making a payment)
           supplier.totalPayments += creditAmount;
           supplier.balance = supplier.totalPurchases - supplier.totalPayments;
         }
       });
-      
+
+      // Add standalone payments recorded via Account Statement payment page
+      const supplierPaymentsSnapshot = await getDocs(query(
+        collection(db, 'accountPayments'),
+        where('storeId', '==', user?.storeId),
+        where('accountType', '==', 'supplier'),
+        where('direction', '==', 'out')
+      ));
+      supplierPaymentsSnapshot.forEach(doc => {
+        const pmt = doc.data();
+        const supplierId = pmt.accountId || 'unknown';
+        const amount = toFiniteNumber(pmt.amount, 0);
+        if (amount <= 0) return;
+        if (supplierMap.has(supplierId)) {
+          const supplier = supplierMap.get(supplierId)!;
+          supplier.totalPayments += amount;
+          supplier.balance = supplier.totalPurchases - supplier.totalPayments;
+        }
+      });
+
       setSuppliers(Array.from(supplierMap.values()));
     } catch (error) {
       console.error('Error fetching suppliers:', error);
@@ -1133,7 +1151,7 @@ const AdminAccountStatement: React.FC = () => {
           where('supplierId', '==', id)
         );
         const purchasesSnap = await getDocs(purchasesQuery);
-        
+
         // Fetch all returns for this supplier
         const returnsQuery = query(
           collection(db, 'supplierReturns'),
@@ -1142,7 +1160,16 @@ const AdminAccountStatement: React.FC = () => {
           where('status', '==', 'credited')
         );
         const returnsSnap = await getDocs(returnsQuery);
-        
+
+        // Fetch standalone payments recorded via Account Statement payment page
+        const supplierPaymentsQuery = query(
+          collection(db, 'accountPayments'),
+          where('storeId', '==', user.storeId),
+          where('accountId', '==', id),
+          where('accountType', '==', 'supplier')
+        );
+        const supplierPaymentsSnap = await getDocs(supplierPaymentsQuery);
+
         // Collect all transactions
         const allTxns: StatementTxn[] = [];
         
@@ -1155,22 +1182,41 @@ const AdminAccountStatement: React.FC = () => {
         purchasesSnap.forEach(doc => {
           const purchase = doc.data();
           const total = purchase.totalCost || purchase.total || 0;
-          const subtotal = purchase.subtotal || total; // Use total if no subtotal (no VAT applied)
+          const subtotal = purchase.subtotal || total;
           const vat = purchase.vat || (total - subtotal);
-          
+
           allTxns.push({
             date: purchase.date || purchase.createdAt || '',
             type: 'purchase',
             ref: purchase.invoiceNumber || doc.id.substring(0, 8),
             description: `Pur.Inv.${purchase.invoiceNumber || doc.id.substring(0, 6)}`,
-            debit: purchase.paymentStatus === 'paid' ? Math.max(total, toFiniteNumber(purchase.amountPaid, 0)) : toFiniteNumber(purchase.amountPaid, 0),  // Payment reduces the balance (debit)
+            debit: 0,
             net: subtotal,
             vat: vat,
-            credit: total,  // Purchase increases what we owe (credit)
+            credit: total,
             data: purchase
           });
         });
-        
+
+        // Standalone payments (accountPayments direction=out) appear as debit entries
+        supplierPaymentsSnap.forEach(doc => {
+          const pmt = doc.data();
+          if (pmt.direction !== 'out') return;
+          const amount = toFiniteNumber(pmt.amount, 0);
+          if (amount <= 0) return;
+          allTxns.push({
+            date: pmt.date || pmt.createdAt || '',
+            type: 'payment',
+            ref: pmt.reference || doc.id.substring(0, 8),
+            description: `Payment - ${pmt.method || 'cash'}`,
+            debit: amount,
+            net: amount,
+            vat: 0,
+            credit: 0,
+            data: pmt
+          });
+        });
+
         returnsSnap.forEach(doc => {
           const returnDoc = doc.data();
           const purchaseId = returnDoc.purchaseId || returnDoc.originalPurchaseId;
@@ -3780,6 +3826,7 @@ const AdminAccountStatement: React.FC = () => {
             // Group by supplier
             const supplierMap = new Map<string, {
               name: string;
+              supplierId: string;
               invoices: PurchaseRecord[];
               totalDebit: number;
               totalCredit: number;
@@ -3787,14 +3834,46 @@ const AdminAccountStatement: React.FC = () => {
             }>();
             filteredPurchases.forEach(p => {
               if (!supplierMap.has(p.supplier)) {
-                supplierMap.set(p.supplier, { name: p.supplier, invoices: [], totalDebit: 0, totalCredit: 0, balance: 0 });
+                supplierMap.set(p.supplier, { name: p.supplier, supplierId: p.supplierId || '', invoices: [], totalDebit: 0, totalCredit: 0, balance: 0 });
               }
               const entry = supplierMap.get(p.supplier)!;
+              if (!entry.supplierId && p.supplierId) entry.supplierId = p.supplierId;
               entry.invoices.push(p);
               entry.totalDebit += p.amount;
               entry.totalCredit += p.amountPaid;
               entry.balance += (p.amount - p.amountPaid);
             });
+
+            // Add standalone payments from accountPayments (direction=out, accountType=supplier)
+            accountPayments
+              .filter(pmt =>
+                pmt.accountType === 'supplier' &&
+                pmt.direction === 'out' &&
+                isDateInRange(pmt.date, filterStartDate, filterEndDate)
+              )
+              .forEach(pmt => {
+                const amount = toFiniteNumber(pmt.amount, 0);
+                if (amount <= 0) return;
+                // Match by accountId first, fall back to accountName
+                let entry = pmt.accountId
+                  ? Array.from(supplierMap.values()).find(e => e.supplierId === pmt.accountId)
+                  : undefined;
+                if (!entry) entry = supplierMap.get(pmt.accountName);
+                if (!entry) {
+                  // Supplier may have no purchases in this date range — create entry
+                  supplierMap.set(pmt.accountName, {
+                    name: pmt.accountName,
+                    supplierId: pmt.accountId || '',
+                    invoices: [],
+                    totalDebit: 0,
+                    totalCredit: 0,
+                    balance: 0,
+                  });
+                  entry = supplierMap.get(pmt.accountName)!;
+                }
+                entry.totalCredit += amount;
+                entry.balance = entry.totalDebit - entry.totalCredit;
+              });
             const supplierAccounts = Array.from(supplierMap.values()).sort((a, b) => b.balance - a.balance);
             const filteredSupplierAccounts = supplierAccounts.filter(account => {
               if (purchaseBalanceFilter === 'active') return account.balance > BALANCE_EPSILON;
