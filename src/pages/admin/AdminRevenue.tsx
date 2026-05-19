@@ -107,46 +107,34 @@ const AdminRevenue: React.FC = () => {
         if (!isCountedSaleStatus(order.status)) return;
         if (!isDateInRange(order.createdAt || order.timestamp, filterStartDate, filterEndDate)) return;
 
-        const orderTotal = toFiniteNumber(order.total, Number.NaN);
-        if (!Number.isFinite(orderTotal) || orderTotal < 0) {
-          quarantinedOrders += 1;
-          return;
-        }
-
         const items = Array.isArray(order.items) ? order.items : [];
-        const itemBaseSubtotals = items.map((item: { quantity: number; price: number }) => {
-          const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
-          const price = Math.max(0, toFiniteNumber(item.price, 0));
-          return quantity * price;
-        });
-        const computedSubtotal = itemBaseSubtotals.reduce((sum: number, value: number) => sum + value, 0);
-        const fallbackSubtotal = Math.max(0, toFiniteNumber(order.subtotal ?? order.total, 0));
-        const baseSubtotal = computedSubtotal > 0 ? computedSubtotal : fallbackSubtotal;
 
-        if (!Number.isFinite(baseSubtotal) || baseSubtotal < 0) {
-          quarantinedOrders += 1;
-          return;
-        }
-
-        let allocatedSoFar = 0;
-        items.forEach((item: { productId: string; composedProductId?: string; id?: string; quantity: number; price: number }, index: number) => {
+        items.forEach((item: {
+          productId: string;
+          composedProductId?: string;
+          id?: string;
+          quantity: number;
+          price: number;
+          discountType?: string;
+          discountValue?: number;
+        }) => {
           const productId = resolveOrderItemProductKey(item);
           if (!productId) return;
 
           const quantity = Math.max(0, toFiniteNumber(item.quantity, 0));
-          const itemSubtotal = Math.max(0, toFiniteNumber(itemBaseSubtotals[index], 0));
-          let itemRevenue = 0;
+          const price = Math.max(0, toFiniteNumber(item.price, 0));
+          const gross = quantity * price;
 
-          if (baseSubtotal > 0) {
-            itemRevenue = (itemSubtotal / baseSubtotal) * orderTotal;
-          } else if (items.length > 0) {
-            itemRevenue = orderTotal / items.length;
-          }
-
-          if (index === items.length - 1) {
-            itemRevenue = orderTotal - allocatedSoFar;
-          } else {
-            allocatedSoFar += itemRevenue;
+          // Apply item-level discount to get net revenue.
+          // Items with discountValue=100% are free/gift units → $0 revenue.
+          let itemRevenue = gross;
+          const discountValue = toFiniteNumber(item.discountValue, 0);
+          if (discountValue > 0) {
+            if (item.discountType === 'percentage') {
+              itemRevenue = gross * (1 - discountValue / 100);
+            } else if (item.discountType === 'fixed') {
+              itemRevenue = Math.max(0, gross - discountValue);
+            }
           }
 
           if (!Number.isFinite(itemRevenue)) {
@@ -155,7 +143,11 @@ const AdminRevenue: React.FC = () => {
           }
 
           productRevenueMap[productId] = (productRevenueMap[productId] || 0) + itemRevenue;
-          orderQuantityMap[productId] = (orderQuantityMap[productId] || 0) + quantity;
+          // Only count quantity for paid units (not 100%-discounted free items)
+          const isPaidUnit = !(item.discountType === 'percentage' && discountValue >= 100);
+          if (isPaidUnit) {
+            orderQuantityMap[productId] = (orderQuantityMap[productId] || 0) + quantity;
+          }
         });
       });
 
