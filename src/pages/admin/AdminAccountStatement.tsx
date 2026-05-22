@@ -1123,6 +1123,156 @@ const AdminAccountStatement: React.FC = () => {
     }
   };
 
+  const generatePaymentReceipt = async (payment: {
+    id?: string;
+    accountName: string;
+    accountType: 'customer' | 'supplier';
+    direction: 'in' | 'out';
+    amount: number;
+    date: string;
+    method: string;
+    notes: string;
+  }) => {
+    const db = getFirestore();
+    let storeName = 'Store';
+    try {
+      const profileSnap = await getDocs(query(
+        collection(db, 'storeProfiles'),
+        where('__name__', '==', user?.storeId ?? '')
+      ));
+      if (!profileSnap.empty) {
+        storeName = profileSnap.docs[0].data().storeName || storeName;
+      }
+    } catch { /* use default */ }
+
+    const doc = new jsPDF({ orientation: 'portrait', unit: 'mm', format: [80, 140] });
+    const receiptNo = payment.id
+      ? payment.id.slice(-8).toUpperCase()
+      : Date.now().toString().slice(-8);
+
+    const isIncoming = payment.direction === 'in';
+    const methodLabel: Record<string, string> = {
+      cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque', other: 'Other',
+    };
+
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(cleanTextForPDF(storeName), 40, 12, { align: 'center' });
+
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    doc.text('PAYMENT RECEIPT', 40, 18, { align: 'center' });
+
+    doc.setLineWidth(0.3);
+    doc.line(5, 21, 75, 21);
+
+    let y = 27;
+    const col1 = 6;
+    const col2 = 40;
+
+    const row = (label: string, value: string) => {
+      doc.setFont(undefined, 'bold');
+      doc.setFontSize(7);
+      doc.text(label, col1, y);
+      doc.setFont(undefined, 'normal');
+      doc.text(cleanTextForPDF(value), col2, y);
+      y += 6;
+    };
+
+    row('Receipt No.:', `#${receiptNo}`);
+    row('Date:', new Date(payment.date + 'T00:00:00').toLocaleDateString('en-GB'));
+    row(isIncoming ? 'Received from:' : 'Paid to:', payment.accountName);
+    row('Type:', payment.accountType === 'customer' ? 'Customer' : 'Supplier');
+    row('Method:', methodLabel[payment.method] || payment.method);
+    if (payment.notes) row('Notes:', payment.notes);
+
+    y += 2;
+    doc.line(5, y, 75, y);
+    y += 6;
+
+    doc.setFontSize(11);
+    doc.setFont(undefined, 'bold');
+    doc.text(isIncoming ? 'Amount Received:' : 'Amount Paid:', col1, y);
+    doc.text(`$${payment.amount.toFixed(2)}`, 74, y, { align: 'right' });
+    y += 5;
+    doc.line(5, y, 75, y);
+    y += 8;
+
+    doc.setFontSize(7);
+    doc.setFont(undefined, 'normal');
+    doc.text(isIncoming ? 'Thank you for your payment.' : 'Payment confirmed.', 40, y, { align: 'center' });
+    y += 5;
+    doc.text(`Recorded by: ${cleanTextForPDF(user?.name || 'System')}`, 40, y, { align: 'center' });
+
+    doc.save(`receipt_${receiptNo}_${payment.accountName.replace(/\s+/g, '_')}.pdf`);
+  };
+
+  const handleSaveAndPrint = async () => {
+    if (!paymentModal || !user?.storeId) return;
+    const amount = parseFloat(newPayment.amount);
+    if (!amount || amount <= 0) { alert('Enter a valid amount'); return; }
+    if (!newPayment.date) { alert('Select a date'); return; }
+    setSavingPayment(true);
+    try {
+      const db = getFirestore();
+      const paymentDoc = {
+        storeId: user.storeId,
+        accountId: paymentModal.accountId,
+        accountName: paymentModal.accountName,
+        accountType: paymentModal.accountType,
+        direction: paymentModal.direction,
+        amount,
+        date: newPayment.date,
+        method: newPayment.method,
+        notes: newPayment.notes,
+        createdAt: new Date().toISOString(),
+        createdBy: user.id,
+        createdByName: user.name || '',
+      };
+      const ref = await addDoc(collection(db, 'accountPayments'), paymentDoc);
+
+      if (paymentModal.accountType === 'customer' && paymentModal.direction === 'in') {
+        const allocation = await allocateCustomerPaymentToOrders(
+          ref.id,
+          paymentModal.accountId,
+          paymentModal.accountName,
+          amount,
+          newPayment.date,
+          newPayment.method,
+          newPayment.notes,
+        );
+        await updateDoc(doc(db, 'accountPayments', ref.id), {
+          orderAllocation: {
+            appliedAmount: allocation.appliedAmount,
+            remainingAmount: allocation.remainingAmount,
+            appliedOrderIds: allocation.appliedOrderIds,
+            appliedAt: new Date().toISOString(),
+          },
+        });
+      }
+
+      setAccountPayments(prev => [{ id: ref.id, ...paymentDoc }, ...prev]);
+      setPaymentModal(null);
+      setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
+
+      await generatePaymentReceipt({
+        id: ref.id,
+        accountName: paymentModal.accountName,
+        accountType: paymentModal.accountType,
+        direction: paymentModal.direction,
+        amount,
+        date: newPayment.date,
+        method: newPayment.method,
+        notes: newPayment.notes,
+      });
+    } catch (err) {
+      console.error('Error saving payment:', err);
+      alert('Failed to save payment. Please try again.');
+    } finally {
+      setSavingPayment(false);
+    }
+  };
+
   const openPaymentModal = (accountId: string, accountName: string, accountType: 'customer' | 'supplier') => {
     setPaymentModal({
       open: true,
@@ -4703,6 +4853,13 @@ const AdminAccountStatement: React.FC = () => {
                 className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
               >
                 Cancel
+              </button>
+              <button
+                onClick={handleSaveAndPrint}
+                disabled={savingPayment}
+                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
+              >
+                {savingPayment ? 'Saving...' : 'Save & Print Receipt'}
               </button>
               <button
                 onClick={handleSaveAccountPayment}
