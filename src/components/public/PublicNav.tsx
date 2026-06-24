@@ -39,7 +39,7 @@ const PublicNav: React.FC = () => {
         aria-label="Main navigation"
       >
         <Link
-          to="/"
+          to="/home"
           className="flex items-center gap-2 font-bold text-xl text-gray-900 hover:text-teal-600 transition-colors shrink-0"
           aria-label="Grabio home"
         >

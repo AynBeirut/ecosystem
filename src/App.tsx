@@ -82,6 +82,7 @@ const AdminSEOAnalytics = lazy(() => import("./pages/admin/AdminSEOAnalytics"));
 const AdminSEOAudit = lazy(() => import("./pages/admin/AdminSEOAudit"));
 const GscCallback = lazy(() => import("./pages/auth/GscCallback"));
 const ModularHomeRedirect = lazy(() => import("./pages/public/ModularHomeRedirect"));
+const ModularHome = lazy(() => import("./pages/public/ModularHome"));
 const Features = lazy(() => import("./pages/public/Features"));
 const Pricing = lazy(() => import("./pages/public/Pricing"));
 const UseCases = lazy(() => import("./pages/public/UseCases"));
@@ -274,6 +275,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         </Route>
                         <Route path="/team/crm" element={<ProtectedRoute allowedRoles={['crm_rep']} requiredModule="crm"><CrmRepPortal /></ProtectedRoute>} />
                         {/* Public marketing pages — must be BEFORE /:slug */}
+                        <Route path="/home" element={<ModularHome />} />
                         <Route path="/features" element={<Features />} />
                         <Route path="/pricing" element={<Pricing />} />
                         <Route path="/use-cases" element={<UseCases />} />

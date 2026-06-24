@@ -3,6 +3,7 @@ import { useNavigate, useLocation, Link } from 'react-router-dom';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 const PUBLIC_MARKETING_PATHS = new Set([
+  '/home',
   '/features',
   '/pricing',
   '/use-cases',
