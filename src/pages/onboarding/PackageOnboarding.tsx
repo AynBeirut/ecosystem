@@ -26,6 +26,9 @@ import { presetToEnabledModules, CORE_MODULE_IDS, type StartingPackageKey } from
 import { loadPackageDraft, savePackageDraft } from '@/lib/packageDraft';
 import type { StoreProfile } from '@/types/storeProfile';
 import { toast } from 'sonner';
+import AdminPageHero from '@/components/admin/AdminPageHero';
+import AdminModuleIcon from '@/components/admin/AdminModuleIcon';
+import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 type OnboardingPath = 'custom' | 'preset';
 
@@ -143,12 +146,17 @@ const PackageOnboarding: React.FC = () => {
 
   if (step === 'choose') {
     return (
-      <div className="container mx-auto px-4 py-8 max-w-4xl">
-        <h1 className="text-2xl font-bold mb-2">Choose how to build your Grabio package</h1>
-        <p className="text-muted-foreground mb-8">Two equal paths — pick what fits your business.</p>
+      <div className="min-h-screen bg-slate-50">
+        <div className="container mx-auto px-4 py-6 max-w-4xl">
+          <AdminPageHero
+            title="Choose how to build your package"
+            description="Two equal paths — pick what fits your business."
+            backTo="/admin/profile"
+            backLabel="Back to Store Profile"
+          />
         <div className="grid md:grid-cols-2 gap-6 mb-8">
           <Card
-            className={`cursor-pointer ${path === 'custom' ? 'ring-2 ring-primary' : ''}`}
+            className={`cursor-pointer shadow-sm hover:shadow-md transition-shadow rounded-xl ${path === 'custom' ? 'ring-2 ring-primary' : ''}`}
             onClick={() => {
               setPath('custom');
               setStep('configure');
@@ -160,7 +168,7 @@ const PackageOnboarding: React.FC = () => {
             </CardHeader>
           </Card>
           <Card
-            className={`cursor-pointer ${path === 'preset' ? 'ring-2 ring-primary' : ''}`}
+            className={`cursor-pointer shadow-sm hover:shadow-md transition-shadow rounded-xl ${path === 'preset' ? 'ring-2 ring-primary' : ''}`}
             onClick={() => setStep('configure')}
           >
             <CardHeader>
@@ -172,30 +180,35 @@ const PackageOnboarding: React.FC = () => {
         <Button variant="outline" asChild>
           <Link to="/admin">Skip for now</Link>
         </Button>
+        <div className="mt-10 pt-6 border-t border-slate-200 text-center">
+          <PoweredByEmoove />
+        </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
-      <div className="mb-4 flex flex-wrap gap-3">
-        <Button variant="ghost" size="sm" asChild className="px-0 text-muted-foreground hover:text-foreground">
-          <Link to="/admin/profile">← Back to store profile</Link>
-        </Button>
+    <div className="min-h-screen bg-slate-50">
+    <div className="container mx-auto px-4 py-6 max-w-4xl">
+      <AdminPageHero
+        title={path === 'preset' ? 'Ready package' : 'Custom package'}
+        description="Toggle modules, accept smart suggestions, then save to your store profile."
+        backTo="/admin/profile"
+        backLabel="Back to Store Profile"
+      />
+      <div className="mb-6 flex flex-wrap gap-3">
         <Button variant="outline" size="sm" asChild>
           <Link to="/subscription">Subscription & billing</Link>
         </Button>
       </div>
-      <h1 className="text-2xl font-bold mb-6">
-        {path === 'preset' ? 'Ready package' : 'Custom package'}
-      </h1>
 
       {path === 'preset' && (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
           {PRESET_LIST.map((preset) => (
             <Card
               key={preset.key}
-              className={`cursor-pointer ${selectedPreset === preset.key ? 'ring-2 ring-primary' : ''}`}
+              className={`cursor-pointer rounded-xl shadow-sm hover:shadow-md transition-shadow ${selectedPreset === preset.key ? 'ring-2 ring-primary' : ''}`}
               onClick={() => handlePresetSelect(preset.key)}
             >
               <CardHeader className="pb-2">
@@ -210,12 +223,18 @@ const PackageOnboarding: React.FC = () => {
       {path === 'custom' && (
         <div className="grid sm:grid-cols-2 gap-3 mb-6">
           {TOGGLEABLE_MODULES.map((mod) => (
-            <div key={mod.id} className="flex items-center gap-2 border rounded-lg p-3">
+            <div
+              key={mod.id}
+              className={`flex items-center gap-3 border rounded-xl p-3 shadow-sm transition-shadow hover:shadow-md ${
+                modules[mod.id] ? 'border-primary/40 bg-primary/5' : 'border-slate-200'
+              }`}
+            >
               <Checkbox
                 id={`mod-${mod.id}`}
                 checked={Boolean(modules[mod.id])}
                 onCheckedChange={(v) => handleToggle(mod.id, Boolean(v))}
               />
+              <AdminModuleIcon moduleId={mod.id} />
               <Label htmlFor={`mod-${mod.id}`} className="cursor-pointer flex-1">
                 <span className="font-medium">{mod.name}</span>
                 <span className="block text-xs text-muted-foreground">{mod.summary}</span>
@@ -283,6 +302,10 @@ const PackageOnboarding: React.FC = () => {
           </CardContent>
         </Card>
       )}
+      <div className="mt-10 pt-6 border-t border-slate-200 text-center">
+        <PoweredByEmoove />
+      </div>
+    </div>
     </div>
   );
 };

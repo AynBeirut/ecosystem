@@ -95,7 +95,7 @@ export async function sendLegacyUserEmail(email: string, name: string): Promise<
             
             <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 30px 0;">
             <p style="font-size: 12px; color: #6b7280;">
-              © 2026 Grabio - Powered by AYN BEIRUT
+              © 2026 Grabio — Powered by <a href="https://emoove.co" style="color:#9ca3af;text-decoration:none;">E-MOOVE</a>
             </p>
           </div>
         </body>

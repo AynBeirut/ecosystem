@@ -1,5 +1,6 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 const PublicFooter: React.FC = () => (
   <footer className="bg-gray-900 text-gray-400 mt-auto">
@@ -55,11 +56,15 @@ const PublicFooter: React.FC = () => (
 
       <div className="border-t border-gray-800 pt-6 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
         <p>© {new Date().getFullYear()} Grabio. All rights reserved.</p>
-        <p>
-          Built for small businesses that need serious tools.{' '}
-          <a href="mailto:support@grabio.space" className="hover:text-white transition-colors">
-            support@grabio.space
-          </a>
+        <p className="flex flex-col sm:flex-row items-center gap-1 sm:gap-3">
+          <PoweredByEmoove variant="muted" className="text-gray-500 hover:text-gray-300" />
+          <span className="hidden sm:inline text-gray-700">·</span>
+          <span>
+            Built for small businesses that need serious tools.{' '}
+            <a href="mailto:support@grabio.space" className="hover:text-white transition-colors">
+              support@grabio.space
+            </a>
+          </span>
         </p>
       </div>
     </div>
