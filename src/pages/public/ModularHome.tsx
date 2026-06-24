@@ -93,7 +93,7 @@ function persistDraft(modules: Record<string, boolean>) {
 }
 
 const ModularHome: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const [filter, setFilter] = useState<FilterKey>('all');
   const [enabledModules, setEnabledModules] = useState<Record<string, boolean>>(buildInitialModules);
 
@@ -186,8 +186,10 @@ const ModularHome: React.FC = () => {
                 <PoweredByEmoove variant="onDark" />
               </p>
 
-              <div className="flex flex-wrap gap-2 justify-center">
-                {user ? (
+              <div className="flex flex-wrap gap-2 justify-center min-h-[44px]">
+                {isLoading ? (
+                  <div className="h-11 w-48 rounded-xl bg-white/10 animate-pulse" aria-hidden />
+                ) : user ? (
                   <Link
                     to={dashboardPath}
                     className="inline-flex items-center gap-2 px-5 py-2.5 text-sm font-semibold rounded-xl bg-teal-500 text-white hover:bg-teal-400 shadow-lg shadow-teal-500/25 transition-all"
@@ -457,8 +459,10 @@ const ModularHome: React.FC = () => {
               <p className="text-slate-400 mb-8">
                 Join businesses that replaced disconnected tools with one modular platform. Free to start.
               </p>
-              <div className="flex flex-col sm:flex-row gap-3 justify-center">
-                {user ? (
+              <div className="flex flex-col sm:flex-row gap-3 justify-center min-h-[52px]">
+                {isLoading ? (
+                  <div className="h-12 w-56 mx-auto rounded-xl bg-white/10 animate-pulse" aria-hidden />
+                ) : user ? (
                   <Link
                     to={dashboardPath}
                     className="px-8 py-4 font-semibold bg-teal-500 hover:bg-teal-400 rounded-xl"
