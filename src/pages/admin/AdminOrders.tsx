@@ -21,13 +21,20 @@ import { StaffMember } from '@/types/staff';
 import { StoreProfile, StoreDeliverySettings, DeliveryPartnerSetting } from '@/types/storeProfile';
 import { FulfillmentLocation } from '@/types/inventory';
 import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign, Edit3 } from 'lucide-react';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { logAction } from '@/lib/auditLog';
 import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
+import {
+  decideRefundRestoreQuantity,
+  resolveFinishedGoodsStockUnitType,
+  resolveProductStockUnitType,
+} from '@/lib/stockUnitType';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
+import { syncOrderToCrmClient } from '@/lib/crmOrderSync';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
@@ -44,6 +51,10 @@ const ENABLE_ORDER_RAW_MATERIAL_DEDUCTION = false;
 interface ProductForOrder {
   id: string;
   name?: string;
+  description?: string;
+  productDescription?: string;
+  shortDescription?: string;
+  details?: string;
   price?: number;
   sellingPrice?: number;
   stock?: number;
@@ -176,6 +187,8 @@ const AdminOrders: React.FC = () => {
     taxRate: 0,
     discountType: 'percentage' as 'percentage' | 'fixed',
     discountValue: 0,
+    invoiceNotes: '',
+    deliveryNotes: '',
   });
   
   const [customerSearchOpen, setCustomerSearchOpen] = useState(false);
@@ -184,6 +197,74 @@ const AdminOrders: React.FC = () => {
   const [useAutoDate, setUseAutoDate] = useState(true);
   const [manualOrderDate, setManualOrderDate] = useState('');
   const [isCreatingNewSalesPerson, setIsCreatingNewSalesPerson] = useState(false);
+
+  const resolveProductDescription = (product?: ProductForOrder | null): string => {
+    if (!product) return '';
+    const candidates = [
+      product.description,
+      product.productDescription,
+      product.shortDescription,
+      product.details,
+    ];
+    for (const value of candidates) {
+      if (typeof value === 'string' && value.trim()) {
+        return value.trim();
+      }
+    }
+    return '';
+  };
+
+  const enrichOrderItemsForSave = (items: OrderItem[]) =>
+    items.map((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      return {
+        ...item,
+        price: product?.sellingPrice || product?.price || item.price || 0,
+        productName: item.productName || product?.name || '',
+        description: (item.description || '').trim() || resolveProductDescription(product),
+      };
+    });
+
+  const enrichOrderForInvoice = (order: Order & { id: string }): Order & { id: string } => ({
+    ...order,
+    items: (order.items || []).map((item) => {
+      const product = products.find((p) => p.id === item.productId);
+      return {
+        ...item,
+        productName: item.productName || product?.name || '',
+        description: (item.description || '').trim() || resolveProductDescription(product),
+      };
+    }),
+  });
+
+  const getEmptyOrderForm = () => ({
+    customerId: '',
+    customerName: '',
+    customerPhone: '',
+    customerEmail: '',
+    assignedSalesPerson: '',
+    salesPersonName: '',
+    items: [] as OrderItem[],
+    fulfillmentLocationId: '',
+    deliveryMethod: 'standard' as DeliveryMethod,
+    taxType: 'none' as 'none' | 'VAT' | 'TTC',
+    taxRate: 0,
+    discountType: 'percentage' as 'percentage' | 'fixed',
+    discountValue: 0,
+    invoiceNotes: '',
+    deliveryNotes: '',
+  });
+
+  const snapshotOrderItem = (item: OrderItem, productId?: string): OrderItem => {
+    const resolvedProductId = productId || item.productId;
+    const product = products.find((p) => p.id === resolvedProductId);
+    return {
+      ...item,
+      productId: resolvedProductId,
+      productName: product?.name || item.productName || '',
+      description: (item.description || '').trim() || resolveProductDescription(product),
+    };
+  };
 
   // Double-click prevention locks
   const isCreatingOrderRef = useRef(false);
@@ -226,6 +307,8 @@ const AdminOrders: React.FC = () => {
   const buildInventoryEventKey = (kind: string, orderId: string, productId: string, meta = '') => {
     return [kind, orderId, productId, meta].join(':');
   };
+
+  const round3 = (n: number) => Math.round(n * 1000) / 1000;
 
   const findMatchingFinishedGood = (docs: FinishedGoodDoc[], orderItemProductId: string) => {
     return docs.find((fgDoc: FinishedGoodDoc) => {
@@ -298,6 +381,182 @@ const AdminOrders: React.FC = () => {
       stockTransactions: [...transactions, stockTransaction],
       updatedAt: nowIso,
     });
+  };
+
+  const findOrderDeductionPriorKey = (
+    transactions: ProductStockTransaction[],
+    orderId: string,
+    productKey: string,
+  ): string | null => {
+    const paidKey = `payment-paid:${orderId}:${productKey}`;
+    if (transactions.some((tx) => tx?.idempotencyKey === paidKey)) return paidKey;
+    const deliveredKeys = transactions
+      .map((tx) => tx?.idempotencyKey)
+      .filter(
+        (key): key is string =>
+          typeof key === 'string' && key.startsWith(`status-delivered:${orderId}:${productKey}:`),
+      );
+    if (deliveredKeys.length > 0) {
+      return deliveredKeys.sort().pop() ?? null;
+    }
+    return null;
+  };
+
+  const restoreInventoryForRefund = async (
+    db: ReturnType<typeof getFirestore>,
+    order: Order & { id: string },
+    refundId: string,
+    refundAmount: number,
+  ): Promise<{
+    restoredLines: number;
+    skippedLines: number;
+    manualAdjustmentRequired: boolean;
+    skippedFractionalQty: number;
+  }> => {
+    if (!user?.storeId || !user?.id) {
+      return { restoredLines: 0, skippedLines: 0, manualAdjustmentRequired: false, skippedFractionalQty: 0 };
+    }
+
+    const totalAmount = Math.max(0, Number(order.total || 0));
+    if (totalAmount <= 0 || refundAmount <= 0) {
+      return { restoredLines: 0, skippedLines: 0, manualAdjustmentRequired: false, skippedFractionalQty: 0 };
+    }
+
+    const refundRatio = Math.min(1, refundAmount / totalAmount);
+    const fgQuery = query(
+      collection(db, 'finishedGoodsInventory'),
+      where('storeId', '==', user.storeId),
+    );
+    const fgSnapshot = await getDocs(fgQuery);
+
+    let restoredLines = 0;
+    let skippedLines = 0;
+    let manualAdjustmentRequired = false;
+    let skippedFractionalQty = 0;
+
+    for (const item of order.items || []) {
+      const productKey = resolveOrderItemProductKey(item);
+      const lineQty = Number(item.quantity || 0);
+      if (!productKey || lineQty <= 0) {
+        skippedLines += 1;
+        continue;
+      }
+
+      const proportionalRestoreQty = round3(lineQty * refundRatio);
+      if (proportionalRestoreQty <= 0) {
+        skippedLines += 1;
+        continue;
+      }
+
+      const idempotencyKey = buildInventoryEventKey('payment-refund', order.id, productKey, refundId);
+      const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, productKey);
+
+      if (matchingFG) {
+        const fgData = matchingFG.data();
+        const unitType = resolveFinishedGoodsStockUnitType(
+          typeof fgData.unit === 'string' ? fgData.unit : undefined,
+        );
+        const qtyDecision = decideRefundRestoreQuantity(proportionalRestoreQty, unitType, round3);
+        if (qtyDecision.manualAdjustmentRequired) {
+          manualAdjustmentRequired = true;
+          skippedFractionalQty = round3(skippedFractionalQty + qtyDecision.skippedFractionalQty);
+        }
+        if (qtyDecision.restoreQty <= 0) {
+          skippedLines += 1;
+          continue;
+        }
+
+        const restoreQty = qtyDecision.restoreQty;
+        const fgTx = (fgData.transactions || []) as InventoryTransaction[];
+        const paidKey = `payment-paid:${order.id}:${productKey}`;
+        const priorKey = fgTx.some((tx) => tx?.idempotencyKey === paidKey)
+          ? paidKey
+          : fgTx
+              .map((tx) => tx?.idempotencyKey)
+              .filter(
+                (key): key is string =>
+                  typeof key === 'string' && key.startsWith(`status-delivered:${order.id}:${productKey}:`),
+              )
+              .sort()
+              .pop() ?? null;
+
+        if (!priorKey) {
+          skippedLines += 1;
+          continue;
+        }
+
+        await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (data) => {
+          const cost = Number(data.costPrice || 0);
+          const newBalance = round3(Number(data.currentBalance || 0) + restoreQty);
+          return {
+            currentBalance: newBalance,
+            quantitySold: round3(Math.max(0, Number(data.quantitySold || 0) - restoreQty)),
+            totalValue: round3(newBalance * cost),
+            transaction: {
+              id: `TXN-REFUND-${Date.now()}-${productKey}`,
+              date: new Date().toISOString(),
+              actionType: 'return',
+              quantity: restoreQty,
+              unitCost: cost,
+              totalCost: round3(cost * restoreQty),
+              reason: `Refund ${refundId}: Order ${order.invoiceNumber || order.id}`,
+              referenceId: order.id,
+              referenceNumber: order.invoiceNumber || order.id,
+              userId: user.id,
+              userName: user.name,
+              idempotencyKey,
+            },
+          };
+        }, priorKey);
+        restoredLines += 1;
+        continue;
+      }
+
+      const productRef = doc(db, 'products', productKey);
+      const productSnap = await getDoc(productRef);
+      if (!productSnap.exists()) {
+        skippedLines += 1;
+        continue;
+      }
+
+      const productData = productSnap.data() as {
+        stockTransactions?: ProductStockTransaction[];
+        stockUnitType?: 'discrete' | 'continuous';
+        stockUnit?: string;
+      };
+      const unitType = resolveProductStockUnitType(productData);
+      const qtyDecision = decideRefundRestoreQuantity(proportionalRestoreQty, unitType, round3);
+      if (qtyDecision.manualAdjustmentRequired) {
+        manualAdjustmentRequired = true;
+        skippedFractionalQty = round3(skippedFractionalQty + qtyDecision.skippedFractionalQty);
+      }
+      if (qtyDecision.restoreQty <= 0) {
+        skippedLines += 1;
+        continue;
+      }
+
+      const restoreQty = qtyDecision.restoreQty;
+      const priorKey = findOrderDeductionPriorKey(productData.stockTransactions || [], order.id, productKey);
+      if (!priorKey) {
+        skippedLines += 1;
+        continue;
+      }
+
+      await applySimpleProductStockChange(
+        db,
+        productKey,
+        restoreQty,
+        'restore',
+        idempotencyKey,
+        `Refund ${refundId}: Order ${order.invoiceNumber || order.id}`,
+        order.id,
+        order.invoiceNumber || order.id,
+        priorKey,
+      );
+      restoredLines += 1;
+    }
+
+    return { restoredLines, skippedLines, manualAdjustmentRequired, skippedFractionalQty };
   };
 
   const applyRawMaterialStockFromOrder = async (
@@ -882,13 +1141,7 @@ const AdminOrders: React.FC = () => {
       const invoiceNumber = await generateInvoiceNumber();
 
       // Add prices to items
-      const itemsWithPrices = newOrder.items.map(item => {
-        const product = products.find(p => p.id === item.productId);
-        return {
-          ...item,
-          price: product?.sellingPrice || product?.price || 0
-        };
-      });
+      const itemsWithPrices = enrichOrderItemsForSave(newOrder.items);
 
       const orderData = {
         storeId: user.storeId,
@@ -899,6 +1152,8 @@ const AdminOrders: React.FC = () => {
         customerTaxId: customer?.taxId || '',
         deliveryAddress: customer?.address || '',
         deliveryCity: customer?.city || '',
+        invoiceNotes: newOrder.invoiceNotes.trim(),
+        deliveryNotes: newOrder.deliveryNotes.trim(),
         deliveryMethod: newOrder.deliveryMethod,
         deliveryFee: totals.deliveryFee,
         estimatedDeliveryTime: getDeliveryOptions().find((opt) => opt.value === newOrder.deliveryMethod)?.time || '',
@@ -943,6 +1198,27 @@ const AdminOrders: React.FC = () => {
       const docRef = await addDoc(collection(db, 'orders'), orderData);
       console.log('Order created successfully, ID:', docRef.id);
       setOrders([{ id: docRef.id, ...orderData }, ...orders]);
+
+      const ownerStoreId = getActualStoreId(user) || user.storeId;
+      if (newOrder.customerId && ownerStoreId) {
+        try {
+          await syncOrderToCrmClient({
+            storeId: ownerStoreId,
+            orderId: docRef.id,
+            customerId: newOrder.customerId,
+            assignedSalesPerson: newOrder.assignedSalesPerson || undefined,
+            assignedSalesPersonName: salesPerson?.name || undefined,
+            invoiceNumber,
+            total: financialCheck.normalized.total,
+            status: orderData.status,
+            paymentStatus: orderData.paymentStatus,
+            createdAt: orderData.createdAt as string,
+            createdBy: user.id,
+          });
+        } catch (crmSyncError) {
+          console.error('CRM order sync failed (order still created):', crmSyncError);
+        }
+      }
 
       // Update customer stats
       if (customer) {
@@ -994,20 +1270,7 @@ const AdminOrders: React.FC = () => {
       isCreatingOrderRef.current = false;
       
       if (operationSucceeded) {
-        setNewOrder({
-          customerId: '',
-          customerName: '',
-          customerPhone: '',
-          customerEmail: '',
-          assignedSalesPerson: '',
-          salesPersonName: '',
-          items: [],
-          deliveryMethod: getDeliveryOptions()[0]?.value || 'standard',
-          taxType: 'none',
-          taxRate: 0,
-          discountType: 'percentage',
-          discountValue: 0,
-        });
+        setNewOrder(getEmptyOrderForm());
         setUseAutoDate(true);
         setManualOrderDate('');
         setIsCreatingOrder(false);
@@ -1016,10 +1279,6 @@ const AdminOrders: React.FC = () => {
   };
 
   // Round to 3 decimal places to eliminate float drift (e.g. 226.48000000000002)
-  const round3 = (n: number) => Math.round(n * 1000) / 1000;
-
-  // Atomic read-calculate-write for finishedGoodsInventory using Firestore runTransaction.
-  // This prevents race conditions and float drift caused by non-atomic read→calc→write.
   const updateFGInventoryAtomic = async (
     db: ReturnType<typeof getFirestore>,
     fgDocId: string,
@@ -1260,13 +1519,15 @@ const AdminOrders: React.FC = () => {
       customerEmail: order.customerEmail || '',
       assignedSalesPerson: order.assignedSalesPerson || '',
       salesPersonName: order.assignedSalesPersonName || '',
-      items: order.items || [],
+      items: (order.items || []).map((item) => snapshotOrderItem(item)),
       fulfillmentLocationId: order.fulfillmentLocationId || '',
       deliveryMethod: (order.deliveryMethod as DeliveryMethod) || getDeliveryOptions()[0]?.value || 'standard',
       taxType: order.taxType || 'none',
       taxRate: order.taxRate || 0,
       discountType: order.discountType || 'percentage',
       discountValue: order.discountValue || 0,
+      invoiceNotes: order.invoiceNotes || '',
+      deliveryNotes: order.deliveryNotes || '',
     });
     setEditingOrder(order);
   };
@@ -1295,13 +1556,7 @@ const AdminOrders: React.FC = () => {
       const db = getFirestore();
       const customer = customers.find(c => c.id === newOrder.customerId);
       const salesPerson = salesStaff.find(s => s.id === newOrder.assignedSalesPerson);
-      const itemsWithPrices = newOrder.items.map(item => {
-        const product = products.find(p => p.id === item.productId);
-        return {
-          ...item,
-          price: product?.sellingPrice || product?.price || item.price || 0
-        };
-      });
+      const itemsWithPrices = enrichOrderItemsForSave(newOrder.items);
 
       const totals = calculateOrderTotals(
         itemsWithPrices,
@@ -1415,6 +1670,8 @@ const AdminOrders: React.FC = () => {
         customerTaxId: customer?.taxId || '',
         deliveryAddress: customer?.address || '',
         deliveryCity: customer?.city || '',
+        invoiceNotes: newOrder.invoiceNotes.trim(),
+        deliveryNotes: newOrder.deliveryNotes.trim(),
         deliveryMethod: newOrder.deliveryMethod,
         deliveryFee: totals.deliveryFee,
         estimatedDeliveryTime: getDeliveryOptions().find((opt) => opt.value === newOrder.deliveryMethod)?.time || '',
@@ -1489,21 +1746,7 @@ const AdminOrders: React.FC = () => {
 
       toast({ title: "Success", description: "Order updated successfully!" });
       setEditingOrder(null);
-      setNewOrder({
-        customerId: '',
-        customerName: '',
-        customerPhone: '',
-        customerEmail: '',
-        assignedSalesPerson: '',
-        salesPersonName: '',
-        items: [],
-        deliveryMethod: getDeliveryOptions()[0]?.value || 'standard',
-        fulfillmentLocationId: '',
-        taxType: 'none',
-        taxRate: 0,
-        discountType: 'percentage',
-        discountValue: 0,
-      });
+      setNewOrder(getEmptyOrderForm());
     } catch (error) {
       console.error('Error updating order:', error);
       toast({ title: "Error", description: "Failed to update order", variant: "destructive" });
@@ -1819,6 +2062,13 @@ const AdminOrders: React.FC = () => {
         recordedAt: new Date().toISOString(),
       };
 
+      const inventoryRestore = await restoreInventoryForRefund(
+        db,
+        refundingOrder,
+        refundRecord.id,
+        sanitizedRefundAmount,
+      );
+
       const existingHistory = refundingOrder.paymentHistory || [];
       const updatedHistory = [...existingHistory, refundRecord];
 
@@ -1830,6 +2080,19 @@ const AdminOrders: React.FC = () => {
         paymentMethod: refundData.refundMethod,
         paymentNotes: refundData.refundNotes,
         paymentHistory: updatedHistory,
+        lastRefundInventoryRestore: {
+          refundId: refundRecord.id,
+          refundAmount: sanitizedRefundAmount,
+          restoredLines: inventoryRestore.restoredLines,
+          skippedLines: inventoryRestore.skippedLines,
+          restoredAt: new Date().toISOString(),
+          ...(inventoryRestore.manualAdjustmentRequired
+            ? {
+                manualAdjustmentRequired: true,
+                skippedFractionalQty: inventoryRestore.skippedFractionalQty,
+              }
+            : {}),
+        },
       });
 
       const updatedOrder = {
@@ -1864,6 +2127,17 @@ const AdminOrders: React.FC = () => {
         title: 'Success',
         description: `Refund processed! Status: ${paymentStatus === 'refunded' ? 'Fully Refunded' : paymentStatus === 'partial' ? 'Partially Paid' : paymentStatus === 'paid' ? 'Fully Paid' : 'Unpaid'}`,
       });
+
+      if (inventoryRestore.manualAdjustmentRequired) {
+        toast({
+          title: 'Manual stock adjustment needed',
+          description:
+            inventoryRestore.restoredLines > 0
+              ? `Restored whole units only. Adjust stock manually for ${inventoryRestore.skippedFractionalQty} remaining unit(s) from this partial refund.`
+              : `This partial refund does not map to whole units. Adjust stock manually (${inventoryRestore.skippedFractionalQty} unit(s)) — no automatic inventory restore was written.`,
+          variant: 'destructive',
+        });
+      }
 
       setViewingPaymentVoucher({ order: updatedOrder, payment: refundRecord });
     } catch (error) {
@@ -2047,14 +2321,14 @@ const AdminOrders: React.FC = () => {
       }
     }
 
-    const html = generateInvoiceHTMLTemplate(enrichedOrder, products, storeProfile, formatCurrency);
+    const html = generateInvoiceHTMLTemplate(enrichOrderForInvoice(enrichedOrder), products, storeProfile, formatCurrency);
     printWindow.document.write(html);
     printWindow.document.close();
     printWindow.print();
   };
 
   const generateInvoiceHTML = (order: Order & { id: string }) => {
-    return generateInvoiceHTMLTemplate(order, products, storeProfile, formatCurrency);
+    return generateInvoiceHTMLTemplate(enrichOrderForInvoice(order), products, storeProfile, formatCurrency);
   };
 
   const handleDownloadPDF = async (order: Order & { id: string }) => {
@@ -2837,18 +3111,22 @@ const AdminOrders: React.FC = () => {
     }
     setNewOrder({
       ...newOrder,
-      items: [...newOrder.items, { 
-        productId: products[0].id, 
+      items: [...newOrder.items, snapshotOrderItem({
+        productId: products[0].id,
         quantity: 1,
         discountType: 'percentage',
-        discountValue: 0
-      }]
+        discountValue: 0,
+      })],
     });
   };
 
   const updateOrderItem = (index: number, field: keyof OrderItem, value: OrderItemUpdateValue) => {
     const updatedItems = [...newOrder.items];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
+    if (field === 'productId' && typeof value === 'string') {
+      updatedItems[index] = snapshotOrderItem(updatedItems[index], value);
+    } else {
+      updatedItems[index] = { ...updatedItems[index], [field]: value };
+    }
     setNewOrder({ ...newOrder, items: updatedItems });
   };
 
@@ -2912,21 +3190,7 @@ const AdminOrders: React.FC = () => {
             if (!open) {
               setIsCreatingOrder(false);
               setEditingOrder(null);
-              setNewOrder({
-                customerId: '',
-                customerName: '',
-                customerPhone: '',
-                customerEmail: '',
-                assignedSalesPerson: '',
-                salesPersonName: '',
-                items: [],
-                deliveryMethod: getDeliveryOptions()[0]?.value || 'standard',
-                fulfillmentLocationId: '',
-                taxType: 'none',
-                taxRate: 0,
-                discountType: 'percentage',
-                discountValue: 0,
-              });
+              setNewOrder(getEmptyOrderForm());
             }
           }}>
             <DialogTrigger asChild>
@@ -2945,20 +3209,26 @@ const AdminOrders: React.FC = () => {
               <div className="grid gap-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="customer">Customer *</Label>
+                    <Label htmlFor="orderCustomer">Customer *</Label>
                     {isCreatingNewCustomer ? (
                       <div className="space-y-2 p-3 border rounded-md">
+                        <Label htmlFor="inlineCustomerName" className="text-xs text-gray-600">Customer Name</Label>
                         <Input
+                          id="inlineCustomerName"
                           placeholder="Customer Name"
                           value={newOrder.customerName}
                           onChange={(e) => setNewOrder({ ...newOrder, customerName: e.target.value })}
                         />
+                        <Label htmlFor="inlineCustomerPhone" className="text-xs text-gray-600">Phone</Label>
                         <Input
+                          id="inlineCustomerPhone"
                           placeholder="Phone"
                           value={newOrder.customerPhone}
                           onChange={(e) => setNewOrder({ ...newOrder, customerPhone: e.target.value })}
                         />
+                        <Label htmlFor="inlineCustomerEmail" className="text-xs text-gray-600">Email (optional)</Label>
                         <Input
+                          id="inlineCustomerEmail"
                           placeholder="Email (optional)"
                           type="email"
                           value={newOrder.customerEmail}
@@ -2974,9 +3244,11 @@ const AdminOrders: React.FC = () => {
                         <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
                           <PopoverTrigger asChild>
                             <Button
+                              id="orderCustomer"
                               variant="outline"
                               role="combobox"
                               aria-expanded={customerSearchOpen}
+                              aria-controls="orderCustomerList"
                               className="w-full justify-between"
                             >
                               {newOrder.customerId
@@ -2985,7 +3257,7 @@ const AdminOrders: React.FC = () => {
                               <User className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent className="w-full p-0">
+                          <PopoverContent id="orderCustomerList" className="w-full p-0">
                             <Command>
                               <CommandInput placeholder="Search customer..." />
                               <CommandEmpty>No customer found.</CommandEmpty>
@@ -3029,14 +3301,16 @@ const AdminOrders: React.FC = () => {
                     )}
                   </div>
                   <div>
-                    <Label htmlFor="salesPerson">Sales Person</Label>
+                    <Label htmlFor="orderSalesPerson">Sales Person</Label>
                     <div className="space-y-2">
                       <Popover open={salesPersonSearchOpen} onOpenChange={setSalesPersonSearchOpen}>
                         <PopoverTrigger asChild>
                           <Button
+                            id="orderSalesPerson"
                             variant="outline"
                             role="combobox"
                             aria-expanded={salesPersonSearchOpen}
+                            aria-controls="orderSalesPersonList"
                             className="w-full justify-between"
                             disabled={salesStaff.length === 0}
                           >
@@ -3046,7 +3320,7 @@ const AdminOrders: React.FC = () => {
                             <User className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent className="w-full p-0">
+                        <PopoverContent id="orderSalesPersonList" className="w-full p-0">
                           <Command>
                             <CommandInput placeholder="Search sales person..." />
                             <CommandEmpty>No sales person found.</CommandEmpty>
@@ -3075,7 +3349,7 @@ const AdminOrders: React.FC = () => {
                 </div>
 
                 <div>
-                  <Label>Order Date</Label>
+                  <p className="text-sm font-medium leading-none mb-2">Order Date</p>
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <input
@@ -3090,12 +3364,16 @@ const AdminOrders: React.FC = () => {
                       </Label>
                     </div>
                     {!useAutoDate && (
-                      <Input
-                        type="datetime-local"
-                        value={manualOrderDate}
-                        onChange={(e) => setManualOrderDate(e.target.value)}
-                        className="w-full"
-                      />
+                      <>
+                        <Label htmlFor="orderManualDate" className="sr-only">Manual order date</Label>
+                        <Input
+                          id="orderManualDate"
+                          type="datetime-local"
+                          value={manualOrderDate}
+                          onChange={(e) => setManualOrderDate(e.target.value)}
+                          className="w-full"
+                        />
+                      </>
                     )}
                     {useAutoDate && (
                       <p className="text-sm text-gray-500">
@@ -3107,7 +3385,10 @@ const AdminOrders: React.FC = () => {
 
                 <div>
                   <div className="flex justify-between items-center mb-2">
-                    <Label>Order Items *</Label>
+                    <div>
+                      <Label>Order Items *</Label>
+                      <p className="text-xs text-gray-500 mt-1">Add a line description under each item — it prints on the invoice PDF.</p>
+                    </div>
                     <Button type="button" size="sm" onClick={addItemToOrder}>
                       <Plus className="h-4 w-4 mr-1" />
                       Add Item
@@ -3128,33 +3409,40 @@ const AdminOrders: React.FC = () => {
                       return (
                         <div key={index} className="p-3 bg-gray-50 rounded-lg space-y-2">
                           <div className="flex gap-2 items-center">
-                            <Select
-                              value={item.productId}
-                              onValueChange={(value) => updateOrderItem(index, 'productId', value)}
-                            >
-                              <SelectTrigger className="flex-1">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {products.map(p => (
-                                  <SelectItem key={p.id} value={p.id}>
-                                    {p.name} - ${(p.sellingPrice || p.price || 0).toFixed(2)}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <Input
-                              type="number"
-                              min="0.01"
-                              step="0.01"
-                              value={item.quantity || ''}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                updateOrderItem(index, 'quantity', val === '' ? '' : parseFloat(val) || 0);
-                              }}
-                              className="w-20"
-                              placeholder="Qty"
-                            />
+                            <div className="flex-1">
+                              <Label htmlFor={`order-item-product-${index}`} className="sr-only">Product</Label>
+                              <Select
+                                value={item.productId}
+                                onValueChange={(value) => updateOrderItem(index, 'productId', value)}
+                              >
+                                <SelectTrigger id={`order-item-product-${index}`} className="w-full">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {products.map(p => (
+                                    <SelectItem key={p.id} value={p.id}>
+                                      {p.name} - ${(p.sellingPrice || p.price || 0).toFixed(2)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                            <div>
+                              <Label htmlFor={`order-item-qty-${index}`} className="sr-only">Quantity</Label>
+                              <Input
+                                id={`order-item-qty-${index}`}
+                                type="number"
+                                min="0.01"
+                                step="0.01"
+                                value={item.quantity || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value;
+                                  updateOrderItem(index, 'quantity', val === '' ? '' : parseFloat(val) || 0);
+                                }}
+                                className="w-20"
+                                placeholder="Qty"
+                              />
+                            </div>
                             <div className="w-28 text-right font-medium">
                               ${itemTotal.toFixed(2)}
                             </div>
@@ -3163,6 +3451,7 @@ const AdminOrders: React.FC = () => {
                               variant="ghost"
                               size="icon"
                               onClick={() => removeOrderItem(index)}
+                              aria-label={`Remove item ${index + 1}`}
                             >
                               <Trash2 className="h-4 w-4 text-red-500" />
                             </Button>
@@ -3170,12 +3459,12 @@ const AdminOrders: React.FC = () => {
                           
                           {/* Item discount controls */}
                           <div className="flex gap-2 items-center pl-2">
-                            <Label className="text-xs text-gray-600 w-16">Discount:</Label>
+                            <Label htmlFor={`order-item-discount-type-${index}`} className="text-xs text-gray-600 w-16">Discount:</Label>
                             <Select
                               value={item.discountType || 'percentage'}
                               onValueChange={(value: 'percentage' | 'fixed') => updateOrderItem(index, 'discountType', value)}
                             >
-                              <SelectTrigger className="w-32 h-8 text-xs">
+                              <SelectTrigger id={`order-item-discount-type-${index}`} className="w-32 h-8 text-xs">
                                 <SelectValue />
                               </SelectTrigger>
                               <SelectContent>
@@ -3183,18 +3472,36 @@ const AdminOrders: React.FC = () => {
                                 <SelectItem value="fixed">$</SelectItem>
                               </SelectContent>
                             </Select>
-                            <Input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={item.discountValue === 0 ? '' : item.discountValue}
-                              onChange={(e) => updateOrderItem(index, 'discountValue', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
-                              className="w-24 h-8 text-xs"
-                              placeholder="0"
-                            />
+                            <div className="flex-1">
+                              <Label htmlFor={`order-item-discount-value-${index}`} className="sr-only">Discount value</Label>
+                              <Input
+                                id={`order-item-discount-value-${index}`}
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={item.discountValue === 0 ? '' : item.discountValue}
+                                onChange={(e) => updateOrderItem(index, 'discountValue', e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0))}
+                                className="w-24 h-8 text-xs"
+                                placeholder="0"
+                              />
+                            </div>
                             {itemDiscount > 0 && (
                               <span className="text-xs text-green-600 font-medium">-${itemDiscount.toFixed(2)}</span>
                             )}
+                          </div>
+
+                          <div className="pl-2 space-y-1">
+                            <Label htmlFor={`order-item-line-description-${index}`} className="text-xs text-gray-600">
+                              Line description (prints on invoice)
+                            </Label>
+                            <Textarea
+                              id={`order-item-line-description-${index}`}
+                              rows={2}
+                              value={item.description ?? resolveProductDescription(product)}
+                              onChange={(e) => updateOrderItem(index, 'description', e.target.value)}
+                              placeholder="Product details shown on the invoice PDF"
+                              className="text-sm min-h-[56px]"
+                            />
                           </div>
                         </div>
                       );
@@ -3202,14 +3509,43 @@ const AdminOrders: React.FC = () => {
                   </div>
                 </div>
 
+                <div className="rounded-lg border border-blue-200 bg-blue-50/40 p-4 space-y-3">
+                  <div>
+                    <h3 className="text-sm font-semibold text-blue-900">Invoice notes</h3>
+                    <p className="text-xs text-gray-500">Optional text printed on the invoice PDF (below line items).</p>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label htmlFor="invoiceNotes">Invoice Notes</Label>
+                      <Textarea
+                        id="invoiceNotes"
+                        placeholder="Payment terms, special instructions…"
+                        value={newOrder.invoiceNotes}
+                        onChange={(e) => setNewOrder({ ...newOrder, invoiceNotes: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                    <div>
+                      <Label htmlFor="deliveryNotes">Delivery Notes</Label>
+                      <Textarea
+                        id="deliveryNotes"
+                        placeholder="Delivery instructions…"
+                        value={newOrder.deliveryNotes}
+                        onChange={(e) => setNewOrder({ ...newOrder, deliveryNotes: e.target.value })}
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Delivery Method</Label>
+                    <Label htmlFor="orderDeliveryMethod">Delivery Method</Label>
                     <Select
                       value={newOrder.deliveryMethod}
                       onValueChange={(value: DeliveryMethod) => setNewOrder({ ...newOrder, deliveryMethod: value })}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger id="orderDeliveryMethod">
                         <SelectValue placeholder="Select delivery method" />
                       </SelectTrigger>
                       <SelectContent>
@@ -3223,39 +3559,38 @@ const AdminOrders: React.FC = () => {
                     {selectedDeliveryOption && (
                       <p className="text-xs text-gray-500 mt-1">
                         ETA: {selectedDeliveryOption.time}
-
-                                      {fulfillmentLocations.length > 0 && (
-                                        <div>
-                                          <Label>Fulfillment Location (optional override)</Label>
-                                          <Select
-                                            value={newOrder.fulfillmentLocationId || 'auto'}
-                                            onValueChange={(value) => setNewOrder({ ...newOrder, fulfillmentLocationId: value === 'auto' ? '' : value })}
-                                          >
-                                            <SelectTrigger>
-                                              <SelectValue placeholder="Auto route" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                              <SelectItem value="auto">Auto route (recommended)</SelectItem>
-                                              {fulfillmentLocations
-                                                .filter((l) => l.isActive !== false)
-                                                .sort((a, b) => Number(a.priority ?? 999) - Number(b.priority ?? 999))
-                                                .map((location) => (
-                                                  <SelectItem key={location.id} value={location.id}>
-                                                    {location.name}
-                                                  </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                          </Select>
-                                        </div>
-                                      )}
                       </p>
+                    )}
+                    {selectedDeliveryOption && fulfillmentLocations.length > 0 && (
+                      <div className="mt-3">
+                        <Label htmlFor="orderFulfillmentLocation">Fulfillment Location (optional override)</Label>
+                        <Select
+                          value={newOrder.fulfillmentLocationId || 'auto'}
+                          onValueChange={(value) => setNewOrder({ ...newOrder, fulfillmentLocationId: value === 'auto' ? '' : value })}
+                        >
+                          <SelectTrigger id="orderFulfillmentLocation">
+                            <SelectValue placeholder="Auto route" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="auto">Auto route (recommended)</SelectItem>
+                            {fulfillmentLocations
+                              .filter((l) => l.isActive !== false)
+                              .sort((a, b) => Number(a.priority ?? 999) - Number(b.priority ?? 999))
+                              .map((location) => (
+                                <SelectItem key={location.id} value={location.id}>
+                                  {location.name}
+                                </SelectItem>
+                              ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
                     )}
                   </div>
 
                   <div>
-                    <Label>Tax Type</Label>
+                    <Label htmlFor="orderTaxType">Tax Type</Label>
                     <Select value={newOrder.taxType} onValueChange={(value: 'none' | 'VAT' | 'TTC') => setNewOrder({ ...newOrder, taxType: value })}>
-                      <SelectTrigger>
+                      <SelectTrigger id="orderTaxType">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -3267,8 +3602,9 @@ const AdminOrders: React.FC = () => {
                   </div>
                   {newOrder.taxType !== 'none' && (
                     <div>
-                      <Label>Tax Rate (%)</Label>
+                      <Label htmlFor="orderTaxRate">Tax Rate (%)</Label>
                       <Input
+                        id="orderTaxRate"
                         type="number"
                         min="0"
                         max="100"
@@ -3283,9 +3619,9 @@ const AdminOrders: React.FC = () => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label>Discount Type</Label>
+                    <Label htmlFor="orderDiscountType">Discount Type</Label>
                     <Select value={newOrder.discountType} onValueChange={(value: 'percentage' | 'fixed') => setNewOrder({ ...newOrder, discountType: value })}>
-                      <SelectTrigger>
+                      <SelectTrigger id="orderDiscountType">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -3295,8 +3631,9 @@ const AdminOrders: React.FC = () => {
                     </Select>
                   </div>
                   <div>
-                    <Label>Discount Value</Label>
+                    <Label htmlFor="orderDiscountValue">Discount Value</Label>
                     <Input
+                      id="orderDiscountValue"
                       type="number"
                       min="0"
                       step="0.01"
@@ -3344,19 +3681,7 @@ const AdminOrders: React.FC = () => {
                 <Button variant="outline" onClick={() => {
                   setIsCreatingOrder(false);
                   setEditingOrder(null);
-                  setNewOrder({
-                    customerId: '',
-                    customerName: '',
-                    customerPhone: '',
-                    customerEmail: '',
-                    assignedSalesPerson: '',
-                    salesPersonName: '',
-                    items: [],
-                    taxType: 'none',
-                    taxRate: 0,
-                    discountType: 'percentage',
-                    discountValue: 0,
-                  });
+                  setNewOrder(getEmptyOrderForm());
                 }}>Cancel</Button>
                 <Button onClick={editingOrder ? handleUpdateOrder : handleCreateOrder}>
                   {editingOrder ? 'Update Order' : 'Create Order'}
@@ -3845,7 +4170,7 @@ const AdminOrders: React.FC = () => {
                         <p className="text-sm"><strong>City:</strong> {viewingOrder.deliveryCity}</p>
                       )}
                       {viewingOrder.deliveryNotes && (
-                        <p className="text-sm"><strong>Notes:</strong> {viewingOrder.deliveryNotes}</p>
+                        <p className="text-sm"><strong>Delivery Notes:</strong> {viewingOrder.deliveryNotes}</p>
                       )}
                       {viewingOrder.deliveryCoordinates && viewingOrder.deliveryCoordinates.lat !== 0 && (
                         <p className="text-sm">
@@ -3864,6 +4189,13 @@ const AdminOrders: React.FC = () => {
                   </div>
                 )}
 
+                {viewingOrder.invoiceNotes && (
+                  <div className="bg-gray-50 p-4 rounded">
+                    <Label>Invoice Notes</Label>
+                    <p className="text-sm mt-1 whitespace-pre-wrap">{viewingOrder.invoiceNotes}</p>
+                  </div>
+                )}
+
                 <div>
                   <Label>Items</Label>
                   <div className="mt-2 space-y-2">
@@ -3871,11 +4203,16 @@ const AdminOrders: React.FC = () => {
                       const product = products.find(p => p.id === item.productId);
                       const itemPrice = item.price || product?.sellingPrice || product?.price || 0;
                       return (
-                        <div key={index} className="flex justify-between p-2 bg-gray-50 rounded">
-                          <span>{product?.name || 'Product'}</span>
-                          <span className="font-medium">
-                            {item.quantity} × ${itemPrice.toFixed(2)} = ${(itemPrice * item.quantity).toFixed(2)}
-                          </span>
+                        <div key={index} className="p-2 bg-gray-50 rounded">
+                          <div className="flex justify-between">
+                            <span>{item.productName || product?.name || 'Product'}</span>
+                            <span className="font-medium">
+                              {item.quantity} × ${itemPrice.toFixed(2)} = ${(itemPrice * item.quantity).toFixed(2)}
+                            </span>
+                          </div>
+                          {(item.description || product?.description) && (
+                            <p className="text-xs text-gray-500 mt-1">{item.description || product?.description}</p>
+                          )}
                         </div>
                       );
                     })}
@@ -4033,17 +4370,18 @@ const AdminOrders: React.FC = () => {
             </DialogHeader>
             <div className="space-y-3">
               <div>
-                <Label>Pickup Date</Label>
+                <Label htmlFor="pickupDate">Pickup Date</Label>
                 <Input
+                  id="pickupDate"
                   type="date"
                   value={pickupData.pickupDate}
                   onChange={(e) => setPickupData((prev) => ({ ...prev, pickupDate: e.target.value }))}
                 />
               </div>
               <div>
-                <Label>Carrier</Label>
+                <Label htmlFor="pickupCarrier">Carrier</Label>
                 <Select value={pickupData.carrier} onValueChange={(value) => setPickupData((prev) => ({ ...prev, carrier: value }))}>
-                  <SelectTrigger>
+                  <SelectTrigger id="pickupCarrier">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -4056,8 +4394,9 @@ const AdminOrders: React.FC = () => {
                 </Select>
               </div>
               <div>
-                <Label>Notes</Label>
+                <Label htmlFor="pickupNotes">Notes</Label>
                 <Textarea
+                  id="pickupNotes"
                   placeholder="Pickup instructions"
                   value={pickupData.notes}
                   onChange={(e) => setPickupData((prev) => ({ ...prev, notes: e.target.value }))}

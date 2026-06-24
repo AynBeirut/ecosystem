@@ -303,6 +303,15 @@ const AdminProduction: React.FC = () => {
   const handleUpdateBatch = async () => {
     if (!editingBatch || !user?.storeId) return;
 
+    if (editingBatch.status === 'completed') {
+      toast({
+        title: 'Completed batch locked',
+        description: 'Delete and recreate, or add a new batch — completed runs cannot be edited in place.',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     try {
       const db = getFirestore();
       const batchRef = doc(db, 'productionBatches', editingBatch.id);
@@ -1437,6 +1446,7 @@ const AdminProduction: React.FC = () => {
                             Recalc Cost
                           </Button>
                         )}
+                        {batch.status !== 'completed' && (
                         <Button
                           variant="ghost"
                           size="icon"
@@ -1444,6 +1454,7 @@ const AdminProduction: React.FC = () => {
                         >
                           <Edit2 className="h-4 w-4" />
                         </Button>
+                        )}
                       </div>
                     </div>
                   </CardHeader>
