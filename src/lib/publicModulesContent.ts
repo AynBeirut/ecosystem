@@ -1,4 +1,4 @@
-import { MODULE_CATALOG, PricingModule, getModulePriceLabel, type PaidTier } from '@/lib/pricingDisplay';
+import { MODULE_CATALOG, PricingModule, getModulePriceLabel, isRoadmapModule, type PaidTier } from '@/lib/pricingDisplay';
 
 export const MODULE_GROUP_META = {
   platform: {
@@ -186,39 +186,100 @@ export const MODULE_FEATURE_ITEMS: Record<string, string[]> = {
     'Promotions and announcement copy',
     'Store campaign drafts',
   ],
+  timesheet_attendance: [
+    'PIN, badge, or face-scan clock-in',
+    'Shift and overtime tracking',
+    'Attendance linked to payroll runs',
+    'Manager approval workflows',
+  ],
+  recruitment_ats: [
+    'Job board posting templates',
+    'Resume intake and pipeline stages',
+    'Interview scheduling and notes',
+    'Hire-to-onboarding handoff',
+  ],
+  expense_ocr: [
+    'Mobile receipt capture',
+    'AI text and tax extraction',
+    'Auto-filled reimbursement forms',
+    'Manager review and approval queue',
+  ],
+  shopify_importer: [
+    'Shopify API or CSV import',
+    'Products, variants, and images',
+    'Customer records and order history',
+    'Storefront preview before cutover',
+  ],
+  localized_logistics: [
+    'Aramex, MotoBoy, and regional fleets',
+    'One-click assign delivery',
+    'Partner shipping label print',
+    'Customer tracking link via WhatsApp',
+  ],
+  whatsapp_marketing_engine: [
+    'Abandoned cart recovery (timed discount)',
+    'VIP restock and low-stock alerts',
+    'Order and delivery notifications',
+    'Campaign triggers from store events',
+  ],
+  dual_currency_accounting: [
+    'USD-pegged catalog prices',
+    'Daily parallel-market rate updates',
+    'Instant LBP calculation at checkout',
+    'Accounting reports in both currencies',
+  ],
+  legal_esign: [
+    'Secure document vault per store',
+    'Contract and NDA routing',
+    'Native e-signature capture',
+    'Audit trail and version history',
+  ],
+  plm_eco: [
+    'Engineering Change Orders (ECO)',
+    'Blueprint and recipe version history',
+    'Effective-date mapping for formula shifts',
+    'Audit trail for manufacturing compliance',
+  ],
 };
 
 export const PLATFORM_CAPABILITIES = [
-  { icon: '🗂️', title: 'One Account', desc: 'All your data in one place' },
-  { icon: '📱', title: 'Admin Android App', desc: 'Owner dashboard on Google Play' },
-  { icon: '🔒', title: 'Secure by Default', desc: 'Firebase Auth and audit logs' },
-  { icon: '⚡', title: 'Real-Time Sync', desc: 'Web and mobile stay in sync' },
-  { icon: '🌍', title: 'Dual Currency', desc: 'USD plus local (LBP) rates' },
-  { icon: '🔔', title: 'Push Alerts', desc: 'Orders, expiry, low stock' },
-  { icon: '🤖', title: 'AI Growth Tools', desc: 'In-account content and campaigns' },
-  { icon: '🏷️', title: 'White-Label', desc: 'Custom domains and templates' },
+  { title: 'One Account', desc: 'All your data in one place' },
+  { title: 'Admin Android App', desc: 'Owner dashboard on Google Play' },
+  { title: 'Secure by Default', desc: 'Firebase Auth and audit logs' },
+  { title: 'Real-Time Sync', desc: 'Web and mobile stay in sync' },
+  { title: 'Dual Currency', desc: 'USD plus local (LBP) rates' },
+  { title: 'Push Alerts', desc: 'Orders, expiry, low stock' },
+  { title: 'AI Growth Tools', desc: 'In-account content and campaigns' },
+  { title: 'White-Label', desc: 'Custom domains and templates' },
 ];
 
 export function getModulesByGroup(group: PricingModule['group']): PricingModule[] {
-  return MODULE_CATALOG.filter((m) => m.group === group);
+  const items = MODULE_CATALOG.filter((m) => m.group === group);
+  return [...items].sort((a, b) => Number(isRoadmapModule(a)) - Number(isRoadmapModule(b)));
 }
 
 export function getStatusBadgeClass(status: PricingModule['status']): string {
   if (status === 'live') return 'bg-teal-100 text-teal-700';
   if (status === 'beta') return 'bg-amber-100 text-amber-800';
+  if (status === 'coming_soon') return 'bg-violet-100 text-violet-800';
+  if (status === 'planned') return 'bg-gray-100 text-gray-600';
   return 'bg-gray-100 text-gray-600';
 }
 
 export function getStatusLabel(status: PricingModule['status']): string {
+  if (status === 'coming_soon') return 'Coming soon';
   if (status === 'planned') return 'In development';
   return status === 'live' ? 'Live' : 'Beta';
 }
 
 export function getBillingLabel(mod: PricingModule, tier: PaidTier = 'starter'): string {
+  if (isRoadmapModule(mod)) {
+    return mod.status === 'coming_soon' ? 'Coming soon' : 'In development';
+  }
   if (mod.billing === 'core') return 'Always included';
   if (mod.billing === 'included') return 'Included with account';
   if (mod.billing === 'planned') {
-    return mod.status === 'planned' ? 'In development' : 'Optional';
+    return 'Optional — billing TBA';
   }
   return getModulePriceLabel(mod, 'monthly', tier);
 }

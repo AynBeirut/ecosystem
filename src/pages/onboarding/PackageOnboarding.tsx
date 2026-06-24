@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
-import { MODULE_CATALOG } from '@/lib/pricingDisplay';
+import { MODULE_CATALOG, isRoadmapModule } from '@/lib/pricingDisplay';
 import { PRESET_LIST, buildProfileFromPreset } from '@/lib/packagePresets';
 import {
   applyModuleToggle,
@@ -30,7 +30,7 @@ import { toast } from 'sonner';
 type OnboardingPath = 'custom' | 'preset';
 
 const TOGGLEABLE_MODULES = MODULE_CATALOG.filter(
-  (m) => !CORE_MODULE_IDS.includes(m.id as (typeof CORE_MODULE_IDS)[number]) && m.status !== 'planned',
+  (m) => !CORE_MODULE_IDS.includes(m.id as (typeof CORE_MODULE_IDS)[number]) && !isRoadmapModule(m),
 );
 
 const PackageOnboarding: React.FC = () => {
