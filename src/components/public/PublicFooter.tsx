@@ -8,7 +8,7 @@ const PublicFooter: React.FC = () => (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
         {/* Brand */}
         <div className="col-span-2 md:col-span-1">
-          <Link to="/" className="text-white font-bold text-xl hover:text-teal-400 transition-colors">
+          <Link to="/home" className="text-white font-bold text-xl hover:text-teal-400 transition-colors">
             Grabio
           </Link>
           <p className="mt-3 text-sm leading-relaxed">

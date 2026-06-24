@@ -1,9 +1,6 @@
-import { useEffect } from 'react';
+import { Navigate } from 'react-router-dom';
 
-/** Sends `/` to the static modular landing page (same Firebase auth session). */
+/** Sends `/` to the React modular home (same Firebase auth session). */
 export default function ModularHomeRedirect() {
-  useEffect(() => {
-    window.location.replace('/home.html');
-  }, []);
-  return null;
+  return <Navigate to="/home" replace />;
 }
