@@ -3,7 +3,8 @@
     "source": "functions"
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "storage": {
     "rules": "storage.rules"
@@ -15,7 +16,7 @@
     },
     "firestore": {
       "host": "127.0.0.1",
-      "port": 8080
+      "port": 8200
     },
     "auth": {
       "host": "127.0.0.1",
@@ -37,7 +38,11 @@
     ],
     "rewrites": [
       {
-        "source": "!/@(sg|sd|grabio-product-description|seo-report).html",
+        "source": "/home",
+        "destination": "/home.html"
+      },
+      {
+        "source": "!/@(sg|sd|grabio-product-description|seo-report|privacy|home|home-pagetest).html",
         "destination": "/index.html"
       }
     ],

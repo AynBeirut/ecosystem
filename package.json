@@ -21,7 +21,8 @@
     "test:inventory-invariants": "vitest run src/__tests__/inventoryTransitionInvariants.test.ts",
     "test:ui": "vitest --ui",
     "test:unit": "vitest run src/__tests__",
-    "test:watch": "vitest watch"
+    "test:watch": "vitest watch",
+    "test:firestore-rules": "JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\""
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -91,6 +92,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@tailwindcss/typography": "^0.5.15",
     "@testing-library/jest-dom": "^6.1.0",
     "@testing-library/react": "^14.0.0",
