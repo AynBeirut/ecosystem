@@ -33,7 +33,7 @@ import { resolveStoreEntitlements } from '@/lib/entitlements';
 import { PRESET_LIST } from '@/lib/packagePresets';
 import { calculateModularPrice, calculateCustomPrice, MODULE_PRICES } from '@/lib/modularPricing';
 import type { StartingPackageKey } from '@/lib/moduleManifest';
-import { MODULE_CATALOG, ADDON_PRICING } from '@/lib/pricingDisplay';
+import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule } from '@/lib/pricingDisplay';
 import type { AddOnKey as PricingAddOnKey } from '@/lib/pricingDisplay';
 import { getApiBaseUrl } from '@/lib/apiBase';
 
@@ -941,10 +941,11 @@ export default function Subscription() {
 
             {/* Coming soon */}
             {(() => {
-              const comingSoon = MODULE_CATALOG.filter(m =>
-                m.status === 'planned' &&
-                m.billing !== 'addon' &&
-                !selectedPresetData?.defaultModules.includes(m.id)
+              const comingSoon = MODULE_CATALOG.filter(
+                (m) =>
+                  isRoadmapModule(m) &&
+                  m.billing !== 'addon' &&
+                  !selectedPresetData?.defaultModules.includes(m.id),
               );
               if (!comingSoon.length) return null;
               return (

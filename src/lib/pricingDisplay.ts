@@ -29,8 +29,13 @@ export type PricingModule = {
   addOnKey?: AddOnKey;
   /** Minimum paid tier when billing === 'tier' */
   minTier?: PaidTier;
-  status: 'live' | 'beta' | 'planned';
+  status: 'live' | 'beta' | 'planned' | 'coming_soon';
 };
+
+/** Shown on /features — hidden from checkout toggles */
+export function isRoadmapModule(mod: PricingModule): boolean {
+  return mod.status === 'planned' || mod.status === 'coming_soon';
+}
 
 export const PLAN_PRICING: Record<PaidTier, { monthly: number; yearly: number }> = {
   starter: { monthly: 10, yearly: 100 },
@@ -74,6 +79,15 @@ export const MODULE_CATALOG: PricingModule[] = [
   { id: 'builder', name: 'Web Builder', group: 'platform', icon: '🎨', summary: 'Store templates, branding, colors — powered by AI', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'ai_builder', name: 'AI Builder', group: 'platform', icon: '✨', summary: 'AI site and content generation', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'blog_publisher', name: 'Blog Publisher', group: 'platform', icon: '📰', summary: 'Write and publish articles on your store page', billing: 'tier', minTier: 'starter', status: 'live' },
+  { id: 'timesheet_attendance', name: 'Timesheet & Attendance', group: 'platform', icon: '⏱️', summary: 'PIN, badge, or face-scan clock-in linked to payroll', billing: 'planned', status: 'planned' },
+  { id: 'recruitment_ats', name: 'Recruitment Funnel (ATS)', group: 'platform', icon: '📋', summary: 'Job postings, resumes, interview stages, and hiring pipeline', billing: 'planned', status: 'planned' },
+  { id: 'expense_ocr', name: 'Expense OCR Scanning', group: 'platform', icon: '🧾', summary: 'Receipt photos with AI extraction for reimbursement requests', billing: 'planned', status: 'planned' },
+  { id: 'shopify_importer', name: 'Shopify Importer & Clone', group: 'platform', icon: '🛍️', summary: '1-click migration from Shopify API or CSV — products, customers, orders', billing: 'planned', status: 'coming_soon' },
+  { id: 'localized_logistics', name: 'Localized Logistics', group: 'platform', icon: '🚛', summary: 'Aramex, MotoBoy, and regional fleets — labels and WhatsApp tracking', billing: 'planned', status: 'coming_soon' },
+  { id: 'whatsapp_marketing_engine', name: 'WhatsApp Marketing Engine', group: 'platform', icon: '📲', summary: 'Abandoned cart recovery, VIP restock alerts, and triggered promos', billing: 'planned', status: 'coming_soon' },
+  { id: 'dual_currency_accounting', name: 'Dual-Currency Accounting Shield', group: 'platform', icon: '💱', summary: 'USD-pegged prices with real-time parallel-market checkout conversion', billing: 'planned', status: 'coming_soon' },
+  { id: 'legal_esign', name: 'Legal Docs & E-Signatures', group: 'platform', icon: '✍️', summary: 'Contracts, NDAs, and quotes with native digital signature', billing: 'planned', status: 'planned' },
+  { id: 'plm_eco', name: 'Product Lifecycle (PLM)', group: 'platform', icon: '🔬', summary: 'Engineering change orders and blueprint version control', billing: 'planned', status: 'planned' },
   { id: 'admin_mobile', name: 'Grabio Admin App', group: 'apps', icon: '📱', summary: 'Android owner dashboard on Google Play', billing: 'included', status: 'live' },
   { id: 'pos', name: 'Grabio POS', group: 'apps', icon: '🖥️', summary: 'Windows POS — download, install, sync with your store', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'invoice_manager', name: 'Invoice Manager App', group: 'apps', icon: '📱', summary: 'Standalone mobile billing app', billing: 'tier', minTier: 'starter', status: 'live' },
@@ -236,7 +250,9 @@ export function getModulePriceLabel(
     return `+$${price}/${billing === 'yearly' ? 'yr' : 'mo'}`;
   }
   if (mod.billing === 'planned') {
-    return mod.status === 'planned' ? 'In development' : 'Optional — billing TBA';
+    if (mod.status === 'coming_soon') return 'Coming soon';
+    if (mod.status === 'planned') return 'In development';
+    return 'Optional — billing TBA';
   }
   return 'Optional';
 }

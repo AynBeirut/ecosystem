@@ -16,6 +16,7 @@ import {
   EMPTY_ADDON_SELECTION,
   getModulePriceLabel,
   MODULE_CATALOG,
+  isRoadmapModule,
   modulesFromSelection,
   normalizeAddOnsFromProfile,
   normalizeTier,
@@ -28,6 +29,7 @@ import {
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { PRESET_LIST } from '@/lib/packagePresets';
 import { calculateModularPrice } from '@/lib/modularPricing';
+import { getStatusBadgeClass, getStatusLabel } from '@/lib/publicModulesContent';
 
 const PLANS = [
   {
@@ -127,6 +129,7 @@ const GROUP_LABELS: Record<PricingModule['group'], string> = {
 };
 
 function isToggleDisabled(mod: PricingModule, tier: PaidTier): boolean {
+  if (isRoadmapModule(mod)) return true;
   if (mod.billing === 'core' || mod.billing === 'included') return true;
   if (mod.billing === 'tier' && mod.minTier && tierMeetsMinimum(tier, mod.minTier)) return true;
   return false;
@@ -456,15 +459,9 @@ const Pricing: React.FC = () => {
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-semibold text-gray-900">{mod.name}</p>
                                 <span
-                                  className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${
-                                    mod.status === 'live'
-                                      ? 'bg-teal-100 text-teal-700'
-                                      : mod.status === 'beta'
-                                        ? 'bg-amber-100 text-amber-800'
-                                        : 'bg-gray-100 text-gray-600'
-                                  }`}
+                                  className={`text-[10px] font-bold uppercase tracking-wide px-2 py-0.5 rounded-full ${getStatusBadgeClass(mod.status)}`}
                                 >
-                                  {mod.status === 'planned' ? 'In development' : mod.status}
+                                  {getStatusLabel(mod.status)}
                                 </span>
                               </div>
                               <p className="text-sm text-gray-500 mt-0.5">{mod.summary}</p>
