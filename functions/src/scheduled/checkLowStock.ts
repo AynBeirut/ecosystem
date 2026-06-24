@@ -1,19 +1,8 @@
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2/scheduler';
+import { getFcmTokensForStoreOwner, sendFcmMulticast } from '../services/fcmTokens';
 
 const db = admin.firestore();
-
-async function getFcmTokensForOwner(storeId: string): Promise<string[]> {
-  const ownerSnap = await db
-    .collection('users')
-    .where('storeId', '==', storeId)
-    .limit(1)
-    .get();
-  if (ownerSnap.empty) return [];
-  const ownerId = ownerSnap.docs[0].id;
-  const fcmSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
-  return fcmSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id).filter(Boolean);
-}
 
 /**
  * Daily scheduled job: check for low-stock products and push alert to each store owner.
@@ -54,7 +43,7 @@ export const checkLowStockAlert = functions.onSchedule(
     // Send FCM to each store owner
     for (const storeId of storeIds) {
       const items = byStore[storeId];
-      const tokens = await getFcmTokensForOwner(storeId);
+      const tokens = await getFcmTokensForStoreOwner(storeId);
       if (tokens.length === 0) continue;
 
       const itemList = items.map((i) => `${i.name}: ${i.stock} ${i.unit || 'units'}`).join(', ');
@@ -64,13 +53,7 @@ export const checkLowStockAlert = functions.onSchedule(
         : `${itemList.slice(0, 100)}${itemList.length > 100 ? '…' : ''}`;
 
       try {
-        await admin.messaging().sendEachForMulticast({
-          tokens,
-          notification: { title, body },
-          data: { type: 'low_stock', storeId },
-          android: { priority: 'high' },
-          apns: { payload: { aps: { sound: 'default' } } },
-        });
+        await sendFcmMulticast(tokens, title, body, { type: 'low_stock', storeId });
         console.log(`Sent low stock alert to store ${storeId} (${items.length} items)`);
       } catch (err) {
         console.warn(`Failed to send low stock alert for store ${storeId}:`, err);

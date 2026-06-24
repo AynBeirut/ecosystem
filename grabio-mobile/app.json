@@ -2,7 +2,7 @@
   "expo": {
     "name": "Grabio",
     "slug": "grabio-mobile",
-    "version": "1.0.0",
+    "version": "1.2.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -18,11 +18,13 @@
       "googleServicesFile": "./GoogleService-Info.plist",
       "infoPlist": {
         "NSCameraUsageDescription": "Take product photos",
-        "NSPhotoLibraryUsageDescription": "Upload product images"
+        "NSPhotoLibraryUsageDescription": "Upload product images",
+        "NSLocationWhenInUseUsageDescription": "Sales CRM records your location when logging field visits."
       }
     },
     "scheme": "grabio",
     "android": {
+      "versionCode": 30,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#6366f1"
@@ -35,6 +37,8 @@
         "android.permission.CAMERA",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.RECEIVE_BOOT_COMPLETED",
         "android.permission.VIBRATE"
       ],

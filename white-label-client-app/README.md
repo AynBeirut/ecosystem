@@ -46,11 +46,33 @@ A bakery owner on Grabio wants their customers to download "Bakery X App" from t
 
 ## Status
 
-🔲 Not started — template ready, pending:
-- `clientConfig.ts` (storeId injection)
-- Marketplace filtered to single store
-- Branding variables extracted from hardcoded values
-- EAS build pipeline for per-client builds
+✅ **Integrated with Grabio Firebase** — no Supabase, single backend  
+✅ **Single-store customer app** — filtered by `storeId` in `app.json` extra  
+✅ **Guest checkout** — no Grabio marketplace login  
+✅ **Admin hub** — `/admin/whitelabel` in Grabio dashboard  
+
+🔲 Per-client EAS builds — set `storeId` in `app.json` extra before each build  
+🔲 Custom icon/splash per client  
+🔲 Play Store / App Store submission per client  
+
+---
+
+## Configure a client build
+
+1. Open Grabio admin → **White-Label Store App** (`/admin/whitelabel`)
+2. Copy your **Store ID**
+3. Edit `app.json`:
+
+```json
+"extra": {
+  "storeId": "YOUR_FIREBASE_STORE_ID",
+  "appName": "Bakery X",
+  "deepLinkHost": "grabio.space"
+}
+```
+
+4. Replace icon/splash in `assets/`
+5. Run `eas build --profile preview` (APK) or `production`
 
 ---
 

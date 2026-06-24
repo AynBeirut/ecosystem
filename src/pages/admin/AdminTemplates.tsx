@@ -3,6 +3,9 @@ import BackButton from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { getAuth } from 'firebase/auth';
+import { useModuleEntitlement } from '@/hooks/useModuleEntitlement';
+import { getApiBaseUrl } from '@/lib/apiBase';
 import {
   Palette, Eye, Check, Upload, Trash2, ChevronLeft, ChevronRight,
   LayoutGrid, Layers, Settings2, Save,
@@ -292,6 +295,15 @@ const SECTION_ANIMATION_OPTIONS: Array<{ id: SectionAnimation; label: string }> 
   { id: 'zoom', label: 'Zoom' },
 ];
 
+// ── AI agent prompts ─────────────────────────────────────────────────────────
+const AI_STORE_TASKS = [
+  { id: 'tagline', label: '✨ Generate store tagline', prompt: (name: string, type: string) => `Write 3 short, catchy taglines for a ${type} store named "${name}". Each on its own line. Keep each under 10 words.` },
+  { id: 'about', label: '📝 Write About section', prompt: (name: string, type: string) => `Write a professional About Us section (3 short paragraphs) for a ${type} store named "${name}". Warm, trustworthy tone.` },
+  { id: 'welcome', label: '👋 Write welcome message', prompt: (name: string, type: string) => `Write a warm welcome message (2-3 sentences) for the homepage of a ${type} store named "${name}".` },
+  { id: 'colors', label: '🎨 Suggest color palette', prompt: (name: string, type: string) => `Suggest a color palette for a ${type} store named "${name}". Give 3 palette options with hex codes for: primary, background, accent, and text. Format clearly.` },
+  { id: 'seo_title', label: '🔍 Generate SEO title & meta', prompt: (name: string, type: string) => `Write an SEO meta title (under 60 chars) and meta description (under 155 chars) for a ${type} store named "${name}".` },
+];
+
 // ── component ────────────────────────────────────────────────────────────────
 const AdminTemplates: React.FC = () => {
   const { toast } = useToast();
@@ -299,6 +311,15 @@ const AdminTemplates: React.FC = () => {
   const { user } = useAuth();
   const storeId = getActualStoreId(user);
   const db = getFirestore();
+  const firebaseAuth = getAuth();
+  const { enabled: hasAiBuilder } = useModuleEntitlement('ai_builder');
+
+  // AI agent state
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiTask, setAiTask] = useState(AI_STORE_TASKS[0].id);
+  const [aiBusinessType, setAiBusinessType] = useState('');
+  const [aiOutput, setAiOutput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Tab
   const [activeTab, setActiveTab] = useState<TabId>('templates');
@@ -682,6 +703,32 @@ const AdminTemplates: React.FC = () => {
     professional: { shell: 'bg-gradient-to-br from-slate-200 via-gray-100 to-zinc-200', header: 'bg-gradient-to-r from-slate-700 to-gray-800 shadow-xl', block: 'bg-white shadow-md hover:shadow-xl transition-all border-slate-300', title: 'text-white tracking-wide font-semibold' },
     artistic:     { shell: 'bg-gradient-to-tr from-violet-200 via-fuchsia-100 to-amber-200', header: 'bg-gradient-to-r from-violet-600 via-purple-500 to-pink-500 shadow-2xl', block: 'bg-white/95 shadow-lg hover:shadow-2xl transition-all border-2 border-violet-300 backdrop-blur-sm', title: 'text-white font-bold drop-shadow-xl' },
     custom:       { shell: 'bg-gradient-to-br from-emerald-100 via-teal-50 to-cyan-100', header: 'bg-gradient-to-r from-teal-600 to-cyan-600 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-teal-200', title: 'text-white font-semibold' },
+  };
+
+  const handleAiGenerate = async () => {
+    const storeName = (user as { storeName?: string } | null)?.storeName || 'My Store';
+    const businessType = aiBusinessType.trim() || 'retail';
+    const task = AI_STORE_TASKS.find(t => t.id === aiTask);
+    if (!task) return;
+    const prompt = task.prompt(storeName, businessType);
+    const token = await firebaseAuth.currentUser?.getIdToken();
+    if (!token) return;
+    setAiLoading(true);
+    setAiOutput('');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/ai/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ storeId, tool: 'ai_builder', prompt }),
+      });
+      const data = await res.json() as { success: boolean; content?: string; message?: string };
+      if (!data.success) throw new Error(data.message || 'Generation failed');
+      setAiOutput(data.content ?? '');
+    } catch (err) {
+      toast({ title: 'AI Error', description: err instanceof Error ? err.message : 'Failed', variant: 'destructive' });
+    } finally {
+      setAiLoading(false);
+    }
   };
 
   const handleSelectTemplate = async (templateId: TemplateId) => {
@@ -2531,6 +2578,87 @@ const AdminTemplates: React.FC = () => {
                 <Save className="h-4 w-4" />{savingSections ? 'Saving…' : hasUnsavedSections ? 'Save Sections *' : 'Save Sections'}
               </Button>
             </div>
+          </div>
+        )}
+
+        {/* ── AI Agent ──────────────────────────────────────────────────── */}
+        {hasAiBuilder && (
+          <div className="mt-8">
+            <button
+              type="button"
+              onClick={() => setAiOpen(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors"
+            >
+              <span className="font-semibold flex items-center gap-2">
+                <span>🤖</span> AI Store Assistant
+                <Badge variant="secondary" className="text-xs">ai_builder</Badge>
+              </span>
+              <span className="text-muted-foreground text-sm">{aiOpen ? '▲ Close' : '▼ Open'}</span>
+            </button>
+
+            {aiOpen && (
+              <Card className="mt-3 border-primary/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Generate store content with AI</CardTitle>
+                  <CardDescription>
+                    Uses your AI Builder credits. Results are copyable — apply them manually where needed.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium block mb-1">What to generate</label>
+                      <select
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                        value={aiTask}
+                        onChange={e => { setAiTask(e.target.value); setAiOutput(''); }}
+                      >
+                        {AI_STORE_TASKS.map(t => (
+                          <option key={t.id} value={t.id}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium block mb-1">Business type</label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                        placeholder="e.g. bakery, clothing boutique, electronics"
+                        value={aiBusinessType}
+                        onChange={e => setAiBusinessType(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={() => void handleAiGenerate()} disabled={aiLoading} className="w-full">
+                    {aiLoading ? 'Generating…' : 'Generate with AI'}
+                  </Button>
+                  {aiOutput && (
+                    <div className="rounded-lg border bg-muted/30 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">Result</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { void navigator.clipboard.writeText(aiOutput); toast({ title: 'Copied!' }); }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                      <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">{aiOutput}</pre>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {!hasAiBuilder && (
+          <div className="mt-6 rounded-xl border border-dashed border-muted-foreground/30 p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              🤖 <span className="font-medium">AI Store Assistant</span> — enable the <span className="font-medium">AI Builder</span> module in your{' '}
+              <a href="/subscription" className="underline text-primary">subscription</a> to generate taglines, about text, and color palettes with AI.
+            </p>
           </div>
         )}
 

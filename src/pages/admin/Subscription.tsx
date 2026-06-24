@@ -28,15 +28,24 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import { resolveStoreEntitlements } from '@/lib/entitlements';
+import { PRESET_LIST } from '@/lib/packagePresets';
+import { calculateModularPrice, calculateCustomPrice, MODULE_PRICES } from '@/lib/modularPricing';
+import type { StartingPackageKey } from '@/lib/moduleManifest';
+import { MODULE_CATALOG, ADDON_PRICING } from '@/lib/pricingDisplay';
+import type { AddOnKey as PricingAddOnKey } from '@/lib/pricingDisplay';
+import { getApiBaseUrl } from '@/lib/apiBase';
 
 type Billing = 'monthly' | 'yearly';
 type SubscriptionTier = 'trial' | 'starter' | 'pro' | 'business';
 type PaidTier = Exclude<SubscriptionTier, 'trial'>;
-type AddOnKey = 'domainPackage' | 'whatsappBusiness' | 'extraStorage';
+type AddOnKey = 'domainPackage' | 'whatsappBusiness' | 'salesCrm' | 'extraStorage';
 
 type AddOnSelection = {
   domainPackage: boolean;
   whatsappBusiness: boolean;
+  salesCrm: boolean;
   extraStorageBlocks: number;
 };
 
@@ -50,6 +59,7 @@ const PRICING = {
     domainPackage: { monthly: 15, yearly: 150 },
     whatsappBusiness: { monthly: 10, yearly: 100 },
     extraStoragePer5Gb: { monthly: 2, yearly: 24 },
+    salesCrm: { monthly: 15, yearly: 150 },
   },
 };
 
@@ -164,9 +174,9 @@ const PLAN_FEATURES: Record<SubscriptionTier, {
 
 const PLAN_ELIGIBLE_ADDONS: Record<SubscriptionTier, AddOnKey[]> = {
   trial: ['whatsappBusiness'],
-  starter: ['domainPackage', 'whatsappBusiness', 'extraStorage'],
-  pro: ['domainPackage', 'whatsappBusiness', 'extraStorage'],
-  business: ['domainPackage', 'whatsappBusiness', 'extraStorage'],
+  starter: ['domainPackage', 'whatsappBusiness', 'salesCrm', 'extraStorage'],
+  pro: ['domainPackage', 'whatsappBusiness', 'salesCrm', 'extraStorage'],
+  business: ['domainPackage', 'whatsappBusiness', 'salesCrm', 'extraStorage'],
 };
 
 const COMPARISON_ROWS: Array<{ feature: string; values: Record<SubscriptionTier, string> }> = [
@@ -188,6 +198,7 @@ const COMPARISON_ROWS: Array<{ feature: string; values: Record<SubscriptionTier,
 const EMPTY_SELECTION: AddOnSelection = {
   domainPackage: false,
   whatsappBusiness: false,
+  salesCrm: false,
   extraStorageBlocks: 0,
 };
 
@@ -239,7 +250,99 @@ export default function Subscription() {
   const [planSelections, setPlanSelections] = useState<Record<PaidTier, AddOnSelection>>(getDefaultSelectionByTier('starter'));
   const [addOnExtraStorageBlocks, setAddOnExtraStorageBlocks] = useState(1);
   const [pendingPayment, setPendingPayment] = useState<{ tier: PaidTier; billing: Billing; addOns: Record<string, unknown>; label: string } | null>(null);
+  const [modularPreset, setModularPreset] = useState<StartingPackageKey | 'custom'>('pkg_shop');
+  const [modularBilling, setModularBilling] = useState<Billing>('monthly');
+  const [modularSeats, setModularSeats] = useState(1);
+  const [modularPos, setModularPos] = useState(0);
+  const [modularAddOns, setModularAddOns] = useState<Record<string, boolean>>({});
+  // Always tracks the exact set of selected modules — presets just pre-fill this
+  const defaultShopModules = PRESET_LIST.find(p => p.key === 'pkg_shop')?.defaultModules ?? [];
+  const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set(defaultShopModules));
   const firebaseAuth = getAuth();
+
+  const selectedPresetData = modularPreset !== 'custom'
+    ? PRESET_LIST.find(p => p.key === modularPreset)
+    : null;
+
+  // Presets are shortcuts that pre-fill the module selection — not fixed prices
+  function handlePresetChange(key: StartingPackageKey | 'custom') {
+    setModularPreset(key);
+    if (key === 'custom') {
+      setSelectedModules(new Set()); // start empty
+    } else {
+      const preset = PRESET_LIST.find(p => p.key === key);
+      setSelectedModules(new Set(preset?.defaultModules ?? []));
+    }
+  }
+
+  function toggleModule(modId: string) {
+    setSelectedModules(prev => {
+      const next = new Set(prev);
+      if (next.has(modId)) {
+        next.delete(modId);
+        // Reset POS locations when POS is turned off
+        if (modId === 'pos') setModularPos(0);
+      } else {
+        next.add(modId);
+        // Default to 1 location when POS is turned on
+        if (modId === 'pos') setModularPos(1);
+      }
+      setModularPreset('custom');
+      return next;
+    });
+  }
+
+  // Keep alias for compatibility with subscribe handler
+  const activeModuleIds = selectedModules;
+
+  // Price is ALWAYS per-module — presets just pre-select a starting set
+  const priceBreakdown = calculateCustomPrice({
+    moduleIds: Array.from(selectedModules),
+    addOnKeys: Object.keys(modularAddOns).filter(k => modularAddOns[k]),
+    seatCount: modularSeats,
+    posLocationCount: modularPos,
+    billing: modularBilling,
+  });
+
+  const grandTotal = priceBreakdown.totalUsd;
+  const modularCheckoutEnabled = ECOSYSTEM_FLAGS.modularCheckout;
+
+  const handleModularSubscribe = async () => {
+    if (!user || !modularCheckoutEnabled) return;
+    setProcessingPayment(true);
+    try {
+      const token = await firebaseAuth.currentUser?.getIdToken();
+      const res = await fetch(`${getApiBaseUrl()}/subscription/subscribe-modular`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          userId: user.id,
+          email: user.email,
+          name: user.name,
+          preset: modularPreset === 'custom' ? null : modularPreset,
+          billing: modularBilling,
+          seatCount: modularSeats,
+          posLocationCount: modularPos,
+          enabledModuleIds: Array.from(selectedModules),
+          addOnKeys: Object.keys(modularAddOns).filter(k => modularAddOns[k]),
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Checkout failed');
+      if (data.paymentUrl) window.location.href = data.paymentUrl;
+    } catch (err) {
+      toast({
+        title: 'Payment failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setProcessingPayment(false);
+    }
+  };
 
   const loadSubscriptionInfo = useCallback(async () => {
     if (!user) return;
@@ -356,6 +459,7 @@ export default function Subscription() {
     addOns: {
       domainPackage?: boolean;
       whatsappBusiness?: boolean;
+      salesCrm?: boolean;
       extraStorageBlocks?: number;
     } = {}
   ) => {
@@ -364,6 +468,7 @@ export default function Subscription() {
       let t = base;
       if (addOns.domainPackage) t += PRICING.addOns.domainPackage[billing];
       if (addOns.whatsappBusiness) t += PRICING.addOns.whatsappBusiness[billing];
+      if (addOns.salesCrm) t += PRICING.addOns.salesCrm[billing];
       if ((addOns.extraStorageBlocks ?? 0) > 0)
         t += (addOns.extraStorageBlocks ?? 0) * PRICING.addOns.extraStoragePer5Gb[billing];
       return t;
@@ -497,6 +602,9 @@ export default function Subscription() {
     if (selection.whatsappBusiness) {
       total += PRICING.addOns.whatsappBusiness[billing];
     }
+    if (selection.salesCrm) {
+      total += PRICING.addOns.salesCrm[billing];
+    }
     if (selection.extraStorageBlocks > 0) {
       total += selection.extraStorageBlocks * PRICING.addOns.extraStoragePer5Gb[billing];
     }
@@ -510,6 +618,7 @@ export default function Subscription() {
     return {
       domainPackage: selection.domainPackage,
       whatsappBusiness: selection.whatsappBusiness,
+      salesCrm: selection.salesCrm,
       extraStorageBlocks: selection.extraStorageBlocks,
     };
   };
@@ -610,6 +719,14 @@ export default function Subscription() {
 
   const isLegacyUser = profile?.isLegacyUser && profile?.legacyExpiresAt;
   const hasActiveSubscription = profile?.subscriptionStatus === 'active' || profile?.subscriptionStatus === 'trial';
+  const entitlements = resolveStoreEntitlements(profile);
+  const isModularV2WithModules =
+    profile?.pricingVersion === 'modular-v2' &&
+    Boolean(profile?.enabledModules && Object.keys(profile.enabledModules).length > 0);
+  const showModularPackageBuilder =
+    ECOSYSTEM_FLAGS.modularEntitlements &&
+    !isLegacyUser &&
+    !(hasActiveSubscription && !isModularV2WithModules);
   const canStartTrial = !profile?.hasUsedTrial && !hasActiveSubscription && !isLegacyUser;
   const activeTier = normalizeTier(profile?.subscriptionTier);
   const activeAddOns = normalizeAddOns(profile?.addOns);
@@ -619,6 +736,305 @@ export default function Subscription() {
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl">
       <h1 className="text-3xl font-bold mb-8">Subscription Management</h1>
+
+      {profile?.nextPlanPreset && (
+        <Card className="mb-8 border-blue-200 bg-blue-50">
+          <CardHeader>
+            <CardTitle>Next renewal plan</CardTitle>
+            <CardDescription>
+              Your price stays the same until{' '}
+              {profile.scheduledPlanMigrationAt
+                ? new Date(profile.scheduledPlanMigrationAt).toLocaleDateString()
+                : profile.subscriptionEndsAt
+                  ? new Date(profile.subscriptionEndsAt).toLocaleDateString()
+                  : 'renewal'}
+              . Then you move to modular pricing.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <p className="font-medium capitalize">Preset: {String(profile.nextPlanPreset).replace('pkg_', '').replace(/_/g, ' ')}</p>
+            {profile.nextSeatCount && profile.nextSeatCount > 1 && (
+              <p className="text-sm text-muted-foreground">{profile.nextSeatCount} users included in mapping</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {showModularPackageBuilder && (
+        <Card className="mb-8 border-primary/30">
+          <CardHeader>
+            <CardTitle>Custom Package Builder</CardTitle>
+            <CardDescription>
+              Pick a base preset, see what's included, then add extras.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-6">
+
+            {/* Step 1: Base preset */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">1 — Choose your base</p>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {PRESET_LIST.map((p) => (
+                  <button
+                    key={p.key}
+                    type="button"
+                    onClick={() => handlePresetChange(p.key)}
+                    className={`text-left rounded-lg border-2 p-3 transition-all ${
+                      modularPreset === p.key
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border hover:border-primary/50'
+                    }`}
+                  >
+                    <p className="font-semibold">{p.label}</p>
+                    <p className="text-sm text-muted-foreground">${p.monthlyUsd}/mo · ${p.yearlyUsd}/yr</p>
+                  </button>
+                ))}
+                {/* Custom / build from scratch */}
+                <button
+                  type="button"
+                  onClick={() => handlePresetChange('custom')}
+                  className={`text-left rounded-lg border-2 p-3 transition-all ${
+                    modularPreset === 'custom'
+                      ? 'border-primary bg-primary/5'
+                      : 'border-border hover:border-primary/50'
+                  }`}
+                >
+                  <p className="font-semibold">Custom</p>
+                  <p className="text-sm text-muted-foreground">Pay per module — from $7/mo</p>
+                </button>
+              </div>
+            </div>
+
+            {/* Step 2: Module selector */}
+            <div>
+              <div className="flex items-center justify-between mb-3">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                  2 — {modularPreset === 'custom' ? 'Pick your modules' : `${selectedPresetData?.label ?? ''} — adjust as needed`}
+                </p>
+                {modularPreset !== 'custom' && selectedPresetData && (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => setSelectedModules(new Set(selectedPresetData.defaultModules))}
+                  >
+                    Reset to preset defaults
+                  </button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mb-2 italic">
+                Price updates live as you toggle. Presets are just quick-start suggestions.
+              </p>
+              <div className="grid sm:grid-cols-2 gap-y-1 gap-x-4">
+                {MODULE_CATALOG
+                  .filter(m => m.billing !== 'addon' && m.status !== 'planned' && m.billing !== 'included')
+                  .map((mod) => {
+                    const isActive = selectedModules.has(mod.id);
+                    const modPrice = MODULE_PRICES[mod.id];
+                    const priceLabel = modPrice && modPrice[modularBilling] > 0
+                      ? `$${modPrice[modularBilling]}/${modularBilling === 'yearly' ? 'yr' : 'mo'}`
+                      : 'Free';
+                    return (
+                      <div key={mod.id} className="col-span-1">
+                        <div
+                          className={`flex items-start gap-2 p-2 rounded-md cursor-pointer transition-all ${
+                            isActive ? 'bg-green-50 dark:bg-green-950/20' : 'opacity-40 hover:opacity-70'
+                          }`}
+                          onClick={() => toggleModule(mod.id)}
+                        >
+                          <Checkbox
+                            checked={isActive}
+                            onCheckedChange={() => toggleModule(mod.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-0.5 shrink-0"
+                          />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium leading-tight">{mod.icon} {mod.name}</p>
+                            <p className="text-xs text-muted-foreground">{mod.summary}</p>
+                          </div>
+                          <Badge variant={isActive ? 'default' : 'outline'} className="shrink-0 text-xs">
+                            {priceLabel}
+                          </Badge>
+                        </div>
+                        {/* Inline POS location selector */}
+                        {mod.id === 'pos' && isActive && (
+                          <div className="ml-7 mt-1 flex items-center gap-2" onClick={e => e.stopPropagation()}>
+                            <span className="text-xs text-muted-foreground">Locations:</span>
+                            {[1, 2, 3, 5].map(n => (
+                              <button
+                                key={n}
+                                type="button"
+                                onClick={() => setModularPos(n)}
+                                className={`w-7 h-7 text-xs rounded-md border transition-colors ${
+                                  modularPos === n
+                                    ? 'bg-primary text-primary-foreground border-primary'
+                                    : 'border-border hover:border-primary/50'
+                                }`}
+                              >
+                                {n}
+                              </button>
+                            ))}
+                            <span className="text-xs text-muted-foreground">
+                              {modularPos > 1 ? `+$${(modularPos - 1) * (modularBilling === 'yearly' ? 10 : 10)}/mo each` : '1st free'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                {/* Always-included (mobile app etc.) */}
+                {MODULE_CATALOG.filter(m => m.billing === 'included').map(mod => (
+                  <div key={mod.id} className="flex items-start gap-2 p-2 rounded-md bg-green-50 dark:bg-green-950/20">
+                    <span className="text-green-500 font-bold mt-0.5 text-sm shrink-0">✓</span>
+                    <div>
+                      <p className="text-sm font-medium leading-tight">{mod.icon} {mod.name}</p>
+                      <p className="text-xs text-muted-foreground">{mod.summary} · Always included</p>
+                    </div>
+                    <Badge variant="secondary" className="shrink-0 text-xs">Free</Badge>
+                  </div>
+                ))}
+              </div>
+              {selectedModules.size === 0 && (
+                <p className="text-xs text-amber-600 mt-2">Select at least one module to continue.</p>
+              )}
+            </div>
+
+            {/* Step 3: Add-on modules */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">3 — Available add-ons</p>
+              <div className="space-y-2">
+                {MODULE_CATALOG.filter(m => m.billing === 'addon' && m.addOnKey).map((mod) => {
+                  const key = mod.addOnKey as PricingAddOnKey;
+                  const pricing = ADDON_PRICING[key];
+                  const price = pricing ? pricing[modularBilling] : 0;
+                  const isChecked = !!modularAddOns[key];
+                  return (
+                    <div
+                      key={mod.id}
+                      className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                        isChecked ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
+                      }`}
+                      onClick={() => setModularAddOns(prev => ({ ...prev, [key]: !prev[key] }))}
+                    >
+                      <Checkbox
+                        id={`addon-${mod.id}`}
+                        checked={isChecked}
+                        onCheckedChange={(v) => setModularAddOns(prev => ({ ...prev, [key]: !!v }))}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="flex-1">
+                        <p className="text-sm font-medium">{mod.icon} {mod.name}</p>
+                        <p className="text-xs text-muted-foreground">{mod.summary}</p>
+                      </div>
+                      <Badge variant={isChecked ? 'default' : 'secondary'}>
+                        +${price}/{modularBilling === 'yearly' ? 'yr' : 'mo'}
+                      </Badge>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Coming soon */}
+            {(() => {
+              const comingSoon = MODULE_CATALOG.filter(m =>
+                m.status === 'planned' &&
+                m.billing !== 'addon' &&
+                !selectedPresetData?.defaultModules.includes(m.id)
+              );
+              if (!comingSoon.length) return null;
+              return (
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Coming soon</p>
+                  <div className="grid sm:grid-cols-2 gap-y-2 gap-x-4 opacity-50">
+                    {comingSoon.map(mod => (
+                      <div key={mod.id} className="flex items-start gap-2">
+                        <span className="text-muted-foreground mt-0.5">○</span>
+                        <div>
+                          <p className="text-sm font-medium">{mod.icon} {mod.name}</p>
+                          <p className="text-xs text-muted-foreground">In development</p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              );
+            })()}
+
+            {/* Step 4: Scale */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">4 — Team & scale</p>
+              <div className="flex flex-wrap gap-4 items-end">
+                <div>
+                  <label className="text-sm font-medium block mb-1">Billing</label>
+                  <Select value={modularBilling} onValueChange={(v) => setModularBilling(v as Billing)}>
+                    <SelectTrigger className="w-40"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="monthly">Monthly</SelectItem>
+                      <SelectItem value="yearly">Yearly (save ~17%)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-sm font-medium block mb-1">Users</label>
+                  <Select value={String(modularSeats)} onValueChange={(v) => setModularSeats(Number(v))}>
+                    <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {[1, 2, 3, 5, 10].map((n) => (
+                        <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                {selectedModules.has('pos') && (
+                  <div>
+                    <label className="text-sm font-medium block mb-1">POS locations</label>
+                    <Select value={String(modularPos)} onValueChange={(v) => setModularPos(Number(v))}>
+                      <SelectTrigger className="w-24"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 5].map((n) => (
+                          <SelectItem key={n} value={String(n)}>{n}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Total + Subscribe */}
+            <div className="flex items-center justify-between pt-4 border-t gap-4">
+              <div>
+                <p className="text-3xl font-bold">
+                  ${grandTotal}<span className="text-base font-normal text-muted-foreground">/{modularBilling === 'yearly' ? 'yr' : 'mo'}</span>
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {selectedModules.size} module{selectedModules.size !== 1 ? 's' : ''} ${priceBreakdown.modulesUsd}
+                  {priceBreakdown.extraSeatsUsd > 0 && ` + ${modularSeats - 1} extra user${modularSeats > 2 ? 's' : ''} $${priceBreakdown.extraSeatsUsd}`}
+                  {priceBreakdown.extraPosUsd > 0 && ` + ${modularPos} POS $${priceBreakdown.extraPosUsd}`}
+                  {priceBreakdown.addOnsUsd > 0 && ` + add-ons $${priceBreakdown.addOnsUsd}`}
+                </p>
+                {!modularCheckoutEnabled && (
+                  <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mt-2">
+                    Modular checkout is temporarily disabled while billing is being verified. You can still preview your package.
+                  </p>
+                )}
+                {grandTotal === 0 && selectedModules.size > 0 && (
+                  <p className="text-xs text-amber-600 mt-1">Selected modules have no price yet — in development.</p>
+                )}
+              </div>
+              <Button
+                size="lg"
+                onClick={() => void handleModularSubscribe()}
+                disabled={processingPayment || activeModuleIds.size === 0 || !modularCheckoutEnabled}
+                className="shrink-0"
+              >
+                {processingPayment ? 'Processing…' : modularCheckoutEnabled ? 'Subscribe' : 'Checkout paused'}
+              </Button>
+            </div>
+
+          </CardContent>
+        </Card>
+      )}
 
       {/* Current Subscription Status */}
       <Card className="mb-8">
@@ -634,57 +1050,120 @@ export default function Subscription() {
         <CardContent>
           <div className="grid md:grid-cols-2 gap-6">
             <div>
-              <h3 className="font-semibold mb-2">Plan Details</h3>
-              <dl className="space-y-2">
-                {isLegacyUser && (
-                  <>
+              {ECOSYSTEM_FLAGS.modularEntitlements && !hasActiveSubscription && !isLegacyUser ? (
+                <p className="text-sm text-muted-foreground">
+                  No active plan. Use the Custom Package Builder above to subscribe.
+                </p>
+              ) : ECOSYSTEM_FLAGS.modularEntitlements && hasActiveSubscription && isModularV2WithModules ? (
+                <>
+                  <div className="flex items-center gap-3 mb-4">
+                    {profile?.startingPackage && (
+                      <div>
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Package</p>
+                        <p className="font-semibold capitalize text-lg">
+                          {String(profile.startingPackage).replace('pkg_', '').replace(/_/g, ' ')}
+                        </p>
+                      </div>
+                    )}
+                    {profile?.subscriptionPlan && (
+                      <div className="ml-auto text-right">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide">Billing</p>
+                        <p className="font-medium capitalize">{profile.subscriptionPlan}</p>
+                      </div>
+                    )}
+                  </div>
+                  {profile?.subscriptionEndsAt && (
+                    <p className="text-xs text-muted-foreground mb-3">
+                      {profile.subscriptionStatus === 'trial' ? 'Trial ends' : 'Next billing'}: {formatDate(profile.subscriptionEndsAt)}
+                    </p>
+                  )}
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Enabled modules</p>
+                  <div className="grid grid-cols-1 gap-1">
+                    {MODULE_CATALOG.filter(m => profile?.enabledModules?.[m.id]).map(m => (
+                      <div key={m.id} className="flex items-center gap-2 text-sm py-0.5">
+                        <span className="text-green-500 font-bold">✓</span>
+                        <span>{m.icon}</span>
+                        <span>{m.name}</span>
+                      </div>
+                    ))}
+                    {!MODULE_CATALOG.some(m => profile?.enabledModules?.[m.id]) && (
+                      <p className="text-xs text-muted-foreground">No modules configured yet.</p>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-semibold mb-2">Plan Details</h3>
+                  <dl className="space-y-2">
+                    {isLegacyUser && (
+                      <>
+                        <div>
+                          <dt className="text-sm text-gray-600">Status</dt>
+                          <dd className="font-medium flex items-center gap-2">
+                            <Badge variant="secondary">Legacy User - Free Access</Badge>
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-sm text-gray-600">Free Access Until</dt>
+                          <dd className="font-medium">{formatDate(profile?.legacyExpiresAt)}</dd>
+                        </div>
+                      </>
+                    )}
                     <div>
-                      <dt className="text-sm text-gray-600">Status</dt>
-                      <dd className="font-medium flex items-center gap-2">
-                        <Badge variant="secondary">Legacy User - Free Access</Badge>
+                      <dt className="text-sm text-gray-600">Tier</dt>
+                      <dd className="font-medium capitalize">{activeTier || 'None'}</dd>
+                    </div>
+                    <div>
+                      <dt className="text-sm text-gray-600">Billing Cycle</dt>
+                      <dd className="font-medium capitalize">{profile?.subscriptionPlan || 'N/A'}</dd>
+                    </div>
+                    {profile?.subscriptionEndsAt && (
+                      <div>
+                        <dt className="text-sm text-gray-600">
+                          {profile?.subscriptionStatus === 'trial' ? 'Trial Ends' : 'Next Billing Date'}
+                        </dt>
+                        <dd className="font-medium">{formatDate(profile?.subscriptionEndsAt)}</dd>
+                      </div>
+                    )}
+                    {profile?.addOns && profile.addOns.length > 0 && (
+                      <div>
+                        <dt className="text-sm text-gray-600">Add-ons</dt>
+                        <dd className="font-medium">
+                          {activeAddOns.map((addon: string) => (
+                            <Badge key={addon} variant="outline" className="mr-2">
+                              {addon}
+                            </Badge>
+                          ))}
+                        </dd>
+                      </div>
+                    )}
+                    <div className="pt-2">
+                      <dt className="text-sm text-gray-600 mb-2">Included modules</dt>
+                      <dd>
+                        <div className="grid grid-cols-1 gap-1">
+                          {MODULE_CATALOG.filter((m) => entitlements?.modules[m.id]).map((m) => (
+                            <div key={m.id} className="flex items-center gap-2 text-sm py-0.5">
+                              <span className="text-green-500 font-bold">✓</span>
+                              <span>{m.icon}</span>
+                              <span>{m.name}</span>
+                            </div>
+                          ))}
+                          {!MODULE_CATALOG.some((m) => entitlements?.modules[m.id]) && (
+                            <p className="text-xs text-muted-foreground">No modules resolved for this plan.</p>
+                          )}
+                        </div>
                       </dd>
                     </div>
-                    <div>
-                      <dt className="text-sm text-gray-600">Free Access Until</dt>
-                      <dd className="font-medium">{formatDate(profile?.legacyExpiresAt)}</dd>
-                    </div>
-                  </>
-                )}
-                <div>
-                  <dt className="text-sm text-gray-600">Tier</dt>
-                  <dd className="font-medium capitalize">{activeTier || 'None'}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm text-gray-600">Billing Cycle</dt>
-                  <dd className="font-medium capitalize">{profile?.subscriptionPlan || 'N/A'}</dd>
-                </div>
-                {profile?.subscriptionEndsAt && (
-                  <div>
-                    <dt className="text-sm text-gray-600">
-                      {profile?.subscriptionStatus === 'trial' ? 'Trial Ends' : 'Next Billing Date'}
-                    </dt>
-                    <dd className="font-medium">{formatDate(profile?.subscriptionEndsAt)}</dd>
-                  </div>
-                )}
-                {profile?.addOns && profile.addOns.length > 0 && (
-                  <div>
-                    <dt className="text-sm text-gray-600">Add-ons</dt>
-                    <dd className="font-medium">
-                      {activeAddOns.map((addon: string) => (
-                        <Badge key={addon} variant="outline" className="mr-2">
-                          {addon}
-                        </Badge>
-                      ))}
-                    </dd>
-                  </div>
-                )}
-              </dl>
+                  </dl>
+                </>
+              )}
             </div>
             
+            {(!ECOSYSTEM_FLAGS.modularEntitlements || hasActiveSubscription || isLegacyUser) && (
             <div>
               <h3 className="font-semibold mb-2">Actions</h3>
               <div className="space-y-2">
-                {canStartTrial && (
+                {canStartTrial && !ECOSYSTEM_FLAGS.modularEntitlements && (
                   <div className="space-y-2">
                     <Button
                       onClick={handleStartTrial}
@@ -723,10 +1202,13 @@ export default function Subscription() {
                 )}
               </div>
             </div>
+            )}
           </div>
         </CardContent>
       </Card>
 
+      {!ECOSYSTEM_FLAGS.modularEntitlements && (
+        <>
       {/* Available Plans */}
       <div className="mb-8">
         <h2 className="text-2xl font-bold mb-4">Available Plans</h2>
@@ -816,6 +1298,20 @@ export default function Subscription() {
                               onCheckedChange={(checked) => updatePlanSelection(paidTier, { domainPackage: Boolean(checked) })}
                             />
                             <span>Domain + Hosting + 10 Themes</span>
+                          </div>
+                          <span>$15/mo</span>
+                        </label>
+                      )}
+
+
+                      {eligibleAddOns.includes('salesCrm') && (
+                        <label className="flex items-center justify-between text-sm gap-2">
+                          <div className="flex items-center gap-2">
+                            <Checkbox
+                              checked={planSelections[paidTier].salesCrm}
+                              onCheckedChange={(checked) => updatePlanSelection(paidTier, { salesCrm: Boolean(checked) })}
+                            />
+                            <span>Sales CRM</span>
                           </div>
                           <span>$15/mo</span>
                         </label>
@@ -1018,6 +1514,24 @@ export default function Subscription() {
           <CardDescription>Enhance your plan with additional features</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="mb-6 overflow-x-auto rounded-lg border">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b bg-muted/50">
+                  <th className="text-left py-2 px-3 font-semibold">Add-on</th>
+                  <th className="text-left py-2 px-3 font-semibold">Price</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr className="border-b"><td className="py-2 px-3">Sales CRM</td><td className="py-2 px-3">$15/mo · $150/yr</td></tr>
+                <tr className="border-b"><td className="py-2 px-3">WhatsApp Business API</td><td className="py-2 px-3">$10/mo · $100/yr</td></tr>
+                <tr className="border-b"><td className="py-2 px-3">AI Credits</td><td className="py-2 px-3 text-muted-foreground">Pay per use</td></tr>
+                <tr className="border-b"><td className="py-2 px-3">Meta Advanced</td><td className="py-2 px-3 text-muted-foreground">~$12/mo (coming soon)</td></tr>
+                <tr className="border-b"><td className="py-2 px-3">SEO Advanced</td><td className="py-2 px-3 text-muted-foreground">~$12/mo (coming soon)</td></tr>
+                <tr><td className="py-2 px-3">Extra Storage</td><td className="py-2 px-3">$2/mo per 5GB</td></tr>
+              </tbody>
+            </table>
+          </div>
           <div className="grid md:grid-cols-2 gap-6">
             <div className="border-2 rounded-lg p-6 hover:border-primary transition-colors">
               <div className="flex items-start justify-between mb-2">
@@ -1099,6 +1613,45 @@ export default function Subscription() {
 
             <div className="border-2 rounded-lg p-6 hover:border-primary transition-colors">
               <div className="flex items-start justify-between mb-2">
+                <h3 className="font-semibold text-lg">Sales CRM</h3>
+                {activeAddOns.includes('salesCrm') ? (
+                  <Badge variant="default">Active</Badge>
+                ) : null}
+              </div>
+              <p className="text-sm text-gray-600 mb-1">
+                Field sales: rep activity logging with GPS, pipeline kanban, admin feed, visit map, performance, exports.
+              </p>
+              <p className="text-xs text-gray-500 mb-4">All paid plans (Starter, Pro, Business).</p>
+              <div className="text-2xl font-bold mb-4">
+                ${PRICING.addOns.salesCrm.monthly}<span className="text-base text-gray-600">/month</span>
+              </div>
+              <div className="text-sm text-gray-600 mb-4">
+                or ${PRICING.addOns.salesCrm.yearly}/year <Badge variant="secondary" className="ml-1">Save $30</Badge>
+              </div>
+              <div className="space-y-2">
+                <Button
+                  onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'monthly', { salesCrm: true })}
+                  disabled={processingPayment || !canManageAddOns}
+                  variant="outline"
+                  className="w-full"
+                >
+                  Add Monthly ($15/mo)
+                </Button>
+                <Button
+                  onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'yearly', { salesCrm: true })}
+                  disabled={processingPayment || !canManageAddOns}
+                  className="w-full"
+                >
+                  Add Yearly ($150/yr)
+                </Button>
+                {!canManageAddOns && (
+                  <p className="text-xs text-red-600 mt-2">* Requires active Starter, Pro, or Business subscription</p>
+                )}
+              </div>
+            </div>
+
+            <div className="border-2 rounded-lg p-6 hover:border-primary transition-colors">
+              <div className="flex items-start justify-between mb-2">
                 <h3 className="font-semibold text-lg">Extra Storage</h3>
               </div>
               <p className="text-sm text-gray-600 mb-1">Additional 5GB blocks auto-billed when you exceed your base plan storage</p>
@@ -1131,6 +1684,9 @@ export default function Subscription() {
           </div>
         </CardContent>
       </Card>
+
+        </>
+      )}
 
       {/* Payment History */}
       {subscriptionInfo?.billingHistory && subscriptionInfo.billingHistory.length > 0 && (

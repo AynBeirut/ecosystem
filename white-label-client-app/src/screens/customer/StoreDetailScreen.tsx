@@ -8,6 +8,7 @@ import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Product, Store } from '../../types';
 import { useCart } from '../../context/CartContext';
+import { mapStoreProfile } from '../../lib/storeProfile';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -27,7 +28,7 @@ export default function StoreDetailScreen() {
     const db = getFirestore();
 
     const unsubStore = onSnapshot(doc(db, 'storeProfiles', params.storeId),
-      (d) => setStore({ id: d.id, ...d.data() } as Store));
+      (d) => setStore(mapStoreProfile(d.id, (d.data() || {}) as Record<string, unknown>)));
 
     const unsubProd = onSnapshot(
       query(collection(db, 'products'),

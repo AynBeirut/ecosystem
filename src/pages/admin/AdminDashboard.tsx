@@ -27,14 +27,18 @@ import {
   Bell,
   ChevronDown,
   Settings2,
-  Layers
+  Layers,
+  LayoutGrid
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { fetchUsdToLbpRateFresh, getUsdToLbpRate, formatLbp } from '@/lib/currency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus } from '@/lib/salesRules';
+import type { StoreProfile } from '@/types/storeProfile';
 import { requestNotificationPermission, saveFcmToken } from '@/lib/notifications';
+import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 
 type RecentEvent = {
   type: 'product' | 'order' | 'announcement';
@@ -59,6 +63,8 @@ type QuickActionStoragePayload = {
 
 const MAX_QUICK_ACTIONS = 12;
 const DEFAULT_QUICK_ACTION_IDS = [
+  'customers',
+  'sales-crm',
   'inventory',
   'orders',
   'account-statement',
@@ -86,26 +92,11 @@ const QUICK_ACTION_COLORS: Record<string, { border: string; iconBg: string; icon
   delivery: { border: 'border-gray-300/70', iconBg: 'bg-gray-100', iconText: 'text-gray-700' },
   announcements: { border: 'border-rose-500/20', iconBg: 'bg-rose-100', iconText: 'text-rose-700' },
   analytics: { border: 'border-cyan-600/20', iconBg: 'bg-cyan-100', iconText: 'text-cyan-700' },
+  'sales-crm': { border: 'border-teal-600/20', iconBg: 'bg-teal-100', iconText: 'text-teal-700' },
 };
 
 const AdminDashboard: React.FC = () => {
-  // Defensive: calling `useAuth` normally; ensure consumer handles undefined user safely.
-  // If the auth hook throws or returns unexpectedly during HMR, this component will
-  // still render a guest-safe UI because we guard accesses to `user` below.
-  type MinimalAuth = { user: { id?: string; name?: string; email?: string } | null } | null;
-  const auth = (() => {
-    try {
-      // NOTE: This is a defensive wrapper. The hook is still called as a React hook
-      // but in very rare HMR failure modes it may throw; we catch and return a
-      // minimal null-shaped object so the page remains usable.
-      // eslint-disable-next-line react-hooks/rules-of-hooks
-      return useAuth() as MinimalAuth;
-    } catch (e) {
-      console.warn('useAuth unavailable in AdminDashboard fallback', e);
-      return { user: null } as MinimalAuth;
-    }
-  })();
-  const { user } = (auth as MinimalAuth) || { user: null };
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [store, setStore] = useState<Record<string, unknown> | null>(null);
@@ -185,6 +176,10 @@ const AdminDashboard: React.FC = () => {
   const canViewReports = user?.role === 'admin' || user?.permissions?.includes('view_reports');
   const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
   const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
+  const { canUse: canUseModule } = useStoreEntitlements();
+  const crmEnabled = user?.role === 'admin' && canUseModule('crm');
+  const moduleVisible = (moduleId: string) =>
+    !ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule(moduleId);
 
   const quickActionStorageKey = useMemo(() => {
     if (!user?.id) return 'dashboardQuickActions:guest';
@@ -210,26 +205,33 @@ const AdminDashboard: React.FC = () => {
     { id: 'products', to: '/admin/products', label: 'Products', icon: Package, visible: canViewInventory },
     { id: 'purchases', to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: canManageInventory },
     { id: 'customers', to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
+    {
+      id: 'sales-crm',
+      to: '/admin/crm',
+      label: 'Sales CRM',
+      icon: LayoutGrid,
+      visible: crmEnabled,
+    },
     { id: 'payments', to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: canProcessPayments },
     { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
     { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
     { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
     { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
-    { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' },
+    { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' && moduleVisible('team') },
     { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
     { id: 'templates', to: '/admin/templates', label: 'Templates & Store Logos', icon: Palette, visible: user?.role === 'admin' },
     { id: 'marketing', to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
     { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
     { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
-    { id: 'service-renewals', to: '/admin/service-renewals', label: 'Service Renewals', icon: Clock, visible: user?.role === 'admin' },
-    { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' },
+    { id: 'service-renewals', to: '/admin/service-renewals', label: 'Service Renewals', icon: Clock, visible: user?.role === 'admin' && moduleVisible('services') },
+    { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' && moduleVisible('dropship') },
     { id: 'product-reviews', to: '/admin/product-reviews', label: 'Product Reviews', icon: Star, visible: user?.role === 'admin' },
     { id: 'notification-logs', to: '/admin/order-notifications', label: 'Notification Logs', icon: Bell, visible: user?.role === 'admin' },
     { id: 'store-logs', to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: user?.role === 'admin' },
     { id: 'delivery', to: '/admin/delivery', label: 'Delivery', icon: Package, visible: canManageDeliveries },
     { id: 'announcements', to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
     { id: 'analytics', to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: canViewReports },
-  ], [canManageDeliveries, canViewInventory, canViewReports, user]);
+  ], [canManageDeliveries, canViewInventory, canViewReports, crmEnabled, user, canUseModule]);
 
   const visibleQuickActionItems = useMemo(
     () => quickActionItems.filter((item) => item.visible),
@@ -416,6 +418,12 @@ const AdminDashboard: React.FC = () => {
         items: [
           { to: '/admin/orders', label: 'Orders', icon: Package, visible: true },
           { to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
+          {
+            to: '/admin/crm/pipeline',
+            label: 'Sales CRM',
+            icon: LayoutGrid,
+            visible: crmEnabled,
+          },
           { to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: canProcessPayments },
           { to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: canViewReports },
         ],
@@ -655,6 +663,9 @@ const AdminDashboard: React.FC = () => {
             <Link to={user?.role === 'admin' ? '/admin/inventory' : '/admin/products'} className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Inventory</Link>
             <Link to="/admin/orders" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Orders</Link>
             <Link to="/admin/customers" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Customers</Link>
+            {crmEnabled && (
+              <Link to="/admin/crm/pipeline" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-teal-800 border border-teal-300">Sales CRM</Link>
+            )}
             {canProcessPayments && <Link to="/admin/payments" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Payments</Link>}
           </div>
         </div>
@@ -780,7 +791,7 @@ const AdminDashboard: React.FC = () => {
               <p className="text-xs text-gray-500">{user?.email || ''}</p>
             </div>
           </div>
-          <Button variant="outline" className="w-full mt-3" onClick={() => navigate('/')}>View Marketplace</Button>
+          <Button variant="outline" className="w-full mt-3" onClick={() => navigate('/search')}>View Marketplace</Button>
         </div>
       </aside>
       <div className="flex-1 p-6">

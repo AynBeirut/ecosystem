@@ -13,7 +13,7 @@ import {
   doc,
   setDoc,
 } from '@react-native-firebase/firestore';
-import { getMessaging, getToken } from '@react-native-firebase/messaging';
+import { getMessaging, getToken, requestPermission, AuthorizationStatus } from '@react-native-firebase/messaging';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 interface AuthUser {
@@ -22,8 +22,9 @@ interface AuthUser {
   displayName: string | null;
   isStoreOwner: boolean;
   storeId?: string;
-  userRole: 'owner' | 'sub_seller' | 'sub_manager' | 'sub_delivery' | 'buyer';
+  userRole: 'owner' | 'sub_seller' | 'sub_manager' | 'sub_delivery' | 'crm_rep' | 'buyer';
   subAccountRole?: 'sales' | 'delivery' | 'manager';
+  crmRepId?: string;
 }
 
 interface AuthContextType {
@@ -70,6 +71,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let storeId: string | undefined = isStoreOwner ? storeSnap.docs[0].id : undefined;
         let userRole: AuthUser['userRole'] = 'buyer';
         let subAccountRole: AuthUser['subAccountRole'];
+        let crmRepId: string | undefined;
 
         if (isStoreOwner) {
           userRole = 'owner';
@@ -78,14 +80,24 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           try {
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             if (userDoc.exists()) {
-              const userData = userDoc.data() as { role?: string; subAccountRole?: AuthUser['subAccountRole']; subAccountId?: string; storeId?: string };
+              const userData = userDoc.data() as {
+                role?: string;
+                subAccountRole?: AuthUser['subAccountRole'];
+                subAccountId?: string;
+                storeId?: string;
+                crmRepId?: string;
+              };
               if (userData.role === 'sub_account') {
                 subAccountRole = userData.subAccountRole;
-                storeId = userData.subAccountId || userData.storeId;
+                storeId = userData.storeId || userData.subAccountId;
                 if (subAccountRole === 'sales') userRole = 'sub_seller';
                 else if (subAccountRole === 'manager') userRole = 'sub_manager';
                 else if (subAccountRole === 'delivery') userRole = 'sub_delivery';
                 else userRole = 'sub_seller';
+              } else if (userData.role === 'crm_rep' && userData.crmRepId) {
+                storeId = userData.storeId;
+                userRole = 'crm_rep';
+                crmRepId = userData.crmRepId;
               }
             }
           } catch {
@@ -101,16 +113,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           storeId,
           userRole,
           subAccountRole,
+          crmRepId,
         });
 
-        // Register FCM token
+        // Register FCM token after notification permission is granted
         try {
-          const token = await getToken(getMessaging());
-          if (token) {
-            await setDoc(
-              doc(db, 'users', firebaseUser.uid, 'fcmTokens', token),
-              { token, createdAt: FieldValue.serverTimestamp() },
-            );
+          const msg = getMessaging();
+          const authStatus = await requestPermission(msg);
+          const enabled =
+            authStatus === AuthorizationStatus.AUTHORIZED ||
+            authStatus === AuthorizationStatus.PROVISIONAL;
+          if (enabled) {
+            const token = await getToken(msg);
+            if (token) {
+              await setDoc(
+                doc(db, 'users', firebaseUser.uid, 'fcmTokens', token),
+                { token, platform: 'mobile', createdAt: FieldValue.serverTimestamp() },
+                { merge: true },
+              );
+              if (storeId) {
+                await setDoc(
+                  doc(db, 'users', firebaseUser.uid),
+                  { storeId, email: firebaseUser.email || null },
+                  { merge: true },
+                );
+              }
+            }
           }
         } catch (_) {
           // FCM token registration is non-critical

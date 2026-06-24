@@ -23,7 +23,7 @@ if (process.env.NODE_ENV !== 'production') {
 }
 
 // Import subscription and webhook handlers
-import { startTrial, subscribe, subscribeStripe, cancelSubscription, getSubscriptionInfo } from './api/subscription';
+import { startTrial, subscribe, subscribeStripe, cancelSubscription, getSubscriptionInfo, subscribeModular, scheduleRenewalMigration } from './api/subscription';
 import { handleWhishWebhook } from './api/webhooks';
 import { processCheckout, handleCheckoutCallback } from './api/checkout';
 import { runWhishOpsChecklist } from './api/whishOps';
@@ -34,11 +34,12 @@ import { createBobCheckoutSession, confirmBobCheckoutSession } from './api/bobCh
 import { sendContactEmail } from './api/contact';
 import { checkCustomDomainStatus, registerCustomDomain } from './api/domain';
 import { exportGdprData, requestGdprDelete } from './api/gdpr';
-import { getAiModels, saveAiSettings } from './api/ai';
+import { getAiModels, saveAiSettings, getAiCreditBalance, deductAiCredits, generateAiContent } from './api/ai';
 import { connectFacebookShop, connectInstagramShopping, createMetaAdsCampaign, enableDynamicProductAds, getMetaCatalogFeed, syncMetaCatalog, trackMetaConversionEvent } from './api/metaCatalog';
 import { getRobotsTxt, getSitemap, submitSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
 import { dispatchOrderNotifications, retryOrderNotification } from './services/orderNotifications';
+import { getFcmTokensForStoreOwner, sendFcmMulticast } from './services/fcmTokens';
 import {
   createSupplierReturn,
   updateSupplierReturnStatus,
@@ -46,6 +47,11 @@ import {
   creditSupplierReturn,
   getSupplierReturnAnalytics,
 } from './api/supplierReturns';
+import { createCrmRep } from './api/crmReps';
+import { syncDropshipProduct } from './api/dropship';
+import { createPosPairingCode, pairPosDevice, posHeartbeat } from './api/posSync';
+import { getPublicProductStock } from './api/publicProductStock';
+import { requireModule } from './middleware/moduleGate';
 const db = admin.firestore();
 
 const app = express();
@@ -150,10 +156,13 @@ app.get('/', (req, res) => {
 app.post('/subscription/trial', startTrial);
 app.post('/subscription/subscribe', subscribe);
 app.post('/subscription/subscribe-stripe', subscribeStripe);
+app.post('/subscription/subscribe-modular', subscribeModular);
+app.post('/subscription/schedule-migration', scheduleRenewalMigration);
 app.post('/subscription/cancel', cancelSubscription);
 app.get('/subscription/info', getSubscriptionInfo);
 
-// Webhook endpoint for Whish payment gateway
+// Webhook endpoint for Whish payment gateway (Whish calls successCallbackUrl via GET)
+app.get('/webhook/whish', handleWhishWebhook);
 app.post('/webhook/whish', handleWhishWebhook);
 
 // Checkout payment endpoints (using store owner's Whish Money account)
@@ -182,7 +191,10 @@ app.post('/gdpr/delete', requestGdprDelete);
 
 // AI integration
 app.post('/ai/models', getAiModels);
+app.post('/ai/generate', generateAiContent);
 app.post('/ai/settings', saveAiSettings);
+app.post('/ai/credits/balance', getAiCreditBalance);
+app.post('/ai/credits/deduct', deductAiCredits);
 
 // Sitemap for SEO
 app.get('/sitemap.xml', getSitemap);
@@ -203,6 +215,14 @@ app.post('/marketing/subscribe', subscribeToStore);
 app.post('/marketing/unsubscribe', unsubscribeFromStore);
 app.get('/marketing/subscribers', listSubscribers);
 app.post('/marketing/send-campaign', sendCampaign);
+
+// Sales CRM — rep accounts via Admin SDK (keeps owner signed in)
+app.post('/crm/reps/create', requireModule('crm'), createCrmRep);
+app.post('/dropship/sync-product', requireModule('dropship'), syncDropshipProduct);
+app.post('/pos/pairing-code', createPosPairingCode);
+app.post('/pos/pair', pairPosDevice);
+app.post('/pos/heartbeat', posHeartbeat);
+app.post('/public/product-stock', getPublicProductStock);
 app.get('/marketing/campaigns', listCampaigns);
 
 app.post('/notifications/order/retry', async (req: Request, res: Response) => {
@@ -620,20 +640,14 @@ app.post('/checkout', async (req: Request, res: Response) => {
       try {
         const storeIds = [...new Set(Object.keys(itemsByStore))];
         for (const storeId of storeIds) {
-          const ownerSnap = await db.collection('users').where('storeId', '==', storeId).limit(1).get();
-          if (ownerSnap.empty) continue;
-          const ownerId = ownerSnap.docs[0].id;
-          const fcmSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
-          const tokens = fcmSnap.docs.map((d: any) => d.id).filter(Boolean);
+          const tokens = await getFcmTokensForStoreOwner(storeId);
           if (tokens.length === 0) continue;
-          await admin.messaging().sendEachForMulticast({
+          await sendFcmMulticast(
             tokens,
-            notification: {
-              title: '🛒 New Order Received',
-              body: `${customerName || 'A customer'} just placed an order`,
-            },
-            data: { storeId, type: 'new_order', orderId: orderIds[0] || '' },
-          });
+            '🛒 New Order Received',
+            `${customerName || 'A customer'} just placed an order`,
+            { storeId, type: 'new_order', orderId: orderIds[0] || '' },
+          );
         }
       } catch (fcmErr) {
         console.warn('FCM new-order notification failed:', fcmErr);
@@ -717,5 +731,6 @@ export { checkExpiringStock } from './scheduled/checkExpiringStock';
 export { checkLowStockAlert } from './scheduled/checkLowStock';
 // Export Firestore triggers: new order + order status / payment status change notifications
 export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
+export { onOrderCreatedCrmSync } from './triggers/crmOrderSync';
 // Export Firestore trigger: store announcements → notify customers who favorited the store
 export { onStoreAnnouncement } from './triggers/storeAnnouncements';

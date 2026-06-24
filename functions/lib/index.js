@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onStoreAnnouncement = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -78,7 +78,13 @@ const metaCatalog_1 = require("./api/metaCatalog");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
 const orderNotifications_1 = require("./services/orderNotifications");
+const fcmTokens_1 = require("./services/fcmTokens");
 const supplierReturns_1 = require("./api/supplierReturns");
+const crmReps_1 = require("./api/crmReps");
+const dropship_1 = require("./api/dropship");
+const posSync_1 = require("./api/posSync");
+const publicProductStock_1 = require("./api/publicProductStock");
+const moduleGate_1 = require("./middleware/moduleGate");
 const db = admin.firestore();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
@@ -179,9 +185,12 @@ app.get('/', (req, res) => {
 app.post('/subscription/trial', subscription_1.startTrial);
 app.post('/subscription/subscribe', subscription_1.subscribe);
 app.post('/subscription/subscribe-stripe', subscription_1.subscribeStripe);
+app.post('/subscription/subscribe-modular', subscription_1.subscribeModular);
+app.post('/subscription/schedule-migration', subscription_1.scheduleRenewalMigration);
 app.post('/subscription/cancel', subscription_1.cancelSubscription);
 app.get('/subscription/info', subscription_1.getSubscriptionInfo);
-// Webhook endpoint for Whish payment gateway
+// Webhook endpoint for Whish payment gateway (Whish calls successCallbackUrl via GET)
+app.get('/webhook/whish', webhooks_1.handleWhishWebhook);
 app.post('/webhook/whish', webhooks_1.handleWhishWebhook);
 // Checkout payment endpoints (using store owner's Whish Money account)
 app.post('/payment/checkout', checkout_1.processCheckout);
@@ -205,7 +214,10 @@ app.post('/gdpr/export', gdpr_1.exportGdprData);
 app.post('/gdpr/delete', gdpr_1.requestGdprDelete);
 // AI integration
 app.post('/ai/models', ai_1.getAiModels);
+app.post('/ai/generate', ai_1.generateAiContent);
 app.post('/ai/settings', ai_1.saveAiSettings);
+app.post('/ai/credits/balance', ai_1.getAiCreditBalance);
+app.post('/ai/credits/deduct', ai_1.deductAiCredits);
 // Sitemap for SEO
 app.get('/sitemap.xml', sitemap_1.getSitemap);
 app.get('/robots.txt', sitemap_1.getRobotsTxt);
@@ -223,6 +235,13 @@ app.post('/marketing/subscribe', marketing_1.subscribeToStore);
 app.post('/marketing/unsubscribe', marketing_1.unsubscribeFromStore);
 app.get('/marketing/subscribers', marketing_1.listSubscribers);
 app.post('/marketing/send-campaign', marketing_1.sendCampaign);
+// Sales CRM — rep accounts via Admin SDK (keeps owner signed in)
+app.post('/crm/reps/create', (0, moduleGate_1.requireModule)('crm'), crmReps_1.createCrmRep);
+app.post('/dropship/sync-product', (0, moduleGate_1.requireModule)('dropship'), dropship_1.syncDropshipProduct);
+app.post('/pos/pairing-code', posSync_1.createPosPairingCode);
+app.post('/pos/pair', posSync_1.pairPosDevice);
+app.post('/pos/heartbeat', posSync_1.posHeartbeat);
+app.post('/public/product-stock', publicProductStock_1.getPublicProductStock);
 app.get('/marketing/campaigns', marketing_1.listCampaigns);
 app.post('/notifications/order/retry', async (req, res) => {
     try {
@@ -540,22 +559,10 @@ app.post('/checkout', async (req, res) => {
             try {
                 const storeIds = [...new Set(Object.keys(itemsByStore))];
                 for (const storeId of storeIds) {
-                    const ownerSnap = await db.collection('users').where('storeId', '==', storeId).limit(1).get();
-                    if (ownerSnap.empty)
-                        continue;
-                    const ownerId = ownerSnap.docs[0].id;
-                    const fcmSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
-                    const tokens = fcmSnap.docs.map((d) => d.id).filter(Boolean);
+                    const tokens = await (0, fcmTokens_1.getFcmTokensForStoreOwner)(storeId);
                     if (tokens.length === 0)
                         continue;
-                    await admin.messaging().sendEachForMulticast({
-                        tokens,
-                        notification: {
-                            title: '🛒 New Order Received',
-                            body: `${customerName || 'A customer'} just placed an order`,
-                        },
-                        data: { storeId, type: 'new_order', orderId: orderIds[0] || '' },
-                    });
+                    await (0, fcmTokens_1.sendFcmMulticast)(tokens, '🛒 New Order Received', `${customerName || 'A customer'} just placed an order`, { storeId, type: 'new_order', orderId: orderIds[0] || '' });
                 }
             }
             catch (fcmErr) {
@@ -639,6 +646,8 @@ Object.defineProperty(exports, "checkLowStockAlert", { enumerable: true, get: fu
 var orderNotifications_2 = require("./triggers/orderNotifications");
 Object.defineProperty(exports, "onOrderCreated", { enumerable: true, get: function () { return orderNotifications_2.onOrderCreated; } });
 Object.defineProperty(exports, "onOrderStatusChanged", { enumerable: true, get: function () { return orderNotifications_2.onOrderStatusChanged; } });
+var crmOrderSync_1 = require("./triggers/crmOrderSync");
+Object.defineProperty(exports, "onOrderCreatedCrmSync", { enumerable: true, get: function () { return crmOrderSync_1.onOrderCreatedCrmSync; } });
 // Export Firestore trigger: store announcements → notify customers who favorited the store
 var storeAnnouncements_1 = require("./triggers/storeAnnouncements");
 Object.defineProperty(exports, "onStoreAnnouncement", { enumerable: true, get: function () { return storeAnnouncements_1.onStoreAnnouncement; } });

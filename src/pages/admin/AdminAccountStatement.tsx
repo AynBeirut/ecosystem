@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { FileDown, Download, ArrowLeft, PlusCircle } from 'lucide-react';
@@ -233,6 +233,8 @@ const AdminAccountStatement: React.FC = () => {
     method: string;
     notes: string;
     createdAt: string;
+    idempotencyKey?: string;
+    paymentFingerprint?: string;
     orderAllocation?: {
       appliedAmount: number;
       remainingAmount: number;
@@ -254,6 +256,58 @@ const AdminAccountStatement: React.FC = () => {
     notes: '',
   });
   const [savingPayment, setSavingPayment] = useState(false);
+  const paymentSaveInFlightRef = useRef(false);
+  const paymentSubmitNonceRef = useRef<string | null>(null);
+
+  const PAYMENT_DUPLICATE_WINDOW_MS = 10 * 60 * 1000;
+
+  const buildPaymentFingerprint = (
+    accountId: string,
+    accountName: string,
+    accountType: 'customer' | 'supplier',
+    direction: 'in' | 'out',
+    amount: number,
+    date: string,
+    method: string,
+  ) => {
+    const roundedAmount = Math.round(amount * 100) / 100;
+    return [
+      user?.storeId || '',
+      accountId,
+      accountName.trim().toLowerCase(),
+      accountType,
+      direction,
+      date,
+      roundedAmount.toFixed(2),
+      method,
+    ].join('|');
+  };
+
+  const buildPaymentIdempotencyKey = (fingerprint: string, submitNonce: string) => (
+    `${fingerprint}|${submitNonce}`
+  );
+
+  const findRecentDuplicatePayment = (
+    fingerprint: string,
+    createdAfterMs: number,
+  ) => {
+    return accountPayments.find((payment) => {
+      const createdAtMs = new Date(payment.createdAt).getTime();
+      if (!Number.isFinite(createdAtMs) || createdAtMs < createdAfterMs) {
+        return false;
+      }
+      const paymentFingerprint = buildPaymentFingerprint(
+        payment.accountId,
+        payment.accountName,
+        payment.accountType,
+        payment.direction,
+        toFiniteNumber(payment.amount, 0),
+        payment.date,
+        payment.method,
+      );
+      return paymentFingerprint === fingerprint;
+    });
+  };
 
   const toFiniteNumber = (value: unknown, fallback = 0): number => {
     const parsed = typeof value === 'number' ? value : Number(value);
@@ -945,17 +999,28 @@ const AdminAccountStatement: React.FC = () => {
           payment.notes,
         );
 
+        const orderAllocation = {
+          appliedAmount: allocation.appliedAmount,
+          remainingAmount: allocation.remainingAmount,
+          appliedOrderIds: allocation.appliedOrderIds,
+          appliedAt: new Date().toISOString(),
+        };
+
         await updateDoc(doc(db, 'accountPayments', payment.id), {
-          orderAllocation: {
-            appliedAmount: allocation.appliedAmount,
-            remainingAmount: allocation.remainingAmount,
-            appliedOrderIds: allocation.appliedOrderIds,
-            appliedAt: new Date().toISOString(),
-          },
+          orderAllocation,
         });
+
+        const index = list.findIndex((entry) => entry.id === payment.id);
+        if (index >= 0) {
+          list[index] = { ...list[index], orderAllocation };
+        }
       }
 
       setAccountPayments(list);
+
+      if (pendingAllocations.length > 0) {
+        await Promise.all([fetchCustomers(), fetchSales()]);
+      }
     } catch (err) {
       console.error('Error fetching account payments:', err);
     }
@@ -1066,14 +1131,92 @@ const AdminAccountStatement: React.FC = () => {
     };
   };
 
-  const handleSaveAccountPayment = async () => {
-    if (!paymentModal || !user?.storeId) return;
+  const createAccountPaymentRecord = async (): Promise<{
+    id: string;
+    paymentDoc: Record<string, unknown>;
+    idempotencyKey: string;
+  } | null> => {
+    if (!paymentModal || !user?.storeId) return null;
+    if (paymentSaveInFlightRef.current) return null;
+
     const amount = parseFloat(newPayment.amount);
-    if (!amount || amount <= 0) { alert('Enter a valid amount'); return; }
-    if (!newPayment.date) { alert('Select a date'); return; }
+    if (!amount || amount <= 0) {
+      alert('Enter a valid amount');
+      return null;
+    }
+    if (!newPayment.date) {
+      alert('Select a date');
+      return null;
+    }
+
+    paymentSaveInFlightRef.current = true;
     setSavingPayment(true);
+
+    const submitNonce = paymentSubmitNonceRef.current || crypto.randomUUID();
+    paymentSubmitNonceRef.current = submitNonce;
+
+    const fingerprint = buildPaymentFingerprint(
+      paymentModal.accountId,
+      paymentModal.accountName,
+      paymentModal.accountType,
+      paymentModal.direction,
+      amount,
+      newPayment.date,
+      newPayment.method,
+    );
+    const idempotencyKey = buildPaymentIdempotencyKey(fingerprint, submitNonce);
+
+    const duplicateCutoffMs = Date.now() - PAYMENT_DUPLICATE_WINDOW_MS;
+    const localDuplicate = findRecentDuplicatePayment(fingerprint, duplicateCutoffMs);
+    if (localDuplicate) {
+      alert(
+        `This payment was already recorded (${localDuplicate.date}, $${toFiniteNumber(localDuplicate.amount, 0).toFixed(2)}). `
+        + 'Do not submit again — refresh the page if you do not see it.',
+      );
+      paymentSaveInFlightRef.current = false;
+      setSavingPayment(false);
+      return null;
+    }
+
     try {
       const db = getFirestore();
+      const idempotencyQuery = query(
+        collection(db, 'accountPayments'),
+        where('idempotencyKey', '==', idempotencyKey),
+      );
+      const idempotencySnap = await getDocs(idempotencyQuery);
+      if (!idempotencySnap.empty) {
+        alert(
+          'This payment is already being saved (duplicate click). '
+          + 'Please refresh — do not save again.',
+        );
+        paymentSaveInFlightRef.current = false;
+        setSavingPayment(false);
+        return null;
+      }
+
+      const fingerprintQuery = query(
+        collection(db, 'accountPayments'),
+        where('paymentFingerprint', '==', fingerprint),
+      );
+      const fingerprintSnap = await getDocs(fingerprintQuery);
+      const remoteDuplicate = fingerprintSnap.docs.find((snapshot) => {
+        const payment = snapshot.data() as { createdAt?: string; storeId?: string };
+        if (payment.storeId && payment.storeId !== user.storeId) return false;
+        const createdAtMs = new Date(payment.createdAt || 0).getTime();
+        return Number.isFinite(createdAtMs) && createdAtMs >= duplicateCutoffMs;
+      });
+
+      if (remoteDuplicate) {
+        alert(
+          'This payment already exists in the system (possible slow connection duplicate). '
+          + 'Please refresh — do not save again.',
+        );
+        paymentSaveInFlightRef.current = false;
+        setSavingPayment(false);
+        return null;
+      }
+
       const paymentDoc = {
         storeId: user.storeId,
         accountId: paymentModal.accountId,
@@ -1084,13 +1227,14 @@ const AdminAccountStatement: React.FC = () => {
         date: newPayment.date,
         method: newPayment.method,
         notes: newPayment.notes,
+        idempotencyKey,
+        paymentFingerprint: fingerprint,
         createdAt: new Date().toISOString(),
         createdBy: user.id,
         createdByName: user.name || '',
       };
       const ref = await addDoc(collection(db, 'accountPayments'), paymentDoc);
 
-      // Customer payments should reduce due balances on existing unpaid orders.
       if (paymentModal.accountType === 'customer' && paymentModal.direction === 'in') {
         const allocation = await allocateCustomerPaymentToOrders(
           ref.id,
@@ -1112,15 +1256,23 @@ const AdminAccountStatement: React.FC = () => {
         });
       }
 
-      setAccountPayments(prev => [{ id: ref.id, ...paymentDoc }, ...prev]);
-      setPaymentModal(null);
-      setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
+      setAccountPayments((prev) => [{ id: ref.id, ...paymentDoc } as (typeof accountPayments)[number], ...prev]);
+      return { id: ref.id, paymentDoc, idempotencyKey };
     } catch (err) {
       console.error('Error saving payment:', err);
       alert('Failed to save payment. Please try again.');
+      return null;
     } finally {
+      paymentSaveInFlightRef.current = false;
       setSavingPayment(false);
     }
+  };
+
+  const handleSaveAccountPayment = async () => {
+    const saved = await createAccountPaymentRecord();
+    if (!saved) return;
+    setPaymentModal(null);
+    setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
   };
 
   const generatePaymentReceipt = async (payment: {
@@ -1208,72 +1360,31 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   const handleSaveAndPrint = async () => {
-    if (!paymentModal || !user?.storeId) return;
-    const amount = parseFloat(newPayment.amount);
-    if (!amount || amount <= 0) { alert('Enter a valid amount'); return; }
-    if (!newPayment.date) { alert('Select a date'); return; }
-    setSavingPayment(true);
-    try {
-      const db = getFirestore();
-      const paymentDoc = {
-        storeId: user.storeId,
-        accountId: paymentModal.accountId,
-        accountName: paymentModal.accountName,
-        accountType: paymentModal.accountType,
-        direction: paymentModal.direction,
-        amount,
-        date: newPayment.date,
-        method: newPayment.method,
-        notes: newPayment.notes,
-        createdAt: new Date().toISOString(),
-        createdBy: user.id,
-        createdByName: user.name || '',
-      };
-      const ref = await addDoc(collection(db, 'accountPayments'), paymentDoc);
+    if (!paymentModal) return;
+    const modalSnapshot = { ...paymentModal };
+    const paymentSnapshot = { ...newPayment };
+    const saved = await createAccountPaymentRecord();
+    if (!saved) return;
 
-      if (paymentModal.accountType === 'customer' && paymentModal.direction === 'in') {
-        const allocation = await allocateCustomerPaymentToOrders(
-          ref.id,
-          paymentModal.accountId,
-          paymentModal.accountName,
-          amount,
-          newPayment.date,
-          newPayment.method,
-          newPayment.notes,
-        );
-        await updateDoc(doc(db, 'accountPayments', ref.id), {
-          orderAllocation: {
-            appliedAmount: allocation.appliedAmount,
-            remainingAmount: allocation.remainingAmount,
-            appliedOrderIds: allocation.appliedOrderIds,
-            appliedAt: new Date().toISOString(),
-          },
-        });
-      }
+    const amount = parseFloat(paymentSnapshot.amount);
+    setPaymentModal(null);
+    setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
 
-      setAccountPayments(prev => [{ id: ref.id, ...paymentDoc }, ...prev]);
-      setPaymentModal(null);
-      setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
-
-      await generatePaymentReceipt({
-        id: ref.id,
-        accountName: paymentModal.accountName,
-        accountType: paymentModal.accountType,
-        direction: paymentModal.direction,
-        amount,
-        date: newPayment.date,
-        method: newPayment.method,
-        notes: newPayment.notes,
-      });
-    } catch (err) {
-      console.error('Error saving payment:', err);
-      alert('Failed to save payment. Please try again.');
-    } finally {
-      setSavingPayment(false);
-    }
+    await generatePaymentReceipt({
+      id: saved.id,
+      accountName: modalSnapshot.accountName,
+      accountType: modalSnapshot.accountType,
+      direction: modalSnapshot.direction,
+      amount,
+      date: paymentSnapshot.date,
+      method: paymentSnapshot.method,
+      notes: paymentSnapshot.notes,
+    });
   };
 
   const openPaymentModal = (accountId: string, accountName: string, accountType: 'customer' | 'supplier') => {
+    paymentSaveInFlightRef.current = false;
+    paymentSubmitNonceRef.current = crypto.randomUUID();
     setPaymentModal({
       open: true,
       accountId,
@@ -1331,21 +1442,39 @@ const AdminAccountStatement: React.FC = () => {
         
         purchasesSnap.forEach(doc => {
           const purchase = doc.data();
-          const total = purchase.totalCost || purchase.total || 0;
+          const total = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
           const subtotal = purchase.subtotal || total;
           const vat = purchase.vat || (total - subtotal);
+          const paid = purchase.paymentStatus === 'paid'
+            ? Math.max(total, toFiniteNumber(purchase.amountPaid || purchase.paid, 0))
+            : toFiniteNumber(purchase.amountPaid || purchase.paid, 0);
+          const invoiceRef = purchase.invoiceNumber || doc.id.substring(0, 8);
 
           allTxns.push({
             date: purchase.date || purchase.createdAt || '',
             type: 'purchase',
-            ref: purchase.invoiceNumber || doc.id.substring(0, 8),
-            description: `Pur.Inv.${purchase.invoiceNumber || doc.id.substring(0, 6)}`,
+            ref: invoiceRef,
+            description: `Pur.Inv.${invoiceRef}`,
             debit: 0,
             net: subtotal,
             vat: vat,
             credit: total,
             data: purchase
           });
+
+          if (paid > 0) {
+            allTxns.push({
+              date: purchase.paymentDate || purchase.paidAt || purchase.date || purchase.createdAt || '',
+              type: 'purchase_payment',
+              ref: `PAY-${invoiceRef}`.substring(0, 20),
+              description: `Payment - ${invoiceRef}`,
+              debit: paid,
+              net: 0,
+              vat: 0,
+              credit: 0,
+              data: purchase
+            });
+          }
         });
 
         // Standalone payments (accountPayments direction=out) appear as debit entries
@@ -1360,7 +1489,7 @@ const AdminAccountStatement: React.FC = () => {
             ref: pmt.reference || doc.id.substring(0, 8),
             description: `Payment - ${pmt.method || 'cash'}`,
             debit: amount,
-            net: amount,
+            net: 0,
             vat: 0,
             credit: 0,
             data: pmt
@@ -1464,9 +1593,12 @@ const AdminAccountStatement: React.FC = () => {
         acctPaymentsSnap.forEach(doc => {
           const payment = doc.data();
           if (payment.direction !== 'in') return;
-          const amount = payment.orderAllocation
-            ? Math.max(0, toFiniteNumber(payment.orderAllocation.remainingAmount, 0))
-            : Math.max(0, toFiniteNumber(payment.amount, 0));
+          const unapplied = getUnappliedPaymentAmount({
+            ...payment,
+            id: doc.id,
+          } as (typeof accountPayments)[number]);
+          if (unapplied <= BALANCE_EPSILON) return;
+          const amount = unapplied;
           if (amount <= BALANCE_EPSILON) return;
           const paymentDate = normalizeDateString(payment.date || payment.createdAt);
           if (!paymentDate) return;
@@ -1703,72 +1835,6 @@ const AdminAccountStatement: React.FC = () => {
     doc.text('Accounts dept. _________________', 20, y);
     
     doc.save(`statement_${detailedStatement.accountName.replace(/\s+/g, '_')}_${detailedStatement.asOfDate.replace(/\//g, '-')}.pdf`);
-  };
-
-  const exportCustomersToExcel = () => {
-    const data: CsvRow[] = [];
-    let quarantinedExportRows = 0;
-
-    const validCustomers = customers.map((customer) => {
-      const totalPurchases = toFiniteNumber(customer.totalPurchases, Number.NaN);
-      const totalPayments = toFiniteNumber(customer.totalPayments, Number.NaN);
-      const balance = toFiniteNumber(customer.balance, Number.NaN);
-      if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
-        quarantinedExportRows += 1;
-        return null;
-      }
-      return {
-        name: toNonEmptyString(customer.name, 'Unknown Customer'),
-        totalPurchases,
-        totalPayments,
-        balance,
-      };
-    }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
-    
-    // Add header rows
-    data.push({ 'Customer Name': 'CUSTOMER BALANCES STATEMENT', 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
-    if (filterStartDate || filterEndDate) {
-      const startDisplay = filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning';
-      const endDisplay = filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present';
-      data.push({ 'Customer Name': `Period from ${startDisplay} to ${endDisplay}`, 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
-    }
-    data.push({ 'Customer Name': `Generated: ${new Date().toLocaleDateString('en-GB')}`, 'Total Payments': '', 'Total Purchases': '', 'Balance': '' });
-    data.push({ 'Customer Name': '', 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
-    
-    // Add column headers
-    data.push({ 'Customer Name': 'Customer Name', 'Total Purchases': 'Total Purchases', 'Total Payments': 'Total Payments', 'Balance': 'Balance' });
-    
-    // Add customer data
-    validCustomers.forEach(c => {
-      data.push({
-        'Customer Name': c.name,
-        'Total Purchases': c.totalPurchases.toFixed(2),
-        'Total Payments': c.totalPayments.toFixed(2),
-        'Balance': c.balance.toFixed(2)
-      });
-    });
-    
-    // Add empty row before totals
-    data.push({ 'Customer Name': '', 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
-    
-    // Add total row
-    const totalPurchases = validCustomers.reduce((sum, c) => sum + c.totalPurchases, 0);
-    const totalPayments = validCustomers.reduce((sum, c) => sum + c.totalPayments, 0);
-    const totalBalance = validCustomers.reduce((sum, c) => sum + c.balance, 0);
-
-    if (quarantinedExportRows > 0) {
-      data.push({ 'Customer Name': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
-      data.push({ 'Customer Name': '', 'Total Purchases': '', 'Total Payments': '', 'Balance': '' });
-    }
-
-    data.push({
-      'Customer Name': 'TOTAL',
-      'Total Purchases': totalPurchases.toFixed(2),
-      'Total Payments': totalPayments.toFixed(2),
-      'Balance': totalBalance.toFixed(2)
-    });
-    
-    exportToCSV(data, 'customers_statement.csv');
   };
 
   const exportSuppliersToExcel = () => {
@@ -2439,94 +2505,6 @@ const AdminAccountStatement: React.FC = () => {
     }
 
     doc.save('sales_history.pdf');
-  };
-
-  const exportCustomersToPDF = async () => {
-    const doc = new jsPDF();
-    let quarantinedExportRows = 0;
-
-    const validCustomers = sortedFilteredCustomers.map((customer) => {
-      const acctPaymentsCredit = accountPayments
-        .filter((payment) => payment.accountId === customer.id && payment.direction === 'in')
-        .reduce((sum, payment) => sum + payment.amount, 0);
-
-      const totalPurchases = toFiniteNumber(customer.totalPurchases, Number.NaN);
-      const totalPayments = toFiniteNumber(customer.totalPayments + acctPaymentsCredit, Number.NaN);
-      const balance = toFiniteNumber(customer.balance - acctPaymentsCredit, Number.NaN);
-      if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
-        quarantinedExportRows += 1;
-        return null;
-      }
-      return {
-        name: toNonEmptyString(customer.name, 'Unknown Customer'),
-        totalPurchases,
-        totalPayments,
-        balance,
-      };
-    }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
-    
-    // Initialize Arabic font support
-    await initArabicPDF(doc);
-    
-    doc.setFontSize(16);
-    doc.setFont(undefined, 'bold');
-    doc.text('CUSTOMER BALANCES STATEMENT', 105, 15, { align: 'center' });
-    doc.setFontSize(9);
-    doc.setFont(undefined, 'normal');
-    if (filterStartDate || filterEndDate) {
-      const startDisplay = filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning';
-      const endDisplay = filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present';
-      doc.text(`Period from ${startDisplay} to ${endDisplay}`, 105, 22, { align: 'center' });
-    }
-    doc.text(`Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`, 105, 27, { align: 'center' });
-    
-    let y = 45;
-    doc.setFontSize(12);
-    doc.text('Customer Name', 20, y);
-    doc.text('Purchases', 90, y);
-    doc.text('Payments', 130, y);
-    doc.text('Balance', 170, y);
-    y += 5;
-    doc.line(20, y, 190, y);
-    y += 7;
-    
-    doc.setFontSize(10);
-    validCustomers.forEach(customer => {
-      if (y > 270) {
-        doc.addPage();
-        y = 20;
-      }
-      // Use writeText for Arabic support
-      const customerName = customer.name.substring(0, 30);
-      writeText(doc, customerName, 20, y);
-      doc.text(`$${customer.totalPurchases.toFixed(2)}`, 90, y);
-      doc.text(`$${customer.totalPayments.toFixed(2)}`, 130, y);
-      doc.text(`$${customer.balance.toFixed(2)}`, 170, y);
-      y += 7;
-    });
-    
-    // Add total row
-    y += 3;
-    doc.line(20, y, 190, y);
-    y += 7;
-    doc.setFontSize(12);
-    doc.setFont(undefined, 'bold');
-    doc.text('TOTAL', 20, y);
-    const totalPurchases = validCustomers.reduce((sum, c) => sum + c.totalPurchases, 0);
-    const totalPayments = validCustomers.reduce((sum, c) => sum + c.totalPayments, 0);
-    const totalBalance = validCustomers.reduce((sum, c) => sum + c.balance, 0);
-    doc.text(`$${totalPurchases.toFixed(2)}`, 90, y);
-    doc.text(`$${totalPayments.toFixed(2)}`, 130, y);
-    doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
-
-    if (quarantinedExportRows > 0) {
-      y += 7;
-      doc.setFontSize(9);
-      doc.setFont(undefined, 'normal');
-      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
-    }
-    
-    doc.save('customers_statement.pdf');
   };
 
   const exportSuppliersToPDF = async () => {
@@ -3269,10 +3247,20 @@ const AdminAccountStatement: React.FC = () => {
     }, new Map<string, (typeof accountPayments)[number][]>());
 
   const getUnappliedPaymentAmount = (payment: (typeof accountPayments)[number]) => {
-    if (payment.orderAllocation) {
-      return Math.max(0, toFiniteNumber(payment.orderAllocation.remainingAmount, 0));
+    const total = toFiniteNumber(payment.amount, 0);
+    if (total <= 0) return 0;
+
+    const alloc = payment.orderAllocation;
+    if (alloc) {
+      if (typeof alloc.remainingAmount === 'number') {
+        return Math.max(0, alloc.remainingAmount);
+      }
+      const applied = toFiniteNumber(alloc.appliedAmount, 0);
+      return Math.max(0, total - applied);
     }
-    return Math.max(0, toFiniteNumber(payment.amount, 0));
+
+    // No allocation metadata: payment was applied to orders (credit is already in amountPaid).
+    return 0;
   };
 
   const toStatementDateLabel = (value: unknown): string => {
@@ -3281,6 +3269,17 @@ const AdminAccountStatement: React.FC = () => {
     const parsed = new Date(normalized);
     if (Number.isNaN(parsed.getTime())) return 'N/A';
     return parsed.toLocaleDateString('en-GB');
+  };
+
+  const getSupplierMetrics = (supplier: SupplierBalance) => {
+    // fetchSuppliers already includes PO payments + standalone accountPayments.
+    // Do not add accountPayments again (was causing 2x standalone payments on the tab).
+    return {
+      totalPurchases: toFiniteNumber(supplier.totalPurchases, 0),
+      totalPayments: toFiniteNumber(supplier.totalPayments, 0),
+      balance: toFiniteNumber(supplier.balance, 0),
+      invoicesCount: purchases.filter((p) => p.supplierId === supplier.id || p.supplier === supplier.name).length,
+    };
   };
 
   const getCustomerMetrics = (customer: CustomerBalance) => {
@@ -3336,6 +3335,149 @@ const AdminAccountStatement: React.FC = () => {
     if (Math.abs(balanceDiff) >= BALANCE_EPSILON) return balanceDiff;
     return a.name.localeCompare(b.name);
   });
+
+  const buildCustomerExportRows = () => {
+    let quarantinedExportRows = 0;
+    const rows = sortedFilteredCustomers.map((customer) => {
+      const metrics = getCustomerMetrics(customer);
+      const totalPurchases = toFiniteNumber(metrics.totalInvoiced, Number.NaN);
+      const totalPayments = toFiniteNumber(metrics.totalPaid, Number.NaN);
+      const balance = toFiniteNumber(metrics.balance, Number.NaN);
+      if (!Number.isFinite(totalPurchases) || !Number.isFinite(totalPayments) || !Number.isFinite(balance)) {
+        quarantinedExportRows += 1;
+        return null;
+      }
+      return {
+        name: toNonEmptyString(customer.name, 'Unknown Customer'),
+        totalPurchases,
+        totalPayments,
+        balance,
+      };
+    }).filter(Boolean) as Array<{ name: string; totalPurchases: number; totalPayments: number; balance: number }>;
+    return { rows, quarantinedExportRows };
+  };
+
+  const getCustomerExportFilterNote = () => {
+    const parts: string[] = [];
+    if (customerBalanceFilter === 'active') parts.push('Active balance only');
+    if (customerBalanceFilter === 'zero') parts.push('Zero balance only');
+    if (filterStartDate || filterEndDate) {
+      const startDisplay = filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning';
+      const endDisplay = filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present';
+      parts.push(`Period ${startDisplay} to ${endDisplay}`);
+    }
+    if (customerSearch.trim()) parts.push(`Search: ${customerSearch.trim()}`);
+    return parts.join(' • ');
+  };
+
+  const exportCustomersToExcel = () => {
+    const data: CsvRow[] = [];
+    const { rows: validCustomers, quarantinedExportRows } = buildCustomerExportRows();
+    const filterNote = getCustomerExportFilterNote();
+
+    data.push({ 'Customer Name': 'CUSTOMER BALANCES STATEMENT', 'Total Invoiced': '', 'Total Paid': '', 'Balance': '' });
+    if (filterNote) {
+      data.push({ 'Customer Name': filterNote, 'Total Invoiced': '', 'Total Paid': '', 'Balance': '' });
+    }
+    data.push({ 'Customer Name': `Generated: ${new Date().toLocaleDateString('en-GB')}`, 'Total Invoiced': '', 'Total Paid': '', 'Balance': '' });
+    data.push({ 'Customer Name': '', 'Total Invoiced': '', 'Total Paid': '', 'Balance': '' });
+    data.push({ 'Customer Name': 'Customer Name', 'Total Invoiced': 'Total Invoiced', 'Total Paid': 'Total Paid', 'Balance': 'Balance' });
+
+    validCustomers.forEach((c) => {
+      data.push({
+        'Customer Name': c.name,
+        'Total Invoiced': c.totalPurchases.toFixed(2),
+        'Total Paid': c.totalPayments.toFixed(2),
+        'Balance': c.balance.toFixed(2),
+      });
+    });
+
+    data.push({ 'Customer Name': '', 'Total Invoiced': '', 'Total Paid': '', 'Balance': '' });
+    const totalInvoiced = validCustomers.reduce((sum, c) => sum + c.totalPurchases, 0);
+    const totalPaid = validCustomers.reduce((sum, c) => sum + c.totalPayments, 0);
+    const totalBalance = validCustomers.reduce((sum, c) => sum + c.balance, 0);
+    if (quarantinedExportRows > 0) {
+      data.push({ 'Customer Name': `Quarantined invalid rows: ${quarantinedExportRows}`, 'Total Invoiced': '', 'Total Paid': '', 'Balance': '' });
+    }
+    data.push({
+      'Customer Name': 'TOTAL',
+      'Total Invoiced': totalInvoiced.toFixed(2),
+      'Total Paid': totalPaid.toFixed(2),
+      'Balance': totalBalance.toFixed(2),
+    });
+
+    exportToCSV(data, 'customers_statement.csv');
+  };
+
+  const exportCustomersToPDF = async () => {
+    const doc = new jsPDF();
+    const { rows: validCustomers, quarantinedExportRows } = buildCustomerExportRows();
+    const filterNote = getCustomerExportFilterNote();
+
+    await initArabicPDF(doc);
+
+    doc.setFontSize(16);
+    doc.setFont(undefined, 'bold');
+    doc.text('CUSTOMER BALANCES STATEMENT', 105, 15, { align: 'center' });
+    doc.setFontSize(9);
+    doc.setFont(undefined, 'normal');
+    let headerY = 22;
+    if (filterNote) {
+      doc.text(filterNote, 105, headerY, { align: 'center' });
+      headerY += 5;
+    }
+    doc.text(
+      `Generated: ${new Date().toLocaleDateString('en-GB')} ${new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' })}`,
+      105,
+      headerY,
+      { align: 'center' },
+    );
+
+    let y = headerY + 18;
+    doc.setFontSize(12);
+    doc.text('Customer Name', 20, y);
+    doc.text('Invoiced', 90, y);
+    doc.text('Paid', 130, y);
+    doc.text('Balance', 170, y);
+    y += 5;
+    doc.line(20, y, 190, y);
+    y += 7;
+
+    doc.setFontSize(10);
+    validCustomers.forEach((customer) => {
+      if (y > 270) {
+        doc.addPage();
+        y = 20;
+      }
+      writeText(doc, customer.name.substring(0, 30), 20, y);
+      doc.text(`$${customer.totalPurchases.toFixed(2)}`, 90, y);
+      doc.text(`$${customer.totalPayments.toFixed(2)}`, 130, y);
+      doc.text(`$${customer.balance.toFixed(2)}`, 170, y);
+      y += 7;
+    });
+
+    y += 3;
+    doc.line(20, y, 190, y);
+    y += 7;
+    doc.setFontSize(12);
+    doc.setFont(undefined, 'bold');
+    doc.text('TOTAL', 20, y);
+    const totalInvoiced = validCustomers.reduce((sum, c) => sum + c.totalPurchases, 0);
+    const totalPaid = validCustomers.reduce((sum, c) => sum + c.totalPayments, 0);
+    const totalBalance = validCustomers.reduce((sum, c) => sum + c.balance, 0);
+    doc.text(`$${totalInvoiced.toFixed(2)}`, 90, y);
+    doc.text(`$${totalPaid.toFixed(2)}`, 130, y);
+    doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
+
+    if (quarantinedExportRows > 0) {
+      y += 7;
+      doc.setFontSize(9);
+      doc.setFont(undefined, 'normal');
+      doc.text(`Quarantined invalid rows: ${quarantinedExportRows}`, 20, y);
+    }
+
+    doc.save('customers_statement.pdf');
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -3640,33 +3782,22 @@ const AdminAccountStatement: React.FC = () => {
           {activeTab === 'suppliers' && (() => {
             const filteredSuppliers = suppliers.filter((supplier) => {
               if (supplierSearch && !supplier.name.toLowerCase().includes(supplierSearch.toLowerCase())) return false;
-              const acctPaymentsCredit = accountPayments
-                .filter((p) => p.accountId === supplier.id && p.direction === 'out')
-                .reduce((s, p) => s + p.amount, 0);
-              const displayBalance = supplier.balance - acctPaymentsCredit;
-              if (supplierBalanceFilter === 'active') return displayBalance > BALANCE_EPSILON;
-              if (supplierBalanceFilter === 'zero') return isZeroBalance(displayBalance);
+              const metrics = getSupplierMetrics(supplier);
+              if (supplierBalanceFilter === 'active') return metrics.balance > BALANCE_EPSILON;
+              if (supplierBalanceFilter === 'zero') return isZeroBalance(metrics.balance);
               return true;
             });
 
             const filteredSupplierTotals = filteredSuppliers.reduce((acc, supplier) => {
-              const acctPaymentsCredit = accountPayments
-                .filter((p) => p.accountId === supplier.id && p.direction === 'out')
-                .reduce((s, p) => s + p.amount, 0);
-              acc.purchased += supplier.totalPurchases;
-              acc.paid += supplier.totalPayments + acctPaymentsCredit;
-              acc.balance += supplier.balance - acctPaymentsCredit;
+              const metrics = getSupplierMetrics(supplier);
+              acc.purchased += metrics.totalPurchases;
+              acc.paid += metrics.totalPayments;
+              acc.balance += metrics.balance;
               return acc;
             }, { purchased: 0, paid: 0, balance: 0 });
 
             const sortedFilteredSuppliers = [...filteredSuppliers].sort((a, b) => {
-              const aBalance = a.balance - accountPayments
-                .filter((p) => p.accountId === a.id && p.direction === 'out')
-                .reduce((s, p) => s + p.amount, 0);
-              const bBalance = b.balance - accountPayments
-                .filter((p) => p.accountId === b.id && p.direction === 'out')
-                .reduce((s, p) => s + p.amount, 0);
-              const balanceDiff = bBalance - aBalance;
+              const balanceDiff = getSupplierMetrics(b).balance - getSupplierMetrics(a).balance;
               if (Math.abs(balanceDiff) >= BALANCE_EPSILON) return balanceDiff;
               return a.name.localeCompare(b.name);
             });
@@ -3762,19 +3893,19 @@ const AdminAccountStatement: React.FC = () => {
                     </thead>
                     <tbody>
                       {sortedFilteredSuppliers.map(supplier => {
-                        const acctPaymentsCredit = accountPayments
-                          .filter(p => p.accountId === supplier.id && p.direction === 'out')
-                          .reduce((s, p) => s + p.amount, 0);
-                        const displayBalance = supplier.balance - acctPaymentsCredit;
+                        const metrics = getSupplierMetrics(supplier);
                         return (
                           <tr key={supplier.id} className="border-b hover:bg-gray-50">
                             <td className="border px-3 py-2 font-medium">{supplier.name}</td>
-                            <td className="border px-3 py-2 text-right">{purchases.filter(p => p.supplier === supplier.name).length}</td>
-                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{supplier.totalPurchases.toFixed(2)}</td>
-                            <td className="border px-3 py-2 text-right text-green-600">{(supplier.totalPayments + acctPaymentsCredit).toFixed(2)}</td>
-                            <td className={`border px-3 py-2 text-right font-bold ${displayBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {displayBalance.toFixed(2)}
-                              {displayBalance > 0 && <span className="ml-1 text-xs font-normal">(owed)</span>}
+                            <td className="border px-3 py-2 text-right">{metrics.invoicesCount}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{metrics.totalPurchases.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{metrics.totalPayments.toFixed(2)}</td>
+                            <td className={`border px-3 py-2 text-right font-bold ${metrics.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                              {metrics.balance.toFixed(2)}
+                              {metrics.balance > 0 && <span className="ml-1 text-xs font-normal">(owed)</span>}
+                              {metrics.balance < -BALANCE_EPSILON && (
+                                <span className="ml-1 text-xs font-normal">(in your favour)</span>
+                              )}
                             </td>
                             <td className="border px-3 py-2 text-center">
                               <div className="flex gap-1 justify-center">
@@ -4726,6 +4857,7 @@ const AdminAccountStatement: React.FC = () => {
                         <th className="border px-3 py-2 text-left text-xs">Method</th>
                         <th className="border px-3 py-2 text-right text-xs">Amount</th>
                         <th className="border px-3 py-2 text-left text-xs">Notes</th>
+                        <th className="border px-3 py-2 text-center text-xs">Receipt</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -4746,6 +4878,23 @@ const AdminAccountStatement: React.FC = () => {
                           <td className="border px-3 py-2 text-sm capitalize">{p.method}</td>
                           <td className="border px-3 py-2 text-right font-bold text-green-700">{p.amount.toFixed(2)}</td>
                           <td className="border px-3 py-2 text-sm text-gray-500">{p.notes || '-'}</td>
+                          <td className="border px-3 py-2 text-center">
+                            <button
+                              onClick={() => generatePaymentReceipt({
+                                id: p.id,
+                                accountName: p.accountName,
+                                accountType: p.accountType,
+                                direction: p.direction,
+                                amount: p.amount,
+                                date: p.date,
+                                method: p.method,
+                                notes: p.notes,
+                              })}
+                              className="flex items-center gap-1 px-2 py-1 text-xs bg-red-600 text-white rounded hover:bg-red-700"
+                            >
+                              <FileDown size={12} /> PDF
+                            </button>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
@@ -4753,6 +4902,7 @@ const AdminAccountStatement: React.FC = () => {
                       <tr>
                         <td colSpan={5} className="border px-3 py-3">TOTAL</td>
                         <td className="border px-3 py-3 text-right text-green-700">{filteredPayments.reduce((s, p) => s + p.amount, 0).toFixed(2)}</td>
+                        <td className="border px-3 py-3"></td>
                         <td className="border px-3 py-3"></td>
                       </tr>
                     </tfoot>
@@ -4850,18 +5000,13 @@ const AdminAccountStatement: React.FC = () => {
             <DialogFooter>
               <button
                 onClick={() => setPaymentModal(null)}
-                className="px-4 py-2 text-sm border rounded hover:bg-gray-50"
+                disabled={savingPayment}
+                className="px-4 py-2 text-sm border rounded hover:bg-gray-50 disabled:opacity-50"
               >
                 Cancel
               </button>
               <button
-                onClick={handleSaveAndPrint}
-                disabled={savingPayment}
-                className="px-4 py-2 text-sm bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50"
-              >
-                {savingPayment ? 'Saving...' : 'Save & Print Receipt'}
-              </button>
-              <button
+                type="button"
                 onClick={handleSaveAccountPayment}
                 disabled={savingPayment}
                 className="px-4 py-2 text-sm bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"

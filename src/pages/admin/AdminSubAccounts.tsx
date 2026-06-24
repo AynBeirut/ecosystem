@@ -278,7 +278,8 @@ const AdminSubAccounts: React.FC = () => {
   };
 
   const handleAddClientToSalesPerson = async (spId: string, spName: string, customer: any) => {
-    if (!user?.storeId) return;
+    const storeId = user?.storeId || user?.id;
+    if (!storeId) return;
     try {
       const db = getFirestore();
       await updateDoc(doc(db, 'customers', customer.id), {
@@ -296,7 +297,8 @@ const AdminSubAccounts: React.FC = () => {
   };
 
   const handleRemoveClientFromSalesPerson = async (customer: any) => {
-    if (!user?.storeId) return;
+    const storeId = user?.storeId || user?.id;
+    if (!storeId) return;
     try {
       const db = getFirestore();
       await updateDoc(doc(db, 'customers', customer.id), {
@@ -429,7 +431,7 @@ const AdminSubAccounts: React.FC = () => {
                       onChange={(e) => setNewAccount({ ...newAccount, commissionRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                       placeholder="5"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Percentage commission on sales</p>
+                    <p className="text-xs text-gray-500 mt-1">Percentage commission on paid sales</p>
                   </div>
                 )}
 
@@ -608,7 +610,7 @@ const AdminSubAccounts: React.FC = () => {
                   const totalPaid   = spOrders.reduce((s, o) => s + (Number(o.amountPaid) || 0), 0);
                   const outstanding = totalSales - totalPaid;
                   const commRate    = sp.commissionRate || 0;
-                  const commEarned  = totalSales * (commRate / 100);
+                  const commEarned  = totalPaid * (commRate / 100);
                   const isExpanded  = expandedSalesPerson === sp.id;
                   const isClientsExpanded = expandedClients === sp.id;
 
@@ -666,7 +668,7 @@ const AdminSubAccounts: React.FC = () => {
                             <div className={`text-xl font-bold ${outstanding > 0 ? 'text-orange-600' : 'text-gray-500'}`}>{outstanding.toFixed(2)}</div>
                           </div>
                           <div className="bg-purple-50 rounded-lg p-3 text-center">
-                            <div className="text-xs text-gray-500">Commission Earned</div>
+                            <div className="text-xs text-gray-500">Commission on Paid</div>
                             <div className="text-xl font-bold text-purple-700">
                               {commRate > 0 ? commEarned.toFixed(2) : '—'}
                             </div>
@@ -767,7 +769,7 @@ const AdminSubAccounts: React.FC = () => {
                                     <th className="px-3 py-2 text-right text-xs">Total</th>
                                     <th className="px-3 py-2 text-right text-xs">Paid</th>
                                     <th className="px-3 py-2 text-right text-xs">Balance</th>
-                                    {commRate > 0 && <th className="px-3 py-2 text-right text-xs">Commission</th>}
+                                    {commRate > 0 && <th className="px-3 py-2 text-right text-xs">Commission Paid</th>}
                                     <th className="px-3 py-2 text-left text-xs">Status</th>
                                   </tr>
                                 </thead>
@@ -776,7 +778,7 @@ const AdminSubAccounts: React.FC = () => {
                                     const total     = Number(o.total) || 0;
                                     const paid      = Number(o.amountPaid) || 0;
                                     const balance   = total - paid;
-                                    const orderComm = total * (commRate / 100);
+                                    const orderComm = paid * (commRate / 100);
                                     return (
                                       <tr key={o.id} className="border-b hover:bg-gray-50">
                                         <td className="px-3 py-2">{new Date(o.createdAt).toLocaleDateString('en-GB')}</td>
@@ -900,7 +902,7 @@ const AdminSubAccounts: React.FC = () => {
                     onChange={(e) => setEditingAccount({ ...editingAccount, commissionRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                     placeholder="5"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Percentage commission on sales</p>
+                  <p className="text-xs text-gray-500 mt-1">Percentage commission on paid sales</p>
                 </div>
               )}
 

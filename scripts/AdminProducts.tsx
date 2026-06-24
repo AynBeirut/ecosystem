@@ -652,7 +652,6 @@ const AdminProducts: React.FC = () => {
                         id="imageFile"
                         type="file"
                         accept="image/*"
-                        capture="environment"
                         style={{ display: 'none' }}
                         onChange={e => setNewProduct(prev => ({ ...prev, imageFile: e.target.files?.[0] || null }))}
                       />

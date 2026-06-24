@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
+import { getFirestore, Transaction } from 'firebase-admin/firestore';
 
 type DefaultAiModel = {
   id: string;
@@ -212,6 +213,135 @@ export async function saveAiSettings(req: Request, res: Response): Promise<void>
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Failed to save AI settings';
     const status = message.includes('Unauthorized') ? 403 : message.includes('Missing bearer token') ? 401 : 500;
+    res.status(status).json({ success: false, message });
+  }
+}
+
+export async function getAiCreditBalance(req: Request, res: Response): Promise<void> {
+  try {
+    const { storeId } = await resolveStoreAuth(req);
+    const snap = await admin.firestore().collection('storeProfiles').doc(storeId).get();
+    const balance = Number(snap.data()?.aiCreditBalance) || 0;
+    res.json({ success: true, balance });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Failed to load balance';
+    res.status(500).json({ success: false, message });
+  }
+}
+
+export async function generateAiContent(req: Request, res: Response): Promise<void> {
+  try {
+    const { storeId } = await resolveStoreAuth(req);
+    const prompt = String(req.body?.prompt || '').trim();
+    const tool = String(req.body?.tool || 'content_generation').trim();
+    const modelIdOverride = String(req.body?.modelId || '').trim();
+
+    if (!prompt) {
+      res.status(400).json({ success: false, message: 'Prompt is required' });
+      return;
+    }
+
+    const db = getFirestore();
+    const profileSnap = await db.collection('storeProfiles').doc(storeId).get();
+    const profileData = profileSnap.data() || {};
+
+    const settings = sanitizeAiSettings(profileData.aiIntegrationSettings);
+    if (!settings.enabled || !settings.apiKey) {
+      res.status(400).json({
+        success: false,
+        message: 'AI integration not configured. Add your API key in AI Builder settings.',
+      });
+      return;
+    }
+
+    const currentBalance = Number(profileData.aiCreditBalance) || 0;
+    const modelId = modelIdOverride || settings.defaultModelId || 'gpt-4o-mini';
+    const modelPricing = settings.modelPricing.find((m) => m.modelId === modelId && m.active);
+    const creditCost = modelPricing?.creditsPerUnit ?? 3;
+
+    if (currentBalance < creditCost) {
+      res.status(402).json({
+        success: false,
+        message: 'Insufficient AI credits. Purchase more credits to continue.',
+      });
+      return;
+    }
+
+    const apiBaseUrl = (settings.apiBaseUrl || 'https://api.openai.com/v1').replace(/\/$/, '');
+    const aiRes = await fetch(`${apiBaseUrl}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${settings.apiKey}`,
+      },
+      body: JSON.stringify({
+        model: modelId,
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1200,
+      }),
+    });
+
+    if (!aiRes.ok) {
+      const errBody = await aiRes.json().catch(() => ({})) as Record<string, unknown>;
+      const errMsg = (errBody?.error as Record<string, unknown> | undefined)?.message;
+      throw new Error(String(errMsg || `AI API returned ${aiRes.status}`));
+    }
+
+    const aiData = await aiRes.json() as { choices: Array<{ message: { content: string } }> };
+    const content = aiData.choices?.[0]?.message?.content?.trim() || '';
+
+    const balanceAfter = currentBalance - creditCost;
+    await db.runTransaction(async (tx: Transaction) => {
+      tx.update(db.collection('storeProfiles').doc(storeId), { aiCreditBalance: balanceAfter });
+      const ledgerRef = db.collection('stores').doc(storeId).collection('aiCreditLedger').doc();
+      tx.set(ledgerRef, {
+        type: 'deduction',
+        credits: -creditCost,
+        balanceAfter,
+        reason: `AI tool: ${tool}`,
+        modelId,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    res.json({ success: true, content, creditsUsed: creditCost, balanceAfter });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Generation failed';
+    res.status(500).json({ success: false, message });
+  }
+}
+
+export async function deductAiCredits(req: Request, res: Response): Promise<void> {
+  try {
+    const { storeId } = await resolveStoreAuth(req);
+    const cost = Math.max(1, Number(req.body?.credits) || 0);
+    const reason = String(req.body?.reason || 'AI usage');
+    const modelId = String(req.body?.modelId || '').trim() || undefined;
+
+    const db = getFirestore();
+    const ref = db.collection('storeProfiles').doc(storeId);
+
+    await db.runTransaction(async (tx: Transaction) => {
+      const snap = await tx.get(ref);
+      const current = Number(snap.data()?.aiCreditBalance) || 0;
+      if (current < cost) throw new Error('Insufficient AI credits');
+      const balanceAfter = current - cost;
+      tx.update(ref, { aiCreditBalance: balanceAfter });
+      const ledgerRef = db.collection('stores').doc(storeId).collection('aiCreditLedger').doc();
+      tx.set(ledgerRef, {
+        type: 'deduction',
+        credits: -cost,
+        balanceAfter,
+        reason,
+        modelId: modelId ?? null,
+        createdAt: admin.firestore.FieldValue.serverTimestamp(),
+      });
+    });
+
+    res.json({ success: true });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Deduction failed';
+    const status = message.includes('Insufficient') ? 402 : 500;
     res.status(status).json({ success: false, message });
   }
 }

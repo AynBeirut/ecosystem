@@ -1,7 +1,7 @@
 import * as admin from 'firebase-admin';
 import { Request, Response } from 'express';
 import { checkPaymentStatus } from '../services/whishPayment';
-import { activateTrial, activateSubscription } from './subscription';
+import { activateTrial, activateSubscription, activateModularSubscription } from './subscription';
 import { sendTrialActivatedEmail, sendSubscriptionActivatedEmail, sendPaymentFailedEmail } from '../services/emailService';
 
 const db = admin.firestore();
@@ -44,6 +44,8 @@ export async function handleWhishWebhook(req: Request, res: Response) {
         await handleTrialSuccess(userId as string, externalId as string, payerPhoneNumber);
       } else if (type === 'subscription') {
         await handleSubscriptionSuccess(userId as string, externalId as string, payerPhoneNumber);
+      } else if (type === 'subscription_modular') {
+        await handleModularSubscriptionSuccess(userId as string, externalId as string, payerPhoneNumber);
       }
     } else if (collectStatus === 'failed' || status === 'failed') {
       await handlePaymentFailure(userId as string, externalId as string, type as string);
@@ -127,6 +129,33 @@ async function handleSubscriptionSuccess(
     console.log(`Subscription activated successfully for ${userId}`);
   } catch (error) {
     console.error('Subscription activation error:', error);
+    throw error;
+  }
+}
+
+/**
+ * Handle successful modular-v2 subscription payment
+ */
+async function handleModularSubscriptionSuccess(
+  userId: string,
+  externalId: string,
+  payerPhone?: string,
+) {
+  try {
+    await activateModularSubscription(userId, externalId);
+    const storeSnap = await db.collection('storeProfiles').doc(userId).get();
+    const email = storeSnap.data()?.email || storeSnap.data()?.ownerEmail;
+    if (email) {
+      await sendSubscriptionActivatedEmail(
+        email,
+        'modular-v2',
+        storeSnap.data()?.subscriptionPlan || 'monthly',
+        (Number(storeSnap.data()?.lastModularPurchaseCents) || 0) / 100,
+      );
+    }
+    console.log(`Modular subscription activated for ${userId}`);
+  } catch (error) {
+    console.error('Modular subscription activation error:', error);
     throw error;
   }
 }

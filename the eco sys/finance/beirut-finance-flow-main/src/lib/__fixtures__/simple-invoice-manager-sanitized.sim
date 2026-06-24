@@ -1,0 +1,87 @@
+{
+  "OtherData": {
+    "ServerOrgId": 1,
+    "ServerUserId": 2,
+    "AppVersion": "sanitized"
+  },
+  "InvoiceTBLs": [
+    {
+      "clients": [
+        {
+          "_id": 1,
+          "unique_key_client": "client-alpha",
+          "name": "Alpha Client",
+          "email": "alpha@example.com",
+          "number": "+961 1 111 111",
+          "address_line1": "Main Street",
+          "address_line2": "Beirut",
+          "business_id": "VAT-ALPHA"
+        }
+      ]
+    },
+    {
+      "products": [
+        {
+          "_id": 10,
+          "unique_key_product": "product-consulting",
+          "prod_name": "Consulting Hour",
+          "product_code": "CONSULT",
+          "type_of_commodity": "service",
+          "rate": 75,
+          "buy_rate": 0,
+          "current_stock": 0,
+          "minimum_stock": 0,
+          "discription": "Hourly service"
+        }
+      ]
+    },
+    {
+      "invoice": [
+        {
+          "_id": 100,
+          "unique_key_invoice": "invoice-100",
+          "invoice_number": "INV-100",
+          "unique_key_fk_client": "client-alpha",
+          "created_date": "2026-06-17",
+          "payable_amount": 150,
+          "balance": 0,
+          "status": "paid",
+          "invoice_note": "Paid in SIM"
+        }
+      ]
+    },
+    {
+      "list_item": [
+        {
+          "unique_key_list_item": "line-1",
+          "unique_key_fk_invoice": "invoice-100",
+          "unique_key_fk_product": "product-consulting",
+          "product_name": "Consulting Hour",
+          "quantity": 2,
+          "rate": 75,
+          "total": 150
+        }
+      ]
+    },
+    {
+      "invoice_payment": [
+        {
+          "unique_key_payment": "payment-100",
+          "unique_key_fk_invoice": "invoice-100",
+          "unique_key_fk_client": "client-alpha",
+          "paid_amount": 150,
+          "payment_type": "Cash",
+          "date_of_payment": "2026-06-18"
+        }
+      ]
+    },
+    {
+      "tbl_expenses": [
+        {
+          "_id": 1,
+          "amount": 10
+        }
+      ]
+    }
+  ]
+}

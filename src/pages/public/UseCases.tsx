@@ -14,19 +14,20 @@ const USE_CASES = [
     title: 'Retail Stores',
     headline: 'Run a tighter retail operation from day one.',
     description:
-      'Neighborhood shops, boutiques, electronics stores, and general retail benefit from integrated POS and inventory — where every sale automatically updates stock and generates a receipt.',
+      'Neighborhood shops, boutiques, and general retail use core marketplace and inventory modules — with optional CRM and the Admin Android app for owners on the go.',
     features: [
-      'Fast checkout with barcode scanning',
-      'Real-time inventory updates on every sale',
-      'Low-stock alerts before you run out',
-      'Customer profiles built from purchase history',
-      'Multi-staff accounts with cashier-level access control',
-      'Online store alongside physical shop',
+      'Online storefront plus web admin dashboard',
+      'Real-time inventory and low-stock alerts',
+      'Invoicing, payments, and dual currency',
+      'Optional Sales CRM for field follow-ups',
+      'Grabio Admin App on Google Play',
+      'Grabio POS (Windows + mobile) — in development',
     ],
-    featureLink: '/features#pos',
-    featureLinkLabel: 'Explore POS features',
-    blogLink: '/blog/pos-systems-for-small-business-guide',
-    blogLinkLabel: 'Read: POS Guide for Small Businesses',
+    modules: ['marketplace', 'stock', 'invoicing', 'crm', 'admin_mobile'],
+    featureLink: '/features#stock',
+    featureLinkLabel: 'Explore inventory modules',
+    blogLink: '/blog/commerce-management-system-guide',
+    blogLinkLabel: 'Read: Commerce Management Guide',
   },
   {
     id: 'food',
@@ -34,17 +35,18 @@ const USE_CASES = [
     title: 'Cafes & Restaurants',
     headline: 'From order to delivery — in one system.',
     description:
-      'Cafes, restaurants, cloud kitchens, and food delivery operations need fast order processing, table or delivery management, and real-time inventory that accounts for ingredients consumed per dish.',
+      'Cafes, restaurants, and cloud kitchens use delivery, marketplace, and Restaurant Production (beta) for live ingredient deduction — without a separate manufacturing step.',
     features: [
-      'Recipe-based inventory consumption (ingredients per dish)',
-      'Fast order processing with modifiers',
-      'Delivery order management with GPS tracking',
-      'Daily sales reports by product',
-      'Cash + card + mobile payment handling',
-      'Staff management with shift-level tracking',
+      'Restaurant Production — recipe deduction on sale',
+      'Delivery workflow with GPS and notifications',
+      'Marketplace ordering and guest tracking',
+      'Inventory and supplier management',
+      'Staff roles via Team & Sub-Accounts',
+      'POS app planned for counter checkout',
     ],
-    featureLink: '/features#inventory',
-    featureLinkLabel: 'Explore inventory features',
+    modules: ['restaurant', 'delivery', 'marketplace', 'stock', 'team'],
+    featureLink: '/features#restaurant',
+    featureLinkLabel: 'Explore F&B modules',
     blogLink: '/blog/commerce-management-system-guide',
     blogLinkLabel: 'Read: Commerce Management Guide',
   },
@@ -54,37 +56,39 @@ const USE_CASES = [
     title: 'Wholesale & Distribution',
     headline: 'Manage volume, suppliers, and credit — cleanly.',
     description:
-      'Wholesale distributors operate on thin margins and complex credit terms. Grabio handles multi-unit inventory, supplier purchase orders, customer credit management, and B2B invoicing at volume.',
+      'Wholesale distributors lean on invoicing, payments, inventory, and analytics — with B2B statements and supplier credit built into the platform core.',
     features: [
-      'Bulk purchase orders with supplier management',
-      'Customer credit limits and payment terms',
-      'Professional B2B invoices with VAT/tax support',
-      'Multi-warehouse inventory visibility',
-      'Overdue invoice tracking and follow-up',
-      'Supplier statements and reconciliation',
+      'Bulk purchase orders and suppliers',
+      'B2B invoices and account statements',
+      'Customer credit and payment terms',
+      'Multi-location inventory visibility',
+      'Revenue and margin analytics',
+      'Optional Dropship Sync for supplier links',
     ],
+    modules: ['invoicing', 'payments', 'stock', 'analytics', 'dropship'],
     featureLink: '/features#invoicing',
-    featureLinkLabel: 'Explore invoicing features',
+    featureLinkLabel: 'Explore finance modules',
     blogLink: '/blog/invoicing-billing-software-guide',
     blogLinkLabel: 'Read: Invoicing Software Guide',
   },
   {
     id: 'services',
     icon: Wrench,
-    title: 'Service Businesses',
-    headline: 'Track work, invoice clients, and get paid.',
+    title: 'Agencies & Services',
+    headline: 'Track work, invoice clients, and grow with CRM + PSA.',
     description:
-      'Service businesses — repair shops, consultancies, cleaning services, freelancers — need fast quoting, clean invoicing, and payment tracking without the overhead of complex product inventory.',
+      'Consultancies and service businesses use invoicing and Service Subscriptions (beta). Add Sales CRM today; Projects (PSA) and Proposal Writer are on the roadmap.',
     features: [
-      'Service-type products (no physical stock required)',
+      'Service-type products and recurring billing',
       'Quote-to-invoice workflows',
-      'Customer service history',
-      'Payment terms and partial payment tracking',
-      'Expense tracking for service delivery costs',
-      'Recurring service billing',
+      'Sales CRM add-on — pipeline and reps',
+      'Projects (PSA) — in development',
+      'AI Proposal Writer — in development',
+      'Client history and payment tracking',
     ],
-    featureLink: '/features#invoicing',
-    featureLinkLabel: 'Explore invoicing features',
+    modules: ['services', 'invoicing', 'crm', 'projects', 'proposal_writer'],
+    featureLink: '/features#crm',
+    featureLinkLabel: 'Explore CRM and PSA modules',
     blogLink: '/blog/invoicing-billing-software-guide',
     blogLinkLabel: 'Read: Invoicing Software Guide',
   },
@@ -94,17 +98,18 @@ const USE_CASES = [
     title: 'Small Manufacturers',
     headline: 'Track what you make, what it costs, and what you sell.',
     description:
-      'Food producers, artisan goods makers, and light manufacturers need to track raw material costs, production batches, yield rates, and finished goods inventory — separately from simple retail stock.',
+      'Food producers and light manufacturers use Factory & Production (Pro+) for BOM, batches, and finished goods — alongside core inventory and analytics.',
     features: [
-      'Raw materials inventory with expiry tracking',
-      'Recipe management (ingredients → finished product)',
-      'Production batch tracking with quality status',
-      'Finished goods valuation (FIFO/LIFO/Weighted average)',
-      'Cost-per-unit calculation for pricing decisions',
-      'Reorder points for raw materials',
+      'Bill of Materials and production runs',
+      'Raw materials with expiry tracking',
+      'Finished goods valuation (FIFO/LIFO)',
+      'Factory module on Pro plan and above',
+      'Marketplace and invoicing included',
+      'Business Insights AI — in development',
     ],
-    featureLink: '/features#inventory',
-    featureLinkLabel: 'Explore production features',
+    modules: ['factory', 'stock', 'analytics', 'marketplace'],
+    featureLink: '/features#factory',
+    featureLinkLabel: 'Explore production modules',
     blogLink: '/blog/business-management-software-small-business',
     blogLinkLabel: 'Read: Business Management Guide',
   },
@@ -114,17 +119,18 @@ const USE_CASES = [
     title: 'Multi-Branch Operations',
     headline: 'One platform. Multiple locations. Complete visibility.',
     description:
-      'Businesses with more than one outlet need consolidated reporting, shared product catalogs, and per-branch staff management — without maintaining separate systems for each location.',
+      'Growing brands use Business tier multi-user access, consolidated analytics, and optional CRM — plus the Admin Android app for each location owner.',
     features: [
-      'Multiple store profiles under one account',
-      'Shared product catalog across branches',
-      'Per-branch staff and access control',
-      'Consolidated revenue and sales reports',
-      'Branch-level inventory tracking',
-      'Marketplace presence for each location',
+      'Team & Sub-Accounts — up to 10 users on Business',
+      'Shared catalog across branches',
+      'Per-branch staff and permissions',
+      'Consolidated revenue reports',
+      'Sales CRM for regional reps',
+      'Admin Android app per owner account',
     ],
+    modules: ['team', 'analytics', 'crm', 'admin_mobile', 'marketplace'],
     featureLink: '/features#team',
-    featureLinkLabel: 'Explore team management features',
+    featureLinkLabel: 'Explore team modules',
     blogLink: '/blog/commerce-management-system-guide',
     blogLinkLabel: 'Read: Commerce Management Guide',
   },
@@ -137,124 +143,147 @@ const UseCases: React.FC = () => {
   }, []);
 
   return (
-  <>
-    <SEOHead
-      title="Grabio Use Cases — Retail, Food, Wholesale, Services, and More"
-      description="See how Grabio adapts to your industry — retail stores, cafes, wholesale distributors, service businesses, small manufacturers, and multi-branch operations."
-      url="/use-cases"
-      keywords={[
-        'business management software use cases',
-        'POS for retail store',
-        'POS for restaurant',
-        'wholesale management system',
-        'invoicing for service business',
-        'manufacturing inventory software',
-      ]}
-    />
+    <>
+      <SEOHead
+        title="Grabio Use Cases — Retail, F&B, Wholesale, Agencies, and More"
+        description="See how Grabio modular platform adapts to your industry — activate core features on your plan and add CRM, production, apps, and AI tools as you grow."
+        url="/use-cases"
+        keywords={[
+          'Grabio use cases',
+          'retail management software',
+          'restaurant inventory software',
+          'agency CRM PSA',
+          'manufacturing inventory software',
+        ]}
+      />
 
-    <div className="flex flex-col min-h-screen bg-white">
-      <PublicNav />
+      <div className="flex flex-col min-h-screen bg-white">
+        <PublicNav />
 
-      <main>
-        {/* ── Hero ── */}
-        <section className="bg-gradient-to-br from-gray-900 to-gray-800 text-white py-16">
-          <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-            <h1 className="text-4xl md:text-5xl font-extrabold mb-5">
-              Built for Your Industry
-            </h1>
-            <p className="text-xl text-gray-300">
-              Grabio adapts to how your business actually works — not the other way around.
-            </p>
-            <div className="flex flex-wrap gap-3 justify-center mt-8">
-              {USE_CASES.map((uc) => (
-                <a
-                  key={uc.id}
-                  href={`#${uc.id}`}
-                  className="px-4 py-2 text-sm font-medium bg-white/10 hover:bg-white/20 rounded-full transition-colors"
-                >
-                  {uc.title}
-                </a>
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* ── Use Case sections ── */}
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 space-y-20">
-          {USE_CASES.map(({ id, icon: Icon, title, headline, description, features, featureLink, featureLinkLabel, blogLink, blogLinkLabel }, i) => (
-            <section
-              key={id}
-              id={id}
-              className="scroll-mt-20"
-              aria-labelledby={`${id}-heading`}
-            >
-              <div className={`grid md:grid-cols-2 gap-10 items-start ${i % 2 === 1 ? 'md:grid-flow-dense' : ''}`}>
-                <div className={i % 2 === 1 ? 'md:col-start-2' : ''}>
-                  <div className="flex items-center gap-3 mb-4">
-                    <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center">
-                      <Icon className="h-5 w-5" />
-                    </div>
-                    <span className="text-sm font-semibold text-gray-500">{title}</span>
-                  </div>
-                  <h2 id={`${id}-heading`} className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 leading-tight">
-                    {headline}
-                  </h2>
-                  <p className="text-gray-500 leading-relaxed mb-6">{description}</p>
-
-                  <div className="flex flex-col gap-2">
-                    <Link
-                      to={featureLink}
-                      className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700"
-                    >
-                      {featureLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                    <Link
-                      to={blogLink}
-                      className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
-                    >
-                      {blogLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
-                    </Link>
-                  </div>
-                </div>
-
-                <div className={`bg-gray-50 rounded-2xl border border-gray-100 p-6 ${i % 2 === 1 ? 'md:col-start-1 md:row-start-1' : ''}`}>
-                  <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
-                    Key capabilities for {title.toLowerCase()}
-                  </p>
-                  <ul className="space-y-3">
-                    {features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-3 text-sm text-gray-700">
-                        <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+        <main>
+          <section className="bg-gradient-to-br from-teal-600 to-cyan-800 text-white py-16">
+            <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
+              <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Built for Your Industry</h1>
+              <p className="text-lg text-teal-100 mb-2">One sign-in — all your data in one place.</p>
+              <p className="text-teal-200/90">
+                Start with core platform features on your plan. Toggle optional modules, apps, and add-ons
+                to match how your business actually works.
+              </p>
+              <div className="flex flex-wrap gap-3 justify-center mt-8">
+                {USE_CASES.map((uc) => (
+                  <a
+                    key={uc.id}
+                    href={`#${uc.id}`}
+                    className="px-4 py-2 text-sm font-medium bg-white/15 hover:bg-white/25 rounded-full transition-colors"
+                  >
+                    {uc.title}
+                  </a>
+                ))}
               </div>
-            </section>
-          ))}
-        </div>
-
-        {/* ── CTA ── */}
-        <section className="bg-gradient-to-br from-teal-600 to-cyan-700 py-16 text-white text-center">
-          <div className="max-w-2xl mx-auto px-4 sm:px-6">
-            <h2 className="text-3xl font-extrabold mb-4">Your industry. One platform.</h2>
-            <p className="text-teal-100 text-lg mb-8">
-              Start free and configure Grabio for how your business actually operates.
-            </p>
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <AuthCTA className="px-8 py-4 font-semibold bg-white text-teal-700 rounded-xl hover:bg-teal-50 transition-colors" />
-              <Link to="/features" className="px-8 py-4 font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors">
-                Explore Features
-              </Link>
             </div>
-          </div>
-        </section>
-      </main>
+          </section>
 
-      <PublicFooter />
-    </div>
-  </>
+          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 space-y-20">
+            {USE_CASES.map(
+              (
+                { id, icon: Icon, title, headline, description, features, modules, featureLink, featureLinkLabel, blogLink, blogLinkLabel },
+                i,
+              ) => (
+                <section key={id} id={id} className="scroll-mt-20" aria-labelledby={`${id}-heading`}>
+                  <div className={`grid md:grid-cols-2 gap-10 items-start ${i % 2 === 1 ? 'md:grid-flow-dense' : ''}`}>
+                    <div className={i % 2 === 1 ? 'md:col-start-2' : ''}>
+                      <div className="flex items-center gap-3 mb-4">
+                        <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center">
+                          <Icon className="h-5 w-5" />
+                        </div>
+                        <span className="text-sm font-semibold text-gray-500">{title}</span>
+                      </div>
+                      <h2 id={`${id}-heading`} className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 leading-tight">
+                        {headline}
+                      </h2>
+                      <p className="text-gray-500 leading-relaxed mb-4">{description}</p>
+                      <div className="flex flex-wrap gap-1.5 mb-6">
+                        {modules.map((mod) => (
+                          <Link
+                            key={mod}
+                            to={`/features#${mod}`}
+                            className="text-[10px] font-mono bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded hover:bg-teal-100"
+                          >
+                            grabio_{mod}
+                          </Link>
+                        ))}
+                      </div>
+                      <div className="flex flex-col gap-2">
+                        <Link
+                          to={featureLink}
+                          className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700"
+                        >
+                          {featureLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                        <Link
+                          to={blogLink}
+                          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+                        >
+                          {blogLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                        <Link
+                          to="/pricing"
+                          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
+                        >
+                          Build your module package <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      </div>
+                    </div>
+
+                    <div
+                      className={`bg-gray-50 rounded-2xl border border-gray-100 p-6 ${i % 2 === 1 ? 'md:col-start-1 md:row-start-1' : ''}`}
+                    >
+                      <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
+                        Key capabilities for {title.toLowerCase()}
+                      </p>
+                      <ul className="space-y-3">
+                        {features.map((feature) => (
+                          <li key={feature} className="flex items-start gap-3 text-sm text-gray-700">
+                            <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
+                            {feature}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  </div>
+                </section>
+              ),
+            )}
+          </div>
+
+          <section className="bg-gradient-to-br from-teal-600 to-cyan-700 py-16 text-white text-center">
+            <div className="max-w-2xl mx-auto px-4 sm:px-6">
+              <h2 className="text-3xl font-extrabold mb-4">Your industry. Your module stack.</h2>
+              <p className="text-teal-100 text-lg mb-8">
+                Start free, pick a base plan, and toggle only the modules you need.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <AuthCTA className="px-8 py-4 font-semibold bg-white text-teal-700 rounded-xl hover:bg-teal-50 transition-colors" />
+                <Link
+                  to="/features"
+                  className="px-8 py-4 font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  Explore Features
+                </Link>
+                <Link
+                  to="/pricing"
+                  className="px-8 py-4 font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  View Pricing
+                </Link>
+              </div>
+            </div>
+          </section>
+        </main>
+
+        <PublicFooter />
+      </div>
+    </>
   );
 };
 
