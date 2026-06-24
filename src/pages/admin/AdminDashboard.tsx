@@ -39,6 +39,7 @@ import type { StoreProfile } from '@/types/storeProfile';
 import { requestNotificationPermission, saveFcmToken } from '@/lib/notifications';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 type RecentEvent = {
   type: 'product' | 'order' | 'announcement';
@@ -94,6 +95,13 @@ const QUICK_ACTION_COLORS: Record<string, { border: string; iconBg: string; icon
   analytics: { border: 'border-cyan-600/20', iconBg: 'bg-cyan-100', iconText: 'text-cyan-700' },
   'sales-crm': { border: 'border-teal-600/20', iconBg: 'bg-teal-100', iconText: 'text-teal-700' },
 };
+
+const STAT_TILES = {
+  products: { gradient: 'from-teal-500 to-teal-700', glow: 'group-hover:shadow-teal-500/20', Icon: Package },
+  orders: { gradient: 'from-orange-400 to-orange-600', glow: 'group-hover:shadow-orange-500/20', Icon: Clock },
+  revenue: { gradient: 'from-emerald-500 to-emerald-700', glow: 'group-hover:shadow-emerald-500/20', Icon: CreditCard },
+  customers: { gradient: 'from-indigo-500 to-indigo-700', glow: 'group-hover:shadow-indigo-500/20', Icon: User },
+} as const;
 
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
@@ -659,7 +667,7 @@ const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-slate-50">
     {isMobile && <MobileHeader title={user?.role === 'sub_account' ? "Seller Dashboard" : "Admin Dashboard"} showBackButton={false} showHomeButton={true} />}
     <div className="md:hidden px-4 pt-3 pb-2 bg-white border-b">
       <div className="space-y-3">
@@ -798,27 +806,76 @@ const AdminDashboard: React.FC = () => {
             </div>
           </div>
           <Button variant="outline" className="w-full mt-3" onClick={() => navigate('/search')}>View Marketplace</Button>
+          <div className="mt-4 pt-3 border-t text-center">
+            <PoweredByEmoove />
+          </div>
         </div>
       </aside>
       <div className="flex-1 p-6">
         {/* Main content: full width with max constraint */}
         <div className="mx-auto w-full max-w-screen-2xl">
           <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-3xl font-extrabold text-gray-900">{user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}</h1>
-              <p className="text-sm text-gray-600 mt-1">Welcome back, {user?.name || 'Store Owner'}</p>
+          <section className="relative rounded-2xl bg-[#0b1220] text-white py-7 px-5 md:px-8 overflow-hidden">
+            <div
+              className="absolute inset-0 opacity-40"
+              style={{
+                backgroundImage:
+                  'radial-gradient(circle at 20% 20%, rgba(20,184,166,0.35) 0%, transparent 45%), radial-gradient(circle at 80% 0%, rgba(99,102,241,0.25) 0%, transparent 40%)',
+              }}
+              aria-hidden
+            />
+            <div
+              className="absolute inset-0 opacity-[0.07]"
+              style={{
+                backgroundImage:
+                  'linear-gradient(rgba(255,255,255,0.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.5) 1px, transparent 1px)',
+                backgroundSize: '48px 48px',
+              }}
+              aria-hidden
+            />
+            <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
+              <div>
+                <p className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-300/90 mb-2">
+                  <span className="h-px w-6 bg-teal-400/50" />
+                  {user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}
+                  <span className="h-px w-6 bg-teal-400/50" />
+                </p>
+                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{storeName}</h1>
+                <p className="text-sm text-slate-300 mt-1">Welcome back, {user?.name || 'Store Owner'}</p>
+                <div className="mt-3 flex items-center gap-2">
+                  <div className={`h-2.5 w-2.5 rounded-full ${store?.status === 'online' ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]' : 'bg-slate-500'}`} />
+                  <span className="text-xs text-slate-400">{store?.status === 'online' ? 'Store online' : 'Store offline'}</span>
+                </div>
+                <div className="mt-3">
+                  <PoweredByEmoove variant="onDark" />
+                </div>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                  onClick={handleStatusToggle}
+                >
+                  {store?.status === 'online' ? 'Go offline' : 'Go online'}
+                </Button>
+                <Button variant="outline" size="sm" asChild className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white">
+                  <Link to="/admin/profile">Store Profile</Link>
+                </Button>
+                {user?.role === 'admin' && (
+                  <Button variant="outline" size="sm" asChild className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white">
+                    <Link to="/subscription">Subscription</Link>
+                  </Button>
+                )}
+              </div>
             </div>
-            <div className="text-right">
-              <p className="text-sm text-gray-500">Overview</p>
-            </div>
-          </div>
+          </section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            <Link to="/admin/inventory" className="h-full">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
-                <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 shrink-0 rounded-md bg-market-primary text-white flex items-center justify-center">
+            <Link to="/admin/inventory" className="h-full group">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4 p-0">
+                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.products.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.products.glow} transition-shadow`}>
                     <Package className="h-5 w-5" />
                   </div>
                   <div>
@@ -829,10 +886,10 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </Link>
 
-            <Link to="/admin/orders" className="h-full">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
-                <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 shrink-0 rounded-md bg-market-accent text-white flex items-center justify-center">
+            <Link to="/admin/orders" className="h-full group">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4 p-0">
+                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.orders.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.orders.glow} transition-shadow`}>
                     <Clock className="h-5 w-5" />
                   </div>
                   <div>
@@ -843,10 +900,10 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </Link>
 
-            <Link to="/admin/revenue" className="h-full">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
-                <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 shrink-0 rounded-md bg-green-500 text-white flex items-center justify-center">
+            <Link to="/admin/revenue" className="h-full group">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4 p-0">
+                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.revenue.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.revenue.glow} transition-shadow`}>
                     <CreditCard className="h-5 w-5" />
                   </div>
                   <div>
@@ -870,10 +927,10 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </Link>
 
-            <Link to="/admin/customers" className="h-full">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer hover:shadow-md transition-shadow overflow-hidden">
-                <CardContent className="h-full flex items-center gap-4">
-                  <div className="h-12 w-12 shrink-0 rounded-md bg-indigo-500 text-white flex items-center justify-center">
+            <Link to="/admin/customers" className="h-full group">
+              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+                <CardContent className="h-full flex items-center gap-4 p-0">
+                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.customers.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.customers.glow} transition-shadow`}>
                     <User className="h-5 w-5" />
                   </div>
                   <div>
@@ -951,7 +1008,7 @@ const AdminDashboard: React.FC = () => {
                         iconText: 'text-gray-700',
                       };
                       return (
-                        <Link key={item.id} to={item.to} className={`relative flex items-center gap-3 p-3 rounded-lg bg-white border ${colors.border} shadow-sm hover:shadow-md transition`}>
+                        <Link key={item.id} to={item.to} className={`relative group flex items-center gap-3 p-3 rounded-xl bg-white border ${colors.border} shadow-sm hover:shadow-[0_12px_32px_-8px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300`}>
                           {showQuickActionManager && (
                             <button
                               type="button"
@@ -965,7 +1022,7 @@ const AdminDashboard: React.FC = () => {
                               Remove
                             </button>
                           )}
-                          <div className={`h-8 w-8 rounded-full ${colors.iconBg} flex items-center justify-center ${colors.iconText}`}>
+                          <div className={`h-9 w-9 rounded-xl ${colors.iconBg} flex items-center justify-center ${colors.iconText} shadow-sm group-hover:scale-105 transition-transform`}>
                             <Icon className="h-4 w-4" />
                           </div>
                           <span className="text-sm font-medium">{item.label}</span>
@@ -986,7 +1043,7 @@ const AdminDashboard: React.FC = () => {
                 ) : (
                   <ul className="space-y-2">
                     {recentEvents.map((ev, idx) => (
-                      <li key={idx} className="p-3 bg-white rounded-lg shadow-sm border">
+                      <li key={idx} className="p-3 bg-white rounded-xl shadow-sm border border-slate-200/80 hover:shadow-md transition-shadow">
                         <div className="flex items-center gap-3">
                           <div className="flex-1">
                             <div className="text-sm font-medium text-gray-800">
@@ -1006,7 +1063,7 @@ const AdminDashboard: React.FC = () => {
 
             <div>
               <h3 className="text-lg font-semibold mb-3">Store Summary</h3>
-              <Card className="min-h-[455px] mt-5">
+              <Card className="min-h-[455px] mt-5 rounded-xl border-slate-200/80 shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)]">
               <CardContent className="pt-4">
                 <div className="space-y-6">
                     <div><strong>Store Name</strong>: {storeName}</div>
