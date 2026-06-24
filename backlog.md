@@ -553,6 +553,30 @@ Standalone or **bundled service items** with flexible subscription billing:
 
 ---
 
+## Session wrap — 2026-06-24 (enforcement live)
+
+### Confirmed working (owner sign-off)
+- [x] Module gates: y.malek CRM allowed (legacy `salesCrm` add-on); moove shop package blocks CRM/POS/factory — expected
+- [x] Frontend + Functions enforcement ON prod (`VITE_ECOSYSTEM_ENFORCE_MODULES`, `ECOSYSTEM_ENFORCE_MODULES`)
+
+### Deferred (not now)
+- [ ] **Refund by product/qty (not dollar amount)** — current money-based partial refund causes fractional restore skips and receipt confusion; redesign: pick line items + qty to return, derive refund total from lines
+- [ ] **Public `/pricing` page overhaul** — modular story, preset clarity, de-dupe with `/subscription` builder; schedule after recording review
+- [ ] **Shop → Factory package upgrade UX** — preset switch duplicates some module rows; works but needs cleaner diff/merge UI on Subscription + onboarding
+
+### Bugs fixed this session
+- [x] `SalesReturns.tsx` — `allOrders is not defined` crash (missing state)
+- [x] `announcements` Firestore rules missing → dashboard `Failed to fetch admin stats` on deny-by-default
+- [x] Subscription + package onboarding — **Back to store profile** link
+
+### Recording Part C (simple)
+1. Stay on https://grabio.space (or staging channel)
+2. Sign out moove → sign in **y.malek@nip-lb.com**
+3. Open `/admin/crm` — should **load** (not gate card)
+4. Optional: sign out → moove → `/admin/crm` blocked again
+
+---
+
 ## Session wrap — 2026-06-21
 
 ### Done today

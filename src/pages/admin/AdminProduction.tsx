@@ -34,8 +34,9 @@ const STATUS_CONFIG: Record<ProductionBatchStatus, { label: string; color: strin
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: AlertCircle },
 };
 
-const PRODUCTION_COMPLETION_LOCKDOWN = false;
-const PRODUCTION_COMPLETION_LOCKDOWN_REASON = 'Temporarily disabled during raw-material integrity audit.';
+const PRODUCTION_COMPLETION_LOCKDOWN = true;
+const PRODUCTION_COMPLETION_LOCKDOWN_REASON =
+  'Completed production batches are locked to protect raw-material and finished-goods counts.';
 
 // Move ProductionForm outside to prevent re-creation on every render
 type ProductionFormBatch = {

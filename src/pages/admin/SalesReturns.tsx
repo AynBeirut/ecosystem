@@ -26,6 +26,7 @@ const SalesReturns: React.FC = () => {
   const isMobile = useIsMobile();
   
   const [returns, setReturns] = useState<SalesReturn[]>([]);
+  const [allOrders, setAllOrders] = useState<(Order & { id: string })[]>([]);
   const [orders, setOrders] = useState<(Order & { id: string })[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [isCreatingReturn, setIsCreatingReturn] = useState(false);
@@ -400,7 +401,9 @@ const SalesReturns: React.FC = () => {
           fetchCollection('products'),
         ]);
         
-        setOrders((ordersData as (Order & { id: string })[]).filter(o => o.status === 'delivered'));
+        const typedOrders = ordersData as (Order & { id: string })[];
+        setAllOrders(typedOrders);
+        setOrders(typedOrders.filter(o => o.status === 'delivered' || o.status === 'returned'));
         setProducts(productsData);
       }
 

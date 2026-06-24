@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/useAuth';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { StoreProfile } from '@/types/storeProfile';
@@ -735,6 +735,11 @@ export default function Subscription() {
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-6xl">
+      <div className="mb-4">
+        <Button variant="ghost" size="sm" asChild className="px-0 text-muted-foreground hover:text-foreground">
+          <Link to="/admin/profile">← Back to store profile</Link>
+        </Button>
+      </div>
       <h1 className="text-3xl font-bold mb-8">Subscription Management</h1>
 
       {profile?.nextPlanPreset && (
