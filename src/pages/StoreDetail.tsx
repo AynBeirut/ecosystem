@@ -15,6 +15,8 @@ import { Star } from 'lucide-react';
 import { Store, Product, StoreAnnouncement } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
+import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import { fetchPublicProductStock } from '@/lib/publicProductStockService';
 import Header from '@/components/Header';
 import ProductCard from '@/components/ProductCard';
 import WhatsAppChatWidget from '@/components/WhatsAppChatWidget';
@@ -275,14 +277,51 @@ const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { 
   );
 };
 
+async function enrichStoreProductsWithStock(
+  storeDocId: string,
+  productsList: Product[],
+  legacyRecipes?: Recipe[],
+  legacyRawMaterials?: RawMaterial[],
+): Promise<Product[]> {
+  const composedIds = productsList
+    .filter((p) => p.productType === 'composed' && p.recipeId)
+    .map((p) => p.id);
+
+  if (ECOSYSTEM_FLAGS.publicProductStockApi && composedIds.length > 0) {
+    const stockItems = await fetchPublicProductStock(storeDocId, composedIds);
+    const stockMap = new Map(stockItems.map((item) => [item.productId, item]));
+    return productsList.map((product) => {
+      if (product.productType !== 'composed' || !product.recipeId) return product;
+      const stock = stockMap.get(product.id);
+      if (!stock) return product;
+      return {
+        ...product,
+        stock: stock.availableStock,
+        inStock: stock.inStock,
+      };
+    });
+  }
+
+  if (!legacyRecipes || !legacyRawMaterials) return productsList;
+
+  return productsList.map((product) => {
+    if (product.productType !== 'composed' || !product.recipeId) return product;
+    const recipe = legacyRecipes.find((r) => r.id === product.recipeId);
+    const availableStock = calculateAvailableStock(recipe, legacyRawMaterials);
+    return {
+      ...product,
+      stock: availableStock,
+      inStock: availableStock > 0,
+    };
+  });
+}
+
 const StoreDetail: React.FC = () => {
   const { id, slug, categorySlug } = useParams<{ id?: string; slug?: string; categorySlug?: string }>();
   const navigate = useNavigate();
   const [storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
-  const [recipes, setRecipes] = useState<Recipe[]>([]);
-  const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [announcements, setAnnouncements] = useState<StoreAnnouncement[]>([]);
   const [reviews, setReviews] = useState<StoreReview[]>([]);
   const [avgRating, setAvgRating] = useState<number | null>(null);
@@ -444,58 +483,52 @@ const StoreDetail: React.FC = () => {
         
         setStore({ id: docId, ...storeData } as Store);
 
-        // Fetch recipes and raw materials for stock calculation
-        const recipesRef = collection(db, 'recipes');
-        const recipesQuery = query(recipesRef, where('storeId', '==', docId));
-        const recipesSnap = await getDocs(recipesQuery);
-        const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        } as Recipe));
-        setRecipes(recipesList);
+        let recipesList: Recipe[] = [];
+        let rawMaterialsList: RawMaterial[] = [];
+        if (!ECOSYSTEM_FLAGS.publicProductStockApi) {
+          const recipesRef = collection(db, 'recipes');
+          const recipesQuery = query(recipesRef, where('storeId', '==', docId));
+          const recipesSnap = await getDocs(recipesQuery);
+          recipesList = recipesSnap.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          } as Recipe));
 
-        const rawMaterialsRef = collection(db, 'rawMaterials');
-        const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', docId));
-        const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
-        const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ 
-          id: doc.id, 
-          ...doc.data() 
-        } as RawMaterial));
-        setRawMaterials(rawMaterialsList);
+          const rawMaterialsRef = collection(db, 'rawMaterials');
+          const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', docId));
+          const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
+          rawMaterialsList = rawMaterialsSnap.docs.map((doc) => ({
+            id: doc.id,
+            ...doc.data(),
+          } as RawMaterial));
+        }
 
         // Fetch products for this store
         const productsRef = collection(db, 'products');
         const productsQuery = query(productsRef, where('storeId', '==', docId));
         const productsSnap = await getDocs(productsQuery);
-        
-        // Attach store information and calculate stock for composed products
+
         const storeInfo = {
           id: docId,
           name: typeof storeData?.name === 'string' ? storeData.name : 'Unknown Store',
           slug: typeof storeData?.slug === 'string' ? storeData.slug : undefined,
         };
-        const productsList = productsSnap.docs.map(doc => {
+        const productsList = productsSnap.docs.map((doc) => {
           const productData = doc.data();
-          const product: Product = {
-            id: doc.id, 
+          return {
+            id: doc.id,
             ...productData,
-            store: storeInfo 
+            store: storeInfo,
           } as Product;
-
-          // If it's a composed product, calculate available stock from raw materials
-          if (product.productType === 'composed' && product.recipeId) {
-            const recipe = recipesList.find(r => r.id === product.recipeId);
-            const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
-            return {
-              ...product,
-              stock: availableStock,
-              inStock: availableStock > 0,
-            };
-          }
-
-          return product;
         });
-        setProducts(productsList);
+
+        const enrichedProducts = await enrichStoreProductsWithStock(
+          docId,
+          productsList,
+          recipesList,
+          rawMaterialsList,
+        );
+        setProducts(enrichedProducts);
 
         // Fetch announcements for this store (optional, if you have this collection)
         let announcementsList: StoreAnnouncement[] = [];
@@ -770,6 +803,7 @@ const StoreDetail: React.FC = () => {
   const pageLayout = store.pageLayout || 'contained';
   const storeCardLayout = store.storeCardStyle || 'standard';
   const visualStyle = store.visualStyle || 'rounded';
+  const isEdgeToEdgePage = pageLayout === 'full-width' || storeCardLayout === 'full-width';
   const sectionOrder: StoreSectionOrder[] = Array.isArray(store.sectionOrder) 
     ? store.sectionOrder 
     : [
@@ -961,12 +995,41 @@ const StoreDetail: React.FC = () => {
     return rows;
   };
 
+  const stripBorderClasses = (className: string) =>
+    className
+      .split(/\s+/)
+      .filter((c) => c && !c.startsWith('border') && c !== 'shadow-sm' && c !== 'shadow-none')
+      .join(' ');
+
+  // Merge page-level layout (Layout tab) with per-section settings (Sections tab)
+  const resolveEffectiveSection = (section: StoreSectionOrder): StoreSectionOrder => {
+    const container = section.container || 'contained';
+    const edgeToEdge = pageLayout === 'full-width' || container === 'full-width'
+      || (pageLayout === 'hybrid' && section.id === 'hero');
+
+    if (edgeToEdge) {
+      return {
+        ...section,
+        container: 'full-width',
+        // Full-width sections: borders off unless explicitly turned on
+        showBorders: section.showBorders === true,
+      };
+    }
+    return {
+      ...section,
+      container,
+      showBorders: section.showBorders ?? true,
+    };
+  };
+
   // Helper: Get section wrapper styling (Elementor-style)
   const getSectionWrapperClasses = (section: StoreSectionOrder) => {
-    const container = section.container || 'contained';
-    const padding = section.padding || 'medium';
-    const showBg = section.showBackground ?? true;
-    const showBorders = section.showBorders ?? true;
+    const effective = resolveEffectiveSection(section);
+    const container = effective.container || 'contained';
+    const padding = effective.padding || 'medium';
+    const showBg = effective.showBackground ?? true;
+    const showBorders = effective.showBorders ?? true;
+    const edgeToEdge = container === 'full-width';
     
     let classes = '';
     
@@ -976,18 +1039,23 @@ const StoreDetail: React.FC = () => {
     else if (padding === 'medium') classes += ' p-6';
     else if (padding === 'large') classes += ' p-12';
     
+    // Background (cardSoft includes borders — strip them when borders are off)
+    if (showBg) {
+      classes += showBorders
+        ? ` ${currentTheme.cardSoft}`
+        : ` ${stripBorderClasses(currentTheme.cardSoft)}`;
+    }
+    
     // Borders and rounded corners
     if (showBorders) {
       classes += ' rounded-xl border-2 shadow-sm';
-    }
-    
-    // Background
-    if (showBg) {
-      classes += ` ${currentTheme.cardSoft}`;
+    } else {
+      classes += ' border-0 shadow-none';
+      if (edgeToEdge) classes += ' rounded-none';
     }
 
     // Animation
-    const animation = section.animation || 'fade';
+    const animation = effective.animation || 'fade';
     if (animation === 'fade') classes += ' section-anim-fade';
     else if (animation === 'slide-up') classes += ' section-anim-slide-up';
     else if (animation === 'zoom') classes += ' section-anim-zoom';
@@ -1038,15 +1106,20 @@ const StoreDetail: React.FC = () => {
 
   // Helper: Get section container wrapper classes
   const getSectionContainerClasses = (section: StoreSectionOrder) => {
-    const container = section.container || 'contained';
+    const effective = resolveEffectiveSection(section);
+    const container = effective.container || 'contained';
     
     if (container === 'full-width') {
-      return 'w-full'; // Edge-to-edge
-    } else if (container === 'wide') {
-      return 'max-w-screen-2xl mx-auto px-4'; // Wide centered (1536px)
-    } else {
-      return 'max-w-7xl mx-auto px-4'; // Contained (1280px)
+      // Break out of parent container when page layout is contained
+      if (pageLayout === 'contained') {
+        return 'w-screen relative left-1/2 -translate-x-1/2';
+      }
+      return 'w-full';
     }
+    if (container === 'wide') {
+      return 'max-w-screen-2xl mx-auto px-4';
+    }
+    return 'max-w-7xl mx-auto px-4';
   };
 
   const renderCategoryFilters = () => {
@@ -1089,7 +1162,9 @@ const StoreDetail: React.FC = () => {
   // Render individual section by ID
   const renderSection = (sectionId: StoreSectionId) => {
     switch (sectionId) {
-      case 'about':
+      case 'about': {
+        const aboutSection = sectionOrder.find(s => s.id === 'about');
+        const aboutBorderless = aboutSection ? !resolveEffectiveSection(aboutSection).showBorders : false;
         if ((aboutUs || mission || vision) && aboutLayout !== 'off') {
           return (
             <div>
@@ -1100,7 +1175,7 @@ const StoreDetail: React.FC = () => {
                   { title: 'Mission', text: mission },
                   { title: 'Vision', text: vision },
                 ].filter(c => c.text).map(c => (
-                  <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`}>
+                  <Card key={c.title} className={`${aboutBorderless ? stripBorderClasses(currentTheme.cardSoft) : currentTheme.cardSoft} flex flex-col ${aboutBorderless ? 'border-0 shadow-none' : ''} ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`}>
                     <CardContent className="p-4 flex flex-col flex-1">
                       <h3 className={`font-semibold mb-2 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.title}</h3>
                       <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} line-clamp-6 flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.text}</p>
@@ -1120,6 +1195,7 @@ const StoreDetail: React.FC = () => {
           );
         }
         return null;
+      }
 
       case 'announcements':
         if (announcements.length > 0) {
@@ -1379,10 +1455,19 @@ const StoreDetail: React.FC = () => {
         hasImportedDesign={store.hasImportedDesign}
       />
       
-      <main className={pageLayout === 'contained' ? 'container mx-auto px-4 py-6' : pageLayout === 'hybrid' ? 'container mx-auto px-4 py-6' : 'py-6'}>
+      <main className={pageLayout === 'contained' ? 'container mx-auto px-4 py-6' : 'py-6'}>
         {/* Store Header */}
-        <div className={`${storeCardLayout === 'full-width' || (pageLayout === 'full-width' && storeCardLayout === 'standard') ? '' : ''}${storeCardLayout !== 'minimal' ? 'rounded-lg shadow-sm p-6 mb-6' : 'mb-6'} ${currentTheme.headerCard}`} style={storeCardStyle}>
-          <div className={`${storeCardLayout === 'full-width' || (pageLayout === 'full-width' && storeCardLayout === 'standard') ? 'container mx-auto px-4' : ''}`}>
+        <div
+          className={[
+            storeCardLayout !== 'minimal' && !isEdgeToEdgePage ? 'rounded-lg shadow-sm p-6 mb-6' : 'mb-6',
+            storeCardLayout === 'minimal' ? 'p-0' : isEdgeToEdgePage ? 'py-4 px-0' : '',
+            isEdgeToEdgePage || storeCardLayout === 'minimal'
+              ? stripBorderClasses(currentTheme.headerCard)
+              : currentTheme.headerCard,
+          ].join(' ')}
+          style={storeCardStyle}
+        >
+          <div className={isEdgeToEdgePage ? 'container mx-auto px-4' : ''}>
             <div className={`flex ${storeCardLayout === 'split' ? 'grid md:grid-cols-2 gap-8' : 'flex-col md:flex-row'} items-center md:items-start gap-6`}>
               <img 
                 src={store.logo} 
@@ -1488,8 +1573,8 @@ const StoreDetail: React.FC = () => {
         </div>
         </div>
         
-        {/* Content wrapper for full-width layout */}
-        <div className={pageLayout === 'full-width' ? 'container mx-auto px-4' : ''}>
+        {/* Page navigation + home sections */}
+        <div className={pageLayout === 'contained' ? '' : pageLayout === 'hybrid' ? 'container mx-auto px-4' : ''}>
         
         {/* Page Navigation Bar */}
         {(() => {
@@ -1527,8 +1612,8 @@ const StoreDetail: React.FC = () => {
         {activePage === 'home' && (
           <div className="space-y-6">
             {groupSectionsIntoRows().map((row, rowIdx) => {
-              // Check if all sections in row want full-width containers
-              const allFullWidth = row.every(s => (s.container || 'contained') === 'full-width');
+              const effectiveRow = row.map(resolveEffectiveSection);
+              const allFullWidth = effectiveRow.every(s => (s.container || 'contained') === 'full-width');
               
               return (
                 <div key={rowIdx} className={allFullWidth ? 'w-full' : ''}>
@@ -1541,11 +1626,15 @@ const StoreDetail: React.FC = () => {
                         : `grid grid-cols-1 md:grid-cols-3 gap-6 ${!allFullWidth ? 'max-w-7xl mx-auto px-4' : ''}`
                     }
                   >
-                    {row.map((section) => (
-                      <div key={section.id} className={getSectionWrapperClasses(section)} style={getSectionWrapperStyle(section)}>
-                        {renderSection(section.id)}
-                      </div>
-                    ))}
+                    {row.map((section) => {
+                      const content = renderSection(section.id);
+                      if (!content) return null;
+                      return (
+                        <div key={section.id} className={getSectionWrapperClasses(section)} style={getSectionWrapperStyle(section)}>
+                          {content}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               );
