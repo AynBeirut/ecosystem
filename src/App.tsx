@@ -47,6 +47,10 @@ import Blocked from "./pages/Blocked";
 import ContactUs from "./pages/ContactUs";
 import CustomDomainStore from "./pages/CustomDomainStore";
 import CookieConsent from "./components/CookieConsent";
+import PublicPageFallback from "./components/public/PublicPageFallback";
+import ModularHome from "./pages/public/ModularHome";
+import Features from "./pages/public/Features";
+import Pricing from "./pages/public/Pricing";
 
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const SubAccountDashboard = lazy(() => import("./pages/admin/SubAccountDashboard"));
@@ -81,10 +85,6 @@ const AdminMarketplaceSync = lazy(() => import("./pages/admin/AdminMarketplaceSy
 const AdminSEOAnalytics = lazy(() => import("./pages/admin/AdminSEOAnalytics"));
 const AdminSEOAudit = lazy(() => import("./pages/admin/AdminSEOAudit"));
 const GscCallback = lazy(() => import("./pages/auth/GscCallback"));
-const ModularHomeRedirect = lazy(() => import("./pages/public/ModularHomeRedirect"));
-const ModularHome = lazy(() => import("./pages/public/ModularHome"));
-const Features = lazy(() => import("./pages/public/Features"));
-const Pricing = lazy(() => import("./pages/public/Pricing"));
 const UseCases = lazy(() => import("./pages/public/UseCases"));
 const About = lazy(() => import("./pages/public/About"));
 const Blog = lazy(() => import("./pages/public/Blog"));
@@ -141,7 +141,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                       }}
                     >
                       <RouteTracker />
-                      <Suspense fallback={<div className="min-h-[40vh]" />}>
+                      <Suspense fallback={<PublicPageFallback />}>
                       <Routes>
                         {/* ── Custom domain: serve the matched store, then only public/cart routes ── */}
                         {isCustomDomain && (
@@ -172,7 +172,8 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/auth/callback" element={<AuthCallback />} />
                         <Route path="/auth/gsc-callback" element={<GscCallback />} />
                         {/* Main app routes */}
-                        <Route path="/" element={<ModularHomeRedirect />} />
+                        <Route path="/" element={<ModularHome />} />
+                        <Route path="/home" element={<ModularHome />} />
                         <Route path="/search" element={<Marketplace />} />
                         <Route path="/store/:slug" element={<StoreDetail />} />
                         <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
@@ -275,7 +276,6 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         </Route>
                         <Route path="/team/crm" element={<ProtectedRoute allowedRoles={['crm_rep']} requiredModule="crm"><CrmRepPortal /></ProtectedRoute>} />
                         {/* Public marketing pages — must be BEFORE /:slug */}
-                        <Route path="/home" element={<ModularHome />} />
                         <Route path="/features" element={<Features />} />
                         <Route path="/pricing" element={<Pricing />} />
                         <Route path="/use-cases" element={<UseCases />} />

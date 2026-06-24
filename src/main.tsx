@@ -2,6 +2,9 @@ import { createRoot } from 'react-dom/client'
 import App from './App'
 import './index.css'
 import './styles/product-animations.css'
+import { runPwaCleanupOnce } from './lib/pwaCleanup'
+
+runPwaCleanupOnce();
 
 const CHUNK_RELOAD_GUARD_KEY = 'chunk-reload-attempted';
 
@@ -66,16 +69,3 @@ window.addEventListener('unhandledrejection', (event) => {
 installNativeButtonClickGuard();
 
 createRoot(document.getElementById("root")!).render(<App />);
-
-// Service workers disabled — bust legacy caches immediately (OAuth-safe).
-if ('serviceWorker' in navigator) {
-	navigator.serviceWorker.getRegistrations().then((registrations) => {
-		registrations.forEach((registration) => registration.unregister());
-	});
-}
-
-if ('caches' in window) {
-	caches.keys().then((cacheNames) => {
-		cacheNames.forEach((cacheName) => caches.delete(cacheName));
-	});
-}

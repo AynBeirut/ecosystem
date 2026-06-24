@@ -14,7 +14,7 @@ const NAV_LINKS = [
 const PublicNav: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const isSignedIn = !!user;
   const dashboardPath =
     user?.role === 'admin'
@@ -63,14 +63,16 @@ const PublicNav: React.FC = () => {
           ))}
         </ul>
 
-        <div className="hidden md:flex items-center gap-2 shrink-0">
+        <div className="hidden md:flex items-center gap-2 shrink-0 min-h-[40px]">
           <Link
             to="/search"
             className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap"
           >
             Marketplace
           </Link>
-          {isSignedIn ? (
+          {isLoading ? (
+            <div className="h-9 w-[220px] rounded-lg bg-gray-100 animate-pulse" aria-hidden />
+          ) : isSignedIn ? (
             <Link
               to={dashboardPath}
               className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors whitespace-nowrap"
@@ -135,8 +137,10 @@ const PublicNav: React.FC = () => {
             </li>
           </ul>
 
-          <div className="pt-3 mt-3 border-t border-gray-100 grid gap-2">
-            {isSignedIn ? (
+          <div className="pt-3 mt-3 border-t border-gray-100 grid gap-2 min-h-[52px]">
+            {isLoading ? (
+              <div className="h-11 w-full rounded-xl bg-gray-100 animate-pulse" aria-hidden />
+            ) : isSignedIn ? (
               <Link
                 to={dashboardPath}
                 onClick={closeMobile}
