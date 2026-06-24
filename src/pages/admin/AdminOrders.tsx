@@ -837,20 +837,34 @@ const AdminOrders: React.FC = () => {
           fetchCollection('subAccounts'),
         ]);
 
-        const locationsSnapshot = await getDocs(query(collection(db, 'fulfillmentLocations'), where('storeId', '==', user.storeId)));
-        const locations: FulfillmentLocation[] = locationsSnapshot.docs.map(
-          (d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) } as FulfillmentLocation)
-        );
+        let locations: FulfillmentLocation[] = [];
+        try {
+          const locationsSnapshot = await getDocs(
+            query(collection(db, 'fulfillmentLocations'), where('storeId', '==', user.storeId)),
+          );
+          locations = locationsSnapshot.docs.map(
+            (d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) } as FulfillmentLocation),
+          );
+        } catch (locationsErr) {
+          console.warn('AdminOrders: fulfillmentLocations skipped', locationsErr);
+        }
         setFulfillmentLocations(locations);
 
-        const viewsSnapshot = await getDocs(query(
-          collection(db, 'orderViews'),
-          where('storeId', '==', user.storeId),
-          where('userId', '==', user.id),
-        ));
-        const views = viewsSnapshot.docs
-          .map((viewDoc) => ({ id: viewDoc.id, ...(viewDoc.data() as Record<string, unknown>) } as SavedOrderView))
-          .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+        let views: SavedOrderView[] = [];
+        try {
+          const viewsSnapshot = await getDocs(
+            query(
+              collection(db, 'orderViews'),
+              where('storeId', '==', user.storeId),
+              where('userId', '==', user.id),
+            ),
+          );
+          views = viewsSnapshot.docs
+            .map((viewDoc) => ({ id: viewDoc.id, ...(viewDoc.data() as Record<string, unknown>) } as SavedOrderView))
+            .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+        } catch (viewsErr) {
+          console.warn('AdminOrders: orderViews skipped', viewsErr);
+        }
         setSavedOrderViews(views);
 
         console.log('AdminOrders: Orders fetched:', ordersData);

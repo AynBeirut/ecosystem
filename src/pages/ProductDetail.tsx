@@ -7,6 +7,8 @@ import { pixelAddToCart, pixelViewContent, trackMetaConversionEvent } from '@/li
 import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
+import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import { fetchPublicProductStock } from '@/lib/publicProductStockService';
 import Header from '@/components/Header';
 import WhatsAppChatWidget from '@/components/WhatsAppChatWidget';
 import { Button } from '@/components/ui/button';
@@ -131,21 +133,33 @@ const ProductDetail: React.FC = () => {
         // Calculate stock for composed products
         let finalProduct: Product = { id: productId, ...productData } as Product;
         if (finalProduct.productType === 'composed' && finalProduct.recipeId && productData.storeId) {
-          // Fetch recipe and raw materials
-          const recipesRef = collection(db, 'recipes');
-          const recipeQuery = query(recipesRef, where('storeId', '==', productData.storeId));
-          const recipesSnap = await getDocs(recipeQuery);
-          const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
-          
-          const rawMaterialsRef = collection(db, 'rawMaterials');
-          const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', productData.storeId));
-          const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
-          const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawMaterial));
-          
-          const recipe = recipesList.find(r => r.id === finalProduct.recipeId);
-          const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
-          finalProduct.stock = availableStock;
-          finalProduct.inStock = availableStock > 0;
+          if (ECOSYSTEM_FLAGS.publicProductStockApi) {
+            try {
+              const stockItems = await fetchPublicProductStock(productData.storeId, [productId]);
+              const stock = stockItems[0];
+              if (stock) {
+                finalProduct.stock = stock.availableStock;
+                finalProduct.inStock = stock.inStock;
+              }
+            } catch (stockErr) {
+              console.error('ProductDetail: public stock API failed', stockErr);
+            }
+          } else {
+            const recipesRef = collection(db, 'recipes');
+            const recipeQuery = query(recipesRef, where('storeId', '==', productData.storeId));
+            const recipesSnap = await getDocs(recipeQuery);
+            const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
+
+            const rawMaterialsRef = collection(db, 'rawMaterials');
+            const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', productData.storeId));
+            const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
+            const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawMaterial));
+
+            const recipe = recipesList.find(r => r.id === finalProduct.recipeId);
+            const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
+            finalProduct.stock = availableStock;
+            finalProduct.inStock = availableStock > 0;
+          }
         }
         
         setProduct(finalProduct);

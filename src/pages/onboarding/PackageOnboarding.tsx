@@ -178,6 +178,14 @@ const PackageOnboarding: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="mb-4 flex flex-wrap gap-3">
+        <Button variant="ghost" size="sm" asChild className="px-0 text-muted-foreground hover:text-foreground">
+          <Link to="/admin/profile">← Back to store profile</Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/subscription">Subscription & billing</Link>
+        </Button>
+      </div>
       <h1 className="text-2xl font-bold mb-6">
         {path === 'preset' ? 'Ready package' : 'Custom package'}
       </h1>

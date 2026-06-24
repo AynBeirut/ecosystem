@@ -534,11 +534,17 @@ const AdminDashboard: React.FC = () => {
         const recentAnnouncementsQuery = query(announcementsRef, where('storeId', '==', actualStoreId), orderBy('createdAt', 'desc'), limit(1));
 
         // Fetch dashboard datasets in parallel for faster page load.
-        const [productsSnap, ordersSnap, recentAnnouncementsSnap] = await Promise.all([
+        const [productsSnap, ordersSnap] = await Promise.all([
           getDocs(productsQuery),
           getDocs(ordersQuery),
-          getDocs(recentAnnouncementsQuery),
         ]);
+
+        let recentAnnouncementDocs: (typeof productsSnap.docs)[number][] = [];
+        try {
+          recentAnnouncementDocs = (await getDocs(recentAnnouncementsQuery)).docs;
+        } catch (announcementsErr) {
+          console.warn('Announcements feed skipped (permissions or index)', announcementsErr);
+        }
 
         setProductCount(productsSnap.size);
         setOrderCount(ordersSnap.size);
@@ -601,7 +607,7 @@ const AdminDashboard: React.FC = () => {
           });
         });
 
-        recentAnnouncementsSnap.forEach(doc => {
+        recentAnnouncementDocs.forEach(doc => {
           events.push({
             type: 'announcement',
             title: doc.data().title,
