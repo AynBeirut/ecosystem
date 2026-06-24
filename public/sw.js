@@ -1,4 +1,4 @@
-// Deprecated cache-first worker — replaced with network-only passthrough.
+// Legacy PWA override: clear caches and always fetch from network.
 self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (event) => {
