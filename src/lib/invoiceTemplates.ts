@@ -1,6 +1,26 @@
 import { Order } from '@/types/order';
 import { StoreProfile } from '@/types/storeProfile';
 
+const escapeHtml = (value: string): string =>
+  value
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+
+const formatMultilineHtml = (value: string): string =>
+  escapeHtml(value).replace(/\n/g, '<br/>');
+
+const resolveCatalogDescription = (product?: { description?: string; productDescription?: string; shortDescription?: string; details?: string } | null): string => {
+  if (!product) return '';
+  const candidates = [product.description, product.productDescription, product.shortDescription, product.details];
+  for (const value of candidates) {
+    if (typeof value === 'string' && value.trim()) return value.trim();
+  }
+  return '';
+};
+
 export const generateInvoiceHTML = (
   order: Order & { id: string },
   products: any[],
@@ -26,6 +46,8 @@ export const generateInvoiceHTML = (
   
   const itemsHtml = order.items?.map(item => {
     const product = products.find(p => p.id === item.productId);
+    const itemName = item.productName || product?.name || 'Product';
+    const itemDescription = (item.description || resolveCatalogDescription(product)).trim();
     // Use item.price (the actual price at time of order) or fallback to product price
     const price = item.price || product?.price || product?.sellingPrice || 0;
     const lineTotal = price * item.quantity;
@@ -45,7 +67,8 @@ export const generateInvoiceHTML = (
     return `
       <tr>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb;">
-          <div>${product?.name || 'Product'}</div>
+          <div style="font-weight: 600;">${escapeHtml(itemName)}</div>
+          ${itemDescription ? `<div style="font-size: 11px; color: #64748b; margin-top: 4px; line-height: 1.45;">${formatMultilineHtml(itemDescription)}</div>` : ''}
           ${hasDiscount ? `<div style="font-size: 11px; color: #ef4444; margin-top: 4px;">Discount: ${item.discountType === 'percentage' ? `${item.discountValue}%` : formatCurrency(item.discountValue, true)}</div>` : ''}
         </td>
         <td style="padding: 12px 8px; border-bottom: 1px solid #e5e7eb; text-align: center;">${item.quantity}</td>
@@ -59,6 +82,36 @@ export const generateInvoiceHTML = (
       </tr>
     `;
   }).join('');
+
+  const invoiceNotesSectionHtml = (() => {
+    const invoiceNotes = (order.invoiceNotes || '').trim();
+    const deliveryNotes = (order.deliveryNotes || '').trim();
+    if (!invoiceNotes && !deliveryNotes) return '';
+
+    const sections: string[] = [];
+    if (invoiceNotes) {
+      sections.push(`
+        <div>
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 6px;">Invoice Notes</div>
+          <div style="font-size: 13px; color: #334155; line-height: 1.5;">${formatMultilineHtml(invoiceNotes)}</div>
+        </div>
+      `);
+    }
+    if (deliveryNotes) {
+      sections.push(`
+        <div>
+          <div style="font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; color: #64748b; margin-bottom: 6px;">Delivery Notes</div>
+          <div style="font-size: 13px; color: #334155; line-height: 1.5;">${formatMultilineHtml(deliveryNotes)}</div>
+        </div>
+      `);
+    }
+
+    return `
+      <div style="margin-top: 30px; padding: 20px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #0ea5e9;">
+        ${sections.join('<div style="height: 12px;"></div>')}
+      </div>
+    `;
+  })();
 
   // Modern Template (Blue/Teal)
   if (template === 'modern') {
@@ -246,7 +299,6 @@ export const generateInvoiceHTML = (
                 ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
                 ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
                 ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
-                ${order.deliveryNotes ? `📝 ${order.deliveryNotes}<br/>` : ''}
               </div>
             </div>
           </div>
@@ -324,6 +376,8 @@ export const generateInvoiceHTML = (
             <div style="font-size: 13px; color: #1e293b; font-weight: 500;">${order.assignedSalesPersonName}</div>
           </div>
           ` : ''}
+
+          ${invoiceNotesSectionHtml}
 
           <div class="footer">
             <p><strong>Thank you for your business!</strong></p>
@@ -524,7 +578,6 @@ export const generateInvoiceHTML = (
                 ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
                 ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
                 ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
-                ${order.deliveryNotes ? `📝 ${order.deliveryNotes}<br/>` : ''}
               </div>
             </div>
           </div>
@@ -585,6 +638,8 @@ export const generateInvoiceHTML = (
             <div style="font-size: 13px; color: #2c2c2c; font-weight: 500;">${order.assignedSalesPersonName}</div>
           </div>
           ` : ''}
+
+          ${invoiceNotesSectionHtml}
 
           <div class="footer">
             <p>Thank you for choosing ${storeName}. We appreciate your business.</p>
@@ -834,7 +889,6 @@ export const generateInvoiceHTML = (
                 ${order.customerPhone ? `📞 ${order.customerPhone}<br/>` : ''}
                 ${order.customerEmail ? `📧 ${order.customerEmail}<br/>` : ''}
                 ${order.deliveryAddress ? `📍 ${order.deliveryAddress}${order.deliveryCity ? ', ' + order.deliveryCity : ''}<br/>` : ''}
-                ${order.deliveryNotes ? `📝 ${order.deliveryNotes}` : ''}
               </p>
             </div>
           </div>
@@ -912,6 +966,8 @@ export const generateInvoiceHTML = (
             <div style="font-size: 13px; color: #1a1a1a; font-weight: 500;">${order.assignedSalesPersonName}</div>
           </div>
           ` : ''}
+
+          ${invoiceNotesSectionHtml}
 
           <div class="footer">
             <h3>Thank You! 🎉</h3>

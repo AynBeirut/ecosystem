@@ -23,10 +23,10 @@ const Footer: React.FC = () => {
       </div>
       {!isHome && !isLogin && (
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/search')}
           className="px-4 py-2 rounded bg-market-primary text-white hover:bg-market-primary/90 text-xs font-medium"
         >
-          Go Back Home
+          Go to Marketplace
         </button>
       )}
     </footer>

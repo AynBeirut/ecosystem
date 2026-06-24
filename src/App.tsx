@@ -81,7 +81,7 @@ const AdminMarketplaceSync = lazy(() => import("./pages/admin/AdminMarketplaceSy
 const AdminSEOAnalytics = lazy(() => import("./pages/admin/AdminSEOAnalytics"));
 const AdminSEOAudit = lazy(() => import("./pages/admin/AdminSEOAudit"));
 const GscCallback = lazy(() => import("./pages/auth/GscCallback"));
-const LandingPage = lazy(() => import("./pages/public/LandingPage"));
+const ModularHomeRedirect = lazy(() => import("./pages/public/ModularHomeRedirect"));
 const Features = lazy(() => import("./pages/public/Features"));
 const Pricing = lazy(() => import("./pages/public/Pricing"));
 const UseCases = lazy(() => import("./pages/public/UseCases"));
@@ -95,6 +95,31 @@ const AdminAuditLogs = lazy(() => import("./pages/admin/AdminAuditLogs"));
 const AdminReturns = lazy(() => import("./pages/admin/AdminReturns"));
 const AdminFinishedGoods = lazy(() => import("./pages/admin/AdminFinishedGoods"));
 const Subscription = lazy(() => import("./pages/admin/Subscription"));
+const CrmModuleShell = lazy(() => import("./pages/admin/crm/CrmModuleShell"));
+const CrmPipeline = lazy(() => import("./pages/admin/crm/CrmPipeline"));
+const CrmActivities = lazy(() => import("./pages/admin/crm/CrmActivities"));
+const CrmMap = lazy(() => import("./pages/admin/crm/CrmMap"));
+const CrmPerformance = lazy(() => import("./pages/admin/crm/CrmPerformance"));
+const CrmClientProfile = lazy(() => import("./pages/admin/crm/CrmClientProfile"));
+const AdminCrmReps = lazy(() => import("./pages/admin/AdminCrmReps"));
+const CrmRepPortal = lazy(() => import("./pages/team/CrmRepPortal"));
+const PackageOnboarding = lazy(() => import("./pages/onboarding/PackageOnboarding"));
+const FinanceEstimates = lazy(() => import("./pages/admin/finance/FinanceEstimates"));
+const FinanceReceipts = lazy(() => import("./pages/admin/finance/FinanceReceipts"));
+const FinancePortfolio = lazy(() => import("./pages/admin/finance/FinancePortfolio"));
+const PosPairing = lazy(() => import("./pages/admin/PosPairing"));
+const AiBuilder = lazy(() => import("./pages/admin/AiBuilder"));
+const BlogPublisher = lazy(() => import("./pages/admin/BlogPublisher"));
+const WhitelabelApp = lazy(() => import("./pages/admin/WhitelabelApp"));
+const StoreBlog = lazy(() => import("./pages/public/StoreBlog"));
+const StoreBlogPost = lazy(() => import("./pages/public/StoreBlogPost"));
+const AdminProjects = lazy(() => import("./pages/admin/AdminProjects"));
+const ContentCreator = lazy(() => import("./pages/admin/ai/ContentCreator"));
+const MarketStrategy = lazy(() => import("./pages/admin/ai/MarketStrategy"));
+const ProposalWriter = lazy(() => import("./pages/admin/ai/ProposalWriter"));
+const SeoAssistant = lazy(() => import("./pages/admin/ai/SeoAssistant"));
+const BusinessInsights = lazy(() => import("./pages/admin/ai/BusinessInsights"));
+const CampaignWriter = lazy(() => import("./pages/admin/ai/CampaignWriter"));
 
 const PLATFORM_HOSTS = ['localhost', '127.0.0.1', 'grabio.space', 'www.grabio.space', 'market-flow-7b074.web.app'];
 const _hostname = typeof window !== 'undefined' ? window.location.hostname : '';
@@ -123,6 +148,8 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                             <Route path="/" element={<CustomDomainStore hostname={_hostname} />} />
                             <Route path="/store/:slug" element={<StoreDetail />} />
                             <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
+                            <Route path="/store/:slug/blog" element={<StoreBlog />} />
+                            <Route path="/store/:slug/blog/:postId" element={<StoreBlogPost />} />
                             <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
                             <Route path="/store/id/:id" element={<StoreDetail />} />
                             <Route path="/store/id/:id/category/:categorySlug" element={<StoreDetail />} />
@@ -144,10 +171,12 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/auth/callback" element={<AuthCallback />} />
                         <Route path="/auth/gsc-callback" element={<GscCallback />} />
                         {/* Main app routes */}
-                        <Route path="/" element={<Navigate to="/features" replace />} />
+                        <Route path="/" element={<ModularHomeRedirect />} />
                         <Route path="/search" element={<Marketplace />} />
                         <Route path="/store/:slug" element={<StoreDetail />} />
                         <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
+                        <Route path="/store/:slug/blog" element={<StoreBlog />} />
+                        <Route path="/store/:slug/blog/:postId" element={<StoreBlogPost />} />
                         <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
                         {/* Backward compatibility routes */}
                         <Route path="/store/id/:id" element={<StoreDetail />} />
@@ -163,6 +192,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/orders/confirmation" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
                         <Route path="/profile" element={<ProtectedRoute><CustomerProfile /></ProtectedRoute>} />
                         <Route path="/upgrade" element={<ProtectedRoute><UpgradeToAdmin /></ProtectedRoute>} />
+                        <Route path="/onboarding/package" element={<ProtectedRoute allowedRoles={['admin']}><PackageOnboarding /></ProtectedRoute>} />
                         {/* Payment Routes */}
                         <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
                         <Route path="/payment/failed" element={<ProtectedRoute><PaymentFailed /></ProtectedRoute>} />
@@ -173,51 +203,76 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                         {/* Sub-Account Routes */}
                         <Route path="/team/dashboard" element={<ProtectedRoute allowedRoles={['sub_account']}><SubAccountDashboard /></ProtectedRoute>} />
-                        <Route path="/admin/products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory"><AdminProducts /></ProtectedRoute>} />
+                        <Route path="/admin/products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory" requiredModule="stock"><AdminProducts /></ProtectedRoute>} />
                         <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfile /></ProtectedRoute>} />
-                        <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']}><AdminPayments /></ProtectedRoute>} />
-                        <Route path="/admin/delivery" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="manage_deliveries"><AdminDelivery /></ProtectedRoute>} />
-                        <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']}><AdminTemplates /></ProtectedRoute>} />
-                        <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminAnnouncements /></ProtectedRoute>} />
-                        <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports"><AdminAnalytics /></ProtectedRoute>} />
-                        <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports"><AdminRevenue /></ProtectedRoute>} />
+                        <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminPayments /></ProtectedRoute>} />
+                        <Route path="/admin/delivery" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="manage_deliveries" requiredModule="delivery"><AdminDelivery /></ProtectedRoute>} />
+                        <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><AdminTemplates /></ProtectedRoute>} />
+                        <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredModule="marketplace"><AdminAnnouncements /></ProtectedRoute>} />
+                        <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports" requiredModule="analytics"><AdminAnalytics /></ProtectedRoute>} />
+                        <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports" requiredModule="analytics"><AdminRevenue /></ProtectedRoute>} />
                         <Route path="/admin/marketing" element={<ProtectedRoute allowedRoles={['admin']}><AdminMarketing /></ProtectedRoute>} />
-                        <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_orders"><AdminOrders /></ProtectedRoute>} />
+                        <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_orders" requiredModule="invoicing"><AdminOrders /></ProtectedRoute>} />
                         {/* Inventory Management */}
-                        <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['admin']}><AdminInventory /></ProtectedRoute>} />
-                        <Route path="/admin/suppliers" element={<ProtectedRoute allowedRoles={['admin']}><AdminSuppliers /></ProtectedRoute>} />
-                        <Route path="/admin/supplier-statements" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierStatements /></ProtectedRoute>} />
-                        <Route path="/admin/raw-materials" element={<ProtectedRoute allowedRoles={['admin']}><AdminRawMaterials /></ProtectedRoute>} />
-                        <Route path="/admin/recipes" element={<ProtectedRoute allowedRoles={['admin']}><AdminRecipes /></ProtectedRoute>} />
-                        <Route path="/admin/composed-products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory"><AdminComposedProducts /></ProtectedRoute>} />
-                        <Route path="/admin/production" element={<ProtectedRoute allowedRoles={['admin']}><AdminProduction /></ProtectedRoute>} />
-                        <Route path="/admin/finished-goods" element={<ProtectedRoute allowedRoles={['admin']}><AdminFinishedGoods /></ProtectedRoute>} />
+                        <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminInventory /></ProtectedRoute>} />
+                        <Route path="/admin/suppliers" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminSuppliers /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-statements" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminSupplierStatements /></ProtectedRoute>} />
+                        <Route path="/admin/raw-materials" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="factory"><AdminRawMaterials /></ProtectedRoute>} />
+                        <Route path="/admin/recipes" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="restaurant"><AdminRecipes /></ProtectedRoute>} />
+                        <Route path="/admin/composed-products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory" requiredModule="restaurant"><AdminComposedProducts /></ProtectedRoute>} />
+                        <Route path="/admin/production" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="factory"><AdminProduction /></ProtectedRoute>} />
+                        <Route path="/admin/finished-goods" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="factory"><AdminFinishedGoods /></ProtectedRoute>} />
                         {/* Purchasing & Returns */}
-                        <Route path="/admin/purchases" element={<ProtectedRoute allowedRoles={['admin']}><AdminPurchases /></ProtectedRoute>} />
-                        <Route path="/admin/returns" element={<ProtectedRoute allowedRoles={['admin']}><AdminReturns /></ProtectedRoute>} />
-                        <Route path="/admin/supplier-credits" element={<ProtectedRoute allowedRoles={['admin']}><AdminSupplierCredits /></ProtectedRoute>} />
-                        <Route path="/admin/supplier-returns" element={<ProtectedRoute allowedRoles={['admin']}><SupplierReturns /></ProtectedRoute>} />
-                        <Route path="/admin/sales-returns" element={<ProtectedRoute allowedRoles={['admin']}><SalesReturns /></ProtectedRoute>} />
+                        <Route path="/admin/purchases" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminPurchases /></ProtectedRoute>} />
+                        <Route path="/admin/returns" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminReturns /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-credits" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminSupplierCredits /></ProtectedRoute>} />
+                        <Route path="/admin/supplier-returns" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><SupplierReturns /></ProtectedRoute>} />
+                        <Route path="/admin/sales-returns" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><SalesReturns /></ProtectedRoute>} />
                         {/* Staff & HR */}
                         <Route path="/admin/staff" element={<ProtectedRoute allowedRoles={['admin']}><AdminStaff /></ProtectedRoute>} />
                         <Route path="/admin/salaries" element={<ProtectedRoute allowedRoles={['admin']}><AdminSalaries /></ProtectedRoute>} />
-                        <Route path="/admin/sub-accounts" element={<ProtectedRoute allowedRoles={['admin']}><AdminSubAccounts /></ProtectedRoute>} />
+                        <Route path="/admin/sub-accounts" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="team"><AdminSubAccounts /></ProtectedRoute>} />
                         {/* Financial */}
-                        <Route path="/admin/expenses" element={<ProtectedRoute allowedRoles={['admin']}><AdminExpenses /></ProtectedRoute>} />
-                        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']}><AdminReports /></ProtectedRoute>} />
-                        <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']}><AdminFinanceSuite /></ProtectedRoute>} />
-                        <Route path="/admin/marketplace" element={<ProtectedRoute allowedRoles={['admin']}><AdminMarketplaceSync /></ProtectedRoute>} />
-                        <Route path="/admin/product-reviews" element={<ProtectedRoute allowedRoles={['admin']}><AdminProductReviews /></ProtectedRoute>} />
+                        <Route path="/admin/expenses" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminExpenses /></ProtectedRoute>} />
+                        <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminReports /></ProtectedRoute>} />
+                        <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminFinanceSuite /></ProtectedRoute>} />
+                        <Route path="/admin/finance/estimates" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="invoice_manager"><FinanceEstimates /></ProtectedRoute>} />
+                        <Route path="/admin/finance/receipts" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="invoice_manager"><FinanceReceipts /></ProtectedRoute>} />
+                        <Route path="/admin/finance/portfolio" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="invoice_manager"><FinancePortfolio /></ProtectedRoute>} />
+                        <Route path="/admin/pos" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="pos"><PosPairing /></ProtectedRoute>} />
+                        <Route path="/admin/ai-builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="ai_builder"><AiBuilder /></ProtectedRoute>} />
+                        <Route path="/admin/blog" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="blog_publisher"><BlogPublisher /></ProtectedRoute>} />
+                        <Route path="/admin/whitelabel" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="whitelabel"><WhitelabelApp /></ProtectedRoute>} />
+                        <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="projects"><AdminProjects /></ProtectedRoute>} />
+                        <Route path="/admin/ai/content-creator" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="content_creator"><ContentCreator /></ProtectedRoute>} />
+                        <Route path="/admin/ai/market-strategy" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="market_strategy"><MarketStrategy /></ProtectedRoute>} />
+                        <Route path="/admin/ai/proposal-writer" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="proposal_writer"><ProposalWriter /></ProtectedRoute>} />
+                        <Route path="/admin/ai/seo-assistant" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="seo_assistant"><SeoAssistant /></ProtectedRoute>} />
+                        <Route path="/admin/ai/business-insights" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics_insights"><BusinessInsights /></ProtectedRoute>} />
+                        <Route path="/admin/ai/campaign-writer" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="campaign_writer"><CampaignWriter /></ProtectedRoute>} />
+                        <Route path="/admin/marketplace" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="dropship"><AdminMarketplaceSync /></ProtectedRoute>} />
+                        <Route path="/admin/product-reviews" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="marketplace"><AdminProductReviews /></ProtectedRoute>} />
                         <Route path="/admin/order-notifications" element={<ProtectedRoute allowedRoles={['admin']}><AdminOrderNotifications /></ProtectedRoute>} />
-                        <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']}><AdminAccountStatement /></ProtectedRoute>} />
-                        <Route path="/admin/cash-collection" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
-                        <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']}><AdminBankReconciliation /></ProtectedRoute>} />
-                        <Route path="/admin/service-renewals" element={<ProtectedRoute allowedRoles={['admin']}><AdminServiceRenewals /></ProtectedRoute>} />
+                        <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminAccountStatement /></ProtectedRoute>} />
+                        <Route path="/admin/cash-collection" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminBankReconciliation /></ProtectedRoute>} />
+                        <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminBankReconciliation /></ProtectedRoute>} />
+                        <Route path="/admin/service-renewals" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="services"><AdminServiceRenewals /></ProtectedRoute>} />
                         <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
                         <Route path="/admin/seo-analytics" element={<ProtectedRoute allowedRoles={['admin']}><AdminSEOAnalytics /></ProtectedRoute>} />
                         <Route path="/admin/seo-audit" element={<ProtectedRoute allowedRoles={['admin']}><AdminSEOAudit /></ProtectedRoute>} />
-                        {/* CRM */}
+                        {/* Customer directory (orders/billing) */}
                         <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />
+                        {/* Sales CRM add-on */}
+                        <Route path="/admin/crm" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="crm"><CrmModuleShell /></ProtectedRoute>}>
+                          <Route index element={<Navigate to="pipeline" replace />} />
+                          <Route path="pipeline" element={<CrmPipeline />} />
+                          <Route path="activities" element={<CrmActivities />} />
+                          <Route path="map" element={<CrmMap />} />
+                          <Route path="performance" element={<CrmPerformance />} />
+                          <Route path="clients/:clientId" element={<CrmClientProfile />} />
+                          <Route path="reps" element={<AdminCrmReps />} />
+                        </Route>
+                        <Route path="/team/crm" element={<ProtectedRoute allowedRoles={['crm_rep']} requiredModule="crm"><CrmRepPortal /></ProtectedRoute>} />
                         {/* Public marketing pages — must be BEFORE /:slug */}
                         <Route path="/features" element={<Features />} />
                         <Route path="/pricing" element={<Pricing />} />

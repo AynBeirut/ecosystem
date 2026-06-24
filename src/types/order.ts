@@ -2,6 +2,8 @@ export interface OrderItem {
   productId: string
   quantity: number
   price?: number
+  productName?: string
+  description?: string
   discountType?: 'percentage' | 'fixed'
   discountValue?: number
   discountAmount?: number
@@ -20,6 +22,7 @@ export interface Order {
   deliveryAddress?: string
   deliveryCity?: string
   deliveryNotes?: string
+  invoiceNotes?: string
   deliveryMethod?: 'standard' | 'express' | 'same_day' | 'pickup'
   deliveryFee?: number
   estimatedDeliveryTime?: string
@@ -102,4 +105,15 @@ export interface Customer {
   tags?: string[]
   notes?: string
   lastOrderDate?: string
+  // Sales CRM add-on
+  storeId?: string
+  pipelineStage?: string
+  assignedRepId?: string | null
+  nextFollowUpAt?: string | null
+  dealValue?: number | null
+  dealCurrency?: string
+  lastActivityAt?: string | null
+  lastActivityResult?: string | null
+  crmEnabled?: boolean
+  status?: 'active' | 'inactive' | 'suspended'
 }

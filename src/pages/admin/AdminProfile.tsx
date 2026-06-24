@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { consumePackageDraftForStore } from '@/lib/applyPackageDraft';
 import { getAuth, multiFactor, TotpMultiFactorGenerator, type MultiFactorInfo, type TotpSecret } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
@@ -1068,7 +1069,12 @@ const AdminProfile: React.FC = () => {
         if (!cleanFormData.template) cleanFormData.template = 'modern';
   // credits feature removed: do not include allowsCredits
         const profileRef = doc(db, 'storeProfiles', user.id);
-        await setDoc(profileRef, cleanFormData);
+        const existingSnap = await getDoc(profileRef);
+        const existingProfile = existingSnap.exists()
+          ? (existingSnap.data() as StoreProfile)
+          : null;
+        const ecosystemPatch = consumePackageDraftForStore(existingProfile);
+        await setDoc(profileRef, { ...cleanFormData, ...ecosystemPatch }, { merge: true });
         // Persist storeId in sellers collection and localStorage
         const sellerRef = doc(db, 'sellers', user.id);
         await setDoc(sellerRef, { storeId: user.id }, { merge: true });

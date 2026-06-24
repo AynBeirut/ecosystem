@@ -6,11 +6,18 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from '@/components/ui/sonner';
 import { useAuth } from '@/context/useAuth';
+import { auth } from '@/lib/firebase';
+import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
 
 const Login: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [signupName, setSignupName] = useState('');
+  const [signupEmail, setSignupEmail] = useState('');
+  const [signupPassword, setSignupPassword] = useState('');
+  const [signupConfirmPassword, setSignupConfirmPassword] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, googleLogin, user, isLoading } = useAuth();
   const navigate = useNavigate();
@@ -30,18 +37,60 @@ const Login: React.FC = () => {
         localStorage.removeItem('redirectAfterLogin');
         console.log('[Login] Navigating to saved path:', redirectPath);
         navigate(redirectPath, { replace: true });
+      } else if (user.role === 'crm_rep') {
+        navigate('/team/crm', { replace: true });
+      } else if (user.role === 'admin') {
+        const onboarding = searchParams.get('onboarding');
+        const preset = searchParams.get('preset');
+        if (onboarding || preset) {
+          const qs = preset ? `?preset=${preset}` : onboarding ? `?onboarding=${onboarding}` : '';
+          navigate(`/onboarding/package${qs}`, { replace: true });
+        } else {
+          navigate('/admin', { replace: true });
+        }
+      } else if (user.role === 'sub_account') {
+        navigate('/team/dashboard', { replace: true });
       } else {
-        console.log('[Login] No redirect path, navigating to home');
-        navigate('/', { replace: true });
+        console.log('[Login] No redirect path, navigating to marketplace');
+        navigate('/search', { replace: true });
       }
     }
-  }, [user, navigate]);
+  }, [user, navigate, searchParams]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSubmitting(true);
     try {
       await login(email, password);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleEmailSignup = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (signupPassword !== signupConfirmPassword) {
+      toast.error('Passwords do not match');
+      return;
+    }
+
+    if (signupPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const userCredential = await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
+      if (signupName.trim()) {
+        await updateProfile(userCredential.user, { displayName: signupName.trim() });
+      }
+      toast.success('Account created successfully!');
+    } catch (error) {
+      const err = error as { message?: string };
+      toast.error(err?.message || 'An error occurred during signup');
+      console.error('Signup error:', error);
     } finally {
       setIsSubmitting(false);
     }
@@ -56,7 +105,9 @@ const Login: React.FC = () => {
     }
   };
 
-  // Show loading while auth state is being determined (especially for OAuth redirects)
+  // Show spinner only while a previous session is being restored (e.g. returning user).
+  // Do NOT block while isLoading is true for a popup sign-in in progress — that would
+  // hide the form and confuse the user if the popup is closed.
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
@@ -172,22 +223,59 @@ const Login: React.FC = () => {
                   </div>
                 </div>
                 
-                <form>
+                <form onSubmit={handleEmailSignup}>
                   <div className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="name">Full Name</Label>
-                      <Input id="name" name="name" placeholder="John Doe" required autoComplete="name" />
+                      <Input
+                        id="name"
+                        name="name"
+                        placeholder="John Doe"
+                        value={signupName}
+                        onChange={(e) => setSignupName(e.target.value)}
+                        required
+                        autoComplete="name"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="email-signup">Email</Label>
-                      <Input id="email-signup" name="email" type="email" placeholder="email@example.com" required autoComplete="email" />
+                      <Input
+                        id="email-signup"
+                        name="email"
+                        type="email"
+                        placeholder="email@example.com"
+                        value={signupEmail}
+                        onChange={(e) => setSignupEmail(e.target.value)}
+                        required
+                        autoComplete="email"
+                      />
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="password-signup">Password</Label>
-                      <Input id="password-signup" name="password" type="password" required autoComplete="new-password" />
+                      <Input
+                        id="password-signup"
+                        name="password"
+                        type="password"
+                        value={signupPassword}
+                        onChange={(e) => setSignupPassword(e.target.value)}
+                        required
+                        autoComplete="new-password"
+                      />
                     </div>
-                    <Button type="submit" className="w-full">
-                      Create Account
+                    <div className="space-y-2">
+                      <Label htmlFor="password-signup-confirm">Confirm Password</Label>
+                      <Input
+                        id="password-signup-confirm"
+                        name="confirmPassword"
+                        type="password"
+                        value={signupConfirmPassword}
+                        onChange={(e) => setSignupConfirmPassword(e.target.value)}
+                        required
+                        autoComplete="new-password"
+                      />
+                    </div>
+                    <Button type="submit" className="w-full" disabled={isSubmitting}>
+                      {isSubmitting ? 'Creating Account...' : 'Create Account'}
                     </Button>
                   </div>
                 </form>

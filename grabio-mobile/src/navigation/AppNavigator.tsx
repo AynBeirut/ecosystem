@@ -48,9 +48,11 @@ import InventoryScreen from '../screens/owner/InventoryScreen';
 import ExpensesScreen from '../screens/owner/ExpensesScreen';
 import CreateOrderScreen from '../screens/owner/CreateOrderScreen';
 import CustomersScreen from '../screens/owner/CustomersScreen';
-import PurchasesScreen from '../screens/owner/PurchasesScreen';
+import GatedPurchasesScreen from '../screens/owner/GatedPurchasesScreen';
 import SuppliersScreen from '../screens/owner/SuppliersScreen';
 import AccountStatementScreen from '../screens/owner/AccountStatementScreen';
+import CrmMyClientsScreen from '../screens/crm/CrmMyClientsScreen';
+import CrmClientDetailScreen from '../screens/crm/CrmClientDetailScreen';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 const Tab = createBottomTabNavigator<TabParamList>();
@@ -78,6 +80,23 @@ function CustomerTabs() {
         name="MyOrders"
         component={MyOrdersScreen}
         options={{ tabBarLabel: 'Track Order', tabBarIcon: () => <Text>📍</Text>, title: 'Track Order' }}
+      />
+      <Tab.Screen
+        name="Profile"
+        component={ProfileScreen}
+        options={{ tabBarLabel: 'Profile', tabBarIcon: () => <Text>👤</Text>, title: 'Profile' }}
+      />
+    </Tab.Navigator>
+  );
+}
+
+function CrmRepTabs() {
+  return (
+    <Tab.Navigator screenOptions={{ ...TAB_HEADER, tabBarActiveTintColor: COLORS.primary }}>
+      <Tab.Screen
+        name="CrmClients"
+        component={CrmMyClientsScreen}
+        options={{ tabBarLabel: 'Clients', tabBarIcon: () => <Text>📋</Text>, title: 'My Clients' }}
       />
       <Tab.Screen
         name="Profile"
@@ -129,7 +148,13 @@ export default function AppNavigator() {
           <>
             <Stack.Screen
               name="MainTabs"
-              component={user && ['owner', 'sub_seller', 'sub_manager', 'sub_delivery'].includes(user.userRole) ? OwnerTabs : CustomerTabs}
+              component={
+                user?.userRole === 'crm_rep'
+                  ? CrmRepTabs
+                  : user && ['owner', 'sub_seller', 'sub_manager', 'sub_delivery'].includes(user.userRole)
+                    ? OwnerTabs
+                    : CustomerTabs
+              }
             />
             <Stack.Screen name="StoreDetail" component={StoreDetailScreen} options={{ headerShown: true }} />
             <Stack.Screen name="ProductDetail" component={ProductDetailScreen} options={{ headerShown: true }} />
@@ -144,9 +169,10 @@ export default function AppNavigator() {
             <Stack.Screen name="Expenses" component={ExpensesScreen} options={{ headerShown: true, title: 'Expenses' }} />
             <Stack.Screen name="CreateOrder" component={CreateOrderScreen} options={{ headerShown: true, title: 'Create Order' }} />
             <Stack.Screen name="Customers" component={CustomersScreen} options={{ headerShown: true, title: 'Customers' }} />
-            <Stack.Screen name="Purchases" component={PurchasesScreen} options={{ headerShown: true, title: 'Purchases' }} />
+            <Stack.Screen name="Purchases" component={GatedPurchasesScreen} options={{ headerShown: true, title: 'Purchases' }} />
             <Stack.Screen name="Suppliers" component={SuppliersScreen} options={{ headerShown: true, title: 'Suppliers' }} />
             <Stack.Screen name="AccountStatement" component={AccountStatementScreen} options={{ headerShown: true, title: 'Account Statement' }} />
+            <Stack.Screen name="CrmClientDetail" component={CrmClientDetailScreen} options={{ headerShown: true, title: 'Client' }} />
           </>
         )}
       </Stack.Navigator>

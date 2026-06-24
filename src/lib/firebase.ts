@@ -15,5 +15,6 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-setPersistence(auth, browserLocalPersistence);
+/** Await before auth listeners / redirect handling so persistence is ready. */
+export const authReady = setPersistence(auth, browserLocalPersistence);
 export const storage = getStorage(app);

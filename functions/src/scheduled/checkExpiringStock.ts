@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2/scheduler';
 import { sendExpiryAlertEmail } from '../services/emailService';
+import { getFcmTokensForStoreOwner, sendFcmMulticast } from '../services/fcmTokens';
 
 const db = admin.firestore();
 
@@ -149,26 +150,16 @@ export const checkExpiringStock = functions.onSchedule(
 
         // Also send FCM push notifications to store owner's tokens
         try {
-          const tokensSnap = await db.collection('users')
-            .where('storeId', '==', storeId)
-            .limit(1)
-            .get();
-          if (!tokensSnap.empty) {
-            const ownerId = tokensSnap.docs[0].id;
-            const fcmTokensSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
-            const tokens = fcmTokensSnap.docs.map((d: any) => d.id).filter(Boolean);
-            if (tokens.length > 0) {
-              const expiredCount = items.filter(i => i.daysLeft < 0).length;
-              const soonCount = items.filter(i => i.daysLeft >= 0).length;
-              await admin.messaging().sendEachForMulticast({
-                tokens,
-                notification: {
-                  title: 'Stock Expiry Alert',
-                  body: `${expiredCount} expired, ${soonCount} expiring soon in ${store.name}`,
-                },
-                data: { storeId, type: 'expiry_alert' },
-              });
-            }
+          const tokens = await getFcmTokensForStoreOwner(storeId);
+          if (tokens.length > 0) {
+            const expiredCount = items.filter(i => i.daysLeft < 0).length;
+            const soonCount = items.filter(i => i.daysLeft >= 0).length;
+            await sendFcmMulticast(
+              tokens,
+              'Stock Expiry Alert',
+              `${expiredCount} expired, ${soonCount} expiring soon in ${store.name}`,
+              { storeId, type: 'expiry_alert' },
+            );
           }
         } catch (fcmError) {
           console.warn(`FCM push failed for store ${storeId}:`, fcmError);
@@ -204,20 +195,14 @@ export const checkExpiringStock = functions.onSchedule(
         });
 
         for (const [storeId, productNames] of Object.entries(lowByStore)) {
-          const ownerSnap = await db.collection('users').where('storeId', '==', storeId).limit(1).get();
-          if (ownerSnap.empty) continue;
-          const ownerId = ownerSnap.docs[0].id;
-          const fcmSnap = await db.collection('users').doc(ownerId).collection('fcmTokens').get();
-          const tokens = fcmSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id).filter(Boolean);
+          const tokens = await getFcmTokensForStoreOwner(storeId);
           if (tokens.length === 0) continue;
-          await admin.messaging().sendEachForMulticast({
+          await sendFcmMulticast(
             tokens,
-            notification: {
-              title: '📦 Low Stock Alert',
-              body: `${productNames.length} product${productNames.length > 1 ? 's are' : ' is'} running low`,
-            },
-            data: { storeId, type: 'low_stock', products: productNames.slice(0, 5).join(',') },
-          });
+            '📦 Low Stock Alert',
+            `${productNames.length} product${productNames.length > 1 ? 's are' : ' is'} running low`,
+            { storeId, type: 'low_stock', products: productNames.slice(0, 5).join(',') },
+          );
         }
       } catch (lowStockErr) {
         console.warn('Low stock FCM check failed:', lowStockErr);

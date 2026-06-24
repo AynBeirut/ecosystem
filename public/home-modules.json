@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "presets": [
+    { "key": "pkg_shop", "label": "Shop", "monthlyUsd": 27, "workflow": "shop" },
+    { "key": "pkg_live_kitchen", "label": "Live Kitchen", "monthlyUsd": 27, "workflow": "live_kitchen" },
+    { "key": "pkg_factory_flow", "label": "Factory Flow", "monthlyUsd": 27, "workflow": "factory" },
+    { "key": "pkg_ngo", "label": "NGO", "monthlyUsd": 22, "workflow": "ngo" },
+    { "key": "pkg_freelancer", "label": "Freelancer", "monthlyUsd": 22, "workflow": "freelancer" }
+  ],
+  "note": "Regenerate from src/lib/homeModulesCatalog.ts when MODULE_CATALOG changes"
+}

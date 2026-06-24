@@ -3,13 +3,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from '@/context/useAuth';
 import { Navigate, Link, useLocation } from 'react-router-dom';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import ModuleGate from '@/components/ModuleGate';
 
 
 const ProtectedRoute: React.FC<{ 
   children: React.ReactNode; 
   allowedRoles?: string[];
   requiredPermission?: string;
-}> = ({ children, allowedRoles, requiredPermission }) => {
+  /** When VITE_ECOSYSTEM_ENFORCE_MODULES is on, gate by module entitlement */
+  requiredModule?: string;
+}> = ({ children, allowedRoles, requiredPermission, requiredModule }) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
   const [ipCheckState, setIpCheckState] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
@@ -17,7 +21,9 @@ const ProtectedRoute: React.FC<{
 
   const loadingTitle = useMemo(() => {
     const path = location.pathname;
-    if (path === '/admin/customers') return 'Customer Management (CRM)';
+    if (path.startsWith('/admin/crm')) return 'Sales CRM';
+    if (path.startsWith('/team/crm')) return 'Sales CRM';
+    if (path === '/admin/customers') return 'Customer Management';
     if (path.startsWith('/admin')) return 'Admin Panel';
     if (path.startsWith('/team')) return 'Team Dashboard';
     return 'Loading';
@@ -174,11 +180,15 @@ const ProtectedRoute: React.FC<{
   if (allowedRoles) {
     // For admin routes, allow both 'admin' and all sub-accounts
     if (allowedRoles.includes('admin')) {
-      const hasAccess = 
-        user.role === 'admin' || 
+      const hasAccess =
+        user.role === 'admin' ||
         user.role === 'sub_account';
-      
+
       if (!hasAccess) {
+        return <Navigate to="/" replace />;
+      }
+    } else if (allowedRoles.includes('crm_rep')) {
+      if (user.role !== 'crm_rep') {
         return <Navigate to="/" replace />;
       }
     } else if (!allowedRoles.includes(user.role)) {
@@ -191,6 +201,14 @@ const ProtectedRoute: React.FC<{
     if (!user.permissions || !user.permissions.includes(requiredPermission)) {
       return <Navigate to="/admin" replace />;
     }
+  }
+
+  if (requiredModule && ECOSYSTEM_FLAGS.enforceModuleGates) {
+    return (
+      <ModuleGate moduleId={requiredModule}>
+        {children}
+      </ModuleGate>
+    );
   }
 
   return <>{children}</>;

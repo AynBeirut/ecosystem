@@ -36,4 +36,7 @@ serviceAccountKey.json
 build
 .credentials.md
 
+# Large POS reference archive — keep local only (GitHub 100MB limit)
+the eco sys/ecosystem-plan/posfinal-main.zip
 
+# OAuth / verification values belong in .credentials.md (gitignored) — never commit here

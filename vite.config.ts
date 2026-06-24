@@ -19,6 +19,19 @@ export default defineConfig(({ mode }) => ({
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/api/, ''),
       },
+      // Proxy Firebase Auth handler so the redirect flow stays same-origin on localhost.
+      // Without this, the SDK can't read cross-origin cookies/storage from firebaseapp.com,
+      // causing onAuthStateChanged to always fire null after the redirect.
+      '/__/auth': {
+        target: 'https://market-flow-7b074.firebaseapp.com',
+        changeOrigin: true,
+        secure: true,
+      },
+      '/__/firebase': {
+        target: 'https://market-flow-7b074.firebaseapp.com',
+        changeOrigin: true,
+        secure: true,
+      },
     },
   },
   plugins: [
@@ -32,7 +45,7 @@ export default defineConfig(({ mode }) => ({
         cleanupOutdatedCaches: true,
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,woff,woff2}'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,jpg,jpeg,woff,woff2,ttf}'],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024, // 5MB
         navigateFallback: '/index.html',
         navigateFallbackDenylist: [/^\/api/, /^\/auth/],

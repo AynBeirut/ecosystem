@@ -35,7 +35,10 @@ const UpgradeToAdmin: React.FC = () => {
     try {
       await upgradeToAdmin();
       toast.success('Seller account activated. Complete your profile and choose your subscription plan.');
-      navigate('/admin/profile', { replace: true });
+      const hasEcosystem =
+        import.meta.env.VITE_ECOSYSTEM_MODULAR === 'true' ||
+        import.meta.env.VITE_ECOSYSTEM_PACKAGE_DRAFT === 'true';
+      navigate(hasEcosystem ? '/onboarding/package' : '/admin/profile', { replace: true });
     } catch (error) {
       console.error('Failed to become seller:', error);
       toast.error('Failed to activate seller account. Please try again.');

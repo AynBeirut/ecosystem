@@ -23,9 +23,11 @@ export default function PaymentSuccess() {
           </div>
           <CardTitle className="text-2xl">Payment Successful!</CardTitle>
           <CardDescription>
-            {type === 'trial' 
-              ? 'Your trial has been activated' 
-              : 'Your subscription is now active'}
+            {type === 'trial'
+              ? 'Your trial has been activated'
+              : type === 'subscription_modular'
+                ? 'Your modular package is now active'
+                : 'Your subscription is now active'}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
