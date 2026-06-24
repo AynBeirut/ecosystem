@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, Check } from 'lucide-react';
 import type { PricingModule } from '@/lib/pricingDisplay';
@@ -18,26 +18,9 @@ type Props = {
 
 export default function FeatureModuleCard({ mod, items, index }: Props) {
   const cardRef = useRef<HTMLElement>(null);
-  const [revealed, setRevealed] = useState(false);
   const [tilt, setTilt] = useState({ x: 0, y: 0 });
   const { Icon, accent } = getModuleIcon(mod.id);
   const roadmap = isRoadmapModule(mod);
-
-  useEffect(() => {
-    const el = cardRef.current;
-    if (!el) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          setRevealed(true);
-          observer.disconnect();
-        }
-      },
-      { threshold: 0.08, rootMargin: '0px 0px -40px 0px' },
-    );
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, []);
 
   const handleMove = (e: React.MouseEvent<HTMLElement>) => {
     const el = cardRef.current;
@@ -54,14 +37,10 @@ export default function FeatureModuleCard({ mod, items, index }: Props) {
     <article
       ref={cardRef}
       id={mod.id}
-      className={`group relative scroll-mt-28 transition-all duration-700 ease-out ${
-        revealed ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-8'
-      }`}
+      className="group relative scroll-mt-28 transition-transform duration-300 ease-out"
       style={{
-        transitionDelay: `${Math.min(index * 45, 360)}ms`,
-        transform: revealed
-          ? `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`
-          : undefined,
+        transitionDelay: `${Math.min(index * 30, 180)}ms`,
+        transform: `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg)`,
       }}
       onMouseMove={handleMove}
       onMouseLeave={handleLeave}
