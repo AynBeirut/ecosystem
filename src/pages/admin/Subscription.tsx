@@ -36,6 +36,9 @@ import type { StartingPackageKey } from '@/lib/moduleManifest';
 import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule } from '@/lib/pricingDisplay';
 import type { AddOnKey as PricingAddOnKey } from '@/lib/pricingDisplay';
 import { getApiBaseUrl } from '@/lib/apiBase';
+import AdminPageHero from '@/components/admin/AdminPageHero';
+import AdminModuleIcon from '@/components/admin/AdminModuleIcon';
+import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 type Billing = 'monthly' | 'yearly';
 type SubscriptionTier = 'trial' | 'starter' | 'pro' | 'business';
@@ -734,13 +737,14 @@ export default function Subscription() {
   const canManageAddOns = hasActiveSubscription && !!activeTier && activeTier !== 'trial';
 
   return (
-    <div className="container mx-auto py-8 px-4 max-w-6xl">
-      <div className="mb-4">
-        <Button variant="ghost" size="sm" asChild className="px-0 text-muted-foreground hover:text-foreground">
-          <Link to="/admin/profile">← Back to store profile</Link>
-        </Button>
-      </div>
-      <h1 className="text-3xl font-bold mb-8">Subscription Management</h1>
+    <div className="min-h-screen bg-slate-50">
+    <div className="container mx-auto py-6 px-4 max-w-6xl">
+      <AdminPageHero
+        title="Subscription Management"
+        description="Build your modular package, manage billing, and control which modules are live in your store."
+        backTo="/admin/profile"
+        backLabel="Back to Store Profile"
+      />
 
       {profile?.nextPlanPreset && (
         <Card className="mb-8 border-blue-200 bg-blue-50">
@@ -766,7 +770,7 @@ export default function Subscription() {
       )}
 
       {showModularPackageBuilder && (
-        <Card className="mb-8 border-primary/30">
+        <Card className="mb-8 border-slate-200/80 shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] bg-white/90 backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Custom Package Builder</CardTitle>
             <CardDescription>
@@ -784,7 +788,7 @@ export default function Subscription() {
                     key={p.key}
                     type="button"
                     onClick={() => handlePresetChange(p.key)}
-                    className={`text-left rounded-lg border-2 p-3 transition-all ${
+                    className={`text-left rounded-xl border-2 p-3 transition-all shadow-sm hover:shadow-md ${
                       modularPreset === p.key
                         ? 'border-primary bg-primary/5'
                         : 'border-border hover:border-primary/50'
@@ -798,7 +802,7 @@ export default function Subscription() {
                 <button
                   type="button"
                   onClick={() => handlePresetChange('custom')}
-                  className={`text-left rounded-lg border-2 p-3 transition-all ${
+                  className={`text-left rounded-xl border-2 p-3 transition-all shadow-sm hover:shadow-md ${
                     modularPreset === 'custom'
                       ? 'border-primary bg-primary/5'
                       : 'border-border hover:border-primary/50'
@@ -841,8 +845,8 @@ export default function Subscription() {
                     return (
                       <div key={mod.id} className="col-span-1">
                         <div
-                          className={`flex items-start gap-2 p-2 rounded-md cursor-pointer transition-all ${
-                            isActive ? 'bg-green-50 dark:bg-green-950/20' : 'opacity-40 hover:opacity-70'
+                          className={`flex items-start gap-3 p-2.5 rounded-xl cursor-pointer transition-all ${
+                            isActive ? 'bg-green-50 dark:bg-green-950/20 ring-1 ring-green-200/60' : 'opacity-50 hover:opacity-80'
                           }`}
                           onClick={() => toggleModule(mod.id)}
                         >
@@ -850,10 +854,11 @@ export default function Subscription() {
                             checked={isActive}
                             onCheckedChange={() => toggleModule(mod.id)}
                             onClick={(e) => e.stopPropagation()}
-                            className="mt-0.5 shrink-0"
+                            className="mt-2 shrink-0"
                           />
+                          <AdminModuleIcon moduleId={mod.id} />
                           <div className="flex-1 min-w-0">
-                            <p className="text-sm font-medium leading-tight">{mod.icon} {mod.name}</p>
+                            <p className="text-sm font-medium leading-tight">{mod.name}</p>
                             <p className="text-xs text-muted-foreground">{mod.summary}</p>
                           </div>
                           <Badge variant={isActive ? 'default' : 'outline'} className="shrink-0 text-xs">
@@ -888,10 +893,11 @@ export default function Subscription() {
                   })}
                 {/* Always-included (mobile app etc.) */}
                 {MODULE_CATALOG.filter(m => m.billing === 'included').map(mod => (
-                  <div key={mod.id} className="flex items-start gap-2 p-2 rounded-md bg-green-50 dark:bg-green-950/20">
-                    <span className="text-green-500 font-bold mt-0.5 text-sm shrink-0">✓</span>
+                  <div key={mod.id} className="flex items-start gap-3 p-2.5 rounded-xl bg-green-50 dark:bg-green-950/20 ring-1 ring-green-200/60">
+                    <span className="text-green-600 font-bold mt-2 text-sm shrink-0">✓</span>
+                    <AdminModuleIcon moduleId={mod.id} />
                     <div>
-                      <p className="text-sm font-medium leading-tight">{mod.icon} {mod.name}</p>
+                      <p className="text-sm font-medium leading-tight">{mod.name}</p>
                       <p className="text-xs text-muted-foreground">{mod.summary} · Always included</p>
                     </div>
                     <Badge variant="secondary" className="shrink-0 text-xs">Free</Badge>
@@ -915,7 +921,7 @@ export default function Subscription() {
                   return (
                     <div
                       key={mod.id}
-                      className={`flex items-center gap-3 p-3 rounded-lg border-2 transition-all cursor-pointer ${
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all cursor-pointer shadow-sm hover:shadow-md ${
                         isChecked ? 'border-primary bg-primary/5' : 'border-border hover:border-primary/30'
                       }`}
                       onClick={() => setModularAddOns(prev => ({ ...prev, [key]: !prev[key] }))}
@@ -926,8 +932,9 @@ export default function Subscription() {
                         onCheckedChange={(v) => setModularAddOns(prev => ({ ...prev, [key]: !!v }))}
                         onClick={(e) => e.stopPropagation()}
                       />
+                      <AdminModuleIcon moduleId={mod.id} />
                       <div className="flex-1">
-                        <p className="text-sm font-medium">{mod.icon} {mod.name}</p>
+                        <p className="text-sm font-medium">{mod.name}</p>
                         <p className="text-xs text-muted-foreground">{mod.summary}</p>
                       </div>
                       <Badge variant={isChecked ? 'default' : 'secondary'}>
@@ -953,10 +960,10 @@ export default function Subscription() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Coming soon</p>
                   <div className="grid sm:grid-cols-2 gap-y-2 gap-x-4 opacity-50">
                     {comingSoon.map(mod => (
-                      <div key={mod.id} className="flex items-start gap-2">
-                        <span className="text-muted-foreground mt-0.5">○</span>
+                      <div key={mod.id} className="flex items-start gap-3 p-2 rounded-lg border border-dashed border-slate-200">
+                        <AdminModuleIcon moduleId={mod.id} />
                         <div>
-                          <p className="text-sm font-medium">{mod.icon} {mod.name}</p>
+                          <p className="text-sm font-medium">{mod.name}</p>
                           <p className="text-xs text-muted-foreground">In development</p>
                         </div>
                       </div>
@@ -1086,9 +1093,9 @@ export default function Subscription() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Enabled modules</p>
                   <div className="grid grid-cols-1 gap-1">
                     {MODULE_CATALOG.filter(m => profile?.enabledModules?.[m.id]).map(m => (
-                      <div key={m.id} className="flex items-center gap-2 text-sm py-0.5">
-                        <span className="text-green-500 font-bold">✓</span>
-                        <span>{m.icon}</span>
+                      <div key={m.id} className="flex items-center gap-3 text-sm py-1">
+                        <span className="text-green-600 font-bold">✓</span>
+                        <AdminModuleIcon moduleId={m.id} size="sm" />
                         <span>{m.name}</span>
                       </div>
                     ))}
@@ -1148,9 +1155,9 @@ export default function Subscription() {
                       <dd>
                         <div className="grid grid-cols-1 gap-1">
                           {MODULE_CATALOG.filter((m) => entitlements?.modules[m.id]).map((m) => (
-                            <div key={m.id} className="flex items-center gap-2 text-sm py-0.5">
-                              <span className="text-green-500 font-bold">✓</span>
-                              <span>{m.icon}</span>
+                            <div key={m.id} className="flex items-center gap-3 text-sm py-1">
+                              <span className="text-green-600 font-bold">✓</span>
+                              <AdminModuleIcon moduleId={m.id} size="sm" />
                               <span>{m.name}</span>
                             </div>
                           ))}
@@ -1797,6 +1804,10 @@ export default function Subscription() {
           </div>
         </DialogContent>
       </Dialog>
+      <div className="mt-10 pt-6 border-t border-slate-200 text-center">
+        <PoweredByEmoove />
+      </div>
+    </div>
     </div>
   );
 }

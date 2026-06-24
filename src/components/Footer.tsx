@@ -1,5 +1,15 @@
 import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import PoweredByEmoove from '@/components/PoweredByEmoove';
+
+const PUBLIC_MARKETING_PATHS = new Set([
+  '/features',
+  '/pricing',
+  '/use-cases',
+  '/about',
+  '/blog',
+  '/onboarding/package',
+]);
 
 const Footer: React.FC = () => {
   const navigate = useNavigate();
@@ -7,14 +17,16 @@ const Footer: React.FC = () => {
   const year = new Date().getFullYear();
   const isHome = location.pathname === '/';
   const isLogin = location.pathname === '/login';
+  const isPublicMarketing =
+    PUBLIC_MARKETING_PATHS.has(location.pathname) ||
+    location.pathname.startsWith('/blog/');
+
+  if (isPublicMarketing) return null;
 
   return (
     <footer className="w-full bg-gray-100 border-t py-4 mt-8 flex flex-col items-center gap-2">
       <div className="text-xs text-gray-500">
-        © {year} Powered by{' '}
-        <a href="https://www.aynbeirut.cm" target="_blank" rel="noopener noreferrer" className="text-market-primary hover:underline">
-          AYN BEIRUT
-        </a>
+        © {year} <PoweredByEmoove />
       </div>
       <div className="text-xs text-gray-600 flex items-center gap-2">
         <Link to="/contact" className="text-market-primary hover:underline font-medium">Contact Us</Link>

@@ -639,7 +639,7 @@ const AdminDashboard: React.FC = () => {
     } catch (e) {
       // ignore
     }
-    return 'AYN BEIRUT';
+    return 'My Store';
   })();
 
   // Toggle store online/offline

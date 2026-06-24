@@ -32,7 +32,7 @@ function buildHtml(name: string, fromEmail: string, subject: string, message: st
         </table>
         <div style="background:#f9fafb;border-left:4px solid #0ea5e9;padding:16px;border-radius:4px;white-space:pre-wrap;">${message}</div>
         <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-        <p style="font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Grabio — Powered by AYN BEIRUT</p>
+        <p style="font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Grabio — Powered by <a href="https://emoove.co" style="color:#9ca3af;">E-MOOVE</a></p>
       </div>
     </body></html>
   `;
@@ -120,7 +120,7 @@ export async function sendContactEmail(req: Request, res: Response): Promise<voi
               <p style="margin:8px 0 0 0;white-space:pre-wrap;">${message}</p>
             </div>
             <hr style="border:none;border-top:1px solid #e5e7eb;margin:24px 0;">
-            <p style="font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Grabio — Powered by AYN BEIRUT</p>
+            <p style="font-size:12px;color:#9ca3af;">© ${new Date().getFullYear()} Grabio — Powered by <a href="https://emoove.co" style="color:#9ca3af;">E-MOOVE</a></p>
           </div>
         </body></html>
       `,
