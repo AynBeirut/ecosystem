@@ -235,7 +235,8 @@ service cloud.firestore {
 
     // Supplier Returns (SRA): only store owners can manage
     match /supplierReturns/{sraId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
       allow delete: if false; // Prevent deletion for audit trail
     }
 
@@ -296,7 +297,9 @@ service cloud.firestore {
 
     // Expenses: store owners and managers can manage
     match /expenses/{expenseId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow delete: if request.auth != null && request.auth.uid == resource.data.storeId;
     }
 
     // Audit Logs: read-only for owners, write allowed for authenticated users
@@ -457,8 +460,35 @@ service cloud.firestore {
 
     // Account Payments: store owners can manage (customer receipts / supplier payouts)
     match /accountPayments/{paymentId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
       allow read, delete: if request.auth != null && request.auth.uid == resource.data.storeId;
+      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+    }
+
+    // Finished goods — monthly service cost allocations (per store / month)
+    match /monthlyServiceCosts/{costId} {
+      allow read: if request.auth != null && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Cash collections — delivery / bank deposit reconciliation
+    match /cashCollections/{collectionId} {
+      allow read: if request.auth != null && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Marketplace sync jobs and per-channel settings (dropship module)
+    match /marketplaceSyncJobs/{jobId} {
+      allow read: if request.auth != null && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null && isStoreAdmin(resource.data.storeId);
+    }
+
+    match /marketplaceChannelSettings/{settingId} {
+      allow read: if request.auth != null && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null && isStoreAdmin(resource.data.storeId);
     }
 
     // Fallback: deny by default (public reads must be explicit above)

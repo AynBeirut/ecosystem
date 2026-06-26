@@ -30,10 +30,12 @@ const ProtectedRoute: React.FC<{
   }, [location.pathname]);
 
   const LoadingShell = () => (
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold">{loadingTitle}</h1>
-      <div className="mt-4 h-5 w-48 animate-pulse rounded bg-gray-200" />
-    </main>
+    <div className="min-h-[40vh] flex items-center justify-center bg-[#eef2f7]">
+      <div className="rounded-2xl border border-slate-200/80 bg-white px-6 py-5 shadow-sm">
+        <h1 className="text-lg font-semibold text-slate-900">{loadingTitle}</h1>
+        <div className="mt-3 h-2 w-40 animate-pulse rounded-full bg-slate-200" />
+      </div>
+    </div>
   );
 
   const requiresAdminIpCheck = useMemo(() => {

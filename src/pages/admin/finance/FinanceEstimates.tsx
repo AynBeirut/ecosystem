@@ -4,7 +4,9 @@ import { getFirestore } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { listEstimates, type FinanceEstimate } from '@/lib/financeService';
 import ModuleGate from '@/components/ModuleGate';
 
@@ -23,29 +25,30 @@ const FinanceEstimates: React.FC = () => {
 
   return (
     <ModuleGate moduleId="invoice_manager">
-      <div className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div>
-            <h1 className="text-2xl font-bold">Estimates & Quotes</h1>
-            <p className="text-muted-foreground">Create quotes and convert to invoices (CORE-INV-02)</p>
-          </div>
+      <AdminPageShell
+        title="Estimates & Quotes"
+        description="Create quotes and convert to invoices (CORE-INV-02)"
+        eyebrow="Finance"
+        backTo="/admin/finance"
+        backLabel="Finance"
+        actions={
           <Button asChild variant="outline">
             <Link to="/admin/finance">Back to Finance</Link>
           </Button>
-        </div>
-        {loading ? (
+        }
+      >        {loading ? (
           <p>Loading…</p>
         ) : estimates.length === 0 ? (
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>No estimates yet</CardTitle>
               <CardDescription>Estimates you create will appear here.</CardDescription>
             </CardHeader>
-          </Card>
+          </AdminPanel>
         ) : (
           <div className="space-y-3">
             {estimates.map((est) => (
-              <Card key={est.id}>
+              <AdminPanel key={est.id}>
                 <CardContent className="py-4 flex justify-between">
                   <div>
                     <p className="font-medium">{est.number}</p>
@@ -58,11 +61,11 @@ const FinanceEstimates: React.FC = () => {
                     <p className="text-sm capitalize">{est.status}</p>
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))}
           </div>
         )}
-      </div>
+      </AdminPageShell>
     </ModuleGate>
   );
 };

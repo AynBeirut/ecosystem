@@ -6,18 +6,6 @@ import { runPwaCleanupOnce } from './lib/pwaCleanup'
 
 runPwaCleanupOnce();
 
-const CHUNK_RELOAD_GUARD_KEY = 'chunk-reload-attempted';
-
-const reloadOnStaleChunk = () => {
-	if (sessionStorage.getItem(CHUNK_RELOAD_GUARD_KEY) === '1') return;
-	sessionStorage.setItem(CHUNK_RELOAD_GUARD_KEY, '1');
-	window.location.reload();
-};
-
-const isStaleChunkError = (message: string) =>
-	message.includes('Failed to fetch dynamically imported module') ||
-	message.includes('Importing a module script failed');
-
 const NATIVE_BUTTON_COOLDOWN_MS = 1200;
 
 const installNativeButtonClickGuard = () => {
@@ -51,20 +39,6 @@ const installNativeButtonClickGuard = () => {
 		true,
 	);
 };
-
-window.addEventListener('vite:preloadError', (event) => {
-	event.preventDefault();
-	reloadOnStaleChunk();
-});
-
-window.addEventListener('unhandledrejection', (event) => {
-	const reason = event.reason as { message?: string } | undefined;
-	const message = reason?.message ?? '';
-	if (isStaleChunkError(message)) {
-		event.preventDefault();
-		reloadOnStaleChunk();
-	}
-});
 
 installNativeButtonClickGuard();
 

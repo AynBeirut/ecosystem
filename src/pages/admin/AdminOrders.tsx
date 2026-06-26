@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -20,12 +20,13 @@ import { Customer } from '@/types/customer';
 import { StaffMember } from '@/types/staff';
 import { StoreProfile, StoreDeliverySettings, DeliveryPartnerSetting } from '@/types/storeProfile';
 import { FulfillmentLocation } from '@/types/inventory';
-import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign, Edit3 } from 'lucide-react';
+import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign, Edit3, Clock, AlertCircle } from 'lucide-react';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { logAction } from '@/lib/auditLog';
 import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
 import {
@@ -3183,6 +3184,15 @@ const AdminOrders: React.FC = () => {
   const deliveryOptions = getDeliveryOptions();
   const selectedDeliveryOption = deliveryOptions.find((o) => o.value === newOrder.deliveryMethod);
   const filteredOrders = getFilteredOrders();
+  const activeOrderStatuses = ['pending', 'confirmed', 'processing', 'ready'];
+  const activeOrdersCount = orders.filter((o) => activeOrderStatuses.includes(String(o.status || '').toLowerCase())).length;
+  const countedRevenue = orders
+    .filter((o) => isCountedSaleStatus(o.status))
+    .reduce((sum, o) => sum + Number(o.total || 0), 0);
+  const unpaidOrdersCount = orders.filter((o) => {
+    const ps = getNormalizedPaymentStatus(o);
+    return ps === 'unpaid' || ps === 'partial';
+  }).length;
   const selectedEligibleCount = getSelectedShippingOrders().length;
   const refundingOrderMaxAmount = refundingOrder
     ? Math.max(0, Math.round((refundingOrder.amountPaid || 0) * 100) / 100)
@@ -3192,27 +3202,25 @@ const AdminOrders: React.FC = () => {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Sales Orders" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
-            <h1 className="text-2xl font-bold">Sales Orders</h1>
-          </div>
-          <Dialog open={isCreatingOrder || !!editingOrder} onOpenChange={(open) => {
-            if (!open) {
-              setIsCreatingOrder(false);
-              setEditingOrder(null);
-              setNewOrder(getEmptyOrderForm());
-            }
-          }}>
-            <DialogTrigger asChild>
-              <Button onClick={() => setIsCreatingOrder(true)}>
-                <Plus className="mr-2 h-4 w-4" />
-                New Order
-              </Button>
-            </DialogTrigger>
+    <AdminPageShell
+      title="Sales Orders"
+      description="Create and manage customer sales orders"
+      eyebrow="Daily Operations"
+      actions={
+        <Button onClick={() => setIsCreatingOrder(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          New Order
+        </Button>
+      }
+    >
+
+        <Dialog open={isCreatingOrder || !!editingOrder} onOpenChange={(open) => {
+          if (!open) {
+            setIsCreatingOrder(false);
+            setEditingOrder(null);
+            setNewOrder(getEmptyOrderForm());
+          }
+        }}>
             <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>{editingOrder ? 'Edit Order' : 'Create New Order'}</DialogTitle>
@@ -3702,7 +3710,13 @@ const AdminOrders: React.FC = () => {
                 </Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
+        </Dialog>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <AdminStatCard title="Total Orders" value={orders.length} icon={ShoppingCart} gradient="from-orange-400 to-orange-600" subtitle="All sales orders" />
+          <AdminStatCard title="Active" value={activeOrdersCount} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Pending through ready" />
+          <AdminStatCard title="Sales Revenue" value={`$${countedRevenue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Counted sale statuses" />
+          <AdminStatCard title="Unpaid / Partial" value={unpaidOrdersCount} icon={AlertCircle} gradient="from-red-500 to-rose-700" subtitle="Needs payment follow-up" valueClassName={unpaidOrdersCount > 0 ? 'text-red-600' : undefined} />
         </div>
 
         {/* Search + Views */}
@@ -3839,21 +3853,21 @@ const AdminOrders: React.FC = () => {
 
         <div className="grid gap-4">
           {loading ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <p className="text-gray-500">Loading orders...</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : filteredOrders.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No orders yet. Create your first order!</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             filteredOrders.map((order) => (
-              <Card key={order.id}>
+              <AdminPanel key={order.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
@@ -4147,7 +4161,7 @@ const AdminOrders: React.FC = () => {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
@@ -4615,8 +4629,7 @@ const AdminOrders: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

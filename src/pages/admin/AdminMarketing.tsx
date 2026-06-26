@@ -11,9 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Mail, Users, Send, Clock, CheckCircle, AlertCircle, Plus, Trash2, RefreshCw } from 'lucide-react';
 import { toast } from '@/components/ui/sonner';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
@@ -34,7 +33,6 @@ interface Campaign {
 
 const AdminMarketing: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [storeId, setStoreId] = useState<string | null>(null);
 
   // Subscribers state
@@ -204,23 +202,15 @@ const AdminMarketing: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? (
-        <MobileHeader title="Email Marketing" showBackButton />
-      ) : (
-        <div className="bg-white border-b px-6 py-4 flex items-center gap-4">
-          <BackButton to="/admin" />
-          <div>
-            <h1 className="text-xl font-bold">Email Marketing</h1>
-            <p className="text-sm text-gray-500">Manage subscribers and send campaigns</p>
-          </div>
-        </div>
-      )}
-
-      <div className="container mx-auto px-4 py-6 max-w-5xl">
+    <AdminPageShell
+      title="Email Marketing"
+      description="Manage subscribers and send campaigns"
+      eyebrow="Business Tools"
+    >
+      <div className="max-w-5xl">
         {/* Summary cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          <Card>
+          <AdminPanel>
             <CardContent className="pt-4 flex items-center gap-3">
               <Users className="text-blue-500" size={28} />
               <div>
@@ -228,8 +218,8 @@ const AdminMarketing: React.FC = () => {
                 <p className="text-xs text-gray-500">Active Subscribers</p>
               </div>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-4 flex items-center gap-3">
               <Send className="text-green-500" size={28} />
               <div>
@@ -237,8 +227,8 @@ const AdminMarketing: React.FC = () => {
                 <p className="text-xs text-gray-500">Campaigns Sent</p>
               </div>
             </CardContent>
-          </Card>
-          <Card className="col-span-2 md:col-span-1">
+          </AdminPanel>
+          <AdminPanel className="col-span-2 md:col-span-1">
             <CardContent className="pt-4 flex items-center gap-3">
               <Mail className="text-purple-500" size={28} />
               <div>
@@ -248,7 +238,7 @@ const AdminMarketing: React.FC = () => {
                 <p className="text-xs text-gray-500">Total Emails Delivered</p>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
         <Tabs defaultValue="compose">
@@ -260,7 +250,7 @@ const AdminMarketing: React.FC = () => {
 
           {/* ── Compose ── */}
           <TabsContent value="compose">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>New Campaign</CardTitle>
                 <CardDescription>
@@ -327,14 +317,14 @@ const AdminMarketing: React.FC = () => {
                   )}
                 </form>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           {/* ── Subscribers ── */}
           <TabsContent value="subscribers">
             <div className="space-y-4">
               {/* Add manually */}
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="text-base">Add Subscriber</CardTitle>
                 </CardHeader>
@@ -360,10 +350,10 @@ const AdminMarketing: React.FC = () => {
                     </Button>
                   </form>
                 </CardContent>
-              </Card>
+              </AdminPanel>
 
               {/* List */}
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <div className="flex justify-between items-center">
                     <CardTitle className="text-base">
@@ -400,13 +390,13 @@ const AdminMarketing: React.FC = () => {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             </div>
           </TabsContent>
 
           {/* ── History ── */}
           <TabsContent value="history">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <div className="flex justify-between items-center">
                   <CardTitle className="text-base">Campaign History</CardTitle>
@@ -448,11 +438,11 @@ const AdminMarketing: React.FC = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
         </Tabs>
       </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

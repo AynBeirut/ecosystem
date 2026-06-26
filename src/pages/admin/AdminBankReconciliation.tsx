@@ -2,9 +2,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { addDoc, collection, getDocs, getFirestore, query, serverTimestamp, where } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { isCountedSaleStatus } from '@/lib/salesRules';
 import { Order } from '@/types/order';
 import { CashCollectionRecord } from '@/types/financial';
@@ -23,8 +22,6 @@ type EligibleOrder = {
 const AdminBankReconciliation: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
-
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [orders, setOrders] = useState<OrderWithId[]>([]);
@@ -327,16 +324,10 @@ const AdminBankReconciliation: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Cash Collection" />}
-      <div className="container mx-auto p-4 space-y-6">
-        {!isMobile && <BackButton to="/admin/dashboard" label="Back to Dashboard" />}
-
-        <div>
-          <h1 className="text-2xl font-bold">Cash Collection</h1>
-          <p className="text-sm text-gray-600">Record bank deposits from cash orders in 3 steps: pick orders, add deposit details, then save.</p>
-        </div>
-
+    <AdminPageShell
+      title="Cash Collection"
+      description="Record bank deposits from cash orders in 3 steps: pick orders, add deposit details, then save."
+    >
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
           <div className="bg-white border rounded p-4">
             <div className="text-sm text-gray-600">Cash Received</div>
@@ -587,8 +578,7 @@ const AdminBankReconciliation: React.FC = () => {
             </>
           )}
         </div>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { DollarSign, Plus, Edit2, Trash2, Calendar, TrendingUp, AlertCircle, FileText } from 'lucide-react';
@@ -14,9 +14,9 @@ import { useToast } from '@/hooks/use-toast';
 import { Expense, ExpenseCategory } from '@/types/financial';
 import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 
@@ -183,7 +183,6 @@ const ExpenseForm = ({ expense, onChange, isEdit = false }: {
 const AdminExpenses: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
   const [isAddingExpense, setIsAddingExpense] = useState(false);
@@ -208,24 +207,33 @@ const AdminExpenses: React.FC = () => {
       if (!user?.storeId) return;
       const db = getFirestore();
       
-      // Fetch store profile
-      const profileRef = doc(db, 'storeProfiles', user.storeId);
-      const profileSnap = await getDoc(profileRef);
-      if (profileSnap.exists()) {
-        setStoreProfile(profileSnap.data() as StoreProfile);
+      try {
+        // Fetch store profile
+        const profileRef = doc(db, 'storeProfiles', user.storeId);
+        const profileSnap = await getDoc(profileRef);
+        if (profileSnap.exists()) {
+          setStoreProfile(profileSnap.data() as StoreProfile);
+        }
+        
+        const expensesRef = collection(db, 'expenses');
+        const q = query(expensesRef, where('storeId', '==', user.storeId));
+        const snapshot = await getDocs(q);
+        const expensesList: Expense[] = snapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        } as Expense));
+        setExpenses(expensesList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+      } catch (error) {
+        console.error('Error fetching expenses:', error);
+        toast({
+          title: 'Could not load expenses',
+          description: error instanceof Error ? error.message : 'Permission or network error',
+          variant: 'destructive',
+        });
       }
-      
-      const expensesRef = collection(db, 'expenses');
-      const q = query(expensesRef, where('storeId', '==', user.storeId));
-      const snapshot = await getDocs(q);
-      const expensesList: Expense[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Expense));
-      setExpenses(expensesList.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime()));
     };
     fetchExpenses();
-  }, [user?.storeId]);
+  }, [user?.storeId, toast]);
 
   // Generate expense report number
   const generateExpenseNumber = async (): Promise<string> => {
@@ -1054,95 +1062,53 @@ const AdminExpenses: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Expense Tracking" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-            <h1 className="text-2xl font-bold">Expense Tracking</h1>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-48"
+    <AdminPageShell
+      title="Expense Tracking"
+      description="Record and monitor business expenses"
+      eyebrow="Finance"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+      actions={(
+        <>
+          <Input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-48"
+          />
+          <Button onClick={() => setIsAddingExpense(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Button>
+        </>
+      )}
+    >
+        <Dialog open={isAddingExpense} onOpenChange={setIsAddingExpense}>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>Add Expense</DialogTitle>
+              <DialogDescription>Record a new business expense</DialogDescription>
+            </DialogHeader>
+            <ExpenseForm
+              expense={newExpense}
+              onChange={(updates) => setNewExpense({ ...newExpense, ...updates })}
             />
-            <Dialog open={isAddingExpense} onOpenChange={setIsAddingExpense}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Expense
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="max-w-2xl">
-                <DialogHeader>
-                  <DialogTitle>Add Expense</DialogTitle>
-                  <DialogDescription>Record a new business expense</DialogDescription>
-                </DialogHeader>
-                <ExpenseForm
-                  expense={newExpense}
-                  onChange={(updates) => setNewExpense({ ...newExpense, ...updates })}
-                />
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddingExpense(false)}>Cancel</Button>
-                  <Button onClick={handleAddExpense}>Add Expense</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
-          </div>
-        </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setIsAddingExpense(false)}>Cancel</Button>
+              <Button onClick={handleAddExpense}>Add Expense</Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">${totalExpenses.toFixed(2)}</div>
-                  <p className="text-xs text-gray-500">Total Expenses</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <Calendar className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">{filteredExpenses.length}</div>
-                  <p className="text-xs text-gray-500">Transactions</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">{recurringExpenses.length}</div>
-                  <p className="text-xs text-gray-500">Recurring</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <AlertCircle className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">{categoryBreakdown.length}</div>
-                  <p className="text-xs text-gray-500">Categories Used</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+          <AdminStatCard title="Total Expenses" value={`$${totalExpenses.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" />
+          <AdminStatCard title="Transactions" value={filteredExpenses.length} icon={Calendar} gradient="from-sky-500 to-blue-700" />
+          <AdminStatCard title="Recurring" value={recurringExpenses.length} icon={TrendingUp} gradient="from-emerald-500 to-teal-700" />
+          <AdminStatCard title="Categories" value={categoryBreakdown.length} icon={AlertCircle} gradient="from-violet-500 to-purple-700" />
         </div>
 
         {categoryBreakdown.length > 0 && (
-          <Card className="mb-6">
+          <AdminPanel className="mb-6">
             <CardHeader>
               <CardTitle>Category Breakdown</CardTitle>
             </CardHeader>
@@ -1159,7 +1125,7 @@ const AdminExpenses: React.FC = () => {
                 ))}
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
 
         <div className="mb-4">
@@ -1180,15 +1146,15 @@ const AdminExpenses: React.FC = () => {
 
         <div className="grid gap-4">
           {filteredExpenses.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <DollarSign className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No expenses recorded for this period.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             filteredExpenses.map((expense) => (
-              <Card key={expense.id}>
+              <AdminPanel key={expense.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -1234,7 +1200,7 @@ const AdminExpenses: React.FC = () => {
                     <p className="text-sm text-gray-600">{expense.notes}</p>
                   </CardContent>
                 )}
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
@@ -1258,8 +1224,8 @@ const AdminExpenses: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+
+    </AdminPageShell>
   );
 };
 

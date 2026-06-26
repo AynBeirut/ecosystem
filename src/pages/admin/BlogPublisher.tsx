@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { getFirestore, collection, doc, addDoc, updateDoc, deleteDoc, onSnapshot, query, orderBy, serverTimestamp } from 'firebase/firestore';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -11,7 +13,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import ModuleGate from '@/components/ModuleGate';
-import BackButton from '@/components/BackButton';
 import { Plus, Pencil, Trash2, Globe, EyeOff } from 'lucide-react';
 
 type PostVisibility = 'public' | 'subscribers';
@@ -152,25 +153,22 @@ const BlogPublisher: React.FC = () => {
 
   return (
     <ModuleGate moduleId="blog_publisher">
-      <div className="container mx-auto px-4 py-8 max-w-4xl space-y-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <BackButton />
-            <h1 className="text-2xl font-bold mt-2 flex items-center gap-2">
-              📰 Blog Publisher
-            </h1>
-            <p className="text-muted-foreground text-sm mt-1">
-              Write and publish articles visible on your public store page.
-            </p>
-          </div>
+      <AdminPageShell
+        title="Blog Publisher"
+        description="Write and publish articles visible on your public store page."
+        eyebrow="Content"
+        backTo="/admin/dashboard"
+        className="max-w-4xl"
+        actions={(
           <Button onClick={openNew} className="gap-2">
             <Plus className="h-4 w-4" /> New Post
           </Button>
-        </div>
+        )}
+      >
 
         {/* Post form */}
         {showForm && (
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>{editingId ? 'Edit Post' : 'New Post'}</CardTitle>
             </CardHeader>
@@ -225,22 +223,22 @@ const BlogPublisher: React.FC = () => {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
 
         {/* Post list */}
         {loading ? (
           <p className="text-muted-foreground">Loading posts…</p>
         ) : posts.length === 0 ? (
-          <Card>
+          <AdminPanel>
             <CardContent className="py-12 text-center">
               <p className="text-muted-foreground">No posts yet. Create your first article!</p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         ) : (
           <div className="space-y-3">
             {posts.map(post => (
-              <Card key={post.id}>
+              <AdminPanel key={post.id}>
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between gap-3">
                     <div className="flex-1 min-w-0">
@@ -281,11 +279,11 @@ const BlogPublisher: React.FC = () => {
                     )}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))}
           </div>
         )}
-      </div>
+      </AdminPageShell>
     </ModuleGate>
   );
 };

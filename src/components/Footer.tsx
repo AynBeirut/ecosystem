@@ -12,6 +12,12 @@ const PUBLIC_MARKETING_PATHS = new Set([
   '/onboarding/package',
 ]);
 
+const ADMIN_SHELL_PREFIXES = ['/admin', '/team/dashboard'];
+
+function isAdminShellPath(pathname: string) {
+  return pathname === '/subscription' || ADMIN_SHELL_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
+
 const Footer: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -22,7 +28,7 @@ const Footer: React.FC = () => {
     PUBLIC_MARKETING_PATHS.has(location.pathname) ||
     location.pathname.startsWith('/blog/');
 
-  if (isPublicMarketing) return null;
+  if (isPublicMarketing || isAdminShellPath(location.pathname)) return null;
 
   return (
     <footer className="w-full bg-gray-100 border-t py-4 mt-8 flex flex-col items-center gap-2">

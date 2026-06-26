@@ -1,15 +1,27 @@
-// Supplier Credit management page skeleton
 import React from 'react';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const AdminSupplierCredits: React.FC = () => {
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Supplier Credits</h1>
-      {/* List of credits, apply credit to PO, expiry tracking, reconciliation */}
-      <div>
-        <p>Manage supplier credits and apply them to purchase orders.</p>
-      </div>
-    </div>
+    <AdminPageShell
+      title="Supplier Credits"
+      description="Manage supplier credits and apply them to purchase orders."
+      eyebrow="Inventory"
+      backTo="/admin/suppliers"
+      backLabel="Suppliers"
+    >
+      <AdminPanel>
+        <CardHeader>
+          <CardTitle>Coming soon</CardTitle>
+          <CardDescription>List credits, apply to PO, expiry tracking, and reconciliation.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Supplier credit management will appear here.</p>
+        </CardContent>
+      </AdminPanel>
+    </AdminPageShell>
   );
 };
 

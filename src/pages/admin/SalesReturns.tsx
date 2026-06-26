@@ -16,14 +16,12 @@ import { useToast } from '@/hooks/use-toast';
 import { Order, PaymentRecord } from '@/types/order';
 import { SalesReturn, SalesReturnItem } from '@/types/salesReturns';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const SalesReturns: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   
   const [returns, setReturns] = useState<SalesReturn[]>([]);
   const [allOrders, setAllOrders] = useState<(Order & { id: string })[]>([]);
@@ -463,21 +461,19 @@ const SalesReturns: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {isMobile ? <MobileHeader title="Sales Returns" /> : null}
-      
-      <main className="container mx-auto p-4 md:p-6 max-w-7xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-          {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-          <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Sales Returns & Refunds</h1>
-            <p className="text-gray-500 mt-1 text-sm md:text-base">Process customer returns and issue refunds</p>
-          </div>
-          <Button onClick={() => setIsCreatingReturn(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Return
-          </Button>
-        </div>
+    <AdminPageShell
+      title="Sales Returns & Refunds"
+      description="Process customer returns and issue refunds"
+      eyebrow="Daily Operations"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+      actions={(
+        <Button onClick={() => setIsCreatingReturn(true)} className="w-full sm:w-auto">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Return
+        </Button>
+      )}
+    >
 
         {/* Create Return Dialog */}
         <Dialog
@@ -516,7 +512,7 @@ const SalesReturns: React.FC = () => {
                     <Label className="text-base md:text-lg font-semibold">Items to Return</Label>
                     <div className="space-y-3 mt-2">
                       {newReturn.items.map((item, index) => (
-                        <Card key={index}>
+                        <AdminPanel key={index}>
                           <CardContent className="p-3 md:p-4">
                             <div className="space-y-3">
                               <div>
@@ -556,7 +552,7 @@ const SalesReturns: React.FC = () => {
                               </div>
                             </div>
                           </CardContent>
-                        </Card>
+                        </AdminPanel>
                       ))}
                     </div>
                   </div>
@@ -668,7 +664,7 @@ const SalesReturns: React.FC = () => {
             {paymentRefunds.map(({ order, payment }) => {
               const inventoryNote = getPaymentRefundInventoryNote(order, payment);
               return (
-                <Card key={`${order.id}-${payment.id}`}>
+                <AdminPanel key={`${order.id}-${payment.id}`}>
                   <CardHeader className="pb-2">
                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                       <div>
@@ -707,7 +703,7 @@ const SalesReturns: React.FC = () => {
                       </p>
                     ) : null}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })}
           </div>
@@ -717,7 +713,7 @@ const SalesReturns: React.FC = () => {
         <div className="grid gap-4">
           <h2 className="text-lg font-semibold text-gray-900">Physical sales returns</h2>
           {returns.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <RotateCcw className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">
@@ -726,10 +722,10 @@ const SalesReturns: React.FC = () => {
                     : 'No sales returns yet. Create your first return to get started.'}
                 </p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             returns.map((returnDoc) => (
-              <Card key={returnDoc.id}>
+              <AdminPanel key={returnDoc.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
@@ -785,12 +781,11 @@ const SalesReturns: React.FC = () => {
                     )}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

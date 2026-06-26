@@ -15,14 +15,12 @@ import { StoreProfile } from '@/types/storeProfile';
 import { logAction } from '@/lib/auditLog';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 import { getActualStoreId } from '@/lib/storeUtils';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const AdminRecipes: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
@@ -67,10 +65,14 @@ const AdminRecipes: React.FC = () => {
       const recipesRef = collection(db, 'recipes');
       const recipesQuery = query(recipesRef, where('storeId', '==', user.storeId));
       const recipesSnapshot = await getDocs(recipesQuery);
-      const recipesList: Recipe[] = recipesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Recipe));
+      const recipesList: Recipe[] = recipesSnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+          id: doc.id,
+          ...data,
+          ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
+        } as Recipe;
+      });
       setRecipes(recipesList);
 
       // Fetch raw materials for ingredient selection
@@ -86,8 +88,8 @@ const AdminRecipes: React.FC = () => {
     fetchData();
   }, [user?.storeId]);
 
-  const calculateRecipeCost = (ingredients: RecipeIngredient[]): number => {
-    return ingredients.reduce((total, ing) => {
+  const calculateRecipeCost = (ingredients?: RecipeIngredient[]): number => {
+    return (ingredients ?? []).reduce((total, ing) => {
       const material = rawMaterials.find(m => m.id === ing.rawMaterialId);
       if (!material) return total;
       return total + (ing.quantity * (material.costPerUnit || 0));
@@ -414,21 +416,20 @@ const AdminRecipes: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Recipes" showBackButton={true} /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-            <h1 className="text-2xl font-bold">Recipes</h1>
-          </div>
-          <Dialog open={isAddingRecipe} onOpenChange={setIsAddingRecipe}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Recipe
-              </Button>
-            </DialogTrigger>
+    <AdminPageShell
+      title="Recipes"
+      description="Manage your product recipes and their raw material composition"
+      eyebrow="Inventory"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+      actions={
+        <Dialog open={isAddingRecipe} onOpenChange={setIsAddingRecipe}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Create Recipe
+            </Button>
+          </DialogTrigger>
             <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Recipe</DialogTitle>
@@ -661,20 +662,21 @@ const AdminRecipes: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+      }
+    >
 
         {/* Recipes List */}
         <div className="grid gap-4">
           {recipes.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <ChefHat className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No recipes yet. Create your first recipe to get started.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             recipes.map((recipe) => (
-              <Card key={recipe.id}>
+              <AdminPanel key={recipe.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
@@ -741,7 +743,7 @@ const AdminRecipes: React.FC = () => {
                     </ul>
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
@@ -981,8 +983,7 @@ const AdminRecipes: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

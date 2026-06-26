@@ -2,7 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { 
   ShoppingCart, 
@@ -13,13 +16,10 @@ import {
   Clock
 } from 'lucide-react';
 import { getFirestore, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
-import MobileHeader from '@/components/MobileHeader';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 const SubAccountDashboard: React.FC = () => {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const [stats, setStats] = useState({
     myOrders: 0,
     pendingOrders: 0,
@@ -118,83 +118,36 @@ const SubAccountDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="Dashboard" showBackButton={false} />}
-      
-      <div className="container mx-auto px-4 py-8">
-        {/* Header */}
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h1 className="text-3xl font-bold">Welcome, {user.name}!</h1>
-            <div className="flex items-center gap-2 mt-2">
-              <Badge className={getRoleColor()}>
-                {getRoleDisplay()}
-              </Badge>
-              <span className="text-sm text-gray-500">Team Member Dashboard</span>
-            </div>
-          </div>
-          <Button variant="outline" onClick={logout}>
-            Logout
-          </Button>
+    <AdminPageShell
+      title={`Welcome, ${user.name}!`}
+      description="Team member dashboard"
+      eyebrow={getRoleDisplay()}
+      actions={(
+        <Button variant="outline" onClick={logout}>Logout</Button>
+      )}
+    >
+        <div className="flex items-center gap-2 mb-2">
+          <Badge className={getRoleColor()}>{getRoleDisplay()}</Badge>
         </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           {user.subAccountRole === 'sales' && (
             <>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">My Orders</CardTitle>
-                  <ShoppingCart className="h-4 w-4 text-gray-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.myOrders}</div>
-                  <p className="text-xs text-gray-500">Total orders created</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Pending</CardTitle>
-                  <Clock className="h-4 w-4 text-yellow-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.pendingOrders}</div>
-                  <p className="text-xs text-gray-500">Awaiting confirmation</p>
-                </CardContent>
-              </Card>
+              <AdminStatCard title="My Orders" value={stats.myOrders} icon={ShoppingCart} gradient="from-orange-400 to-orange-600" subtitle="Total orders created" />
+              <AdminStatCard title="Pending" value={stats.pendingOrders} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Awaiting confirmation" />
             </>
           )}
 
           {user.subAccountRole === 'delivery' && (
             <>
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Ready for Delivery</CardTitle>
-                  <Truck className="h-4 w-4 text-blue-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.deliveriesToday}</div>
-                  <p className="text-xs text-gray-500">Orders to deliver</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between pb-2">
-                  <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-green-500" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stats.completedToday}</div>
-                  <p className="text-xs text-gray-500">Deliveries made</p>
-                </CardContent>
-              </Card>
+              <AdminStatCard title="Ready for Delivery" value={stats.deliveriesToday} icon={Truck} gradient="from-sky-500 to-blue-700" subtitle="Orders to deliver" />
+              <AdminStatCard title="Completed Today" value={stats.completedToday} icon={CheckCircle} gradient="from-emerald-500 to-teal-700" subtitle="Deliveries made" />
             </>
           )}
         </div>
 
         {/* Quick Actions */}
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle>Quick Actions</CardTitle>
             <CardDescription>Access your main tasks</CardDescription>
@@ -246,10 +199,10 @@ const SubAccountDashboard: React.FC = () => {
               )}
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {/* Permissions Info */}
-        <Card className="mt-6">
+        <AdminPanel className="mt-6">
           <CardHeader>
             <CardTitle>Your Permissions</CardTitle>
             <CardDescription>What you can do in the system</CardDescription>
@@ -279,9 +232,8 @@ const SubAccountDashboard: React.FC = () => {
               })}
             </div>
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </AdminPanel>
+    </AdminPageShell>
   );
 };
 

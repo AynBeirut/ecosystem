@@ -2,14 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Download, FileDown } from 'lucide-react';
+import { Download, FileDown, DollarSign, TrendingUp, Package, Percent } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus, isDateInRange, resolveOrderItemProductKey } from '@/lib/salesRules';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const cleanTextForPDF = (text: string): string => text.replace(/[^\u0020-\u007E]/g, '?');
 
@@ -26,7 +26,6 @@ interface ProductRevenue {
 
 const AdminRevenue: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [productRevenues, setProductRevenues] = useState<ProductRevenue[]>([]);
   const [quarantinedOrdersCount, setQuarantinedOrdersCount] = useState(0);
@@ -271,7 +270,7 @@ const AdminRevenue: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="text-lg">Loading revenue data...</div>
         </div>
@@ -280,57 +279,20 @@ const AdminRevenue: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="Revenue & Profit" showBackButton={true} />}
-      <div className="container mx-auto p-4 md:p-6">
-        <div className="mb-4 md:mb-6">
-          {!isMobile && <BackButton to="/admin/dashboard" label="Back to Dashboard" />}
+    <AdminPageShell
+      title="Revenue & Profit Report"
+      description="Product-level profitability analysis"
+      eyebrow="Business Tools"
+    >
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <AdminStatCard title="Total Revenue" value={`$${totalRevenue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Filtered period" />
+          <AdminStatCard title="Total Cost" value={`$${totalCost.toFixed(2)}`} icon={Package} gradient="from-violet-500 to-purple-700" subtitle="Cost of goods sold" />
+          <AdminStatCard title="Total Profit" value={`$${totalProfit.toFixed(2)}`} icon={TrendingUp} gradient="from-emerald-500 to-teal-700" subtitle="Revenue minus cost" valueClassName={totalProfit >= 0 ? 'text-emerald-700' : 'text-red-600'} />
+          <AdminStatCard title="Avg Margin" value={`${avgMargin.toFixed(1)}%`} icon={Percent} gradient="from-sky-500 to-blue-700" subtitle="Profit / revenue" valueClassName={avgMargin >= 0 ? 'text-emerald-700' : 'text-red-600'} />
         </div>
 
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Revenue & Profit Report</h1>
-            <p className="text-gray-600 text-sm md:text-base mt-1">Product-level profitability analysis</p>
-            {quarantinedOrdersCount > 0 && (
-              <p className="text-orange-600 text-sm mt-1">
-                Quarantined invalid orders: {quarantinedOrdersCount}
-              </p>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Total Revenue</CardDescription>
-              <CardTitle className="text-2xl">${totalRevenue.toFixed(2)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Total Cost</CardDescription>
-              <CardTitle className="text-2xl">${totalCost.toFixed(2)}</CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Total Profit</CardDescription>
-              <CardTitle className={`text-2xl ${totalProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                ${totalProfit.toFixed(2)}
-              </CardTitle>
-            </CardHeader>
-          </Card>
-          <Card>
-            <CardHeader className="pb-3">
-              <CardDescription>Avg Profit Margin</CardDescription>
-              <CardTitle className={`text-2xl ${avgMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-                {avgMargin.toFixed(1)}%
-              </CardTitle>
-            </CardHeader>
-          </Card>
-        </div>
-
-        <Card className="mb-6">
+        <AdminPanel className="mb-6">
           <CardContent className="pt-6">
             <div className="flex flex-wrap gap-4 items-end">
               <div className="flex-1 min-w-[150px]">
@@ -406,9 +368,9 @@ const AdminRevenue: React.FC = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle>Product Revenue & Profit</CardTitle>
             <CardDescription>Detailed profit analysis for each product</CardDescription>
@@ -460,9 +422,8 @@ const AdminRevenue: React.FC = () => {
               </table>
             </div>
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </AdminPanel>
+    </AdminPageShell>
   );
 };
 

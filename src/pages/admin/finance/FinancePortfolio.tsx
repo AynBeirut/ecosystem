@@ -1,17 +1,22 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import ModuleGate from '@/components/ModuleGate';
 
 const FinancePortfolio: React.FC = () => (
   <ModuleGate moduleId="invoice_manager">
-    <div className="container mx-auto px-4 py-8 max-w-2xl">
-      <h1 className="text-2xl font-bold mb-2">Portfolio PDF</h1>
-      <p className="text-muted-foreground mb-6">
-        Static PDF export of client billing history (INV-02). No Web Builder — export only.
-      </p>
-      <Card>
+    <AdminPageShell
+      title="Portfolio PDF"
+      description="Static PDF export of client billing history (INV-02). No Web Builder — export only."
+      eyebrow="Finance"
+      backTo="/admin/finance"
+      backLabel="Finance"
+      className="max-w-2xl"
+    >
+      <AdminPanel>
         <CardHeader>
           <CardTitle>Generate portfolio</CardTitle>
           <CardDescription>
@@ -26,8 +31,8 @@ const FinancePortfolio: React.FC = () => (
             <Link to="/admin/finance">Back to Finance</Link>
           </Button>
         </CardContent>
-      </Card>
-    </div>
+      </AdminPanel>
+    </AdminPageShell>
   </ModuleGate>
 );
 

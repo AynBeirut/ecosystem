@@ -2,9 +2,8 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { getFirestore, collection, query, where, getDocs, doc, updateDoc, arrayUnion } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
-import BackButton from '@/components/BackButton';
-import MobileHeader from '@/components/MobileHeader';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { useToast } from '@/hooks/use-toast';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,7 +27,6 @@ type ChargeFilter = 'all' | 'pending' | 'overdue' | 'paid' | 'failed';
 const AdminServiceRenewals: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [charges, setCharges] = useState<RenewalCharge[]>([]);
   const [loading, setLoading] = useState(true);
   const [processingId, setProcessingId] = useState<string | null>(null);
@@ -250,37 +248,34 @@ const AdminServiceRenewals: React.FC = () => {
   }, [charges, activeFilter]);
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Service Renewals" />}
-
-      <div className="p-4 md:p-6">
-        <BackButton to="/admin/dashboard" label="Back to Dashboard" />
-
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold">Service Renewals</h1>
-          <p className="text-muted-foreground">Manage recurring service renewal charges and reactivate subscriptions after payment.</p>
-        </div>
+    <AdminPageShell
+      title="Service Renewals"
+      description="Manage recurring service renewal charges and reactivate subscriptions after payment"
+      eyebrow="Business Tools"
+      backTo="/admin/dashboard"
+      backLabel="Dashboard"
+    >
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
+          <AdminPanel>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Total Charges</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold">{summary.total}</div></CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Pending</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold text-orange-600">{summary.pending}</div></CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Pending Amount</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold">${summary.pendingAmount.toFixed(2)}</div></CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardHeader className="pb-2"><CardTitle className="text-sm">Overdue</CardTitle></CardHeader>
             <CardContent><div className="text-2xl font-bold text-red-600">{summary.overdueCount}</div></CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle>Renewal Charges</CardTitle>
           </CardHeader>
@@ -363,9 +358,8 @@ const AdminServiceRenewals: React.FC = () => {
               </div>
             )}
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </AdminPanel>
+    </AdminPageShell>
   );
 };
 

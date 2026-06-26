@@ -15,8 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { ProductionBatch, ProductionBatchStatus, ComposedProduct, RawMaterial, Recipe } from '@/types/inventory';
 import { FinishedGoodsItem } from '@/types/finishedGoods';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
@@ -1232,21 +1232,20 @@ const AdminProduction: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Production Planning" showBackButton={true} /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-            <h1 className="text-2xl font-bold">Production Planning</h1>
-          </div>
-          <Dialog open={isAddingBatch} onOpenChange={setIsAddingBatch}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Schedule Production
-              </Button>
-            </DialogTrigger>
+    <AdminPageShell
+      title="Production Planning"
+      description="Schedule and track production batches"
+      eyebrow="Daily Operations"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+      actions={
+        <Dialog open={isAddingBatch} onOpenChange={setIsAddingBatch}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Schedule Production
+            </Button>
+          </DialogTrigger>
             <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Schedule Production Batch</DialogTitle>
@@ -1263,10 +1262,11 @@ const AdminProduction: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+      }
+    >
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
                 <Clock className="h-5 w-5 text-blue-500" />
@@ -1276,8 +1276,8 @@ const AdminProduction: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
                 <Factory className="h-5 w-5 text-yellow-500" />
@@ -1287,8 +1287,8 @@ const AdminProduction: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
                 <CheckCircle className="h-5 w-5 text-green-500" />
@@ -1298,8 +1298,8 @@ const AdminProduction: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="flex items-center gap-2">
                 <Package className="h-5 w-5 text-purple-500" />
@@ -1309,16 +1309,16 @@ const AdminProduction: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
         {PRODUCTION_COMPLETION_LOCKDOWN && (
-          <Card className="mb-4 border-red-300 bg-red-50">
+          <AdminPanel className="mb-4 border-red-300 bg-red-50">
             <CardContent className="pt-4">
               <p className="text-sm font-medium text-red-700">⚠️ Production completion is temporarily disabled.</p>
               <p className="text-xs text-red-600 mt-1">{PRODUCTION_COMPLETION_LOCKDOWN_REASON}</p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
 
         <div className="mb-4 flex gap-4 flex-wrap">
@@ -1392,18 +1392,18 @@ const AdminProduction: React.FC = () => {
 
         <div className="grid gap-4">
           {filteredBatches.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <Factory className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No production batches scheduled.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             filteredBatches.map((batch) => {
               const statusConfig = STATUS_CONFIG[batch.status];
               const Icon = statusConfig.icon;
               return (
-                <Card key={batch.id}>
+                <AdminPanel key={batch.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -1492,7 +1492,7 @@ const AdminProduction: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
@@ -1568,8 +1568,7 @@ const AdminProduction: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

@@ -312,7 +312,7 @@ const AdminSupplierReturns: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="space-y-6">
       {isMobile ? <MobileHeader title="Supplier Returns" /> : null}
       <main className="container mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-6">
@@ -513,12 +513,12 @@ const AdminSupplierReturns: React.FC = () => {
         {/* Supplier Returns List */}
         <div className="grid gap-4">
           {supplierReturns.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <PackageX className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No supplier returns yet.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             supplierReturns.map((sra) => {
               const supplier = suppliers.find(s => s.id === sra.supplierId);
@@ -528,7 +528,7 @@ const AdminSupplierReturns: React.FC = () => {
               const reasonValue = (sra.reason || sra.returnReason) as string | undefined;
 
               return (
-                <Card key={sra.id}>
+                <AdminPanel key={sra.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
@@ -643,11 +643,12 @@ const AdminSupplierReturns: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
         </div>
+
       </main>
     </div>
   );

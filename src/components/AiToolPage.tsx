@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { getAuth } from 'firebase/auth';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
@@ -105,22 +107,22 @@ const AiToolPage: React.FC<Props> = ({ config }) => {
 
   return (
     <ModuleGate moduleId={config.moduleId}>
-      <div className="container mx-auto px-4 py-8 max-w-3xl">
-        {/* Header */}
-        <div className="flex items-center gap-3 mb-6">
-          <span className="text-3xl">{config.icon}</span>
-          <div>
-            <h1 className="text-2xl font-bold">{config.title}</h1>
-            <p className="text-muted-foreground text-sm">{config.description}</p>
-          </div>
-          <div className="ml-auto text-right">
+      <AdminPageShell
+        title={config.title}
+        description={config.description}
+        eyebrow="AI Tools"
+        backTo="/admin/ai-builder"
+        backLabel="AI Builder"
+        className="max-w-3xl"
+        actions={
+          <div className="text-right">
             <p className="text-xs text-muted-foreground">Credits</p>
             <p className="text-xl font-bold">{balance}</p>
           </div>
-        </div>
-
+        }
+      >
         {!isAiConfigured && (
-          <Card className="mb-6 border-amber-200 bg-amber-50">
+          <AdminPanel className="mb-6 border-amber-200 bg-amber-50">
             <CardContent className="pt-4 pb-4">
               <p className="text-sm text-amber-800">
                 AI integration not configured.{' '}
@@ -130,11 +132,11 @@ const AiToolPage: React.FC<Props> = ({ config }) => {
                 first.
               </p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
 
         {balance === 0 && (
-          <Card className="mb-6 border-red-200 bg-red-50">
+          <AdminPanel className="mb-6 border-red-200 bg-red-50">
             <CardContent className="pt-4 pb-4">
               <p className="text-sm text-red-800">
                 No credits remaining.{' '}
@@ -144,11 +146,11 @@ const AiToolPage: React.FC<Props> = ({ config }) => {
                 to continue.
               </p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
 
         {/* Input form */}
-        <Card className="mb-6">
+        <AdminPanel className="mb-6">
           <CardHeader>
             <CardTitle>Input</CardTitle>
             <CardDescription>Fill in the details below and hit Generate.</CardDescription>
@@ -198,11 +200,11 @@ const AiToolPage: React.FC<Props> = ({ config }) => {
               {loading ? 'Generating…' : `Generate ${config.title}`}
             </Button>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {/* Output */}
         {output && (
-          <Card>
+          <AdminPanel>
             <CardHeader className="flex flex-row items-center justify-between pb-2">
               <CardTitle className="text-base">{config.outputLabel ?? 'Result'}</CardTitle>
               <div className="flex items-center gap-2">
@@ -213,9 +215,9 @@ const AiToolPage: React.FC<Props> = ({ config }) => {
             <CardContent>
               <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">{output}</pre>
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
-      </div>
+      </AdminPageShell>
     </ModuleGate>
   );
 };

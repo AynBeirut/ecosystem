@@ -8,9 +8,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { BarChart3, TrendingUp, TrendingDown, DollarSign, ShoppingCart, Users, Package, AlertTriangle, Download, FileText } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Expense } from '@/types/financial';
 import { Purchase } from '@/types/inventory';
 import { RawMaterial } from '@/types/material';
@@ -22,7 +22,6 @@ import { exportToCSV, exportToPDF } from '@/lib/exportUtils';
 
 const AdminReports: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [dateRange, setDateRange] = useState({
     startDate: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0],
     endDate: new Date().toISOString().split('T')[0],
@@ -181,32 +180,6 @@ const AdminReports: React.FC = () => {
       return acc;
     }, {} as Record<string, number>);
 
-  const StatCard = ({ title, value, icon: Icon, trend, color = 'text-gray-600' }: {
-    title: string;
-    value: string | number;
-    icon: any;
-    trend?: { value: number; isPositive: boolean };
-    color?: string;
-  }) => (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-start justify-between">
-          <div>
-            <p className="text-sm text-gray-500 mb-1">{title}</p>
-            <div className={`text-2xl font-bold ${color}`}>{value}</div>
-            {trend && (
-              <div className={`flex items-center mt-2 text-sm ${trend.isPositive ? 'text-green-600' : 'text-red-600'}`}>
-                {trend.isPositive ? <TrendingUp className="h-4 w-4 mr-1" /> : <TrendingDown className="h-4 w-4 mr-1" />}
-                {Math.abs(trend.value)}%
-              </div>
-            )}
-          </div>
-          <Icon className={`h-8 w-8 ${color} opacity-50`} />
-        </div>
-      </CardContent>
-    </Card>
-  );
-
   const handleExportExpenses = () => {
     const filteredExpenses = expenses.filter(e => filterByDateRange(e.date));
     const exportData = filteredExpenses.map(e => ({
@@ -268,23 +241,19 @@ const AdminReports: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Reports & Analytics" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
-            <h1 className="text-2xl font-bold">Reports & Analytics</h1>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleExportFinancialSummary}>
-              <Download className="mr-2 h-4 w-4" />
-              Export Summary
-            </Button>
-          </div>
-        </div>
-
-        <Card className="mb-6">
+    <AdminPageShell
+      title="Reports & Analytics"
+      description="Financial, inventory, and production insights for your store"
+      eyebrow="Business Tools"
+      backTo="/admin/dashboard"
+      actions={(
+        <Button variant="outline" onClick={handleExportFinancialSummary}>
+          <Download className="mr-2 h-4 w-4" />
+          Export Summary
+        </Button>
+      )}
+    >
+        <AdminPanel className="mb-6">
           <CardHeader>
             <CardTitle>Report Settings</CardTitle>
             <CardDescription>Configure date range and report type</CardDescription>
@@ -324,7 +293,7 @@ const AdminReports: React.FC = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         <Tabs defaultValue="overview" className="space-y-6">
           <TabsList className="grid w-full grid-cols-5">
@@ -337,34 +306,38 @@ const AdminReports: React.FC = () => {
 
           <TabsContent value="overview" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <StatCard
+              <AdminStatCard
                 title="Total Costs"
                 value={`$${totalCosts.toFixed(2)}`}
                 icon={DollarSign}
-                color="text-red-600"
+                gradient="from-red-500 to-rose-700"
+                valueClassName="text-red-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Inventory Value"
                 value={`$${totalInventoryValue.toFixed(2)}`}
                 icon={Package}
-                color="text-blue-600"
+                gradient="from-sky-500 to-blue-700"
+                valueClassName="text-blue-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Active Customers"
                 value={activeCustomers}
                 icon={Users}
-                color="text-green-600"
+                gradient="from-emerald-500 to-teal-700"
+                valueClassName="text-green-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Production Units"
                 value={totalProduction}
                 icon={BarChart3}
-                color="text-purple-600"
+                gradient="from-violet-500 to-purple-700"
+                valueClassName="text-purple-600"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle>Quick Insights</CardTitle>
                 </CardHeader>
@@ -416,9 +389,9 @@ const AdminReports: React.FC = () => {
                     <span className="font-bold text-green-600">${totalCustomerValue.toFixed(2)}</span>
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
 
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-yellow-500" />
@@ -451,14 +424,14 @@ const AdminReports: React.FC = () => {
                     </span>
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             </div>
           </TabsContent>
 
           <TabsContent value="salesperson" className="space-y-6">
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
               {/* Sales by Person */}
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><Users className="h-5 w-5" />Sales by Person</CardTitle>
                   <CardDescription>{dateRange.startDate} → {dateRange.endDate}</CardDescription>
@@ -509,10 +482,10 @@ const AdminReports: React.FC = () => {
                     </table>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
 
               {/* Monthly Sales Report */}
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2"><BarChart3 className="h-5 w-5" />Monthly Sales Report</CardTitle>
                   <CardDescription>Revenue per month in selected range</CardDescription>
@@ -565,11 +538,11 @@ const AdminReports: React.FC = () => {
                     </table>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             </div>
 
             {/* Monthly breakdown per salesperson */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Monthly Breakdown per Sales Person</CardTitle>
                 <CardDescription>Each person's sales per month</CardDescription>
@@ -628,7 +601,7 @@ const AdminReports: React.FC = () => {
                   );
                 })()}
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           <TabsContent value="financial" className="space-y-6">
@@ -644,34 +617,38 @@ const AdminReports: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <StatCard
+              <AdminStatCard
                 title="Total Expenses"
                 value={`$${totalExpenses.toFixed(2)}`}
                 icon={DollarSign}
-                color="text-red-600"
+                gradient="from-red-500 to-rose-700"
+                valueClassName="text-red-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Purchases (Paid)"
                 value={`$${totalPurchasesPaid.toFixed(2)}`}
                 icon={ShoppingCart}
-                color="text-green-600"
+                gradient="from-emerald-500 to-teal-700"
+                valueClassName="text-green-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Accounts Payable"
                 value={`$${accountsPayable.toFixed(2)}`}
                 icon={AlertTriangle}
-                color="text-red-600"
+                gradient="from-red-500 to-rose-700"
+                valueClassName="text-red-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Salary Payments"
                 value={`$${totalSalaries.toFixed(2)}`}
                 icon={Users}
-                color="text-purple-600"
+                gradient="from-violet-500 to-purple-700"
+                valueClassName="text-purple-600"
               />
             </div>
 
             {unpaidPurchases.length > 0 && (
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -704,11 +681,11 @@ const AdminReports: React.FC = () => {
                     })}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             )}
 
             {unpaidOrders.length > 0 && (
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <AlertTriangle className="h-5 w-5 text-orange-600" />
@@ -741,10 +718,10 @@ const AdminReports: React.FC = () => {
                     })}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             )}
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Expense Breakdown by Category</CardTitle>
                 <CardDescription>Top 5 expense categories in selected period</CardDescription>
@@ -774,9 +751,9 @@ const AdminReports: React.FC = () => {
                   )}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Purchase Trends</CardTitle>
                 <CardDescription>Monthly purchase totals</CardDescription>
@@ -797,7 +774,7 @@ const AdminReports: React.FC = () => {
                   )}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           <TabsContent value="inventory" className="space-y-6">
@@ -809,34 +786,38 @@ const AdminReports: React.FC = () => {
             </div>
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <StatCard
+              <AdminStatCard
                 title="Total Items"
                 value={materials.length}
                 icon={Package}
-                color="text-blue-600"
+                gradient="from-sky-500 to-blue-700"
+                valueClassName="text-blue-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Inventory Value"
                 value={`$${totalInventoryValue.toFixed(2)}`}
                 icon={DollarSign}
-                color="text-green-600"
+                gradient="from-emerald-500 to-teal-700"
+                valueClassName="text-green-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Low Stock"
                 value={lowStockItems.length}
                 icon={AlertTriangle}
-                color="text-yellow-600"
+                gradient="from-amber-400 to-yellow-600"
+                valueClassName="text-yellow-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Out of Stock"
                 value={outOfStockItems.length}
                 icon={AlertTriangle}
-                color="text-red-600"
+                gradient="from-red-500 to-rose-700"
+                valueClassName="text-red-600"
               />
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle>Low Stock Items</CardTitle>
                   <CardDescription>Items below minimum stock level</CardDescription>
@@ -858,9 +839,9 @@ const AdminReports: React.FC = () => {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
 
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle>Top Value Items</CardTitle>
                   <CardDescription>Highest inventory value items</CardDescription>
@@ -884,39 +865,43 @@ const AdminReports: React.FC = () => {
                       })}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             </div>
           </TabsContent>
 
           <TabsContent value="production" className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <StatCard
+              <AdminStatCard
                 title="Total Batches"
                 value={productionBatches.length}
                 icon={BarChart3}
-                color="text-purple-600"
+                gradient="from-violet-500 to-purple-700"
+                valueClassName="text-purple-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Completed"
                 value={completedBatches.length}
                 icon={Package}
-                color="text-green-600"
+                gradient="from-emerald-500 to-teal-700"
+                valueClassName="text-green-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Units Produced"
                 value={totalProduction}
                 icon={TrendingUp}
-                color="text-blue-600"
+                gradient="from-sky-500 to-blue-700"
+                valueClassName="text-blue-600"
               />
-              <StatCard
+              <AdminStatCard
                 title="Production Cost"
                 value={`$${productionCost.toFixed(2)}`}
                 icon={DollarSign}
-                color="text-orange-600"
+                gradient="from-orange-400 to-orange-600"
+                valueClassName="text-orange-600"
               />
             </div>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Production Status</CardTitle>
                 <CardDescription>Overview of all production batches</CardDescription>
@@ -949,9 +934,9 @@ const AdminReports: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Customer Metrics</CardTitle>
                 <CardDescription>Customer relationship overview</CardDescription>
@@ -972,11 +957,11 @@ const AdminReports: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
         </Tabs>
-      </main>
-    </div>
+
+    </AdminPageShell>
   );
 };
 

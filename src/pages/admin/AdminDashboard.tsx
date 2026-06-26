@@ -80,21 +80,41 @@ const DEFAULT_QUICK_ACTION_IDS = [
   'analytics',
 ];
 
-const QUICK_ACTION_COLORS: Record<string, { border: string; iconBg: string; iconText: string }> = {
-  inventory: { border: 'border-purple-600/20', iconBg: 'bg-purple-100', iconText: 'text-purple-600' },
-  orders: { border: 'border-orange-500/20', iconBg: 'bg-orange-100', iconText: 'text-orange-600' },
-  'account-statement': { border: 'border-indigo-600/20', iconBg: 'bg-indigo-100', iconText: 'text-indigo-600' },
-  'cash-collection': { border: 'border-emerald-600/20', iconBg: 'bg-emerald-100', iconText: 'text-emerald-700' },
-  'service-renewals': { border: 'border-blue-600/20', iconBg: 'bg-blue-100', iconText: 'text-blue-700' },
-  'marketplace-sync': { border: 'border-amber-600/20', iconBg: 'bg-amber-100', iconText: 'text-amber-700' },
-  'product-reviews': { border: 'border-yellow-600/20', iconBg: 'bg-yellow-100', iconText: 'text-yellow-700' },
-  'notification-logs': { border: 'border-sky-600/20', iconBg: 'bg-sky-100', iconText: 'text-sky-700' },
-  'store-logs': { border: 'border-slate-600/20', iconBg: 'bg-slate-100', iconText: 'text-slate-700' },
-  delivery: { border: 'border-gray-300/70', iconBg: 'bg-gray-100', iconText: 'text-gray-700' },
-  announcements: { border: 'border-rose-500/20', iconBg: 'bg-rose-100', iconText: 'text-rose-700' },
-  analytics: { border: 'border-cyan-600/20', iconBg: 'bg-cyan-100', iconText: 'text-cyan-700' },
-  'sales-crm': { border: 'border-teal-600/20', iconBg: 'bg-teal-100', iconText: 'text-teal-700' },
+const QUICK_ACTION_GRADIENTS: Record<string, string> = {
+  inventory: 'from-violet-500 to-purple-700',
+  orders: 'from-orange-400 to-orange-600',
+  products: 'from-teal-500 to-teal-700',
+  purchases: 'from-sky-500 to-blue-700',
+  customers: 'from-indigo-500 to-indigo-700',
+  'sales-crm': 'from-emerald-500 to-teal-700',
+  payments: 'from-amber-500 to-orange-600',
+  'account-statement': 'from-slate-600 to-slate-800',
+  'cash-collection': 'from-green-500 to-emerald-700',
+  finance: 'from-cyan-500 to-blue-700',
+  staff: 'from-pink-500 to-rose-700',
+  'sub-accounts': 'from-fuchsia-500 to-purple-700',
+  'store-profile': 'from-blue-500 to-indigo-700',
+  templates: 'from-violet-400 to-fuchsia-600',
+  marketing: 'from-rose-400 to-pink-600',
+  'seo-analytics': 'from-lime-500 to-green-700',
+  'seo-audit': 'from-cyan-400 to-teal-600',
+  'service-renewals': 'from-blue-400 to-indigo-600',
+  'marketplace-sync': 'from-amber-400 to-yellow-600',
+  'product-reviews': 'from-yellow-400 to-amber-600',
+  'notification-logs': 'from-sky-400 to-cyan-600',
+  'store-logs': 'from-slate-500 to-zinc-700',
+  delivery: 'from-stone-500 to-stone-700',
+  announcements: 'from-red-400 to-rose-600',
+  analytics: 'from-teal-400 to-cyan-600',
 };
+
+const DEFAULT_QUICK_GRADIENT = 'from-slate-500 to-slate-700';
+
+const ACTIVITY_META = {
+  product: { label: 'New product', Icon: Package, gradient: 'from-teal-500 to-teal-700' },
+  order: { label: 'Order placed', Icon: ShoppingCart, gradient: 'from-orange-400 to-orange-600' },
+  announcement: { label: 'Announcement', Icon: Megaphone, gradient: 'from-rose-400 to-pink-600' },
+} as const;
 
 const STAT_TILES = {
   products: { gradient: 'from-teal-500 to-teal-700', glow: 'group-hover:shadow-teal-500/20', Icon: Package },
@@ -138,7 +158,7 @@ const AdminDashboard: React.FC = () => {
         customExchangeRate: fresh.rate,
         usdToLbpRate: fresh.rate,
         exchangeRateMode: 'auto',
-        exchangeRateProvider: 'exchangerate.host',
+        exchangeRateProvider: 'open.er-api.com',
         exchangeRateBaseCurrency: 'USD',
         exchangeRateQuoteCurrency: 'LBP',
         exchangeRateLastAutoUpdatedAt: new Date(fresh.fetchedAt).toISOString(),
@@ -667,155 +687,8 @@ const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-50">
-    {isMobile && <MobileHeader title={user?.role === 'sub_account' ? "Seller Dashboard" : "Admin Dashboard"} showBackButton={false} showHomeButton={true} />}
-    <div className="md:hidden px-4 pt-3 pb-2 bg-white border-b">
-      <div className="space-y-3">
-        <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-emerald-700">Daily Operations</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Link to={user?.role === 'admin' ? '/admin/inventory' : '/admin/products'} className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Inventory</Link>
-            <Link to="/admin/orders" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Orders</Link>
-            <Link to="/admin/customers" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Customers</Link>
-            {crmEnabled && (
-              <Link to="/admin/crm/pipeline" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-teal-800 border border-teal-300">Sales CRM</Link>
-            )}
-            {canProcessPayments && <Link to="/admin/payments" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-emerald-200">Payments</Link>}
-          </div>
-        </div>
-
-        <div className="rounded-lg border border-indigo-200 bg-indigo-50 px-3 py-2">
-          <div className="text-xs font-semibold uppercase tracking-wide text-indigo-700">Setup & Settings</div>
-          <div className="mt-2 flex flex-wrap gap-2">
-            <Link to="/admin/profile" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Profile</Link>
-            <Link to="/admin/templates" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Templates & Store Logos</Link>
-            <Link to="/admin/announcements" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Announcements</Link>
-            <Link to="/admin/marketing" className="rounded-md bg-white px-3 py-1.5 text-xs font-medium text-gray-700 border border-indigo-200">Email Marketing</Link>
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <button onClick={handleStatusToggle} className="flex items-center gap-2 rounded-md px-2 py-1 text-xs text-gray-600 hover:bg-gray-100">
-            <div className={`h-3 w-3 rounded-full ${store?.status === 'online' ? 'bg-green-500' : 'bg-gray-400'}`} />
-            <span>{store?.status === 'online' ? 'Store Online' : 'Store Offline'}</span>
-          </button>
-          <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="text-xs font-semibold text-indigo-700">Open Guide</a>
-        </div>
-      </div>
-    </div>
-  <div className="flex">
-  <aside className="hidden lg:flex lg:flex-col w-64 bg-white shadow-sm h-screen sticky top-0">
-        <div className="p-6 flex-shrink-0">
-          <Link to="/" className="text-2xl font-bold text-market-primary">Grabio</Link>
-          <p className="text-gray-500 text-sm mt-1">{user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}</p>
-        </div>
-        <nav className="mt-1.5 flex-1 overflow-y-auto pb-24">
-          <div className="px-4 space-y-4">
-            <Link to="/admin/dashboard" className={`flex items-center px-3 py-2 rounded-lg border transition ${isRouteActive('/admin/dashboard') ? 'bg-market-primary/10 text-market-primary border-market-primary/20' : 'bg-white text-gray-700 border-gray-100 hover:shadow-sm'}`}>
-              <StoreIcon className="h-5 w-5 mr-3" />
-              <span className="font-medium">Dashboard Home</span>
-            </Link>
-
-            <section className="rounded-xl border border-emerald-200 bg-emerald-50/70 p-2">
-              <div className="px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Daily Operations</div>
-              <div className="space-y-2">
-                {menuGroups.daily.map((group) => (
-                  <div key={group.id} className="rounded-lg border border-emerald-200/70 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-gray-800"
-                      onClick={() => toggleMenuGroup(group.id)}
-                    >
-                      <span>{group.title}</span>
-                      <ChevronDown className={`h-4 w-4 transition-transform ${openMenuGroups[group.id] ? 'rotate-180' : ''}`} />
-                    </button>
-                    {openMenuGroups[group.id] && (
-                      <div className="space-y-1 px-2 pb-2">
-                        {group.items.filter((item) => item.visible).map((item) => {
-                          const Icon = item.icon;
-                          return (
-                            <Link
-                              key={item.to}
-                              to={item.to}
-                              className={`flex items-center rounded-md px-2 py-2 text-sm transition ${isRouteActive(item.to) ? 'bg-emerald-100 text-emerald-900' : 'text-gray-600 hover:bg-emerald-50'}`}
-                            >
-                              <Icon className="mr-2 h-4 w-4" />
-                              <span>{item.label}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-indigo-200 bg-indigo-50/70 p-2">
-              <div className="flex items-center gap-2 px-2 pb-1 text-[11px] font-semibold uppercase tracking-wide text-indigo-700">
-                <Settings2 className="h-3.5 w-3.5" />
-                <span>Setup & Settings</span>
-              </div>
-              <div className="space-y-2">
-                {menuGroups.setup.map((group) => (
-                  <div key={group.id} className="rounded-lg border border-indigo-200/70 bg-white">
-                    <button
-                      type="button"
-                      className="flex w-full items-center justify-between px-3 py-2 text-left text-sm font-medium text-gray-800"
-                      onClick={() => toggleMenuGroup(group.id)}
-                    >
-                      <span>{group.title}</span>
-                      <ChevronDown className={`h-4 w-4 transition-transform ${openMenuGroups[group.id] ? 'rotate-180' : ''}`} />
-                    </button>
-                    {openMenuGroups[group.id] && (
-                      <div className="space-y-1 px-2 pb-2">
-                        {group.items.filter((item) => item.visible).map((item) => {
-                          const Icon = item.icon;
-                          return (
-                            <Link
-                              key={item.to}
-                              to={item.to}
-                              className={`flex items-center rounded-md px-2 py-2 text-sm transition ${isRouteActive(item.to) ? 'bg-indigo-100 text-indigo-900' : 'text-gray-600 hover:bg-indigo-50'}`}
-                            >
-                              <Icon className="mr-2 h-4 w-4" />
-                              <span>{item.label}</span>
-                            </Link>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </section>
-
-            <a href="/store-owner-guide.html" target="_blank" rel="noopener noreferrer" className="flex items-center px-3 py-2 text-indigo-700 font-semibold rounded-lg bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 transition">
-              <FileText className="h-5 w-5 mr-3 text-indigo-600" />
-              <span>Store Owner Guide</span>
-            </a>
-          </div>
-        </nav>
-          <div className="absolute inset-x-0 -bottom-5 border-t bg-white px-6 pt-3 pb-3">
-          <div className="flex items-center">
-            <div className="h-10 w-10 rounded-full bg-market-primary flex items-center justify-center text-white">
-              {user?.name ? String(user.name).charAt(0) : 'G'}
-            </div>
-            <div className="ml-3">
-              <p className="text-sm font-medium">{user?.name || 'Guest'}</p>
-              <p className="text-xs text-gray-500">{user?.email || ''}</p>
-            </div>
-          </div>
-          <Button variant="outline" className="w-full mt-3" onClick={() => navigate('/search')}>View Marketplace</Button>
-          <div className="mt-4 pt-3 border-t text-center">
-            <PoweredByEmoove />
-          </div>
-        </div>
-      </aside>
-      <div className="flex-1 p-6">
-        {/* Main content: full width with max constraint */}
-        <div className="mx-auto w-full max-w-screen-2xl">
-          <div className="space-y-6">
-          <section className="relative rounded-2xl bg-[#0b1220] text-white py-7 px-5 md:px-8 overflow-hidden">
+    <div className="space-y-6">
+          <section className="relative rounded-xl bg-[#0b1220] text-white py-4 px-4 md:px-5 overflow-hidden">
             <div
               className="absolute inset-0 opacity-40"
               style={{
@@ -833,94 +706,89 @@ const AdminDashboard: React.FC = () => {
               }}
               aria-hidden
             />
-            <div className="relative flex flex-col lg:flex-row lg:items-center lg:justify-between gap-5">
-              <div>
-                <p className="inline-flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-teal-300/90 mb-2">
-                  <span className="h-px w-6 bg-teal-400/50" />
+            <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div className="min-w-0">
+                <p className="inline-flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-teal-300/90 mb-1">
+                  <span className="h-px w-4 bg-teal-400/50" />
                   {user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}
-                  <span className="h-px w-6 bg-teal-400/50" />
+                  <span className="h-px w-4 bg-teal-400/50" />
                 </p>
-                <h1 className="text-2xl md:text-3xl font-bold tracking-tight">{storeName}</h1>
-                <p className="text-sm text-slate-300 mt-1">Welcome back, {user?.name || 'Store Owner'}</p>
-                <div className="mt-3 flex items-center gap-2">
-                  <div className={`h-2.5 w-2.5 rounded-full ${store?.status === 'online' ? 'bg-green-400 shadow-[0_0_8px_rgba(74,222,128,0.6)]' : 'bg-slate-500'}`} />
-                  <span className="text-xs text-slate-400">{store?.status === 'online' ? 'Store online' : 'Store offline'}</span>
-                </div>
-                <div className="mt-3">
-                  <PoweredByEmoove variant="onDark" />
+                <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-tight">{storeName}</h1>
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-400">
+                  <span className="text-slate-300">Welcome back, {user?.name || 'Store Owner'}</span>
+                  <span className="hidden sm:inline text-slate-600">·</span>
+                  <span className="inline-flex items-center gap-1.5">
+                    <span className={`h-2 w-2 rounded-full ${store?.status === 'online' ? 'bg-green-400 shadow-[0_0_6px_rgba(74,222,128,0.5)]' : 'bg-slate-500'}`} />
+                    {store?.status === 'online' ? 'Store online' : 'Store offline'}
+                  </span>
                 </div>
               </div>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-2 shrink-0">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                  className="h-8 border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white text-xs"
                   onClick={handleStatusToggle}
                 >
                   {store?.status === 'online' ? 'Go offline' : 'Go online'}
                 </Button>
-                <Button variant="outline" size="sm" asChild className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white">
+                <Button variant="outline" size="sm" asChild className="h-8 border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white text-xs">
                   <Link to="/admin/profile">Store Profile</Link>
                 </Button>
-                {user?.role === 'admin' && (
-                  <Button variant="outline" size="sm" asChild className="border-white/20 bg-white/5 text-white hover:bg-white/10 hover:text-white">
-                    <Link to="/subscription">Subscription</Link>
-                  </Button>
-                )}
               </div>
             </div>
           </section>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <Link to="/admin/inventory" className="h-full group">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
                 <CardContent className="h-full flex items-center gap-4 p-0">
-                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.products.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.products.glow} transition-shadow`}>
+                  <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.products.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.products.glow} transition-shadow`}>
                     <Package className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-sm text-gray-500">Products</div>
-                    <div className="text-2xl font-semibold text-gray-900">{productCount}</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Products</div>
+                    <div className="text-2xl font-bold tracking-tight text-slate-900">{productCount}</div>
                   </div>
                 </CardContent>
               </Card>
             </Link>
 
             <Link to="/admin/orders" className="h-full group">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
                 <CardContent className="h-full flex items-center gap-4 p-0">
-                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.orders.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.orders.glow} transition-shadow`}>
+                  <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.orders.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.orders.glow} transition-shadow`}>
                     <Clock className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-sm text-gray-500">Orders</div>
-                    <div className="text-2xl font-semibold text-gray-900">{orderCount}</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Orders</div>
+                    <div className="text-2xl font-bold tracking-tight text-slate-900">{orderCount}</div>
                   </div>
                 </CardContent>
               </Card>
             </Link>
 
             <Link to="/admin/revenue" className="h-full group">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
                 <CardContent className="h-full flex items-center gap-4 p-0">
-                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.revenue.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.revenue.glow} transition-shadow`}>
+                  <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.revenue.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.revenue.glow} transition-shadow`}>
                     <CreditCard className="h-5 w-5" />
                   </div>
-                  <div>
-                    <div className="text-sm text-gray-500">Revenue</div>
-                    <div className="text-2xl font-semibold text-gray-900">${revenue.toFixed(2)}</div>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Revenue</div>
+                    <div className="text-2xl font-bold tracking-tight text-slate-900">${revenue.toFixed(2)}</div>
                     {quarantinedRevenueOrders > 0 && (
-                      <div className="text-xs text-orange-600">Quarantined orders: {quarantinedRevenueOrders}</div>
+                      <div className="text-xs text-amber-600">Quarantined: {quarantinedRevenueOrders}</div>
                     )}
                     {usdToLbpRate ? (
                       <div
-                        className="text-xs text-gray-500 truncate"
+                        className="text-xs text-slate-500 truncate"
                         title={`≈ ${formatLbp(revenue, usdToLbpRate)}`}
                       >
                         ≈ {formatLbp(revenue, usdToLbpRate)}
                       </div>
                     ) : (
-                      <div className="text-xs text-gray-500">LBP estimate unavailable</div>
+                      <div className="text-xs text-slate-400">LBP estimate unavailable</div>
                     )}
                   </div>
                 </CardContent>
@@ -928,43 +796,45 @@ const AdminDashboard: React.FC = () => {
             </Link>
 
             <Link to="/admin/customers" className="h-full group">
-              <Card className="h-full min-h-[140px] p-4 cursor-pointer rounded-xl border-slate-200/80 bg-white/90 backdrop-blur-sm shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] hover:shadow-[0_20px_50px_-12px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden">
+              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
                 <CardContent className="h-full flex items-center gap-4 p-0">
-                  <div className={`h-12 w-12 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.customers.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.customers.glow} transition-shadow`}>
+                  <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.customers.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.customers.glow} transition-shadow`}>
                     <User className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-sm text-gray-500">Customers</div>
-                    <div className="text-2xl font-semibold text-gray-900">{customerCount}</div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Customers</div>
+                    <div className="text-2xl font-bold tracking-tight text-slate-900">{customerCount}</div>
                   </div>
                 </CardContent>
               </Card>
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
-            <div className="lg:col-span-2 space-y-3">
-              <div>
-                <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
-                  <h3 className="text-lg font-semibold">Quick Actions</h3>
-                  <div className="flex items-center gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setShowQuickActionManager((prev) => !prev)}
-                    >
-                      {showQuickActionManager ? 'Done' : 'Add Quick Action'}
-                    </Button>
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
+            <div className="lg:col-span-2 space-y-6">
+              <div className="rounded-2xl border border-white/80 bg-white p-4 md:p-5 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5">
+                <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Shortcuts</p>
+                    <h3 className="text-lg font-semibold tracking-tight text-slate-900">Quick Actions</h3>
                   </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="rounded-lg border-slate-200 text-slate-700 hover:bg-slate-50"
+                    onClick={() => setShowQuickActionManager((prev) => !prev)}
+                  >
+                    {showQuickActionManager ? 'Done' : 'Customize'}
+                  </Button>
                 </div>
 
                 {showQuickActionManager && (
-                  <div className="mb-3 p-3 bg-white border rounded-lg">
+                  <div className="mb-4 p-4 bg-slate-50 border border-slate-200/80 rounded-xl">
                     <div className="mb-3 grid grid-cols-1 md:grid-cols-[1fr_auto] gap-2">
                       <select
                         value={quickActionToAdd}
                         onChange={(event) => setQuickActionToAdd(event.target.value)}
-                        className="h-9 rounded-md border px-3 text-sm bg-white"
+                        className="h-9 rounded-lg border border-slate-200 px-3 text-sm bg-white text-slate-800"
                         disabled={addableQuickActions.length === 0}
                       >
                         <option value="" disabled>
@@ -979,6 +849,7 @@ const AdminDashboard: React.FC = () => {
                       <Button
                         type="button"
                         size="sm"
+                        className="rounded-lg"
                         onClick={() => quickActionToAdd && handleAddQuickAction(quickActionToAdd)}
                         disabled={!quickActionToAdd || addableQuickActions.length === 0}
                       >
@@ -987,7 +858,7 @@ const AdminDashboard: React.FC = () => {
                     </div>
 
                     {addableQuickActions.length === 0 ? (
-                      <div className="text-sm text-gray-500">
+                      <div className="text-sm text-slate-500">
                         {selectedQuickActionIds.length >= MAX_QUICK_ACTIONS
                           ? `Maximum ${MAX_QUICK_ACTIONS} quick actions selected. Remove one to add another.`
                           : 'All quick actions are already added.'}
@@ -997,22 +868,18 @@ const AdminDashboard: React.FC = () => {
                 )}
 
                 {selectedQuickActions.length === 0 ? (
-                  <div className="text-sm text-gray-500">No quick actions selected. Use Add Quick Action.</div>
+                  <div className="text-sm text-slate-500 py-6 text-center rounded-xl border border-dashed border-slate-200">No quick actions selected. Use Customize to add shortcuts.</div>
                 ) : (
                   <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                     {selectedQuickActions.map((item) => {
                       const Icon = item.icon;
-                      const colors = QUICK_ACTION_COLORS[item.id] || {
-                        border: 'border-gray-200',
-                        iconBg: 'bg-gray-100',
-                        iconText: 'text-gray-700',
-                      };
+                      const gradient = QUICK_ACTION_GRADIENTS[item.id] || DEFAULT_QUICK_GRADIENT;
                       return (
-                        <Link key={item.id} to={item.to} className={`relative group flex items-center gap-3 p-3 rounded-xl bg-white border ${colors.border} shadow-sm hover:shadow-[0_12px_32px_-8px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300`}>
+                        <Link key={item.id} to={item.to} className="relative group flex items-center gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:bg-white hover:border-slate-300/80 hover:shadow-[0_12px_32px_-10px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300">
                           {showQuickActionManager && (
                             <button
                               type="button"
-                              className="absolute top-1 right-1 text-xs px-1.5 py-0.5 rounded bg-red-100 text-red-700 hover:bg-red-200"
+                              className="absolute top-1.5 right-1.5 text-[10px] px-1.5 py-0.5 rounded-md bg-red-500/10 text-red-600 hover:bg-red-500/20 font-medium"
                               onClick={(event) => {
                                 event.preventDefault();
                                 event.stopPropagation();
@@ -1022,10 +889,10 @@ const AdminDashboard: React.FC = () => {
                               Remove
                             </button>
                           )}
-                          <div className={`h-9 w-9 rounded-xl ${colors.iconBg} flex items-center justify-center ${colors.iconText} shadow-sm group-hover:scale-105 transition-transform`}>
+                          <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_12px_-4px_rgba(15,23,42,0.4)] group-hover:scale-105 transition-transform`}>
                             <Icon className="h-4 w-4" />
                           </div>
-                          <span className="text-sm font-medium">{item.label}</span>
+                          <span className="text-sm font-medium text-slate-800 leading-tight">{item.label}</span>
                         </Link>
                       );
                     })}
@@ -1033,53 +900,82 @@ const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              <div>
-                <div className="flex items-center justify-between mb-3">
-                  <h3 className="text-lg font-semibold">Recent Activity</h3>
-                  <Link to="/admin/audit-logs" className="text-sm text-market-primary">View all</Link>
+              <div className="rounded-2xl border border-white/80 bg-white p-4 md:p-5 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5">
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Live feed</p>
+                    <h3 className="text-lg font-semibold tracking-tight text-slate-900">Recent Activity</h3>
+                  </div>
+                  <Link to="/admin/audit-logs" className="text-sm font-medium text-teal-700 hover:text-teal-800">View all</Link>
                 </div>
                 {recentEvents.length === 0 ? (
-                  <div className="text-sm text-gray-500">No recent activity.</div>
+                  <div className="text-sm text-slate-500 py-8 text-center rounded-xl border border-dashed border-slate-200">No recent activity yet.</div>
                 ) : (
                   <ul className="space-y-2">
-                    {recentEvents.map((ev, idx) => (
-                      <li key={idx} className="p-3 bg-white rounded-xl shadow-sm border border-slate-200/80 hover:shadow-md transition-shadow">
+                    {recentEvents.map((ev, idx) => {
+                      const meta = ACTIVITY_META[ev.type];
+                      const ActivityIcon = meta.Icon;
+                      return (
+                      <li key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all">
                         <div className="flex items-center gap-3">
-                          <div className="flex-1">
-                            <div className="text-sm font-medium text-gray-800">
-                              {ev.type === 'product' && `New product: ${ev.name}`}
-                              {ev.type === 'order' && `Order placed — $${ev.total}`}
-                              {ev.type === 'announcement' && `Announcement: ${ev.title}`}
+                          <div className={`h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br ${meta.gradient} flex items-center justify-center text-white shadow-sm`}>
+                            <ActivityIcon className="h-4 w-4" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-slate-800 truncate">
+                              {ev.type === 'product' && `${meta.label}: ${ev.name}`}
+                              {ev.type === 'order' && `${meta.label} — $${ev.total}`}
+                              {ev.type === 'announcement' && `${meta.label}: ${ev.title}`}
                             </div>
-                            <div className="text-xs text-gray-500 mt-1">{(ev.createdAt && new Date(String(ev.createdAt)).toLocaleString()) || '—'}</div>
+                            <div className="text-xs text-slate-500 mt-0.5">{(ev.createdAt && new Date(String(ev.createdAt)).toLocaleString()) || '—'}</div>
                           </div>
                         </div>
                       </li>
-                    ))}
+                    );})}
                   </ul>
                 )}
               </div>
             </div>
 
             <div>
-              <h3 className="text-lg font-semibold mb-3">Store Summary</h3>
-              <Card className="min-h-[455px] mt-5 rounded-xl border-slate-200/80 shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)]">
-              <CardContent className="pt-4">
-                <div className="space-y-6">
-                    <div><strong>Store Name</strong>: {storeName}</div>
-                  <div><strong>Location</strong>: Lebanon</div>
-                  <div><strong>Active Template</strong>: Vibrant</div>
-                    <div><strong>Active Announcements</strong>: 1</div>
-                    <div><strong>Seller Subscription</strong>: You are seller #4 — 12 months free remaining.</div>
-                    <div>
-                      <strong>Exchange rate (USD → LBP)</strong>:
-                      <div className="mt-1">
+              <div className="mb-3">
+                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Overview</p>
+                <h3 className="text-lg font-semibold tracking-tight text-slate-900">Store Summary</h3>
+              </div>
+              <Card className="rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5 overflow-hidden">
+              <CardContent className="pt-5 pb-2">
+                <dl className="divide-y divide-slate-100">
+                    <div className="flex items-start justify-between gap-3 py-3 first:pt-0">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Store Name</dt>
+                      <dd className="text-sm font-semibold text-slate-900 text-right">{storeName}</dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 py-3">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Location</dt>
+                      <dd className="text-sm text-slate-700 text-right">Lebanon</dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 py-3">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Template</dt>
+                      <dd className="text-sm text-slate-700 text-right">Vibrant</dd>
+                    </div>
+                    <div className="flex items-start justify-between gap-3 py-3">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Announcements</dt>
+                      <dd className="text-sm text-slate-700 text-right">1 active</dd>
+                    </div>
+                    {user?.role === 'sub_account' && (
+                    <div className="flex items-start justify-between gap-3 py-3">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Seller Plan</dt>
+                      <dd className="text-sm text-slate-700 text-right">#4 — 12 mo free</dd>
+                    </div>
+                    )}
+                    <div className="py-3">
+                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Exchange Rate (USD → LBP)</dt>
+                      <dd>
                         {editingRate ? (
                           <div className="flex items-center gap-2">
                             <input
                               value={editRateValue}
                               onChange={e => setEditRateValue(e.target.value)}
-                              className="border px-2 py-1 rounded w-32 text-sm"
+                              className="border border-slate-200 rounded-lg px-2 py-1.5 w-32 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                               placeholder="e.g. 15000"
                             />
                             <button
@@ -1120,18 +1016,19 @@ const AdminDashboard: React.FC = () => {
                                   setSavingRate(false);
                                 }
                               }}
-                              className="px-3 py-1 bg-market-primary text-white rounded text-sm"
+                              className="px-3 py-1.5 bg-[#0b1220] text-white rounded-lg text-sm hover:bg-slate-800"
                               disabled={savingRate}
                             >
                               Save
                             </button>
-                            <button onClick={() => setEditingRate(false)} className="px-2 py-1 rounded text-sm border">Cancel</button>
+                            <button onClick={() => setEditingRate(false)} className="px-2.5 py-1.5 rounded-lg text-sm border border-slate-200 text-slate-600 hover:bg-slate-50">Cancel</button>
                           </div>
                         ) : (
-                          <div className="flex items-center gap-3 flex-wrap">
-                            <div className="text-sm text-gray-700">{usdToLbpRate ? `${usdToLbpRate} LBP per USD` : 'Not set'}</div>
-                            <span className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-700">Mode: {exchangeRateMode === 'auto' ? 'Auto' : 'Manual'}</span>
-                            <button onClick={() => setEditingRate(true)} className="text-sm text-market-primary">Edit</button>
+                          <div className="space-y-2">
+                            <div className="text-sm font-semibold text-slate-800">{usdToLbpRate ? `${usdToLbpRate.toLocaleString()} LBP / USD` : 'Not set'}</div>
+                            <span className="inline-flex text-[10px] font-semibold uppercase tracking-wider px-2 py-0.5 rounded-md bg-slate-100 text-slate-600">{exchangeRateMode === 'auto' ? 'Auto' : 'Manual'}</span>
+                            <div className="flex flex-wrap gap-2 pt-1">
+                            <button onClick={() => setEditingRate(true)} className="text-xs font-medium text-teal-700 hover:text-teal-800 px-2 py-1 rounded-md hover:bg-teal-50">Edit</button>
                             <button
                               onClick={async () => {
                                 if (!user?.id) return;
@@ -1147,7 +1044,7 @@ const AdminDashboard: React.FC = () => {
                                   console.warn('Failed to enable auto exchange rates', err);
                                 }
                               }}
-                              className="text-sm text-blue-600"
+                              className="text-xs font-medium text-blue-600 hover:text-blue-700 px-2 py-1 rounded-md hover:bg-blue-50"
                               disabled={syncingAutoRate}
                             >
                               {syncingAutoRate && exchangeRateMode === 'auto' ? 'Syncing...' : 'Auto Mode'}
@@ -1167,7 +1064,7 @@ const AdminDashboard: React.FC = () => {
                                   console.warn('Failed to switch to manual mode', err);
                                 }
                               }}
-                              className="text-sm text-amber-700"
+                              className="text-xs font-medium text-amber-700 hover:text-amber-800 px-2 py-1 rounded-md hover:bg-amber-50"
                             >
                               Manual Mode
                             </button>
@@ -1178,28 +1075,24 @@ const AdminDashboard: React.FC = () => {
                                 if (!actualStoreId) return;
                                 await syncAutoRateForStore(actualStoreId);
                               }}
-                              className="text-sm text-green-700"
+                              className="text-xs font-medium text-emerald-700 hover:text-emerald-800 px-2 py-1 rounded-md hover:bg-emerald-50"
                               disabled={syncingAutoRate}
                             >
-                              {syncingAutoRate ? 'Refreshing...' : 'Refresh Now'}
+                              {syncingAutoRate ? 'Refreshing...' : 'Refresh'}
                             </button>
+                            </div>
                           </div>
                         )}
-                      </div>
+                      </dd>
                     </div>
-                    {/* Credits feature removed */}
-                </div>
+                </dl>
               </CardContent>
-              <CardFooter>
-                <Button variant="ghost" onClick={() => navigate('/admin/profile')}>Edit Store Profile</Button>
+              <CardFooter className="border-t border-slate-100 bg-slate-50/50">
+                <Button variant="ghost" className="text-teal-700 hover:text-teal-800 hover:bg-teal-50" onClick={() => navigate('/admin/profile')}>Edit Store Profile</Button>
               </CardFooter>
               </Card>
             </div>
           </div>
-        </div>
-      </div>
-    </div>
-    </div>
     </div>
   );
 }
