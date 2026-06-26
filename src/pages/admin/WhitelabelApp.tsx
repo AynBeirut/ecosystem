@@ -1,12 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import ModuleGate from '@/components/ModuleGate';
-import BackButton from '@/components/BackButton';
+import AdminPageShell from '@/components/admin/AdminPageShell';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { useToast } from '@/hooks/use-toast';
@@ -100,20 +101,16 @@ const WhitelabelApp: React.FC = () => {
 
   return (
     <ModuleGate moduleId="whitelabel">
-      <div className="container mx-auto px-4 py-8 max-w-3xl space-y-6">
-        <BackButton />
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2 mt-2">
-            📲 White-Label Store App
-            <Badge variant="secondary">Firebase only</Badge>
-          </h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Branded customer app for your store — same Firebase project as Grabio, no separate backend.
-          </p>
-        </div>
-
+      <AdminPageShell
+        title="White-Label Store App"
+        description="Branded customer app for your store — same Firebase project as Grabio, no separate backend."
+        eyebrow="Mobile"
+        backTo="/admin/dashboard"
+        actions={<Badge variant="secondary">Firebase only</Badge>}
+      >
+        <div className="max-w-3xl space-y-6">
         {!loading && (
-          <Card className="border-primary/20 bg-primary/5">
+          <AdminPanel className="border-primary/20 bg-primary/5">
             <CardContent className="pt-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
               {logoUrl ? (
                 <img src={logoUrl} alt="" className="w-16 h-16 rounded-full object-cover border-2 border-primary/30" />
@@ -129,10 +126,10 @@ const WhitelabelApp: React.FC = () => {
                 )}
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">Store ID (for mobile build)</CardTitle>
             <CardDescription>Paste into white-label-client-app/app.json → expo.extra.storeId</CardDescription>
@@ -141,9 +138,9 @@ const WhitelabelApp: React.FC = () => {
             <code className="flex-1 bg-muted rounded-md px-3 py-2 text-sm font-mono break-all">{storeId}</code>
             <Button size="sm" variant="outline" onClick={copyStoreId}>{copied ? '✓ Copied' : 'Copy'}</Button>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">App branding</CardTitle>
             <CardDescription>Saved to Firestore on your store profile — the mobile app reads live data from Firebase.</CardDescription>
@@ -186,9 +183,9 @@ const WhitelabelApp: React.FC = () => {
               {saving ? 'Saving…' : 'Save branding'}
             </Button>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">Build config snippet</CardTitle>
             <CardDescription>For each client build in white-label-client-app/</CardDescription>
@@ -196,9 +193,9 @@ const WhitelabelApp: React.FC = () => {
           <CardContent>
             <pre className="bg-muted rounded-lg p-4 text-xs overflow-x-auto">{easSnippet}</pre>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">Setup steps</CardTitle>
           </CardHeader>
@@ -215,9 +212,9 @@ const WhitelabelApp: React.FC = () => {
               </div>
             ))}
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">What customers get</CardTitle>
           </CardHeader>
@@ -228,8 +225,9 @@ const WhitelabelApp: React.FC = () => {
               ))}
             </div>
           </CardContent>
-        </Card>
-      </div>
+        </AdminPanel>
+        </div>
+      </AdminPageShell>
     </ModuleGate>
   );
 };

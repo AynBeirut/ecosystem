@@ -12,14 +12,12 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { CalendarIcon, Megaphone, Plus, Edit3, Trash2, Eye } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { StoreAnnouncement } from '@/types/product';
 
 const AdminAnnouncements: React.FC = () => {
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [announcements, setAnnouncements] = useState<StoreAnnouncement[]>([
     {
       id: 'ann1',
@@ -129,27 +127,18 @@ const AdminAnnouncements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Announcements" />}
-      <div className="p-4 md:p-6">
-        <BackButton />
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Megaphone className="h-6 w-6" />
-                Announcements
-              </h1>
-              <p className="text-muted-foreground">Create and manage store announcements and promotions</p>
-            </div>
-            
-            <Dialog open={isCreating} onOpenChange={setIsCreating}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="h-4 w-4 mr-2" />
-                  New Announcement
-                </Button>
-              </DialogTrigger>
+    <AdminPageShell
+      title="Announcements"
+      description="Create and manage store announcements and promotions"
+      eyebrow="Business Tools"
+      actions={(
+        <Dialog open={isCreating} onOpenChange={setIsCreating}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="h-4 w-4 mr-2" />
+              New Announcement
+            </Button>
+          </DialogTrigger>
               <DialogContent className="w-[95vw] max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Create Announcement</DialogTitle>
@@ -242,12 +231,12 @@ const AdminAnnouncements: React.FC = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
-        </div>
+      )}
+    >
 
         <div className="grid grid-cols-1 gap-4">
           {announcements.map((announcement) => (
-            <Card key={announcement.id}>
+            <AdminPanel key={announcement.id}>
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div className="space-y-1">
@@ -306,11 +295,11 @@ const AdminAnnouncements: React.FC = () => {
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ))}
           
           {announcements.length === 0 && (
-            <Card>
+            <AdminPanel>
               <CardContent className="flex flex-col items-center justify-center py-12">
                 <Megaphone className="h-12 w-12 text-muted-foreground mb-4" />
                 <h3 className="text-lg font-semibold mb-2">No Announcements Yet</h3>
@@ -322,10 +311,9 @@ const AdminAnnouncements: React.FC = () => {
                   Create Your First Announcement
                 </Button>
               </CardContent>
-            </Card>
+            </AdminPanel>
           )}
         </div>
-      </div>
 
       {/* Edit Announcement Dialog */}
       <Dialog open={!!editingAnnouncement} onOpenChange={() => setEditingAnnouncement(null)}>
@@ -421,7 +409,7 @@ const AdminAnnouncements: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 };
 

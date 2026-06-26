@@ -15,9 +15,8 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil, ImagePlus, Palette, GripVertical, ChevronUp, ChevronDown, Globe } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting, AiModelPricingSetting } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
@@ -58,6 +57,64 @@ const getStatusBadgeClass = (status: 'active' | 'pending' | 'error') => {
   if (status === 'error') return 'bg-red-100 text-red-800';
   return 'bg-yellow-100 text-yellow-800';
 };
+
+type ProfileSectionId =
+  | 'social-media'
+  | 'growth-seo'
+  | 'invoice'
+  | 'product-settings'
+  | 'banners'
+  | 'store-pages'
+  | 'template-colors'
+  | 'ai-api'
+  | 'custom-domain'
+  | 'mfa'
+  | 'gdpr'
+  | 'marketplace';
+
+type ProfileCollapsibleSectionProps = {
+  id: ProfileSectionId;
+  title: React.ReactNode;
+  description: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  children: React.ReactNode;
+};
+
+function ProfileCollapsibleSection({
+  id,
+  title,
+  description,
+  open,
+  onOpenChange,
+  children,
+}: ProfileCollapsibleSectionProps) {
+  return (
+    <AdminPanel className={open ? undefined : 'shadow-sm'}>
+      <CardHeader className={open ? 'pb-3' : 'py-4'}>
+        <div className="flex items-center justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <CardTitle className="text-base leading-snug">{title}</CardTitle>
+            <CardDescription className={open ? 'mt-1' : 'mt-0.5 line-clamp-1'}>
+              {description}
+            </CardDescription>
+          </div>
+          <div className="flex shrink-0 items-center gap-2">
+            <Label htmlFor={`profile-section-${id}`} className="text-xs text-muted-foreground">
+              {open ? 'Shown' : 'Hidden'}
+            </Label>
+            <Switch
+              id={`profile-section-${id}`}
+              checked={open}
+              onCheckedChange={onOpenChange}
+            />
+          </div>
+        </div>
+      </CardHeader>
+      {open ? children : null}
+    </AdminPanel>
+  );
+}
 
 const defaultProfile: StoreProfile = {
   name: '',
@@ -157,7 +214,6 @@ const AdminProfile: React.FC = () => {
   const { user, setUser } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const db = getFirestore();
   const [formData, setFormData] = useState<StoreProfile>(defaultProfile);
   const [isSaving, setIsSaving] = useState(false);
@@ -254,6 +310,12 @@ const AdminProfile: React.FC = () => {
   const [aiCatalogUpdatedAt, setAiCatalogUpdatedAt] = useState('');
   const autoProvisionAttemptRef = useRef(0);
   const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
+
+  const [openProfileSections, setOpenProfileSections] = useState<Partial<Record<ProfileSectionId, boolean>>>({});
+  const isProfileSectionOpen = (id: ProfileSectionId) => Boolean(openProfileSections[id]);
+  const setProfileSectionOpen = (id: ProfileSectionId, open: boolean) => {
+    setOpenProfileSections((prev) => ({ ...prev, [id]: open }));
+  };
 
   const refreshMfaStatus = async () => {
     const auth = getAuth();
@@ -1107,20 +1169,15 @@ const AdminProfile: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Store Profile" />}
-      <div className="p-4 md:p-6 max-w-6xl mx-auto">
-        <BackButton />
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Store className="h-6 w-6" />
-            Store Profile
-          </h1>
-          <p className="text-muted-foreground">Manage your store information and branding</p>
-        </div>
+    <AdminPageShell
+      title="Store Profile"
+      description="Manage your store's public profile and essential information"
+      eyebrow="Profile & Store Setup"
+      className="max-w-6xl mx-auto"
+    >
 
         {/* Subscription Card */}
-        <Card className="mb-6 border-2 border-primary">
+        <AdminPanel className="mb-6 border-2 border-primary">
           <CardHeader>
             <CardTitle>Subscription Plan</CardTitle>
             <CardDescription>
@@ -1148,11 +1205,11 @@ const AdminProfile: React.FC = () => {
               </Button>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Logo Upload Section */}
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Store Logo</CardTitle>
               <CardDescription>
@@ -1205,10 +1262,10 @@ const AdminProfile: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
           {/* Basic Information */}
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Basic Information</CardTitle>
               <CardDescription>
@@ -1377,10 +1434,10 @@ const AdminProfile: React.FC = () => {
                 />
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
           {/* Contact Information */}
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Contact Information</CardTitle>
               <CardDescription>
@@ -1428,17 +1485,21 @@ const AdminProfile: React.FC = () => {
                 <p className="text-xs text-muted-foreground mt-1">Messages from the store Contact Us page will be forwarded to this email.</p>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
+
+          <p className="text-sm text-slate-500 px-1">
+            Optional sections below start collapsed. Toggle <span className="font-medium">Hidden / Shown</span> on each card to expand.
+          </p>
 
           {/* Social Media Links */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Social Media</CardTitle>
-              <CardDescription>
-                Connect your social media accounts (optional)
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="social-media"
+            title="Social Media"
+            description="Connect your social media accounts (optional)"
+            open={isProfileSectionOpen('social-media')}
+            onOpenChange={(open) => setProfileSectionOpen('social-media', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               <div>
                 <Label htmlFor="facebook">Facebook URL</Label>
                 <Input
@@ -1492,16 +1553,16 @@ const AdminProfile: React.FC = () => {
                 <p className="text-xs text-muted-foreground mt-1">Customers can order directly via WhatsApp from the product page.</p>
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Growth, SEO & Subscription Controls</CardTitle>
-              <CardDescription>
-                Configure discoverability, Meta/Facebook data, service policy, and recurring billing defaults.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <ProfileCollapsibleSection
+            id="growth-seo"
+            title="Growth, SEO & Subscription Controls"
+            description="Discoverability, Meta/Facebook data, service policy, and billing defaults"
+            open={isProfileSectionOpen('growth-seo')}
+            onOpenChange={(open) => setProfileSectionOpen('growth-seo', open)}
+          >
+            <CardContent className="space-y-6 pt-0">
               <div className="space-y-4">
                 <h4 className="text-sm font-semibold">SEO Basics</h4>
                 <div>
@@ -2176,17 +2237,17 @@ const AdminProfile: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Invoice Configuration */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Invoice Settings</CardTitle>
-              <CardDescription>
-                Customize your invoice appearance and numbering
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="invoice"
+            title="Invoice Settings"
+            description="Customize invoice appearance and numbering"
+            open={isProfileSectionOpen('invoice')}
+            onOpenChange={(open) => setProfileSectionOpen('invoice', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <Label htmlFor="invoicePrefix">Invoice Number Prefix</Label>
@@ -2244,17 +2305,17 @@ const AdminProfile: React.FC = () => {
                 />
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Product Settings */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Product Settings</CardTitle>
-              <CardDescription>
-                Configure settings for composed products
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="product-settings"
+            title="Product Settings"
+            description="Default price multiplier and product categories"
+            open={isProfileSectionOpen('product-settings')}
+            onOpenChange={(open) => setProfileSectionOpen('product-settings', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               <div>
                 <Label htmlFor="priceMultiplier">Default Price Multiplier</Label>
                 <Input
@@ -2346,15 +2407,17 @@ const AdminProfile: React.FC = () => {
                 </p>
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Banner / Carousel Images */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><ImagePlus className="h-5 w-5" />Banner Images</CardTitle>
-              <CardDescription>Upload header/banner images for your store carousel (background image + carousel)</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="banners"
+            title={<span className="flex items-center gap-2"><ImagePlus className="h-5 w-5" />Banner Images</span>}
+            description="Header and carousel images for your storefront"
+            open={isProfileSectionOpen('banners')}
+            onOpenChange={(open) => setProfileSectionOpen('banners', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               <Label htmlFor="carousel-upload" className="cursor-pointer">
                 <div className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors w-fit">
                   <Upload className="h-4 w-4" />
@@ -2382,15 +2445,17 @@ const AdminProfile: React.FC = () => {
                 <p className="text-sm text-muted-foreground">No banner images uploaded yet.</p>
               )}
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Custom Pages */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><GripVertical className="h-5 w-5" />Store Pages</CardTitle>
-              <CardDescription>Create custom pages for your store. "About Us" (page 2) and "Products" (page 3) are built-in.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="store-pages"
+            title={<span className="flex items-center gap-2"><GripVertical className="h-5 w-5" />Store Pages</span>}
+            description="Custom pages — About Us and Products are built-in"
+            open={isProfileSectionOpen('store-pages')}
+            onOpenChange={(open) => setProfileSectionOpen('store-pages', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               {(formData.customPages || []).map((page, idx) => (
                 <div key={page.id} className="border rounded-lg p-4 space-y-3">
                   <div className="flex items-center gap-2">
@@ -2467,15 +2532,17 @@ const AdminProfile: React.FC = () => {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Template Colors */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Palette className="h-5 w-5" />Template Colors</CardTitle>
-              <CardDescription>Customize the colors of your store page template</CardDescription>
-            </CardHeader>
-            <CardContent>
+          <ProfileCollapsibleSection
+            id="template-colors"
+            title={<span className="flex items-center gap-2"><Palette className="h-5 w-5" />Template Colors</span>}
+            description="Primary, secondary, and accent colors for your store template"
+            open={isProfileSectionOpen('template-colors')}
+            onOpenChange={(open) => setProfileSectionOpen('template-colors', open)}
+          >
+            <CardContent className="pt-0">
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 {([
                   { key: 'primary', label: 'Primary Color', defaultVal: '#0ea5e9' },
@@ -2525,17 +2592,17 @@ const AdminProfile: React.FC = () => {
                 ))}
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* AI API Integration */}
-          <Card>
-            <CardHeader>
-              <CardTitle>AI API Integration</CardTitle>
-              <CardDescription>
-                Connect your external AI account. Assistant access stays on your account, while customers use prepaid credits by selected model.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="ai-api"
+            title="AI API Integration"
+            description="Connect your external AI account and model credit pricing"
+            open={isProfileSectionOpen('ai-api')}
+            onOpenChange={(open) => setProfileSectionOpen('ai-api', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               <div className="flex items-center justify-between border rounded-md px-3 py-2">
                 <div>
                   <Label htmlFor="aiIntegrationEnabled">Enable AI API integration</Label>
@@ -2694,15 +2761,17 @@ const AdminProfile: React.FC = () => {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Custom Domain */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2"><Globe className="h-5 w-5" />Custom Domain</CardTitle>
-              <CardDescription>Point your own domain (e.g. shop.yourbrand.com) to your store.</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="custom-domain"
+            title={<span className="flex items-center gap-2"><Globe className="h-5 w-5" />Custom Domain</span>}
+            description="Point your own domain to your Grabio store"
+            open={isProfileSectionOpen('custom-domain')}
+            onOpenChange={(open) => setProfileSectionOpen('custom-domain', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               <div className="space-y-2">
                 <Label htmlFor="customDomain">Domain Name</Label>
                 <Input
@@ -2828,17 +2897,17 @@ const AdminProfile: React.FC = () => {
                 </div>
               )}
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Admin MFA */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Admin MFA (TOTP)</CardTitle>
-              <CardDescription>
-                Protect admin access with authenticator app based 2FA.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="mfa"
+            title="Admin MFA (TOTP)"
+            description="Authenticator app two-factor authentication for admin access"
+            open={isProfileSectionOpen('mfa')}
+            onOpenChange={(open) => setProfileSectionOpen('mfa', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               {user?.role !== 'admin' ? (
                 <p className="text-sm text-muted-foreground">MFA enrollment is available to admin accounts only.</p>
               ) : (
@@ -2966,17 +3035,17 @@ const AdminProfile: React.FC = () => {
                 </>
               )}
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* GDPR Tools */}
-          <Card>
-            <CardHeader>
-              <CardTitle>GDPR Tools</CardTitle>
-              <CardDescription>
-                Export your store data and submit right-to-be-forgotten deletion requests.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <ProfileCollapsibleSection
+            id="gdpr"
+            title="GDPR Tools"
+            description="Data export, deletion requests, and privacy policy generator"
+            open={isProfileSectionOpen('gdpr')}
+            onOpenChange={(open) => setProfileSectionOpen('gdpr', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
               <div className="rounded-lg border p-4 space-y-3">
                 <p className="text-sm font-medium">Data Export</p>
                 <p className="text-xs text-muted-foreground">
@@ -3033,17 +3102,17 @@ const AdminProfile: React.FC = () => {
                 />
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           {/* Marketplace + Dropshipping Integrations */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Marketplace & Dropshipping Integrations</CardTitle>
-              <CardDescription>
-                Enable marketplace channels (including Alibaba) and configure your dropshipping partners.
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-6">
+          <ProfileCollapsibleSection
+            id="marketplace"
+            title="Marketplace & Dropshipping Integrations"
+            description="Amazon, eBay, Alibaba channels and dropshipping partners"
+            open={isProfileSectionOpen('marketplace')}
+            onOpenChange={(open) => setProfileSectionOpen('marketplace', open)}
+          >
+            <CardContent className="space-y-6 pt-0">
               <div>
                 <h4 className="font-medium mb-3">Marketplaces</h4>
                 <div className="space-y-3">
@@ -3158,7 +3227,7 @@ const AdminProfile: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </ProfileCollapsibleSection>
 
           <div className="flex justify-end space-x-4">
             <Button
@@ -3177,8 +3246,7 @@ const AdminProfile: React.FC = () => {
             </Button>
           </div>
         </form>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

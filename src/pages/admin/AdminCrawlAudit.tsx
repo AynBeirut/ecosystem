@@ -14,7 +14,9 @@ import {
   doc,
   getDoc,
 } from 'firebase/firestore';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
+import { CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -46,8 +48,6 @@ import {
   RefreshCw,
   Loader2,
 } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ function StatCard({
   icon: React.ReactNode; label: string; value: string; sub?: string; accent?: string;
 }) {
   return (
-    <Card className="border-0 shadow-sm">
+    <AdminPanel className="border-0 shadow-sm">
       <CardContent className="p-5">
         <div className="flex items-start justify-between">
           <div>
@@ -180,7 +180,7 @@ function StatCard({
           <div className="p-2 rounded-lg bg-muted">{icon}</div>
         </div>
       </CardContent>
-    </Card>
+    </AdminPanel>
   );
 }
 
@@ -210,7 +210,7 @@ export default function AdminCrawlAudit() {
   // ── Loading ──
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="flex flex-col items-center gap-3 text-muted-foreground">
           <Loader2 className="w-8 h-8 animate-spin text-teal-600" />
           <p className="text-sm">Loading Firestore data…</p>
@@ -222,7 +222,7 @@ export default function AdminCrawlAudit() {
   // ── Empty state ──
   if (!data) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center space-y-3 max-w-sm">
           <Globe className="w-10 h-10 text-teal-300 mx-auto" />
           <p className="text-base font-medium text-muted-foreground">No traffic data yet</p>
@@ -238,7 +238,7 @@ export default function AdminCrawlAudit() {
   // ── Error ──
   if (error) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center space-y-3">
           <p className="text-sm text-red-600">{error}</p>
           <Button variant="outline" size="sm" onClick={load}>
@@ -256,32 +256,19 @@ export default function AdminCrawlAudit() {
   }));
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="SEO Audit" />}
-
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-
-        <BackButton />
-
-        {/* ── Header ── */}
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="flex items-center gap-2 mb-1">
-              <Globe className="w-5 h-5 text-teal-600" />
-              <h1 className="text-xl font-bold">grabio.space — SEO Traffic Audit</h1>
-              <Badge className="bg-teal-100 text-teal-700 border-teal-300 text-xs">Live Data</Badge>
-            </div>
-            <p className="text-sm text-muted-foreground">
-              Source: Firestore seo_events · {data.auditPeriod} &nbsp;·&nbsp; {data.auditDays} days
-            </p>
-          </div>
-          <Button variant="outline" size="sm" onClick={load}>
-            <RefreshCw className="w-3 h-3 mr-2" /> Refresh
-          </Button>
-        </div>
-
+    <AdminPageShell
+      title="SEO Traffic Audit"
+      description={`Firestore seo_events · ${data.auditPeriod} · ${data.auditDays} days`}
+      eyebrow="SEO & Analytics"
+      backTo="/admin/dashboard"
+      actions={(
+        <Button variant="outline" size="sm" onClick={load}>
+          <RefreshCw className="w-3 h-3 mr-2" /> Refresh
+        </Button>
+      )}
+    >
         {/* ── Banner ── */}
-        <Card className="border-0 bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md">
+        <AdminPanel className="border-0 bg-gradient-to-r from-teal-600 to-emerald-600 text-white shadow-md">
           <CardContent className="p-5">
             <p className="text-sm font-semibold uppercase tracking-wider opacity-80 mb-1">
               SEO Audit Finding — {data.auditDays}-day Firestore analysis
@@ -296,7 +283,7 @@ export default function AdminCrawlAudit() {
               Only 1 unrecognised IP detected — already blocked. Bot contamination is negligible.
             </p>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {/* ── Stat cards ── */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -345,7 +332,7 @@ export default function AdminCrawlAudit() {
 
           {/* ── Traffic Trend ── */}
           <TabsContent value="traffic" className="space-y-4 pt-4">
-            <Card className="border-0 shadow-sm">
+            <AdminPanel className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Traffic Trend — Page Events Over Time</CardTitle>
                 <p className="text-xs text-muted-foreground">
@@ -372,10 +359,10 @@ export default function AdminCrawlAudit() {
                   {fmt(data.totalRequests)} total events tracked
                 </p>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Day-by-day table */}
-            <Card className="border-0 shadow-sm">
+            <AdminPanel className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Day-by-Day Log — Full Period</CardTitle>
                 <p className="text-xs text-muted-foreground">Consistent volume = healthy organic signal</p>
@@ -419,12 +406,12 @@ export default function AdminCrawlAudit() {
                   </table>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           {/* ── Crawl Health ── */}
           <TabsContent value="health" className="space-y-4 pt-4">
-            <Card className="border-0 shadow-sm">
+            <AdminPanel className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Crawl Health — Response Code Breakdown</CardTitle>
                 <p className="text-xs text-muted-foreground">
@@ -462,12 +449,12 @@ export default function AdminCrawlAudit() {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           {/* ── Top Pages ── */}
           <TabsContent value="pages" className="space-y-4 pt-4">
-            <Card className="border-0 shadow-sm">
+            <AdminPanel className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Top Pages — Ranking Opportunity Map</CardTitle>
                 <p className="text-xs text-muted-foreground">High-frequency pages = what Google is watching — optimise these first</p>
@@ -496,8 +483,8 @@ export default function AdminCrawlAudit() {
                   </table>
                 </div>
               </CardContent>
-            </Card>
-            <Card className="border-0 shadow-sm">
+            </AdminPanel>
+            <AdminPanel className="border-0 shadow-sm">
               <CardHeader className="pb-2">
                 <CardTitle className="text-sm font-semibold">Event Share by Page</CardTitle>
               </CardHeader>
@@ -512,12 +499,12 @@ export default function AdminCrawlAudit() {
                   </BarChart>
                 </ResponsiveContainer>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           {/* ── Crawlers / Bot IPs ── */}
           <TabsContent value="bots" className="space-y-4 pt-4">
-            <Card className="border-0 shadow-sm border-l-4 border-l-teal-500">
+            <AdminPanel className="border-0 shadow-sm border-l-4 border-l-teal-500">
               <CardHeader className="pb-2">
                 <div className="flex items-center gap-2">
                   <Bug className="w-4 h-4 text-teal-600" />
@@ -554,7 +541,7 @@ export default function AdminCrawlAudit() {
                   </table>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Action plan */}
             <div>
@@ -565,7 +552,7 @@ export default function AdminCrawlAudit() {
               <p className="text-xs text-muted-foreground mb-4">Site is in strong health — these refinements will push organic visibility even further</p>
               <div className="space-y-3">
                 {ACTION_PLAN.map(item => (
-                  <Card key={item.priority} className={`border-0 shadow-sm border-l-4 ${item.color}`}>
+                  <AdminPanel key={item.priority} className={`border-0 shadow-sm border-l-4 ${item.color}`}>
                     <CardContent className="p-4">
                       <div className="flex items-start gap-3">
                         <span className={`text-xs font-bold px-2 py-1 rounded-full ${item.badge}`}>{item.priority}</span>
@@ -575,14 +562,13 @@ export default function AdminCrawlAudit() {
                         </div>
                       </div>
                     </CardContent>
-                  </Card>
+                  </AdminPanel>
                 ))}
               </div>
             </div>
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 }
 

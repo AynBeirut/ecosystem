@@ -1,15 +1,27 @@
-// Supplier Return analytics page skeleton
 import React from 'react';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
 const AdminSupplierReturnAnalytics: React.FC = () => {
   return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Supplier Return Analytics</h1>
-      {/* KPIs, charts, supplier performance, financial impact */}
-      <div>
-        <p>Analyze supplier return metrics and performance here.</p>
-      </div>
-    </div>
+    <AdminPageShell
+      title="Supplier Return Analytics"
+      description="Analyze supplier return metrics and performance."
+      eyebrow="Inventory"
+      backTo="/admin/supplier-returns"
+      backLabel="Supplier Returns"
+    >
+      <AdminPanel>
+        <CardHeader>
+          <CardTitle>Coming soon</CardTitle>
+          <CardDescription>KPIs, charts, supplier performance, and financial impact.</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <p className="text-sm text-muted-foreground">Analytics dashboard for supplier returns will appear here.</p>
+        </CardContent>
+      </AdminPanel>
+    </AdminPageShell>
   );
 };
 

@@ -1,11 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import ModuleGate from '@/components/ModuleGate';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { Monitor, RefreshCw } from 'lucide-react';
 
 type PosStats = {
   pairedDevices: number;
@@ -46,39 +50,27 @@ const GrabioPOS: React.FC = () => {
 
   return (
     <ModuleGate moduleId="pos">
-      <div className="container mx-auto px-4 py-8 max-w-3xl space-y-6">
-
-        {/* Header */}
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            🖥️ Grabio POS
-            <Badge variant="secondary">Windows</Badge>
-          </h1>
-          <p className="text-muted-foreground mt-1">
-            Full offline point-of-sale for Windows. Syncs products and sales with your Grabio store.
-          </p>
-        </div>
-
-        {/* Stats */}
+      <AdminPageShell
+        title="Grabio POS"
+        description="Full offline point-of-sale for Windows. Syncs products and sales with your Grabio store."
+        eyebrow="POS"
+        backTo="/admin/dashboard"
+        className="max-w-3xl"
+      >
         {stats && (
-          <div className="grid grid-cols-2 gap-4">
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-3xl font-bold">{stats.pairedDevices}</p>
-                <p className="text-sm text-muted-foreground mt-1">Paired terminals</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-5">
-                <p className="text-3xl font-bold">{stats.lastSync ? new Date(stats.lastSync).toLocaleDateString() : '—'}</p>
-                <p className="text-sm text-muted-foreground mt-1">Last sync</p>
-              </CardContent>
-            </Card>
+          <div className="grid grid-cols-2 gap-3 md:gap-4 mb-2">
+            <AdminStatCard title="Paired Terminals" value={stats.pairedDevices} icon={Monitor} gradient="from-teal-500 to-teal-700" />
+            <AdminStatCard
+              title="Last Sync"
+              value={stats.lastSync ? new Date(stats.lastSync).toLocaleDateString() : '—'}
+              icon={RefreshCw}
+              gradient="from-sky-500 to-blue-700"
+            />
           </div>
         )}
 
         {/* Store ID */}
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">Your Store ID</CardTitle>
             <CardDescription>Enter this on the POS login screen to pair a terminal.</CardDescription>
@@ -91,10 +83,10 @@ const GrabioPOS: React.FC = () => {
               {copied ? '✓ Copied' : 'Copy'}
             </Button>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {/* Setup steps */}
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">Quick Setup</CardTitle>
           </CardHeader>
@@ -111,10 +103,10 @@ const GrabioPOS: React.FC = () => {
               </div>
             ))}
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {/* Download */}
-        <Card className="border-primary/30 bg-primary/5">
+        <AdminPanel className="border-primary/30 bg-primary/5">
           <CardContent className="pt-6 flex flex-col sm:flex-row items-start sm:items-center gap-4">
             <div className="flex-1">
               <p className="font-semibold">Grabio POS — Windows Installer</p>
@@ -128,10 +120,10 @@ const GrabioPOS: React.FC = () => {
               </Button>
             </a>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {/* Features */}
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle className="text-base">What's included</CardTitle>
           </CardHeader>
@@ -157,12 +149,12 @@ const GrabioPOS: React.FC = () => {
               ))}
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         <p className="text-xs text-muted-foreground text-center">
           The POS receives independent updates from the Windows build pipeline. Your Grabio subscription keeps it licensed.
         </p>
-      </div>
+      </AdminPageShell>
     </ModuleGate>
   );
 };

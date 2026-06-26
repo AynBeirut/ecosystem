@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react';
-import BackButton from '@/components/BackButton';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,8 +10,9 @@ import {
   LayoutGrid, Layers, Settings2, Save,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
@@ -1070,68 +1070,59 @@ const AdminTemplates: React.FC = () => {
 
   // ── render ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Store Design" />}
-
-      <div className="p-4 md:p-6">
-        <BackButton to="/admin/profile" label="Back to Store Profile" />
-
-        <div className="mb-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Settings2 className="h-6 w-6" /> Store Design
-              </h1>
-              <p className="text-muted-foreground">Customise your store's look, layout, and sections</p>
-            </div>
-            <div>
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  className="hidden"
-                  onChange={async (e) => {
-                    if (!storeId) return;
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    try {
-                      const text = await file.text();
-                      const imported = JSON.parse(text);
-                      // Mark store as having imported design for white-label header
-                      await setDoc(doc(db, 'storeProfiles', storeId), { ...imported, hasImportedDesign: true }, { merge: true });
-                      // Update local state
-                      if (imported.template) {
-                        setSelectedTemplate(imported.template);
-                        setPreviewTemplate(imported.template);
-                      }
-                      if (imported.templateColors) setColors({ ...EMPTY_COLORS(), ...imported.templateColors });
-                      if (imported.productDisplayType) setProductDisplayType(imported.productDisplayType);
-                      if (imported.productCardAnimation) setProductCardAnimation(imported.productCardAnimation);
-                      if (imported.heroLayout) setHeroLayout(imported.heroLayout);
-                      if (imported.menuStyle) setMenuStyle(imported.menuStyle);
-                      if (imported.contactFormStyle) setContactFormStyle(imported.contactFormStyle);
-                      if (imported.ratingDisplayType) setRatingDisplayType(imported.ratingDisplayType);
-                      if (imported.aboutLayout) setAboutLayout(imported.aboutLayout);
-                      if (Array.isArray(imported.sectionOrder)) setSectionOrder(imported.sectionOrder);
-                      toast({ title: 'Design Imported', description: 'All settings applied from preset.' });
-                    } catch (err) {
-                      toast({ title: 'Import Failed', description: 'Invalid JSON file.', variant: 'destructive' });
-                    }
-                  }}
-                />
-                <Button variant="outline" size="sm" className="gap-2" as="span">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  Import Design
-                </Button>
-              </label>
-              <p className="text-xs text-muted-foreground mt-1 text-right">
-                💡 Upload a JSON design file to instantly apply a preset
-              </p>
-            </div>
-          </div>
+    <AdminPageShell
+      title="Store Design"
+      description="Customise your store's look, layout, and sections"
+      eyebrow="Profile & Store Setup"
+      backTo="/admin/profile"
+      backLabel="Back to Store Profile"
+      actions={
+        <div>
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={async (e) => {
+                if (!storeId) return;
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const imported = JSON.parse(text);
+                  await setDoc(doc(db, 'storeProfiles', storeId), { ...imported, hasImportedDesign: true }, { merge: true });
+                  if (imported.template) {
+                    setSelectedTemplate(imported.template);
+                    setPreviewTemplate(imported.template);
+                  }
+                  if (imported.templateColors) setColors({ ...EMPTY_COLORS(), ...imported.templateColors });
+                  if (imported.productDisplayType) setProductDisplayType(imported.productDisplayType);
+                  if (imported.productCardAnimation) setProductCardAnimation(imported.productCardAnimation);
+                  if (imported.heroLayout) setHeroLayout(imported.heroLayout);
+                  if (imported.menuStyle) setMenuStyle(imported.menuStyle);
+                  if (imported.contactFormStyle) setContactFormStyle(imported.contactFormStyle);
+                  if (imported.ratingDisplayType) setRatingDisplayType(imported.ratingDisplayType);
+                  if (imported.aboutLayout) setAboutLayout(imported.aboutLayout);
+                  if (Array.isArray(imported.sectionOrder)) setSectionOrder(imported.sectionOrder);
+                  toast({ title: 'Design Imported', description: 'All settings applied from preset.' });
+                } catch (err) {
+                  toast({ title: 'Import Failed', description: 'Invalid JSON file.', variant: 'destructive' });
+                }
+              }}
+            />
+            <Button variant="outline" size="sm" className="gap-2" as="span">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Import Design
+            </Button>
+          </label>
+          <p className="text-xs text-muted-foreground mt-1 text-right">
+            Upload a JSON design file to instantly apply a preset
+          </p>
         </div>
+      }
+    >
 
         {/* Tab bar */}
         <div className="flex gap-1 p-1 bg-muted rounded-xl mb-8 overflow-x-auto">
@@ -1158,7 +1149,7 @@ const AdminTemplates: React.FC = () => {
             {/* Template cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {templates.map(tmpl => (
-                <Card key={tmpl.id} className={`relative overflow-hidden ${selectedTemplate === tmpl.id ? 'ring-2 ring-primary' : ''}`}>
+                <AdminPanel key={tmpl.id} className={`relative overflow-hidden ${selectedTemplate === tmpl.id ? 'ring-2 ring-primary' : ''}`}>
                   {selectedTemplate === tmpl.id && (
                     <div className="absolute top-2 right-2 z-10">
                       <Badge className="bg-primary text-primary-foreground"><Check className="h-3 w-3 mr-1" />Active</Badge>
@@ -1299,13 +1290,13 @@ const AdminTemplates: React.FC = () => {
                       </div>
                     </div>
                   </CardContent>
-                </Card>
+                </AdminPanel>
               ))}
             </div>
 
             {/* Section Order & Visibility - only show when Custom template is selected */}
             {selectedTemplate === 'custom' && (
-              <Card className="border-2 border-primary/30 shadow-lg">
+              <AdminPanel className="border-2 border-primary/30 shadow-lg">
                 <CardHeader className="bg-primary/5">
                   <CardTitle className="flex items-center gap-2">
                     <Layers className="h-5 w-5" />
@@ -1744,11 +1735,11 @@ const AdminTemplates: React.FC = () => {
                     </p>
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             )}
 
             {/* Media upload */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Store Images</CardTitle>
                 <CardDescription>Hero background, carousel slides, and photo gallery</CardDescription>
@@ -1854,7 +1845,7 @@ const AdminTemplates: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Auto-save Notice */}
             <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800">
@@ -1867,7 +1858,7 @@ const AdminTemplates: React.FC = () => {
         {activeTab === 'colors' && (
           <div className="space-y-8">
             {/* Enhanced Live Preview */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Eye className="h-5 w-5" />
@@ -1959,10 +1950,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Preset Palettes */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Preset Palettes</CardTitle>
                 <CardDescription>10 curated palettes for the {templates.find(t => t.id === selectedTemplate)?.name} template — click to apply all 7 colors at once</CardDescription>
@@ -1986,10 +1977,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Free-pick color pickers */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Custom Colors</CardTitle>
                 <CardDescription>Fine-tune each color to match your brand — changes preview instantly</CardDescription>
@@ -2035,10 +2026,10 @@ const AdminTemplates: React.FC = () => {
                   )})}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Hero/Banner Layout Style */}
-            <Card className="border-2 border-primary/20 shadow-lg">
+            <AdminPanel className="border-2 border-primary/20 shadow-lg">
               <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
                 <CardTitle className="flex items-center gap-2">
                   <LayoutGrid className="h-5 w-5" />
@@ -2119,7 +2110,7 @@ const AdminTemplates: React.FC = () => {
                   <strong>💡 Tip:</strong> Banner colors are configured above (Banner Background & Banner Text Color). Choose a layout that complements your brand - Fullscreen for impact, Minimal for simplicity, Split for visual balance.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Save Colors Section */}
             <div className="flex justify-between items-center">
@@ -2145,7 +2136,7 @@ const AdminTemplates: React.FC = () => {
         {activeTab === 'layout' && (
           <div className="space-y-8">
             {/* Product display */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Product Display</CardTitle>
                 <CardDescription>How products appear on your store — all include smooth entry animations</CardDescription>
@@ -2191,10 +2182,10 @@ const AdminTemplates: React.FC = () => {
                   )}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Product hover animation */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Product Hover Animation</CardTitle>
                 <CardDescription>Choose how product cards animate when users hover over them — adds visual interest and interactivity</CardDescription>
@@ -2209,10 +2200,10 @@ const AdminTemplates: React.FC = () => {
                   <strong>💡 Tip:</strong> Hover animations are subtle on mobile but create an engaging experience on desktop. Try "Parallax" or "3D Lift" for modern stores.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Menu style */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Navigation Menu Style</CardTitle>
                 <CardDescription>How the top navigation bar appears to customers</CardDescription>
@@ -2224,10 +2215,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* About layout */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>About Us Layout</CardTitle>
                 <CardDescription>Control how your About / Mission / Vision section appears (when filled in Store Profile)</CardDescription>
@@ -2239,10 +2230,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Page Layout */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Page Layout</CardTitle>
                 <CardDescription>Choose how content is positioned on the page — full-width for modern edge-to-edge design or contained for classic centered layout</CardDescription>
@@ -2257,10 +2248,10 @@ const AdminTemplates: React.FC = () => {
                   <strong>🎨 Pro Tip:</strong> "Hybrid" gives you the best of both worlds — full-width hero banner with contained content sections for optimal readability.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Store Card Style */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Store Info Card Style</CardTitle>
                 <CardDescription>Control how your store information card (logo, description, contact) is displayed</CardDescription>
@@ -2272,10 +2263,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Visual Style */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Visual Style</CardTitle>
                 <CardDescription>Choose the overall visual aesthetic for borders and corners throughout your store</CardDescription>
@@ -2290,7 +2281,7 @@ const AdminTemplates: React.FC = () => {
                   <strong>✨ Style Guide:</strong> "Rounded" is friendly and modern, "Sharp" is professional and bold, "Mixed" combines both for unique visual interest.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             <div className="flex justify-end gap-3 items-center">
               {hasUnsavedLayout && (
@@ -2307,7 +2298,7 @@ const AdminTemplates: React.FC = () => {
         {activeTab === 'sections' && (
           <div className="space-y-8">
             {/* Section ordering */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Section Order & Visibility</CardTitle>
                 <CardDescription>Control which sections appear and their display order on your storefront</CardDescription>
@@ -2468,10 +2459,10 @@ const AdminTemplates: React.FC = () => {
                   </ul>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Contact form */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Contact Form Style</CardTitle>
                 <CardDescription>Choose which fields and layout appear on your Contact Us page</CardDescription>
@@ -2507,10 +2498,10 @@ const AdminTemplates: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Rating display */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Rating Display Style</CardTitle>
                 <CardDescription>How customer ratings appear on your store — only visible to customers viewing your store</CardDescription>
@@ -2568,7 +2559,7 @@ const AdminTemplates: React.FC = () => {
                   )}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             <div className="flex justify-end gap-3 items-center">
               {hasUnsavedSections && (
@@ -2597,7 +2588,7 @@ const AdminTemplates: React.FC = () => {
             </button>
 
             {aiOpen && (
-              <Card className="mt-3 border-primary/20">
+              <AdminPanel className="mt-3 border-primary/20">
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">Generate store content with AI</CardTitle>
                   <CardDescription>
@@ -2648,7 +2639,7 @@ const AdminTemplates: React.FC = () => {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             )}
           </div>
         )}
@@ -2672,8 +2663,7 @@ const AdminTemplates: React.FC = () => {
             Visit Store Profile
           </Button>
         </div>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

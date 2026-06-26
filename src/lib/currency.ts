@@ -6,15 +6,38 @@ export type RateCache = {
 const CACHE_KEY = 'usdToLbpRate';
 const TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-async function fetchRateFromApi(): Promise<number> {
-  // Public, no-key endpoint. If your project requires a paid provider, swap this here.
-  const url = 'https://api.exchangerate.host/latest?base=USD&symbols=LBP';
+async function fetchRateFromOpenErApi(): Promise<number> {
+  const res = await fetch('https://open.er-api.com/v6/latest/USD');
+  if (!res.ok) throw new Error(`rate fetch failed: ${res.status}`);
+  const data = await res.json();
+  const rate = data?.rates?.LBP;
+  if (!rate || typeof rate !== 'number') throw new Error('invalid rate response');
+  return rate;
+}
+
+async function fetchRateFromExchangeRateHost(): Promise<number> {
+  const accessKey = import.meta.env.VITE_EXCHANGERATE_HOST_KEY as string | undefined;
+  const url = accessKey
+    ? `https://api.exchangerate.host/latest?access_key=${encodeURIComponent(accessKey)}&base=USD&symbols=LBP`
+    : 'https://api.exchangerate.host/latest?base=USD&symbols=LBP';
   const res = await fetch(url);
   if (!res.ok) throw new Error(`rate fetch failed: ${res.status}`);
   const data = await res.json();
   const rate = data?.rates?.LBP;
   if (!rate || typeof rate !== 'number') throw new Error('invalid rate response');
   return rate;
+}
+
+async function fetchRateFromApi(): Promise<number> {
+  try {
+    return await fetchRateFromOpenErApi();
+  } catch (primaryErr) {
+    try {
+      return await fetchRateFromExchangeRateHost();
+    } catch {
+      throw primaryErr;
+    }
+  }
 }
 
 export async function fetchUsdToLbpRateFresh(): Promise<RateCache> {

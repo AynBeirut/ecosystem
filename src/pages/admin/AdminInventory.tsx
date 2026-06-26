@@ -1,22 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/useAuth';
 import { useNavigate } from 'react-router-dom';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2, Factory, ChefHat, Clock, Activity, ShieldAlert, CheckCircle2 } from 'lucide-react';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminNavCard from '@/components/admin/AdminNavCard';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import SwipeableLayout from '@/components/SwipeableLayout';
 import { getDaysUntilExpiry } from '@/lib/expiryUtils';
 
 const AdminInventory: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     simpleProducts: { count: 0, totalValue: 0, lowStock: 0 },
@@ -168,213 +168,49 @@ const AdminInventory: React.FC = () => {
 
   return (
     <SwipeableLayout>
-      <div className="min-h-screen bg-background">
-        {isMobile && <MobileHeader title="Inventory Overview" />}
-        <div className="p-4 md:p-6">
-          <div className="hidden md:block">
-            <BackButton />
-          </div>
-        
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Package className="h-6 w-6" />
-            Inventory Overview
-          </h1>
-          <p className="text-muted-foreground">Comprehensive view of all inventory items and valuation</p>
-        </div>
+      <AdminPageShell
+          title="Inventory Overview"
+          description="Comprehensive view of all inventory items and valuation."
+          eyebrow="Stock & Catalog"
+          backTo="/admin/dashboard"
+        >
 
         {/* Quick Navigation */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/products')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-market-primary">
-                <Package className="h-5 w-5" />
-                Products
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Manage all product types: Simple items, Services, and Composed products</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/suppliers')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-purple-600">
-                <TrendingUp className="h-5 w-5" />
-                Suppliers
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Manage suppliers and vendor relationships</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/purchases')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-blue-600">
-                <ShoppingCart className="h-5 w-5" />
-                Purchases
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Create purchase orders for raw materials and finished products</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/supplier-returns')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-600">
-                <Undo2 className="h-5 w-5" />
-                Supplier Returns
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Return defective or incorrect items to suppliers</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/sales-returns')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-red-600">
-                <Undo2 className="h-5 w-5" />
-                Sales Returns
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Process customer returns and refunds</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/recipes')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-pink-600">
-                <ChefHat className="h-5 w-5" />
-                Recipes
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Create and manage recipes for composed products</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/production')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-indigo-600">
-                <Factory className="h-5 w-5" />
-                Production
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Plan and track daily production batches</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/finished-goods')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-green-600">
-                <Package className="h-5 w-5" />
-                Finished Goods
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Track manufactured items ready for sale</p>
-            </CardContent>
-          </Card>
-
-          <Card className="cursor-pointer hover:shadow-lg transition" onClick={() => navigate('/admin/expenses')}>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-amber-600">
-                <DollarSign className="h-5 w-5" />
-                Expenses
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">Track and manage business expenses and operational costs</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+          <AdminNavCard title="Products" description="Manage all product types: Simple items, Services, and Composed products" icon={Package} gradient="from-teal-500 to-teal-700" onClick={() => navigate('/admin/products')} />
+          <AdminNavCard title="Suppliers" description="Manage suppliers and vendor relationships" icon={TrendingUp} gradient="from-violet-500 to-purple-700" onClick={() => navigate('/admin/suppliers')} />
+          <AdminNavCard title="Purchases" description="Create purchase orders for raw materials and finished products" icon={ShoppingCart} gradient="from-sky-500 to-blue-700" onClick={() => navigate('/admin/purchases')} />
+          <AdminNavCard title="Supplier Returns" description="Return defective or incorrect items to suppliers" icon={Undo2} gradient="from-orange-400 to-orange-600" onClick={() => navigate('/admin/supplier-returns')} />
+          <AdminNavCard title="Sales Returns" description="Process customer returns and refunds" icon={Undo2} gradient="from-red-400 to-rose-600" onClick={() => navigate('/admin/sales-returns')} />
+          <AdminNavCard title="Recipes" description="Create and manage recipes for composed products" icon={ChefHat} gradient="from-pink-500 to-rose-700" onClick={() => navigate('/admin/recipes')} />
+          <AdminNavCard title="Production" description="Plan and track daily production batches" icon={Factory} gradient="from-indigo-500 to-indigo-700" onClick={() => navigate('/admin/production')} />
+          <AdminNavCard title="Finished Goods" description="Track manufactured items ready for sale" icon={Package} gradient="from-green-500 to-emerald-700" onClick={() => navigate('/admin/finished-goods')} />
+          <AdminNavCard title="Expenses" description="Track and manage business expenses and operational costs" icon={DollarSign} gradient="from-amber-500 to-orange-600" onClick={() => navigate('/admin/expenses')} />
         </div>
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <DollarSign className="h-4 w-4" />
-                Total Value
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${totalInventoryValue.toFixed(2)}</div>
-              <p className="text-xs text-muted-foreground">Across all inventory</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Package className="h-4 w-4" />
-                Simple Products
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.simpleProducts.count}</div>
-              <p className="text-xs text-muted-foreground">${stats.simpleProducts.totalValue.toFixed(2)} value</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Wrench className="h-4 w-4" />
-                Services
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{stats.services.count}</div>
-              <p className="text-xs text-muted-foreground">Active services</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-orange-500" />
-                Low Stock Alerts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-500">{totalLowStock}</div>
-              <p className="text-xs text-muted-foreground">Items need reordering</p>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium flex items-center gap-2">
-                <Clock className="h-4 w-4 text-red-500" />
-                Expiry Alerts
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="flex items-baseline gap-2">
-                {expiryStats.expired > 0 && (
-                  <span className="text-2xl font-bold text-red-600">{expiryStats.expired} expired</span>
-                )}
-                {expiryStats.expiringSoon > 0 && (
-                  <span className="text-xl font-bold text-orange-500">{expiryStats.expiringSoon} soon</span>
-                )}
-                {expiryStats.expired === 0 && expiryStats.expiringSoon === 0 && (
-                  <span className="text-2xl font-bold text-green-600">0</span>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">Items expiring or expired</p>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
+          <AdminStatCard title="Total Value" value={`$${totalInventoryValue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Across all inventory" />
+          <AdminStatCard title="Simple Products" value={stats.simpleProducts.count} icon={Package} gradient="from-teal-500 to-teal-700" subtitle={`$${stats.simpleProducts.totalValue.toFixed(2)} value`} />
+          <AdminStatCard title="Services" value={stats.services.count} icon={Wrench} gradient="from-cyan-500 to-blue-700" subtitle="Active services" />
+          <AdminStatCard title="Low Stock" value={totalLowStock} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Items need reordering" valueClassName="text-orange-600" />
+          <AdminStatCard
+            title="Expiry Alerts"
+            value={expiryStats.expired + expiryStats.expiringSoon}
+            icon={Clock}
+            gradient="from-red-500 to-rose-700"
+            subtitle={
+              expiryStats.expired > 0 || expiryStats.expiringSoon > 0
+                ? `${expiryStats.expired} expired · ${expiryStats.expiringSoon} soon`
+                : 'All items fresh'
+            }
+            valueClassName={expiryStats.expired > 0 ? 'text-red-600' : expiryStats.expiringSoon > 0 ? 'text-orange-600' : 'text-green-600'}
+          />
         </div>
 
         {/* Inventory Activity Dashboard */}
         <div className="mb-6 grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <Card className="lg:col-span-2">
+          <AdminPanel className="lg:col-span-2">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Activity className="h-5 w-5 text-market-primary" />
@@ -424,9 +260,9 @@ const AdminInventory: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Stock Health</CardTitle>
               <CardDescription>Overall status for this store</CardDescription>
@@ -448,7 +284,7 @@ const AdminInventory: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
         {/* Detailed Tabs */}
@@ -464,7 +300,7 @@ const AdminInventory: React.FC = () => {
           </TabsList>
 
           <TabsContent value="simple">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Simple Products</CardTitle>
                 <CardDescription>Items purchased and sold with stock tracking</CardDescription>
@@ -487,11 +323,11 @@ const AdminInventory: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           <TabsContent value="services">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Services</CardTitle>
                 <CardDescription>Services with cost tracking, no stock</CardDescription>
@@ -509,11 +345,11 @@ const AdminInventory: React.FC = () => {
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           <TabsContent value="raw">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Raw Materials</CardTitle>
                 <CardDescription>Ingredients and materials for production</CardDescription>
@@ -544,11 +380,11 @@ const AdminInventory: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           <TabsContent value="finished">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Finished Goods</CardTitle>
                 <CardDescription>Manufactured items ready for sale with FIFO cost tracking</CardDescription>
@@ -574,11 +410,11 @@ const AdminInventory: React.FC = () => {
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           <TabsContent value="expiry">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Clock className="h-5 w-5" />
@@ -612,11 +448,10 @@ const AdminInventory: React.FC = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+      </AdminPageShell>
     </SwipeableLayout>
   );
 };

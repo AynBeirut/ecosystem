@@ -14,17 +14,14 @@ import { Undo2, Plus, CheckCircle, XCircle, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, RawMaterial } from '@/types/inventory';
 import { SupplierReturn, SupplierReturnItem, SupplierReturnStatus } from '@/types/supplierReturns';
-import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
 const SupplierReturns: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   
   const [returns, setReturns] = useState<SupplierReturn[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
@@ -322,22 +319,20 @@ const SupplierReturns: React.FC = () => {
   const selectedPurchase = purchases.find(p => p.id === newReturn.purchaseId);
 
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {isMobile ? <MobileHeader title="Supplier Returns" /> : null}
-      
-      <main className="container mx-auto p-4 md:p-6 max-w-7xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-          {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-          <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Supplier Returns (SRA)</h1>
-            <p className="text-gray-500 mt-1 text-sm md:text-base">Create and manage returns to suppliers</p>
-          </div>
-          <Button onClick={() => setIsCreatingReturn(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Return
-          </Button>
-        </div>
-
+    <AdminPageShell
+      title="Supplier Returns (SRA)"
+      description="Create and manage returns to suppliers"
+      eyebrow="Inventory"
+      backTo="/admin/dashboard"
+      backLabel="Dashboard"
+      className="pb-20"
+      actions={(
+        <Button onClick={() => setIsCreatingReturn(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Return
+        </Button>
+      )}
+    >
         {/* Create Return Dialog */}
         <Dialog
           open={isCreatingReturn}
@@ -379,7 +374,7 @@ const SupplierReturns: React.FC = () => {
                     <Label className="text-base md:text-lg font-semibold">Items to Return</Label>
                     <div className="space-y-3 mt-2">
                       {newReturn.items.map((item, index) => (
-                        <Card key={index}>
+                        <AdminPanel key={index}>
                           <CardContent className="p-3 md:p-4">
                             <div className="space-y-3">
                               <div>
@@ -419,7 +414,7 @@ const SupplierReturns: React.FC = () => {
                               </div>
                             </div>
                           </CardContent>
-                        </Card>
+                        </AdminPanel>
                       ))}
                     </div>
                   </div>
@@ -509,15 +504,15 @@ const SupplierReturns: React.FC = () => {
         {/* Returns List */}
         <div className="grid gap-4">
           {returns.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <Undo2 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No supplier returns yet. Create your first return to get started.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             returns.map((returnDoc) => (
-              <Card key={returnDoc.id}>
+              <AdminPanel key={returnDoc.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
@@ -575,12 +570,11 @@ const SupplierReturns: React.FC = () => {
                     )}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

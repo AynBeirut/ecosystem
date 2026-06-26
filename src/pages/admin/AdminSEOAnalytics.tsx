@@ -41,9 +41,8 @@ import {
   Share2,
   ArrowRight,
 } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -127,7 +126,7 @@ interface StatCardProps {
 }
 
 const StatCard: React.FC<StatCardProps> = ({ title, value, sub, icon: Icon, accent = 'text-teal-600' }) => (
-  <Card>
+  <AdminPanel>
     <CardContent className="p-5 flex items-start gap-4">
       <div className={`rounded-full p-2.5 bg-gray-100 ${accent}`}>
         <Icon className="h-5 w-5" />
@@ -138,13 +137,12 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, sub, icon: Icon, acce
         {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
       </div>
     </CardContent>
-  </Card>
+  </AdminPanel>
 );
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const AdminSEOAnalytics: React.FC = () => {
-  const isMobile = useIsMobile();
   const [timeRange, setTimeRange] = useState('30d');
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date | null>(null);
@@ -303,43 +301,32 @@ const AdminSEOAnalytics: React.FC = () => {
 
   // ─── Render ────────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="SEO Analytics" />}
-
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Header row */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {!isMobile && <BackButton />}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">SEO & Traffic Analytics</h1>
-              <p className="text-sm text-gray-500">
-                Public site tracking — grabio.space
-                {lastRefresh && (
-                  <span className="ml-2 text-gray-400">
-                    · refreshed {lastRefresh.toLocaleTimeString()}
-                  </span>
-                )}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            <Select value={timeRange} onValueChange={setTimeRange}>
-              <SelectTrigger className="w-[110px]">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="7d">Last 7 days</SelectItem>
-                <SelectItem value="30d">Last 30 days</SelectItem>
-                <SelectItem value="90d">Last 90 days</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-            </Button>
-          </div>
-        </div>
-
+    <AdminPageShell
+      title="SEO & Traffic Analytics"
+      description={
+        lastRefresh
+          ? `Public site tracking — grabio.space · refreshed ${lastRefresh.toLocaleTimeString()}`
+          : 'Public site tracking — grabio.space'
+      }
+      className="max-w-7xl mx-auto px-4 py-6"
+      actions={(
+        <>
+          <Select value={timeRange} onValueChange={setTimeRange}>
+            <SelectTrigger className="w-[110px]">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="7d">Last 7 days</SelectItem>
+              <SelectItem value="30d">Last 30 days</SelectItem>
+              <SelectItem value="90d">Last 90 days</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+        </>
+      )}
+    >
         {/* Overview stat cards */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard
@@ -384,7 +371,7 @@ const AdminSEOAnalytics: React.FC = () => {
           {/* ─── Traffic Tab ─────────────────────────────────────────── */}
           <TabsContent value="traffic" className="space-y-6">
             {/* Page views over time */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="text-base">Visitors Over Time</CardTitle>
               </CardHeader>
@@ -431,11 +418,11 @@ const AdminSEOAnalytics: React.FC = () => {
                   </ResponsiveContainer>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Sources */}
             <div className="grid md:grid-cols-2 gap-6">
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="text-base">Traffic Sources</CardTitle>
                 </CardHeader>
@@ -468,9 +455,9 @@ const AdminSEOAnalytics: React.FC = () => {
                     </ResponsiveContainer>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
 
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="text-base">Source Breakdown</CardTitle>
                 </CardHeader>
@@ -499,13 +486,13 @@ const AdminSEOAnalytics: React.FC = () => {
                     })}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             </div>
           </TabsContent>
 
           {/* ─── Pages Tab ───────────────────────────────────────────── */}
           <TabsContent value="pages" className="space-y-6">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="text-base">Top Pages</CardTitle>
               </CardHeader>
@@ -550,11 +537,11 @@ const AdminSEOAnalytics: React.FC = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Bar chart of top pages */}
             {pageStats.length > 0 && (
-              <Card>
+              <AdminPanel>
                 <CardHeader>
                   <CardTitle className="text-base">Views by Page</CardTitle>
                 </CardHeader>
@@ -579,14 +566,14 @@ const AdminSEOAnalytics: React.FC = () => {
                     </BarChart>
                   </ResponsiveContainer>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             )}
           </TabsContent>
 
           {/* ─── Leads Tab ───────────────────────────────────────────── */}
           <TabsContent value="leads" className="space-y-6">
             {/* Leads over time */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="text-base">Leads Over Time</CardTitle>
               </CardHeader>
@@ -619,10 +606,10 @@ const AdminSEOAnalytics: React.FC = () => {
                   </ResponsiveContainer>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Recent leads list */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="text-base">Recent Leads</CardTitle>
               </CardHeader>
@@ -666,12 +653,12 @@ const AdminSEOAnalytics: React.FC = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
 
           {/* ─── Funnel Tab ──────────────────────────────────────────── */}
           <TabsContent value="funnel" className="space-y-6">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="text-base">Conversion Funnel</CardTitle>
               </CardHeader>
@@ -753,11 +740,10 @@ const AdminSEOAnalytics: React.FC = () => {
                   </>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
           </TabsContent>
         </Tabs>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

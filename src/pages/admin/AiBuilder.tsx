@@ -1,7 +1,9 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import ModuleGate from '@/components/ModuleGate';
 import { AI_CREDIT_PACKS } from '@/lib/aiCredits';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
@@ -12,12 +14,14 @@ const AiBuilder: React.FC = () => {
 
   return (
     <ModuleGate moduleId="ai_builder">
-      <div className="container mx-auto px-4 py-8 max-w-3xl">
-        <h1 className="text-2xl font-bold mb-2">AI Builder</h1>
-        <p className="text-muted-foreground mb-6">
-          Wizard + editor UX — Grabio template store (free standard + paid custom).
-        </p>
-        <Card className="mb-6">
+      <AdminPageShell
+        title="AI Builder"
+        description="Wizard + editor UX — Grabio template store (free standard + paid custom)."
+        eyebrow="AI Tools"
+        backTo="/admin/dashboard"
+        className="max-w-3xl"
+      >
+        <AdminPanel className="mb-6">
           <CardHeader>
             <CardTitle>Credit balance</CardTitle>
             <CardDescription>All AI agents share one prepaid balance.</CardDescription>
@@ -25,10 +29,10 @@ const AiBuilder: React.FC = () => {
           <CardContent>
             <p className="text-3xl font-bold">{balance} credits</p>
           </CardContent>
-        </Card>
+        </AdminPanel>
         <div className="grid sm:grid-cols-3 gap-4 mb-6">
           {AI_CREDIT_PACKS.map((pack) => (
-            <Card key={pack.id}>
+            <AdminPanel key={pack.id}>
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">{pack.label}</CardTitle>
                 <CardDescription>${pack.priceUsd}</CardDescription>
@@ -38,13 +42,10 @@ const AiBuilder: React.FC = () => {
                   Buy (checkout Phase 6)
                 </Button>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ))}
         </div>
-        <Button asChild variant="outline">
-          <Link to="/admin">Back to dashboard</Link>
-        </Button>
-      </div>
+      </AdminPageShell>
     </ModuleGate>
   );
 };

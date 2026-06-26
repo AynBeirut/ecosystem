@@ -21,9 +21,8 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Globe, CheckCircle2, XCircle, RefreshCw, UploadCloud, Link2, ExternalLink } from 'lucide-react';
 import { MarketplaceIntegrationSetting } from '@/types/storeProfile';
 import { Product } from '@/types/product';
@@ -131,7 +130,6 @@ const toIsoSafe = (value: unknown): string => {
 const AdminMarketplaceSync: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
 
   const [loading, setLoading] = useState(true);
   const [integrations, setIntegrations] = useState<MarketplaceIntegrationSetting[]>([]);
@@ -946,56 +944,47 @@ const AdminMarketplaceSync: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Marketplace Sync" />}
-      <div className="p-4 md:p-6">
-        <BackButton />
-        <div className="mb-6 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-          <div>
-            <h1 className="text-2xl font-bold flex items-center gap-2">
-              <Globe className="h-6 w-6" />
-              Marketplace Sync Center
-            </h1>
-            <p className="text-muted-foreground">
-              Test channel connectivity and manually push product snapshots to enabled marketplaces.
-            </p>
-          </div>
-          <Button asChild variant="outline">
-            <Link to="/admin/profile">
-              <Link2 className="h-4 w-4 mr-2" />
-              Open Integrations In Profile
-            </Link>
-          </Button>
-        </div>
-
+    <AdminPageShell
+      title="Marketplace Sync Center"
+      description="Test channel connectivity and manually push product snapshots to enabled marketplaces."
+      className="p-4 md:p-6"
+      actions={(
+        <Button asChild variant="outline">
+          <Link to="/admin/profile">
+            <Link2 className="h-4 w-4 mr-2" />
+            Open Integrations In Profile
+          </Link>
+        </Button>
+      )}
+    >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <Card>
+          <AdminPanel>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Enabled Channels</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{loading ? '...' : enabledIntegrations.length}</div>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Products Ready</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{loading ? '...' : products.length}</div>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Recent Sync Jobs</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{loading ? '...' : jobs.length}</div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
-        <Card className="mb-6">
+        <AdminPanel className="mb-6">
           <CardHeader>
             <CardTitle>Product Scope</CardTitle>
             <CardDescription>
@@ -1018,9 +1007,9 @@ const AdminMarketplaceSync: React.FC = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card className="mb-6 border-blue-200">
+        <AdminPanel className="mb-6 border-blue-200">
           <CardHeader>
             <CardTitle>Meta Catalog Sync</CardTitle>
             <CardDescription>
@@ -1152,9 +1141,9 @@ const AdminMarketplaceSync: React.FC = () => {
               </Button>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card className="mb-6 border-indigo-200">
+        <AdminPanel className="mb-6 border-indigo-200">
           <CardHeader>
             <CardTitle>Meta Ads Campaign</CardTitle>
             <CardDescription>
@@ -1249,9 +1238,9 @@ const AdminMarketplaceSync: React.FC = () => {
               </Button>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
-        <Card className="mb-6 border-emerald-200">
+        <AdminPanel className="mb-6 border-emerald-200">
           <CardHeader>
             <CardTitle>Dynamic Product Ads</CardTitle>
             <CardDescription>
@@ -1341,15 +1330,15 @@ const AdminMarketplaceSync: React.FC = () => {
               </Button>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         <div className="space-y-4 mb-6">
           {enabledIntegrations.length === 0 && (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-6 text-sm text-muted-foreground">
                 No enabled marketplace channels found. Enable at least one integration in Store Profile first.
               </CardContent>
-            </Card>
+            </AdminPanel>
           )}
 
           {enabledIntegrations.map((integration) => {
@@ -1360,7 +1349,7 @@ const AdminMarketplaceSync: React.FC = () => {
             const lastSyncAt = settings.lastSuccessfulSyncAt || channelLastCompletedAt[integration.id] || '';
 
             return (
-              <Card key={integration.id} className={isAlibaba ? 'border-amber-300' : ''}>
+              <AdminPanel key={integration.id} className={isAlibaba ? 'border-amber-300' : ''}>
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     {integration.name}
@@ -1557,12 +1546,12 @@ const AdminMarketplaceSync: React.FC = () => {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             );
           })}
         </div>
 
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle>Recent Sync History</CardTitle>
             <CardDescription>Latest sync jobs across all marketplace channels.</CardDescription>
@@ -1616,9 +1605,8 @@ const AdminMarketplaceSync: React.FC = () => {
               </div>
             )}
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </AdminPanel>
+    </AdminPageShell>
   );
 };
 

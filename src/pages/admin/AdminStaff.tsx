@@ -12,15 +12,13 @@ import { Trash2, Plus, Edit3, Users, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { StaffMember } from '@/types/staff';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 
 const AdminStaff: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [isAddingStaff, setIsAddingStaff] = useState(false);
   const [editingStaff, setEditingStaff] = useState<StaffMember | null>(null);
@@ -191,21 +189,18 @@ const AdminStaff: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Staff Management" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
-            <h1 className="text-2xl font-bold">Staff Management (Payroll)</h1>
-          </div>
-          <Dialog open={isAddingStaff} onOpenChange={setIsAddingStaff}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Staff Member
-              </Button>
-            </DialogTrigger>
+    <AdminPageShell
+      title="Staff Management (Payroll)"
+      description="Manage your team's payroll, roles, and employment status"
+      eyebrow="Business Tools"
+      actions={(
+        <Dialog open={isAddingStaff} onOpenChange={setIsAddingStaff}>
+          <DialogTrigger asChild>
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Staff Member
+            </Button>
+          </DialogTrigger>
             <DialogContent className="max-w-2xl">
               <DialogHeader>
                 <DialogTitle>Add New Staff Member</DialogTitle>
@@ -286,42 +281,43 @@ const AdminStaff: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
+      )}
+    >
 
         {/* Staff Stats */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
-          <Card>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold">{staff.length}</div>
               <p className="text-xs text-gray-500">Total Staff</p>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold">{staff.filter(s => s.status === 'active').length}</div>
               <p className="text-xs text-gray-500">Active Staff</p>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold">{staff.filter(s => s.status === 'suspended').length}</div>
               <p className="text-xs text-gray-500">Suspended</p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
         {/* Staff List */}
         <div className="grid gap-4">
           {staff.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No staff members yet. Add your first team member to get started.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             staff.map((member) => (
-              <Card key={member.id}>
+              <AdminPanel key={member.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
@@ -375,7 +371,7 @@ const AdminStaff: React.FC = () => {
                     </div>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
@@ -471,8 +467,7 @@ const AdminStaff: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

@@ -1,4 +1,7 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc, getDoc, setDoc, runTransaction } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
@@ -11,7 +14,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign } from 'lucide-react';
+import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign, Clock, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial, PaymentRecord } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
@@ -26,14 +29,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 const AdminPurchases: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
@@ -1856,58 +1855,73 @@ const AdminPurchases: React.FC = () => {
       return null; // Don't show payment status for non-received orders
     }
     
-    return (
-      <Badge className={variants[paymentStatus].color}>
-        {variants[paymentStatus].label}
-      </Badge>
-    );
-  };
+  return (
+    <Badge className={variants[paymentStatus].color}>
+      {variants[paymentStatus].label}
+    </Badge>
+  );
+};
+
+  const purchaseStats = useMemo(() => {
+    const openStatuses = ['pending', 'confirmed'];
+    const openOrders = purchases.filter((p) => openStatuses.includes(String(p.status || '').toLowerCase())).length;
+    const totalValue = purchases.reduce((sum, p) => sum + Number(p.totalAmount || p.total || p.totalCost || 0), 0);
+    const amountDue = purchases
+      .filter((p) => p.status === 'received' && p.paymentStatus !== 'paid')
+      .reduce((sum, p) => sum + Math.max(0, Number(p.totalAmount || p.total || 0) - Number(p.amountPaid || 0)), 0);
+    return { total: purchases.length, openOrders, totalValue, amountDue };
+  }, [purchases]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Purchase Orders" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-            <h1 className="text-2xl font-bold">Purchase Orders</h1>
-          </div>
-          <Dialog open={isAddingPurchase} onOpenChange={setIsAddingPurchase}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Create Purchase Order
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Create Purchase Order</DialogTitle>
-                <DialogDescription>Order raw materials from supplier</DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <div className="flex items-center justify-between mb-1">
-                      <Label htmlFor="supplierId">Supplier *</Label>
-                      <Button 
-                        type="button" 
-                        variant="link" 
-                        size="sm" 
-                        className="text-xs h-auto p-0"
-                        onClick={() => setIsCreatingNewSupplier(!isCreatingNewSupplier)}
-                      >
-                        {isCreatingNewSupplier ? "Select existing" : "+ Add new supplier"}
-                      </Button>
-                    </div>
-                    
-                    {!isCreatingNewSupplier ? (
-                      <Select
-                        value={newPurchase.supplierId}
-                        onValueChange={(value) => setNewPurchase({ ...newPurchase, supplierId: value })}
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select supplier" />
-                        </SelectTrigger>
+    <AdminPageShell
+      title="Purchase Orders"
+      eyebrow="Daily Operations"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+      actions={
+        <Button onClick={() => setIsAddingPurchase(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Create Purchase Order
+        </Button>
+      }
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <AdminStatCard title="Purchase Orders" value={purchaseStats.total} icon={ShoppingCart} gradient="from-teal-500 to-teal-700" subtitle="All POs on record" />
+        <AdminStatCard title="Open POs" value={purchaseStats.openOrders} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Pending or confirmed" />
+        <AdminStatCard title="Total PO Value" value={`$${purchaseStats.totalValue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Sum of all orders" />
+        <AdminStatCard title="Amount Due" value={`$${purchaseStats.amountDue.toFixed(2)}`} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 ? 'text-orange-600' : undefined} />
+      </div>
+
+      <Dialog open={isAddingPurchase} onOpenChange={setIsAddingPurchase}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Create Purchase Order</DialogTitle>
+            <DialogDescription>Order raw materials from supplier</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4">
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <Label htmlFor="supplierId">Supplier *</Label>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="text-xs h-auto p-0"
+                    onClick={() => setIsCreatingNewSupplier(!isCreatingNewSupplier)}
+                  >
+                    {isCreatingNewSupplier ? "Select existing" : "+ Add new supplier"}
+                  </Button>
+                </div>
+
+                {!isCreatingNewSupplier ? (
+                  <Select
+                    value={newPurchase.supplierId}
+                    onValueChange={(value) => setNewPurchase({ ...newPurchase, supplierId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select supplier" />
+                    </SelectTrigger>
                         <SelectContent>
                           {suppliers.map(supplier => (
                             <SelectItem key={supplier.id} value={supplier.id}>
@@ -2164,23 +2178,22 @@ const AdminPurchases: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-        </div>
 
         {/* Purchase Orders List */}
         <div className="grid gap-4">
           {purchases.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <ShoppingCart className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No purchase orders yet. Create your first PO to get started.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             purchases.map((purchase) => {
               const supplier = suppliers.find(s => s.id === purchase.supplierId);
 
               return (
-                <Card key={purchase.id}>
+                <AdminPanel key={purchase.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
@@ -2390,7 +2403,7 @@ const AdminPurchases: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
@@ -2484,8 +2497,7 @@ const AdminPurchases: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

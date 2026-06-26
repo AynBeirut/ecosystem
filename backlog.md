@@ -591,5 +591,28 @@ Standalone or **bundled service items** with flexible subscription billing:
 
 ---
 
+## Admin UI unification — 2026-06-26 (in progress)
+
+### Done
+- [x] Shared `AdminLayout` (dark sidebar, footer, mobile ops strip) wraps **all** `/admin/*`, `/subscription`, `/team/dashboard`
+- [x] `useAdminNavigation` — single menu source (matches dashboard sidebar list)
+- [x] `AdminPageHero` — compact dark header for inner pages
+- [x] Bulk shell class pass: `min-h-screen bg-gray-50` → `space-y-6` on admin pages
+- [x] CRM shell restyled; Inventory page uses `AdminPageHero` (pilot)
+
+### Remaining (per-page)
+- [x] Batch 3 (8 pages): `AdminPageShell` + `AdminPanel` / `AdminStatCard` / `AdminNavCard` body restyle
+- [x] Batch 2 body pass: `AdminPanel` on all 28 header-only pages (Orders, Purchases, Products, etc.)
+- [x] Batch 3 body pass: `AdminPanel` + `AdminStatCard` / `AdminNavCard` on inventory cluster
+- [x] Batch 4: remaining legacy pages → `AdminPageShell` + `AdminPanel` (Whitelabel, Finance sub-pages, AI tools via `AiToolPage`, Product Reviews, Order Notifications, Crawl Audit, CRM shell, SubAccount dashboard, Subscription, AI Builder, Blog Publisher, POS Pairing, Projects, supplier skeleton pages)
+- [x] Batch 5: add `AdminStatCard` KPI rows to high-traffic Batch 2 pages (Orders, Purchases, Customers, Payments, Analytics, Revenue)
+- [ ] Add `AdminPageHero` to every admin page (replace legacy h1 + BackButton + MobileHeader) — **mostly done via Batch 4; `AdminDashboard` keeps custom hero**
+- [ ] Remove duplicate `MobileHeader` / `BackButton` where layout covers nav
+- [ ] SubAccountDashboard — align with dashboard home stat cards
+- [ ] Blank-page audit: module gates (`requiredModule`), lazy chunk errors, missing Firestore indexes
+- [ ] Slow pages: Orders, Purchases, Account Statement — profile queries / pagination
+
+---
+
 *Next step: Owner will study implementation approach for POS, Invoice Manager, Blog Publisher, and AI Builder before any code. No module build until strategy is confirmed.*
 

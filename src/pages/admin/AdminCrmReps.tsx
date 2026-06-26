@@ -7,7 +7,8 @@ import { getActualStoreId } from '@/lib/storeUtils';
 import { getApiBaseUrl } from '@/lib/apiBase';
 import type { CrmRep } from '@/types/crm';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -109,7 +110,7 @@ export default function AdminCrmReps() {
 
   return (
     <div className="space-y-6">
-      <Card>
+      <AdminPanel>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
@@ -177,7 +178,7 @@ export default function AdminCrmReps() {
             </ul>
           )}
         </CardContent>
-      </Card>
+      </AdminPanel>
     </div>
   );
 }

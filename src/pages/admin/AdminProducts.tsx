@@ -22,9 +22,8 @@ import { Switch } from '@/components/ui/switch';
 import { Product, ProductType, ServiceBillingType } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
@@ -49,7 +48,6 @@ const DEFAULT_PRODUCT_CATEGORIES = [
 const AdminProducts: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
   const [recipes, setRecipes] = useState<Array<{ id: string; name?: string; costPerUnit?: number }>>([]);
@@ -744,32 +742,21 @@ const AdminProducts: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Manage Products" />}
-      <div className="p-4 md:p-6">
-        <BackButton to={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'} label="Back to Inventory" />
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Package className="h-6 w-6" />
-                {canManageInventory ? 'Manage Products' : 'View Products'}
-              </h1>
-              <p className="text-muted-foreground">
-                {canManageInventory 
-                  ? 'Add, edit, and manage your store products'
-                  : 'View your store products'}
-              </p>
-            </div>
-            
-            {canManageInventory && (
-              <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Product
-                  </Button>
-                </DialogTrigger>
+    <AdminPageShell
+      title={canManageInventory ? 'Manage Products' : 'View Products'}
+      description={canManageInventory ? 'Add, edit, and manage your store products' : 'View your store products'}
+      eyebrow="Daily Operations"
+      backTo={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'}
+      backLabel="Back to Inventory"
+      actions={
+        canManageInventory && (
+          <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
+            </DialogTrigger>
               <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Add New Product</DialogTitle>
@@ -1058,13 +1045,12 @@ const AdminProducts: React.FC = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            )}
-          </div>
-        </div>
-
+        )
+      }
+    >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {products.map((product) => (
-            <Card key={product.id}>
+            <AdminPanel key={product.id}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
@@ -1206,12 +1192,12 @@ const AdminProducts: React.FC = () => {
                 </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ))}
           
           {products.length === 0 && (
             <div className="col-span-full">
-              <Card>
+              <AdminPanel>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Package className="h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No Products Yet</h3>
@@ -1227,11 +1213,10 @@ const AdminProducts: React.FC = () => {
                     </Button>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             </div>
           )}
         </div>
-      </div>
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
@@ -1570,7 +1555,7 @@ const AdminProducts: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 };
 

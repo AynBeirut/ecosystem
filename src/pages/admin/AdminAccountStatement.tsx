@@ -7,9 +7,9 @@ import { exportToCSV } from '@/lib/exportUtils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import { useNavigate } from 'react-router-dom';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
 import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { initArabicPDF, writeText, cleanTextForPDF } from '@/lib/arabicPDF';
 import { isCountedSaleStatus, isDateInRange, normalizeDateString, resolveOrderItemProductKey } from '@/lib/salesRules';
 
@@ -3202,8 +3202,7 @@ const AdminAccountStatement: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background">
-        {isMobile && <MobileHeader title="Account Statement" />}
+      <div className="space-y-6">
         <div className="container mx-auto p-4">
           <div className="flex justify-center items-center h-64">
             <div className="text-lg">Loading account statement...</div>
@@ -3480,39 +3479,33 @@ const AdminAccountStatement: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Account Statement" />}
-      <div className="container mx-auto p-4">
-        {!isMobile && (
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            <button
-              onClick={() => navigate('/admin/dashboard')}
-              className="flex items-center gap-2 text-gray-600 hover:text-gray-800"
-            >
-              <ArrowLeft size={20} />
-              Back to Dashboard
-          </button>
-          <h1 className="text-2xl font-bold">Account Statement</h1>
-        </div>
-        <div className="flex gap-2">
+    <AdminPageShell
+      title="Account Statement"
+      description="Detailed overview of financial transactions and balances"
+      eyebrow="Business Tools"
+      backTo="/admin/finance"
+      backLabel="Finance Suite"
+      actions={(
+        <div className="flex flex-wrap gap-2">
           <button
+            type="button"
             onClick={exportAllToExcel}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700"
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
           >
-            <Download size={20} />
+            <Download size={18} />
             Export Excel
           </button>
           <button
+            type="button"
             onClick={exportAllToPDF}
-            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700"
+            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
           >
-            <FileDown size={20} />
+            <FileDown size={18} />
             Export PDF
           </button>
         </div>
-      </div>
-        )}
+      )}
+    >
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
         <div className="bg-white p-4 rounded shadow">
@@ -5162,8 +5155,7 @@ const AdminAccountStatement: React.FC = () => {
           </div>
         </div>
       )}
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

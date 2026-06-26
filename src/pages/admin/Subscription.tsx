@@ -5,7 +5,8 @@ import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { StoreProfile } from '@/types/storeProfile';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -36,7 +37,8 @@ import type { StartingPackageKey } from '@/lib/moduleManifest';
 import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule } from '@/lib/pricingDisplay';
 import type { AddOnKey as PricingAddOnKey } from '@/lib/pricingDisplay';
 import { getApiBaseUrl } from '@/lib/apiBase';
-import AdminPageHero from '@/components/admin/AdminPageHero';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import AdminModuleIcon from '@/components/admin/AdminModuleIcon';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
@@ -737,17 +739,16 @@ export default function Subscription() {
   const canManageAddOns = hasActiveSubscription && !!activeTier && activeTier !== 'trial';
 
   return (
-    <div className="min-h-screen bg-slate-50">
-    <div className="container mx-auto py-6 px-4 max-w-6xl">
-      <AdminPageHero
-        title="Subscription Management"
-        description="Build your modular package, manage billing, and control which modules are live in your store."
-        backTo="/admin/profile"
-        backLabel="Back to Store Profile"
-      />
+    <AdminPageShell
+      title="Subscription Management"
+      description="Build your modular package, manage billing, and control which modules are live in your store."
+      backTo="/admin/profile"
+      backLabel="Back to Store Profile"
+      className="max-w-6xl"
+    >
 
       {profile?.nextPlanPreset && (
-        <Card className="mb-8 border-blue-200 bg-blue-50">
+        <AdminPanel className="mb-8 border-blue-200 bg-blue-50">
           <CardHeader>
             <CardTitle>Next renewal plan</CardTitle>
             <CardDescription>
@@ -766,11 +767,11 @@ export default function Subscription() {
               <p className="text-sm text-muted-foreground">{profile.nextSeatCount} users included in mapping</p>
             )}
           </CardContent>
-        </Card>
+        </AdminPanel>
       )}
 
       {showModularPackageBuilder && (
-        <Card className="mb-8 border-slate-200/80 shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] bg-white/90 backdrop-blur-sm">
+        <AdminPanel className="mb-8 border-slate-200/80 shadow-[0_4px_24px_-4px_rgba(15,23,42,0.08)] bg-white/90 backdrop-blur-sm">
           <CardHeader>
             <CardTitle>Custom Package Builder</CardTitle>
             <CardDescription>
@@ -1046,11 +1047,11 @@ export default function Subscription() {
             </div>
 
           </CardContent>
-        </Card>
+        </AdminPanel>
       )}
 
       {/* Current Subscription Status */}
-      <Card className="mb-8">
+      <AdminPanel className="mb-8">
         <CardHeader>
           <div className="flex justify-between items-start">
             <div>
@@ -1218,7 +1219,7 @@ export default function Subscription() {
             )}
           </div>
         </CardContent>
-      </Card>
+      </AdminPanel>
 
       {!ECOSYSTEM_FLAGS.modularEntitlements && (
         <>
@@ -1234,7 +1235,7 @@ export default function Subscription() {
             const isHighlighted = tier === 'starter' || tier === 'business';
 
             return (
-              <Card key={tier} className={isHighlighted ? 'border-primary' : ''}>
+              <AdminPanel key={tier} className={isHighlighted ? 'border-primary' : ''}>
                 <CardHeader>
                   <div className="flex justify-between items-start gap-2">
                     <div>
@@ -1391,7 +1392,7 @@ export default function Subscription() {
                     )}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             );
           })}
         </div>
@@ -1432,7 +1433,7 @@ export default function Subscription() {
       </div>
 
       {/* Comparison Table */}
-      <Card className="mb-8">
+      <AdminPanel className="mb-8">
         <CardHeader>
           <CardTitle>Plan Comparison</CardTitle>
           <CardDescription>Compare limits and features across all plans</CardDescription>
@@ -1518,10 +1519,10 @@ export default function Subscription() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </AdminPanel>
 
       {/* Add-ons */}
-      <Card className="mb-8">
+      <AdminPanel className="mb-8">
         <CardHeader>
           <CardTitle>Add-ons & Upgrades</CardTitle>
           <CardDescription>Enhance your plan with additional features</CardDescription>
@@ -1696,14 +1697,14 @@ export default function Subscription() {
             </div>
           </div>
         </CardContent>
-      </Card>
+      </AdminPanel>
 
         </>
       )}
 
       {/* Payment History */}
       {subscriptionInfo?.billingHistory && subscriptionInfo.billingHistory.length > 0 && (
-        <Card>
+        <AdminPanel>
           <CardHeader>
             <CardTitle>Payment History</CardTitle>
             <CardDescription>Your recent transactions</CardDescription>
@@ -1744,12 +1745,12 @@ export default function Subscription() {
               </table>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
       )}
 
       {/* Premium Support - Only for Premium and Pro users */}
       {(activeTier === 'pro' || activeTier === 'business' || isCurrentTrial) && hasActiveSubscription && (
-        <Card className="mt-8 border-2 border-green-200 bg-green-50">
+        <AdminPanel className="mt-8 border-2 border-green-200 bg-green-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <svg className="w-6 h-6 text-green-600" fill="currentColor" viewBox="0 0 24 24">
@@ -1775,7 +1776,7 @@ export default function Subscription() {
               Chat on WhatsApp: +961 79 190 116
             </a>
           </CardContent>
-        </Card>
+        </AdminPanel>
       )}
 
       {/* Payment method picker dialog */}
@@ -1807,7 +1808,6 @@ export default function Subscription() {
       <div className="mt-10 pt-6 border-t border-slate-200 text-center">
         <PoweredByEmoove />
       </div>
-    </div>
-    </div>
+    </AdminPageShell>
   );
 }

@@ -11,11 +11,10 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Users, Plus, Edit2, Trash2, Star, DollarSign, TrendingUp, Award } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Customer } from '@/types/customer';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
 
 const CUSTOMER_TIERS = [
   { value: 'bronze', label: 'Bronze', color: 'bg-orange-100 text-orange-800', minPercent: 0 },
@@ -188,7 +187,6 @@ const CustomerForm: React.FC<{
 const AdminCustomers: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesPersons, setSalesPersons] = useState<{ id: string; name: string }[]>([]);
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
@@ -426,84 +424,39 @@ const AdminCustomers: React.FC = () => {
     : 0;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Customer Management" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
-            <h1 className="text-2xl font-bold">Customer Management (CRM)</h1>
-          </div>
-          <Dialog open={isAddingCustomer} onOpenChange={setIsAddingCustomer}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Customer
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
-              <DialogHeader>
-                <DialogTitle>Add Customer</DialogTitle>
-                <DialogDescription>Create a new customer profile</DialogDescription>
-              </DialogHeader>
-              <CustomerForm
-                customer={newCustomer}
-                onChange={(updates) => setNewCustomer({ ...newCustomer, ...updates })}
-                salesPersons={salesPersons}
-              />
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setIsAddingCustomer(false)}>Cancel</Button>
-                <Button onClick={handleAddCustomer}>Add Customer</Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
+    <AdminPageShell
+      title="Customer Management (CRM)"
+      eyebrow="Sales & Customers"
+      actions={(
+        <Button onClick={() => setIsAddingCustomer(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Customer
+        </Button>
+      )}
+    >
+      <Dialog open={isAddingCustomer} onOpenChange={setIsAddingCustomer}>
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Add Customer</DialogTitle>
+            <DialogDescription>Create a new customer profile</DialogDescription>
+          </DialogHeader>
+          <CustomerForm
+            customer={newCustomer}
+            onChange={(updates) => setNewCustomer({ ...newCustomer, ...updates })}
+            salesPersons={salesPersons}
+          />
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddingCustomer(false)}>Cancel</Button>
+            <Button onClick={handleAddCustomer}>Add Customer</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <Users className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">{customers.length}</div>
-                  <p className="text-xs text-gray-500">Total Customers</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">{activeCustomers}</div>
-                  <p className="text-xs text-gray-500">Active Customers</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <Award className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">{totalLoyaltyPoints.toLocaleString()}</div>
-                  <p className="text-xs text-gray-500">Total Loyalty Points</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-6">
-              <div className="flex items-center gap-2">
-                <DollarSign className="h-5 w-5 text-gray-500" />
-                <div>
-                  <div className="text-2xl font-bold">${avgCreditLimit.toFixed(0)}</div>
-                  <p className="text-xs text-gray-500">Avg Credit Limit</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+          <AdminStatCard title="Total Customers" value={customers.length} icon={Users} gradient="from-slate-600 to-slate-800" subtitle="All profiles" />
+          <AdminStatCard title="Active Customers" value={activeCustomers} icon={TrendingUp} gradient="from-emerald-500 to-teal-700" subtitle="Status active" />
+          <AdminStatCard title="Loyalty Points" value={totalLoyaltyPoints.toLocaleString()} icon={Award} gradient="from-violet-500 to-purple-700" subtitle="Total across customers" />
+          <AdminStatCard title="Avg Credit Limit" value={`$${avgCreditLimit.toFixed(0)}`} icon={DollarSign} gradient="from-sky-500 to-blue-700" subtitle="Per customer average" />
         </div>
 
         <div className="flex gap-4 mb-6">
@@ -532,17 +485,17 @@ const AdminCustomers: React.FC = () => {
 
         <div className="grid gap-4">
           {filteredCustomers.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <Users className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No customers found.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             filteredCustomers.map((customer) => {
               const tier = getCustomerTier(customer);
               return (
-                <Card key={customer.id}>
+                <AdminPanel key={customer.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -615,7 +568,7 @@ const AdminCustomers: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
@@ -641,8 +594,7 @@ const AdminCustomers: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

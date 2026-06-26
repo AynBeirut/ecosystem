@@ -48,9 +48,11 @@ import ContactUs from "./pages/ContactUs";
 import CustomDomainStore from "./pages/CustomDomainStore";
 import CookieConsent from "./components/CookieConsent";
 import PublicPageFallback from "./components/public/PublicPageFallback";
-import ModularHome from "./pages/public/ModularHome";
-import Features from "./pages/public/Features";
-import Pricing from "./pages/public/Pricing";
+import AdminLayout from "./components/admin/AdminLayout";
+
+const ModularHome = lazy(() => import("./pages/public/ModularHome"));
+const Features = lazy(() => import("./pages/public/Features"));
+const Pricing = lazy(() => import("./pages/public/Pricing"));
 
 const AdminDashboard = lazy(() => import("./pages/admin/AdminDashboard"));
 const SubAccountDashboard = lazy(() => import("./pages/admin/SubAccountDashboard"));
@@ -199,11 +201,11 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
                         <Route path="/payment/failed" element={<ProtectedRoute><PaymentFailed /></ProtectedRoute>} />
                         <Route path="/blocked" element={<ProtectedRoute><Blocked /></ProtectedRoute>} />
-                        {/* Admin Routes */}
-                        <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
+                        {/* Admin shell + routes */}
+                        <Route element={<AdminLayout />}>
+                        <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
                         <Route path="/subscription" element={<ProtectedRoute allowedRoles={['admin']}><Subscription /></ProtectedRoute>} />
                         <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
-                        {/* Sub-Account Routes */}
                         <Route path="/team/dashboard" element={<ProtectedRoute allowedRoles={['sub_account']}><SubAccountDashboard /></ProtectedRoute>} />
                         <Route path="/admin/products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory" requiredModule="stock"><AdminProducts /></ProtectedRoute>} />
                         <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfile /></ProtectedRoute>} />
@@ -273,6 +275,7 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                           <Route path="performance" element={<CrmPerformance />} />
                           <Route path="clients/:clientId" element={<CrmClientProfile />} />
                           <Route path="reps" element={<AdminCrmReps />} />
+                        </Route>
                         </Route>
                         <Route path="/team/crm" element={<ProtectedRoute allowedRoles={['crm_rep']} requiredModule="crm"><CrmRepPortal /></ProtectedRoute>} />
                         {/* Public marketing pages — must be BEFORE /:slug */}

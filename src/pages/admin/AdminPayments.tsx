@@ -8,15 +8,14 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { CreditCard, DollarSign, Wallet, Building2, Smartphone } from 'lucide-react';
+import { CreditCard, DollarSign, Wallet, Building2, Smartphone, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const AdminPayments: React.FC = () => {
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const { user } = useAuth();
   const db = getFirestore();
 
@@ -321,24 +320,33 @@ const AdminPayments: React.FC = () => {
     }
   ];
 
-  return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Payment Methods" />}
-      
-      <div className="p-4 md:p-6">
-        <BackButton />
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <CreditCard className="h-6 w-6" />
-            Payment Methods
-          </h1>
-          <p className="text-muted-foreground">Configure which payment methods to accept in your store</p>
-        </div>
+  const enabledMethodsCount = Object.values(paymentMethods).filter(Boolean).length;
+  const activeGatewaysCount = [
+    gatewaySettings.whishEnabled,
+    gatewaySettings.stripeEnabled,
+    gatewaySettings.paypalEnabled,
+    gatewaySettings.bankTransferEnabled,
+    gatewaySettings.cashOnDeliveryEnabled,
+  ].filter(Boolean).length;
+  const whishConfigured = Boolean(credentials.whishChannel.trim() && credentials.whishSecret.trim());
 
-  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+  return (
+    <AdminPageShell
+      title="Payment Methods"
+      description="Configure which payment methods to accept in your store"
+      eyebrow="Profile & Store Setup"
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
+        <AdminStatCard title="Methods Enabled" value={enabledMethodsCount} icon={CreditCard} gradient="from-slate-600 to-slate-800" subtitle="Customer checkout options" />
+        <AdminStatCard title="Active Gateways" value={activeGatewaysCount} icon={Zap} gradient="from-teal-500 to-teal-700" subtitle="Whish, Stripe, PayPal, etc." />
+        <AdminStatCard title="Whish Money" value={whishConfigured ? 'Ready' : 'Setup'} icon={Smartphone} gradient={whishConfigured ? 'from-emerald-500 to-teal-700' : 'from-amber-400 to-yellow-600'} subtitle={whishConfigured ? 'Credentials saved' : 'Add channel & secret'} />
+        <AdminStatCard title="Cash on Delivery" value={paymentMethods.cashOnDelivery ? 'On' : 'Off'} icon={DollarSign} gradient={paymentMethods.cashOnDelivery ? 'from-sky-500 to-blue-700' : 'from-slate-400 to-slate-600'} subtitle="In-store / delivery cash" />
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Payment Methods */}
           <div className="space-y-4">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Available Payment Methods</CardTitle>
                 <CardDescription>
@@ -365,9 +373,9 @@ const AdminPayments: React.FC = () => {
                   );
                 })}
               </CardContent>
-            </Card>
+            </AdminPanel>
             
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Payment Security</CardTitle>
                 <CardDescription>
@@ -394,12 +402,12 @@ const AdminPayments: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </div>
 
           {/* Payment Credentials and Processing Fees */}
           <div className="space-y-4">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Payment Credentials</CardTitle>
                 <CardDescription>
@@ -471,9 +479,9 @@ const AdminPayments: React.FC = () => {
                   {isSavingCreds ? 'Saving...' : 'Save Payment Credentials'}
                 </Button>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Gateway Control Center</CardTitle>
                 <CardDescription>
@@ -574,9 +582,9 @@ const AdminPayments: React.FC = () => {
                   {isSavingGateways ? 'Saving...' : 'Save Gateway Controls'}
                 </Button>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Whish Production Ops Checklist</CardTitle>
                 <CardDescription>
@@ -619,9 +627,9 @@ const AdminPayments: React.FC = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
             
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Processing Fees</CardTitle>
                 <CardDescription>
@@ -692,43 +700,10 @@ const AdminPayments: React.FC = () => {
                   Save Fee Settings
                 </Button>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </div>
         </div>
-
-        {/* Summary Card */}
-        <Card className="mt-6">
-          <CardHeader>
-            <CardTitle>Payment Summary</CardTitle>
-            <CardDescription>
-              Overview of your current payment configuration
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">
-                  {Object.values(paymentMethods).filter(Boolean).length}
-                </div>
-                <div className="text-sm text-muted-foreground">Active Methods</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">{fees.creditCardFee}%</div>
-                <div className="text-sm text-muted-foreground">Credit Card Fee</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-primary">${fees.processingFee}</div>
-                <div className="text-sm text-muted-foreground">Processing Fee</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">100%</div>
-                <div className="text-sm text-muted-foreground">Secure</div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

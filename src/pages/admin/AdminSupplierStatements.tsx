@@ -8,16 +8,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Download, Printer } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Supplier, PurchaseOrder } from '@/types/inventory';
 import { exportToCSV } from '@/lib/exportUtils';
 
 const AdminSupplierStatements: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
-  
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [selectedSupplierId, setSelectedSupplierId] = useState('');
   const [purchaseOrders, setPurchaseOrders] = useState<PurchaseOrder[]>([]);
@@ -196,17 +193,15 @@ const AdminSupplierStatements: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Supplier Statements" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
-            <h1 className="text-2xl font-bold">Supplier Account Statements</h1>
-          </div>
-        </div>
+    <AdminPageShell
+      title="Supplier Account Statements"
+      description="View and export statements for your suppliers."
+      eyebrow="Inventory"
+      backTo="/admin/suppliers"
+      backLabel="Suppliers"
+    >
 
-        <Card className="mb-6">
+        <AdminPanel className="mb-6">
           <CardHeader>
             <CardTitle>Statement Settings</CardTitle>
             <CardDescription>Select supplier and date range</CardDescription>
@@ -248,11 +243,11 @@ const AdminSupplierStatements: React.FC = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {selectedSupplier && (
           <>
-            <Card className="mb-6">
+            <AdminPanel className="mb-6">
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
@@ -293,9 +288,9 @@ const AdminSupplierStatements: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Purchase Orders</CardTitle>
                 <CardDescription>
@@ -341,11 +336,10 @@ const AdminSupplierStatements: React.FC = () => {
                   </div>
                 )}
               </CardContent>
-            </Card>
+            </AdminPanel>
           </>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 
