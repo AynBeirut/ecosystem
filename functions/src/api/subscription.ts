@@ -11,6 +11,7 @@ import { PACKAGE_PRESETS } from '../lib/moduleManifest';
 import { buildRenewalMigrationPatch } from '../lib/legacyPlanMapping';
 import type { StartingPackageKey } from '../lib/moduleManifest';
 import Stripe from 'stripe';
+import { assertNotDemoStoreProfile } from '../services/storeCommerceGuard';
 
 const db = admin.firestore();
 
@@ -216,6 +217,8 @@ export async function startTrial(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    await assertNotDemoStoreProfile(db, userId);
+
     // Check if user already used trial
     const storeRef = db.collection('storeProfiles').doc(userId);
     const storeSnap = await storeRef.get();
@@ -256,6 +259,8 @@ export async function subscribe(req: Request, res: Response) {
     if (!userId || !email || !tier || !billing) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    await assertNotDemoStoreProfile(db, userId);
 
     const normalizedTier = normalizePaidTier(tier);
     const normalizedBilling: Billing = billing === 'yearly' ? 'yearly' : 'monthly';
@@ -315,6 +320,7 @@ export async function subscribe(req: Request, res: Response) {
  * Activate trial after successful payment
  */
 export async function activateTrial(userId: string, paymentId: string, tier: string) {
+  await assertNotDemoStoreProfile(db, userId);
   const storeRef = db.collection('storeProfiles').doc(userId);
   const normalizedTier: SubscriptionTier = 'trial';
   const trialAmount = 0;
@@ -384,6 +390,7 @@ export async function activateSubscription(
   addOns: unknown,
   amount: number
 ) {
+  await assertNotDemoStoreProfile(db, userId);
   const storeRef = db.collection('storeProfiles').doc(userId);
   const storeSnap = await storeRef.get();
   const existingProfile = storeSnap.exists ? storeSnap.data() : {};
@@ -598,6 +605,8 @@ export async function subscribeStripe(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    await assertNotDemoStoreProfile(db, userId);
+
     const normalizedTier = normalizePaidTier(tier);
     const normalizedBilling: Billing = billing === 'yearly' ? 'yearly' : 'monthly';
     const { amount, description, addOns: normalizedAddOns } = calculateAmount(normalizedTier, normalizedBilling, addOns);
@@ -679,6 +688,8 @@ export async function subscribeModular(req: Request, res: Response) {
     if (!userId || !email || !billing) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    await assertNotDemoStoreProfile(db, userId);
 
     const moduleIds = Array.isArray(enabledModuleIds)
       ? enabledModuleIds.map(String).filter(Boolean)
@@ -772,6 +783,7 @@ export async function subscribeModular(req: Request, res: Response) {
 }
 
 export async function activateModularSubscription(userId: string, externalId: string): Promise<void> {
+  await assertNotDemoStoreProfile(db, userId);
   const storeRef = db.collection('storeProfiles').doc(userId);
   const snap = await storeRef.get();
   if (!snap.exists) throw new Error('Store not found');

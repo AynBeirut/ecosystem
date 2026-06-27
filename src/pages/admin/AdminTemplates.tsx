@@ -304,15 +304,32 @@ const AI_STORE_TASKS = [
   { id: 'seo_title', label: '🔍 Generate SEO title & meta', prompt: (name: string, type: string) => `Write an SEO meta title (under 60 chars) and meta description (under 155 chars) for a ${type} store named "${name}".` },
 ];
 
+type AdminTemplatesProps = {
+  /** When set, read/write design under builders/{uid}/demoStores/{demoId}/profile/branding */
+  demoId?: string;
+};
+
 // ── component ────────────────────────────────────────────────────────────────
-const AdminTemplates: React.FC = () => {
+const AdminTemplates: React.FC<AdminTemplatesProps> = ({ demoId }) => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const storeId = getActualStoreId(user);
+  const demoMode = Boolean(demoId && user?.id);
+  const builderUid = user?.id ?? '';
+  const storeId = demoMode ? demoId! : getActualStoreId(user);
   const db = getFirestore();
   const firebaseAuth = getAuth();
   const { enabled: hasAiBuilder } = useModuleEntitlement('ai_builder');
+  const canPersist = demoMode ? Boolean(demoId && builderUid) : Boolean(storeId);
+  const designDocRef = demoMode
+    ? doc(db, 'builders', builderUid, 'demoStores', demoId!, 'profile', 'branding')
+    : storeId
+      ? doc(db, 'storeProfiles', storeId)
+      : null;
+
+  const mediaRoot = demoMode
+    ? `builder-demos/${builderUid}/${demoId}`
+    : `store-media/${storeId ?? 'unknown'}`;
 
   // AI agent state
   const [aiOpen, setAiOpen] = useState(false);
@@ -622,8 +639,8 @@ const AdminTemplates: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      if (!storeId) return;
-      const snap = await getDoc(doc(db, 'storeProfiles', storeId));
+      if (!designDocRef) return;
+      const snap = await getDoc(designDocRef);
       if (!snap.exists()) return;
       const d = snap.data();
       // templates tab
@@ -671,7 +688,7 @@ const AdminTemplates: React.FC = () => {
     };
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
+  }, [demoId, storeId, builderUid]);
 
   // ── warn before leaving with unsaved changes ─────────────────────────────
   useEffect(() => {
@@ -751,8 +768,8 @@ const AdminTemplates: React.FC = () => {
         setVisualStyle(found.layoutConfig.visualStyle);
       }
     }
-    if (storeId) {
-      const updateData: any = {
+    if (designDocRef) {
+      const updateData: Record<string, unknown> = {
         template: templateId,
         templateColors: found?.defaultPalette ?? colors,
       };
@@ -771,14 +788,14 @@ const AdminTemplates: React.FC = () => {
         updateData.visualStyle = found.layoutConfig.visualStyle;
       }
       
-      await setDoc(doc(db, 'storeProfiles', storeId), updateData, { merge: true });
+      await setDoc(designDocRef, updateData, { merge: true });
     }
     toast({ title: 'Template Applied', description: `Now using the ${found?.name} template with complete layout settings.` });
   };
 
   const saveMediaSettings = async (next: { backgroundImage?: string; carouselImages?: string[]; galleryImages?: string[] }) => {
-    if (!storeId) return;
-    await setDoc(doc(db, 'storeProfiles', storeId), {
+    if (!designDocRef) return;
+    await setDoc(designDocRef, {
       ...(next.backgroundImage !== undefined ? { storeBackgroundImage: next.backgroundImage } : {}),
       ...(next.carouselImages !== undefined ? { carouselImages: next.carouselImages } : {}),
       ...(next.galleryImages !== undefined ? { galleryImages: next.galleryImages } : {}),
@@ -786,18 +803,18 @@ const AdminTemplates: React.FC = () => {
   };
 
   const uploadSingleImage = async (file: File, folder: 'background' | 'carousel' | 'gallery') => {
-    if (storeId) await assertCanUploadBytes(db, storeId, file.size);
-    const path = `store-media/${storeId ?? 'unknown'}/${folder}/${Date.now()}_${encodeURIComponent(file.name)}`;
+    if (!demoMode && storeId) await assertCanUploadBytes(db, storeId, file.size);
+    const path = `${mediaRoot}/${folder}/${Date.now()}_${encodeURIComponent(file.name)}`;
     const imageRef = ref(storage, path);
     await uploadBytes(imageRef, file);
-    if (storeId) await trackStorageUsageAfterUpload(db, storeId, file.size);
+    if (!demoMode && storeId) await trackStorageUsageAfterUpload(db, storeId, file.size);
     return getDownloadURL(imageRef);
   };
 
   const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !storeId) return;
+    if (!file || !canPersist) return;
     setUploadingSection('background');
     try {
       const url = await uploadSingleImage(file, 'background');
@@ -811,7 +828,7 @@ const AdminTemplates: React.FC = () => {
   const handleMultiUpload = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'carousel' | 'gallery') => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (!files.length || !storeId) return;
+    if (!files.length || !canPersist) return;
     setUploadingSection(mode);
     try {
       const urls = await Promise.all(files.map(f => uploadSingleImage(f, mode)));
@@ -871,10 +888,10 @@ const AdminTemplates: React.FC = () => {
   };
 
   const saveColors = async () => {
-    if (!storeId) return;
+    if (!designDocRef) return;
     setSavingColors(true);
     try {
-      await setDoc(doc(db, 'storeProfiles', storeId), { templateColors: colors }, { merge: true });
+      await setDoc(designDocRef, { templateColors: colors }, { merge: true });
       setHasUnsavedColors(false);
       toast({ title: 'Colors Saved', description: 'Your custom palette is live.' });
     } catch { toast({ title: 'Save Failed', variant: 'destructive' }); }
@@ -883,10 +900,10 @@ const AdminTemplates: React.FC = () => {
 
   // ── layout handlers ──────────────────────────────────────────────────────
   const saveLayout = async () => {
-    if (!storeId) return;
+    if (!designDocRef) return;
     setSavingLayout(true);
     try {
-      await setDoc(doc(db, 'storeProfiles', storeId), { 
+      await setDoc(designDocRef, { 
         productDisplayType, 
         productCardAnimation, 
         heroLayout, 
@@ -906,10 +923,10 @@ const AdminTemplates: React.FC = () => {
 
   // ── sections handlers ────────────────────────────────────────────────────
   const saveSections = async () => {
-    if (!storeId) return;
+    if (!designDocRef) return;
     setSavingSections(true);
     try {
-      await setDoc(doc(db, 'storeProfiles', storeId), { contactFormStyle, ratingDisplayType, sectionOrder }, { merge: true });
+      await setDoc(designDocRef, { contactFormStyle, ratingDisplayType, sectionOrder }, { merge: true });
       setHasUnsavedSections(false);
       toast({ title: 'Sections Saved', description: 'Section styles updated.' });
     } catch { toast({ title: 'Save Failed', variant: 'destructive' }); }
@@ -994,10 +1011,10 @@ const AdminTemplates: React.FC = () => {
   };
 
   const uploadSectionBackgroundImage = async (sectionId: StoreSectionId, file: File) => {
-    if (!storeId) return;
+    if (!canPersist) return;
     try {
-      await assertCanUploadBytes(db, storeId, file.size);
-      const path = `store-media/${storeId}/section-backgrounds/${sectionId}/${Date.now()}_${encodeURIComponent(file.name)}`;
+      if (!demoMode && storeId) await assertCanUploadBytes(db, storeId, file.size);
+      const path = `${mediaRoot}/section-backgrounds/${sectionId}/${Date.now()}_${encodeURIComponent(file.name)}`;
       const imageRef = ref(storage, path);
       await uploadBytes(imageRef, file);
       await trackStorageUsageAfterUpload(db, storeId, file.size);
@@ -1071,11 +1088,11 @@ const AdminTemplates: React.FC = () => {
   // ── render ───────────────────────────────────────────────────────────────
   return (
     <AdminPageShell
-      title="Store Design"
-      description="Customise your store's look, layout, and sections"
-      eyebrow="Profile & Store Setup"
-      backTo="/admin/profile"
-      backLabel="Back to Store Profile"
+      title={demoMode ? 'Demo Store Design' : 'Store Design'}
+      description={demoMode ? 'Templates, colors, layout, and sections for this demo store' : "Customise your store's look, layout, and sections"}
+      eyebrow={demoMode ? 'Builder Demo' : 'Profile & Store Setup'}
+      backTo={demoMode ? '/builder' : '/admin/profile'}
+      backLabel={demoMode ? 'Back to Builder Dashboard' : 'Back to Store Profile'}
       actions={
         <div>
           <label className="cursor-pointer">
@@ -1084,13 +1101,13 @@ const AdminTemplates: React.FC = () => {
               accept="application/json,.json"
               className="hidden"
               onChange={async (e) => {
-                if (!storeId) return;
+                if (!designDocRef) return;
                 const file = e.target.files?.[0];
                 if (!file) return;
                 try {
                   const text = await file.text();
                   const imported = JSON.parse(text);
-                  await setDoc(doc(db, 'storeProfiles', storeId), { ...imported, hasImportedDesign: true }, { merge: true });
+                  await setDoc(designDocRef, { ...imported, hasImportedDesign: true }, { merge: true });
                   if (imported.template) {
                     setSelectedTemplate(imported.template);
                     setPreviewTemplate(imported.template);
@@ -2657,10 +2674,16 @@ const AdminTemplates: React.FC = () => {
           <Button
             type="button"
             variant="secondary"
-            onClick={() => window.open(`/store/${storeSlug}`, '_blank', 'noopener,noreferrer')}
-            disabled={!storeSlug}
+            onClick={() => {
+              if (demoMode && demoId) {
+                window.open(`/builder/demo/${demoId}/preview`, '_blank', 'noopener,noreferrer');
+                return;
+              }
+              window.open(`/store/${storeSlug}`, '_blank', 'noopener,noreferrer');
+            }}
+            disabled={demoMode ? !demoId : !storeSlug}
           >
-            Visit Store Profile
+            {demoMode ? 'Preview demo store' : 'Visit Store Profile'}
           </Button>
         </div>
     </AdminPageShell>

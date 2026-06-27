@@ -107,6 +107,10 @@ const CrmClientProfile = lazy(() => import("./pages/admin/crm/CrmClientProfile")
 const AdminCrmReps = lazy(() => import("./pages/admin/AdminCrmReps"));
 const CrmRepPortal = lazy(() => import("./pages/team/CrmRepPortal"));
 const PackageOnboarding = lazy(() => import("./pages/onboarding/PackageOnboarding"));
+const BuilderOnboarding = lazy(() => import("./pages/onboarding/BuilderOnboarding"));
+const BuilderDashboard = lazy(() => import("./pages/builder/BuilderDashboard"));
+const BuilderDemoEdit = lazy(() => import("./pages/builder/BuilderDemoEdit"));
+const BuilderDemoPreview = lazy(() => import("./pages/builder/BuilderDemoPreview"));
 const FinanceEstimates = lazy(() => import("./pages/admin/finance/FinanceEstimates"));
 const FinanceReceipts = lazy(() => import("./pages/admin/finance/FinanceReceipts"));
 const FinancePortfolio = lazy(() => import("./pages/admin/finance/FinancePortfolio"));
@@ -197,6 +201,10 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/profile" element={<ProtectedRoute><CustomerProfile /></ProtectedRoute>} />
                         <Route path="/upgrade" element={<ProtectedRoute><UpgradeToAdmin /></ProtectedRoute>} />
                         <Route path="/onboarding/package" element={<ProtectedRoute allowedRoles={['admin']}><PackageOnboarding /></ProtectedRoute>} />
+                        <Route path="/onboarding/builder" element={<ProtectedRoute><BuilderOnboarding /></ProtectedRoute>} />
+                        <Route path="/builder" element={<ProtectedRoute><BuilderDashboard /></ProtectedRoute>} />
+                        <Route path="/builder/demo/:demoId/edit" element={<ProtectedRoute><BuilderDemoEdit /></ProtectedRoute>} />
+                        <Route path="/builder/demo/:demoId/preview" element={<ProtectedRoute><BuilderDemoPreview /></ProtectedRoute>} />
                         {/* Payment Routes */}
                         <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
                         <Route path="/payment/failed" element={<ProtectedRoute><PaymentFailed /></ProtectedRoute>} />

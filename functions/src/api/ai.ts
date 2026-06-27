@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import { getFirestore, Transaction } from 'firebase-admin/firestore';
+import { assertRealStoreForCommerce } from '../services/storeCommerceGuard';
 
 type DefaultAiModel = {
   id: string;
@@ -196,6 +197,8 @@ export async function saveAiSettings(req: Request, res: Response): Promise<void>
     const settings = sanitizeAiSettings(req.body?.aiIntegrationSettings);
 
     const db = admin.firestore();
+    await assertRealStoreForCommerce(db, storeId);
+
     await db.collection('storeProfiles').doc(storeId).set(
       {
         aiIntegrationSettings: settings,
@@ -242,6 +245,8 @@ export async function generateAiContent(req: Request, res: Response): Promise<vo
     }
 
     const db = getFirestore();
+    await assertRealStoreForCommerce(db, storeId);
+
     const profileSnap = await db.collection('storeProfiles').doc(storeId).get();
     const profileData = profileSnap.data() || {};
 
@@ -319,6 +324,7 @@ export async function deductAiCredits(req: Request, res: Response): Promise<void
     const modelId = String(req.body?.modelId || '').trim() || undefined;
 
     const db = getFirestore();
+    await assertRealStoreForCommerce(db, storeId);
     const ref = db.collection('storeProfiles').doc(storeId);
 
     await db.runTransaction(async (tx: Transaction) => {

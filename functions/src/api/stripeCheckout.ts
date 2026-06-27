@@ -4,6 +4,7 @@ import Stripe from 'stripe';
 import { activateRecurringServiceSubscriptionsFromOrder } from '../services/orderSubscriptions';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { applyTrialRevenueShareIfNeeded } from '../services/subscriptionEnforcement';
+import { checkRealStoreForCommerce, commerceGuardHttpStatus } from '../services/storeCommerceGuard';
 
 const db = admin.firestore();
 
@@ -103,6 +104,14 @@ export async function createStripeCheckoutSession(req: Request, res: Response) {
 
     if (!storeId || !Number.isFinite(totalAmount) || totalAmount <= 0) {
       return res.status(400).json({ error: 'Invalid order data for Stripe checkout' });
+    }
+
+    const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+    if (!commerceCheck.eligible) {
+      return res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
     }
 
     const storeProfileSnap = await db.collection('storeProfiles').doc(storeId).get();

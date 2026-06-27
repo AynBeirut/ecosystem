@@ -1182,6 +1182,7 @@ const AdminAccountStatement: React.FC = () => {
       const db = getFirestore();
       const idempotencyQuery = query(
         collection(db, 'accountPayments'),
+        where('storeId', '==', user.storeId),
         where('idempotencyKey', '==', idempotencyKey),
       );
       const idempotencySnap = await getDocs(idempotencyQuery);
@@ -1197,6 +1198,7 @@ const AdminAccountStatement: React.FC = () => {
 
       const fingerprintQuery = query(
         collection(db, 'accountPayments'),
+        where('storeId', '==', user.storeId),
         where('paymentFingerprint', '==', fingerprint),
       );
       const fingerprintSnap = await getDocs(fingerprintQuery);
@@ -1273,6 +1275,7 @@ const AdminAccountStatement: React.FC = () => {
     if (!saved) return;
     setPaymentModal(null);
     setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
+    await Promise.all([fetchSales(), fetchCustomers()]);
   };
 
   const generatePaymentReceipt = async (payment: {
@@ -1369,6 +1372,7 @@ const AdminAccountStatement: React.FC = () => {
     const amount = parseFloat(paymentSnapshot.amount);
     setPaymentModal(null);
     setNewPayment({ amount: '', date: new Date().toISOString().slice(0, 10), method: 'cash', notes: '' });
+    await Promise.all([fetchSales(), fetchCustomers()]);
 
     await generatePaymentReceipt({
       id: saved.id,
@@ -3212,6 +3216,21 @@ const AdminAccountStatement: React.FC = () => {
     );
   }
 
+  const accountStatementTabs: Array<{
+    id: typeof activeTab;
+    label: string;
+    count: number;
+  }> = [
+    { id: 'customers', label: 'Customers', count: customers.length },
+    { id: 'suppliers', label: 'Suppliers', count: suppliers.length },
+    { id: 'products', label: 'Products', count: products.length },
+    { id: 'purchases', label: 'Purchases', count: purchases.length },
+    { id: 'expenses', label: 'Expenses', count: expenses.length },
+    { id: 'sales', label: 'Sales', count: sales.length },
+    { id: 'cashCollections', label: 'Cash Collections', count: cashCollections.length },
+    { id: 'payments', label: 'Payments', count: accountPayments.length },
+  ];
+
   const { summaries: filteredProductSummaries, quarantinedSales: quarantinedProductSalesCount } = getFilteredProductSummaries();
   const productSummaryTotals = filteredProductSummaries.reduce((acc, product) => {
     const discount = product.totalDiscount || 0;
@@ -3283,10 +3302,20 @@ const AdminAccountStatement: React.FC = () => {
 
   const getCustomerMetrics = (customer: CustomerBalance) => {
     const invoices = inRangeCustomerSalesMap.get(customer.name) || [];
-    const payments = inRangeCustomerPaymentsMap.get(customer.id) || [];
+    const paymentsInRange = inRangeCustomerPaymentsMap.get(customer.id) || [];
 
     const invoicePaid = invoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.amountPaid, 0), 0);
-    const unappliedPayments = payments
+    const allocatedFromPayments = paymentsInRange
+      .filter((payment) => payment.direction === 'in')
+      .reduce((sum, payment) => {
+        const alloc = payment.orderAllocation;
+        if (alloc && typeof alloc.appliedAmount === 'number') {
+          return sum + toFiniteNumber(alloc.appliedAmount, 0);
+        }
+        return sum + toFiniteNumber(payment.amount, 0);
+      }, 0);
+    const unappliedPayments = paymentsInRange
+      .filter((payment) => payment.direction === 'in')
       .map((payment) => ({
         ...payment,
         unappliedAmount: getUnappliedPaymentAmount(payment),
@@ -3295,7 +3324,7 @@ const AdminAccountStatement: React.FC = () => {
     const unappliedCredit = unappliedPayments.reduce((sum, payment) => sum + payment.unappliedAmount, 0);
 
     const totalInvoiced = invoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.total, 0), 0);
-    const totalPaid = invoicePaid + unappliedCredit;
+    const totalPaid = Math.max(invoicePaid, allocatedFromPayments) + unappliedCredit;
     const balance = totalInvoiced - totalPaid;
 
     return {
@@ -3542,89 +3571,22 @@ const AdminAccountStatement: React.FC = () => {
       </div>
 
       <div className="bg-white rounded shadow">
-        <div className="border-b overflow-x-auto">
-          <div className="flex min-w-max">
-            <button
-              onClick={() => setActiveTab('customers')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'customers'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Customers ({customers.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('suppliers')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'suppliers'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Suppliers ({suppliers.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('products')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'products'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Products ({products.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('purchases')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'purchases'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Purchases ({purchases.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('expenses')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'expenses'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Expenses ({expenses.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('sales')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'sales'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Sales ({sales.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('cashCollections')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'cashCollections'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Cash Collections ({cashCollections.length})
-            </button>
-            <button
-              onClick={() => setActiveTab('payments')}
-              className={`px-6 py-3 font-medium whitespace-nowrap ${
-                activeTab === 'payments'
-                  ? 'border-b-2 border-blue-600 text-blue-600'
-                  : 'text-gray-600 hover:text-gray-800'
-              }`}
-            >
-              Payments ({accountPayments.length})
-            </button>
-          </div>
+        <div className="border-b px-4 py-3 sm:px-6">
+          <label htmlFor="account-statement-section" className="block text-sm font-medium text-gray-600 mb-2">
+            Section
+          </label>
+          <select
+            id="account-statement-section"
+            value={activeTab}
+            onChange={(e) => setActiveTab(e.target.value as typeof activeTab)}
+            className="w-full max-w-md border border-gray-300 rounded-md px-3 py-2 text-sm font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          >
+            {accountStatementTabs.map((tab) => (
+              <option key={tab.id} value={tab.id}>
+                {tab.label} ({tab.count})
+              </option>
+            ))}
+          </select>
         </div>
 
         <div className="p-6">

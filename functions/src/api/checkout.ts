@@ -4,6 +4,7 @@ import axios from 'axios';
 import { activateRecurringServiceSubscriptionsFromOrder } from '../services/orderSubscriptions';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { applyTrialRevenueShareIfNeeded } from '../services/subscriptionEnforcement';
+import { checkRealStoreForCommerce, commerceGuardHttpStatus } from '../services/storeCommerceGuard';
 
 const db = admin.firestore();
 
@@ -246,6 +247,14 @@ export async function processCheckout(req: Request, res: Response) {
       return res.status(400).json({ error: 'Invalid order data' });
     }
 
+    const commerceCheck = await checkRealStoreForCommerce(db, String(storeId));
+    if (!commerceCheck.eligible) {
+      return res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
+    }
+
     // Get store's Whish Money credentials
     const storeRef = db.collection('storeProfiles').doc(storeId);
     const storeSnap = await storeRef.get();
@@ -368,6 +377,11 @@ export async function handleCheckoutCallback(req: Request, res: Response) {
 
     const orderData = orderSnap.data();
     const storeId = orderData?.storeId;
+
+    const commerceCheck = await checkRealStoreForCommerce(db, String(storeId || ''));
+    if (!commerceCheck.eligible) {
+      return res.status(commerceGuardHttpStatus(commerceCheck.code)).send(commerceCheck.message);
+    }
 
     // Get store credentials to check payment status
     const storeRef = db.collection('storeProfiles').doc(storeId);

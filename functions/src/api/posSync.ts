@@ -2,6 +2,7 @@ import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import * as crypto from 'crypto';
 import { canUseModule } from '../lib/entitlements';
+import { assertRealStoreForCommerce } from '../services/storeCommerceGuard';
 
 const db = admin.firestore();
 
@@ -17,6 +18,8 @@ export async function createPosPairingCode(req: Request, res: Response): Promise
       res.status(403).json({ error: 'Unauthorized' });
       return;
     }
+
+    await assertRealStoreForCommerce(db, storeId);
 
     const profile = (await db.collection('storeProfiles').doc(storeId).get()).data();
     if (!canUseModule(profile, 'pos')) {
@@ -69,6 +72,8 @@ export async function pairPosDevice(req: Request, res: Response): Promise<void> 
     }
 
     const storeId = data.storeId as string;
+    await assertRealStoreForCommerce(db, storeId);
+
     const deviceToken = crypto.randomBytes(32).toString('hex');
     const deviceRef = db.collection('stores').doc(storeId).collection('posDevices').doc();
 
