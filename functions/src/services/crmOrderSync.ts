@@ -1,4 +1,5 @@
 import * as admin from 'firebase-admin';
+import { checkRealStoreForCommerce } from './storeCommerceGuard';
 
 const SALES_CRM_ADDON = 'salesCrm';
 const STAGE_RANK: Record<string, number> = {
@@ -121,6 +122,12 @@ export async function syncOrderToCrm(orderId: string, order: OrderCrmPayload): P
   const createdBy = String(order.createdBy || storeId).trim();
 
   if (!storeId || !customerId) return;
+
+  const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+  if (!commerceCheck.eligible) {
+    console.warn('[crmOrderSync] skipped non-real store', storeId, commerceCheck.code);
+    return;
+  }
 
   const storeSnap = await db.collection('storeProfiles').doc(storeId).get();
   if (!storeSnap.exists || !storeHasSalesCrm(storeSnap.data())) return;

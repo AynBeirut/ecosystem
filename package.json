@@ -22,7 +22,8 @@
     "test:ui": "vitest --ui",
     "test:unit": "vitest run src/__tests__",
     "test:watch": "vitest watch",
-    "test:firestore-rules": "JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\""
+    "test:firestore-rules": "JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\"",
+    "test:builder-phase1": "npm run build --prefix functions && node scripts/testStoreCommerceGuard.cjs && JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\""
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

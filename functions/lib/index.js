@@ -81,8 +81,10 @@ const orderNotifications_1 = require("./services/orderNotifications");
 const fcmTokens_1 = require("./services/fcmTokens");
 const supplierReturns_1 = require("./api/supplierReturns");
 const crmReps_1 = require("./api/crmReps");
+const builderTransfer_1 = require("./api/builderTransfer");
 const dropship_1 = require("./api/dropship");
 const posSync_1 = require("./api/posSync");
+const storeCommerceGuard_1 = require("./services/storeCommerceGuard");
 const publicProductStock_1 = require("./api/publicProductStock");
 const moduleGate_1 = require("./middleware/moduleGate");
 const db = admin.firestore();
@@ -238,6 +240,7 @@ app.post('/marketing/send-campaign', marketing_1.sendCampaign);
 // Sales CRM — rep accounts via Admin SDK (keeps owner signed in)
 app.post('/crm/reps/create', (0, moduleGate_1.requireModule)('crm'), crmReps_1.createCrmRep);
 app.post('/dropship/sync-product', (0, moduleGate_1.requireModule)('dropship'), dropship_1.syncDropshipProduct);
+app.post('/builder/transfer-demo', builderTransfer_1.transferBuilderDemo);
 app.post('/pos/pairing-code', posSync_1.createPosPairingCode);
 app.post('/pos/pair', posSync_1.pairPosDevice);
 app.post('/pos/heartbeat', posSync_1.posHeartbeat);
@@ -390,6 +393,16 @@ app.post('/checkout', async (req, res) => {
             itemsByStore[it.storeId].push(it);
         }
         console.log('Items by store:', itemsByStore);
+        for (const storeId of Object.keys(itemsByStore)) {
+            const commerceCheck = await (0, storeCommerceGuard_1.checkRealStoreForCommerce)(db, storeId);
+            if (!commerceCheck.eligible) {
+                console.error('Checkout blocked for store:', storeId, commerceCheck.code, commerceCheck.message);
+                return res.status((0, storeCommerceGuard_1.commerceGuardHttpStatus)(commerceCheck.code)).json({
+                    error: commerceCheck.message,
+                    code: commerceCheck.code,
+                });
+            }
+        }
         let ordersCreated = 0;
         const orderIds = [];
         await db.runTransaction(async (tx) => {

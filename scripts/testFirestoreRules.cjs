@@ -26,6 +26,11 @@ const CRM_REP_UID = 'crmRepMobile001';
 const CRM_REP_ID = 'crmRepIndigo001';
 const MODULAR_CRM_STORE = 'modularCrmStore001';
 const STRANGER = 'crossTenantStranger001';
+const DEMO_STORE = 'demoStorePhase1001';
+const EXPIRED_STORE = 'expiredStorePhase1001';
+const BUILDER_UID = 'builderPhase1001';
+const LEGACY_STORE = 'legacyStorePhase1001';
+const GRACE_PERIOD_STORE = 'gracePeriodStore001';
 
 const now = () => new Date().toISOString();
 
@@ -153,6 +158,39 @@ async function seed(testEnv) {
       }),
 
       db.doc(`users/${STRANGER}`).set({ email: 'stranger@test.local', role: 'admin' }),
+
+      // Phase 1 builder / commerce guard seeds
+      db.doc(`storeProfiles/${DEMO_STORE}`).set({
+        name: 'Demo Store',
+        isDemo: true,
+        subscriptionStatus: 'active',
+        ownerId: BUILDER_UID,
+      }),
+      db.doc(`storeProfiles/${EXPIRED_STORE}`).set({
+        name: 'Expired Store',
+        subscriptionStatus: 'expired',
+        ownerId: EXPIRED_STORE,
+      }),
+      db.doc(`storeProfiles/${LEGACY_STORE}`).set({
+        name: 'Legacy Real Store',
+        ownerId: LEGACY_STORE,
+      }),
+      db.doc(`storeProfiles/${GRACE_PERIOD_STORE}`).set({
+        name: 'Grace Period Store',
+        subscriptionStatus: 'grace_period',
+        ownerId: GRACE_PERIOD_STORE,
+      }),
+      db.doc(`users/${BUILDER_UID}`).set({ email: 'builder@test.local', role: 'builder' }),
+      db.doc(`builders/${BUILDER_UID}`).set({
+        businessType: 'designer',
+        demoSlotCount: 0,
+        createdAt: now(),
+      }),
+      db.doc(`builders/${BUILDER_UID}/demoStores/demo1`).set({
+        name: 'Builder Demo 1',
+        status: 'draft',
+        createdAt: now(),
+      }),
 
       db.doc('recipes/recipe-indigo-1').set({
         storeId: INDIGO,
@@ -371,6 +409,130 @@ async function main() {
     })
   );
 
+  // --- Phase 1 builder / isRealStore ---
+  cases.push(
+    await runCase('P1-1', 'stranger cannot create product', async () => {
+      const db = testEnv.authenticatedContext(STRANGER).firestore();
+      await assertFails(
+        db.collection('products').doc('prod-stranger-1').set({
+          storeId: INDIGO,
+          name: 'Blocked Product',
+          price: 10,
+        })
+      );
+      return 'stranger product create on indigo → PERMISSION_DENIED (expected)';
+    })
+  );
+
+  cases.push(
+    await runCase('P1-2', 'store owner creates product on legacy real store', async () => {
+      const db = testEnv.authenticatedContext(LEGACY_STORE).firestore();
+      await assertSucceeds(
+        db.collection('products').doc('prod-legacy-1').set({
+          storeId: LEGACY_STORE,
+          name: 'Legacy Product',
+          price: 12,
+        })
+      );
+      return `owner uid=${LEGACY_STORE} product create on legacy store (no subscriptionStatus) → OK`;
+    })
+  );
+
+  cases.push(
+    await runCase('P1-3', 'demo store profile blocks product create', async () => {
+      const db = testEnv.authenticatedContext(BUILDER_UID).firestore();
+      await assertFails(
+        db.collection('products').doc('prod-demo-fail').set({
+          storeId: DEMO_STORE,
+          name: 'Demo Product',
+          price: 5,
+        })
+      );
+      return `product create with storeId=${DEMO_STORE} isDemo=true → PERMISSION_DENIED (expected)`;
+    })
+  );
+
+  cases.push(
+    await runCase('P1-4', 'expired store blocks order create', async () => {
+      const db = testEnv.authenticatedContext(EXPIRED_STORE).firestore();
+      await assertFails(
+        db.collection('orders').doc('order-expired-1').set({
+          storeId: EXPIRED_STORE,
+          total: 50,
+          status: 'pending',
+        })
+      );
+      return `order create on expired store → PERMISSION_DENIED (expected)`;
+    })
+  );
+
+  cases.push(
+    await runCase('P1-5', 'builder writes isolated demo product', async () => {
+      const db = testEnv.authenticatedContext(BUILDER_UID).firestore();
+      await assertSucceeds(
+        db.doc(`builders/${BUILDER_UID}/demoStores/demo1/products/p1`).set({
+          name: 'Demo Catalog Item',
+          price: 9,
+        })
+      );
+      return `builder uid=${BUILDER_UID} demo product write → OK`;
+    })
+  );
+
+  cases.push(
+    await runCase('P1-6', 'stranger cannot write builder demo', async () => {
+      const db = testEnv.authenticatedContext(STRANGER).firestore();
+      await assertFails(
+        db.doc(`builders/${BUILDER_UID}/demoStores/demo1/products/p2`).set({ name: 'Hack' })
+      );
+      return 'stranger builder demo write → PERMISSION_DENIED (expected)';
+    })
+  );
+
+  cases.push(
+    await runCase('P1-7', 'stranger cannot create subAccount on foreign store', async () => {
+      const db = testEnv.authenticatedContext(STRANGER).firestore();
+      await assertFails(
+        db.collection('subAccounts').doc('sub-stranger-hack').set({
+          storeId: INDIGO,
+          role: 'sales',
+          status: 'active',
+          email: 'hack@test.local',
+        })
+      );
+      return 'stranger subAccounts create on indigo → PERMISSION_DENIED (expected)';
+    })
+  );
+
+  cases.push(
+    await runCase('P1-8', 'indigo owner creates subAccount on real store', async () => {
+      const db = testEnv.authenticatedContext(INDIGO).firestore();
+      await assertSucceeds(
+        db.collection('subAccounts').doc('sub-indigo-new').set({
+          storeId: INDIGO,
+          role: 'sales',
+          status: 'active',
+          email: 'newsales@indigo.test',
+        })
+      );
+      return `owner uid=${INDIGO} subAccounts create → OK`;
+    })
+  );
+
+  cases.push(
+    await runCase('P1-9', 'grace_period store can create product', async () => {
+      const db = testEnv.authenticatedContext(GRACE_PERIOD_STORE).firestore();
+      await assertSucceeds(
+        db.collection('products').doc('prod-grace-1').set({
+          storeId: GRACE_PERIOD_STORE,
+          name: 'Grace Period Product',
+          price: 3,
+        })
+      );
+      return `owner uid=${GRACE_PERIOD_STORE} subscriptionStatus=grace_period product create → OK`;
+    })
+  );
+
   await testEnv.cleanup();
 
   console.log('\n=== Firestore Rules Checklist (emulator) ===');
@@ -392,7 +554,8 @@ async function main() {
       c.id === '1b' ||
       c.id === '1c' ||
       c.id === '8a' ||
-      c.id === '8b',
+      c.id === '8b' ||
+      (typeof c.id === 'string' && c.id.startsWith('P1-')),
   );
   const coreFailed = core.filter((c) => !c.pass).length;
   console.log(`Core checklist: ${core.length - coreFailed}/${core.length} passed`);

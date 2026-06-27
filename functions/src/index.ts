@@ -48,8 +48,13 @@ import {
   getSupplierReturnAnalytics,
 } from './api/supplierReturns';
 import { createCrmRep } from './api/crmReps';
+import { transferBuilderDemo } from './api/builderTransfer';
 import { syncDropshipProduct } from './api/dropship';
 import { createPosPairingCode, pairPosDevice, posHeartbeat } from './api/posSync';
+import {
+  checkRealStoreForCommerce,
+  commerceGuardHttpStatus,
+} from './services/storeCommerceGuard';
 import { getPublicProductStock } from './api/publicProductStock';
 import { requireModule } from './middleware/moduleGate';
 const db = admin.firestore();
@@ -219,6 +224,7 @@ app.post('/marketing/send-campaign', sendCampaign);
 // Sales CRM — rep accounts via Admin SDK (keeps owner signed in)
 app.post('/crm/reps/create', requireModule('crm'), createCrmRep);
 app.post('/dropship/sync-product', requireModule('dropship'), syncDropshipProduct);
+app.post('/builder/transfer-demo', transferBuilderDemo);
 app.post('/pos/pairing-code', createPosPairingCode);
 app.post('/pos/pair', pairPosDevice);
 app.post('/pos/heartbeat', posHeartbeat);
@@ -418,6 +424,17 @@ app.post('/checkout', async (req: Request, res: Response) => {
       itemsByStore[it.storeId].push(it);
     }
     console.log('Items by store:', itemsByStore);
+
+    for (const storeId of Object.keys(itemsByStore)) {
+      const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+      if (!commerceCheck.eligible) {
+        console.error('Checkout blocked for store:', storeId, commerceCheck.code, commerceCheck.message);
+        return res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+          error: commerceCheck.message,
+          code: commerceCheck.code,
+        });
+      }
+    }
 
     let ordersCreated = 0;
     const orderIds: string[] = [];

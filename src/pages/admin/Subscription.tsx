@@ -38,7 +38,6 @@ import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule } from '@/lib/pricingDis
 import type { AddOnKey as PricingAddOnKey } from '@/lib/pricingDisplay';
 import { getApiBaseUrl } from '@/lib/apiBase';
 import AdminPageShell from '@/components/admin/AdminPageShell';
-import AdminPanel from '@/components/admin/AdminPanel';
 import AdminModuleIcon from '@/components/admin/AdminModuleIcon';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
@@ -1029,7 +1028,11 @@ export default function Subscription() {
                 </p>
                 {!modularCheckoutEnabled && (
                   <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-md px-2 py-1.5 mt-2">
-                    Modular checkout is temporarily disabled while billing is being verified. You can still preview your package.
+                    Modular checkout is temporarily disabled while billing is being verified. You can still preview your package.{' '}
+                    <Link to="/onboarding/package?onboarding=custom" className="font-semibold underline">
+                      Save your package here (no payment)
+                    </Link>
+                    {' '}— pick modules, then click <strong>Save &amp; continue</strong>.
                   </p>
                 )}
                 {grandTotal === 0 && selectedModules.size > 0 && (
