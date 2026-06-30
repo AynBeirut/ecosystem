@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Expenses - Check Database Tables</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #1e1e1e; color: #fff; }
+        .section { margin: 20px 0; padding: 15px; background: #2d2d2d; border-radius: 8px; }
+        h2 { color: #4CAF50; }
+        pre { background: #1a1a1a; padding: 10px; border-radius: 4px; overflow-x: auto; }
+        .error { color: #f44336; }
+        .success { color: #4CAF50; }
+        button { padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer; margin: 5px; }
+        button:hover { background: #45a049; }
+    </style>
+</head>
+<body>
+    <h1>🔍 Expense Tables Debug Tool</h1>
+    
+    <div class="section">
+        <h2>Database Tables Check</h2>
+        <button onclick="checkTables()">Check All Tables</button>
+        <pre id="tables-output">Click button to check tables...</pre>
+    </div>
+
+    <div class="section">
+        <h2>Bill Payments Data</h2>
+        <button onclick="checkBillPayments()">Check Bill Payments</button>
+        <pre id="bill-payments-output">Click button to check data...</pre>
+    </div>
+
+    <div class="section">
+        <h2>Expenses Data</h2>
+        <button onclick="checkExpenses()">Check Expenses</button>
+        <pre id="expenses-output">Click button to check data...</pre>
+    </div>
+
+    <div class="section">
+        <h2>Staff Payments Data</h2>
+        <button onclick="checkStaffPayments()">Check Staff Payments</button>
+        <pre id="staff-payments-output">Click button to check data...</pre>
+    </div>
+
+    <div class="section">
+        <h2>Add Sample Data</h2>
+        <button onclick="addSampleBills()">Add Sample Bill Payments</button>
+        <button onclick="addSampleExpenses()">Add Sample Expenses</button>
+        <pre id="sample-output">Click buttons to add sample data...</pre>
+    </div>
+
+    <script src="js/db-sql.js"></script>
+    <script>
+        function checkTables() {
+            const output = document.getElementById('tables-output');
+            try {
+                const result = db.exec(`
+                    SELECT name, type 
+                    FROM sqlite_master 
+                    WHERE type IN ('table', 'view')
+                    ORDER BY name
+                `);
+                
+                if (result[0]) {
+                    let html = '<span class="success">✅ Tables found:</span>\n\n';
+                    result[0].values.forEach(row => {
+                        html += `${row[1]}: ${row[0]}\n`;
+                    });
+                    output.innerHTML = html;
+                } else {
+                    output.innerHTML = '<span class="error">No tables found!</span>';
+                }
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        function checkBillPayments() {
+            const output = document.getElementById('bill-payments-output');
+            try {
+                // Check structure
+                const structure = db.exec(`PRAGMA table_info(bill_payments)`);
+                let html = '<span class="success">✅ Table Structure:</span>\n';
+                if (structure[0]) {
+                    structure[0].values.forEach(col => {
+                        html += `  - ${col[1]} (${col[2]})\n`;
+                    });
+                }
+
+                // Check data
+                const data = db.exec(`
+                    SELECT COUNT(*) as count, 
+                           COALESCE(SUM(amount), 0) as total,
+                           MIN(timestamp) as first,
+                           MAX(timestamp) as last
+                    FROM bill_payments
+                `);
+                
+                if (data[0]) {
+                    const row = data[0].values[0];
+                    html += `\n<span class="success">📊 Data Summary:</span>\n`;
+                    html += `  Count: ${row[0]}\n`;
+                    html += `  Total: $${row[1].toFixed(2)}\n`;
+                    html += `  First: ${row[2] ? new Date(row[2]).toLocaleString() : 'N/A'}\n`;
+                    html += `  Last: ${row[3] ? new Date(row[3]).toLocaleString() : 'N/A'}\n`;
+                }
+
+                // Show some records
+                const records = db.exec(`SELECT * FROM bill_payments LIMIT 5`);
+                if (records[0] && records[0].values.length > 0) {
+                    html += `\n<span class="success">📄 Sample Records:</span>\n`;
+                    records[0].values.forEach((row, i) => {
+                        html += `\nRecord ${i + 1}:\n`;
+                        html += `  ID: ${row[0]}, Amount: $${row[5]}, Date: ${new Date(row[7]).toLocaleString()}\n`;
+                    });
+                }
+
+                output.innerHTML = html;
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        function checkExpenses() {
+            const output = document.getElementById('expenses-output');
+            try {
+                // Check if table exists
+                const tableCheck = db.exec(`
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='expenses'
+                `);
+                
+                if (!tableCheck[0] || tableCheck[0].values.length === 0) {
+                    output.innerHTML = '<span class="error">❌ expenses table does not exist yet!</span>';
+                    return;
+                }
+
+                // Check structure
+                const structure = db.exec(`PRAGMA table_info(expenses)`);
+                let html = '<span class="success">✅ Table Structure:</span>\n';
+                if (structure[0]) {
+                    structure[0].values.forEach(col => {
+                        html += `  - ${col[1]} (${col[2]})\n`;
+                    });
+                }
+
+                // Check data
+                const data = db.exec(`
+                    SELECT COUNT(*) as count, 
+                           COALESCE(SUM(amount), 0) as total,
+                           MIN(expenseDate) as first,
+                           MAX(expenseDate) as last
+                    FROM expenses
+                `);
+                
+                if (data[0]) {
+                    const row = data[0].values[0];
+                    html += `\n<span class="success">📊 Data Summary:</span>\n`;
+                    html += `  Count: ${row[0]}\n`;
+                    html += `  Total: $${row[1].toFixed(2)}\n`;
+                }
+
+                output.innerHTML = html;
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        function checkStaffPayments() {
+            const output = document.getElementById('staff-payments-output');
+            try {
+                // Check if table exists
+                const tableCheck = db.exec(`
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='staff_payments'
+                `);
+                
+                if (!tableCheck[0] || tableCheck[0].values.length === 0) {
+                    output.innerHTML = '<span class="error">❌ staff_payments table does not exist yet!</span>';
+                    return;
+                }
+
+                const data = db.exec(`
+                    SELECT COUNT(*) as count, 
+                           COALESCE(SUM(netAmount), 0) as total
+                    FROM staff_payments
+                `);
+                
+                if (data[0]) {
+                    const row = data[0].values[0];
+                    let html = '<span class="success">📊 Data Summary:</span>\n';
+                    html += `  Count: ${row[0]}\n`;
+                    html += `  Total: $${row[1].toFixed(2)}\n`;
+                    output.innerHTML = html;
+                }
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        function addSampleBills() {
+            const output = document.getElementById('sample-output');
+            try {
+                const now = Date.now();
+                
+                db.exec(`
+                    INSERT INTO bill_payments (billType, billNumber, customerName, amount, paymentMethod, timestamp, cashierId)
+                    VALUES 
+                        (1, 'ELEC-001', 'Electricity Company', 150.50, 'cash', ${now}, 'admin'),
+                        (2, 'WATER-001', 'Water Authority', 75.25, 'cash', ${now}, 'admin'),
+                        (3, 'PHONE-001', 'Telecom', 85.00, 'bank_transfer', ${now}, 'admin')
+                `);
+                
+                output.innerHTML = '<span class="success">✅ Added 3 sample bill payments totaling $310.75</span>';
+                checkBillPayments();
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        function addSampleExpenses() {
+            const output = document.getElementById('sample-output');
+            try {
+                // Check if table exists first
+                const tableCheck = db.exec(`
+                    SELECT name FROM sqlite_master 
+                    WHERE type='table' AND name='expenses'
+                `);
+                
+                if (!tableCheck[0] || tableCheck[0].values.length === 0) {
+                    output.innerHTML = '<span class="error">❌ expenses table does not exist. Run migration 012 first!</span>';
+                    return;
+                }
+
+                const now = Date.now();
+                
+                db.exec(`
+                    INSERT INTO expenses (category, description, amount, expenseDate, status, recordedBy, recordedAt)
+                    VALUES 
+                        ('rent', 'Monthly shop rent', 500.00, ${now}, 'paid', 1, ${now}),
+                        ('supplies', 'Office supplies', 45.50, ${now}, 'paid', 1, ${now}),
+                        ('marketing', 'Facebook ads', 120.00, ${now}, 'paid', 1, ${now})
+                `);
+                
+                output.innerHTML = '<span class="success">✅ Added 3 sample expenses totaling $665.50</span>';
+                checkExpenses();
+            } catch (error) {
+                output.innerHTML = `<span class="error">❌ Error: ${error.message}</span>`;
+            }
+        }
+
+        // Auto-load on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            checkTables();
+        });
+    </script>
+</body>
+</html>

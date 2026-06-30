@@ -1,0 +1,441 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Restore Backup - AYN BEIRUT POS</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        button {
+            background: #3498db;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .danger {
+            background: #e74c3c;
+        }
+        .danger:hover {
+            background: #c0392b;
+        }
+        .success {
+            background: #27ae60;
+        }
+        .success:hover {
+            background: #229954;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .info {
+            background: #3498db;
+            color: white;
+        }
+        .success-msg {
+            background: #27ae60;
+            color: white;
+        }
+        .error {
+            background: #e74c3c;
+            color: white;
+        }
+        .warning {
+            background: #f39c12;
+            color: white;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+        .backup-list {
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .backup-item {
+            background: #ecf0f1;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #3498db;
+        }
+        .backup-item h3 {
+            margin: 0 0 10px 0;
+            color: #2c3e50;
+        }
+        .backup-item p {
+            margin: 5px 0;
+            color: #7f8c8d;
+            font-size: 14px;
+        }
+        .backup-item button {
+            margin-top: 10px;
+        }
+        pre {
+            background: #2c3e50;
+            color: #ecf0f1;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Restore Database Backup</h1>
+        
+        <div class="warning">
+            ⚠️ <strong>Data Recovery Tool</strong><br>
+            Your sales history is safe in localStorage backups. Use this tool to restore it.
+        </div>
+        
+        <h2>Available Backups:</h2>
+        <div id="backupList" class="backup-list"></div>
+        
+        <h2>Current Storage Status:</h2>
+        <button onclick="checkStorage()">Check Storage</button>
+        <button onclick="listBackups()">Refresh Backup List</button>
+        
+        <div id="status"></div>
+        
+        <hr style="margin: 30px 0;">
+        
+        <h2>Manual Recovery:</h2>
+        <button onclick="restoreFromLocalStorage()" class="success">Restore from localStorage</button>
+        <button onclick="clearIndexedDB()" class="danger">Clear IndexedDB (Start Fresh)</button>
+        <button onclick="goToPOS()" class="success">Return to POS</button>
+    </div>
+
+    <script src="js/sql-wasm.js"></script>
+    <script>
+        let SQL;
+        
+        async function initSQL() {
+            if (!SQL) {
+                SQL = await initSqlJs({
+                    locateFile: file => `js/${file}`
+                });
+            }
+            return SQL;
+        }
+        
+        function showStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('status');
+            statusDiv.style.display = 'block';
+            statusDiv.className = type === 'error' ? 'error' : type === 'success' ? 'success-msg' : 'info';
+            statusDiv.innerHTML = message;
+        }
+        
+        async function checkStorage() {
+            showStatus('🔍 Checking storage...', 'info');
+            
+            try {
+                // Check localStorage
+                const lsKeys = [];
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.includes('AynBeirut')) {
+                        const item = localStorage.getItem(key);
+                        lsKeys.push({
+                            key: key,
+                            size: item ? (item.length / 1024).toFixed(2) + ' KB' : '0 KB',
+                            type: key.includes('backup') ? 'Backup' : 'Database'
+                        });
+                    }
+                }
+                
+                // Check IndexedDB
+                const dbNames = await indexedDB.databases();
+                
+                let html = '<h3>LocalStorage:</h3><pre>';
+                html += JSON.stringify(lsKeys, null, 2);
+                html += '</pre>';
+                
+                html += '<h3>IndexedDB Databases:</h3><pre>';
+                html += JSON.stringify(dbNames, null, 2);
+                html += '</pre>';
+                
+                showStatus(html, 'info');
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function listBackups() {
+            const backupListDiv = document.getElementById('backupList');
+            backupListDiv.innerHTML = '<p>Loading backups...</p>';
+            
+            try {
+                const backups = [];
+                
+                for (let i = 0; i < localStorage.length; i++) {
+                    const key = localStorage.key(i);
+                    if (key.startsWith('AynBeirutPOS_backup_')) {
+                        const data = localStorage.getItem(key);
+                        const timestamp = key.replace('AynBeirutPOS_backup_', '');
+                        const date = new Date(timestamp);
+                        
+                        backups.push({
+                            key: key,
+                            timestamp: timestamp,
+                            date: date.toLocaleString(),
+                            size: (data.length / 1024).toFixed(2) + ' KB',
+                            data: data
+                        });
+                    }
+                }
+                
+                if (backups.length === 0) {
+                    backupListDiv.innerHTML = '<p>❌ No backups found in localStorage</p>';
+                    return;
+                }
+                
+                // Sort by date (newest first)
+                backups.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+                
+                let html = '';
+                for (const backup of backups) {
+                    html += `
+                        <div class="backup-item">
+                            <h3>📦 Backup: ${backup.date}</h3>
+                            <p><strong>Key:</strong> ${backup.key}</p>
+                            <p><strong>Size:</strong> ${backup.size}</p>
+                            <button onclick="restoreBackup('${backup.key}')">Restore This Backup</button>
+                            <button onclick="inspectBackup('${backup.key}')" class="info">Inspect Contents</button>
+                        </div>
+                    `;
+                }
+                
+                backupListDiv.innerHTML = html;
+                
+            } catch (error) {
+                backupListDiv.innerHTML = `<p>❌ Error loading backups: ${error.message}</p>`;
+            }
+        }
+        
+        async function inspectBackup(backupKey) {
+            showStatus('🔍 Inspecting backup...', 'info');
+            
+            try {
+                await initSQL();
+                
+                const backupData = localStorage.getItem(backupKey);
+                if (!backupData) {
+                    showStatus('❌ Backup not found', 'error');
+                    return;
+                }
+                
+                // Decode base64
+                const binaryString = atob(backupData);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                // Load database
+                const db = new SQL.Database(bytes);
+                
+                // Get table counts
+                const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+                let info = '<h3>📊 Backup Contents:</h3><pre>';
+                
+                if (tables.length > 0) {
+                    for (const tableName of tables[0].values) {
+                        const count = db.exec(`SELECT COUNT(*) as count FROM ${tableName[0]}`);
+                        const rowCount = count[0]?.values[0][0] || 0;
+                        info += `${tableName[0]}: ${rowCount} rows\n`;
+                    }
+                } else {
+                    info += 'No tables found\n';
+                }
+                
+                info += '</pre>';
+                
+                db.close();
+                showStatus(info, 'info');
+                
+            } catch (error) {
+                showStatus(`❌ Error inspecting backup: ${error.message}`, 'error');
+            }
+        }
+        
+        async function restoreBackup(backupKey) {
+            if (!confirm(`Are you sure you want to restore from:\n${backupKey}\n\nThis will replace your current database.`)) {
+                return;
+            }
+            
+            showStatus('🔄 Restoring backup...', 'info');
+            
+            try {
+                const backupData = localStorage.getItem(backupKey);
+                if (!backupData) {
+                    showStatus('❌ Backup not found', 'error');
+                    return;
+                }
+                
+                // Save to both localStorage and IndexedDB
+                localStorage.setItem('AynBeirutPOS_database', backupData);
+                
+                // Clear and save to IndexedDB
+                await clearIndexedDB(false);
+                
+                // Decode and save to IndexedDB
+                const binaryString = atob(backupData);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                await saveToIndexedDB(bytes);
+                
+                showStatus(`
+                    ✅ <strong>Backup restored successfully!</strong><br><br>
+                    Restored from: ${backupKey}<br>
+                    Saved to: localStorage + IndexedDB<br><br>
+                    <button onclick="goToPOS()" class="success">Return to POS</button>
+                `, 'success');
+                
+            } catch (error) {
+                showStatus(`❌ Error restoring backup: ${error.message}`, 'error');
+            }
+        }
+        
+        async function restoreFromLocalStorage() {
+            if (!confirm('Restore from localStorage?\n\nThis will use the most recent localStorage database.')) {
+                return;
+            }
+            
+            showStatus('🔄 Restoring from localStorage...', 'info');
+            
+            try {
+                const lsData = localStorage.getItem('AynBeirutPOS_database');
+                if (!lsData) {
+                    showStatus('❌ No database found in localStorage', 'error');
+                    return;
+                }
+                
+                // Clear IndexedDB first
+                await clearIndexedDB(false);
+                
+                // Decode and save to IndexedDB
+                const binaryString = atob(lsData);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let i = 0; i < binaryString.length; i++) {
+                    bytes[i] = binaryString.charCodeAt(i);
+                }
+                
+                await saveToIndexedDB(bytes);
+                
+                showStatus(`
+                    ✅ <strong>Database restored from localStorage!</strong><br><br>
+                    <button onclick="goToPOS()" class="success">Return to POS</button>
+                `, 'success');
+                
+            } catch (error) {
+                showStatus(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        async function saveToIndexedDB(data) {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('AynBeirutPOS_BlobStorage', 3);
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains('database')) {
+                        db.createObjectStore('database');
+                    }
+                };
+                
+                request.onsuccess = (event) => {
+                    const db = event.target.result;
+                    const transaction = db.transaction(['database'], 'readwrite');
+                    const store = transaction.objectStore('database');
+                    const blob = new Blob([data], { type: 'application/x-sqlite3' });
+                    store.put(blob, 'sqliteDb');
+                    
+                    transaction.oncomplete = () => {
+                        db.close();
+                        resolve();
+                    };
+                    
+                    transaction.onerror = () => {
+                        db.close();
+                        reject(transaction.error);
+                    };
+                };
+                
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        async function clearIndexedDB(showMessage = true) {
+            return new Promise((resolve, reject) => {
+                const deleteRequest = indexedDB.deleteDatabase('AynBeirutPOS_BlobStorage');
+                
+                deleteRequest.onsuccess = () => {
+                    if (showMessage) {
+                        showStatus('✅ IndexedDB cleared', 'success');
+                    }
+                    resolve();
+                };
+                
+                deleteRequest.onerror = () => {
+                    if (showMessage) {
+                        showStatus(`❌ Error clearing IndexedDB: ${deleteRequest.error}`, 'error');
+                    }
+                    reject(deleteRequest.error);
+                };
+                
+                deleteRequest.onblocked = () => {
+                    if (showMessage) {
+                        showStatus('⛔ Clear blocked - close all POS tabs first', 'error');
+                    }
+                    reject(new Error('Blocked'));
+                };
+            });
+        }
+        
+        function goToPOS() {
+            window.location.href = 'index.html';
+        }
+        
+        // Auto-load backups on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            listBackups();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ayn Beirut POS - Legacy Mode</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-container">
+            <div class="logo-placeholder">A</div>
+            <h1>AYN BEIRUT</h1>
+            <p class="tagline">Tech made in Beirut, deployed worldwide</p>
+            <div class="spinner-container">
+                <div class="spinner"></div>
+            </div>
+            <div id="loading-status">Initializing POS (Legacy Mode)...</div>
+        </div>
+    </div>
+
+    <!-- Main POS Interface (copied from main index.html) -->
+    <div id="pos-app" class="pos-app" style="display: none;">
+        <!-- Same content as main index.html -->
+        <header class="pos-header">
+            <div class="header-left">
+                <div class="logo">A</div>
+                <div class="brand-info">
+                    <h1 class="brand-name">AYN BEIRUT</h1>
+                    <p class="brand-tagline">Point of Sale System</p>
+                </div>
+            </div>
+            <div class="header-center">
+                <div class="search-container">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="product-search" class="search-input" placeholder="Search products...">
+                </div>
+                <div class="barcode-container">
+                    <span class="barcode-icon">📷</span>
+                    <input type="text" id="barcode-input" class="barcode-input" placeholder="Scan barcode (F2)">
+                </div>
+            </div>
+            <div class="header-right">
+                <button id="unpaid-orders-btn" class="btn-unpaid-orders" title="Unpaid Orders">📋</button>
+                <button id="customer-display-btn" class="btn-customer-display" title="Open Customer Display">🖥️</button>
+                <button id="reports-btn" class="btn-reports" title="Sales Reports">📊</button>
+                <button id="admin-btn" class="btn-admin" title="Admin Panel">⚙️</button>
+                <div class="status-indicator online">
+                    <span class="status-dot"></span>
+                    <span id="connection-status">Offline (Legacy Mode)</span>
+                </div>
+            </div>
+        </header>
+        
+        <div class="pos-content">
+            <div class="product-section">
+                <div class="category-filter">
+                    <button class="category-btn active" data-category="all">All Products</button>
+                </div>
+                <div id="product-grid" class="product-grid"></div>
+            </div>
+            <div class="cart-section">
+                <div class="cart-header">
+                    <h2>Current Order</h2>
+                    <button id="clear-cart" class="btn-text">Clear All</button>
+                </div>
+                <div id="cart-items" class="cart-items">
+                    <div class="cart-empty">
+                        <span class="cart-empty-icon">🛒</span>
+                        <p>Cart is empty</p>
+                    </div>
+                </div>
+                <div class="cart-footer">
+                    <div class="cart-summary">
+                        <div class="summary-row">
+                            <span>Subtotal:</span>
+                            <span id="subtotal">$0.00</span>
+                        </div>
+                        <div class="summary-row">
+                            <span>Tax (10%):</span>
+                            <span id="tax">$0.00</span>
+                        </div>
+                        <div class="summary-row total">
+                            <span>Total:</span>
+                            <span id="total">$0.00</span>
+                        </div>
+                    </div>
+                    <button id="checkout-btn" class="btn-checkout" disabled>Complete Sale</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- LEGACY MODE - IndexedDB only, NO SQL.js -->
+    <script>
+        // Override initDatabase to use legacy only
+        window.USE_LEGACY_DB = true;
+        console.log('🔧 Running in LEGACY MODE - IndexedDB only');
+    </script>
+    
+    <!-- Legacy IndexedDB -->
+    <script src="js/db.js"></script>
+    
+    <!-- Core Modules -->
+    <script src="js/auth.js"></script>
+    <script src="js/virtual-keyboard.js"></script>
+    <script src="js/receipt.js"></script>
+    <script src="js/product-management.js"></script>
+    <script src="js/reports.js"></script>
+    <script src="js/customer-display.js"></script>
+    <script src="js/barcode-scanner.js"></script>
+    <script src="js/inventory.js"></script>
+    <script src="js/payment.js"></script>
+    <script src="js/customers.js"></script>
+    <script src="js/categories.js"></script>
+    <script src="js/unpaid-orders.js"></script>
+    <script src="js/data-export.js"></script>
+    <script src="js/pos-core.js"></script>
+    
+    <!-- Modified app.js for legacy mode -->
+    <script>
+        // Simple app startup without SQL.js
+        async function startApp() {
+            try {
+                updateLoadingStatus('Initializing legacy database...');
+                
+                // Use legacy IndexedDB
+                await initDB();
+                
+                updateLoadingStatus('Checking authentication...');
+                const isAuthenticated = await initAuth();
+                
+                if (!isAuthenticated) {
+                    return;
+                }
+                
+                updateLoadingStatus('Loading products...');
+                const products = await loadProductsFromDB();
+                PRODUCTS.length = 0;
+                PRODUCTS.push(...products);
+                
+                updateLoadingStatus('Loading categories...');
+                const categories = await loadCategoriesFromDB();
+                CATEGORIES.length = 0;
+                CATEGORIES.push(...categories);
+                
+                if (categories.length > 0) {
+                    renderCategories(categories);
+                }
+                
+                if (products.length > 0) {
+                    renderProducts(products);
+                }
+                
+                await updateConnectionStatus();
+                hideLoading();
+                
+                console.log('✅ App started successfully in LEGACY MODE');
+            } catch (error) {
+                console.error('❌ App startup failed:', error);
+                updateLoadingStatus('Error: ' + error.message);
+            }
+        }
+        
+        function updateLoadingStatus(message) {
+            const status = document.getElementById('loading-status');
+            if (status) status.textContent = message;
+            console.log('📢', message);
+        }
+        
+        function hideLoading() {
+            document.getElementById('loading-screen').style.display = 'none';
+            document.getElementById('pos-app').style.display = 'block';
+        }
+        
+        // Start the app
+        window.addEventListener('DOMContentLoaded', startApp);
+    </script>
+</body>
+</html>

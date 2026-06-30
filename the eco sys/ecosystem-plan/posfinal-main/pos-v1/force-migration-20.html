@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Force Migration 20</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button.danger {
+            background: #f44336;
+        }
+        button.danger:hover {
+            background: #da190b;
+        }
+        #output {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            margin-top: 20px;
+            border-radius: 4px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .success { color: #4CAF50; }
+        .error { color: #f44336; }
+        .warning { color: #ff9800; }
+        .info { color: #2196F3; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Force Migration 20 (Purchases Table)</h1>
+        <p>This tool will check the current database version and force apply migration 20 if needed.</p>
+        
+        <button onclick="checkVersion()">1️⃣ Check Current Version</button>
+        <button onclick="forceMigration20()" class="danger">2️⃣ Force Apply Migration 20</button>
+        <button onclick="verifyTables()">3️⃣ Verify Purchases Table</button>
+        
+        <div id="output"></div>
+    </div>
+
+    <script src="lib/sql-wasm.js"></script>
+    <script>
+        let db = null;
+        let SQL = null;
+        const DB_GLOBAL_KEY = 'AynBeirutPOS_GLOBAL';
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output');
+            const span = document.createElement('span');
+            span.className = type;
+            span.textContent = message + '\n';
+            output.appendChild(span);
+            console.log(message);
+        }
+
+        async function initDatabase() {
+            if (db) return true;
+
+            try {
+                log('📊 Initializing SQL.js...', 'info');
+                SQL = await initSqlJs({
+                    locateFile: file => `lib/${file}`
+                });
+
+                // Load existing database
+                const existingData = localStorage.getItem(DB_GLOBAL_KEY);
+                if (existingData) {
+                    log('📂 Loading existing database...', 'info');
+                    const binaryData = Uint8Array.from(atob(existingData), c => c.charCodeAt(0));
+                    db = new SQL.Database(binaryData);
+                    log('✅ Database loaded successfully', 'success');
+                } else {
+                    log('❌ No existing database found!', 'error');
+                    return false;
+                }
+
+                return true;
+            } catch (error) {
+                log(`❌ Error initializing database: ${error.message}`, 'error');
+                console.error(error);
+                return false;
+            }
+        }
+
+        async function checkVersion() {
+            document.getElementById('output').innerHTML = '';
+            
+            if (!await initDatabase()) return;
+
+            try {
+                // Check schema_version table
+                const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='schema_version'");
+                
+                if (tables.length === 0) {
+                    log('❌ schema_version table does not exist!', 'error');
+                    return;
+                }
+
+                // Get current version
+                const versionResult = db.exec('SELECT MAX(version) as version FROM schema_version');
+                const currentVersion = versionResult[0].values[0][0] || 0;
+                
+                log(`📊 Current Schema Version: ${currentVersion}`, 'info');
+                log(`🎯 Target Schema Version: 20`, 'info');
+                
+                if (currentVersion < 20) {
+                    log(`⚠️ Migration 20 needs to be applied!`, 'warning');
+                } else {
+                    log(`✅ Already at version 20 or higher`, 'success');
+                }
+
+                // Check if purchases table exists
+                const purchasesTable = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='purchases'");
+                if (purchasesTable.length > 0) {
+                    log(`✅ Purchases table already exists`, 'success');
+                } else {
+                    log(`⚠️ Purchases table does NOT exist`, 'warning');
+                }
+
+            } catch (error) {
+                log(`❌ Error checking version: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        async function forceMigration20() {
+            document.getElementById('output').innerHTML = '';
+            
+            if (!await initDatabase()) return;
+
+            try {
+                // Check current version
+                const versionResult = db.exec('SELECT MAX(version) as version FROM schema_version');
+                const currentVersion = versionResult[0].values[0][0] || 0;
+                
+                log(`📊 Current version: ${currentVersion}`, 'info');
+
+                if (currentVersion >= 20) {
+                    log(`✅ Already at version 20 or higher, checking purchases table...`, 'info');
+                    const purchasesTable = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='purchases'");
+                    if (purchasesTable.length > 0) {
+                        log(`✅ Purchases table already exists, no migration needed`, 'success');
+                        return;
+                    }
+                }
+
+                // Fetch migration SQL
+                log(`📥 Fetching migration 20 SQL...`, 'info');
+                const response = await fetch('./migrations/020-add-purchases-table.sql');
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch migration: ${response.status}`);
+                }
+                const migrationSQL = await response.text();
+                log(`✅ Migration SQL loaded (${migrationSQL.length} characters)`, 'success');
+
+                // Apply migration
+                log(`🔧 Applying migration 20...`, 'info');
+                db.run(migrationSQL);
+                log(`✅ Migration SQL executed`, 'success');
+
+                // Update schema version
+                log(`📝 Updating schema version to 20...`, 'info');
+                db.run(`INSERT INTO schema_version (version, applied_at) VALUES (20, ${Date.now()})`);
+                log(`✅ Schema version updated`, 'success');
+
+                // Save database
+                log(`💾 Saving database...`, 'info');
+                const data = db.export();
+                const base64Data = btoa(String.fromCharCode.apply(null, data));
+                localStorage.setItem(DB_GLOBAL_KEY, base64Data);
+                log(`✅ Database saved to localStorage`, 'success');
+
+                log(`\n🎉 Migration 20 applied successfully!`, 'success');
+                log(`\n⚠️ Please restart the POS application to reload the updated database.`, 'warning');
+
+            } catch (error) {
+                log(`❌ Error applying migration: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+
+        async function verifyTables() {
+            document.getElementById('output').innerHTML = '';
+            
+            if (!await initDatabase()) return;
+
+            try {
+                // Check all tables
+                const tables = db.exec("SELECT name FROM sqlite_master WHERE type='table' ORDER BY name");
+                
+                log(`📋 Database Tables:`, 'info');
+                tables[0].values.forEach(([tableName]) => {
+                    log(`  - ${tableName}`, 'info');
+                });
+
+                // Check if purchases table exists
+                const purchasesTable = db.exec("SELECT name FROM sqlite_master WHERE type='table' AND name='purchases'");
+                
+                if (purchasesTable.length > 0) {
+                    log(`\n✅ Purchases table exists!`, 'success');
+                    
+                    // Get purchases table structure
+                    const structure = db.exec("PRAGMA table_info(purchases)");
+                    log(`\n📊 Purchases Table Structure:`, 'info');
+                    structure[0].values.forEach(row => {
+                        log(`  - ${row[1]} (${row[2]})`, 'info');
+                    });
+                } else {
+                    log(`\n❌ Purchases table does NOT exist`, 'error');
+                }
+
+                // Check schema version
+                const versionResult = db.exec('SELECT MAX(version) as version FROM schema_version');
+                const currentVersion = versionResult[0].values[0][0] || 0;
+                log(`\n📊 Current Schema Version: ${currentVersion}`, 'info');
+
+            } catch (error) {
+                log(`❌ Error verifying tables: ${error.message}`, 'error');
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

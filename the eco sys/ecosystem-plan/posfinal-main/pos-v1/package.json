@@ -1,0 +1,99 @@
+{
+  "name": "ayn-beirut-pos",
+  "productName": "Ayn Beirut POS",
+  "version": "1.0.2",
+  "description": "Point of Sale System - Offline PWA with Electron Desktop Support",
+  "main": "electron-main.js",
+  "author": "AynBeirut",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev",
+    "build": "electron-builder --win",
+    "build:mac": "electron-builder --mac",
+    "build:linux": "electron-builder --linux",
+    "build:all": "electron-builder -mwl",
+    "dist": "electron-builder"
+  },
+  "build": {
+    "appId": "com.aynbeirut.pos",
+    "productName": "Ayn Beirut POS",
+    "copyright": "Copyright © 2025 AynBeirut",
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "files": [
+      "**/*",
+      "!dist",
+      "!node_modules",
+      "!.git",
+      "!*.md",
+      "!test-migrations.html"
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "build/icon.png",
+      "artifactName": "${productName}-${version}-win.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Ayn Beirut POS",
+      "installerIcon": "build/icon.ico",
+      "uninstallerIcon": "build/icon.ico",
+      "installerHeader": "build/icon.png",
+      "installerSidebar": "build/icon.png"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "AynBeirut",
+        "repo": "posfinal"
+      }
+    ],
+    "mac": {
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "icon": "build/icon.icns",
+      "category": "public.app-category.business"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Office",
+      "description": "Point of Sale System for Ayn Beirut Restaurant",
+      "desktop": {
+        "Name": "Ayn Beirut POS",
+        "Comment": "Restaurant Point of Sale System",
+        "Categories": "Office;Finance;",
+        "Terminal": false
+      },
+      "maintainer": "AynBeirut <contact@aynbeirut.com>",
+      "vendor": "AynBeirut",
+      "synopsis": "Modern POS system with offline support"
+    }
+  },
+  "dependencies": {
+    "electron-updater": "^6.6.2"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.9.1"
+  }
+}

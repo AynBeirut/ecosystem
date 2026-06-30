@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS Stress Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-bottom: 20px;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .test-section h3 {
+            margin-top: 0;
+            color: #4CAF50;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 5px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .btn-danger {
+            background: #f44336;
+        }
+        .btn-danger:hover {
+            background: #da190b;
+        }
+        #log {
+            background: #1e1e1e;
+            color: #00ff00;
+            padding: 15px;
+            border-radius: 5px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 400px;
+            overflow-y: auto;
+            margin-top: 20px;
+        }
+        .log-entry {
+            margin: 2px 0;
+        }
+        .log-success { color: #00ff00; }
+        .log-error { color: #ff0000; }
+        .log-warning { color: #ffaa00; }
+        .log-info { color: #00aaff; }
+        .stats {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-box {
+            background: #f9f9f9;
+            padding: 15px;
+            border-radius: 5px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #4CAF50;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔥 POS System Stress Test</h1>
+        <p>This tool tests the POS system under heavy load to identify performance bottlenecks and freezing issues.</p>
+        
+        <div class="stats">
+            <div class="stat-box">
+                <div class="stat-value" id="operations-count">0</div>
+                <div class="stat-label">Operations</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="success-count">0</div>
+                <div class="stat-label">Successful</div>
+            </div>
+            <div class="stat-box">
+                <div class="stat-value" id="error-count">0</div>
+                <div class="stat-label">Errors</div>
+            </div>
+        </div>
+
+        <div class="test-section">
+            <h3>📊 Database Save Queue Test</h3>
+            <p>Tests the save queue by triggering 20 simultaneous database saves</p>
+            <button onclick="testSaveQueue()">Run Save Queue Test</button>
+        </div>
+
+        <div class="test-section">
+            <h3>⚡ Rapid Transaction Test</h3>
+            <p>Simulates rapid sales transactions (3rd operation freeze scenario)</p>
+            <button onclick="testRapidTransactions()">Run Rapid Transactions (10 ops)</button>
+            <button onclick="testRapidTransactions(50)">Extreme (50 ops)</button>
+        </div>
+
+        <div class="test-section">
+            <h3>🔄 Continuous Load Test</h3>
+            <p>Continuous operations for 30 seconds</p>
+            <button onclick="testContinuousLoad()" id="continuous-btn">Start Continuous Test</button>
+            <button onclick="stopContinuousLoad()" class="btn-danger" id="stop-btn" disabled>Stop Test</button>
+        </div>
+
+        <div class="test-section">
+            <h3>💥 Full Stress Test</h3>
+            <p>Combines all tests - WARNING: Heavy load!</p>
+            <button onclick="runFullStressTest()" class="btn-danger">Run Full Stress Test</button>
+        </div>
+
+        <button onclick="clearLog()" style="background: #666;">Clear Log</button>
+
+        <div id="log"></div>
+    </div>
+
+    <script>
+        let operationsCount = 0;
+        let successCount = 0;
+        let errorCount = 0;
+        let continuousTestInterval = null;
+        let isTestRunning = false;
+
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            const timestamp = new Date().toLocaleTimeString('en-US', { hour12: false, fractionalSecondDigits: 3 });
+            entry.textContent = `[${timestamp}] ${message}`;
+            logDiv.appendChild(entry);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        function updateStats() {
+            document.getElementById('operations-count').textContent = operationsCount;
+            document.getElementById('success-count').textContent = successCount;
+            document.getElementById('error-count').textContent = errorCount;
+        }
+
+        function clearLog() {
+            document.getElementById('log').innerHTML = '';
+            operationsCount = 0;
+            successCount = 0;
+            errorCount = 0;
+            updateStats();
+            log('=== Log Cleared ===', 'info');
+        }
+
+        async function testSaveQueue() {
+            log('🚀 Starting Save Queue Test - 20 simultaneous saves', 'warning');
+            const startTime = Date.now();
+            
+            try {
+                // Check if database is available
+                if (typeof window.db === 'undefined') {
+                    throw new Error('Database not available. Please open this in the POS app context.');
+                }
+
+                // Trigger 20 saves simultaneously
+                const promises = [];
+                for (let i = 0; i < 20; i++) {
+                    operationsCount++;
+                    const promise = new Promise((resolve, reject) => {
+                        setTimeout(async () => {
+                            try {
+                                if (typeof window.saveDatabase === 'function') {
+                                    await window.saveDatabase();
+                                    log(`✅ Save ${i + 1} completed`, 'success');
+                                    successCount++;
+                                    resolve();
+                                } else {
+                                    throw new Error('saveDatabase function not available');
+                                }
+                            } catch (err) {
+                                log(`❌ Save ${i + 1} failed: ${err.message}`, 'error');
+                                errorCount++;
+                                reject(err);
+                            }
+                        }, Math.random() * 100); // Random delay 0-100ms
+                    });
+                    promises.push(promise);
+                }
+
+                await Promise.allSettled(promises);
+                const duration = Date.now() - startTime;
+                log(`✅ Save Queue Test completed in ${duration}ms`, 'success');
+                log(`📊 Check console for save queue messages (⏸️ queuing, 🔄 processing)`, 'info');
+            } catch (err) {
+                log(`❌ Test failed: ${err.message}`, 'error');
+                errorCount++;
+            }
+            
+            updateStats();
+        }
+
+        async function testRapidTransactions(count = 10) {
+            log(`🚀 Starting Rapid Transaction Test - ${count} operations`, 'warning');
+            const startTime = Date.now();
+            
+            try {
+                if (typeof window.runExec === 'undefined') {
+                    throw new Error('runExec not available. Run this in POS app context.');
+                }
+
+                for (let i = 0; i < count; i++) {
+                    operationsCount++;
+                    try {
+                        // Simulate a transaction by updating a test value
+                        await window.runExec(
+                            "UPDATE settings SET value = ? WHERE key = 'stress_test_counter'",
+                            [i]
+                        );
+                        log(`✅ Transaction ${i + 1}/${count} completed`, 'success');
+                        successCount++;
+                        
+                        // No delay between operations - stress test!
+                    } catch (err) {
+                        log(`❌ Transaction ${i + 1} failed: ${err.message}`, 'error');
+                        errorCount++;
+                    }
+                }
+
+                const duration = Date.now() - startTime;
+                const opsPerSecond = (count / (duration / 1000)).toFixed(2);
+                log(`✅ Rapid Transaction Test completed in ${duration}ms (${opsPerSecond} ops/sec)`, 'success');
+            } catch (err) {
+                log(`❌ Test failed: ${err.message}`, 'error');
+                errorCount++;
+            }
+            
+            updateStats();
+        }
+
+        async function performRandomOperation() {
+            const operations = [
+                // Database read
+                async () => {
+                    if (typeof window.runQuery === 'function') {
+                        await window.runQuery('SELECT COUNT(*) as count FROM products');
+                        return 'Query executed';
+                    }
+                },
+                // Database write
+                async () => {
+                    if (typeof window.runExec === 'function') {
+                        await window.runExec(
+                            "UPDATE settings SET value = ? WHERE key = 'stress_test_counter'",
+                            [Date.now()]
+                        );
+                        return 'Write executed';
+                    }
+                },
+                // Database save
+                async () => {
+                    if (typeof window.saveDatabase === 'function') {
+                        await window.saveDatabase();
+                        return 'Database saved';
+                    }
+                }
+            ];
+
+            const operation = operations[Math.floor(Math.random() * operations.length)];
+            return await operation();
+        }
+
+        async function testContinuousLoad() {
+            if (isTestRunning) {
+                log('⚠️ Test already running', 'warning');
+                return;
+            }
+
+            isTestRunning = true;
+            document.getElementById('continuous-btn').disabled = true;
+            document.getElementById('stop-btn').disabled = false;
+
+            log('🚀 Starting Continuous Load Test - Running for 30 seconds', 'warning');
+            const startTime = Date.now();
+            let operationNumber = 0;
+
+            continuousTestInterval = setInterval(async () => {
+                if (!isTestRunning) return;
+
+                operationNumber++;
+                operationsCount++;
+                try {
+                    const result = await performRandomOperation();
+                    if (operationNumber % 10 === 0) {
+                        log(`✅ Operation ${operationNumber}: ${result}`, 'success');
+                    }
+                    successCount++;
+                } catch (err) {
+                    log(`❌ Operation ${operationNumber} failed: ${err.message}`, 'error');
+                    errorCount++;
+                }
+                updateStats();
+            }, 100); // New operation every 100ms
+
+            // Auto-stop after 30 seconds
+            setTimeout(() => {
+                stopContinuousLoad();
+                const duration = Date.now() - startTime;
+                log(`✅ Continuous Load Test completed: ${operationNumber} operations in ${duration}ms`, 'success');
+            }, 30000);
+        }
+
+        function stopContinuousLoad() {
+            if (continuousTestInterval) {
+                clearInterval(continuousTestInterval);
+                continuousTestInterval = null;
+            }
+            isTestRunning = false;
+            document.getElementById('continuous-btn').disabled = false;
+            document.getElementById('stop-btn').disabled = true;
+            log('🛑 Continuous Load Test stopped', 'info');
+        }
+
+        async function runFullStressTest() {
+            log('💥💥💥 STARTING FULL STRESS TEST 💥💥💥', 'warning');
+            log('This will run all tests sequentially...', 'info');
+            
+            await testSaveQueue();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testRapidTransactions(50);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            testContinuousLoad();
+            
+            log('💥 Full Stress Test initiated - Monitor system performance', 'warning');
+        }
+
+        // Initial log
+        log('=== POS Stress Test Ready ===', 'info');
+        log('⚠️ WARNING: Open this file inside the POS application (Menu > Dev Tools > Console)', 'warning');
+        log('⚠️ Then load this page in a new window/tab and run tests', 'warning');
+        log('', 'info');
+        
+        // Check if running in POS context
+        if (typeof window.db !== 'undefined') {
+            log('✅ Database detected - Tests can run', 'success');
+        } else {
+            log('❌ Database NOT detected - Open in POS app context first', 'error');
+            log('💡 Tip: Open POS app, then open this HTML file', 'info');
+        }
+    </script>
+</body>
+</html>

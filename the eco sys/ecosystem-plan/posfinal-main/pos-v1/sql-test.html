@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SQL.js Database Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 50px auto; padding: 20px; }
+        h1 { color: #1C75BC; }
+        .test { background: #f5f5f5; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        button { background: #1C75BC; color: white; border: none; padding: 10px 20px; margin: 5px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #155a8a; }
+        pre { background: #eee; padding: 10px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔬 SQL.js Database Test</h1>
+    
+    <div class="test">
+        <h3>Database Status</h3>
+        <div id="db-status">Testing...</div>
+    </div>
+    
+    <div class="test">
+        <h3>Storage Information</h3>
+        <div id="storage-info">Loading...</div>
+    </div>
+    
+    <div class="test">
+        <h3>Cashier ID</h3>
+        <div id="cashier-info">Loading...</div>
+    </div>
+    
+    <div class="test">
+        <h3>Actions</h3>
+        <button onclick="testDatabase()">Test Database</button>
+        <button onclick="testMigration()">Test Migration</button>
+        <button onclick="testBackup()">Create Backup</button>
+        <button onclick="testRestore()">Restore from File</button>
+        <button onclick="checkIntegrity()">Check Integrity</button>
+    </div>
+    
+    <div class="test">
+        <h3>Test Results</h3>
+        <pre id="results">Click buttons above to run tests...</pre>
+    </div>
+
+    <!-- SQL.js Library -->
+    <script src="lib/sql-wasm.js"></script>
+    
+    <!-- Our Modules -->
+    <script src="js/storage-manager.js"></script>
+    <script src="js/db-sql.js"></script>
+    <script src="js/migrate-to-sql.js"></script>
+    <script src="js/disaster-recovery.js"></script>
+    
+    <script>
+        let results = [];
+        
+        function log(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            results.push(`[${timestamp}] ${message}`);
+            document.getElementById('results').textContent = results.join('\n');
+            
+            if (type === 'error') {
+                console.error(message);
+            } else {
+                console.log(message);
+            }
+        }
+        
+        async function testDatabase() {
+            try {
+                log('🔧 Initializing database...');
+                await initDatabase();
+                log('✅ Database initialized successfully', 'success');
+                
+                // Test creating a category
+                log('Testing category insert...');
+                await saveCategory({ name: 'test', displayName: 'Test Category', icon: '🧪' });
+                log('✅ Category saved');
+                
+                // Test reading categories
+                const categories = await getAllCategories();
+                log(`✅ Categories read: ${categories.length} found`);
+                
+                // Test product operations
+                log('Testing product operations...');
+                const productId = Date.now();
+                await runExec(
+                    `INSERT INTO products (id, name, category, price, stock, synced) VALUES (?, ?, ?, ?, ?, 0)`,
+                    [productId, 'Test Product', 'test', 99.99, 10]
+                );
+                log('✅ Product created');
+                
+                const products = runQuery('SELECT * FROM products WHERE id = ?', [productId]);
+                log(`✅ Product read: ${products[0].name}`);
+                
+                log('✅ ALL DATABASE TESTS PASSED', 'success');
+            } catch (error) {
+                log(`❌ Database test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testMigration() {
+            try {
+                log('🔄 Testing migration...');
+                await migrateFromIndexedDB();
+                log('✅ Migration completed', 'success');
+            } catch (error) {
+                log(`❌ Migration test failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testBackup() {
+            try {
+                log('💾 Creating backup...');
+                const filename = await createManualBackup();
+                log(`✅ Backup created: ${filename}`, 'success');
+            } catch (error) {
+                log(`❌ Backup failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function testRestore() {
+            try {
+                log('📂 Opening restore dialog...');
+                await restoreFromFile();
+            } catch (error) {
+                log(`❌ Restore failed: ${error.message}`, 'error');
+            }
+        }
+        
+        async function checkIntegrity() {
+            try {
+                log('🔍 Checking database integrity...');
+                if (!db) {
+                    throw new Error('Database not initialized');
+                }
+                
+                const result = db.exec('PRAGMA integrity_check');
+                if (result.length === 0 || result[0].values[0][0] !== 'ok') {
+                    throw new Error('Integrity check failed');
+                }
+                
+                log('✅ Database integrity OK', 'success');
+            } catch (error) {
+                log(`❌ Integrity check failed: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-run on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Test database initialization
+                await initDatabase();
+                document.getElementById('db-status').className = 'success';
+                document.getElementById('db-status').textContent = '✅ Database initialized successfully';
+                
+                // Show storage info
+                const storageInfo = getStorageInfo();
+                document.getElementById('storage-info').textContent = 
+                    `Type: ${storageInfo.type}\n` +
+                    `Description: ${storageInfo.description}\n` +
+                    `Unlimited: ${storageInfo.hasUnlimitedStorage ? 'Yes' : 'No'}`;
+                
+                // Show cashier ID
+                const cashierId = getCashierId();
+                document.getElementById('cashier-info').textContent = cashierId;
+                
+                log('✅ Page loaded successfully');
+                log('💾 Storage: ' + storageInfo.description);
+                log('🆔 Cashier ID: ' + cashierId);
+                
+            } catch (error) {
+                document.getElementById('db-status').className = 'error';
+                document.getElementById('db-status').textContent = '❌ Database initialization failed: ' + error.message;
+                log('❌ Initialization failed: ' + error.message, 'error');
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# Dependencies & builds
+node_modules/
+dist/
+*.log
+
+# Secrets — never commit
+.credentials.md
+.env
+.env.*
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+
+# Electron / local DB
+*.sqlite
+*.db
+
+# Temp
+.tmp-*/

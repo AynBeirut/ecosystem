@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg width="256" height="256" viewBox="0 0 256 256" xmlns="http://www.w3.org/2000/svg">
+  <!-- Background -->
+  <rect width="256" height="256" rx="32" fill="#1a73e8"/>
+  
+  <!-- Shopping Cart Icon -->
+  <g transform="translate(48, 48)">
+    <!-- Cart Body -->
+    <path d="M 20 40 L 30 20 L 150 20 L 140 70 L 30 70 Z" fill="white" stroke="white" stroke-width="6" stroke-linejoin="round"/>
+    
+    <!-- Cart Handle -->
+    <path d="M 10 30 L 25 30" stroke="white" stroke-width="8" stroke-linecap="round"/>
+    
+    <!-- Cart Wheels -->
+    <circle cx="50" cy="100" r="12" fill="white"/>
+    <circle cx="120" cy="100" r="12" fill="white"/>
+    
+    <!-- POS Badge -->
+    <rect x="90" y="30" width="50" height="30" rx="8" fill="#34a853"/>
+    <text x="115" y="50" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="white" text-anchor="middle">POS</text>
+  </g>
+</svg>

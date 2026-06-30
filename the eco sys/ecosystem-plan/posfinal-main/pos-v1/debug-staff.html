@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Staff & Attendance</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            cursor: pointer;
+            background: #1c75bc;
+            color: white;
+            border: none;
+            border-radius: 5px;
+        }
+        button:hover {
+            background: #155a94;
+        }
+        .output {
+            margin-top: 20px;
+            padding: 15px;
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-family: monospace;
+            white-space: pre-wrap;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+        .success { color: green; }
+        .error { color: red; }
+        .warning { color: orange; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Staff & Attendance Debugger</h1>
+        
+        <div>
+            <h3>Check Database Tables:</h3>
+            <button onclick="checkStaffTable()">Check Staff Table</button>
+            <button onclick="checkAttendanceTable()">Check Attendance Table</button>
+            <button onclick="checkTodayAttendance()">Check Today's Attendance</button>
+        </div>
+        
+        <div>
+            <h3>Add Sample Data:</h3>
+            <button onclick="addSampleStaff()">Add Sample Staff (3 employees)</button>
+            <button onclick="addTodayAttendance()">Add Today's Attendance</button>
+            <button onclick="clearAllStaff()">⚠️ Clear All Staff</button>
+        </div>
+        
+        <div id="output" class="output">Results will appear here...</div>
+    </div>
+
+    <script src="js/db-sql.js"></script>
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message, type = 'normal') {
+            const timestamp = new Date().toLocaleTimeString();
+            const className = type === 'success' ? 'success' : type === 'error' ? 'error' : type === 'warning' ? 'warning' : '';
+            output.innerHTML += `<div class="${className}">[${timestamp}] ${message}</div>`;
+            output.scrollTop = output.scrollHeight;
+        }
+        
+        function checkStaffTable() {
+            output.innerHTML = '';
+            log('Checking staff table...', 'normal');
+            
+            try {
+                const result = db.exec('SELECT * FROM staff ORDER BY id');
+                
+                if (!result || !result[0]) {
+                    log('❌ Staff table is EMPTY! No staff members found.', 'error');
+                    log('Solution: Click "Add Sample Staff" button to create test employees.', 'warning');
+                    return;
+                }
+                
+                const columns = result[0].columns;
+                const rows = result[0].values;
+                
+                log(`✅ Found ${rows.length} staff member(s):`, 'success');
+                log('');
+                
+                rows.forEach((row, index) => {
+                    const staff = {};
+                    columns.forEach((col, i) => {
+                        staff[col] = row[i];
+                    });
+                    
+                    log(`--- Employee #${index + 1} ---`);
+                    log(`ID: ${staff.id}`);
+                    log(`Name: ${staff.firstName} ${staff.lastName}`);
+                    log(`Employee Code: ${staff.employeeCode || 'N/A'}`);
+                    log(`Position: ${staff.position}`);
+                    log(`Payment Type: ${staff.paymentType}`);
+                    log(`Active: ${staff.isActive ? 'Yes' : 'No'}`);
+                    log('');
+                });
+                
+                log(`Total: ${rows.length} staff members`, 'success');
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        function checkAttendanceTable() {
+            output.innerHTML = '';
+            log('Checking attendance table...', 'normal');
+            
+            try {
+                const result = db.exec('SELECT * FROM staff_attendance ORDER BY attendanceDate DESC LIMIT 20');
+                
+                if (!result || !result[0]) {
+                    log('❌ Attendance table is EMPTY! No attendance records found.', 'error');
+                    log('Solution: Click "Add Today\'s Attendance" button to create test records.', 'warning');
+                    return;
+                }
+                
+                const columns = result[0].columns;
+                const rows = result[0].values;
+                
+                log(`✅ Found ${rows.length} attendance record(s) (showing last 20):`, 'success');
+                log('');
+                
+                rows.forEach((row, index) => {
+                    const record = {};
+                    columns.forEach((col, i) => {
+                        record[col] = row[i];
+                    });
+                    
+                    log(`--- Record #${index + 1} ---`);
+                    log(`Staff ID: ${record.staffId}`);
+                    log(`Date: ${record.attendanceDate}`);
+                    log(`Status: ${record.status}`);
+                    log(`Check In: ${record.checkInTime || 'N/A'}`);
+                    log(`Check Out: ${record.checkOutTime || 'N/A'}`);
+                    log(`Total Hours: ${record.totalHours || 0}`);
+                    log('');
+                });
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        function checkTodayAttendance() {
+            output.innerHTML = '';
+            const today = new Date().toISOString().split('T')[0];
+            log(`Checking attendance for today (${today})...`, 'normal');
+            
+            try {
+                const result = db.exec(`SELECT * FROM staff_attendance WHERE attendanceDate = '${today}'`);
+                
+                if (!result || !result[0]) {
+                    log(`❌ No attendance records for today (${today})`, 'error');
+                    log('Solution: Click "Add Today\'s Attendance" to create records.', 'warning');
+                    return;
+                }
+                
+                const columns = result[0].columns;
+                const rows = result[0].values;
+                
+                log(`✅ Found ${rows.length} attendance record(s) for today:`, 'success');
+                log('');
+                
+                rows.forEach((row, index) => {
+                    const record = {};
+                    columns.forEach((col, i) => {
+                        record[col] = row[i];
+                    });
+                    
+                    log(`--- Record #${index + 1} ---`);
+                    log(`Staff ID: ${record.staffId}`);
+                    log(`Status: ${record.status}`);
+                    log(`Check In: ${record.checkInTime || 'N/A'}`);
+                    log(`Check Out: ${record.checkOutTime || 'N/A'}`);
+                    log(`Total Hours: ${record.totalHours || 0}h`);
+                    log('');
+                });
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        function addSampleStaff() {
+            output.innerHTML = '';
+            log('Adding sample staff members...', 'normal');
+            
+            const sampleStaff = [
+                {
+                    firstName: 'John',
+                    lastName: 'Smith',
+                    position: 'Cashier',
+                    paymentType: 'monthly',
+                    monthlySalary: 2500,
+                    phone: '123-456-7890',
+                    email: 'john@example.com'
+                },
+                {
+                    firstName: 'Sarah',
+                    lastName: 'Johnson',
+                    position: 'Cook',
+                    paymentType: 'hourly',
+                    hourlyRate: 15,
+                    phone: '123-456-7891',
+                    email: 'sarah@example.com'
+                },
+                {
+                    firstName: 'Mike',
+                    lastName: 'Brown',
+                    position: 'Waiter',
+                    paymentType: 'daily',
+                    dailyRate: 80,
+                    phone: '123-456-7892',
+                    email: 'mike@example.com'
+                }
+            ];
+            
+            try {
+                sampleStaff.forEach((staff, index) => {
+                    const employeeCode = `EMP${String(index + 1).padStart(3, '0')}`;
+                    const timestamp = Date.now();
+                    
+                    db.run(`
+                        INSERT INTO staff (
+                            firstName, lastName, employeeCode, position, 
+                            paymentType, monthlySalary, dailyRate, hourlyRate,
+                            phone, email, isActive, createdAt, updatedAt
+                        ) VALUES (
+                            '${staff.firstName}', '${staff.lastName}', '${employeeCode}', '${staff.position}',
+                            '${staff.paymentType}', ${staff.monthlySalary || 0}, ${staff.dailyRate || 0}, ${staff.hourlyRate || 0},
+                            '${staff.phone}', '${staff.email}', 1, ${timestamp}, ${timestamp}
+                        )
+                    `);
+                    
+                    log(`✅ Added: ${staff.firstName} ${staff.lastName} (${staff.position})`, 'success');
+                });
+                
+                log('', 'normal');
+                log('✅ Successfully added 3 sample staff members!', 'success');
+                log('Now click "Check Staff Table" to verify.', 'normal');
+                
+            } catch (error) {
+                log(`❌ Error adding staff: ${error.message}`, 'error');
+            }
+        }
+        
+        function addTodayAttendance() {
+            output.innerHTML = '';
+            log('Adding today\'s attendance...', 'normal');
+            
+            try {
+                // First, get all staff
+                const staffResult = db.exec('SELECT id, firstName, lastName FROM staff WHERE isActive = 1');
+                
+                if (!staffResult || !staffResult[0] || staffResult[0].values.length === 0) {
+                    log('❌ No staff members found! Please add staff first.', 'error');
+                    return;
+                }
+                
+                const today = new Date().toISOString().split('T')[0];
+                const timestamp = Date.now();
+                
+                staffResult[0].values.forEach((row, index) => {
+                    const staffId = row[0];
+                    const firstName = row[1];
+                    const lastName = row[2];
+                    
+                    // Vary the attendance for demo purposes
+                    const statuses = ['present', 'present', 'late', 'present'];
+                    const status = statuses[index % statuses.length];
+                    const checkInTime = status === 'late' ? '09:15:00' : '09:00:00';
+                    const checkOutTime = '17:00:00';
+                    const totalHours = 8;
+                    const regularHours = 8;
+                    
+                    db.run(`
+                        INSERT OR REPLACE INTO staff_attendance (
+                            staffId, attendanceDate, status, checkInTime, checkOutTime,
+                            totalHours, regularHours, overtimeHours, createdAt, updatedAt
+                        ) VALUES (
+                            ${staffId}, '${today}', '${status}', '${checkInTime}', '${checkOutTime}',
+                            ${totalHours}, ${regularHours}, 0, ${timestamp}, ${timestamp}
+                        )
+                    `);
+                    
+                    log(`✅ ${firstName} ${lastName}: ${status} (${checkInTime} - ${checkOutTime})`, 'success');
+                });
+                
+                log('', 'normal');
+                log('✅ Successfully added today\'s attendance!', 'success');
+                log('Now you can open Staff Management and click "Daily Attendance" to see the records.', 'normal');
+                
+            } catch (error) {
+                log(`❌ Error adding attendance: ${error.message}`, 'error');
+            }
+        }
+        
+        function clearAllStaff() {
+            if (!confirm('⚠️ WARNING: This will delete ALL staff and attendance records!\n\nAre you sure?')) {
+                return;
+            }
+            
+            output.innerHTML = '';
+            log('Clearing all staff and attendance...', 'warning');
+            
+            try {
+                db.run('DELETE FROM staff_attendance');
+                log('✅ Cleared attendance records', 'success');
+                
+                db.run('DELETE FROM staff');
+                log('✅ Cleared staff records', 'success');
+                
+                log('', 'normal');
+                log('✅ All staff and attendance data cleared!', 'success');
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        // Auto-check on load
+        setTimeout(() => {
+            log('=== AUTO-CHECK ON LOAD ===', 'normal');
+            checkStaffTable();
+        }, 500);
+    </script>
+</body>
+</html>

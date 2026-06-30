@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Customer Display - Ayn Beirut POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ayn-blue: #1C75BC;
+            --deep-navy: #0A0F1C;
+            --electric-cyan: #00C2FF;
+            --warm-orange: #F27A1D;
+            --soft-white: #F5F7FA;
+            --light-grey: #C9D1D9;
+            --gradient-primary: linear-gradient(135deg, #1C75BC 0%, #00C2FF 100%);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: var(--deep-navy);
+            color: var(--soft-white);
+            overflow: hidden;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .display-header {
+            background: var(--gradient-primary);
+            padding: 30px;
+            text-align: center;
+            box-shadow: 0 4px 20px rgba(28, 117, 188, 0.3);
+        }
+
+        .logo-large {
+            font-size: 72px;
+            font-weight: 700;
+            background: linear-gradient(135deg, white 0%, var(--soft-white) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 10px;
+            letter-spacing: 2px;
+        }
+
+        .tagline {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.9);
+            font-weight: 300;
+            letter-spacing: 1px;
+        }
+
+        /* Main Content */
+        .display-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            padding: 40px;
+            overflow: hidden;
+        }
+
+        /* Welcome State */
+        .welcome-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            flex: 1;
+            text-align: center;
+        }
+
+        .welcome-icon {
+            font-size: 120px;
+            margin-bottom: 30px;
+            animation: float 3s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .welcome-title {
+            font-size: 42px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .welcome-message {
+            font-size: 24px;
+            color: var(--light-grey);
+            font-weight: 300;
+        }
+
+        /* Cart Display */
+        .cart-display {
+            display: none;
+            flex-direction: column;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .cart-display.active {
+            display: flex;
+        }
+
+        .cart-title {
+            font-size: 32px;
+            font-weight: 600;
+            margin-bottom: 30px;
+            color: var(--electric-cyan);
+        }
+
+        .items-container {
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 30px;
+        }
+
+        .cart-item {
+            display: grid;
+            grid-template-columns: auto 1fr auto auto;
+            gap: 20px;
+            align-items: center;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(201, 209, 217, 0.1);
+            border-radius: 12px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+        }
+
+        .cart-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            border-color: var(--electric-cyan);
+        }
+
+        .item-icon {
+            font-size: 36px;
+            line-height: 1;
+        }
+
+        .item-name {
+            font-size: 24px;
+            font-weight: 500;
+        }
+
+        .item-quantity {
+            font-size: 22px;
+            color: var(--light-grey);
+            background: rgba(0, 194, 255, 0.1);
+            padding: 8px 20px;
+            border-radius: 20px;
+            border: 1px solid var(--electric-cyan);
+        }
+
+        .item-price {
+            font-size: 28px;
+            font-weight: 600;
+            color: var(--electric-cyan);
+            min-width: 120px;
+            text-align: right;
+        }
+
+        /* Totals Section */
+        .totals-display {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid var(--ayn-blue);
+            border-radius: 16px;
+            padding: 30px;
+        }
+
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 15px 0;
+        }
+
+        .total-row:not(:last-child) {
+            border-bottom: 1px solid rgba(201, 209, 217, 0.1);
+        }
+
+        .total-label {
+            font-size: 24px;
+            color: var(--light-grey);
+        }
+
+        .total-value {
+            font-size: 28px;
+            font-weight: 600;
+        }
+
+        .total-row.grand-total {
+            margin-top: 10px;
+            padding-top: 25px;
+        }
+
+        .total-row.grand-total .total-label {
+            font-size: 32px;
+            font-weight: 600;
+            color: var(--soft-white);
+        }
+
+        .total-row.grand-total .total-value {
+            font-size: 48px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        /* Footer */
+        .display-footer {
+            text-align: center;
+            padding: 20px;
+            font-size: 16px;
+            color: var(--light-grey);
+            border-top: 1px solid rgba(201, 209, 217, 0.1);
+        }
+
+        /* Scrollbar */
+        .items-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .items-container::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 4px;
+        }
+
+        .items-container::-webkit-scrollbar-thumb {
+            background: var(--ayn-blue);
+            border-radius: 4px;
+        }
+
+        .items-container::-webkit-scrollbar-thumb:hover {
+            background: var(--electric-cyan);
+        }
+
+        /* Empty Cart State */
+        .empty-cart {
+            text-align: center;
+            padding: 60px 20px;
+            color: var(--light-grey);
+        }
+
+        .empty-cart-icon {
+            font-size: 80px;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .empty-cart-text {
+            font-size: 24px;
+            font-weight: 300;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="display-header">
+        <div class="logo-large">AYN BEIRUT</div>
+        <div class="tagline">Tech made in Beirut, deployed worldwide</div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="display-content">
+        <!-- Welcome State -->
+        <div class="welcome-state" id="welcome-state">
+            <div class="welcome-icon">🛒</div>
+            <div class="welcome-title">Welcome!</div>
+            <div class="welcome-message">Your items will appear here</div>
+        </div>
+
+        <!-- Cart Display -->
+        <div class="cart-display" id="cart-display">
+            <div class="cart-title">Your Cart</div>
+            
+            <div class="items-container" id="items-container">
+                <!-- Items will be populated by JavaScript -->
+            </div>
+
+            <div class="totals-display">
+                <div class="total-row">
+                    <span class="total-label">Subtotal</span>
+                    <span class="total-value" id="display-subtotal">$0.00</span>
+                </div>
+                <div class="total-row">
+                    <span class="total-label">Tax (11%)</span>
+                    <span class="total-value" id="display-tax">$0.00</span>
+                </div>
+                <div class="total-row grand-total">
+                    <span class="total-label">TOTAL</span>
+                    <span class="total-value" id="display-total">$0.00</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <div class="display-footer">
+        Thank you for shopping with us! 💙
+    </div>
+
+    <script>
+        // Listen for messages from the main POS window
+        window.addEventListener('storage', function(e) {
+            if (e.key === 'customer-display-cart') {
+                updateDisplay(JSON.parse(e.newValue || '[]'));
+            }
+        });
+
+        // Also listen for direct postMessage (if windows are related)
+        window.addEventListener('message', function(e) {
+            if (e.data && e.data.type === 'cart-update') {
+                updateDisplay(e.data.cart);
+            }
+        });
+
+        // Check for initial cart data
+        function checkInitialCart() {
+            const cartData = localStorage.getItem('customer-display-cart');
+            if (cartData) {
+                updateDisplay(JSON.parse(cartData));
+            }
+        }
+
+        function updateDisplay(cart) {
+            const welcomeState = document.getElementById('welcome-state');
+            const cartDisplay = document.getElementById('cart-display');
+            const itemsContainer = document.getElementById('items-container');
+
+            if (!cart || cart.length === 0) {
+                welcomeState.style.display = 'flex';
+                cartDisplay.classList.remove('active');
+                return;
+            }
+
+            welcomeState.style.display = 'none';
+            cartDisplay.classList.add('active');
+
+            // Render cart items
+            itemsContainer.innerHTML = cart.map(item => `
+                <div class="cart-item">
+                    <div class="item-icon">${item.icon || '📦'}</div>
+                    <div class="item-name">${item.name}</div>
+                    <div class="item-quantity">×${item.quantity}</div>
+                    <div class="item-price">${formatDualCurrencyDisplay(item.price * item.quantity)}</div>
+                </div>
+            `).join('');
+
+            // Calculate totals
+            const subtotal = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+            const tax = subtotal * 0.11;
+            const total = subtotal + tax;
+
+            // Update totals display with dual currency
+            document.getElementById('display-subtotal').innerHTML = formatDualCurrencyDisplay(subtotal);
+            document.getElementById('display-tax').innerHTML = formatDualCurrencyDisplay(tax);
+            document.getElementById('display-total').innerHTML = formatDualCurrencyDisplay(total);
+        }
+
+        // Initial check
+        checkInitialCart();
+
+        // Periodic check (fallback)
+        setInterval(checkInitialCart, 1000);
+    </script>
+    
+    <!-- Currency Formatter (lightweight inline version for customer display) -->
+    <script>
+        // Simple dual currency formatter for customer display
+        let displayCurrencyConfig = {
+            showSecondary: true,
+            exchangeRate: 89500,
+            secondaryCurrency: 'LBP'
+        };
+        
+        // Load from localStorage (updated by main POS app)
+        function loadDisplayCurrencyConfig() {
+            try {
+                const stored = localStorage.getItem('currencyConfig');
+                if (stored) {
+                    displayCurrencyConfig = JSON.parse(stored);
+                    console.log('💱 Customer display currency config loaded:', displayCurrencyConfig);
+                }
+            } catch (error) {
+                console.warn('⚠️ Could not load currency config, using defaults');
+            }
+        }
+        
+        function formatDualCurrencyDisplay(amountUSD) {
+            if (!amountUSD || isNaN(amountUSD)) amountUSD = 0;
+            amountUSD = parseFloat(amountUSD);
+            
+            const usd = '$' + amountUSD.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+            
+            if (!displayCurrencyConfig.showSecondary) {
+                return usd;
+            }
+            
+            const lbp = Math.round(amountUSD * displayCurrencyConfig.exchangeRate);
+            const lbpFormatted = lbp.toLocaleString('en-US') + ' ' + displayCurrencyConfig.secondaryCurrency;
+            
+            return usd + '<br><small style="color: #C9D1D9; font-size: 0.75em;">' + lbpFormatted + '</small>';
+        }
+        
+        // Load config on page load
+        loadDisplayCurrencyConfig();
+        
+        // Reload config periodically in case it changes
+        setInterval(loadDisplayCurrencyConfig, 5000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Test - Ayn Beirut POS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0A0F1C;
+            color: #C9D1D9;
+            padding: 20px;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        h1 { color: #1C75BC; }
+        h2 { color: #00C2FF; margin-top: 30px; }
+        .info { background: rgba(28, 117, 188, 0.1); padding: 15px; border-radius: 8px; margin: 10px 0; }
+        .success { background: rgba(76, 175, 80, 0.1); border: 1px solid #4caf50; }
+        .error { background: rgba(244, 67, 54, 0.1); border: 1px solid #f44336; }
+        button {
+            background: #1C75BC;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        button:hover { background: #00C2FF; }
+        .danger { background: #f44336; }
+        .danger:hover { background: #d32f2f; }
+        pre {
+            background: rgba(0, 0, 0, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            overflow-x: auto;
+        }
+        .user-card {
+            background: rgba(28, 117, 188, 0.05);
+            border: 1px solid rgba(28, 117, 188, 0.3);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 10px 0;
+        }
+        .credentials {
+            font-family: monospace;
+            color: #00C2FF;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Ayn Beirut POS - Database Test</h1>
+    
+    <div class="info">
+        <strong>Purpose:</strong> This page helps diagnose login issues by checking the database and user credentials.
+    </div>
+
+    <h2>📊 Database Status</h2>
+    <div id="db-status">Checking database...</div>
+
+    <h2>👥 Users in Database</h2>
+    <div id="users-list">Loading users...</div>
+
+    <h2>🔑 Default Credentials</h2>
+    <div class="user-card">
+        <h3>👨‍💼 Admin Account</h3>
+        <p class="credentials">
+            Username: <strong>admin</strong><br>
+            Password: <strong>admin123</strong><br>
+            Role: <strong>admin</strong>
+        </p>
+    </div>
+    
+    <div class="user-card">
+        <h3>👤 Cashier Account</h3>
+        <p class="credentials">
+            Username: <strong>cashier</strong><br>
+            Password: <strong>cashier123</strong><br>
+            Role: <strong>cashier</strong>
+        </p>
+    </div>
+
+    <h2>🛠️ Actions</h2>
+    <button onclick="initUsers()">Initialize Users</button>
+    <button onclick="testLogin()">Test Login</button>
+    <button onclick="clearSession()">Clear Session</button>
+    <button class="danger" onclick="resetDatabase()">⚠️ Reset Entire Database</button>
+
+    <h2>📝 Test Results</h2>
+    <div id="test-results"></div>
+
+    <script src="js/db.js"></script>
+    <script src="js/auth.js"></script>
+    <script>
+        let testDb = null;
+
+        async function checkDatabase() {
+            try {
+                testDb = await initDatabase();
+                document.getElementById('db-status').innerHTML = '<div class="info success">✅ Database connected successfully!</div>';
+                await loadUsers();
+            } catch (error) {
+                document.getElementById('db-status').innerHTML = `<div class="info error">❌ Database error: ${error.message}</div>`;
+            }
+        }
+
+        async function loadUsers() {
+            if (!db) {
+                document.getElementById('users-list').innerHTML = '<div class="info error">❌ Database not available</div>';
+                return;
+            }
+
+            try {
+                const transaction = db.transaction(['users'], 'readonly');
+                const store = transaction.objectStore('users');
+                const request = store.getAll();
+
+                request.onsuccess = () => {
+                    const users = request.result;
+                    
+                    if (users.length === 0) {
+                        document.getElementById('users-list').innerHTML = `
+                            <div class="info error">
+                                ⚠️ No users found in database!<br>
+                                <button onclick="initUsers()">Click here to initialize users</button>
+                            </div>
+                        `;
+                    } else {
+                        let html = `<div class="info success">Found ${users.length} users:</div>`;
+                        users.forEach(user => {
+                            html += `
+                                <div class="user-card">
+                                    <strong>ID:</strong> ${user.id}<br>
+                                    <strong>Username:</strong> <span class="credentials">${user.username}</span><br>
+                                    <strong>Password:</strong> <span class="credentials">${user.password}</span><br>
+                                    <strong>Role:</strong> ${user.role}<br>
+                                    <strong>Name:</strong> ${user.name}
+                                </div>
+                            `;
+                        });
+                        document.getElementById('users-list').innerHTML = html;
+                    }
+                };
+
+                request.onerror = () => {
+                    document.getElementById('users-list').innerHTML = `<div class="info error">❌ Error loading users: ${request.error}</div>`;
+                };
+            } catch (error) {
+                document.getElementById('users-list').innerHTML = `<div class="info error">❌ Error: ${error.message}</div>`;
+            }
+        }
+
+        async function initUsers() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<p>Initializing users...</p>';
+            
+            try {
+                await initializeUsersDB();
+                results.innerHTML = '<div class="info success">✅ Users initialized successfully!</div>';
+                await loadUsers();
+            } catch (error) {
+                results.innerHTML = `<div class="info error">❌ Error initializing users: ${error.message}</div>`;
+            }
+        }
+
+        async function testLogin() {
+            const results = document.getElementById('test-results');
+            results.innerHTML = '<p>Testing login...</p>';
+            
+            try {
+                // Test admin login
+                const adminResult = await login('admin', 'admin123', 'admin');
+                
+                // Test cashier login
+                const cashierResult = await login('cashier', 'cashier123', 'cashier');
+                
+                let html = '<h3>Login Test Results:</h3>';
+                html += `<div class="user-card ${adminResult.success ? 'success' : 'error'}">
+                    <strong>Admin Login:</strong> ${adminResult.success ? '✅ SUCCESS' : '❌ FAILED'}<br>
+                    ${!adminResult.success ? 'Error: ' + adminResult.message : 'User: ' + adminResult.user.name}
+                </div>`;
+                
+                html += `<div class="user-card ${cashierResult.success ? 'success' : 'error'}">
+                    <strong>Cashier Login:</strong> ${cashierResult.success ? '✅ SUCCESS' : '❌ FAILED'}<br>
+                    ${!cashierResult.success ? 'Error: ' + cashierResult.message : 'User: ' + cashierResult.user.name}
+                </div>`;
+                
+                results.innerHTML = html;
+            } catch (error) {
+                results.innerHTML = `<div class="info error">❌ Test error: ${error.message}</div>`;
+            }
+        }
+
+        function clearSession() {
+            localStorage.removeItem('ayn-pos-session');
+            document.getElementById('test-results').innerHTML = '<div class="info success">✅ Session cleared!</div>';
+        }
+
+        function resetDatabase() {
+            if (!confirm('⚠️ This will DELETE ALL DATA including products, sales, and users!\n\nAre you absolutely sure?')) {
+                return;
+            }
+
+            if (!confirm('Last chance! This action cannot be undone.\n\nProceed with database reset?')) {
+                return;
+            }
+
+            const request = indexedDB.deleteDatabase('AynBeirutPOS');
+            
+            request.onsuccess = () => {
+                document.getElementById('test-results').innerHTML = '<div class="info success">✅ Database deleted! Reloading page...</div>';
+                setTimeout(() => window.location.reload(), 2000);
+            };
+
+            request.onerror = () => {
+                document.getElementById('test-results').innerHTML = '<div class="info error">❌ Failed to delete database</div>';
+            };
+        }
+
+        // Auto-run on page load
+        window.addEventListener('DOMContentLoaded', checkDatabase);
+    </script>
+</body>
+</html>

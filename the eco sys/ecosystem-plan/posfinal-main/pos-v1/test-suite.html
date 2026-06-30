@@ -1,0 +1,351 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>POS System Test - Ayn Beirut</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0A0F1C;
+            color: #C9D1D9;
+            padding: 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        h1 { color: #1C75BC; }
+        h2 { color: #00C2FF; margin-top: 30px; }
+        .test-section {
+            background: rgba(28, 117, 188, 0.1);
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid rgba(28, 117, 188, 0.3);
+        }
+        .test-item {
+            padding: 10px;
+            margin: 5px 0;
+            background: rgba(0, 194, 255, 0.05);
+            border-left: 3px solid #00C2FF;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .status {
+            padding: 5px 15px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+        }
+        .pass { background: #4caf50; color: white; }
+        .fail { background: #f44336; color: white; }
+        .pending { background: #ff9800; color: white; }
+        .info { background: #2196F3; color: white; }
+        button {
+            background: linear-gradient(135deg, #1C75BC, #00C2FF);
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 5px;
+        }
+        button:hover {
+            opacity: 0.9;
+        }
+        .log {
+            background: #000;
+            color: #0f0;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 12px;
+            max-height: 300px;
+            overflow-y: auto;
+            margin-top: 15px;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .stat-card {
+            background: rgba(28, 117, 188, 0.2);
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00C2FF;
+        }
+        .stat-label {
+            font-size: 14px;
+            color: #888;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧪 AYN BEIRUT POS - System Test Suite</h1>
+    
+    <div class="summary">
+        <div class="stat-card">
+            <div class="stat-value" id="total-tests">0</div>
+            <div class="stat-label">Total Tests</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="passed-tests" style="color: #4caf50;">0</div>
+            <div class="stat-label">Passed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="failed-tests" style="color: #f44336;">0</div>
+            <div class="stat-label">Failed</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value" id="pending-tests" style="color: #ff9800;">0</div>
+            <div class="stat-label">Pending</div>
+        </div>
+    </div>
+
+    <button onclick="runAllTests()">🚀 Run All Tests</button>
+    <button onclick="clearResults()">🗑️ Clear Results</button>
+    <button onclick="openPOS()">📱 Open POS</button>
+
+    <div id="test-results"></div>
+    <div class="log" id="test-log"></div>
+
+    <script>
+        let testResults = {
+            total: 0,
+            passed: 0,
+            failed: 0,
+            pending: 0
+        };
+
+        function log(message, type = 'info') {
+            const logEl = document.getElementById('test-log');
+            const timestamp = new Date().toLocaleTimeString();
+            const color = type === 'error' ? '#f44336' : type === 'success' ? '#4caf50' : '#0f0';
+            logEl.innerHTML += `<div style="color: ${color}">[${timestamp}] ${message}</div>`;
+            logEl.scrollTop = logEl.scrollHeight;
+            console.log(message);
+        }
+
+        function updateStats() {
+            document.getElementById('total-tests').textContent = testResults.total;
+            document.getElementById('passed-tests').textContent = testResults.passed;
+            document.getElementById('failed-tests').textContent = testResults.failed;
+            document.getElementById('pending-tests').textContent = testResults.pending;
+        }
+
+        function addTestResult(name, status, message = '') {
+            const resultsEl = document.getElementById('test-results');
+            const testItem = document.createElement('div');
+            testItem.className = 'test-item';
+            testItem.innerHTML = `
+                <span>${name}</span>
+                <span class="status ${status}">${status.toUpperCase()}</span>
+            `;
+            
+            const section = resultsEl.querySelector(`[data-section="${getCurrentSection()}"]`) || createSection(getCurrentSection());
+            section.appendChild(testItem);
+
+            testResults.total++;
+            if (status === 'pass') testResults.passed++;
+            else if (status === 'fail') testResults.failed++;
+            else testResults.pending++;
+            
+            updateStats();
+            log(`${status.toUpperCase()}: ${name} ${message}`, status === 'fail' ? 'error' : 'success');
+        }
+
+        let currentSection = 'General';
+        function getCurrentSection() { return currentSection; }
+        function setSection(name) { currentSection = name; }
+
+        function createSection(name) {
+            const resultsEl = document.getElementById('test-results');
+            const section = document.createElement('div');
+            section.className = 'test-section';
+            section.setAttribute('data-section', name);
+            section.innerHTML = `<h2>${name}</h2>`;
+            resultsEl.appendChild(section);
+            return section;
+        }
+
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+            document.getElementById('test-log').innerHTML = '';
+            testResults = { total: 0, passed: 0, failed: 0, pending: 0 };
+            updateStats();
+        }
+
+        function openPOS() {
+            window.open('index.html', '_blank');
+        }
+
+        async function runAllTests() {
+            clearResults();
+            log('🚀 Starting comprehensive POS system tests...', 'info');
+
+            // Database Tests
+            setSection('📊 Database Tests');
+            await testDatabase();
+
+            // Product Tests
+            setSection('📦 Product Management Tests');
+            await testProducts();
+
+            // Cart Tests
+            setSection('🛒 Shopping Cart Tests');
+            await testCart();
+
+            // Payment Tests
+            setSection('💳 Payment System Tests');
+            await testPayment();
+
+            // Reports Tests
+            setSection('📈 Reports & Analytics Tests');
+            await testReports();
+
+            // UI Tests
+            setSection('🎨 User Interface Tests');
+            await testUI();
+
+            log('✅ All tests completed!', 'success');
+        }
+
+        async function testDatabase() {
+            try {
+                log('Testing database initialization...');
+                
+                // Open database
+                const dbRequest = indexedDB.open('AynBeirutPOS', 3);
+                
+                const db = await new Promise((resolve, reject) => {
+                    dbRequest.onsuccess = () => resolve(dbRequest.result);
+                    dbRequest.onerror = () => reject(dbRequest.error);
+                });
+
+                addTestResult('Database connection', 'pass');
+                
+                // Check object stores
+                if (db.objectStoreNames.contains('sales')) {
+                    addTestResult('Sales store exists', 'pass');
+                } else {
+                    addTestResult('Sales store exists', 'fail');
+                }
+
+                if (db.objectStoreNames.contains('products')) {
+                    addTestResult('Products store exists', 'pass');
+                } else {
+                    addTestResult('Products store exists', 'fail');
+                }
+
+                if (db.objectStoreNames.contains('users')) {
+                    addTestResult('Users store exists', 'pass');
+                } else {
+                    addTestResult('Users store exists', 'fail');
+                }
+
+                db.close();
+                
+            } catch (error) {
+                addTestResult('Database initialization', 'fail', error.message);
+                log(`Database error: ${error.message}`, 'error');
+            }
+        }
+
+        async function testProducts() {
+            try {
+                log('Testing product loading...');
+                
+                const db = await openDatabase();
+                const products = await getAllProducts(db);
+                
+                if (products && products.length > 0) {
+                    addTestResult(`Load products (${products.length} items)`, 'pass');
+                } else {
+                    addTestResult('Load products', 'fail', 'No products found');
+                }
+
+                db.close();
+                
+            } catch (error) {
+                addTestResult('Product loading', 'fail', error.message);
+            }
+        }
+
+        async function testCart() {
+            addTestResult('Add to cart functionality', 'pending', 'Manual test required');
+            addTestResult('Remove from cart', 'pending', 'Manual test required');
+            addTestResult('Update quantity', 'pending', 'Manual test required');
+            addTestResult('Clear cart', 'pending', 'Manual test required');
+        }
+
+        async function testPayment() {
+            addTestResult('Cash payment', 'pending', 'Manual test required');
+            addTestResult('Card payment', 'pending', 'Manual test required');
+            addTestResult('Receipt generation', 'pending', 'Manual test required');
+        }
+
+        async function testReports() {
+            try {
+                const db = await openDatabase();
+                const sales = await getAllSalesData(db);
+                
+                addTestResult(`Sales data retrieval (${sales.length} records)`, sales.length >= 0 ? 'pass' : 'fail');
+                
+                db.close();
+            } catch (error) {
+                addTestResult('Sales data retrieval', 'fail', error.message);
+            }
+        }
+
+        async function testUI() {
+            addTestResult('Virtual keyboard', 'pending', 'Manual test required');
+            addTestResult('Barcode scanner', 'pending', 'Manual test required');
+            addTestResult('Customer display', 'pending', 'Manual test required');
+            addTestResult('Search functionality', 'pending', 'Manual test required');
+        }
+
+        // Helper functions
+        function openDatabase() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open('AynBeirutPOS', 3);
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function getAllProducts(db) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['products'], 'readonly');
+                const store = transaction.objectStore('products');
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        function getAllSalesData(db) {
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction(['sales'], 'readonly');
+                const store = transaction.objectStore('sales');
+                const request = store.getAll();
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+
+        // Auto-run tests on load
+        window.addEventListener('load', () => {
+            log('Test suite ready. Click "Run All Tests" to begin.', 'info');
+        });
+    </script>
+</body>
+</html>

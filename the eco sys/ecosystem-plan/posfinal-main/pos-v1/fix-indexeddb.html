@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix IndexedDB - Ayn Beirut POS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            margin-top: 0;
+        }
+        button {
+            background: #1C75BC;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #155a94;
+        }
+        .log {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+        .success {
+            color: #28a745;
+            font-weight: bold;
+        }
+        .error {
+            color: #dc3545;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix IndexedDB Version Error</h1>
+        <p>This tool will clear the IndexedDB version conflict. Your data is safe in localStorage.</p>
+        
+        <button onclick="fixIndexedDB()">Fix IndexedDB Now</button>
+        
+        <div class="log" id="log"></div>
+    </div>
+
+    <script>
+        function log(message, type = 'info') {
+            const logDiv = document.getElementById('log');
+            const color = type === 'success' ? '#28a745' : type === 'error' ? '#dc3545' : '#333';
+            logDiv.innerHTML += `<div style="color: ${color};">${message}</div>`;
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function fixIndexedDB() {
+            log('🔧 Starting IndexedDB fix...');
+            
+            try {
+                // Delete old IndexedDB database
+                log('🗑️ Deleting old AynBeirutPOS IndexedDB...');
+                
+                const deleteRequest = indexedDB.deleteDatabase('AynBeirutPOS');
+                
+                deleteRequest.onsuccess = () => {
+                    log('✅ IndexedDB deleted successfully!', 'success');
+                    log('');
+                    log('🎉 FIXED! You can now close this window and refresh the POS app.', 'success');
+                };
+                
+                deleteRequest.onerror = (event) => {
+                    log('❌ Error deleting IndexedDB: ' + event.target.error, 'error');
+                };
+                
+                deleteRequest.onblocked = () => {
+                    log('⚠️ Delete blocked. Please close all POS tabs and try again.', 'error');
+                };
+                
+            } catch (error) {
+                log('❌ Error: ' + error.message, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

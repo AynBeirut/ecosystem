@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Storage - Ayn Beirut POS</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a2e;
+            color: white;
+        }
+        .container {
+            background: #16213e;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #4CAF50;
+            margin-bottom: 20px;
+        }
+        .warning {
+            background: #ff9800;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-weight: bold;
+        }
+        .info-box {
+            background: #2196F3;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .success {
+            background: #4CAF50;
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        button {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 8px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #d32f2f;
+        }
+        button.safe {
+            background: #4CAF50;
+        }
+        button.safe:hover {
+            background: #45a049;
+        }
+        #storage-info {
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            background: #0d1117;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .key-item {
+            padding: 5px;
+            border-bottom: 1px solid #333;
+        }
+        .key-name {
+            color: #4CAF50;
+            font-weight: bold;
+        }
+        .key-size {
+            color: #ff9800;
+            float: right;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧹 Clear Storage - Ayn Beirut POS</h1>
+        
+        <div class="warning">
+            ⚠️ WARNING: This will delete ALL localStorage data!<br>
+            Your database, backups, and settings will be PERMANENTLY REMOVED!
+        </div>
+        
+        <div class="info-box">
+            <strong>Current Storage Usage:</strong>
+            <div id="storage-info">Loading...</div>
+        </div>
+        
+        <h3>Options:</h3>
+        
+        <button class="safe" onclick="showStorageInfo()">🔍 Refresh Storage Info</button>
+        <button onclick="clearBackupsOnly()">🗑️ Clear Backups Only (Safe)</button>
+        <button onclick="clearErrorLogs()">📋 Clear Error Logs (Safe)</button>
+        <button onclick="clearEverything()">💣 CLEAR EVERYTHING (Dangerous!)</button>
+        
+        <div id="result"></div>
+        
+        <hr style="margin: 30px 0; border-color: #333;">
+        
+        <button class="safe" onclick="window.location.href='index.html'">🏠 Return to POS</button>
+    </div>
+
+    <script>
+        function formatBytes(bytes) {
+            if (bytes === 0) return '0 Bytes';
+            const k = 1024;
+            const sizes = ['Bytes', 'KB', 'MB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round((bytes / Math.pow(k, i)) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        function showStorageInfo() {
+            const infoDiv = document.getElementById('storage-info');
+            let html = '';
+            let totalSize = 0;
+            
+            const keys = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                keys.push(localStorage.key(i));
+            }
+            
+            keys.sort();
+            
+            for (const key of keys) {
+                const value = localStorage.getItem(key);
+                const size = new Blob([value]).size;
+                totalSize += size;
+                
+                html += `<div class="key-item">
+                    <span class="key-name">${key}</span>
+                    <span class="key-size">${formatBytes(size)}</span>
+                </div>`;
+            }
+            
+            html = `<div style="margin-bottom: 15px; font-size: 16px; color: #ff9800;">
+                <strong>Total: ${keys.length} items, ${formatBytes(totalSize)}</strong>
+            </div>` + html;
+            
+            infoDiv.innerHTML = html || '<span style="color: #999;">No items in localStorage</span>';
+        }
+
+        function clearBackupsOnly() {
+            if (!confirm('Clear all backup files? This will keep your main database.')) return;
+            
+            let cleared = 0;
+            const keysToDelete = [];
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.includes('backup') || key.includes('_latest_backup') || key.includes('_emergency_')) {
+                    keysToDelete.push(key);
+                }
+            }
+            
+            keysToDelete.forEach(key => {
+                localStorage.removeItem(key);
+                cleared++;
+            });
+            
+            document.getElementById('result').innerHTML = `
+                <div class="success">✅ Cleared ${cleared} backup files!</div>
+            `;
+            showStorageInfo();
+        }
+
+        function clearErrorLogs() {
+            if (!confirm('Clear error logs?')) return;
+            
+            let cleared = 0;
+            const keysToDelete = [];
+            
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.includes('error_log') || key.includes('_log') || key.includes('crash')) {
+                    keysToDelete.push(key);
+                }
+            }
+            
+            keysToDelete.forEach(key => {
+                localStorage.removeItem(key);
+                cleared++;
+            });
+            
+            document.getElementById('result').innerHTML = `
+                <div class="success">✅ Cleared ${cleared} error log files!</div>
+            `;
+            showStorageInfo();
+        }
+
+        function clearEverything() {
+            const confirm1 = confirm('⚠️ ARE YOU ABSOLUTELY SURE?\\n\\nThis will delete EVERYTHING including your database!\\n\\nClick OK to continue or Cancel to abort.');
+            if (!confirm1) return;
+            
+            const confirm2 = confirm('⚠️ FINAL WARNING!\\n\\nThis action CANNOT be undone!\\nAll sales, inventory, and customer data will be LOST!\\n\\nClick OK to proceed with deletion.');
+            if (!confirm2) return;
+            
+            const itemCount = localStorage.length;
+            localStorage.clear();
+            
+            document.getElementById('result').innerHTML = `
+                <div class="success">✅ Cleared ${itemCount} items from localStorage!<br><br>
+                ♻️ Your browser localStorage is now completely empty.<br>
+                🔄 You can now return to the POS and start fresh.</div>
+            `;
+            showStorageInfo();
+        }
+
+        // Auto-load storage info on page load
+        showStorageInfo();
+    </script>
+</body>
+</html>

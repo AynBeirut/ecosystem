@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Status Dropdown Test</title>
+    <style>
+        body { 
+            font-family: Arial, sans-serif; 
+            padding: 20px; 
+            background: #1a1f2e;
+            color: white;
+        }
+        .test-section { 
+            margin: 20px 0; 
+            padding: 15px; 
+            border: 1px solid #333; 
+            background: #252b3a;
+            border-radius: 8px;
+        }
+        .status { 
+            padding: 8px 12px; 
+            margin: 5px 0; 
+            border-radius: 4px;
+            font-family: monospace;
+        }
+        .pass { background: #22c55e; color: white; }
+        .fail { background: #ef4444; color: white; }
+        .info { background: #3b82f6; color: white; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            background: #3b82f6;
+            color: white;
+        }
+        button:hover { background: #2563eb; }
+        #test-dropdown {
+            display: none;
+            position: absolute;
+            background: #252b3a;
+            border: 1px solid #444;
+            border-radius: 8px;
+            padding: 10px;
+            margin-top: 10px;
+            min-width: 200px;
+        }
+        .theme-btn {
+            display: block;
+            width: 100%;
+            margin: 5px 0;
+            text-align: left;
+        }
+        [data-theme="light"] body { background: #f3f4f6; color: #111827; }
+        [data-theme="moderate"] body { background: #1a1f2e; color: #f9fafb; }
+        [data-theme="dark"] body { background: #0a0e1a; color: #e5e7eb; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Status Dropdown Test</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Function Existence</h2>
+        <div id="test1-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: DOM Elements</h2>
+        <div id="test2-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 3: Event Handlers</h2>
+        <button id="test-toggle">Toggle Test Dropdown</button>
+        <div id="test-dropdown">
+            <button class="theme-btn" data-theme="light">☀️ Light</button>
+            <button class="theme-btn" data-theme="moderate">🎨 Colorful</button>
+            <button class="theme-btn" data-theme="dark">🌙 Dark</button>
+            <button id="test-logout">🚪 Test Logout</button>
+        </div>
+        <div id="test3-result"></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 4: Theme Switching</h2>
+        <div id="test4-result"></div>
+        <div class="status info">Current theme: <span id="current-theme">dark</span></div>
+    </div>
+    
+    <div class="test-section">
+        <h2>Console Output</h2>
+        <div id="console-output" style="font-family: monospace; font-size: 12px;"></div>
+    </div>
+
+    <script>
+        // Capture console logs
+        const consoleOutput = document.getElementById('console-output');
+        const originalLog = console.log;
+        console.log = function(...args) {
+            originalLog.apply(console, args);
+            const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : a).join(' ');
+            consoleOutput.innerHTML += `<div>${new Date().toLocaleTimeString()}: ${msg}</div>`;
+        };
+
+        // Test 1: Check if function exists
+        function test1() {
+            const result = document.getElementById('test1-result');
+            if (typeof initStatusDropdownHandlers === 'function') {
+                result.innerHTML = '<div class="status pass">✅ PASS: initStatusDropdownHandlers function exists</div>';
+                return true;
+            } else {
+                result.innerHTML = '<div class="status fail">❌ FAIL: initStatusDropdownHandlers function not found</div>';
+                return false;
+            }
+        }
+
+        // Test 2: Check DOM elements
+        function test2() {
+            const result = document.getElementById('test2-result');
+            const elements = {
+                'logout-btn-dropdown': document.getElementById('logout-btn-dropdown'),
+                'theme buttons': document.querySelectorAll('.theme-btn'),
+                'status-dropdown': document.getElementById('status-dropdown')
+            };
+            
+            let html = '';
+            let allPass = true;
+            
+            for (const [name, el] of Object.entries(elements)) {
+                if (el && (el.length > 0 || el.nodeType === 1)) {
+                    html += `<div class="status pass">✅ ${name} found</div>`;
+                } else {
+                    html += `<div class="status fail">❌ ${name} not found</div>`;
+                    allPass = false;
+                }
+            }
+            
+            result.innerHTML = html;
+            return allPass;
+        }
+
+        // Test 3: Test event handlers manually
+        function test3() {
+            const result = document.getElementById('test3-result');
+            const testToggle = document.getElementById('test-toggle');
+            const testDropdown = document.getElementById('test-dropdown');
+            const themeBtns = testDropdown.querySelectorAll('.theme-btn');
+            const testLogout = document.getElementById('test-logout');
+            
+            let html = '<div class="status info">Testing manual event handlers...</div>';
+            
+            // Toggle dropdown
+            testToggle.onclick = function(e) {
+                e.stopPropagation();
+                testDropdown.style.display = testDropdown.style.display === 'none' ? 'block' : 'none';
+                console.log('Test dropdown toggled');
+            };
+            
+            // Theme buttons
+            themeBtns.forEach(btn => {
+                btn.onclick = function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const theme = this.getAttribute('data-theme');
+                    console.log('🎨 Theme clicked:', theme);
+                    document.documentElement.setAttribute('data-theme', theme);
+                    document.getElementById('current-theme').textContent = theme;
+                    testDropdown.style.display = 'none';
+                    html += `<div class="status pass">✅ Theme ${theme} applied</div>`;
+                    result.innerHTML = html;
+                };
+            });
+            
+            // Logout
+            testLogout.onclick = function(e) {
+                e.preventDefault();
+                e.stopPropagation();
+                console.log('🚪 Logout clicked');
+                testDropdown.style.display = 'none';
+                html += '<div class="status pass">✅ Logout handler works</div>';
+                result.innerHTML = html;
+            };
+            
+            html += '<div class="status info">👆 Click buttons above to test</div>';
+            result.innerHTML = html;
+        }
+
+        // Test 4: Monitor theme changes
+        function test4() {
+            const result = document.getElementById('test4-result');
+            const observer = new MutationObserver((mutations) => {
+                mutations.forEach((mutation) => {
+                    if (mutation.attributeName === 'data-theme') {
+                        const theme = document.documentElement.getAttribute('data-theme');
+                        console.log('Theme changed to:', theme);
+                        result.innerHTML = `<div class="status pass">✅ Theme changed to: ${theme}</div>`;
+                    }
+                });
+            });
+            
+            observer.observe(document.documentElement, { attributes: true });
+            result.innerHTML = '<div class="status info">Monitoring theme changes...</div>';
+        }
+
+        // Run tests
+        window.addEventListener('DOMContentLoaded', () => {
+            console.log('🧪 Starting tests...');
+            test1();
+            test2();
+            test3();
+            test4();
+            console.log('✅ Tests initialized');
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clear Database - Ayn Beirut POS</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #0A0F1C;
+            color: #C9D1D9;
+            padding: 40px;
+            max-width: 600px;
+            margin: 0 auto;
+            text-align: center;
+        }
+        h1 { color: #1C75BC; }
+        .btn {
+            background: #f44336;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 16px;
+            margin: 10px;
+        }
+        .btn:hover { background: #d32f2f; }
+        .btn-primary {
+            background: #1C75BC;
+        }
+        .btn-primary:hover {
+            background: #00C2FF;
+        }
+        .result {
+            background: rgba(76, 175, 80, 0.1);
+            border: 1px solid #4caf50;
+            padding: 20px;
+            border-radius: 8px;
+            margin-top: 20px;
+        }
+        .error {
+            background: rgba(244, 67, 54, 0.1);
+            border: 1px solid #f44336;
+        }
+    </style>
+</head>
+<body>
+    <h1>🧹 Clear Database</h1>
+    <p>This will delete all POS data and reset to defaults</p>
+    
+    <button class="btn" onclick="clearDatabase()">🗑️ Clear Database</button>
+    <button class="btn-primary btn" onclick="clearAndRestart()">🔄 Clear & Restart POS</button>
+    
+    <div id="result"></div>
+
+    <script>
+        async function clearDatabase() {
+            const result = document.getElementById('result');
+            
+            try {
+                // Delete ALL POS databases (there are multiple)
+                const dbNames = [
+                    'AynBeirutPOS',
+                    'AynBeirutPOS_BlobStorage',
+                    'AynBeirutPOS_backup'
+                ];
+                
+                console.log('🧹 Deleting all POS databases...');
+                
+                for (const dbName of dbNames) {
+                    await new Promise((resolve) => {
+                        const request = indexedDB.deleteDatabase(dbName);
+                        request.onsuccess = () => {
+                            console.log(`✅ Deleted database: ${dbName}`);
+                            resolve();
+                        };
+                        request.onerror = () => {
+                            console.warn(`⚠️ Could not delete: ${dbName}`);
+                            resolve();
+                        };
+                        request.onblocked = () => {
+                            console.warn(`⚠️ Database deletion blocked: ${dbName} - close all POS tabs`);
+                            alert('Please close ALL other POS tabs first, then try again');
+                            resolve();
+                        };
+                    });
+                }
+                
+                console.log('✅ All databases deleted');
+                
+                // Clear localStorage
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                result.className = 'result';
+                result.innerHTML = `
+                    <h2>✅ Database Cleared!</h2>
+                    <p>All data has been removed</p>
+                    <p>You can now restart the POS application</p>
+                `;
+                
+            } catch (error) {
+                result.className = 'result error';
+                result.innerHTML = `
+                    <h2>❌ Error</h2>
+                    <p>${error.message}</p>
+                `;
+            }
+        }
+        
+        function clearAndRestart() {
+            clearDatabase().then(() => {
+                setTimeout(() => {
+                    window.location.href = 'index.html';
+                }, 1500);
+            });
+        }
+    </script>
+</body>
+</html>

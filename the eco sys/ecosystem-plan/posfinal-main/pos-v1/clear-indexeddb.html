@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear IndexedDB - AYN BEIRUT POS</title>
+    <meta charset="UTF-8">
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2c3e50;
+            margin-top: 0;
+        }
+        button {
+            background: #e74c3c;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #c0392b;
+        }
+        button:disabled {
+            background: #95a5a6;
+            cursor: not-allowed;
+        }
+        .success {
+            background: #27ae60;
+        }
+        .success:hover {
+            background: #229954;
+        }
+        #status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            display: none;
+        }
+        .info {
+            background: #3498db;
+            color: white;
+        }
+        .success-msg {
+            background: #27ae60;
+            color: white;
+        }
+        .error {
+            background: #e74c3c;
+            color: white;
+        }
+        .warning {
+            background: #f39c12;
+            color: white;
+            margin-bottom: 20px;
+            padding: 15px;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Clear IndexedDB Database</h1>
+        
+        <div class="warning">
+            ⚠️ <strong>Warning:</strong> This will delete the IndexedDB database. Your data is safe in localStorage backup, but you should only do this if instructed.
+        </div>
+        
+        <p>This tool will:</p>
+        <ul>
+            <li>Delete the AynBeirutPOS_BlobStorage IndexedDB database</li>
+            <li>Allow fresh migration from localStorage backup</li>
+            <li>Fix migration errors from schema version conflicts</li>
+        </ul>
+        
+        <button id="clearBtn" onclick="clearDatabase()">Clear IndexedDB Database</button>
+        <button id="backBtn" onclick="goBack()" class="success" style="display:none;">Return to POS</button>
+        
+        <div id="status"></div>
+    </div>
+
+    <script>
+        async function clearDatabase() {
+            const statusDiv = document.getElementById('status');
+            const clearBtn = document.getElementById('clearBtn');
+            const backBtn = document.getElementById('backBtn');
+            
+            clearBtn.disabled = true;
+            statusDiv.style.display = 'block';
+            statusDiv.className = 'info';
+            statusDiv.innerHTML = '🔄 Deleting IndexedDB database...';
+            
+            try {
+                // Delete the IndexedDB database
+                const deleteRequest = indexedDB.deleteDatabase('AynBeirutPOS_BlobStorage');
+                
+                deleteRequest.onsuccess = () => {
+                    statusDiv.className = 'success-msg';
+                    statusDiv.innerHTML = `
+                        ✅ <strong>IndexedDB cleared successfully!</strong><br><br>
+                        Next steps:<br>
+                        1. Click "Return to POS" below<br>
+                        2. The system will restore from localStorage backup<br>
+                        3. Fresh migration will run correctly
+                    `;
+                    clearBtn.style.display = 'none';
+                    backBtn.style.display = 'inline-block';
+                };
+                
+                deleteRequest.onerror = (event) => {
+                    statusDiv.className = 'error';
+                    statusDiv.innerHTML = `
+                        ❌ <strong>Failed to delete database:</strong><br>
+                        ${event.target.error || 'Unknown error'}<br><br>
+                        Try closing all POS tabs and try again.
+                    `;
+                    clearBtn.disabled = false;
+                };
+                
+                deleteRequest.onblocked = () => {
+                    statusDiv.className = 'error';
+                    statusDiv.innerHTML = `
+                        ⛔ <strong>Database deletion blocked!</strong><br><br>
+                        Please close all other POS tabs and try again.
+                    `;
+                    clearBtn.disabled = false;
+                };
+                
+            } catch (error) {
+                statusDiv.className = 'error';
+                statusDiv.innerHTML = `
+                    ❌ <strong>Error:</strong> ${error.message}<br><br>
+                    ${error.stack}
+                `;
+                clearBtn.disabled = false;
+            }
+        }
+        
+        function goBack() {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>

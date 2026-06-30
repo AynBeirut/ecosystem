@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Minimal SQL.js Test</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .status { padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .loading { background: #fff3cd; }
+        .success { background: #d4edda; }
+        .error { background: #f8d7da; }
+        pre { background: white; padding: 10px; overflow: auto; }
+    </style>
+</head>
+<body>
+    <h1>🔬 Minimal SQL.js Test</h1>
+    <div id="status" class="status loading">Loading SQL.js...</div>
+    <pre id="log"></pre>
+    
+    <script src="lib/sql-wasm.js"></script>
+    <script>
+        const log = [];
+        function addLog(msg) {
+            const time = new Date().toLocaleTimeString();
+            log.push(`[${time}] ${msg}`);
+            document.getElementById('log').textContent = log.join('\n');
+            console.log(msg);
+        }
+        
+        addLog('Page loaded');
+        
+        // Check if initSqlJs is available
+        if (typeof initSqlJs === 'undefined') {
+            document.getElementById('status').className = 'status error';
+            document.getElementById('status').textContent = '❌ initSqlJs not found - library failed to load';
+            addLog('ERROR: initSqlJs is undefined');
+        } else {
+            addLog('✅ initSqlJs function found');
+            
+            // Try to initialize
+            const startTime = Date.now();
+            addLog('Calling initSqlJs...');
+            
+            initSqlJs({
+                locateFile: file => {
+                    addLog(`Looking for: ${file}`);
+                    return `lib/${file}`;
+                }
+            }).then(SQL => {
+                const loadTime = ((Date.now() - startTime) / 1000).toFixed(2);
+                addLog(`✅ SQL.js loaded in ${loadTime}s`);
+                
+                // Create a test database
+                const db = new SQL.Database();
+                addLog('✅ Database created');
+                
+                // Run a test query
+                db.run('CREATE TABLE test (id INTEGER, name TEXT)');
+                db.run('INSERT INTO test VALUES (1, "Hello"), (2, "World")');
+                const result = db.exec('SELECT * FROM test');
+                addLog(`✅ Query executed: ${result[0].values.length} rows`);
+                
+                document.getElementById('status').className = 'status success';
+                document.getElementById('status').textContent = `✅ SQL.js working! Loaded in ${loadTime}s`;
+                
+            }).catch(err => {
+                addLog(`❌ ERROR: ${err.message}`);
+                addLog(`Stack: ${err.stack}`);
+                document.getElementById('status').className = 'status error';
+                document.getElementById('status').textContent = '❌ Failed: ' + err.message;
+            });
+        }
+        
+        // Timeout warning
+        setTimeout(() => {
+            if (document.getElementById('status').className === 'status loading') {
+                addLog('⚠️ Still loading after 10 seconds...');
+            }
+        }, 10000);
+    </script>
+</body>
+</html>

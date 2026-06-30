@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ayn Beirut POS - Safe Mode</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css?v=5">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-container">
+            <div class="loading-logo">
+                <div class="logo-text">Ayn Beirut</div>
+                <div class="logo-subtext">POS System</div>
+            </div>
+            <div class="loading-spinner"></div>
+            <div id="loading-status" class="loading-status">Safe Mode Loading...</div>
+        </div>
+    </div>
+
+    <!-- Main POS Interface (Simplified) -->
+    <div id="pos-app" class="pos-container" style="display: none;">
+        <!-- Header -->
+        <header class="pos-header">
+            <div class="header-left">
+                <h1 class="pos-title">Ayn Beirut POS</h1>
+                <div class="pos-subtitle">Safe Mode</div>
+            </div>
+            <div class="header-right">
+                <button class="header-btn" onclick="showInfo()">
+                    <span>ℹ️ Info</span>
+                </button>
+                <button class="header-btn" onclick="window.location.href='emergency.html'">
+                    <span>🆘 Emergency</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <div class="pos-content">
+            <!-- Left Panel - Products (Simplified) -->
+            <div class="products-panel">
+                <div class="panel-header">
+                    <h3>Products (Safe Mode)</h3>
+                </div>
+                <div class="products-grid" id="products-grid">
+                    <!-- Safe mode message -->
+                    <div style="padding: 40px; text-align: center; color: #888;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">🛡️</div>
+                        <h3 style="margin-bottom: 15px;">Safe Mode Active</h3>
+                        <p>Complex modules disabled to prevent loading issues.<br>
+                        Use Emergency Mode for full diagnostics.</p>
+                        <br>
+                        <button onclick="tryFullMode()" style="
+                            background: linear-gradient(135deg, #4CAF50, #45a049);
+                            color: white;
+                            border: none;
+                            padding: 12px 24px;
+                            border-radius: 6px;
+                            cursor: pointer;
+                            font-family: inherit;
+                        ">Try Full Mode</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Panel - Cart (Simplified) -->
+            <div class="cart-panel">
+                <div class="panel-header">
+                    <h3>Cart</h3>
+                </div>
+                <div class="cart-content">
+                    <div style="padding: 20px; text-align: center; color: #888;">
+                        <p>Cart functionality available in full mode</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🛡️ Safe Mode Loading...');
+        
+        function showInfo() {
+            alert('Ayn Beirut POS - Safe Mode\n\n' +
+                  'This mode loads with minimal JavaScript to prevent infinite loading.\n\n' +
+                  'Features available:\n' +
+                  '• Basic interface\n' +
+                  '• Emergency diagnostics\n' +
+                  '• Settings access\n\n' +
+                  'Use "Try Full Mode" to attempt normal operation.');
+        }
+        
+        function tryFullMode() {
+            if (confirm('This will attempt to load the full POS system.\n\nIf it hangs, refresh and stay in Safe Mode.\n\nProceed?')) {
+                window.location.href = 'index.html';
+            }
+        }
+        
+        // Simple startup without complex dependencies
+        function startSafeMode() {
+            console.log('🛡️ Starting Safe Mode...');
+            
+            const loadingScreen = document.getElementById('loading-screen');
+            const posApp = document.getElementById('pos-app');
+            const statusEl = document.getElementById('loading-status');
+            
+            statusEl.textContent = 'Safe Mode Ready!';
+            
+            setTimeout(() => {
+                loadingScreen.style.display = 'none';
+                posApp.style.display = 'flex';
+                
+                // Show success notification
+                const notification = document.createElement('div');
+                notification.style.cssText = `
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    background: linear-gradient(135deg, #2196F3, #1976D2);
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+                    z-index: 10000;
+                    font-family: 'Poppins', sans-serif;
+                    font-size: 14px;
+                `;
+                notification.innerHTML = `
+                    <div style="font-weight: 600; margin-bottom: 5px;">🛡️ Safe Mode Active</div>
+                    <div style="opacity: 0.9;">No infinite loading. Basic interface ready.</div>
+                `;
+                document.body.appendChild(notification);
+                
+                setTimeout(() => {
+                    notification.style.opacity = '0';
+                    notification.style.transform = 'translateX(100%)';
+                    notification.style.transition = 'all 0.3s ease';
+                    setTimeout(() => notification.remove(), 300);
+                }, 5000);
+                
+            }, 1000);
+        }
+        
+        // Start safe mode when ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', startSafeMode);
+        } else {
+            startSafeMode();
+        }
+    </script>
+</body>
+</html>

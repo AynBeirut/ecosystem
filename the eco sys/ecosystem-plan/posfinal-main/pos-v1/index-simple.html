@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ayn Beirut POS - Simple Start</title>
+    <link rel="stylesheet" href="css/styles.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-container">
+            <div class="logo-placeholder">A</div>
+            <h1>AYN BEIRUT</h1>
+            <p class="tagline">Tech made in Beirut, deployed worldwide</p>
+            <div class="spinner-container">
+                <div class="spinner"></div>
+            </div>
+            <div id="loading-status">Initializing POS without SQL.js...</div>
+            <button onclick="clearAndReload()" style="margin-top: 20px; padding: 10px 20px; background: #1C75BC; color: white; border: none; border-radius: 5px; cursor: pointer;">Clear Cache & Reload</button>
+        </div>
+    </div>
+
+    <!-- Main POS (Hidden initially) -->
+    <div id="pos-app" style="display: none;">
+        <h1>POS Ready (Legacy Mode)</h1>
+        <p>Using IndexedDB instead of SQL.js</p>
+    </div>
+
+    <script>
+        function clearAndReload() {
+            if (confirm('Clear all cache and reload? This will delete stored data.')) {
+                // Clear all storage
+                localStorage.clear();
+                sessionStorage.clear();
+                
+                // Clear IndexedDB
+                indexedDB.databases().then(dbs => {
+                    dbs.forEach(db => indexedDB.deleteDatabase(db.name));
+                });
+                
+                // Clear cache
+                if ('caches' in window) {
+                    caches.keys().then(names => {
+                        names.forEach(name => caches.delete(name));
+                    });
+                }
+                
+                setTimeout(() => location.reload(true), 1000);
+            }
+        }
+        
+        // Try to load legacy database
+        setTimeout(() => {
+            document.getElementById('loading-status').textContent = 'Starting in legacy mode...';
+            setTimeout(() => {
+                document.getElementById('loading-screen').style.display = 'none';
+                document.getElementById('pos-app').style.display = 'block';
+            }, 1000);
+        }, 2000);
+    </script>
+    
+    <!-- Legacy IndexedDB -->
+    <script src="js/db.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/app.js"></script>
+</body>
+</html>

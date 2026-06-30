@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Check Users Database</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
+        button { background: #007bff; color: white; border: none; padding: 10px 20px; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        pre { background: #f8f9fa; padding: 15px; border-radius: 4px; overflow-x: auto; }
+        .user { border-bottom: 1px solid #ddd; padding: 10px; margin: 10px 0; }
+        .user:last-child { border-bottom: none; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 Database User Checker</h1>
+        <p>Check all users in the database (even if not showing in UI)</p>
+        <button onclick="checkDatabase()">Check Database Now</button>
+        <div id="results"></div>
+    </div>
+
+    <script src="js/sql.js"></script>
+    <script>
+        async function checkDatabase() {
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '<p>Loading...</p>';
+            
+            try {
+                // Load SQL.js
+                const SQL = await initSqlJs({
+                    locateFile: file => `lib/${file}`
+                });
+                
+                // Load database from Electron storage
+                const fs = require('fs');
+                const path = require('path');
+                const dbPath = 'C:\\AynBeirutPOS-Data\\pos-database.sqlite';
+                
+                if (!fs.existsSync(dbPath)) {
+                    resultsDiv.innerHTML = '<p style="color: red;">❌ Database file not found at: ' + dbPath + '</p>';
+                    return;
+                }
+                
+                const buffer = fs.readFileSync(dbPath);
+                const db = new SQL.Database(buffer);
+                
+                // Get all users
+                const result = db.exec('SELECT * FROM users');
+                
+                if (!result || result.length === 0) {
+                    resultsDiv.innerHTML = '<p style="color: red;">❌ No users table or no users found</p>';
+                    return;
+                }
+                
+                const columns = result[0].columns;
+                const values = result[0].values;
+                
+                let html = '<h2>✅ Found ' + values.length + ' users:</h2>';
+                
+                values.forEach(row => {
+                    html += '<div class="user">';
+                    columns.forEach((col, idx) => {
+                        html += '<strong>' + col + ':</strong> ' + (row[idx] || 'NULL') + '<br>';
+                    });
+                    html += '</div>';
+                });
+                
+                html += '<h3>Raw SQL Result:</h3>';
+                html += '<pre>' + JSON.stringify({ columns, values }, null, 2) + '</pre>';
+                
+                resultsDiv.innerHTML = html;
+                
+            } catch (error) {
+                resultsDiv.innerHTML = '<p style="color: red;">❌ Error: ' + error.message + '</p><pre>' + error.stack + '</pre>';
+            }
+        }
+    </script>
+</body>
+</html>

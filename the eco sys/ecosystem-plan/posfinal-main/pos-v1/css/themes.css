@@ -1,0 +1,341 @@
+/* ===================================
+   THEME SYSTEM - Colorful UI
+   ================================== */
+
+/* Dark Theme (Default) */
+[data-theme="dark"] {
+    --bg-primary: #0A0F1C;
+    --bg-secondary: #151B2E;
+    --bg-tertiary: #1F2937;
+    --bg-card: #1a2332;
+    --bg-hover: #252f42;
+    
+    --color-primary: #1C75BC;
+    --color-secondary: #00C2FF;
+    --color-success: #10B981;
+    --color-warning: #F59E0B;
+    --color-error: #EF4444;
+    --color-info: #3B82F6;
+    
+    --text-primary: #F9FAFB;
+    --text-secondary: #D1D5DB;
+    --text-muted: #9CA3AF;
+    
+    --border-color: #374151;
+    --shadow-color: rgba(0, 0, 0, 0.3);
+    
+    --gradient-primary: linear-gradient(135deg, #1C75BC, #00C2FF);
+    --gradient-success: linear-gradient(135deg, #10B981, #059669);
+}
+
+/* Light Theme */
+[data-theme="light"] {
+    --bg-primary: #FFFFFF;
+    --bg-secondary: #F9FAFB;
+    --bg-tertiary: #F3F4F6;
+    --bg-card: #FFFFFF;
+    --bg-hover: #F3F4F6;
+    
+    --color-primary: #1C75BC;
+    --color-secondary: #0099CC;
+    --color-success: #059669;
+    --color-warning: #D97706;
+    --color-error: #DC2626;
+    --color-info: #2563EB;
+    
+    --text-primary: #111827;
+    --text-secondary: #374151;
+    --text-muted: #6B7280;
+    
+    --border-color: #E5E7EB;
+    --shadow-color: rgba(0, 0, 0, 0.1);
+    
+    --gradient-primary: linear-gradient(135deg, #1C75BC, #0099CC);
+    --gradient-success: linear-gradient(135deg, #059669, #10B981);
+}
+
+/* Moderate/Colorful Theme - VIBRANT RAINBOW COLORS */
+[data-theme="moderate"] {
+    /* Vibrant Background Gradients */
+    --bg-primary: linear-gradient(135deg, #1e3a8a 0%, #7c3aed 50%, #db2777 100%);
+    --bg-secondary: linear-gradient(135deg, #312e81 0%, #581c87 100%);
+    --bg-tertiary: linear-gradient(135deg, #3730a3 0%, #6d28d9 100%);
+    --bg-card: linear-gradient(135deg, rgba(30, 58, 138, 0.9) 0%, rgba(124, 58, 237, 0.9) 100%);
+    --bg-hover: linear-gradient(135deg, #4338ca 0%, #7c3aed 100%);
+    
+    /* Rainbow Accent Colors */
+    --color-primary: #667eea;
+    --color-secondary: #f5576c;
+    --color-success: #06D6A0;
+    --color-warning: #FFD166;
+    --color-error: #EF476F;
+    --color-info: #26C6DA;
+    --color-purple: #AB47BC;
+    --color-orange: #FF7043;
+    --color-pink: #EC407A;
+    --color-teal: #26A69A;
+    
+    /* Bright Text */
+    --text-primary: #FFFFFF;
+    --text-secondary: #E0E0E0;
+    --text-muted: #B0B0B0;
+    
+    /* Glowing Borders */
+    --border-color: rgba(102, 126, 234, 0.5);
+    --shadow-color: rgba(102, 126, 234, 0.3);
+    
+    /* Animated Gradients */
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    --gradient-success: linear-gradient(135deg, #06D6A0 0%, #1de9b6 100%);
+    --gradient-warning: linear-gradient(135deg, #FFD166 0%, #ffa726 100%);
+    --gradient-rainbow: linear-gradient(135deg, #667eea 0%, #f5576c 25%, #06D6A0 50%, #FFD166 75%, #26C6DA 100%);
+    
+    /* Glow Effects */
+    --shadow-glow: 0 0 20px rgba(102, 126, 234, 0.6);
+    --shadow-glow-success: 0 0 20px rgba(6, 214, 160, 0.6);
+    --shadow-glow-error: 0 0 20px rgba(239, 71, 111, 0.6);
+    --shadow-glow-rainbow: 0 0 30px rgba(102, 126, 234, 0.4), 0 0 50px rgba(245, 87, 108, 0.3);
+}
+
+/* Colorful Theme - Enhanced Components */
+[data-theme="moderate"] body {
+    background: var(--bg-primary);
+}
+
+[data-theme="moderate"] .pos-header {
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-glow);
+}
+
+[data-theme="moderate"] .product-card {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
+    border: 2px solid rgba(102, 126, 234, 0.4);
+    transition: all 0.3s ease;
+}
+
+[data-theme="moderate"] .product-card:hover {
+    transform: translateY(-5px) scale(1.02);
+    box-shadow: var(--shadow-glow);
+    border-color: var(--color-primary);
+}
+
+[data-theme="moderate"] .stat-card {
+    background: var(--gradient-secondary);
+    border-left: 4px solid var(--color-secondary);
+    box-shadow: var(--shadow-glow);
+}
+
+[data-theme="moderate"] .stat-card:nth-child(1) {
+    background: var(--gradient-primary);
+    border-left-color: var(--color-primary);
+}
+
+[data-theme="moderate"] .stat-card:nth-child(2) {
+    background: var(--gradient-success);
+    border-left-color: var(--color-success);
+}
+
+[data-theme="moderate"] .stat-card:nth-child(3) {
+    background: var(--gradient-warning);
+    border-left-color: var(--color-warning);
+}
+
+[data-theme="moderate"] button.btn-primary {
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-glow);
+    border: none;
+}
+
+[data-theme="moderate"] button.btn-primary:hover {
+    transform: scale(1.05);
+    box-shadow: 0 0 30px rgba(102, 126, 234, 0.8);
+}
+
+[data-theme="moderate"] button.btn-success {
+    background: var(--gradient-success);
+    box-shadow: var(--shadow-glow-success);
+}
+
+[data-theme="moderate"] button.btn-danger {
+    background: linear-gradient(135deg, #EF476F 0%, #dc2626 100%);
+    box-shadow: var(--shadow-glow-error);
+}
+
+[data-theme="moderate"] .modal-content {
+    background: var(--bg-card);
+    border: 2px solid rgba(102, 126, 234, 0.3);
+    box-shadow: var(--shadow-glow-rainbow);
+}
+
+[data-theme="moderate"] .cart-section {
+    background: var(--bg-secondary);
+    border-left: 3px solid var(--color-primary);
+}
+
+[data-theme="moderate"] .category-btn.active {
+    background: var(--gradient-primary);
+    box-shadow: var(--shadow-glow);
+}
+
+[data-theme="moderate"] input:focus,
+[data-theme="moderate"] select:focus,
+[data-theme="moderate"] textarea:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+}
+
+/* Theme Switcher Dropdown Styles */
+.customer-display-container {
+    position: relative;
+    display: inline-block;
+}
+
+.theme-dropdown {
+    position: absolute;
+    top: calc(100% + 5px);
+    right: 0;
+    background: var(--bg-card, #1a2332);
+    border: 1px solid var(--border-color, #374151);
+    border-radius: 8px;
+    padding: 8px;
+    display: none;
+    flex-direction: column;
+    gap: 6px;
+    box-shadow: 0 4px 12px var(--shadow-color, rgba(0, 0, 0, 0.3));
+    z-index: 1000;
+    min-width: 140px;
+}
+
+.theme-dropdown.show {
+    display: flex;
+}
+
+.theme-dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 12px;
+    border: none;
+    background: var(--bg-secondary, #151B2E);
+    color: var(--text-primary, #F9FAFB);
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: 'Poppins', sans-serif;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    text-align: left;
+}
+
+.theme-dropdown-item:hover {
+    background: var(--bg-hover, #252f42);
+    transform: translateX(-2px);
+}
+
+.theme-dropdown-item.active {
+    background: var(--gradient-primary);
+    font-weight: 600;
+}
+
+.theme-dropdown-item .theme-icon {
+    font-size: 18px;
+    min-width: 20px;
+}
+
+/* Smooth transitions for theme changes */
+* {
+    transition: background-color 0.3s ease, color 0.3s ease, border-color 0.3s ease;
+}
+
+/* Apply theme colors to existing elements */
+body {
+    background: var(--bg-primary);
+    color: var(--text-primary);
+}
+
+.pos-header {
+    background: var(--bg-secondary);
+    border-bottom: 1px solid var(--border-color);
+}
+
+.product-card,
+.cart-item,
+.modal-content,
+.stats-card {
+    background: var(--bg-card);
+    border-color: var(--border-color);
+}
+
+.product-card:hover {
+    background: var(--bg-hover);
+}
+
+button.primary,
+.btn-primary {
+    background: var(--gradient-primary);
+}
+
+button.success,
+.btn-success {
+    background: var(--gradient-success);
+}
+
+button.warning,
+.btn-warning {
+    background: var(--color-warning);
+}
+
+button.error,
+.btn-error {
+    background: var(--color-error);
+}
+
+/* Status indicators with theme colors */
+.status-indicator.online .status-dot {
+    background: var(--color-success);
+    box-shadow: 0 0 10px var(--color-success);
+}
+
+.status-indicator.offline .status-dot {
+    background: var(--color-error);
+    box-shadow: 0 0 10px var(--color-error);
+}
+
+/* Badges with theme colors */
+.badge {
+    background: var(--color-error);
+}
+
+.badge.success {
+    background: var(--color-success);
+}
+
+.badge.warning {
+    background: var(--color-warning);
+}
+
+.badge.info {
+    background: var(--color-info);
+}
+
+/* Input fields */
+input[type="text"],
+input[type="number"],
+input[type="email"],
+input[type="password"],
+textarea,
+select {
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border-color: var(--border-color);
+}
+
+input[type="text"]:focus,
+input[type="number"]:focus,
+input[type="email"]:focus,
+input[type="password"]:focus,
+textarea:focus,
+select:focus {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px rgba(var(--color-primary), 0.1);
+}

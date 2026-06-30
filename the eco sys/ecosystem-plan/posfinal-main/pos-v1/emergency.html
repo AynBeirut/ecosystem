@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ayn Beirut POS - Emergency Mode</title>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Poppins', sans-serif;
+            background: linear-gradient(135deg, #0A0F1C, #1a1a2e);
+            color: white;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        .header {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 15px 30px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .main-content {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+        
+        .emergency-panel {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 40px;
+            max-width: 600px;
+            text-align: center;
+        }
+        
+        .status-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+        
+        .emergency-title {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 15px;
+            color: #FF9800;
+        }
+        
+        .emergency-desc {
+            font-size: 16px;
+            line-height: 1.6;
+            opacity: 0.8;
+            margin-bottom: 30px;
+        }
+        
+        .action-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #4CAF50, #45a049);
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .diagnostic-info {
+            margin-top: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 8px;
+            text-align: left;
+            font-size: 14px;
+        }
+        
+        .diagnostic-item {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+        }
+        
+        .status-ok { color: #4CAF50; }
+        .status-error { color: #f44336; }
+        .status-warning { color: #FF9800; }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>Ayn Beirut POS</h1>
+    </div>
+    
+    <div class="main-content">
+        <div class="emergency-panel">
+            <div class="status-icon">⚠️</div>
+            <div class="emergency-title">Emergency Mode Active</div>
+            <div class="emergency-desc">
+                The normal startup process was causing infinite loading loops. 
+                This emergency mode bypasses all complex operations to ensure you can access the system.
+            </div>
+            
+            <div class="action-buttons">
+                <button class="btn btn-primary" onclick="tryNormalLoad()">Try Normal Load</button>
+                <button class="btn btn-secondary" onclick="showDiagnostics()">Show Diagnostics</button>
+                <button class="btn btn-secondary" onclick="clearAllData()">Clear Storage</button>
+            </div>
+            
+            <div class="diagnostic-info" id="diagnostics" style="display: none;">
+                <h3>System Diagnostics</h3>
+                <div class="diagnostic-item">
+                    <span>Browser:</span>
+                    <span class="status-ok" id="browser-info">Loading...</span>
+                </div>
+                <div class="diagnostic-item">
+                    <span>Storage:</span>
+                    <span class="status-ok" id="storage-info">Loading...</span>
+                </div>
+                <div class="diagnostic-item">
+                    <span>Database:</span>
+                    <span class="status-error" id="db-info">Disabled (preventing hang)</span>
+                </div>
+                <div class="diagnostic-item">
+                    <span>Last Error:</span>
+                    <span class="status-warning" id="error-info">Infinite loading loop detected</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        console.log('🚀 Emergency mode loaded successfully');
+        
+        function tryNormalLoad() {
+            if (confirm('This will attempt to load the full POS system. Are you sure?')) {
+                window.location.href = 'index.html';
+            }
+        }
+        
+        function showDiagnostics() {
+            const diagnostics = document.getElementById('diagnostics');
+            diagnostics.style.display = diagnostics.style.display === 'none' ? 'block' : 'none';
+            
+            if (diagnostics.style.display === 'block') {
+                updateDiagnostics();
+            }
+        }
+        
+        function updateDiagnostics() {
+            document.getElementById('browser-info').textContent = navigator.userAgent.split(' ')[0];
+            
+            // Check storage
+            try {
+                localStorage.setItem('test', 'test');
+                localStorage.removeItem('test');
+                document.getElementById('storage-info').textContent = 'Available';
+            } catch (e) {
+                document.getElementById('storage-info').textContent = 'Error: ' + e.message;
+                document.getElementById('storage-info').className = 'status-error';
+            }
+        }
+        
+        function clearAllData() {
+            if (confirm('This will clear ALL stored data including sales records. Are you sure?')) {
+                try {
+                    localStorage.clear();
+                    sessionStorage.clear();
+                    if ('caches' in window) {
+                        caches.keys().then(names => {
+                            names.forEach(name => caches.delete(name));
+                        });
+                    }
+                    alert('All data cleared. The page will reload.');
+                    location.reload();
+                } catch (e) {
+                    alert('Error clearing data: ' + e.message);
+                }
+            }
+        }
+        
+        // Auto-show diagnostics after 3 seconds
+        setTimeout(() => {
+            showDiagnostics();
+        }, 3000);
+    </script>
+</body>
+</html>

@@ -1,0 +1,478 @@
+/**
+ * UI/UX STANDARDS AND OVERRIDES
+ * Comprehensive standards for touch targets, accessibility, and consistency
+ * Ayn Beirut POS - December 2025
+ */
+
+/* ========================================
+   TOUCH TARGET STANDARDS (44x44px minimum)
+   ======================================== */
+
+/* Override quantity buttons to meet touch target standards */
+.qty-btn {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 18px !important;
+}
+
+/* Override icon buttons to meet touch target standards */
+.btn-icon {
+    width: 44px !important;
+    height: 44px !important;
+    min-width: 44px !important;
+    min-height: 44px !important;
+}
+
+/* Ensure all buttons meet minimum touch targets */
+button,
+.btn,
+.btn-primary,
+.btn-secondary,
+.btn-success,
+.btn-warning,
+.btn-danger {
+    min-height: 44px;
+    min-width: 44px;
+    padding: 12px 24px;
+}
+
+/* Category buttons touch targets */
+.category-btn {
+    min-height: 44px;
+    padding: 12px var(--space-md);
+}
+
+/* Header buttons */
+.header-btn {
+    min-width: 44px;
+    min-height: 44px;
+}
+
+/* ========================================
+   INPUT FIELD STANDARDS (16px font, 48px height)
+   ======================================== */
+
+/* All text inputs must be 16px to prevent mobile zoom */
+input[type="text"],
+input[type="email"],
+input[type="tel"],
+input[type="number"],
+input[type="password"],
+input[type="search"],
+input[type="url"],
+input:not([type]),
+select,
+textarea,
+.form-control,
+.search-input,
+.barcode-input {
+    font-size: 16px !important;
+    min-height: 48px !important;
+    padding: 12px 16px !important;
+}
+
+/* Form group inputs */
+.form-group input,
+.form-group select,
+.form-group textarea {
+    font-size: 16px !important;
+    min-height: 48px !important;
+    padding: 12px var(--space-md) !important;
+}
+
+/* ========================================
+   FOCUS INDICATORS (WCAG 2.1 AA Compliance)
+   ======================================== */
+
+/* Enhanced focus states with visible outline */
+*:focus-visible,
+input:focus,
+select:focus,
+textarea:focus,
+button:focus {
+    outline: 2px solid var(--electric-cyan, #00C2FF) !important;
+    outline-offset: 2px !important;
+    box-shadow: 0 0 0 4px rgba(0, 194, 255, 0.25) !important;
+}
+
+/* Remove default outline but keep custom */
+*:focus {
+    outline: none;
+}
+
+*:focus-visible {
+    outline: 2px solid var(--electric-cyan, #00C2FF) !important;
+    outline-offset: 2px;
+}
+
+/* ========================================
+   TYPOGRAPHY STANDARDS
+   ======================================== */
+
+/* Minimum font size for readability */
+body {
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* Small text minimum */
+small,
+.small-text,
+.form-group small {
+    font-size: 13px !important;
+    line-height: 1.5;
+}
+
+/* Heading hierarchy */
+h1, .h1 { font-size: 32px; font-weight: 700; line-height: 1.2; }
+h2, .h2 { font-size: 24px; font-weight: 700; line-height: 1.3; }
+h3, .h3 { font-size: 20px; font-weight: 600; line-height: 1.4; }
+h4, .h4 { font-size: 18px; font-weight: 600; line-height: 1.4; }
+h5, .h5 { font-size: 16px; font-weight: 600; line-height: 1.5; }
+h6, .h6 { font-size: 14px; font-weight: 600; line-height: 1.5; }
+
+/* Product names and labels */
+.product-name {
+    font-size: 16px !important;
+}
+
+/* ========================================
+   MODAL SIZING STANDARDS
+   ======================================== */
+
+/* Full-screen modals for easy reach */
+.modal-content {
+    max-width: 95vw !important;
+    width: 95% !important;
+    max-height: 90vh !important;
+}
+
+/* Modal size variants */
+.modal-sm .modal-content { max-width: 500px !important; }
+.modal-md .modal-content { max-width: 700px !important; }
+.modal-lg .modal-content { max-width: 900px !important; }
+.modal-xl .modal-content { max-width: 1200px !important; }
+
+/* Modal close button touch target */
+.modal-close,
+.close-modal {
+    min-width: 44px !important;
+    min-height: 44px !important;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px !important;
+}
+
+/* ========================================
+   FORM VALIDATION & ERROR STATES
+   ======================================== */
+
+/* Error state for inputs */
+.input-error,
+input.error,
+.form-group input.error {
+    border-color: #EF4444 !important;
+    background-color: rgba(239, 68, 68, 0.08) !important;
+}
+
+/* Error messages */
+.error-message,
+.field-error {
+    color: #EF4444;
+    font-size: 13px;
+    margin-top: 4px;
+    display: block;
+    font-weight: 500;
+}
+
+/* Success state */
+.input-success,
+input.success {
+    border-color: #10B981 !important;
+    background-color: rgba(16, 185, 129, 0.08) !important;
+}
+
+/* Required field indicators */
+label .required,
+label span.required {
+    color: #EF4444;
+    margin-left: 2px;
+    font-weight: 700;
+}
+
+/* ========================================
+   TABLE STANDARDS
+   ======================================== */
+
+/* Alternating row colors for readability */
+.data-table tbody tr:nth-child(even),
+table tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* Sticky table headers */
+.data-table thead,
+table thead {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    background: var(--deep-navy, #0A0F1C);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Table cell padding */
+.data-table td,
+.data-table th,
+table td,
+table th {
+    padding: 12px !important;
+    min-height: 44px;
+}
+
+/* Table responsive wrapper */
+.table-wrapper {
+    overflow-x: auto;
+}
+
+/* ========================================
+   ACCESSIBILITY ENHANCEMENTS
+   ======================================== */
+
+/* Hidden but accessible to screen readers */
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border-width: 0;
+}
+
+/* Skip to content link */
+.skip-link {
+    position: absolute;
+    top: -40px;
+    left: 0;
+    background: var(--ayn-blue);
+    color: white;
+    padding: 8px;
+    text-decoration: none;
+    z-index: 100;
+}
+
+.skip-link:focus {
+    top: 0;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    * {
+        border-color: currentColor !important;
+    }
+    
+    button,
+    input,
+    select,
+    textarea {
+        border-width: 2px !important;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+        scroll-behavior: auto !important;
+    }
+}
+
+/* ========================================
+   COLOR CONTRAST ENHANCEMENTS
+   ======================================== */
+
+/* Ensure minimum contrast ratios */
+.text-muted {
+    color: #9CA3AF !important; /* WCAG AA compliant on dark backgrounds */
+}
+
+.text-secondary {
+    color: #D1D5DB !important; /* Higher contrast */
+}
+
+/* Link contrast */
+a {
+    color: #60A5FA;
+    text-decoration: underline;
+}
+
+a:hover {
+    color: #93C5FD;
+}
+
+/* ========================================
+   SPACING CONSISTENCY
+   ======================================== */
+
+/* Standard spacing utilities */
+.spacing-xs { padding: var(--space-xs, 4px); }
+.spacing-sm { padding: var(--space-sm, 8px); }
+.spacing-md { padding: var(--space-md, 16px); }
+.spacing-lg { padding: var(--space-lg, 24px); }
+.spacing-xl { padding: var(--space-xl, 32px); }
+
+/* Margin utilities */
+.margin-xs { margin: var(--space-xs, 4px); }
+.margin-sm { margin: var(--space-sm, 8px); }
+.margin-md { margin: var(--space-md, 16px); }
+.margin-lg { margin: var(--space-lg, 24px); }
+.margin-xl { margin: var(--space-xl, 32px); }
+
+/* ========================================
+   RESPONSIVE TOUCH TARGETS (Mobile)
+   ======================================== */
+
+@media (max-width: 768px) {
+    /* Increase touch targets on mobile */
+    button,
+    .btn,
+    a.btn {
+        min-height: 48px !important;
+        padding: 14px 20px !important;
+    }
+    
+    input,
+    select,
+    textarea {
+        min-height: 52px !important;
+        font-size: 16px !important;
+    }
+    
+    .qty-btn {
+        width: 48px !important;
+        height: 48px !important;
+    }
+    
+    .btn-icon {
+        width: 48px !important;
+        height: 48px !important;
+    }
+}
+
+/* ========================================
+   LOADING & DISABLED STATES
+   ======================================== */
+
+/* Disabled state styling */
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled,
+.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
+/* Loading state */
+.loading {
+    position: relative;
+    pointer-events: none;
+    opacity: 0.6;
+}
+
+.loading::after {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    border: 2px solid #fff;
+    border-top-color: transparent;
+    border-radius: 50%;
+    animation: spinner 0.6s linear infinite;
+}
+
+@keyframes spinner {
+    to { transform: rotate(360deg); }
+}
+
+/* ========================================
+   PRINT STYLES
+   ======================================== */
+
+@media print {
+    /* Hide non-essential elements */
+    .no-print,
+    .header-btn,
+    .virtual-keyboard,
+    .sidebar {
+        display: none !important;
+    }
+    
+    /* Optimize for printing */
+    body {
+        background: white;
+        color: black;
+    }
+    
+    .modal-content {
+        max-width: 100%;
+        box-shadow: none;
+        border: 1px solid #000;
+    }
+}
+
+/* ========================================
+   UTILITY CLASSES
+   ======================================== */
+
+/* Text alignment */
+.text-left { text-align: left; }
+.text-center { text-align: center; }
+.text-right { text-align: right; }
+
+/* Display utilities */
+.d-none { display: none; }
+.d-block { display: block; }
+.d-flex { display: flex; }
+.d-inline-flex { display: inline-flex; }
+
+/* Flex utilities */
+.flex-center {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.flex-between {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Width utilities */
+.w-100 { width: 100%; }
+.w-auto { width: auto; }
+
+/* Height utilities */
+.h-100 { height: 100%; }
+.h-auto { height: auto; }
+
+/* ========================================
+   END OF UI/UX STANDARDS
+   ======================================== */

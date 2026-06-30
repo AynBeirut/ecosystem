@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Restore POS Data</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #0a0f1c; color: #fff; display:flex; flex-direction:column; align-items:center; justify-content:center; min-height:100vh; margin:0; }
+  h1 { color: #58a6ff; }
+  #status { margin: 20px; font-size: 18px; text-align: center; max-width: 600px; }
+  button { padding: 16px 40px; font-size: 18px; background: #238636; color: #fff; border: none; border-radius: 8px; cursor: pointer; margin-top: 20px; }
+  button:hover { background: #2ea043; }
+  .success { color: #3fb950; }
+  .error { color: #f85149; }
+  .info { color: #8b949e; font-size: 14px; margin-top: 10px; }
+</style>
+</head>
+<body>
+<h1>🗄️ AYN BEIRUT POS — Restore Data</h1>
+<div id="status">Click the button to restore your historical data (123 sales, 18 products, 6 customers)</div>
+<button id="btn" onclick="restore()">▶ Restore Data Now</button>
+<div class="info" id="detail"></div>
+
+<script src="lib/sql-wasm.js"></script>
+<script>
+async function restore() {
+  const btn = document.getElementById('btn');
+  const status = document.getElementById('status');
+  const detail = document.getElementById('detail');
+  btn.disabled = true;
+  btn.textContent = '⏳ Restoring...';
+
+  try {
+    status.textContent = 'Loading SQL engine...';
+    const SQL = await initSqlJs({ locateFile: f => `lib/${f}` });
+
+    status.textContent = 'Fetching backup file...';
+    const resp = await fetch('/backup.sqlite');
+    if (!resp.ok) throw new Error(`Backup file not found (HTTP ${resp.status}). Make sure backup.sqlite is in the pos-v1 folder.`);
+    const buf = await resp.arrayBuffer();
+    const uint8 = new Uint8Array(buf);
+
+    status.textContent = 'Loading backup database...';
+    const backupDb = new SQL.Database(uint8);
+    const sales    = backupDb.exec('SELECT COUNT(*) FROM sales')[0]?.values[0][0];
+    const products = backupDb.exec('SELECT COUNT(*) FROM products')[0]?.values[0][0];
+    const customers= backupDb.exec('SELECT COUNT(*) FROM customers')[0]?.values[0][0];
+    const exported = backupDb.export();
+    backupDb.close();
+
+    status.textContent = 'Saving to IndexedDB...';
+
+    // Save ONLY to IndexedDB (binary, no inflation — localStorage quota is only ~5MB and would corrupt)
+    // storage-manager.js defaults to IndexedDB, so this is the correct and safe storage path.
+    const idbVersion = await new Promise(resolve => {
+      const r = indexedDB.open('AynBeirutPOS_BlobStorage');
+      r.onsuccess = e => { const v = e.target.result.version; e.target.result.close(); resolve(v); };
+      r.onerror = () => resolve(1);
+    });
+
+    await new Promise((resolve, reject) => {
+      const req = indexedDB.open('AynBeirutPOS_BlobStorage', idbVersion);
+      req.onsuccess = e => {
+        const db = e.target.result;
+        const tx = db.transaction('database', 'readwrite');
+        // Must store as Blob — matches indexedDbSave() in storage-manager.js
+        const blob = new Blob([exported], { type: 'application/x-sqlite3' });
+        tx.objectStore('database').put(blob, 'sqliteDb');
+        tx.oncomplete = () => { db.close(); resolve(); };
+        tx.onerror = ev => reject(ev.target.error);
+      };
+      req.onupgradeneeded = e => {
+        const db = e.target.result;
+        if (!db.objectStoreNames.contains('database')) db.createObjectStore('database');
+      };
+      req.onerror = e => reject(e.target.error);
+    });
+
+    status.innerHTML = `<span class="success">✅ Restore complete!</span><br>Sales: ${sales} &nbsp; Products: ${products} &nbsp; Customers: ${customers}`;
+    detail.innerHTML = 'Data saved to this browser\'s storage.<br><strong>Now <a href="/index.html" style="color:#58a6ff">click here to open the POS</a></strong>';
+    btn.textContent = '✅ Done — Open POS';
+    btn.onclick = () => location.href = '/index.html';
+    btn.disabled = false;
+
+  } catch(e) {
+    status.innerHTML = `<span class="error">❌ Error: ${e.message}</span>`;
+    btn.textContent = '🔄 Retry';
+    btn.disabled = false;
+    btn.onclick = restore;
+  }
+}
+</script>
+</body>
+</html>

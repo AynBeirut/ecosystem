@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Login - Ayn Beirut POS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="css/styles.css">
+    <style>
+        body {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            background: var(--deep-navy);
+            margin: 0;
+            padding: var(--space-lg);
+        }
+
+        .login-container {
+            width: 100%;
+            max-width: 450px;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(201, 209, 217, 0.1);
+            border-radius: 16px;
+            padding: var(--space-xl);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .login-header {
+            text-align: center;
+            margin-bottom: var(--space-xl);
+        }
+
+        .login-logo {
+            font-size: 72px;
+            font-weight: 700;
+            background: var(--gradient-primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: var(--space-md);
+        }
+
+        .login-title {
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0 0 var(--space-sm) 0;
+            color: var(--soft-white);
+        }
+
+        .login-subtitle {
+            font-size: 14px;
+            color: var(--light-grey);
+            margin: 0;
+        }
+
+        .login-form {
+            margin-bottom: var(--space-lg);
+        }
+
+        .form-group {
+            margin-bottom: var(--space-lg);
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 500;
+            color: var(--light-grey);
+            margin-bottom: var(--space-sm);
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: var(--space-md);
+            background: rgba(28, 117, 188, 0.1);
+            border: 1px solid var(--border-grey);
+            border-radius: 8px;
+            color: var(--soft-white);
+            font-size: 16px;
+            font-family: 'Poppins', sans-serif;
+            transition: all 0.3s ease;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: var(--electric-cyan);
+            background: rgba(28, 117, 188, 0.15);
+            box-shadow: 0 0 0 3px rgba(0, 194, 255, 0.1);
+        }
+
+        .form-group select option {
+            background: var(--deep-navy);
+            color: var(--soft-white);
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: var(--space-md);
+            background: var(--gradient-primary);
+            border: none;
+            border-radius: 8px;
+            color: var(--soft-white);
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-login:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(28, 117, 188, 0.3);
+        }
+
+        .btn-login:active {
+            transform: translateY(0);
+        }
+
+        .quick-login {
+            margin-top: var(--space-lg);
+            padding-top: var(--space-lg);
+            border-top: 1px solid rgba(201, 209, 217, 0.1);
+        }
+
+        .quick-login-title {
+            font-size: 13px;
+            color: var(--light-grey);
+            text-align: center;
+            margin-bottom: var(--space-md);
+        }
+
+        .quick-login-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: var(--space-sm);
+        }
+
+        .btn-quick-login {
+            padding: var(--space-sm);
+            background: rgba(0, 194, 255, 0.1);
+            border: 1px solid rgba(0, 194, 255, 0.3);
+            border-radius: 6px;
+            color: var(--electric-cyan);
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .btn-quick-login:hover {
+            background: rgba(0, 194, 255, 0.2);
+            transform: scale(1.02);
+        }
+
+        .error-message {
+            background: rgba(242, 122, 29, 0.1);
+            border: 1px solid rgba(242, 122, 29, 0.3);
+            border-radius: 8px;
+            padding: var(--space-md);
+            color: var(--warm-orange);
+            font-size: 14px;
+            margin-bottom: var(--space-md);
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .login-footer {
+            text-align: center;
+            margin-top: var(--space-lg);
+            font-size: 12px;
+            color: var(--light-grey);
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <div class="login-logo">A</div>
+            <h1 class="login-title">Ayn Beirut POS</h1>
+            <p class="login-subtitle">Sign in to continue</p>
+        </div>
+
+        <div class="error-message" id="error-message"></div>
+
+        <form class="login-form" id="login-form">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required autocomplete="username" placeholder="Enter your username">
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required autocomplete="current-password" placeholder="Enter your password">
+            </div>
+
+            <div class="form-group">
+                <label for="role">Role</label>
+                <select id="role" name="role" required>
+                    <option value="cashier">Cashier</option>
+                    <option value="manager">Manager</option>
+                    <option value="admin">Admin</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn-login">Sign In</button>
+        </form>
+
+        <div class="quick-login">
+            <div class="quick-login-title">Quick Login (Demo)</div>
+            <div class="quick-login-buttons">
+                <button class="btn-quick-login" data-user="admin">👨‍💼 Admin</button>
+                <button class="btn-quick-login" data-user="manager">📊 Manager</button>
+                <button class="btn-quick-login" data-user="cashier">👤 Cashier</button>
+            </div>
+        </div>
+
+        <div class="login-footer">
+            <p>Tech made in Beirut, deployed worldwide</p>
+        </div>
+    </div>
+
+    <script src="js/db.js"></script>
+    <script src="js/auth.js"></script>
+    <script src="js/virtual-keyboard.js?v=6"></script>
+    <script>
+        // Auto-initialize database and users on page load
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Initialize database first
+                await initDatabase();
+                console.log('✅ Database initialized');
+                
+                // Initialize users automatically
+                await initializeUsersDB();
+                console.log('✅ Users initialized');
+                
+                // Initialize virtual keyboard
+                initVirtualKeyboard();
+                console.log('✅ Virtual keyboard ready');
+            } catch (error) {
+                console.error('Initialization error:', error);
+            }
+        });
+        
+        // Login form submission
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const role = document.getElementById('role').value;
+            
+            const result = await login(username, password, role);
+            
+            if (result.success) {
+                window.location.href = 'index.html';
+            } else {
+                showError(result.message);
+            }
+        });
+
+        // Quick login buttons
+        document.querySelectorAll('.btn-quick-login').forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const userType = btn.dataset.user;
+                
+                if (userType === 'admin') {
+                    document.getElementById('username').value = 'admin';
+                    document.getElementById('password').value = 'admin123';
+                    document.getElementById('role').value = 'admin';
+                } else if (userType === 'manager') {
+                    document.getElementById('username').value = 'manager';
+                    document.getElementById('password').value = 'manager123';
+                    document.getElementById('role').value = 'manager';
+                } else {
+                    document.getElementById('username').value = 'cashier';
+                    document.getElementById('password').value = 'cashier123';
+                    document.getElementById('role').value = 'cashier';
+                }
+                
+                document.getElementById('login-form').dispatchEvent(new Event('submit'));
+            });
+        });
+
+        // Show error message
+        function showError(message) {
+            const errorDiv = document.getElementById('error-message');
+            errorDiv.textContent = message;
+            errorDiv.classList.add('show');
+            
+            setTimeout(() => {
+                errorDiv.classList.remove('show');
+            }, 5000);
+        }
+
+        // Check if already logged in
+        const currentUser = getCurrentUser();
+        if (currentUser) {
+            window.location.href = 'index.html';
+        }
+    </script>
+</body>
+</html>
