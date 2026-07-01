@@ -43,8 +43,12 @@ Push to **ecosystem** — not `AynBeirut/posfinal`.
 
 ## Source
 
-`pos-v1` was copied from `../posfinal/pos-v1/` (source only — no `node_modules`, no `dist`). Legacy VPS sync remains in `js/sync-manager.js` until Grabio QA passes.
+Production POS lives in **`../posfinal/`** (full repo — offline, in production). The ecosystem copy under `posfinal-main/` was seeded from `pos-v1`; **re-sync from full `posfinal` before major work** (see PROJECT-PLAN.md).
 
-## Next build task
+## Project goals
 
-Implement `the eco sys/ecosystem-plan/posfinal-main/pos-v1/js/grabio/` per CODE-TASKS.md (pairing + heartbeat first).
+1. **Connect** offline POS to Grabio (pairing, heartbeat, then catalog/orders)
+2. **Rebrand** UI to Grabio
+3. **Add** manufacturing + hotel features
+
+Full roadmap → **[PROJECT-PLAN.md](PROJECT-PLAN.md)** (start here tomorrow).
