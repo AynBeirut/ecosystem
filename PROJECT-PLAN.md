@@ -81,6 +81,10 @@ Create `js/grabio/` in the POS app:
 - [ ] Token survives restart
 - [ ] Clear errors for wrong/expired code
 
+### Known gap (before shipping to operators)
+
+- [ ] **Re-pair entry point in UI** — `window.openGrabioPairingModal()` is callable but not exposed in Settings or any menu. Operators who need to re-pair (new admin code, token revoked, heartbeat 401) cannot reach it without dev tools. Add a visible "Pair with Grabio" / "Re-pair" button in Settings before production rollout. Logged only — not built yet.
+
 ---
 
 ## Phase 2 — UI rebrand (Grabio look)
@@ -120,8 +124,9 @@ Create `js/grabio/` in the POS app:
 - [x] Created `eco sys pos` workspace (isolated from old `posfinal` git)
 - [x] Copied POS source + builder pack into ecosystem path layout
 - [x] Wired git → `AynBeirut/ecosystem`, pushed `pos-windows-grabio`
-- [ ] **Tomorrow:** Re-sync from full **`posfinal`** (not pos-v1-only assumption)
-- [ ] **Tomorrow:** Start `js/grabio/` (pairing + heartbeat)
+- [x] `js/grabio/` Phase 1 — config, pairing, heartbeat (pushed `pos-windows-grabio`)
+- [ ] Re-pair button in Settings UI (see Known gap above)
+- [ ] **Tomorrow:** Re-sync from full **`posfinal`** if production drifted
 - [ ] Anwar: merge PR + fix Windows-invalid paths in ecosystem repo (`assets/xandroid /...`)
 
 ---
