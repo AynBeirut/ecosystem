@@ -7,8 +7,10 @@ alwaysApply: false
 # Grabio POS
 
 - Work only inside `eco sys pos/` — do not edit `../posfinal/` or parent `githup/` repos
+- Production reference (read-only): `../posfinal/` — full repo, not pos-v1-only
 - Handoff pack: `the eco sys/ecosystem-plan/pos-windows-builder-pack/README.md`
-- POS code: `the eco sys/ecosystem-plan/posfinal-main/pos-v1/`
+- POS code (edit): `the eco sys/ecosystem-plan/posfinal-main/`
+- Roadmap: `PROJECT-PLAN.md`
 - API: `https://us-central1-market-flow-7b074.cloudfunctions.net/api`
 - Live: `/pos/pairing-code`, `/pos/pair`, `/pos/heartbeat`
 - Planned: `/pos/catalog`, `/pos/orders`
