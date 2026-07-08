@@ -29,12 +29,12 @@ const StoreBlogPost: React.FC = () => {
     const load = async () => {
       // Resolve slug → storeId
       const slugSnap = await getDocs(
-        query(collection(db, 'storeProfiles'), where('storeSlug', '==', slug))
+        query(collection(db, 'storeProfiles'), where('slug', '==', slug))
       );
       if (slugSnap.empty) { navigate(`/store/${slug}/blog`); return; }
       const storeDoc = slugSnap.docs[0];
       const storeId = storeDoc.id;
-      setStoreName(storeDoc.data().storeName ?? slug);
+      setStoreName(storeDoc.data().name ?? slug);
 
       const postSnap = await getDoc(doc(db, 'stores', storeId, 'blogPosts', postId));
       if (!postSnap.exists()) {

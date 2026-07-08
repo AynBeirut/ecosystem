@@ -1,50 +1,39 @@
 {
-  "name": "Beirut Finance Flow",
-  "short_name": "Finance Flow",
-  "description": "Complete offline-first accounting and invoicing system",
-  "start_url": "/",
+  "name": "Grabio Invoice Manager",
+  "short_name": "Grabio Invoice",
+  "description": "Invoicing, estimates, receipts, and finance tools — part of the Grabio ecosystem",
+  "start_url": "/invoice/",
+  "scope": "/invoice/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#000000",
+  "display_override": ["standalone", "fullscreen"],
+  "background_color": "#111827",
+  "theme_color": "#38B2AC",
   "orientation": "any",
   "icons": [
     {
-      "src": "/icon-192.png",
+      "src": "icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any maskable"
     },
     {
-      "src": "/icon-512.png",
+      "src": "icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
     }
   ],
-  "screenshots": [
-    {
-      "src": "/screenshot-wide.png",
-      "sizes": "1280x720",
-      "type": "image/png",
-      "form_factor": "wide"
-    },
-    {
-      "src": "/screenshot-narrow.png",
-      "sizes": "750x1334",
-      "type": "image/png",
-      "form_factor": "narrow"
-    }
-  ],
   "categories": ["business", "finance", "productivity"],
+  "prefer_related_applications": false,
   "shortcuts": [
     {
       "name": "Create Invoice",
-      "url": "/invoices",
+      "url": "/invoice/invoices",
       "description": "Create a new invoice"
     },
     {
       "name": "View Reports",
-      "url": "/reports",
+      "url": "/invoice/reports",
       "description": "View financial reports"
     }
   ]

@@ -21,6 +21,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
 import { pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
+import ClampedText from '@/components/ClampedText';
 
 type StorePaymentMethods = {
   creditCard: boolean;
@@ -885,15 +886,15 @@ const Cart: React.FC = () => {
                           <div className="sm:ml-4 flex-grow">
                             <div className="flex flex-col sm:flex-row sm:justify-between">
                               <div>
-                                <h3 className="font-medium text-gray-900">
+                                <h3 className="font-medium text-gray-900 min-w-0">
                                   <Link 
                                     to={item.product.slug && item.product.store?.slug 
                                       ? `/${item.product.store.slug}/product/${item.product.slug}`
                                       : `/product/id/${item.product.id}`
                                     } 
-                                    className="hover:text-market-primary"
+                                    className="hover:text-market-primary block min-w-0"
                                   >
-                                    {item.product.name}
+                                    <ClampedText text={item.product.name} maxLines={2} className="font-medium text-gray-900" as="span" />
                                   </Link>
                                 </h3>
                                 <p className="text-sm text-gray-500">

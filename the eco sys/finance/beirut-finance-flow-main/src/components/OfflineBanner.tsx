@@ -1,14 +1,20 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
+import { isFinanceInAppShell } from "@/lib/playStoreNavScope";
 
 const OfflineBanner = () => {
   const [online, setOnline] = useState(typeof navigator !== "undefined" ? navigator.onLine : true);
+  const inAppShell = isFinanceInAppShell();
 
   useEffect(() => {
     const onOffline = () => { setOnline(false); toast.error("You're offline. Changes will sync when you reconnect."); };
     const onOnline = () => {
       setOnline(true);
+      if (inAppShell) {
+        toast.success("Back online.");
+        return;
+      }
       toast.success("Back online. Refreshing…");
       setTimeout(() => window.location.reload(), 800);
     };
@@ -18,7 +24,7 @@ const OfflineBanner = () => {
       window.removeEventListener("offline", onOffline);
       window.removeEventListener("online", onOnline);
     };
-  }, []);
+  }, [inAppShell]);
 
   if (online) return null;
   return (

@@ -33,12 +33,12 @@ const StoreBlog: React.FC = () => {
     const load = async () => {
       // Resolve slug → storeId
       const slugSnap = await getDocs(
-        query(collection(db, 'storeProfiles'), where('storeSlug', '==', slug))
+        query(collection(db, 'storeProfiles'), where('slug', '==', slug))
       );
       if (slugSnap.empty) { setLoading(false); return; }
       const storeDoc = slugSnap.docs[0];
       const storeId = storeDoc.id;
-      const storeName = storeDoc.data().storeName ?? slug;
+      const storeName = storeDoc.data().name ?? slug;
       setStore({ name: storeName, storeId });
 
       // Fetch published public posts

@@ -1,13 +1,14 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AppLayout from "@/components/AppLayout";
-import { Plus, Trash, Mail, FileDown, Send, Phone, Eye } from "lucide-react";
+import FinancePageShell from "@/components/FinancePageShell";
+import { Plus, Trash, Share2, FileDown, Phone, Eye, X, User } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/SearchableCombobox";
 import { CURRENCIES } from "@/services/mockData";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +18,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import EstimateList from "@/components/EstimateList";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import ShareSheet from "@/components/ShareSheet";
 
 // Define schema for estimate form
 const estimateSchema = z.object({
@@ -30,17 +32,18 @@ const estimateSchema = z.object({
 });
 
 const EstimateManager = () => {
-  const { user, clients, products, estimates, createEstimate, previewEstimate, sendEstimate, exportEstimateAsPdf, logout, checkLimit } = useAppContext();
+  const { user, clients, products, estimates, createEstimate, updateEstimate, previewEstimate, sendEstimate, exportEstimateAsPdf, logout, checkLimit, refreshDocumentCompany } = useAppContext();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>("list");
+  const [editingEstimateId, setEditingEstimateId] = useState<string | null>(null);
   const [lineItems, setLineItems] = useState<Array<{ id: string, description: string, quantity: number, unitPrice: number, subtotal: number }>>([]);
   const [selectedEstimateId, setSelectedEstimateId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
-  const [sendMethod, setSendMethod] = useState<"email" | "whatsapp">("email");
-  const [recipientEmail, setRecipientEmail] = useState("");
-  const [recipientPhone, setRecipientPhone] = useState("");
+  const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
+  const [shareRecipientEmail, setShareRecipientEmail] = useState("");
+  const [shareRecipientPhone, setShareRecipientPhone] = useState("");
+  const [shareClientName, setShareClientName] = useState("");
   const [previewEstimateData, setPreviewEstimateData] = useState<any>(null);
 
   const form = useForm<z.infer<typeof estimateSchema>>({
@@ -116,6 +119,71 @@ const EstimateManager = () => {
     };
   };
 
+  const clientOptions = useMemo(
+    () => clients.map((client) => ({
+      value: client.id,
+      label: client.name,
+      keywords: [client.email, client.phone].filter(Boolean).join(' '),
+    })),
+    [clients],
+  );
+
+  const productOptions = useMemo(
+    () => products.map((product) => ({
+      value: product.id,
+      label: `${product.name} — $${product.salePrice.toFixed(2)}`,
+      keywords: product.sku || product.category || '',
+    })),
+    [products],
+  );
+
+  const resetCreateForm = () => {
+    form.reset({
+      customer: "",
+      clientId: "",
+      currency: "USD",
+      tax: 0,
+      discount: 0,
+      notes: "",
+      expiryDate: "",
+    });
+    setLineItems([]);
+    setEditingEstimateId(null);
+  };
+
+  const handleEditEstimate = (estimate: {
+    id: string;
+    clientId?: string;
+    clientName?: string;
+    currency: string;
+    items?: Array<{ id: string; description: string; quantity: number; unitPrice: number; subtotal: number }>;
+    tax?: number;
+    discount?: number;
+    notes?: string;
+    expiryDate?: string;
+  }) => {
+    setEditingEstimateId(estimate.id);
+    form.reset({
+      customer: estimate.clientName || "",
+      clientId: estimate.clientId || "",
+      currency: estimate.currency || "USD",
+      tax: estimate.tax || 0,
+      discount: estimate.discount || 0,
+      notes: estimate.notes || "",
+      expiryDate: estimate.expiryDate || "",
+    });
+    setLineItems(
+      (estimate.items || []).map((item) => ({
+        id: item.id || `item-${Date.now()}-${Math.random()}`,
+        description: item.description || "",
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || 0,
+        subtotal: item.subtotal || (item.quantity || 0) * (item.unitPrice || 0),
+      })),
+    );
+    setActiveTab("create");
+  };
+
   const handleClientSelect = (clientId: string) => {
     const selectedClient = clients.find(client => client.id === clientId);
     if (selectedClient) {
@@ -167,6 +235,36 @@ const EstimateManager = () => {
     const totals = calculateTotals();
     console.log("Calculated totals:", totals);
 
+    if (editingEstimateId) {
+      try {
+        updateEstimate(editingEstimateId, {
+          clientId: values.clientId || "",
+          clientName: values.customer,
+          amount: totals.total,
+          currency: values.currency,
+          items: lineItems,
+          expiryDate: values.expiryDate,
+          notes: values.notes,
+          tax: values.tax,
+          discount: values.discount,
+        });
+        toast({
+          title: "Estimate Updated",
+          description: "Your estimate has been saved.",
+        });
+        resetCreateForm();
+        setActiveTab("list");
+      } catch (error) {
+        console.error("Error updating estimate:", error);
+        toast({
+          title: "Error",
+          description: "Failed to update estimate.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
     // Check limit before attempting to create
     const limitCheck = checkLimit("estimates");
     if (!limitCheck.allowed) {
@@ -193,8 +291,7 @@ const EstimateManager = () => {
           title: "Estimate Created",
           description: "Your estimate has been created successfully",
         });
-        form.reset();
-        setLineItems([]);
+        resetCreateForm();
         setActiveTab("list");
       }
       // On failure the context already surfaced a specific toast (auth/org/limit/RLS/network).
@@ -209,10 +306,11 @@ const EstimateManager = () => {
   };
 
 
-  const handlePreviewEstimate = (estimateData: any = null) => {
+  const handlePreviewEstimate = async (estimateData: any = null) => {
+    const company = (await refreshDocumentCompany()) || user?.company;
     if (estimateData) {
       setSelectedEstimateId(estimateData.id);
-      setPreviewEstimateData(estimateData);
+      setPreviewEstimateData({ ...estimateData, company });
     } else {
       const values = form.getValues();
       const totals = calculateTotals();
@@ -229,7 +327,7 @@ const EstimateManager = () => {
         date: new Date().toLocaleDateString(),
         expiryDate: values.expiryDate,
         notes: values.notes,
-        company: user?.company,
+        company,
       });
     }
     
@@ -238,41 +336,16 @@ const EstimateManager = () => {
 
   const handleSendEstimate = (estimateId: string) => {
     setSelectedEstimateId(estimateId);
-    setIsSendDialogOpen(true);
+    const est = estimates.find((e) => e.id === estimateId);
+    const client = est?.clientId ? clients.find((c) => c.id === est.clientId) : null;
+    setShareRecipientEmail(client?.email || "");
+    setShareRecipientPhone(client?.phone || "");
+    setShareClientName(est?.clientName || client?.name || "");
+    setIsShareSheetOpen(true);
   };
 
-  const confirmSendEstimate = () => {
-    if (!selectedEstimateId) return;
-    
-    let success = false;
-    
-    if (sendMethod === "email" && recipientEmail) {
-      success = sendEstimate(selectedEstimateId, recipientEmail);
-      if (success) {
-        toast({
-          title: "Estimate Sent",
-          description: `Your estimate has been sent to ${recipientEmail}`,
-        });
-      }
-    } else if (sendMethod === "whatsapp" && recipientPhone) {
-      success = true;
-      toast({
-        title: "WhatsApp Message Prepared",
-        description: `Estimate details ready to send via WhatsApp to ${recipientPhone}`,
-      });
-      
-      const whatsappText = `Hello! I'm sending you estimate ${selectedEstimateId}. Total amount: ${calculateTotals().total.toFixed(2)} ${form.getValues().currency}.`;
-      const whatsappUrl = `https://wa.me/${recipientPhone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappText)}`;
-      window.open(whatsappUrl, '_blank');
-    }
-    
-    setIsSendDialogOpen(false);
-    setRecipientEmail("");
-    setRecipientPhone("");
-  };
-
-  const handleExportEstimate = (estimateId: string) => {
-    const success = exportEstimateAsPdf(estimateId);
+  const handleExportEstimate = async (estimateId: string) => {
+    const success = await exportEstimateAsPdf(estimateId);
     if (success) {
       toast({
         title: "Estimate Exported",
@@ -298,7 +371,7 @@ const EstimateManager = () => {
   const totals = calculateTotals();
 
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
@@ -306,7 +379,7 @@ const EstimateManager = () => {
             <p className="text-gray-500 dark:text-gray-400">Create and manage your estimates</p>
           </div>
           <Button 
-            className="mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700"
+            className="mt-4 sm:mt-0 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700"
             onClick={() => setActiveTab("create")}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -317,9 +390,9 @@ const EstimateManager = () => {
         <Card>
           <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
-              <TabsList>
+              <TabsList className="grid w-full grid-cols-2 gap-2 h-auto">
                 <TabsTrigger value="list">Estimate List</TabsTrigger>
-                <TabsTrigger value="create">Create Estimate</TabsTrigger>
+                <TabsTrigger value="create">{editingEstimateId ? "Edit Estimate" : "Create Estimate"}</TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent>
@@ -328,41 +401,82 @@ const EstimateManager = () => {
                 <EstimateList 
                   onPreview={handlePreviewEstimate}
                   onSend={handleSendEstimate}
-                  onExport={handleExportEstimate}
+                  onEdit={handleEditEstimate}
                 />
               </div>
             </TabsContent>
             <TabsContent value="create">
               <Form {...form}>
                 <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Client Information</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {clients.length > 0 && (
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">Select Existing Client</label>
-                          <Select onValueChange={handleClientSelect}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select client" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {clients.map(client => (
-                                <SelectItem key={client.id} value={client.id}>
-                                  {client.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Client</label>
+
+                    {clients.length > 0 && !form.watch('clientId') && !form.watch('customer') && (
+                      <SearchableCombobox
+                        options={clientOptions}
+                        value={form.watch('clientId')}
+                        onValueChange={handleClientSelect}
+                        placeholder="Search clients…"
+                        searchPlaceholder="Search by name, email, phone…"
+                        renderOption={(opt) => {
+                          const c = clients.find((cl) => cl.id === opt.value);
+                          return (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{opt.label}</span>
+                              {c && (c.email || c.phone) && (
+                                <span className="text-xs text-muted-foreground">
+                                  {[c.email, c.phone].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }}
+                      />
+                    )}
+
+                    {(() => {
+                      const selId = form.watch('clientId');
+                      const selClient = selId ? clients.find((c) => c.id === selId) : null;
+                      if (!selClient) return null;
+                      return (
+                        <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50/50 dark:border-teal-800 dark:bg-teal-950/30 p-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900">
+                            <User className="h-4 w-4 text-teal-700 dark:text-teal-300" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{selClient.name}</p>
+                            {selClient.email && (
+                              <p className="text-xs text-muted-foreground truncate">{selClient.email}</p>
+                            )}
+                            {selClient.phone && (
+                              <p className="text-xs text-muted-foreground">{selClient.phone}</p>
+                            )}
+                            {(selClient as any).address && (
+                              <p className="text-xs text-muted-foreground truncate">{(selClient as any).address}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              form.setValue('clientId', '');
+                              form.setValue('customer', '');
+                            }}
+                            className="shrink-0 rounded-full p-1 hover:bg-teal-200/60 dark:hover:bg-teal-800/60 transition-colors"
+                            aria-label="Clear client"
+                          >
+                            <X className="h-4 w-4 text-muted-foreground" />
+                          </button>
                         </div>
-                      )}
-                      
+                      );
+                    })()}
+
+                    {!form.watch('clientId') && clients.length === 0 && (
                       <FormField
                         control={form.control}
                         name="customer"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Customer Name</FormLabel>
+                            <FormLabel className="text-xs text-muted-foreground">Or type a name</FormLabel>
                             <FormControl>
                               <Input placeholder="Customer name or company" {...field} />
                             </FormControl>
@@ -370,7 +484,7 @@ const EstimateManager = () => {
                           </FormItem>
                         )}
                       />
-                    </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -397,25 +511,20 @@ const EstimateManager = () => {
                             <div className="col-span-12 md:col-span-6">
                               <label className="text-sm font-medium mb-1 block">Description</label>
                               <div className="flex flex-col space-y-2">
-                                {products.length > 0 && (
-                                  <Select onValueChange={(value) => handleProductSelect(value, item.id)}>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select product" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {products.map(product => (
-                                        <SelectItem key={product.id} value={product.id}>
-                                          {product.name} - ${product.salePrice.toFixed(2)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                {products.length > 0 ? (
+                                  <SearchableCombobox
+                                    options={productOptions}
+                                    onValueChange={(value) => handleProductSelect(value, item.id)}
+                                    placeholder="Search products…"
+                                    searchPlaceholder="Type product name or SKU…"
+                                  />
+                                ) : (
+                                  <Input
+                                    placeholder="Item description"
+                                    value={item.description}
+                                    onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
+                                  />
                                 )}
-                                <Input
-                                  placeholder="Item description"
-                                  value={item.description}
-                                  onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
-                                />
                               </div>
                             </div>
                             <div className="col-span-3 md:col-span-2">
@@ -740,110 +849,31 @@ const EstimateManager = () => {
                 Close
               </Button>
             </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline"
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  if (selectedEstimateId) {
-                    handleSendEstimate(selectedEstimateId);
-                  }
-                }}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Send
-              </Button>
-              <Button 
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  if (selectedEstimateId) {
-                    handleExportEstimate(selectedEstimateId);
-                  } else {
-                    toast({
-                      title: "Info",
-                      description: "Save the estimate first to export it as PDF",
-                    });
-                  }
-                }}
-              >
-                <FileDown className="mr-2 h-4 w-4" />
-                Save as PDF
-              </Button>
-            </div>
+            <Button 
+              onClick={() => {
+                setIsPreviewOpen(false);
+                if (selectedEstimateId) {
+                  handleSendEstimate(selectedEstimateId);
+                }
+              }}
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send Estimate</DialogTitle>
-            <DialogDescription>
-              Choose how you want to send this estimate to your client.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="flex space-x-2">
-              <Button
-                variant={sendMethod === "email" ? "default" : "outline"}
-                className={sendMethod === "email" ? "bg-indigo-600" : ""}
-                onClick={() => setSendMethod("email")}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Email
-              </Button>
-              <Button
-                variant={sendMethod === "whatsapp" ? "default" : "outline"}
-                className={sendMethod === "whatsapp" ? "bg-green-600" : ""}
-                onClick={() => setSendMethod("whatsapp")}
-              >
-                <Phone className="mr-2 h-4 w-4" />
-                WhatsApp
-              </Button>
-            </div>
-            
-            {sendMethod === "email" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Email</label>
-                <Input
-                  type="email"
-                  placeholder="client@example.com"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                />
-              </div>
-            )}
-            
-            {sendMethod === "whatsapp" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Phone Number (with country code)</label>
-                <Input
-                  type="tel"
-                  placeholder="+1234567890"
-                  value={recipientPhone}
-                  onChange={(e) => setRecipientPhone(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={confirmSendEstimate}
-              className="bg-indigo-600"
-              disabled={(sendMethod === "email" && !recipientEmail) || (sendMethod === "whatsapp" && !recipientPhone)}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Send Estimate
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </AppLayout>
+      <ShareSheet
+        open={isShareSheetOpen}
+        onOpenChange={setIsShareSheetOpen}
+        documentId={selectedEstimateId || ""}
+        documentType="estimate"
+        recipientEmail={shareRecipientEmail}
+        recipientPhone={shareRecipientPhone}
+        clientName={shareClientName}
+      />
+    </FinancePageShell>
   );
 };
 

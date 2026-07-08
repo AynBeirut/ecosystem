@@ -1,0 +1,15 @@
+---
+description: Grabio POS Windows — paths, API, deploy safety.
+globs: ["**/posfinal-main/**", "**/posSync.ts"]
+alwaysApply: false
+---
+
+# Grabio POS
+
+- Handoff pack: `the eco sys/ecosystem-plan/pos-windows-builder-pack/README.md`
+- POS code: `the eco sys/ecosystem-plan/posfinal-main/pos-v1/`
+- API: `https://us-central1-market-flow-7b074.cloudfunctions.net/api`
+- Live: `/pos/pairing-code`, `/pos/pair`, `/pos/heartbeat`
+- Planned: `/pos/catalog`, `/pos/orders`
+- Offline-first; add `js/grabio/` — do not delete `sync-manager.js` yet
+- No Firebase prod deploy without Anwar approval

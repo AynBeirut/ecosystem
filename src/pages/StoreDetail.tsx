@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, runTransaction, orderBy, serverTimestamp } from 'firebase/firestore';
 import SEOHead from '@/components/SEOHead';
 import { auth as firebaseAuth } from '@/lib/firebase';
@@ -27,6 +27,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { generateSlug } from '@/lib/slugify';
+import ClampedText from '@/components/ClampedText';
+import type { StoreSectionId, StoreSectionOrder, SectionWidth } from '@/types/storeProfile';
+import EditorRegionShell from '@/components/builder/EditorRegionShell';
+import type { EditorPreviewStatePayload, EditorSelectableId } from '@/lib/editorPreviewBridge';
+import { EDITOR_PREVIEW_READY, EDITOR_PREVIEW_STATE } from '@/lib/editorPreviewBridge';
+import { mergeSectionOrderFromProfile } from '@/lib/storeSectionDefaults';
+import { mergeTemplateColors } from '@/lib/storeContentDraft';
 
 // ── Store-level contact form (sends message to storeContactMessages/{storeId}/messages) ──
 const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { cardSoft: string; sectionTitle: string; mutedText: string }; formStyle?: 1 | 2 | 3 | 4 | 5 | 6 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 }> = ({ storeId, storeName, theme, formStyle = 1 }) => {
@@ -341,8 +348,42 @@ const StoreDetail: React.FC = () => {
   const bannerTimer = useRef<ReturnType<typeof setInterval> | null>(null);
   // Read More modal state
   const [readMoreContent, setReadMoreContent] = useState<{ title: string; text: string } | null>(null);
+  const [searchParams] = useSearchParams();
+  const editorPreview = searchParams.get('editorPreview') === '1';
+  const [editorHighlightSection, setEditorHighlightSection] = useState<EditorSelectableId | null>(null);
+  const [liveEditorState, setLiveEditorState] = useState<EditorPreviewStatePayload | null>(null);
   // Page navigation state
   const [activePage, setActivePage] = useState<string>('home');
+
+  useEffect(() => {
+    if (!editorPreview) return;
+    const handler = (event: MessageEvent) => {
+      if (event.data?.type === 'grabio:section-highlight') {
+        setEditorHighlightSection((event.data.sectionId as EditorSelectableId) ?? null);
+      }
+      if (event.data?.type === EDITOR_PREVIEW_STATE && event.data.payload) {
+        setLiveEditorState(event.data.payload as EditorPreviewStatePayload);
+      }
+    };
+    window.addEventListener('message', handler);
+    window.parent.postMessage({ type: EDITOR_PREVIEW_READY }, '*');
+    return () => window.removeEventListener('message', handler);
+  }, [editorPreview]);
+
+  useEffect(() => {
+    if (!editorPreview) return;
+    const blockNavigation = (event: MouseEvent) => {
+      const target = event.target as HTMLElement | null;
+      const anchor = target?.closest('a');
+      if (!anchor) return;
+      const href = anchor.getAttribute('href');
+      if (!href || href.startsWith('#')) return;
+      event.preventDefault();
+      event.stopPropagation();
+    };
+    document.addEventListener('click', blockNavigation, true);
+    return () => document.removeEventListener('click', blockNavigation, true);
+  }, [editorPreview]);
 
   const normalizedCategorySlug = String(categorySlug || '').trim().toLowerCase();
   const productCategories = useMemo(
@@ -474,8 +515,8 @@ const StoreDetail: React.FC = () => {
           docId = identifier;
           setStoreId(docId);
           
-          // Redirect to short slug URL if store has a slug
-          if (storeData.slug) {
+          // Redirect to short slug URL if store has a slug (not in theme-editor preview)
+          if (storeData.slug && !editorPreview) {
             navigate(`/${storeData.slug}`, { replace: true });
             return;
           }
@@ -550,7 +591,7 @@ const StoreDetail: React.FC = () => {
     };
 
     loadStore();
-  }, [id, slug, navigate]);
+  }, [id, slug, navigate, editorPreview]);
   
   // Load reviews when storeId is set
   useEffect(() => {
@@ -562,6 +603,13 @@ const StoreDetail: React.FC = () => {
   
 
   if (isLoading) {
+    if (editorPreview) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-white">
+          <p className="text-sm text-gray-500 animate-pulse">Loading store preview…</p>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-gray-50">
         <Header
@@ -590,6 +638,13 @@ const StoreDetail: React.FC = () => {
   }
 
   if (error || !store) {
+    if (editorPreview) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-white px-4">
+          <p className="text-sm text-gray-600 text-center">{error || 'Store not found'}</p>
+        </div>
+      );
+    }
     return (
       <div className="min-h-screen bg-gray-50">
         <Header
@@ -612,8 +667,12 @@ const StoreDetail: React.FC = () => {
   }
 
   const allowedTemplates = new Set(['default', 'modern', 'minimalist', 'minimal', 'classic', 'classic_ecom', 'fashion_boutique', 'food_restaurant', 'tech_electronics', 'vibrant', 'professional', 'artistic']);
-  const resolvedTemplate = typeof store.template === 'string' && allowedTemplates.has(store.template)
-    ? store.template
+  const editorPreviewLive = editorPreview && Boolean(liveEditorState);
+  const liveContent = editorPreviewLive ? liveEditorState?.content : undefined;
+  const liveThemeFields = editorPreviewLive ? liveEditorState?.theme : undefined;
+  const resolvedTemplateRaw = liveThemeFields?.template ?? store.template;
+  const resolvedTemplate = typeof resolvedTemplateRaw === 'string' && allowedTemplates.has(resolvedTemplateRaw)
+    ? resolvedTemplateRaw
     : 'modern';
   
   // White-label detection: Pro/Business/Premium tier OR Custom Domain OR Imported Design
@@ -784,37 +843,37 @@ const StoreDetail: React.FC = () => {
   };
   const currentTheme = templateStyles[resolvedTemplate] || templateStyles.modern;
   const backgroundImage = typeof store.storeBackgroundImage === 'string' ? store.storeBackgroundImage : '';
-  const carouselImages = Array.isArray(store.carouselImages)
-    ? store.carouselImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
+  const carouselImages = Array.isArray(liveContent?.carouselImages ?? store.carouselImages)
+    ? (liveContent?.carouselImages ?? store.carouselImages)!.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
     : [];
   const galleryImages = Array.isArray(store.galleryImages)
     ? store.galleryImages.filter((url): url is string => typeof url === 'string' && url.trim().length > 0)
     : [];
-  const aboutUs = typeof store.aboutUs === 'string' ? store.aboutUs.trim() : '';
-  const mission = typeof store.mission === 'string' ? store.mission.trim() : '';
-  const vision = typeof store.vision === 'string' ? store.vision.trim() : '';
-  const productDisplayType = store.productDisplayType || 'grid-standard';
-  const productCardAnimation = store.productCardAnimation || 'none';
-  const heroLayout = store.heroLayout || 'fullscreen';
-  const menuStyle = store.menuStyle || 'classic';
-  const aboutLayout = store.aboutLayout || 'left';
-  const contactFormStyle = store.contactFormStyle || 1;
-  const ratingDisplayType = store.ratingDisplayType || 'stars';
-  const pageLayout = store.pageLayout || 'contained';
-  const storeCardLayout = store.storeCardStyle || 'standard';
-  const visualStyle = store.visualStyle || 'rounded';
+  const aboutUs = typeof (liveContent?.aboutUs ?? store.aboutUs) === 'string' ? String(liveContent?.aboutUs ?? store.aboutUs).trim() : '';
+  const mission = typeof (liveContent?.mission ?? store.mission) === 'string' ? String(liveContent?.mission ?? store.mission).trim() : '';
+  const vision = typeof (liveContent?.vision ?? store.vision) === 'string' ? String(liveContent?.vision ?? store.vision).trim() : '';
+  const productDisplayType = liveThemeFields?.productDisplayType ?? store.productDisplayType ?? 'grid-standard';
+  const productCardAnimation = liveThemeFields?.productCardAnimation ?? store.productCardAnimation ?? 'none';
+  const heroLayout = liveThemeFields?.heroLayout ?? store.heroLayout ?? 'fullscreen';
+  const menuStyle = liveEditorState?.layout?.menuStyle ?? store.menuStyle ?? 'classic';
+  const aboutLayout = liveThemeFields?.aboutLayout ?? store.aboutLayout ?? 'left';
+  const contactFormStyle = liveThemeFields?.contactFormStyle ?? store.contactFormStyle ?? 1;
+  const ratingDisplayType = liveContent?.ratingDisplayType ?? liveThemeFields?.ratingDisplayType ?? store.ratingDisplayType ?? 'stars';
+  const pageLayout = liveThemeFields?.pageLayout ?? store.pageLayout ?? 'contained';
+  const storeCardLayout = liveEditorState?.layout?.storeCardStyle ?? store.storeCardStyle ?? 'standard';
+  const showStoreHeaderChrome = liveEditorState?.layout?.showStoreHeader ?? true;
+  const showNavigationChrome = liveEditorState?.layout?.showNavigation ?? true;
+  const visualStyle = liveThemeFields?.visualStyle ?? store.visualStyle ?? 'rounded';
   const isEdgeToEdgePage = pageLayout === 'full-width' || storeCardLayout === 'full-width';
-  const sectionOrder: StoreSectionOrder[] = Array.isArray(store.sectionOrder) 
-    ? store.sectionOrder 
-    : [
-        { id: 'hero', enabled: true, order: 0, width: 'full' },
-        { id: 'about', enabled: true, order: 1, width: 'full' },
-        { id: 'announcements', enabled: true, order: 2, width: 'full' },
-        { id: 'products', enabled: true, order: 3, width: 'full' },
-        { id: 'gallery', enabled: true, order: 4, width: 'full' },
-        { id: 'reviews', enabled: true, order: 5, width: 'full' },
-        { id: 'contact', enabled: true, order: 6, width: 'full' },
-      ];
+  const sectionOrder: StoreSectionOrder[] =
+    editorPreview && liveEditorState?.sectionOrder?.length
+      ? liveEditorState.sectionOrder
+      : mergeSectionOrderFromProfile(store.sectionOrder);
+
+  const displaySlogan = liveContent?.slogan ?? store.slogan;
+  const displayDescription = liveContent?.description ?? store.description;
+  const displayLogo = liveContent?.logo ?? store.logo;
+  const displayLogoPosition = liveContent?.logoPosition ?? store.logoPosition;
 
   // Merge backgroundImage + carouselImages into one unified banner list
   const bannerImages = [
@@ -830,7 +889,7 @@ const StoreDetail: React.FC = () => {
     }, 4000);
   };
 
-  const tColors = store.templateColors;
+  const tColors = mergeTemplateColors(store.templateColors, liveContent?.templateColors);
   const colorStyle = tColors ? {
     '--store-primary': tColors.primary,
     '--store-secondary': tColors.secondary,
@@ -846,6 +905,8 @@ const StoreDetail: React.FC = () => {
     ...colorStyle,
     backgroundColor: tColors.background
   } as React.CSSProperties : colorStyle;
+
+  const showCommerceActions = store.storefrontMode !== 'display';
 
   const storeStructuredData: Array<Record<string, unknown>> = [
     {
@@ -931,12 +992,12 @@ const StoreDetail: React.FC = () => {
 
   const productGridClass =
     productDisplayType === 'grid-large'
-      ? 'grid grid-cols-1 sm:grid-cols-2 gap-6'
+      ? 'grid grid-cols-1 sm:grid-cols-2 gap-6 min-w-0'
       : productDisplayType === 'list'
-        ? 'grid grid-cols-1 gap-4'
+        ? 'grid grid-cols-1 gap-4 min-w-0'
         : productDisplayType === 'masonry'
-          ? 'columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4'
-          : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6';
+          ? 'columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4 min-w-0'
+          : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 min-w-0';
 
   // Helper to check if section is enabled
   const isSectionEnabled = (sectionId: StoreSectionId): boolean => {
@@ -1003,6 +1064,9 @@ const StoreDetail: React.FC = () => {
 
   // Merge page-level layout (Layout tab) with per-section settings (Sections tab)
   const resolveEffectiveSection = (section: StoreSectionOrder): StoreSectionOrder => {
+    if (editorPreviewLive) {
+      return section;
+    }
     const container = section.container || 'contained';
     const edgeToEdge = pageLayout === 'full-width' || container === 'full-width'
       || (pageLayout === 'hybrid' && section.id === 'hero');
@@ -1044,6 +1108,8 @@ const StoreDetail: React.FC = () => {
       classes += showBorders
         ? ` ${currentTheme.cardSoft}`
         : ` ${stripBorderClasses(currentTheme.cardSoft)}`;
+    } else if (editorPreview) {
+      classes += ' bg-transparent';
     }
     
     // Borders and rounded corners
@@ -1122,6 +1188,18 @@ const StoreDetail: React.FC = () => {
     return 'max-w-7xl mx-auto px-4';
   };
 
+  const sectionPreviewKey = (section: StoreSectionOrder) =>
+    [
+      section.id,
+      section.enabled,
+      section.width,
+      section.container,
+      section.padding,
+      section.animation,
+      section.showBorders,
+      section.showBackground,
+    ].join('-');
+
   const renderCategoryFilters = () => {
     if (!storeBasePath || productCategories.length === 0) return null;
 
@@ -1159,6 +1237,15 @@ const StoreDetail: React.FC = () => {
     );
   };
 
+  const renderEditorSectionPlaceholder = (title: string, hint: string) => (
+    <div>
+      <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>{title}</h2>
+      <div className="rounded-lg border-2 border-dashed border-gray-300 bg-white/60 px-4 py-12 text-center">
+        <p className="text-sm text-gray-600">{hint}</p>
+      </div>
+    </div>
+  );
+
   // Render individual section by ID
   const renderSection = (sectionId: StoreSectionId) => {
     switch (sectionId) {
@@ -1194,6 +1281,12 @@ const StoreDetail: React.FC = () => {
             </div>
           );
         }
+        if (editorPreview) {
+          return renderEditorSectionPlaceholder(
+            'About Us',
+            'Your story, mission, and vision will show here. Section style updates live in this preview.',
+          );
+        }
         return null;
       }
 
@@ -1213,6 +1306,12 @@ const StoreDetail: React.FC = () => {
             </div>
           );
         }
+        if (editorPreview) {
+          return renderEditorSectionPlaceholder(
+            'Announcements',
+            'Store announcements will appear here when you add them.',
+          );
+        }
         return null;
 
       case 'products':
@@ -1223,8 +1322,8 @@ const StoreDetail: React.FC = () => {
             {filteredProducts.length > 0 ? (
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
-                  <div key={product.id} className={productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
+                  <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
+                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} showCommerceActions={showCommerceActions} />
                   </div>
                 ))}
               </div>
@@ -1256,9 +1355,21 @@ const StoreDetail: React.FC = () => {
             </div>
           );
         }
+        if (editorPreview) {
+          return renderEditorSectionPlaceholder(
+            'Gallery',
+            'Gallery images from your store profile will display here.',
+          );
+        }
         return null;
 
       case 'reviews':
+        if (editorPreview && reviews.length === 0) {
+          return renderEditorSectionPlaceholder(
+            'Reviews',
+            'Customer reviews and ratings appear here on your live store.',
+          );
+        }
         return (
           <div>
             <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
@@ -1280,12 +1391,107 @@ const StoreDetail: React.FC = () => {
                       </div>
                     </div>
                     {r.comment && <p className={`mt-2 ${currentTheme.mutedText}`}>{r.comment}</p>}
+                    {!editorPreview && user && user.id === r.userId && (
+                      <div className="mt-3 flex gap-2">
+                        <Button size="sm" variant="outline" onClick={() => {
+                          setEditingId(r.id || null);
+                          setEditRating(r.rating || 5);
+                          setEditComment(r.comment || '');
+                        }}>Edit</Button>
+                        <Button size="sm" variant="ghost" onClick={async () => {
+                          if (!r.id || !id) return;
+                          try {
+                            const db = getFirestore();
+                            await runTransaction(db, async (tx) => {
+                              const storeRef = doc(db, 'storeProfiles', id);
+                              const reviewRef = doc(db, 'storeReviews', r.id!);
+                              const [storeSnap, reviewSnap] = await Promise.all([tx.get(storeRef), tx.get(reviewRef)]);
+                              if (!reviewSnap.exists()) throw new Error('Review not found');
+                              const oldRating = reviewSnap.data().rating || 0;
+                              const prevCount = storeSnap.exists() ? (storeSnap.data().ratingCount || 0) : 0;
+                              const prevAvg = storeSnap.exists() ? (storeSnap.data().rating || 0) : 0;
+                              const newCount = Math.max(0, prevCount - 1);
+                              if (newCount === 0) {
+                                tx.update(storeRef, { rating: 0, ratingCount: 0 });
+                              } else {
+                                const newAvg = ((prevAvg * prevCount) - oldRating) / newCount;
+                                tx.update(storeRef, { rating: newAvg, ratingCount: newCount });
+                              }
+                              tx.delete(reviewRef);
+                            });
+                            toast('Review deleted');
+                            fetchReviews();
+                            const db2 = getFirestore();
+                            const sref = doc(db2, 'storeProfiles', id);
+                            const ssnap = await getDoc(sref);
+                            if (ssnap.exists()) setStore({ id, ...ssnap.data() } as Store);
+                          } catch (err) {
+                            console.error('Failed to delete review', err);
+                            toast('Failed to delete review');
+                          }
+                        }}>Delete</Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
             ) : (
               <div className={`p-6 rounded border text-center ${currentTheme.mutedText}`}>
                 No reviews yet. Be the first to review!
+              </div>
+            )}
+
+            {!editorPreview && (
+              <div className={`mt-6 p-4 rounded shadow-sm ${currentTheme.card}`}>
+                <h3 className="font-semibold mb-2">Write a review</h3>
+                {!user ? (
+                  <div className="text-gray-600">Please sign in to leave a review.</div>
+                ) : (
+                  <form onSubmit={async (e) => {
+                    e.preventDefault();
+                    if (!id || !user || isSubmittingReview) return;
+                    setIsSubmittingReview(true);
+                    try {
+                      const db = getFirestore();
+                      await runTransaction(db, async (tx) => {
+                        const reviewRef = doc(collection(db, 'storeReviews'));
+                        const reviewData: Partial<StoreReview> = {
+                          storeId: id,
+                          userId: user.id,
+                          userName: user.name,
+                          rating: Number(newRating),
+                          comment: newComment,
+                          createdAt: serverTimestamp(),
+                        };
+                        tx.set(reviewRef, reviewData);
+                      });
+                      toast('Review submitted');
+                      setNewComment('');
+                      setNewRating(5);
+                      await fetchReviews();
+                      const db2 = getFirestore();
+                      const sref = doc(db2, 'storeProfiles', id);
+                      const ssnap = await getDoc(sref);
+                      if (ssnap.exists()) setStore({ id, ...ssnap.data() } as Store);
+                    } catch (err) {
+                      console.error('Failed to submit review', err);
+                      toast.error('Failed to submit review');
+                    } finally {
+                      setIsSubmittingReview(false);
+                    }
+                  }}>
+                    <div className="flex items-center gap-4 mb-3">
+                      <label className="text-sm">Rating</label>
+                      <select value={newRating} onChange={(e) => setNewRating(Number(e.target.value))} className="border px-2 py-1 rounded">
+                        {[5, 4, 3, 2, 1].map(n => <option key={n} value={n}>{n} star{n > 1 ? 's' : ''}</option>)}
+                      </select>
+                    </div>
+                    <textarea value={newComment} onChange={(e) => setNewComment(e.target.value)} className="w-full border rounded p-2 mb-3" placeholder="Write your comment (optional)" />
+                    <div className="text-right">
+                      <Button type="submit" disabled={isSubmittingReview}>{isSubmittingReview ? 'Submitting...' : 'Submit review'}</Button>
+                    </div>
+                  </form>
+                )}
               </div>
             )}
           </div>
@@ -1300,14 +1506,14 @@ const StoreDetail: React.FC = () => {
           return (
             <div className="p-4 md:p-5 flex items-center justify-between gap-4" style={heroBannerStyle}>
               <h2 className="text-xl md:text-2xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-              {store.slogan && <p className="text-sm opacity-90 hidden md:block" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+              {displaySlogan && <p className="text-sm opacity-90 hidden md:block" style={{ color: heroBannerStyle.color }}>{displaySlogan}</p>}
             </div>
           );
         } else if (heroLayout === 'centered') {
           return (
             <div className="p-8 md:p-12 text-center" style={heroBannerStyle}>
               <h2 className=" text-3xl md:text-4xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-              {store.slogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+              {displaySlogan && <p className="text-base md:text-lg opacity-90 mt-3 max-w-2xl mx-auto" style={{ color: heroBannerStyle.color }}>{displaySlogan}</p>}
             </div>
           );
         } else if (heroLayout === 'split' && bannerImages.length > 0) {
@@ -1325,7 +1531,7 @@ const StoreDetail: React.FC = () => {
               </div>
               <div className="p-8 flex flex-col justify-center" style={heroBannerStyle}>
                 <h2 className="text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-                {store.slogan && <p className="text-base opacity-90 mt-3" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+                {displaySlogan && <p className="text-base opacity-90 mt-3" style={{ color: heroBannerStyle.color }}>{displaySlogan}</p>}
               </div>
             </div>
           );
@@ -1344,7 +1550,7 @@ const StoreDetail: React.FC = () => {
               {/* Slogan overlay */}
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end">
                 <div className="p-6 text-white">
-                  {store.slogan && <p className="text-base md:text-xl font-semibold drop-shadow">{store.slogan}</p>}
+                  {displaySlogan && <p className="text-base md:text-xl font-semibold drop-shadow">{displaySlogan}</p>}
                 </div>
               </div>
               {/* Carousel controls */}
@@ -1376,7 +1582,7 @@ const StoreDetail: React.FC = () => {
           return (
             <div className="p-6 md:p-8" style={heroBannerStyle}>
               <h2 className="text-2xl md:text-3xl font-bold" style={{ color: heroBannerStyle.color }}>{store.name}</h2>
-              {store.slogan && <p className="text-sm md:text-base opacity-90 mt-2" style={{ color: heroBannerStyle.color }}>{store.slogan}</p>}
+              {displaySlogan && <p className="text-sm md:text-base opacity-90 mt-2" style={{ color: heroBannerStyle.color }}>{displaySlogan}</p>}
             </div>
           );
         }
@@ -1433,33 +1639,47 @@ const StoreDetail: React.FC = () => {
             className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[80vh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between px-6 py-4 border-b">
-              <h2 className="text-xl font-bold">{readMoreContent.title}</h2>
-              <button onClick={() => setReadMoreContent(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none">&times;</button>
+            <div className="flex items-start justify-between gap-3 px-6 py-4 border-b shrink-0 min-w-0">
+              <ClampedText
+                text={readMoreContent.title}
+                maxLines={2}
+                className="text-xl font-bold min-w-0 flex-1"
+                as="h2"
+              />
+              <button onClick={() => setReadMoreContent(null)} className="text-gray-400 hover:text-gray-700 text-2xl leading-none shrink-0">&times;</button>
             </div>
-            <div className="overflow-y-auto px-6 py-4">
-              <p className="text-sm whitespace-pre-line text-gray-700 leading-relaxed">{readMoreContent.text}</p>
+            <div className="overflow-y-auto px-6 py-4 min-h-0 flex-1">
+              <p className="text-sm whitespace-pre-line text-gray-700 leading-relaxed break-words">{readMoreContent.text}</p>
             </div>
           </div>
         </div>
       )}
 
+      {!editorPreview && (
       <Header
         storeName={store.name}
-        storeLogo={store.logo}
+        storeLogo={displayLogo}
         storeSlug={store.slug}
-        logoPosition={store.logoPosition}
+        logoPosition={displayLogoPosition}
         primaryColor={store.templateColors?.primary}
         subscriptionTier={store.subscriptionTier}
         hasCustomDomain={!!store.customDomain}
         hasImportedDesign={store.hasImportedDesign}
       />
+      )}
       
       <main className={pageLayout === 'contained' ? 'container mx-auto px-4 py-6' : 'py-6'}>
         {/* Store Header */}
+        {showStoreHeaderChrome && (
+        <EditorRegionShell
+          id="store_header"
+          editorPreview={editorPreview}
+          highlightedId={editorHighlightSection}
+          className="mb-6"
+        >
         <div
           className={[
-            storeCardLayout !== 'minimal' && !isEdgeToEdgePage ? 'rounded-lg shadow-sm p-6 mb-6' : 'mb-6',
+            storeCardLayout !== 'minimal' && !isEdgeToEdgePage ? 'rounded-lg shadow-sm p-6 mb-0' : 'mb-0',
             storeCardLayout === 'minimal' ? 'p-0' : isEdgeToEdgePage ? 'py-4 px-0' : '',
             isEdgeToEdgePage || storeCardLayout === 'minimal'
               ? stripBorderClasses(currentTheme.headerCard)
@@ -1470,7 +1690,7 @@ const StoreDetail: React.FC = () => {
           <div className={isEdgeToEdgePage ? 'container mx-auto px-4' : ''}>
             <div className={`flex ${storeCardLayout === 'split' ? 'grid md:grid-cols-2 gap-8' : 'flex-col md:flex-row'} items-center md:items-start gap-6`}>
               <img 
-                src={store.logo} 
+                src={displayLogo} 
                 alt={store.name} 
                 className="h-24 w-24 object-cover rounded-full border-4 border-white shadow-sm"
               />
@@ -1521,7 +1741,7 @@ const StoreDetail: React.FC = () => {
                   {isFollowing ? 'Following' : 'Follow'}
                 </Button>
               </div>
-              <p className="mb-4 text-sm" style={{ color: storeCardStyle.color }}>{store.description}</p>
+              <p className="mb-4 text-sm" style={{ color: storeCardStyle.color }}>{displayDescription}</p>
               
               <div className="flex flex-wrap justify-center md:justify-start gap-4" style={{ color: storeCardStyle.color }}>
                 <div className="flex items-center">
@@ -1572,12 +1792,14 @@ const StoreDetail: React.FC = () => {
           </div>
         </div>
         </div>
+        </EditorRegionShell>
+        )}
         
         {/* Page navigation + home sections */}
         <div className={pageLayout === 'contained' ? '' : pageLayout === 'hybrid' ? 'container mx-auto px-4' : ''}>
         
         {/* Page Navigation Bar */}
-        {(() => {
+        {showNavigationChrome && (() => {
           const customPages = Array.isArray(store.customPages) ? store.customPages : [];
           const hasAbout = !!(store.aboutUs || store.mission || store.vision);
           const hasContact = !!(store.contactInfo?.phone || store.contactInfo?.email || store.location || store.website || store.socialLinks?.facebook || store.socialLinks?.instagram || store.socialLinks?.twitter || store.socialLinks?.whatsapp);
@@ -1590,11 +1812,27 @@ const StoreDetail: React.FC = () => {
           ];
           if (navPages.length <= 1) return null;
           return (
-            <div className={`flex gap-1 mb-6 overflow-x-auto rounded-lg p-1 ${menuStyle === 'bold' ? 'bg-[var(--store-primary)]/20' : menuStyle === 'sticky-glass' ? 'backdrop-blur bg-white/70 border border-white/50 sticky top-2 z-20' : currentTheme.cardSoft}`}>
+            <EditorRegionShell
+              id="navigation"
+              editorPreview={editorPreview}
+              highlightedId={editorHighlightSection}
+              className="mb-6"
+            >
+            <div className={`flex gap-1 overflow-x-auto rounded-lg p-1 ${menuStyle === 'bold' ? 'bg-[var(--store-primary)]/20' : menuStyle === 'sticky-glass' ? 'backdrop-blur bg-white/70 border border-white/50 sticky top-2 z-20' : currentTheme.cardSoft}`}>
               {navPages.map(p => (
                 <button
                   key={p.id}
-                  onClick={() => setActivePage(p.id)}
+                  type="button"
+                  onClick={() => {
+                    if (editorPreview) {
+                      window.parent.postMessage(
+                        { type: 'grabio:section-select', sectionId: 'navigation' },
+                        '*',
+                      );
+                      return;
+                    }
+                    setActivePage(p.id);
+                  }}
                   className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
                     activePage === p.id
                       ? `${menuStyle === 'bold' ? 'bg-[var(--store-primary)] text-white shadow' : 'bg-white shadow text-gray-900'}`
@@ -1604,7 +1842,17 @@ const StoreDetail: React.FC = () => {
                   {p.label}
                 </button>
               ))}
+              {store.enabledModules?.blog_publisher && store.slug && !editorPreview && (
+                <button
+                  type="button"
+                  onClick={() => navigate(`/store/${store.slug}/blog`)}
+                  className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${menuStyle === 'bold' ? 'text-[var(--store-text)] hover:bg-white/50' : `${currentTheme.mutedText} hover:bg-white/60`}`}
+                >
+                  Blog
+                </button>
+              )}
             </div>
+            </EditorRegionShell>
           );
         })()}
 
@@ -1630,9 +1878,16 @@ const StoreDetail: React.FC = () => {
                       const content = renderSection(section.id);
                       if (!content) return null;
                       return (
-                        <div key={section.id} className={getSectionWrapperClasses(section)} style={getSectionWrapperStyle(section)}>
+                        <EditorRegionShell
+                          key={sectionPreviewKey(section)}
+                          id={section.id}
+                          editorPreview={editorPreview}
+                          highlightedId={editorHighlightSection}
+                          className={`${getSectionWrapperClasses(section)}`}
+                          style={getSectionWrapperStyle(section)}
+                        >
                           {content}
-                        </div>
+                        </EditorRegionShell>
                       );
                     })}
                   </div>
@@ -1671,8 +1926,8 @@ const StoreDetail: React.FC = () => {
             {filteredProducts.length > 0 ? (
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
-                  <div key={product.id} className={productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} />
+                  <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
+                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} showCommerceActions={showCommerceActions} />
                   </div>
                 ))}
               </div>
@@ -1806,157 +2061,14 @@ const StoreDetail: React.FC = () => {
           </div>
         )}
 
-        {/* Reviews */}
-        {isSectionEnabled('reviews') && (
-          <div className={`mt-8 rounded-lg p-4 ${currentTheme.cardSoft}`}>
-            <h2 className={`text-xl font-semibold mb-4 ${currentTheme.sectionTitle}`}>Reviews</h2>
-            {reviews.length > 0 ? (
-              <div className="space-y-4">
-              {reviews.map(r => (
-                <div key={r.id} className={`p-4 rounded shadow-sm ${currentTheme.reviewCard}`}>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="font-semibold">{r.userName || 'Anonymous'}</div>
-                      <div className="text-yellow-500 flex items-center">{Array.from({length: r.rating}).map((_,i)=>(<Star key={i} size={14}/>))}</div>
-                    </div>
-                    <div className={`text-sm ${currentTheme.mutedText}`}>
-                      {(() => {
-                        if (!r.createdAt) return 'Recently';
-                        const date = new Date(String(r.createdAt));
-                        return Number.isNaN(date.getTime()) ? 'Recently' : date.toLocaleDateString();
-                      })()}
-                    </div>
-                  </div>
-                  {r.comment && <p className={`mt-2 ${currentTheme.mutedText}`}>{r.comment}</p>}
-                  {user && user.id === r.userId && (
-                    <div className="mt-3 flex gap-2">
-                      <Button size="sm" variant="outline" onClick={() => {
-                        // start editing
-                        setEditingId(r.id || null);
-                        setEditRating(r.rating || 5);
-                        setEditComment(r.comment || '');
-                      }}>Edit</Button>
-                      <Button size="sm" variant="ghost" onClick={async () => {
-                        if (!r.id) return;
-                        try {
-                          const db = getFirestore();
-                          await runTransaction(db, async (tx) => {
-                            const storeRef = doc(db, 'storeProfiles', id);
-                            const reviewRef = doc(db, 'storeReviews', r.id!);
-                            const [storeSnap, reviewSnap] = await Promise.all([tx.get(storeRef), tx.get(reviewRef)]);
-                            if (!reviewSnap.exists()) throw new Error('Review not found');
-                            const oldRating = reviewSnap.data().rating || 0;
-                            const prevCount = storeSnap.exists() ? (storeSnap.data().ratingCount || 0) : 0;
-                            const prevAvg = storeSnap.exists() ? (storeSnap.data().rating || 0) : 0;
-                            const newCount = Math.max(0, prevCount - 1);
-                            if (newCount === 0) {
-                              tx.update(storeRef, { rating: 0, ratingCount: 0 });
-                            } else {
-                              const newAvg = ((prevAvg * prevCount) - oldRating) / newCount;
-                              tx.update(storeRef, { rating: newAvg, ratingCount: newCount });
-                            }
-                            tx.delete(reviewRef);
-                          });
-                          toast('Review deleted');
-                          fetchReviews();
-                          // refresh store
-                          const db2 = getFirestore();
-                          const sref = doc(db2, 'storeProfiles', id);
-                          const ssnap = await getDoc(sref);
-                          if (ssnap.exists()) setStore({ id, ...ssnap.data() } as Store);
-                        } catch (err) {
-                          console.error('Failed to delete review', err);
-                          toast('Failed to delete review');
-                        }
-                      }}>Delete</Button>
-                    </div>
-                  )}
-                </div>
-              ))}
-              </div>
-            ) : (
-              <div className={currentTheme.mutedText}>No reviews yet. Be the first to review this store.</div>
-            )}
-
-            <div className={`mt-6 p-4 rounded shadow-sm ${currentTheme.card}`}>
-            <h3 className="font-semibold mb-2">Write a review</h3>
-            {!user ? (
-              <div className="text-gray-600">Please sign in to leave a review.</div>
-            ) : (
-              <form onSubmit={async (e) => {
-                e.preventDefault();
-                if (!id || !user) return;
-                if (isSubmittingReview) return; // prevent dupes
-                setIsSubmittingReview(true);
-                try {
-                  const db = getFirestore();
-                  // Transaction: create review and update store's aggregated rating/count
-                  await runTransaction(db, async (tx) => {
-                    const storeRef = doc(db, 'storeProfiles', id);
-                    const storeSnap = await tx.get(storeRef);
-                    const prevCount = storeSnap.exists() ? (storeSnap.data().ratingCount || 0) : 0;
-                    const prevAvg = storeSnap.exists() ? (storeSnap.data().rating || 0) : 0;
-                    const reviewRef = doc(collection(db, 'storeReviews'));
-                    const reviewData: Partial<StoreReview> = {
-                      storeId: id,
-                      userId: user.id,
-                      userName: user.name,
-                      rating: Number(newRating),
-                      comment: newComment,
-                      createdAt: serverTimestamp()
-                    };
-                    // Log the actual payload we're about to write (helps debug rules mismatches)
-                    console.log('DEBUG reviewData (to write)', reviewData);
-                    // Log auth state from both our context user and firebase.auth currentUser to verify they match
-                    console.log('DEBUG auth.uids', { contextUid: user.id, firebaseUid: firebaseAuth.currentUser?.uid });
-                    // Create the review document only. Aggregating store rating is handled
-                    // server-side or via a separate trusted process; client should not
-                    // attempt to update the storeProfiles doc because rules restrict that
-                    // to the store owner.
-                    tx.set(reviewRef, reviewData);
-                  });
-                  toast('Review submitted');
-                  setNewComment('');
-                  setNewRating(5);
-                  // Refresh reviews and store
-                  await fetchReviews();
-                  const db2 = getFirestore();
-                  const sref = doc(db2, 'storeProfiles', id);
-                  const ssnap = await getDoc(sref);
-                  if (ssnap.exists()) setStore({ id, ...ssnap.data() } as Store);
-                } catch (err) {
-                  console.error('Failed to submit review', err);
-                  const maybeErr = err as { code?: string; name?: string; message?: string } | undefined;
-                  const code = maybeErr?.code || maybeErr?.name || '';
-                  const message = maybeErr?.message || String(err);
-                  const full = code ? `${code}: ${message}` : message;
-                  pushDebugLog('Review submit failed', full, { storeId: id, err });
-                  toast.error('Failed to submit review: ' + full);
-                } finally {
-                  setIsSubmittingReview(false);
-                }
-              }}>
-                <div className="flex items-center gap-4 mb-3">
-                  <label className="text-sm">Rating</label>
-                  <select value={newRating} onChange={(e) => setNewRating(Number(e.target.value))} className="border px-2 py-1 rounded">
-                    {[5,4,3,2,1].map(n => <option key={n} value={n}>{n} star{n>1?'s':''}</option>)}
-                  </select>
-                </div>
-                <textarea value={newComment} onChange={(e)=>setNewComment(e.target.value)} className="w-full border rounded p-2 mb-3" placeholder="Write your comment (optional)"></textarea>
-                <div className="text-right">
-                  <Button type="submit" disabled={isSubmittingReview}>{isSubmittingReview ? 'Submitting...' : 'Submit review'}</Button>
-                </div>
-              </form>
-            )}
-          </div>
-        </div>
-        )}
         </div>{/* End content wrapper for full-width layout */}
       </main>
+      {!editorPreview && (
       <WhatsAppChatWidget
         phone={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined}
         storeName={store.name}
       />
+      )}
     </div>
   );
 };

@@ -1,14 +1,15 @@
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AppLayout from "@/components/AppLayout";
-import { Plus, Eye, FileDown, Send, Mail, Phone } from "lucide-react";
+import FinancePageShell from "@/components/FinancePageShell";
+import { Plus, Eye, FileDown, Share2, Mail, Phone } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/SearchableCombobox";
 import { CURRENCIES } from "@/services/mockData";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -16,6 +17,7 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import ShareSheet from "@/components/ShareSheet";
 
 const receiptSchema = z.object({
   clientName: z.string().min(1, "Client name is required"),
@@ -50,13 +52,14 @@ const ReceiptManager = () => {
   
   const [activeTab, setActiveTab] = useState("receipts-list");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
+  const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [previewData, setPreviewData] = useState<any>(null);
   const [previewType, setPreviewType] = useState<"receipt" | "payment">("receipt");
-  const [sendMethod, setSendMethod] = useState<"email" | "whatsapp">("email");
-  const [recipientEmail, setRecipientEmail] = useState("");
-  const [recipientPhone, setRecipientPhone] = useState("");
+  const [shareRecipientEmail, setShareRecipientEmail] = useState("");
+  const [shareRecipientPhone, setShareRecipientPhone] = useState("");
+  const [shareClientName, setShareClientName] = useState("");
+  const [shareDocType, setShareDocType] = useState<"receipt" | "paymentOrder">("receipt");
 
   const receiptForm = useForm<z.infer<typeof receiptSchema>>({
     resolver: zodResolver(receiptSchema),
@@ -99,6 +102,24 @@ const ReceiptManager = () => {
       paymentOrderForm.setValue('supplierId', supplierId);
     }
   };
+
+  const clientOptions = useMemo(
+    () => clients.map((client) => ({
+      value: client.id,
+      label: client.name,
+      keywords: [client.email, client.phone].filter(Boolean).join(' '),
+    })),
+    [clients],
+  );
+
+  const supplierOptions = useMemo(
+    () => suppliers.map((supplier) => ({
+      value: supplier.id,
+      label: supplier.name,
+      keywords: [supplier.email, supplier.phone].filter(Boolean).join(' '),
+    })),
+    [suppliers],
+  );
 
   const onReceiptSubmit = async (values: z.infer<typeof receiptSchema>) => {
     const success = await createReceipt({
@@ -204,54 +225,28 @@ const ReceiptManager = () => {
   const handleSendItem = (itemId: string, type: "receipt" | "payment") => {
     setSelectedItemId(itemId);
     setPreviewType(type);
-    setIsSendDialogOpen(true);
-  };
-
-  const confirmSendItem = () => {
-    if (!selectedItemId) return;
-    
-    let success = false;
-    
-    if (sendMethod === "email" && recipientEmail) {
-      if (previewType === "receipt") {
-        success = sendReceipt(selectedItemId, recipientEmail);
-        if (success) {
-          toast({
-            title: "Receipt Sent",
-            description: `Your receipt has been sent to ${recipientEmail}`,
-          });
-        }
-      } else {
-        success = sendPaymentOrder(selectedItemId, recipientEmail);
-        if (success) {
-          toast({
-            title: "Payment Order Sent",
-            description: `Your payment order has been sent to ${recipientEmail}`,
-          });
-        }
-      }
-    } else if (sendMethod === "whatsapp" && recipientPhone) {
-      success = true;
-      toast({
-        title: "WhatsApp Message Prepared",
-        description: `${previewType === "receipt" ? "Receipt" : "Payment order"} details ready to send via WhatsApp to ${recipientPhone}`,
-      });
-      
-      const whatsappText = `Hello! I'm sending you ${previewType === "receipt" ? "receipt" : "payment order"} ${selectedItemId}. Total amount: ${previewData?.amount?.toFixed(2)} ${previewData?.currency}.`;
-      const whatsappUrl = `https://wa.me/${recipientPhone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappText)}`;
-      window.open(whatsappUrl, '_blank');
+    setShareDocType(type === "receipt" ? "receipt" : "paymentOrder");
+    if (type === "receipt") {
+      const receipt = receipts.find((r) => r.id === itemId);
+      const client = receipt?.clientId ? clients.find((c) => c.id === receipt.clientId) : null;
+      setShareRecipientEmail(client?.email || "");
+      setShareRecipientPhone(client?.phone || "");
+      setShareClientName(receipt?.clientName || client?.name || "");
+    } else {
+      const payment = paymentOrders.find((p) => p.id === itemId);
+      const supplier = payment?.supplierId ? suppliers.find((s) => s.id === payment.supplierId) : null;
+      setShareRecipientEmail(supplier?.email || "");
+      setShareRecipientPhone(supplier?.phone || "");
+      setShareClientName(payment?.supplierName || supplier?.name || "");
     }
-    
-    setIsSendDialogOpen(false);
-    setRecipientEmail("");
-    setRecipientPhone("");
+    setIsShareSheetOpen(true);
   };
 
-  const handleExportItem = (itemId: string, type: "receipt" | "payment") => {
+  const handleExportItem = async (itemId: string, type: "receipt" | "payment") => {
     let success = false;
     
     if (type === "receipt") {
-      success = exportReceiptAsPdf(itemId);
+      success = await exportReceiptAsPdf(itemId);
       if (success) {
         toast({
           title: "Receipt Exported",
@@ -265,7 +260,7 @@ const ReceiptManager = () => {
         });
       }
     } else {
-      success = exportPaymentOrderAsPdf(itemId);
+      success = await exportPaymentOrderAsPdf(itemId);
       if (success) {
         toast({
           title: "Payment Order Exported",
@@ -290,7 +285,7 @@ const ReceiptManager = () => {
   };
 
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
@@ -302,7 +297,7 @@ const ReceiptManager = () => {
         <Card>
           <Tabs defaultValue="receipts-list" value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
-              <TabsList className="grid grid-cols-2 md:grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2 md:grid-cols-4 gap-2 h-auto">
                 <TabsTrigger value="receipts-list">Receipts List</TabsTrigger>
                 <TabsTrigger value="create-receipt">New Receipt</TabsTrigger>
                 <TabsTrigger value="payments-list">Payment Orders List</TabsTrigger>
@@ -368,7 +363,7 @@ const ReceiptManager = () => {
                                         size="sm"
                                         onClick={() => handleSendItem(receipt.id, "receipt")}
                                       >
-                                        <Send className="h-4 w-4" />
+                                        <Share2 className="h-4 w-4" />
                                       </Button>
                                       <Button
                                         variant="outline"
@@ -399,37 +394,34 @@ const ReceiptManager = () => {
                       <h3 className="text-lg font-medium">Client Information</h3>
                       
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        {clients.length > 0 && (
+                        {clients.length > 0 && !receiptForm.watch('clientId') && !receiptForm.watch('clientName') && (
                           <div>
-                            <label className="text-sm font-medium mb-1 block">Select Existing Client</label>
-                            <Select onValueChange={handleClientSelect}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select client" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {clients.map(client => (
-                                  <SelectItem key={client.id} value={client.id}>
-                                    {client.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <label className="text-sm font-medium mb-1 block">Find client</label>
+                            <SearchableCombobox
+                              options={clientOptions}
+                              value={receiptForm.watch('clientId')}
+                              onValueChange={handleClientSelect}
+                              placeholder="Type to search clients…"
+                              searchPlaceholder="Search by name, email, phone…"
+                            />
                           </div>
                         )}
                         
-                        <FormField
-                          control={receiptForm.control}
-                          name="clientName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Client Name</FormLabel>
-                              <FormControl>
-                                <Input placeholder="Client name or company" {...field} />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
+                        {clients.length === 0 && (
+                          <FormField
+                            control={receiptForm.control}
+                            name="clientName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Client Name</FormLabel>
+                                <FormControl>
+                                  <Input placeholder="Client name or company" {...field} />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                        )}
                       </div>
                     </div>
 
@@ -620,7 +612,7 @@ const ReceiptManager = () => {
                                       size="sm"
                                       onClick={() => handleSendItem(payment.id, "payment")}
                                     >
-                                      <Send className="h-4 w-4" />
+                                      <Share2 className="h-4 w-4" />
                                     </Button>
                                     <Button
                                       variant="outline"
@@ -653,19 +645,14 @@ const ReceiptManager = () => {
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         {suppliers.length > 0 && (
                           <div>
-                            <label className="text-sm font-medium mb-1 block">Select Existing Supplier</label>
-                            <Select onValueChange={handleSupplierSelect}>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select supplier" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {suppliers.map(supplier => (
-                                  <SelectItem key={supplier.id} value={supplier.id}>
-                                    {supplier.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                            <label className="text-sm font-medium mb-1 block">Find supplier</label>
+                            <SearchableCombobox
+                              options={supplierOptions}
+                              value={paymentOrderForm.watch('supplierId')}
+                              onValueChange={handleSupplierSelect}
+                              placeholder="Type to search suppliers…"
+                              searchPlaceholder="Search by name, email, phone…"
+                            />
                           </div>
                         )}
                         
@@ -950,7 +937,7 @@ const ReceiptManager = () => {
                 }}
               >
                 <Mail className="mr-2 h-4 w-4" />
-                Send
+                Share
               </Button>
               <Button 
                 onClick={() => {
@@ -973,78 +960,16 @@ const ReceiptManager = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>
-              Send {previewType === "receipt" ? "Receipt" : "Payment Order"}
-            </DialogTitle>
-            <DialogDescription>
-              Choose how you want to send this {previewType === "receipt" ? "receipt" : "payment order"}.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="flex space-x-2">
-              <Button
-                variant={sendMethod === "email" ? "default" : "outline"}
-                className={sendMethod === "email" ? "bg-indigo-600" : ""}
-                onClick={() => setSendMethod("email")}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Email
-              </Button>
-              <Button
-                variant={sendMethod === "whatsapp" ? "default" : "outline"}
-                className={sendMethod === "whatsapp" ? "bg-green-600" : ""}
-                onClick={() => setSendMethod("whatsapp")}
-              >
-                <Phone className="mr-2 h-4 w-4" />
-                WhatsApp
-              </Button>
-            </div>
-            
-            {sendMethod === "email" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Email</label>
-                <Input
-                  type="email"
-                  placeholder="recipient@example.com"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                />
-              </div>
-            )}
-            
-            {sendMethod === "whatsapp" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Phone Number (with country code)</label>
-                <Input
-                  type="tel"
-                  placeholder="+1234567890"
-                  value={recipientPhone}
-                  onChange={(e) => setRecipientPhone(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={confirmSendItem}
-              className="bg-indigo-600"
-              disabled={(sendMethod === "email" && !recipientEmail) || (sendMethod === "whatsapp" && !recipientPhone)}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Send {previewType === "receipt" ? "Receipt" : "Payment Order"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </AppLayout>
+      <ShareSheet
+        open={isShareSheetOpen}
+        onOpenChange={setIsShareSheetOpen}
+        documentId={selectedItemId || ""}
+        documentType={shareDocType}
+        recipientEmail={shareRecipientEmail}
+        recipientPhone={shareRecipientPhone}
+        clientName={shareClientName}
+      />
+    </FinancePageShell>
   );
 };
 

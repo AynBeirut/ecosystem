@@ -1,0 +1,36 @@
+---
+description: Grabio POS Windows work — ecosystem connection, paths, and deploy safety.
+globs: ["the eco sys/ecosystem-plan/posfinal-main/**", "functions/src/api/posSync.ts", "docs/planning/pos*.md"]
+alwaysApply: false
+---
+
+# Grabio POS (Windows)
+
+## Read first
+- `docs/planning/pos-windows-handoff.md` — structure + handoff
+- `docs/planning/pos-sync-contract.md` — API contract
+
+## Code locations
+- POS app: `the eco sys/ecosystem-plan/posfinal-main/pos-v1/` (Electron + SQL.js)
+- Platform API: `functions/src/api/posSync.ts`
+- Admin UI: `src/pages/admin/PosPairing.tsx` → `/admin/pos`
+
+## API base (prod)
+`https://us-central1-market-flow-7b074.cloudfunctions.net/api`
+
+## Live endpoints (api + Cloud Run)
+- `POST /pos/pairing-code` — admin generates code (Bearer)
+- `POST /pos/generate-install-token` — auto-pair token (Bearer)
+- `POST /pos/auto-pair` — POS first-launch with pairing.json
+- `POST /pos/pair` — POS exchanges code for deviceToken
+- `POST /pos/heartbeat` — keepalive
+- `GET /pos/catalog`, `POST /pos/orders` + sync routes — live
+
+## Installer
+`pos/Grabio-POS-Setup.exe` in Firebase Storage (public read). Admin: `/admin/pos`
+
+## Rules
+- POS stays offline-first; sync is additive, not a rewrite
+- `composedProductSource` set at pair time: `platform` | `pos`
+- No prod Firebase deploy without owner approval
+- Credentials only in `.credentials.md` (gitignored)

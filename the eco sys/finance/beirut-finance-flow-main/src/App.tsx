@@ -7,6 +7,8 @@ import { lazy, Suspense } from "react";
 import { AppProvider } from "@/context/AppContext";
 import { AccountingProvider } from "@/context/AccountingContext";
 import AuthGuard from "@/components/AuthGuard";
+import InvoiceModuleGate from "@/components/InvoiceModuleGate";
+import PlayStoreV1RouteGuard from "@/components/PlayStoreV1RouteGuard";
 import ErrorBoundary from "@/components/ErrorBoundary";
 import OfflineBanner from "@/components/OfflineBanner";
 import SessionGuard from "@/components/SessionGuard";
@@ -18,7 +20,7 @@ import AuthCallback from "./pages/AuthCallback";
 const InvoiceManager = lazy(() => import("./pages/InvoiceManager"));
 const EstimateManager = lazy(() => import("./pages/EstimateManager"));
 const ReceiptManager = lazy(() => import("./pages/ReceiptManager"));
-const CompanyProfile = lazy(() => import("./pages/CompanyProfile"));
+const CompanyProfileRedirect = lazy(() => import("./pages/CompanyProfileRedirect"));
 const Settings = lazy(() => import("./pages/Settings"));
 const PremiumUpgrade = lazy(() => import("./pages/PremiumUpgrade"));
 const SubUsers = lazy(() => import("./pages/SubUsers"));
@@ -58,9 +60,13 @@ const PageFallback = () => (
 
 const wrap = (node: React.ReactNode, scope?: string) => (
   <AuthGuard>
-    <ErrorBoundary scope={scope}>
-      <Suspense fallback={<PageFallback />}>{node}</Suspense>
-    </ErrorBoundary>
+    <InvoiceModuleGate>
+      <PlayStoreV1RouteGuard>
+        <ErrorBoundary scope={scope}>
+          <Suspense fallback={<PageFallback />}>{node}</Suspense>
+        </ErrorBoundary>
+      </PlayStoreV1RouteGuard>
+    </InvoiceModuleGate>
   </AuthGuard>
 );
 
@@ -74,14 +80,14 @@ const App = () => (
             <OfflineBanner />
             <Toaster />
             <Sonner />
-            <BrowserRouter>
+            <BrowserRouter basename={import.meta.env.BASE_URL.replace(/\/$/, "") || undefined}>
               <Routes>
                 <Route path="/" element={<Index />} />
                 <Route path="/auth/callback" element={<AuthCallback />} />
                 <Route path="/invoices" element={wrap(<InvoiceManager />, "invoices")} />
                 <Route path="/estimates" element={wrap(<EstimateManager />)} />
                 <Route path="/receipts" element={wrap(<ReceiptManager />)} />
-                <Route path="/profile" element={wrap(<CompanyProfile />)} />
+                <Route path="/profile" element={wrap(<CompanyProfileRedirect />, "profile")} />
                 <Route path="/settings" element={wrap(<Settings />)} />
                 <Route path="/premium" element={wrap(<PremiumUpgrade />)} />
                 <Route path="/reports" element={wrap(<Reports />)} />

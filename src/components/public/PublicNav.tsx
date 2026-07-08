@@ -17,13 +17,11 @@ const PublicNav: React.FC = () => {
   const { user, isLoading } = useAuth();
   const isSignedIn = !!user;
   const dashboardPath =
-    user?.role === 'admin'
-      ? '/admin'
+    user?.role === 'crm_rep'
+      ? '/team/crm'
       : user?.role === 'sub_account'
         ? '/team/dashboard'
-        : user?.role === 'crm_rep'
-          ? '/team/crm'
-          : '/';
+        : '/admin/dashboard';
 
   const isActive = (href: string) =>
     href === '/'

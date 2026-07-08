@@ -10,8 +10,10 @@ import {
   LayoutGrid,
   Mail,
   Megaphone,
+  Monitor,
   Package,
   Palette,
+  Receipt,
   Settings2,
   ShoppingCart,
   Store as StoreIcon,
@@ -22,6 +24,8 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import { canUseInvoiceManagerApp } from '@/lib/entitlements';
+import { INVOICE_MANAGER_EMBED_URL } from '@/lib/invoiceApp';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 
 export type AdminNavItem = {
@@ -29,6 +33,8 @@ export type AdminNavItem = {
   label: string;
   icon: LucideIcon;
   visible: boolean;
+  /** Full-page navigation to a separate SPA (e.g. /invoice/) */
+  external?: boolean;
 };
 
 export type AdminNavGroup = {
@@ -47,7 +53,7 @@ const DEFAULT_OPEN_GROUPS: Record<string, boolean> = {
 export function useAdminNavigation() {
   const { user } = useAuth();
   const location = useLocation();
-  const { canUse: canUseModule } = useStoreEntitlements();
+  const { canUse: canUseModule, profile } = useStoreEntitlements();
   const [openMenuGroups, setOpenMenuGroups] = useState<Record<string, boolean>>(DEFAULT_OPEN_GROUPS);
 
   const canViewInventory = user?.role === 'admin' || user?.permissions?.includes('view_inventory');
@@ -56,8 +62,12 @@ export function useAdminNavigation() {
   const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
   const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
   const crmEnabled = user?.role === 'admin' && canUseModule('crm');
+  const invoiceManagerEnabled = user?.role === 'admin' && canUseInvoiceManagerApp(profile);
 
   const isRouteActive = (route: string) => {
+    if (route.startsWith('/admin/finance/') && route !== '/admin/finance') {
+      return location.pathname.startsWith(route);
+    }
     if (route === '/admin/dashboard') return location.pathname === '/admin/dashboard' || location.pathname === '/admin';
     if (route.startsWith('/admin/crm')) return location.pathname.startsWith('/admin/crm');
     return location.pathname === route || location.pathname.startsWith(`${route}/`);
@@ -89,6 +99,12 @@ export function useAdminNavigation() {
         title: 'Sales & Customers',
         items: [
           { to: '/admin/orders', label: 'Orders', icon: Package, visible: true },
+          {
+            to: '/admin/pos',
+            label: 'Grabio POS',
+            icon: Monitor,
+            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('pos')),
+          },
           { to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
           { to: '/admin/crm/pipeline', label: 'Sales CRM', icon: LayoutGrid, visible: crmEnabled },
           { to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: Boolean(canProcessPayments) },
@@ -109,7 +125,7 @@ export function useAdminNavigation() {
             icon: CreditCard,
             visible: user?.role === 'admin' && Boolean(canProcessPayments),
           },
-          { to: '/admin/templates', label: 'Templates & Store Logos', icon: Palette, visible: user?.role === 'admin' },
+          { to: '/admin/templates', label: 'Classic Templates', icon: Palette, visible: user?.role === 'admin' },
           { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: Boolean(canViewReports) },
           { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
@@ -121,6 +137,12 @@ export function useAdminNavigation() {
         title: 'Business Tools',
         items: [
           { to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
+          {
+            to: INVOICE_MANAGER_EMBED_URL,
+            label: 'Invoice Manager',
+            icon: Receipt,
+            visible: invoiceManagerEnabled,
+          },
           { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
           { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
           { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
@@ -150,6 +172,7 @@ export function useAdminNavigation() {
     canViewInventory,
     canViewReports,
     crmEnabled,
+    invoiceManagerEnabled,
     user?.role,
   ]);
 

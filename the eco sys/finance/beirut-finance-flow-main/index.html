@@ -2,38 +2,73 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      (function () {
+        var stored = localStorage.getItem("darkMode");
+        var dark = stored === null ? true : stored === "true";
+        if (dark) document.documentElement.classList.add("dark");
+
+        // One-time wipe of old broken SW caches — keyed so it only runs once
+        var CACHE_KEY = 'sw-wiped-v3';
+        if (!localStorage.getItem(CACHE_KEY) && 'serviceWorker' in navigator) {
+          localStorage.setItem(CACHE_KEY, '1');
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            regs.forEach(function(r) { r.unregister(); });
+          });
+          caches.keys().then(function(keys) {
+            keys.forEach(function(k) { caches.delete(k); });
+          });
+        }
+      })();
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>SmartInvoice — Work Faster. Bill Smarter. Earn More.</title>
-    <meta name="description" content="A complete invoicing and accounting toolkit: invoices, estimates, payments, stock, expenses, profit tracking—everything your business needs to stay ahead.">
-    <meta name="author" content="AYN BEIRUT" />
+    <title>Grabio Invoice Manager</title>
+    <meta name="description" content="Full invoicing and finance suite — invoices, estimates, inventory, and reports. Part of the Grabio ecosystem at grabio.space.">
+    <meta name="author" content="Grabio" />
     
     <!-- PWA Meta Tags -->
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#38B2AC" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <meta name="apple-mobile-web-app-title" content="Finance Flow" />
-    <link rel="manifest" href="/manifest.json" />
-    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-title" content="Grabio Invoice" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./icon-192.png" />
 
-    
-    
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/QHvQc3MmZYhoY4bKKTZ0l5j3K2P2/social-images/social-1763847993208-frame_0s_1757613664117.png">
-
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:site" content="@lovable_dev" />
-    <meta name="twitter:image" content="https://storage.googleapis.com/gpt-engineer-file-uploads/QHvQc3MmZYhoY4bKKTZ0l5j3K2P2/social-images/social-1763847993208-frame_0s_1757613664117.png">
-    <meta property="og:title" content="SmartInvoice — Work Faster. Bill Smarter. Earn More.">
-  <meta name="twitter:title" content="SmartInvoice — Work Faster. Bill Smarter. Earn More.">
-  <meta property="og:description" content="A complete invoicing and accounting toolkit: invoices, estimates, payments, stock, expenses, profit tracking—everything your business needs to stay ahead.">
-  <meta name="twitter:description" content="A complete invoicing and accounting toolkit: invoices, estimates, payments, stock, expenses, profit tracking—everything your business needs to stay ahead.">
+    <meta property="og:url" content="https://grabio.space/invoice/" />
+    <meta property="og:title" content="Grabio Invoice Manager">
+    <meta property="og:description" content="Full invoicing and finance suite — part of the Grabio ecosystem.">
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="Grabio Invoice Manager">
+    <meta name="twitter:description" content="Full invoicing and finance suite — part of the Grabio ecosystem.">
 </head>
 
   <body>
-    <div id="root"></div>
-    <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
-    <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
+    <div id="root">
+      <!-- Native splash — removed by React on first render -->
+      <div id="app-splash" style="position:fixed;inset:0;background:#111827;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:9999;">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="48" height="48" rx="12" fill="#38B2AC"/>
+          <path d="M14 24h20M24 14v20" stroke="white" stroke-width="3.5" stroke-linecap="round"/>
+        </svg>
+        <p style="color:#38B2AC;font-family:system-ui,sans-serif;font-size:16px;font-weight:600;margin-top:16px;letter-spacing:0.5px;">Invoice Manager</p>
+        <div style="margin-top:24px;width:32px;height:3px;background:#1f2937;border-radius:2px;overflow:hidden;">
+          <div id="app-splash-bar" style="height:100%;width:0%;background:#38B2AC;border-radius:2px;transition:width 1.5s ease;"></div>
+        </div>
+      </div>
+    </div>
+    <script>
+      // Animate the progress bar and auto-remove splash if React never removes it
+      setTimeout(function() {
+        var bar = document.getElementById('app-splash-bar');
+        if (bar) bar.style.width = '80%';
+      }, 50);
+      setTimeout(function() {
+        var s = document.getElementById('app-splash');
+        if (s) s.style.display = 'none';
+      }, 8000);
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

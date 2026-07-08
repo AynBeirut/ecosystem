@@ -5,18 +5,11 @@ import AppLayout from "@/components/AppLayout";
 import { useAppContext } from "@/context/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import { CheckCircle2 } from "lucide-react";
+import { BRAND } from "@/lib/branding";
 
 const PremiumUpgrade = () => {
   const { user, logout } = useAppContext();
   const { toast } = useToast();
-
-  const handleUpgrade = () => {
-    toast({
-      title: "Payment required",
-      description: "Plan upgrades are processed via verified payment. Please contact support to enable billing.",
-      variant: "destructive",
-    });
-  };
 
   const handleLogout = () => {
     logout();
@@ -39,7 +32,9 @@ const PremiumUpgrade = () => {
       <div className="space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Premium Upgrade</h1>
-          <p className="text-gray-500 dark:text-gray-400">Unlock all features with AYN BEIRUT Premium</p>
+          <p className="text-gray-500 dark:text-gray-400">
+            Manage modules and billing on your Grabio subscription
+          </p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -108,12 +103,18 @@ const PremiumUpgrade = () => {
               </ul>
             </CardContent>
             <CardFooter>
-              <Button 
-                onClick={handleUpgrade} 
+              <Button
+                asChild
                 disabled={user?.plan === "pro"}
-                className={`w-full ${user?.plan === "pro" ? "bg-green-600" : "bg-amber-600 hover:bg-amber-700"}`}
+                className={`w-full ${user?.plan === "pro" ? "bg-green-600" : "bg-[#38B2AC] hover:bg-[#2C9A94] text-white"}`}
               >
-                {user?.plan === "pro" ? "Already Subscribed" : "Contact Sales"}
+                {user?.plan === "pro" ? (
+                  <span>Already Subscribed</span>
+                ) : (
+                  <a href={BRAND.subscriptionUrl} target="_blank" rel="noopener noreferrer">
+                    Manage on Grabio
+                  </a>
+                )}
               </Button>
             </CardFooter>
           </Card>

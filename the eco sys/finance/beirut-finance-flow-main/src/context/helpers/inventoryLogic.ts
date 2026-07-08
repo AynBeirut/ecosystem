@@ -1,7 +1,7 @@
 // Composed product cost + inventory movement logic
 // Org-scoped helpers used by AppContext
 
-import { dbInsert, dbUpdate } from "./supabaseOps";
+import { dbInsert, dbUpdate } from "./dbOps";
 import type { Product } from "../AppContext";
 
 const LOG = "Context][Inventory";

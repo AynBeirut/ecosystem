@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
+import { mergeBrandingIntoStoreProfile } from '../lib/builderBrandingTransfer';
 
 const db = admin.firestore();
 
@@ -88,17 +89,13 @@ export async function transferBuilderDemo(req: Request, res: Response): Promise<
 
     const batch = db.batch();
 
-    batch.set(db.collection('storeProfiles').doc(storeId), {
+    batch.set(db.collection('storeProfiles').doc(storeId), mergeBrandingIntoStoreProfile(branding as Record<string, unknown>, {
       id: storeId,
       storeId,
       ownerId: clientUid,
       email: clientEmail,
       name,
       slug: String(branding.slug || generateSlug(name)),
-      description: branding.description || '',
-      slogan: branding.slogan || '',
-      logo: branding.logo || '',
-      template: branding.template || 'default',
       isDemo: false,
       subscriptionStatus: 'trial',
       subscriptionTier: 'trial',
@@ -108,7 +105,7 @@ export async function transferBuilderDemo(req: Request, res: Response): Promise<
       updatedAt: timestamp,
       transferredFromDemoId: demoId,
       transferredFromBuilderUid: builderUid,
-    });
+    }));
 
     const userRef = db.collection('users').doc(clientUid);
     const userSnap = await userRef.get();

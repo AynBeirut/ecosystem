@@ -1,23 +1,49 @@
 
 import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from "react";
 // exportDocumentAsPdf is now invoked through documentLogic.generatePDF
+import { onAuthStateChanged, signOut as firebaseSignOut, getRedirectResult, signInWithCustomToken } from "firebase/auth";
+import { auth, authReady as firebaseAuthReady } from "@/integrations/firebase/client";
 import { supabase } from "@/integrations/supabase/client";
+import { resolveGrabioStore, storeProfileToCompany, updateFinanceDocumentSettings, type StoreCompanyView } from "@/lib/grabio/storeService";
+import type { FinanceDocumentSettings } from "@/lib/grabio/types";
+import { resolveInvoiceAppPlan } from "@/lib/grabio/entitlements";
+import { consumeMobileSsoToken } from "@/lib/grabio/mobileSso";
 import {
   mapDbClient, mapDbSupplier, mapDbProduct, mapDbInvoice,
   mapDbEstimate, mapDbPurchaseOrder, mapDbReceipt, mapDbPayment, mapDbExpense,
 } from "./helpers/dbMappers";
-import { dbInsert, dbUpdate, dbDelete, dbBulkInsert, dbDeleteWhere, flushPendingOps } from "./helpers/supabaseOps";
+import { dbInsert, dbUpdate, dbDelete, dbBulkInsert, dbDeleteWhere, flushPendingOps } from "./helpers/dbOps";
+import { setFinanceStoreId } from "@/lib/firestore/storeContext";
+import { loadStoreData } from "@/lib/firestore/loadStoreData";
 import {
   calculateComposedProductCost as calcComposedCost,
   insertInventoryMovement as insertInvMovement,
   updateInventoryForComposedProduct,
   recordStockMovement,
 } from "./helpers/inventoryLogic";
-import { generatePDF, sendDocumentEmail, type DocumentType } from "./helpers/documentLogic";
+import { generatePDF, generatePdfFile, sendDocumentEmail, type DocumentType } from "./helpers/documentLogic";
+import { resolveClientId, resolveSupplierId, syncLineItemsToCatalog } from "./helpers/catalogSync";
 import { toast } from "sonner";
 import type { SimImportRunSummary, SimMigrationData } from "@/lib/simImport";
+import {
+  clearGuestDemo,
+  clearGuestDemoData,
+  GUEST_DEMO_EMAIL,
+  GUEST_DEMO_STORE_ID,
+  GUEST_DEMO_USER_ID,
+  guestDemoLimitMessage,
+  GUEST_DEMO_LIMITS,
+  isGuestDemoActive,
+  loadGuestDemoData,
+  saveGuestDemoData,
+  setGuestDemoActive,
+} from "@/lib/guestDemo";
+
+/** Phase A1 removes this flag — all data reads/writes go through Firestore. */
+const USE_SUPABASE_LEGACY = import.meta.env.VITE_USE_SUPABASE_LEGACY === "true";
 
 const guardOrg = (orgId: string | null, userId: string | null): boolean => {
+  if (isGuestDemoActive() && userId === GUEST_DEMO_USER_ID && orgId === GUEST_DEMO_STORE_ID) return true;
   if (!userId) { toast.error("Please sign in first."); return false; }
   if (!orgId) { toast.error("No active organization selected."); return false; }
   return true;
@@ -118,7 +144,7 @@ export interface Expense {
 
 export interface Organization {
   id: string; name: string; logoUrl?: string; address?: string;
-  phone?: string; email?: string; taxId?: string; currency?: string;
+  phone?: string; email?: string; website?: string; taxId?: string; currency?: string;
   plan?: 'free' | 'paid' | 'pro';
 }
 
@@ -138,6 +164,7 @@ interface AppContextType {
   payments: Payment[];
   expenses: Expense[];
   isLoggedIn: boolean;
+  isGuestDemo: boolean;
   isDarkMode: boolean;
   activeOrganizationId: string | null;
   organizations: Organization[];
@@ -157,6 +184,8 @@ interface AppContextType {
   };
   login: (email: string, password: string) => boolean;
   logout: () => void;
+  startGuestDemo: () => void;
+  exitGuestDemo: () => void;
   createInvoice: (invoice: Omit<Invoice, "id" | "date" | "status">) => Promise<string | null>;
   createEstimate: (estimate: Omit<Estimate, "id" | "date" | "status">) => Promise<string | null>;
   convertEstimateToInvoice: (estimateId: string) => Promise<boolean>;
@@ -195,17 +224,20 @@ interface AppContextType {
   previewReceipt: (receiptId: string) => Receipt | null;
   previewPaymentOrder: (paymentOrderId: string) => PaymentOrder | null;
   previewPurchaseOrder: (purchaseOrderId: string) => PurchaseOrder | null;
-  sendInvoice: (invoiceId: string, recipientEmail: string) => boolean;
-  sendEstimate: (estimateId: string, recipientEmail: string) => boolean;
-  sendReceipt: (receiptId: string, recipientEmail: string) => boolean;
-  sendPaymentOrder: (paymentOrderId: string, recipientEmail: string) => boolean;
-  sendPurchaseOrder: (purchaseOrderId: string, recipientEmail: string) => boolean;
-  exportInvoiceAsPdf: (invoiceId: string) => boolean;
-  exportEstimateAsPdf: (estimateId: string) => boolean;
-  exportReceiptAsPdf: (receiptId: string) => boolean;
-  exportPaymentOrderAsPdf: (paymentOrderId: string) => boolean;
-  exportPurchaseOrderAsPdf: (purchaseOrderId: string) => boolean;
+  sendInvoice: (invoiceId: string, recipientEmail: string) => Promise<boolean>;
+  sendEstimate: (estimateId: string, recipientEmail: string) => Promise<boolean>;
+  sendReceipt: (receiptId: string, recipientEmail: string) => Promise<boolean>;
+  sendPaymentOrder: (paymentOrderId: string, recipientEmail: string) => Promise<boolean>;
+  sendPurchaseOrder: (purchaseOrderId: string, recipientEmail: string) => Promise<boolean>;
+  exportInvoiceAsPdf: (invoiceId: string) => Promise<boolean>;
+  exportEstimateAsPdf: (estimateId: string) => Promise<boolean>;
+  exportReceiptAsPdf: (receiptId: string) => Promise<boolean>;
+  exportPaymentOrderAsPdf: (paymentOrderId: string) => Promise<boolean>;
+  exportPurchaseOrderAsPdf: (purchaseOrderId: string) => Promise<boolean>;
+  getDocumentPdfFile: (documentType: string, documentId: string) => Promise<File | null>;
   updateSettings: (settings: any) => void;
+  reloadStoreProfile: () => Promise<void>;
+  refreshDocumentCompany: () => Promise<StoreCompanyView | null>;
   checkLimit: (type: "invoices" | "estimates" | "receipts" | "purchaseOrders" | "clients" | "products") => { allowed: boolean; current: number; limit: number; message?: string };
   getCurrentMonthKey: () => string;
   calculateComposedProductCost: (product: Product) => number;
@@ -226,10 +258,6 @@ export interface InvoiceDraftFromProject {
 const AppContext = createContext<AppContextType | undefined>(undefined);
 
 const FREE_TIER_LIMITS = { documents: 10, clients: 10, products: 10 };
-const PREMIUM_OVERRIDE_EMAILS = new Set(["anwar@aynbeirut.com"]);
-
-const hasPremiumOverride = (email?: string | null): boolean =>
-  !!email && PREMIUM_OVERRIDE_EMAILS.has(email.trim().toLowerCase());
 
 // ============ Helper: inventory movement insert (org-scoped wrapper) ============
 const insertInventoryMovement = async (
@@ -245,7 +273,7 @@ const insertInventoryMovement = async (
 
 // ============ Provider ============
 
-export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boolean }> = ({ children, embedded = false }) => {
   const [authReady, setAuthReady] = useState(false);
   const userIdRef = useRef<string | null>(null);
   const userEmailRef = useRef<string | null>(null);
@@ -262,8 +290,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveOrgId(id);
     orgIdRef.current = id;
     localStorage.setItem('activeOrganizationId', id);
-    // Refresh current user's role for the newly selected org
-    if (userIdRef.current) {
+    // Refresh current user's role for the newly selected org (legacy Supabase only)
+    if (USE_SUPABASE_LEGACY && userIdRef.current) {
       const { data } = await supabase
         .from('organization_members' as any)
         .select('role')
@@ -276,6 +304,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // ===== Org membership management (lookup-only invites) =====
   const inviteUserToOrg = useCallback(async (email: string, role: 'admin' | 'manager' | 'agent' | 'assistant') => {
+    if (!USE_SUPABASE_LEGACY) {
+      return { ok: false, message: 'Organization invites are managed in Grabio Admin.' };
+    }
     const orgId = orgIdRef.current;
     if (!orgId) return { ok: false, message: 'No active organization' };
     if (currentUserRole !== 'owner' && currentUserRole !== 'admin') {
@@ -386,6 +417,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [payments, setPayments] = useState<Payment[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [isGuestDemo, setIsGuestDemo] = useState(() => isGuestDemoActive());
 
   // localStorage-only state
   const storedPortfolioItems = localStorage.getItem("portfolioItems");
@@ -393,162 +425,343 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const storedDarkMode = localStorage.getItem("darkMode");
   const [portfolioItems, setPortfolioItems] = useState<PortfolioItem[]>(storedPortfolioItems ? JSON.parse(storedPortfolioItems) : []);
   const [paymentOrders, setPaymentOrders] = useState<PaymentOrder[]>(storedPaymentOrders ? JSON.parse(storedPaymentOrders) : []);
-  const [isDarkMode, setIsDarkMode] = useState(storedDarkMode === "true");
+  const [isDarkMode, setIsDarkMode] = useState(() => {
+    if (storedDarkMode === null) return true;
+    return storedDarkMode === "true";
+  });
 
-  // ===== Load organizations for user (with bootstrap) =====
+  // ===== Load Grabio store (replaces Supabase organizations) =====
   const loadOrganizations = useCallback(async (): Promise<string | null> => {
     const uid = userIdRef.current;
-    if (!uid) return null;
+    const email = userEmailRef.current;
+    if (!uid || !email) return null;
 
-    const { data, error } = await supabase
-      .from('organization_members' as any)
-      .select('organization_id, role')
-      .eq('user_id', uid);
-    if (error) { console.error("[Context][Org][load]", error); return null; }
-
-    let memberships = (data as any[]) || [];
-
-    // Bootstrap: if no membership exists, create a default organization and own it.
-    // Uses an atomic security-definer RPC (org + owner membership in one transaction).
-    // A direct client INSERT ... RETURNING fails with 42501 because the org SELECT
-    // policy can't see the new row before the membership exists.
-    if (memberships.length === 0) {
-      console.log("[Context][Org][bootstrap] Creating default org for user", uid);
-      const { data: bootRows, error: orgErr } = await supabase
-        .rpc('bootstrap_organization' as any, { _name: 'My Organization' });
-      const newOrg = Array.isArray(bootRows) ? bootRows[0] : bootRows;
-      if (orgErr || !newOrg) {
-        console.error("[Context][Org][bootstrap] Create org failed", {
-          code: (orgErr as any)?.code,
-          message: (orgErr as any)?.message,
-          details: (orgErr as any)?.details,
-          hint: (orgErr as any)?.hint,
-          full: orgErr,
-        });
-        return null;
-      }
-      memberships = [{ organization_id: (newOrg as any).id, role: 'owner' }];
+    try {
+      const { storeId, profile, role } = await resolveGrabioStore(uid, email);
+      const company = storeProfileToCompany(profile);
+      const plan = resolveInvoiceAppPlan(profile, email);
+      const mapped: Organization[] = [{
+        id: storeId,
+        name: profile.name || profile.storeName || company.name || 'My Organization',
+        logoUrl: profile.logo,
+        address: company.address,
+        phone: company.phone,
+        email: company.email || email,
+        website: company.website,
+        taxId: profile.taxId,
+        currency: 'USD',
+        plan,
+      }];
+      setOrganizations(mapped);
+      setActiveOrgId(storeId);
+      orgIdRef.current = storeId;
+      localStorage.setItem('activeOrganizationId', storeId);
+      setCurrentUserRole(role === 'owner' ? 'owner' : role === 'admin' ? 'admin' : 'member');
+      setUser(prev => prev ? { ...prev, plan, company: { ...company } } : prev);
+      setFinanceStoreId(storeId);
+      return storeId;
+    } catch (err) {
+      console.error("[Context][GrabioStore][load]", err);
+      return null;
     }
-
-    const orgIds = memberships.map((r: any) => r.organization_id);
-    const { data: orgs, error: orgsErr } = await supabase
-      .from('organizations' as any)
-      .select('*')
-      .in('id', orgIds);
-    if (orgsErr) { console.error("[Context][Org][fetch]", orgsErr); return null; }
-
-    const mapped: Organization[] = ((orgs as any[]) || []).map((o: any) => ({
-      id: o.id, name: o.name, logoUrl: o.logo_url, address: o.address,
-      phone: o.phone, email: o.email, taxId: o.tax_id, currency: o.currency,
-      plan: hasPremiumOverride(userEmailRef.current) ? 'pro' : ((o.plan as 'free' | 'paid' | 'pro') || 'free'),
-    }));
-    setOrganizations(mapped);
-
-    const stored = localStorage.getItem('activeOrganizationId');
-    const activeId = stored && mapped.find(o => o.id === stored) ? stored : mapped[0]?.id;
-    if (activeId) {
-      setActiveOrgId(activeId);
-      orgIdRef.current = activeId;
-      localStorage.setItem('activeOrganizationId', activeId);
-      const roleRow = memberships.find((r: any) => r.organization_id === activeId);
-      setCurrentUserRole((roleRow?.role as any) || 'member');
-    }
-    return activeId || null;
   }, []);
 
   // ===== Load all org-scoped data =====
   const loadAllData = useCallback(async (orgId: string) => {
-    console.log("[Context] Loading data for org:", orgId);
-    const q = (table: string) => supabase.from(table as any).select('*').eq('organization_id', orgId);
+    if (orgId === GUEST_DEMO_STORE_ID || isGuestDemoActive()) return;
+    console.log("[Context] Loading data for store:", orgId);
+    if (USE_SUPABASE_LEGACY) {
+      const q = (table: string) => supabase.from(table as any).select('*').eq('organization_id', orgId);
 
-    const [cR, sR, pR, iR, eR, poR, rR, payR, expR] = await Promise.all([
-      q('clients'), q('suppliers'), q('products'), q('invoices'),
-      q('estimates'), q('purchase_orders'), q('receipts'),
-      q('payments'), q('expenses'),
-    ]);
+      const [cR, sR, pR, iR, eR, poR, rR, payR, expR] = await Promise.all([
+        q('clients'), q('suppliers'), q('products'), q('invoices'),
+        q('estimates'), q('purchase_orders'), q('receipts'),
+        q('payments'), q('expenses'),
+      ]);
 
-    if (cR.data) setClients((cR.data as any[]).map(mapDbClient));
-    if (sR.data) setSuppliers((sR.data as any[]).map(mapDbSupplier));
-    if (pR.data) setProducts((pR.data as any[]).map(mapDbProduct));
-    if (iR.data) setInvoices((iR.data as any[]).map(mapDbInvoice));
-    if (eR.data) setEstimates((eR.data as any[]).map(mapDbEstimate));
-    if (poR.data) setPurchaseOrders((poR.data as any[]).map(mapDbPurchaseOrder));
-    if (rR.data) setReceipts((rR.data as any[]).map(mapDbReceipt));
-    if (payR.data) setPayments((payR.data as any[]).map(mapDbPayment));
-    if (expR.data) setExpenses((expR.data as any[]).map(mapDbExpense));
+      if (cR.data) setClients((cR.data as any[]).map(mapDbClient));
+      if (sR.data) setSuppliers((sR.data as any[]).map(mapDbSupplier));
+      if (pR.data) setProducts((pR.data as any[]).map(mapDbProduct));
+      if (iR.data) setInvoices((iR.data as any[]).map(mapDbInvoice));
+      if (eR.data) setEstimates((eR.data as any[]).map(mapDbEstimate));
+      if (poR.data) setPurchaseOrders((poR.data as any[]).map(mapDbPurchaseOrder));
+      if (rR.data) setReceipts((rR.data as any[]).map(mapDbReceipt));
+      if (payR.data) setPayments((payR.data as any[]).map(mapDbPayment));
+      if (expR.data) setExpenses((expR.data as any[]).map(mapDbExpense));
+      console.log("[Context] Supabase data loaded.");
+      return;
+    }
 
-    console.log("[Context] Data loaded.");
+    try {
+      setFinanceStoreId(orgId);
+      const data = await loadStoreData(orgId);
+      setClients(data.clients);
+      setSuppliers(data.suppliers);
+      setProducts(data.products);
+      setInvoices(data.invoices);
+      setEstimates(data.estimates);
+      setPurchaseOrders(data.purchaseOrders);
+      setReceipts(data.receipts);
+      setPayments(data.payments);
+      setExpenses(data.expenses);
+      console.log("[Context] Firestore data loaded.");
+    } catch (err) {
+      console.error("[Context][Firestore][load]", err);
+      toast.error("Failed to load your finance data. Please refresh.");
+    }
   }, []);
 
-  // Build User from session
-  const buildUserFromSession = (email: string): User => {
+  // Build User session shell — company comes from storeProfiles via loadOrganizations only.
+  const buildUserFromSession = (email: string, plan: User['plan'] = 'free'): User => {
+    let createdCounts: User['createdCounts'] = {
+      invoices: {}, estimates: {}, receipts: {}, purchaseOrders: {},
+    };
+    let isDemoAccount: boolean | undefined;
+
     const stored = localStorage.getItem("user");
     if (stored) {
       try {
-        const parsed = JSON.parse(stored);
+        const parsed = JSON.parse(stored) as Partial<User>;
         if (parsed.email === email) {
-          delete parsed.credits;
-          parsed.plan = hasPremiumOverride(email) ? "pro" : (parsed.plan || "free");
-          if (!parsed.createdCounts) parsed.createdCounts = { invoices: {}, estimates: {}, receipts: {}, purchaseOrders: {} };
-          if (!parsed.company) parsed.company = { name: "", address: "", phone: "", logo: "" };
-          return parsed;
+          if (parsed.createdCounts) createdCounts = parsed.createdCounts;
+          isDemoAccount = parsed.isDemoAccount;
         }
-      } catch {}
+      } catch { /* ignore corrupt cache */ }
     }
+
     return {
-      email, plan: hasPremiumOverride(email) ? "pro" : "free",
-      createdCounts: { invoices: {}, estimates: {}, receipts: {}, purchaseOrders: {} },
-      company: { name: "My Company", address: "123 Business St", phone: "+1234567890", logo: "" },
+      email,
+      plan,
+      isDemoAccount,
+      createdCounts,
+      company: {
+        name: '',
+        address: '',
+        phone: '',
+        email: '',
+        logo: '',
+        primaryColor: '#38B2AC',
+        secondaryColor: '#C7D2FE',
+        invoiceTemplate: 'basic',
+      },
     };
   };
 
-  // ===== Auth initialization =====
+  const initGuestDemoSession = useCallback(() => {
+    setGuestDemoActive(true);
+    setIsGuestDemo(true);
+    userIdRef.current = GUEST_DEMO_USER_ID;
+    userEmailRef.current = GUEST_DEMO_EMAIL;
+    orgIdRef.current = GUEST_DEMO_STORE_ID;
+    setFinanceStoreId(GUEST_DEMO_STORE_ID);
+    setActiveOrgId(GUEST_DEMO_STORE_ID);
+    localStorage.setItem('activeOrganizationId', GUEST_DEMO_STORE_ID);
+    setCurrentUserRole('owner');
+
+    const data = loadGuestDemoData();
+    const demoUser: User = {
+      email: GUEST_DEMO_EMAIL,
+      plan: 'free',
+      company: {
+        name: 'Demo',
+        address: 'Demo Street, Beirut',
+        phone: '+961 1 000 000',
+        email: GUEST_DEMO_EMAIL,
+        logo: '',
+        primaryColor: '#38B2AC',
+        secondaryColor: '#C7D2FE',
+        invoiceTemplate: 'basic',
+      },
+      createdCounts: {
+        invoices: {}, estimates: {}, receipts: {}, purchaseOrders: {},
+      },
+    };
+    if (data.company) {
+      demoUser.company = { ...demoUser.company, ...data.company };
+    }
+
+    setUser(demoUser);
+    setOrganizations([{
+      id: GUEST_DEMO_STORE_ID,
+      name: 'Demo',
+      email: GUEST_DEMO_EMAIL,
+      currency: 'USD',
+      plan: 'free',
+    }]);
+    setClients(data.clients);
+    setSuppliers(data.suppliers);
+    setProducts(data.products);
+    setInvoices(data.invoices);
+    setEstimates(data.estimates);
+    setReceipts(data.receipts);
+    setPurchaseOrders(data.purchaseOrders);
+    setPayments(data.payments);
+    setExpenses(data.expenses);
+    setIsLoggedIn(true);
+  }, []);
+
+  // ===== Auth initialization (Firebase / Grabio) =====
   useEffect(() => {
+    let mounted = true;
+    let unsub: (() => void) | undefined;
+
+    const clearSession = () => {
+      userIdRef.current = null;
+      userEmailRef.current = null;
+      orgIdRef.current = null;
+      setFinanceStoreId(null);
+      setUser(null);
+      setIsLoggedIn(false);
+      setIsGuestDemo(false);
+      setOrganizations([]);
+      setClients([]);
+      setSuppliers([]);
+      setProducts([]);
+      setInvoices([]);
+      setEstimates([]);
+      setPurchaseOrders([]);
+      setReceipts([]);
+      setPayments([]);
+      setExpenses([]);
+    };
+
     const initSession = async (userId: string, email: string) => {
+      if (isGuestDemoActive()) {
+        clearGuestDemo();
+        setIsGuestDemo(false);
+      }
       userIdRef.current = userId;
       userEmailRef.current = email;
       setUser(buildUserFromSession(email));
       setIsLoggedIn(true);
       const orgId = await loadOrganizations();
-      if (orgId) {
+        if (orgId) {
         await loadAllData(orgId);
         flushPendingOps();
       }
     };
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      console.log("[Context][Auth]", _event, session?.user?.id);
-      if (session?.user) {
-        initSession(session.user.id, session.user.email || "");
-      } else {
-        userIdRef.current = null;
-        userEmailRef.current = null;
-        orgIdRef.current = null;
-        setUser(null);
-        setIsLoggedIn(false);
-        setOrganizations([]);
-        setClients([]); setSuppliers([]); setProducts([]);
-        setInvoices([]); setEstimates([]); setPurchaseOrders([]);
-        setReceipts([]); setPayments([]); setExpenses([]);
-      }
-    });
+    const boot = async () => {
+      await firebaseAuthReady;
+      if (!mounted) return;
 
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        initSession(session.user.id, session.user.email || "");
+      try {
+        const mobileToken = consumeMobileSsoToken();
+        if (mobileToken && !auth.currentUser) {
+          await signInWithCustomToken(auth, mobileToken);
+        }
+        await getRedirectResult(auth);
+      } catch (err) {
+        console.error("[Context][Auth] redirect result failed", err);
       }
-      setAuthReady(true);
-    });
 
-    return () => subscription.unsubscribe();
-  }, []);
+      unsub = onAuthStateChanged(auth, async (firebaseUser) => {
+        if (!mounted) return;
+        console.log("[Context][Auth]", firebaseUser?.uid ?? "signed-out");
+        if (firebaseUser?.email) {
+          await initSession(firebaseUser.uid, firebaseUser.email);
+        } else if (isGuestDemoActive()) {
+          initGuestDemoSession();
+        } else {
+          clearSession();
+        }
+        if (mounted) setAuthReady(true);
+      });
+    };
+
+    void boot();
+    return () => {
+      mounted = false;
+      unsub?.();
+    };
+  }, [loadAllData, loadOrganizations, initGuestDemoSession]);
+
+  const reloadStoreProfile = useCallback(async () => {
+    const orgId = await loadOrganizations();
+    if (orgId) await loadAllData(orgId);
+  }, [loadAllData, loadOrganizations]);
+
+  /** Always pull latest store identity from Firestore server before PDFs / send. */
+  const refreshDocumentCompany = useCallback(async (): Promise<StoreCompanyView | null> => {
+    if (isGuestDemoActive() && user?.company) {
+      return user.company as StoreCompanyView;
+    }
+    const uid = userIdRef.current;
+    const email = userEmailRef.current || '';
+    if (!uid) return null;
+    try {
+      const { storeId, profile, role } = await resolveGrabioStore(uid, email);
+      const company = storeProfileToCompany(profile);
+      const plan = resolveInvoiceAppPlan(profile, email);
+      const mapped: Organization[] = [{
+        id: storeId,
+        name: profile.name || profile.storeName || company.name || 'My Organization',
+        logoUrl: profile.logo,
+        address: company.address,
+        phone: company.phone,
+        email: company.email || email,
+        website: company.website,
+        taxId: profile.taxId,
+        currency: 'USD',
+        plan,
+      }];
+      setOrganizations(mapped);
+      setActiveOrgId(storeId);
+      orgIdRef.current = storeId;
+      localStorage.setItem('activeOrganizationId', storeId);
+      setCurrentUserRole(role === 'owner' ? 'owner' : role === 'admin' ? 'admin' : 'member');
+      setUser((prev) => (prev ? { ...prev, plan, company: { ...company } } : prev));
+      setFinanceStoreId(storeId);
+      return company;
+    } catch (err) {
+      console.error('[Context][CompanyRefresh]', err);
+      return null;
+    }
+  }, [user?.company]);
+
+  useEffect(() => {
+    const onProfileUpdated = () => {
+      if (isGuestDemoActive()) return;
+      void reloadStoreProfile();
+    };
+    window.addEventListener('grabio:store-profile-updated', onProfileUpdated);
+    return () => window.removeEventListener('grabio:store-profile-updated', onProfileUpdated);
+  }, [reloadStoreProfile]);
 
   // Reload data when active org changes
   useEffect(() => {
-    if (activeOrganizationId && isLoggedIn) {
+    if (activeOrganizationId && isLoggedIn && !isGuestDemo) {
       loadAllData(activeOrganizationId);
     }
-  }, [activeOrganizationId]);
+  }, [activeOrganizationId, isLoggedIn, isGuestDemo, loadAllData]);
+
+  useEffect(() => {
+    if (!isGuestDemo) return;
+    saveGuestDemoData({
+      clients,
+      suppliers,
+      products,
+      invoices,
+      estimates,
+      receipts,
+      purchaseOrders,
+      payments,
+      expenses,
+      company: user?.company,
+    });
+  }, [
+    isGuestDemo,
+    clients,
+    suppliers,
+    products,
+    invoices,
+    estimates,
+    receipts,
+    purchaseOrders,
+    payments,
+    expenses,
+    user?.company,
+  ]);
 
   // ===== Computed summaries =====
   const financialSummary = React.useMemo(() => {
@@ -582,8 +795,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return calcComposedCost(product, 1);
   };
 
-  // Persist prefs
-  useEffect(() => { user ? localStorage.setItem("user", JSON.stringify(user)) : localStorage.removeItem("user"); }, [user]);
+  // Persist usage counters only — never cache company profile in localStorage.
+  useEffect(() => {
+    if (!user) {
+      localStorage.removeItem("user");
+      return;
+    }
+    localStorage.setItem("user", JSON.stringify({
+      email: user.email,
+      plan: user.plan,
+      createdCounts: user.createdCounts,
+      isDemoAccount: user.isDemoAccount,
+    }));
+  }, [user?.email, user?.plan, user?.createdCounts, user?.isDemoAccount]);
   useEffect(() => { localStorage.setItem("portfolioItems", JSON.stringify(portfolioItems)); }, [portfolioItems]);
   useEffect(() => { localStorage.setItem("paymentOrders", JSON.stringify(paymentOrders)); }, [paymentOrders]);
   useEffect(() => {
@@ -599,6 +823,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const checkLimit = (type: "invoices" | "estimates" | "receipts" | "purchaseOrders" | "clients" | "products") => {
     if (!user) return { allowed: false, current: 0, limit: 0, message: "Please log in to continue" };
+    if (isGuestDemo) {
+      const limitMap: Record<typeof type, number> = {
+        clients: GUEST_DEMO_LIMITS.clients,
+        products: GUEST_DEMO_LIMITS.products,
+        invoices: GUEST_DEMO_LIMITS.invoices,
+        estimates: GUEST_DEMO_LIMITS.estimates,
+        receipts: GUEST_DEMO_LIMITS.receipts,
+        purchaseOrders: GUEST_DEMO_LIMITS.purchaseOrders,
+      };
+      const countMap: Record<typeof type, number> = {
+        clients: clients.length,
+        products: products.length,
+        invoices: invoices.length,
+        estimates: estimates.length,
+        receipts: receipts.length,
+        purchaseOrders: purchaseOrders.length,
+      };
+      const limit = limitMap[type];
+      const current = countMap[type];
+      return {
+        allowed: current < limit,
+        current,
+        limit,
+        message: current >= limit ? guestDemoLimitMessage(type, current, limit) : undefined,
+      };
+    }
     if (user.plan === "pro" || user.isDemoAccount) return { allowed: true, current: 0, limit: Infinity };
     if (type === "clients") {
       const c = clients.length; const l = FREE_TIER_LIMITS.clients;
@@ -644,8 +894,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const limitCheck = checkLimit("invoices");
     if (!limitCheck.allowed) { toast.error(limitCheck.message || "Monthly invoice limit reached."); return null; }
 
+    const resolvedClientId = await resolveClientId(clients, addClient, invoice.clientId, invoice.clientName);
+    const syncedItems = await syncLineItemsToCatalog(products, addProduct, invoice.items);
+    const invoicePayload = {
+      ...invoice,
+      clientId: resolvedClientId,
+      items: syncedItems,
+    };
+
     // STRICT stock validation — abort if ANY item fails
-    for (const item of invoice.items) {
+    for (const item of invoicePayload.items) {
       const prod = products.find(p => p.id === item.id);
       if (!prod) continue;
       if (prod.type === "service") continue;
@@ -663,7 +921,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Recompute item.rawPrice for composed products using calcComposedCost
     // (per-unit cost = sum(component.qty * component.unitCost) + serviceCost).
     // For simple products, fall back to product.rawPrice. Services keep 0.
-    const normalizedItems: LineItem[] = invoice.items.map(item => {
+    const normalizedItems: LineItem[] = invoicePayload.items.map(item => {
       const prod = products.find(p => p.id === item.id);
       if (!prod) return item;
       if (prod.type === "composed") {
@@ -676,7 +934,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return { ...item, rawPrice: 0 };
     });
 
-    const newInvoice: Invoice = { ...invoice, items: normalizedItems, id, date, status: "draft" };
+    const newInvoice: Invoice = { ...invoicePayload, items: normalizedItems, id, date, status: "draft" };
 
     // Apply stock deductions via helpers ONLY (no direct dbUpdate/products mutation)
     for (const item of normalizedItems) {
@@ -713,7 +971,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     (newInvoice as any).paymentMethod = pm;
     const okInv = await dbInsert('invoices', {
       id, user_id: userId, organization_id: orgId, date,
-      client_id: invoice.clientId || null, client_name: invoice.clientName,
+      client_id: invoicePayload.clientId || null, client_name: invoicePayload.clientName,
       items: normalizedItems, amount: invoice.amount, currency: invoice.currency,
       status: initialStatus, tax: invoice.tax || 0, discount: invoice.discount || 0,
       total: invoice.total || 0, template: invoice.template || null, notes: invoice.notes || null,
@@ -878,15 +1136,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const limitCheck = checkLimit("estimates");
     if (!limitCheck.allowed) { toast.error(limitCheck.message || "Monthly estimate limit reached."); return null; }
 
+    const resolvedClientId = await resolveClientId(clients, addClient, estimate.clientId, estimate.clientName);
+    const syncedItems = await syncLineItemsToCatalog(products, addProduct, estimate.items);
+    const estimatePayload = {
+      ...estimate,
+      clientId: resolvedClientId,
+      items: syncedItems,
+    };
+
     const id = `EST-${Date.now()}`;
     const date = new Date().toISOString();
-    const optimistic: Estimate = { ...estimate, id, date, status: "pending" };
+    const optimistic: Estimate = { ...estimatePayload, id, date, status: "pending" };
     setEstimates(prev => [...prev, optimistic]);
 
     const ok = await dbInsert('estimates', {
       id, user_id: userId, organization_id: orgId, date,
-      client_id: estimate.clientId || null, client_name: estimate.clientName,
-      items: estimate.items, amount: estimate.amount, currency: estimate.currency,
+      client_id: estimatePayload.clientId || null, client_name: estimatePayload.clientName,
+      items: estimatePayload.items, amount: estimate.amount, currency: estimate.currency,
       status: 'pending', expiry_date: estimate.expiryDate || null, notes: estimate.notes || null,
     }, 'Context][Estimate');
 
@@ -898,7 +1164,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     incrementDocumentCount("estimates");
 
-    const itemRows = estimate.items.map(it => ({
+    const itemRows = estimatePayload.items.map(it => ({
       organization_id: orgId, estimate_id: id, product_id: it.id || null,
       name: it.description, quantity: it.quantity, unit_price: it.unitPrice,
       raw_cost: it.rawPrice || 0, subtotal: it.subtotal,
@@ -920,6 +1186,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (data.status !== undefined) dbU.status = data.status;
     if (data.expiryDate !== undefined) dbU.expiry_date = data.expiryDate;
     if (data.notes !== undefined) dbU.notes = data.notes;
+    if (data.tax !== undefined) dbU.tax = data.tax;
+    if (data.discount !== undefined) dbU.discount = data.discount;
     if (Object.keys(dbU).length > 0) dbUpdate('estimates', estimateId, dbU, 'Context][Estimate][update');
 
     if (data.items && orgId) {
@@ -1072,20 +1340,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const limitCheck = checkLimit("purchaseOrders");
     if (!limitCheck.allowed) { toast.error(limitCheck.message || "Monthly purchase-order limit reached."); return null; }
 
+    const resolvedSupplierId = await resolveSupplierId(suppliers, addSupplier, po.supplierId, po.supplierName);
+    const syncedItems = await syncLineItemsToCatalog(products, addProduct, po.items);
+    const poPayload = { ...po, supplierId: resolvedSupplierId, items: syncedItems };
+
     const id = `PO-${Date.now()}`;
     const date = new Date().toISOString();
 
     // Insert PO FIRST. Only mutate stock on success to avoid phantom adjustments.
     const okPO = await dbInsert('purchase_orders', {
       id, user_id: userId, organization_id: orgId, date,
-      supplier_id: po.supplierId || null, supplier_name: po.supplierName,
-      items: po.items, amount: po.amount, currency: po.currency,
+      supplier_id: poPayload.supplierId || null, supplier_name: poPayload.supplierName,
+      items: poPayload.items, amount: po.amount, currency: po.currency,
       status: 'draft', notes: po.notes || null,
     }, 'Context][PO');
     if (!okPO) return null;
 
     // Stock additions via helper ONLY (skip services)
-    for (const item of po.items) {
+    for (const item of poPayload.items) {
       const prod = products.find(p => p.id === item.id);
       if (!prod || prod.type === "service") continue;
       if (prod.stockQuantity === undefined) continue;
@@ -1096,7 +1368,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
-    setPurchaseOrders(prev => [...prev, { ...po, id, date, status: "draft" }]);
+    setPurchaseOrders(prev => [...prev, { ...poPayload, id, date, status: "draft" }]);
     incrementDocumentCount("purchaseOrders");
     return id;
   };
@@ -1172,6 +1444,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addSupplier = async (supplier: Omit<Supplier, "id">): Promise<string | null> => {
     const userId = getUserId(); const orgId = getOrgId();
     if (!guardOrg(orgId, userId)) return null;
+    if (isGuestDemo && suppliers.length >= GUEST_DEMO_LIMITS.suppliers) {
+      toast.error(guestDemoLimitMessage('suppliers', suppliers.length, GUEST_DEMO_LIMITS.suppliers));
+      return null;
+    }
 
     const id = `SUP-${Date.now()}`;
     setSuppliers(prev => [...prev, { ...supplier, id }]);
@@ -1307,13 +1583,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // ===== Misc =====
   const login = () => true;
+  const exitGuestDemo = () => {
+    clearGuestDemo();
+    userIdRef.current = null;
+    userEmailRef.current = null;
+    orgIdRef.current = null;
+    setFinanceStoreId(null);
+    setUser(null);
+    setIsLoggedIn(false);
+    setIsGuestDemo(false);
+    setOrganizations([]);
+    setClients([]);
+    setSuppliers([]);
+    setProducts([]);
+    setInvoices([]);
+    setEstimates([]);
+    setPurchaseOrders([]);
+    setReceipts([]);
+    setPayments([]);
+    setExpenses([]);
+    localStorage.removeItem('activeOrganizationId');
+  };
+  const startGuestDemo = () => {
+    clearGuestDemoData();
+    initGuestDemoSession();
+  };
   const logout = async () => {
-    await supabase.auth.signOut().catch(() => {});
+    if (isGuestDemo) {
+      exitGuestDemo();
+      return;
+    }
+    await firebaseSignOut(auth).catch(() => {});
+    if (USE_SUPABASE_LEGACY) await supabase.auth.signOut().catch(() => {});
     setUser(null); setIsLoggedIn(false); localStorage.removeItem("user");
   };
 
   const updateCompanyProfile = (companyData: Partial<Company>) => {
-    setUser(prev => prev ? { ...prev, company: { ...prev.company, ...companyData } } : prev);
+    if (isGuestDemo) {
+      setUser(prev => prev ? { ...prev, company: { ...prev.company, ...companyData } } : prev);
+      return;
+    }
+    const docPatch: Partial<FinanceDocumentSettings> = {};
+    if (companyData.primaryColor !== undefined) docPatch.primaryColor = companyData.primaryColor;
+    if (companyData.secondaryColor !== undefined) docPatch.secondaryColor = companyData.secondaryColor;
+    if (companyData.invoiceTemplate !== undefined) docPatch.invoiceTemplate = companyData.invoiceTemplate;
+    if (companyData.signature !== undefined) docPatch.signature = companyData.signature;
+
+    if (Object.keys(docPatch).length === 0) {
+      console.warn('[updateCompanyProfile] Company identity fields are edited in Grabio Admin Profile only.');
+      return;
+    }
+
+    const storeId = orgIdRef.current;
+    if (storeId) {
+      void updateFinanceDocumentSettings(storeId, docPatch).catch((err) => {
+        console.error('[updateCompanyProfile][Firestore]', err);
+        toast.error('Failed to save document settings.');
+      });
+    }
+
+    setUser(prev => prev ? { ...prev, company: { ...prev.company, ...docPatch } } : prev);
   };
 
   const addPortfolioItem = (item: Omit<PortfolioItem, "id">) => {
@@ -1353,24 +1682,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     companyFallback: user?.company,
   });
 
+  const runDocumentAction = async (
+    action: () => boolean | Promise<boolean>,
+  ): Promise<boolean> => {
+    await refreshDocumentCompany();
+    return action();
+  };
+
   // ===== Send document via email (PDF + mailto handoff) =====
   const sendInvoice = (id: string, email: string) =>
-    sendDocumentEmail("invoice", id, email, buildDocCtx());
+    runDocumentAction(() => sendDocumentEmail("invoice", id, email, buildDocCtx()));
   const sendEstimate = (id: string, email: string) =>
-    sendDocumentEmail("estimate", id, email, buildDocCtx());
+    runDocumentAction(() => sendDocumentEmail("estimate", id, email, buildDocCtx()));
   const sendReceipt = (id: string, email: string) =>
-    sendDocumentEmail("receipt", id, email, buildDocCtx());
+    runDocumentAction(() => sendDocumentEmail("receipt", id, email, buildDocCtx()));
   const sendPaymentOrder = (id: string, email: string) =>
-    sendDocumentEmail("paymentOrder", id, email, buildDocCtx());
+    runDocumentAction(() => sendDocumentEmail("paymentOrder", id, email, buildDocCtx()));
   const sendPurchaseOrder = (id: string, email: string) =>
-    sendDocumentEmail("purchaseOrder", id, email, buildDocCtx());
+    runDocumentAction(() => sendDocumentEmail("purchaseOrder", id, email, buildDocCtx()));
 
   // ===== Export PDF (delegates to documentLogic.generatePDF) =====
-  const exportInvoiceAsPdf = (id: string) => generatePDF("invoice", id, buildDocCtx());
-  const exportEstimateAsPdf = (id: string) => generatePDF("estimate", id, buildDocCtx());
-  const exportReceiptAsPdf = (id: string) => generatePDF("receipt", id, buildDocCtx());
-  const exportPaymentOrderAsPdf = (id: string) => generatePDF("paymentOrder", id, buildDocCtx());
-  const exportPurchaseOrderAsPdf = (id: string) => generatePDF("purchaseOrder", id, buildDocCtx());
+  const exportInvoiceAsPdf = (id: string) =>
+    runDocumentAction(() => generatePDF("invoice", id, buildDocCtx()));
+  const exportEstimateAsPdf = (id: string) =>
+    runDocumentAction(() => generatePDF("estimate", id, buildDocCtx()));
+  const exportReceiptAsPdf = (id: string) =>
+    runDocumentAction(() => generatePDF("receipt", id, buildDocCtx()));
+  const exportPaymentOrderAsPdf = (id: string) =>
+    runDocumentAction(() => generatePDF("paymentOrder", id, buildDocCtx()));
+  const exportPurchaseOrderAsPdf = (id: string) =>
+    runDocumentAction(() => generatePDF("purchaseOrder", id, buildDocCtx()));
+
+  const getDocumentPdfFile = (documentType: DocumentType, documentId: string): Promise<File | null> =>
+    generatePdfFile(documentType, documentId, buildDocCtx());
 
   const updateSettings = (settings: any) => console.log("Settings updated:", settings);
 
@@ -1610,12 +1954,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const value: AppContextType = {
     user, invoices, receipts, estimates, clients, suppliers, products,
     portfolioItems, paymentOrders, purchaseOrders, payments, expenses,
-    isLoggedIn, isDarkMode,
+    isLoggedIn, isGuestDemo, isDarkMode,
     activeOrganizationId, organizations, setActiveOrganizationId,
     currentUserRole, inviteUserToOrg, listOrgMembers, removeOrgMember,
     updateMemberRole, updateOrgPlan, hasPermission,
     financialSummary, accountingSummary,
-    login, logout, createInvoice, createEstimate, convertEstimateToInvoice,
+    login, logout, startGuestDemo, exitGuestDemo, createInvoice, createEstimate, convertEstimateToInvoice,
     createReceipt, createPaymentOrder, createPurchaseOrder,
     updateCompanyProfile, addClient, addSupplier, addProduct, updateProduct, deleteProduct,
     deleteClient, updateClient, deleteSupplier, updateSupplier,
@@ -1626,8 +1970,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     previewInvoice, previewEstimate, previewReceipt, previewPaymentOrder, previewPurchaseOrder,
     sendInvoice, sendEstimate, sendReceipt, sendPaymentOrder, sendPurchaseOrder,
     exportInvoiceAsPdf, exportEstimateAsPdf, exportReceiptAsPdf,
-    exportPaymentOrderAsPdf, exportPurchaseOrderAsPdf,
-    updateSettings, checkLimit, getCurrentMonthKey,
+    exportPaymentOrderAsPdf, exportPurchaseOrderAsPdf, getDocumentPdfFile,
+    updateSettings, reloadStoreProfile, refreshDocumentCompany, checkLimit, getCurrentMonthKey,
     calculateComposedProductCost: calculateComposedProductCostFn,
     generateInvoiceDraftFromProject,
     retryFailedTimesheets,
@@ -1635,6 +1979,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   if (!authReady) {
+    if (embedded) {
+      return <div className="py-8 text-center text-sm text-muted-foreground">Loading finance data…</div>;
+    }
     return <div className="min-h-screen flex items-center justify-center"><p>Loading...</p></div>;
   }
 

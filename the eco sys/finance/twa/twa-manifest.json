@@ -1,0 +1,65 @@
+{
+  "packageId": "space.grabio.finance",
+  "host": "grabio.space",
+  "name": "Grabio Invoice Manager",
+  "launcherName": "Grabio Invoice",
+  "display": "standalone",
+  "themeColor": "#38B2AC",
+  "themeColorDark": "#000000",
+  "navigationColor": "#38B2AC",
+  "navigationColorDark": "#2C9A94",
+  "navigationDividerColor": "#38B2AC",
+  "navigationDividerColorDark": "#2C9A94",
+  "backgroundColor": "#FFFFFF",
+  "enableNotifications": false,
+  "startUrl": "/invoice/?source=grabio-finance-app",
+  "iconUrl": "https://grabio.space/invoice/icon-512.png",
+  "maskableIconUrl": "https://grabio.space/invoice/icon-512.png",
+  "monochromeIconUrl": "https://grabio.space/invoice/icon-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "./grabio-finance-release.keystore",
+    "alias": "grabio-finance"
+  },
+  "appVersionName": "1.2.4",
+  "appVersionCode": 8,
+  "shortcuts": [
+    {
+      "name": "Create Invoice",
+      "shortName": "Invoice",
+      "url": "/invoice/invoices?source=grabio-finance-app",
+      "chosenIconUrl": "https://grabio.space/invoice/icon-192.png"
+    },
+    {
+      "name": "Reports",
+      "shortName": "Reports",
+      "url": "/invoice/reports?source=grabio-finance-app",
+      "chosenIconUrl": "https://grabio.space/invoice/icon-192.png"
+    }
+  ],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://grabio.space/invoice/manifest.json",
+  "fallbackType": "webview",
+  "features": {
+    "locationDelegation": {
+      "enabled": false
+    }
+  },
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": false,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "minSdkVersion": 21,
+  "orientation": "default",
+  "fingerprints": [
+    "6D:B2:E1:18:95:F4:BC:8D:3C:0A:39:E7:CE:3A:9E:AF:15:78:78:04:4C:E4:9D:B1:D5:E6:57:E9:DE:D7:54:73",
+    "76:AA:40:1F:B3:CD:67:1B:A4:FB:D8:4C:DE:F0:9B:B1:D8:91:2D:03:0D:F9:F1:25:D2:2A:03:FE:0C:43:ED:4C",
+    "0F:49:2F:0D:43:02:47:20:25:8B:1E:9E:30:6C:C5:9D:29:1C:BA:F1:F4:EE:7F:8B:28:B8:CA:62:4B:BE:0F:82"
+  ],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": [],
+  "displayOverride": [],
+  "appVersion": "1.2.4"
+}

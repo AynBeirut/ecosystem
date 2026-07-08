@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sun, Moon, LogOut, Mail } from "lucide-react";
 import DataImportDialog from "@/components/DataImportDialog";
 import SimImportDialog from "@/components/SimImportDialog";
+import { BRAND } from "@/lib/branding";
 
 const Settings = () => {
   const { user, isDarkMode, toggleDarkMode, logout } = useAppContext();
@@ -110,6 +111,22 @@ const Settings = () => {
           </TabsList>
           
           <TabsContent value="general" className="space-y-4 mt-6">
+            <Card>
+              <CardHeader>
+                <CardTitle>Company &amp; invoice branding</CardTitle>
+                <CardDescription>
+                  Store name, logo, email, website, and invoice template are managed in Grabio Admin.
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <a
+                  href={`${BRAND.ecosystemUrl}/admin/profile`}
+                  className="inline-flex items-center text-sm font-medium text-[#38B2AC] hover:underline"
+                >
+                  Open Business &amp; Invoice Settings in Grabio Admin →
+                </a>
+              </CardContent>
+            </Card>
             <Card>
               <CardHeader>
                 <CardTitle>Theme</CardTitle>
@@ -310,10 +327,16 @@ const Settings = () => {
                     />
                   </div>
                 </div>
+                <p className="text-sm text-muted-foreground pt-2">
+                  <a href={BRAND.privacyUrl} target="_blank" rel="noopener noreferrer" className="text-[#38B2AC] hover:underline">
+                    Privacy Policy
+                  </a>
+                  {' '}— how Grabio handles your data.
+                </p>
               </CardContent>
             </Card>
           </TabsContent>
-          
+
           <TabsContent value="support" className="space-y-4 mt-6">
             <Card>
               <CardHeader>
@@ -324,8 +347,8 @@ const Settings = () => {
                 <div className="flex flex-col items-start space-y-4">
                   <p>Having issues or questions?</p>
                   
-                  <a href="mailto:dev@aynbeirut.com">
-                    <Button className="bg-indigo-600 hover:bg-indigo-700">
+                  <a href={`mailto:${BRAND.supportEmail}`}>
+                    <Button className="bg-[#38B2AC] hover:bg-[#2C9A94] text-white">
                       <Mail className="mr-2 h-4 w-4" />
                       Email our support team
                     </Button>

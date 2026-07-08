@@ -2,6 +2,11 @@ import { defineConfig } from "vite";
 import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
+import { financeInternalAlias } from "./src/vite-finance-alias";
+
+const financeSrcPath = path.resolve(__dirname, "the eco sys/finance/beirut-finance-flow-main/src");
+const mainSrcPath = path.resolve(__dirname, "src");
+const rootNodeModules = path.resolve(__dirname, "node_modules");
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => ({
@@ -35,12 +40,25 @@ export default defineConfig(({ mode }) => ({
   },
   plugins: [
     react(),
+    financeInternalAlias(financeSrcPath, mainSrcPath),
     mode === 'development' &&
     componentTagger(),
   ].filter(Boolean),
   resolve: {
+    dedupe: [
+      "react",
+      "react-dom",
+      "react-router",
+      "react-router-dom",
+      "@tanstack/react-query",
+    ],
     alias: {
-      "@": path.resolve(__dirname, "./src"),
+      react: path.resolve(rootNodeModules, "react"),
+      "react-dom": path.resolve(rootNodeModules, "react-dom"),
+      "react/jsx-runtime": path.resolve(rootNodeModules, "react/jsx-runtime"),
+      "react/jsx-dev-runtime": path.resolve(rootNodeModules, "react/jsx-dev-runtime"),
+      "react-router": path.resolve(rootNodeModules, "react-router"),
+      "react-router-dom": path.resolve(rootNodeModules, "react-router-dom"),
     },
   },
 }));

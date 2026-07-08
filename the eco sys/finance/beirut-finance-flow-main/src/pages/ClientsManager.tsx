@@ -3,7 +3,7 @@ import { useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import AppLayout from "@/components/AppLayout";
+import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -95,7 +95,7 @@ const ClientsManager = () => {
   };
 
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
@@ -103,7 +103,7 @@ const ClientsManager = () => {
             <p className="text-muted-foreground">Add and manage your clients</p>
           </div>
           <Button 
-            className="mt-4 sm:mt-0"
+            className="mt-4 sm:mt-0 w-full sm:w-auto"
             onClick={() => setActiveTab("add")}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -112,16 +112,15 @@ const ClientsManager = () => {
         </div>
 
         <Card>
-          <CardHeader>
-            <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
+          <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
+            <CardHeader>
+              <TabsList className="grid w-full grid-cols-2 gap-2 h-auto sm:flex sm:w-auto">
                 <TabsTrigger value="list">Client List</TabsTrigger>
                 <TabsTrigger value="add">Add Client</TabsTrigger>
                 {selectedClient && <TabsTrigger value="statement">Account Statement</TabsTrigger>}
               </TabsList>
-            </Tabs>
-          </CardHeader>
-          <CardContent>
+            </CardHeader>
+            <CardContent>
             <TabsContent value="list">
               {clients.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
@@ -144,13 +143,13 @@ const ClientsManager = () => {
                     return (
                       <div
                         key={client.id}
-                        className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
+                        className="flex flex-col sm:flex-row cursor-pointer sm:items-center justify-between gap-4 rounded-lg border p-4 hover:bg-muted/50 transition-colors"
                         onClick={() => {
                           setSelectedClientId(client.id);
                           setActiveTab("statement");
                         }}
                       >
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-4 w-full sm:w-auto">
                           <div className="rounded-full bg-secondary p-2">
                             <Building2 className="h-5 w-5 text-secondary-foreground" />
                           </div>
@@ -162,7 +161,7 @@ const ClientsManager = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-start sm:items-center gap-4 w-full sm:w-auto justify-between sm:justify-start">
                           <div className="text-right">
                             <p className="text-sm text-muted-foreground">Outstanding</p>
                             <p className="font-bold">{formatCurrency(outstanding, "USD")}</p>
@@ -285,10 +284,11 @@ const ClientsManager = () => {
                 </div>
               )}
             </TabsContent>
-          </CardContent>
+            </CardContent>
+          </Tabs>
         </Card>
       </div>
-    </AppLayout>
+    </FinancePageShell>
   );
 };
 

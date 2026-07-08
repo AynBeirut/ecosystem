@@ -7,7 +7,7 @@ Demo stores live **only** under the builder path. They must never appear in prod
 ```
 builders/{builderUid}
   businessType: 'designer' | 'media_company' | ...
-  demoSlotCount: number          // max 5 active demos
+  demoSlotCount: number          // max 2 active demos
   grantedExtras?: string[]       // admin-granted module ids (Phase 3 UI)
   createdAt, updatedAt
 

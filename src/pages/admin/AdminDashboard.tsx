@@ -28,9 +28,12 @@ import {
   ChevronDown,
   Settings2,
   Layers,
+  Receipt,
   LayoutGrid
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
+import { auth } from '@/lib/firebase';
+import { waitForAuthToken } from '@/lib/waitForAuthToken';
 import { fetchUsdToLbpRateFresh, getUsdToLbpRate, formatLbp } from '@/lib/currency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -38,6 +41,8 @@ import { isCountedSaleStatus } from '@/lib/salesRules';
 import type { StoreProfile } from '@/types/storeProfile';
 import { requestNotificationPermission, saveFcmToken } from '@/lib/notifications';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import { canUseInvoiceManagerApp } from '@/lib/entitlements';
+import { INVOICE_MANAGER_EMBED_URL } from '@/lib/invoiceApp';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
@@ -64,20 +69,30 @@ type QuickActionStoragePayload = {
 
 const MAX_QUICK_ACTIONS = 12;
 const DEFAULT_QUICK_ACTION_IDS = [
+  'invoice-manager',
   'customers',
-  'sales-crm',
-  'inventory',
   'orders',
+  'inventory',
+  'payments',
   'account-statement',
   'cash-collection',
-  'service-renewals',
-  'marketplace-sync',
-  'product-reviews',
-  'notification-logs',
-  'store-logs',
   'delivery',
   'announcements',
   'analytics',
+  'products',
+  'purchases',
+];
+
+/** Mobile home — finance-first; hide SEO/marketing/sync from defaults. */
+const MOBILE_DEFAULT_QUICK_ACTION_IDS = [
+  'invoice-manager',
+  'customers',
+  'orders',
+  'inventory',
+  'payments',
+  'delivery',
+  'announcements',
+  'products',
 ];
 
 const QUICK_ACTION_GRADIENTS: Record<string, string> = {
@@ -90,6 +105,7 @@ const QUICK_ACTION_GRADIENTS: Record<string, string> = {
   payments: 'from-amber-500 to-orange-600',
   'account-statement': 'from-slate-600 to-slate-800',
   'cash-collection': 'from-green-500 to-emerald-700',
+  'invoice-manager': 'from-teal-500 to-cyan-700',
   finance: 'from-cyan-500 to-blue-700',
   staff: 'from-pink-500 to-rose-700',
   'sub-accounts': 'from-fuchsia-500 to-purple-700',
@@ -147,6 +163,21 @@ const AdminDashboard: React.FC = () => {
   const [showQuickActionManager, setShowQuickActionManager] = useState(false);
   const [quickActionsLoaded, setQuickActionsLoaded] = useState(false);
   const [quickActionToAdd, setQuickActionToAdd] = useState('');
+  const [firestoreReady, setFirestoreReady] = useState(false);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setFirestoreReady(false);
+      return;
+    }
+    let cancelled = false;
+    void waitForAuthToken().then((firebaseUser) => {
+      if (!cancelled) setFirestoreReady(Boolean(firebaseUser));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
 
   const syncAutoRateForStore = async (actualStoreId: string) => {
     setSyncingAutoRate(true);
@@ -204,8 +235,9 @@ const AdminDashboard: React.FC = () => {
   const canViewReports = user?.role === 'admin' || user?.permissions?.includes('view_reports');
   const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
   const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
-  const { canUse: canUseModule } = useStoreEntitlements();
+  const { canUse: canUseModule, profile } = useStoreEntitlements();
   const crmEnabled = user?.role === 'admin' && canUseModule('crm');
+  const invoiceManagerEnabled = user?.role === 'admin' && canUseInvoiceManagerApp(profile);
   const moduleVisible = (moduleId: string) =>
     !ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule(moduleId);
 
@@ -216,10 +248,11 @@ const AdminDashboard: React.FC = () => {
   }, [user]);
 
   const quickActionPreferenceRef = useMemo(() => {
-    if (!user?.id) return null;
+    const uid = auth.currentUser?.uid || user?.id;
+    if (!uid) return null;
     const db = getFirestore();
-    return doc(db, 'users', user.id);
-  }, [user?.id]);
+    return doc(db, 'users', uid);
+  }, [user?.id, firestoreReady]);
 
   const quickActionItems = useMemo<QuickActionItem[]>(() => [
     {
@@ -241,13 +274,22 @@ const AdminDashboard: React.FC = () => {
       visible: crmEnabled,
     },
     { id: 'payments', to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: canProcessPayments },
+    {
+      id: 'invoice-manager',
+      to: INVOICE_MANAGER_EMBED_URL,
+      label: 'Invoice Manager',
+      icon: Receipt,
+      visible: canUseModule('invoicing') || canUseModule('invoice_manager'),
+    },
     { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
     { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
     { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
     { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
     { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' && moduleVisible('team') },
     { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
-    { id: 'templates', to: '/admin/templates', label: 'Templates & Store Logos', icon: Palette, visible: user?.role === 'admin' },
+    { id: 'builder', to: '/admin/builder', label: 'Store Builder', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
+    { id: 'theme-editor', to: '/admin/theme-editor', label: 'Theme Editor', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
+    { id: 'templates', to: '/admin/templates', label: 'Classic Templates', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
     { id: 'marketing', to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
     { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
     { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
@@ -273,12 +315,14 @@ const AdminDashboard: React.FC = () => {
 
   const defaultQuickActionIds = useMemo(() => {
     const visibleIds = visibleQuickActionItems.map((item) => item.id);
-    const preferred = DEFAULT_QUICK_ACTION_IDS.filter((id) => visibleIds.includes(id));
+    const preferredSource = isMobile ? MOBILE_DEFAULT_QUICK_ACTION_IDS : DEFAULT_QUICK_ACTION_IDS;
+    const preferred = preferredSource.filter((id) => visibleIds.includes(id));
     const fallback = visibleIds.filter((id) => !preferred.includes(id));
     return [...preferred, ...fallback].slice(0, MAX_QUICK_ACTIONS);
-  }, [visibleQuickActionItems]);
+  }, [isMobile, visibleQuickActionItems]);
 
   useEffect(() => {
+    if (!firestoreReady) return;
     const sanitizeCustomActions = (items: unknown): QuickActionItem[] => {
       if (!Array.isArray(items)) return [];
       return items.filter((item): item is QuickActionItem => {
@@ -340,9 +384,32 @@ const AdminDashboard: React.FC = () => {
         localCustomActions = [];
       }
 
-      const mergedCustomActions = serverCustomActions.length > 0 ? serverCustomActions : localCustomActions;
+      let serverUpdatedAt = '';
+      let localUpdatedAt = '';
+      try {
+        if (quickActionPreferenceRef) {
+          const prefSnap2 = await getDoc(quickActionPreferenceRef);
+          if (prefSnap2.exists()) {
+            serverUpdatedAt = (prefSnap2.data() as any)?.dashboardQuickActions?.updatedAt || (prefSnap2.data() as any)?.dashboardQuickActionsUpdatedAt || '';
+          }
+        }
+      } catch { /* ignore */ }
+      try {
+        const rawLocal = localStorage.getItem(quickActionStorageKey);
+        if (rawLocal) {
+          const parsedLocal = JSON.parse(rawLocal);
+          localUpdatedAt = parsedLocal?.updatedAt || '';
+        }
+      } catch { /* ignore */ }
+
+      const useLocal = localUpdatedAt && (!serverUpdatedAt || localUpdatedAt > serverUpdatedAt);
+      const preferredIds = useLocal
+        ? (localIds.length > 0 ? localIds : serverIds)
+        : (serverIds.length > 0 ? serverIds : localIds);
+      const mergedCustomActions = useLocal
+        ? (localCustomActions.length > 0 ? localCustomActions : serverCustomActions)
+        : (serverCustomActions.length > 0 ? serverCustomActions : localCustomActions);
       const customIds = mergedCustomActions.map((item) => item.id);
-      const preferredIds = serverIds.length > 0 ? serverIds : localIds;
       const sanitizedIds = preferredIds
         .filter((id) => visibleIds.includes(id) || customIds.includes(id))
         .slice(0, MAX_QUICK_ACTIONS);
@@ -353,20 +420,22 @@ const AdminDashboard: React.FC = () => {
     };
 
     void loadQuickActionPreferences();
-  }, [defaultQuickActionIds, quickActionPreferenceRef, quickActionStorageKey, visibleQuickActionItems]);
+  }, [defaultQuickActionIds, firestoreReady, quickActionPreferenceRef, quickActionStorageKey, visibleQuickActionItems]);
 
   useEffect(() => {
     if (!quickActionsLoaded) return;
+    const now = new Date().toISOString();
     const payload: QuickActionStoragePayload = {
       selectedQuickActionIds: selectedQuickActionIds.slice(0, MAX_QUICK_ACTIONS),
       customQuickActions: customQuickActions.map((item) => ({ ...item, icon: Layers, visible: true })),
     };
-    localStorage.setItem(quickActionStorageKey, JSON.stringify(payload));
+    const localWrapper = { ...payload, updatedAt: now };
+    localStorage.setItem(quickActionStorageKey, JSON.stringify(localWrapper));
 
     if (!quickActionPreferenceRef) return;
-    void setDoc(quickActionPreferenceRef, {
-      dashboardQuickActions: payload,
-      dashboardQuickActionsUpdatedAt: new Date().toISOString(),
+    setDoc(quickActionPreferenceRef, {
+      dashboardQuickActions: { ...payload, updatedAt: now },
+      dashboardQuickActionsUpdatedAt: now,
     }, { merge: true }).catch((error) => {
       console.warn('Failed to save quick action preferences to Firestore', error);
     });
@@ -463,8 +532,10 @@ const AdminDashboard: React.FC = () => {
         title: 'Profile & Store Setup',
         items: [
           { to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
+          { to: '/admin/builder', label: 'Store Builder', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
+          { to: '/admin/theme-editor', label: 'Theme Editor', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
           { to: '/admin/payments', label: 'Payment Settings', icon: CreditCard, visible: user?.role === 'admin' && canProcessPayments },
-          { to: '/admin/templates', label: 'Templates & Store Logos', icon: Palette, visible: user?.role === 'admin' },
+          { to: '/admin/templates', label: 'Classic Templates', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
           { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
           { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
@@ -476,6 +547,12 @@ const AdminDashboard: React.FC = () => {
         title: 'Business Tools',
         items: [
           { to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
+          {
+            to: INVOICE_MANAGER_EMBED_URL,
+            label: 'Invoice Manager',
+            icon: Receipt,
+            visible: invoiceManagerEnabled,
+          },
           { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
           { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
           { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
@@ -507,18 +584,9 @@ const AdminDashboard: React.FC = () => {
   // Mount/unmount instrumentation removed after verification.
 
   useEffect(() => {
+    if (!firestoreReady || !user?.id) return;
+
     const fetchStats = async () => {
-      if (!user?.id) {
-        // No authenticated store user yet; clear stats and exit early.
-        setStore(null);
-        setProductCount(0);
-        setOrderCount(0);
-        setRevenue(0);
-        setQuarantinedRevenueOrders(0);
-        setCustomerCount(0);
-        setRecentEvents([]);
-        return;
-      }
       try {
         const db = getFirestore();
         // Use storeId for sub-accounts, user.id for regular admins
@@ -655,7 +723,7 @@ const AdminDashboard: React.FC = () => {
       }
     };
     fetchStats();
-  }, [user]);
+  }, [user, firestoreReady]);
 
   // credits toggle removed
 

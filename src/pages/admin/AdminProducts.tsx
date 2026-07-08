@@ -24,12 +24,21 @@ import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import ClampedText, {
+  FORM_DIALOG_BODY,
+  FORM_DIALOG_FOOTER,
+  FORM_DIALOG_HEADER,
+  FORM_DIALOG_SHELL,
+  FORM_FILE_BUTTON_CLASS,
+  SelectedFileLabel,
+} from '@/components/ClampedText';
 import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { generateUniqueSlug } from '@/lib/slugify';
 import { assertCanCreateProduct, assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
+import { waitForAuthToken } from '@/lib/waitForAuthToken';
 
 const DEFAULT_PRODUCT_CATEGORIES = [
   'Electronics',
@@ -64,6 +73,22 @@ const AdminProducts: React.FC = () => {
     minimumServiceDurationMinutes: 0,
     defaultRenewalReminderDays: 7,
   });
+  const [firestoreReady, setFirestoreReady] = useState(false);
+  const storeId = getActualStoreId(user);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setFirestoreReady(false);
+      return;
+    }
+    let cancelled = false;
+    void waitForAuthToken().then((firebaseUser) => {
+      if (!cancelled) setFirestoreReady(Boolean(firebaseUser));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
   
   // Check if user has permission to manage inventory
   const canManageInventory = user?.role === 'admin' || 
@@ -127,15 +152,21 @@ const AdminProducts: React.FC = () => {
       inStock: numericStock > 0,
     };
   };
-  // Load products from Firestore on mount and when user changes
+  // Load products from Firestore once auth token is ready for secured collections
   useEffect(() => {
-    const db = getFirestore();
-    const fetchProducts = async () => {
-      if (!user?.storeId) return setProducts([]);
+    if (!firestoreReady) return;
+    if (!storeId) {
+      setProducts([]);
+      return;
+    }
 
+    const db = getFirestore();
+    let cancelled = false;
+
+    const fetchProducts = async () => {
       // Fetch categories from store profile (storeId first, then user.id fallback)
       try {
-        const profileDocIds = Array.from(new Set([user.storeId, user.id].filter(Boolean)));
+        const profileDocIds = Array.from(new Set([storeId, user?.id].filter(Boolean)));
         let loadedCategories: string[] = [];
 
         for (const profileDocId of profileDocIds) {
@@ -181,43 +212,64 @@ const AdminProducts: React.FC = () => {
         console.warn('Failed to load profile categories for products, using defaults:', error);
         setCategories(DEFAULT_PRODUCT_CATEGORIES);
       }
-      
-      // Fetch products
-      const productsRef = collection(db, 'products');
-      const q = query(productsRef, where('storeId', '==', user.storeId));
-      const snapshot = await getDocs(q);
-      const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-      setProducts(productsList);
-      
-      // Fetch finished goods stock for composed products
-      const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
-      const fgQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
-      const fgSnapshot = await getDocs(fgQuery);
-      const stockMap: Record<string, number> = {};
-      fgSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.productId && typeof data.currentBalance === 'number') {
-          stockMap[data.productId] = data.currentBalance;
+
+      try {
+        // Fetch products
+        const productsRef = collection(db, 'products');
+        const q = query(productsRef, where('storeId', '==', storeId));
+        const snapshot = await getDocs(q);
+        if (cancelled) return;
+        const productsList: Product[] = snapshot.docs.map((productDoc) => ({
+          id: productDoc.id,
+          ...productDoc.data(),
+        } as Product));
+        setProducts(productsList);
+
+        // Fetch finished goods stock for composed products
+        const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
+        const fgQuery = query(finishedGoodsRef, where('storeId', '==', storeId));
+        const fgSnapshot = await getDocs(fgQuery);
+        if (cancelled) return;
+        const stockMap: Record<string, number> = {};
+        fgSnapshot.docs.forEach((fgDoc) => {
+          const data = fgDoc.data();
+          if (data.productId && typeof data.currentBalance === 'number') {
+            stockMap[data.productId] = data.currentBalance;
+          }
+        });
+        setFinishedGoodsStock(stockMap);
+
+        // Fetch recipes for composed products
+        const recipesRef = collection(db, 'recipes');
+        const recipesQuery = query(recipesRef, where('storeId', '==', storeId));
+        const recipesSnapshot = await getDocs(recipesQuery);
+        if (cancelled) return;
+        const recipesList = recipesSnapshot.docs.map((recipeDoc) => ({
+          id: recipeDoc.id,
+          ...recipeDoc.data(),
+        }));
+        setRecipes(recipesList);
+      } catch (error) {
+        console.error('[AdminProducts] Failed to load products:', error);
+        if (!cancelled) {
+          setProducts([]);
+          setFinishedGoodsStock({});
+          setRecipes([]);
         }
-      });
-      setFinishedGoodsStock(stockMap);
-      
-      // Fetch recipes for composed products
-      const recipesRef = collection(db, 'recipes');
-      const recipesQuery = query(recipesRef, where('storeId', '==', user.storeId));
-      const recipesSnapshot = await getDocs(recipesQuery);
-      const recipesList = recipesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRecipes(recipesList);
+      }
     };
-    fetchProducts();
-  }, [user?.storeId, user?.id]);
+
+    void fetchProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [firestoreReady, storeId, user?.id]);
 
   const categoryOptions = Array.from(new Set([
     ...categories,
     ...(newProduct.category ? [newProduct.category] : []),
   ].map((category) => (typeof category === 'string' ? category.trim() : '')).filter((category) => category.length > 0)));
   const handleSyncSupplier = async (product: Product) => {
-    const storeId = getActualStoreId(user) || user?.storeId;
     if (!storeId) {
       toast({ title: 'Error', description: 'Store not found', variant: 'destructive' });
       return;
@@ -275,22 +327,43 @@ const AdminProducts: React.FC = () => {
     }
   };
 
+  const parseProductPrice = (rawPrice: string | number): number | null => {
+    const priceText = String(rawPrice ?? '').trim();
+    if (!priceText) return null;
+    const parsed = Number(priceText);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const handleAddProduct = async () => {
     if (isSaving) return;
     setIsSaving(true);
     const db = getFirestore();
-    if (!newProduct.name || !newProduct.price) {
-      toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
+    const parsedPrice = parseProductPrice(newProduct.price);
+    if (!newProduct.name.trim() || parsedPrice === null) {
+      toast({ title: "Error", description: "Please enter a product name and valid price", variant: "destructive" });
       setIsSaving(false);
       return;
     }
-    if (!user?.storeId) {
+    if (!storeId) {
       toast({
         title: "Error",
         description: "Your store is not set up correctly. Please refresh the page or contact support.",
         variant: "destructive"
       });
-      console.warn("Attempted to add product but user.storeId is missing! User:", user);
+      console.warn("Attempted to add product but storeId is missing! User:", user);
+      setIsSaving(false);
+      return;
+    }
+
+    try {
+      await waitForAuthToken();
+    } catch (authErr) {
+      console.error('[AdminProducts] Auth token not ready:', authErr);
+      toast({
+        title: 'Error',
+        description: 'Sign-in is still loading. Please wait a moment and try again.',
+        variant: 'destructive',
+      });
       setIsSaving(false);
       return;
     }
@@ -334,7 +407,7 @@ const AdminProducts: React.FC = () => {
     }
 
     try {
-      await assertCanCreateProduct(db, user.storeId, newProduct.productType);
+      await assertCanCreateProduct(db, storeId, newProduct.productType);
     } catch (error) {
       toast({
         title: 'Plan Limit Reached',
@@ -349,7 +422,7 @@ const AdminProducts: React.FC = () => {
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
-        await assertCanUploadBytes(db, user.storeId, newProduct.imageFile.size);
+        await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
         await new Promise<void>((resolve, reject) => {
@@ -361,7 +434,7 @@ const AdminProducts: React.FC = () => {
           );
         });
         imageUrl = await getDownloadURL(imageRef);
-        await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
+        await trackStorageUsageAfterUpload(db, storeId, newProduct.imageFile.size);
       } catch (error) {
         console.error('Image upload failed:', error);
         toast({ title: "Error", description: `Image upload failed: ${error.message || 'Unknown error'}`, variant: "destructive" });
@@ -394,12 +467,12 @@ const AdminProducts: React.FC = () => {
       const productData = {
         name: newProduct.name,
         description: newProduct.description,
-        price: parseFloat(newProduct.price),
+        price: parsedPrice,
         category: newProduct.category,
         deliveryTime: newProduct.deliveryTime || '3-5 days',
         image: imageUrl || `https://placehold.co/400x300/38B2AC/fff?text=${encodeURIComponent(newProduct.name)}`,
         imageAlt: String(newProduct.imageAlt || newProduct.name || '').trim(),
-        storeId: user?.storeId || '',
+        storeId: storeId,
         slug: productSlug,
         ...getStockPayload(newProduct.productType, 0),
         rating: 0,
@@ -426,16 +499,17 @@ const AdminProducts: React.FC = () => {
       const cleanProductData = Object.fromEntries(
         Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])
       );
-  const docRef = await addDoc(collection(db, 'products'), cleanProductData);
+      const docRef = await addDoc(collection(db, 'products'), cleanProductData);
+      setProducts((prev) => [...prev, { id: docRef.id, ...(cleanProductData as Product) }]);
 
       if (
         newProduct.dropshipEnabled &&
         newProduct.supplierProductUrl.trim() &&
         newProduct.supplierPlatform === 'shein' &&
-        user?.storeId
+        storeId
       ) {
         try {
-          await syncDropshipProduct(user.storeId, docRef.id);
+          await syncDropshipProduct(storeId, docRef.id);
         } catch (syncErr) {
           console.warn('Initial Shein sync failed after create', syncErr);
           toast({
@@ -448,7 +522,7 @@ const AdminProducts: React.FC = () => {
       
       // Refetch products to get complete data
       const productsRef = collection(db, 'products');
-      const q = query(productsRef, where('storeId', '==', user.storeId));
+      const q = query(productsRef, where('storeId', '==', storeId));
       const snapshot = await getDocs(q);
       const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
       setProducts(productsList);
@@ -517,8 +591,29 @@ const AdminProducts: React.FC = () => {
   const handleUpdateProduct = async () => {
     if (isSaving) return;
     const db = getFirestore();
-    if (!editingProduct || !newProduct.name || !newProduct.price) {
+    const parsedPrice = parseProductPrice(newProduct.price);
+    if (!editingProduct || !newProduct.name.trim() || parsedPrice === null) {
       toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
+      return;
+    }
+    if (!storeId) {
+      toast({
+        title: "Error",
+        description: "Your store is not set up correctly. Please refresh the page or contact support.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await waitForAuthToken();
+    } catch (authErr) {
+      console.error('[AdminProducts] Auth token not ready:', authErr);
+      toast({
+        title: 'Error',
+        description: 'Sign-in is still loading. Please wait a moment and try again.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -549,7 +644,7 @@ const AdminProducts: React.FC = () => {
       // Check for active production batches
       const batchesRef = collection(db, 'productionBatches');
       const batchesQuery = query(batchesRef, 
-        where('storeId', '==', user.storeId),
+        where('storeId', '==', storeId),
         where('productId', '==', editingProduct.id),
         where('status', 'in', ['pending', 'in-progress'])
       );
@@ -565,9 +660,9 @@ const AdminProducts: React.FC = () => {
       }
     }
 
-    if (editingProduct.productType !== 'composed' && newProduct.productType === 'composed' && user?.storeId) {
+    if (editingProduct.productType !== 'composed' && newProduct.productType === 'composed' && storeId) {
       try {
-        await assertCanCreateProduct(db, user.storeId, 'composed');
+        await assertCanCreateProduct(db, storeId, 'composed');
       } catch (error) {
         toast({
           title: 'Plan Limit Reached',
@@ -599,8 +694,8 @@ const AdminProducts: React.FC = () => {
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
-        if (user?.storeId) {
-          await assertCanUploadBytes(db, user.storeId, newProduct.imageFile.size);
+        if (storeId) {
+          await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
         }
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
@@ -613,8 +708,8 @@ const AdminProducts: React.FC = () => {
           );
         });
         imageUrl = await getDownloadURL(imageRef);
-        if (user?.storeId) {
-          await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
+        if (storeId) {
+          await trackStorageUsageAfterUpload(db, storeId, newProduct.imageFile.size);
         }
       } catch {
         toast({ title: "Error", description: "Image upload failed.", variant: "destructive" });
@@ -639,7 +734,7 @@ const AdminProducts: React.FC = () => {
       const updatedProduct = {
         name: newProduct.name,
         description: newProduct.description,
-        price: parseFloat(newProduct.price),
+        price: parsedPrice,
         category: newProduct.category,
         deliveryTime: newProduct.deliveryTime,
         image: resolvedImage,
@@ -679,9 +774,9 @@ const AdminProducts: React.FC = () => {
       );
   await updateDoc(doc(db, 'products', editingProduct.id), cleanUpdatedProduct);
 
-      if (hasDropshipLink && newProduct.supplierPlatform === 'shein' && user?.storeId) {
+      if (hasDropshipLink && newProduct.supplierPlatform === 'shein' && storeId) {
         try {
-          await syncDropshipProduct(user.storeId, editingProduct.id);
+          await syncDropshipProduct(storeId, editingProduct.id);
         } catch (syncErr) {
           console.warn('Shein sync failed after update', syncErr);
           toast({
@@ -696,7 +791,7 @@ const AdminProducts: React.FC = () => {
       if (newProduct.productType === 'composed' && newProduct.recipeId) {
         const composedRef = collection(db, 'composedProducts');
         const composedQuery = query(composedRef, 
-          where('storeId', '==', user.storeId),
+          where('storeId', '==', storeId),
           where('productId', '==', editingProduct.id)
         );
         const composedSnapshot = await getDocs(composedQuery);
@@ -712,9 +807,9 @@ const AdminProducts: React.FC = () => {
         }
       }
       
-      if (user?.storeId) {
+      if (storeId) {
         const productsRef = collection(db, 'products');
-        const q = query(productsRef, where('storeId', '==', user.storeId));
+        const q = query(productsRef, where('storeId', '==', storeId));
         const snapshot = await getDocs(q);
         setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
       }
@@ -757,15 +852,16 @@ const AdminProducts: React.FC = () => {
                 Add Product
               </Button>
             </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+              <DialogContent className={FORM_DIALOG_SHELL}>
+                <DialogHeader className={FORM_DIALOG_HEADER}>
                   <DialogTitle>Add New Product</DialogTitle>
                   <DialogDescription className="text-xs">
                     Fill in the details below.
                   </DialogDescription>
                 </DialogHeader>
-                
-                <div className="space-y-4">
+
+                <div className={FORM_DIALOG_BODY}>
+                <div className="space-y-4 min-w-0 max-w-full">
                   <div>
                     <Label htmlFor="name">Product Name *</Label>
                     <Input
@@ -783,7 +879,7 @@ const AdminProducts: React.FC = () => {
                       type="number"
                       step="0.01"
                       value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
-                      onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value === '' ? 0 : e.target.value }))}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value }))}
                       placeholder="0.00"
                     />
                   </div>
@@ -967,6 +1063,25 @@ const AdminProducts: React.FC = () => {
                   
                   <div>
                     <Label htmlFor="image">Image URL</Label>
+                    {newProduct.image && (
+                      <>
+                        <img
+                          src={newProduct.image}
+                          alt={newProduct.imageAlt || newProduct.name || 'Product'}
+                          className="w-full h-32 object-cover rounded-md border mb-2 mt-1"
+                        />
+                        {(newProduct.imageAlt || newProduct.name) && (
+                          <p className="text-xs text-muted-foreground mb-2 min-w-0">
+                            Alt preview:{' '}
+                            <ClampedText
+                              text={newProduct.imageAlt || newProduct.name}
+                              maxLines={2}
+                              className="inline"
+                            />
+                          </p>
+                        )}
+                      </>
+                    )}
                     <Input
                       id="image"
                       value={newProduct.image}
@@ -1004,10 +1119,10 @@ const AdminProducts: React.FC = () => {
                       <Button
                         type="button"
                         variant="default"
-                        className="w-full"
+                        className={FORM_FILE_BUTTON_CLASS}
                         onClick={() => document.getElementById('imageFileGallery')?.click()}
                       >
-                        {newProduct.imageFile ? `Selected: ${newProduct.imageFile.name}` : 'Choose from gallery'}
+                        <SelectedFileLabel file={newProduct.imageFile} idleLabel="Choose from gallery" />
                       </Button>
                       <Button
                         type="button"
@@ -1034,12 +1149,13 @@ const AdminProducts: React.FC = () => {
                     )}
                   </div>
                 </div>
-                
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddingProduct(false)}>
+                </div>
+
+                <DialogFooter className={FORM_DIALOG_FOOTER}>
+                  <Button type="button" variant="outline" onClick={() => setIsAddingProduct(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleAddProduct} disabled={isSaving}>
+                  <Button type="button" onClick={handleAddProduct} disabled={isSaving}>
                     {isSaving ? 'Saving...' : 'Add Product'}
                   </Button>
                 </DialogFooter>
@@ -1054,7 +1170,12 @@ const AdminProducts: React.FC = () => {
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="text-lg">{product.name}</CardTitle>
+                    <ClampedText
+                      text={product.name}
+                      maxLines={2}
+                      className="text-lg font-semibold leading-none tracking-tight"
+                      as="h3"
+                    />
                     <CardDescription className="text-xl font-bold text-primary">
                       ${product.price}
                     </CardDescription>
@@ -1220,15 +1341,16 @@ const AdminProducts: React.FC = () => {
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className={FORM_DIALOG_SHELL}>
+          <DialogHeader className={FORM_DIALOG_HEADER}>
             <DialogTitle>Edit Product</DialogTitle>
             <DialogDescription className="text-xs">
               Update product details below.
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4">
+
+          <div className={FORM_DIALOG_BODY}>
+          <div className="space-y-4 min-w-0 max-w-full">
             <div>
               <Label htmlFor="edit-name">Product Name *</Label>
               <Input
@@ -1246,7 +1368,7 @@ const AdminProducts: React.FC = () => {
                 type="number"
                 step="0.01"
                 value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
-                onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value === '' ? 0 : e.target.value }))}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value }))}
                 placeholder="0.00"
               />
             </div>
@@ -1459,6 +1581,7 @@ const AdminProducts: React.FC = () => {
             <div>
               <Label htmlFor="edit-image">Image URL</Label>
               {(editingProduct?.image || newProduct.imageFile) && (
+                <>
                 <img
                   src={
                     newProduct.imageFile
@@ -1468,6 +1591,17 @@ const AdminProducts: React.FC = () => {
                   alt={newProduct.imageAlt || editingProduct?.name || 'Product'}
                   className="w-full h-32 object-cover rounded-md border mb-2"
                 />
+                {(newProduct.imageAlt || editingProduct?.name) && (
+                  <p className="text-xs text-muted-foreground mb-2 min-w-0">
+                    Alt preview:{' '}
+                    <ClampedText
+                      text={newProduct.imageAlt || editingProduct?.name || ''}
+                      maxLines={2}
+                      className="inline"
+                    />
+                  </p>
+                )}
+                </>
               )}
               <Input
                 id="edit-image"
@@ -1513,10 +1647,10 @@ const AdminProducts: React.FC = () => {
                 <Button
                   type="button"
                   variant="default"
-                  className="w-full"
+                  className={FORM_FILE_BUTTON_CLASS}
                   onClick={() => document.getElementById('editImageFileGallery')?.click()}
                 >
-                  {newProduct.imageFile ? `Selected: ${newProduct.imageFile.name}` : 'Choose from gallery'}
+                  <SelectedFileLabel file={newProduct.imageFile} idleLabel="Choose from gallery" />
                 </Button>
                 <Button
                   type="button"
@@ -1544,8 +1678,9 @@ const AdminProducts: React.FC = () => {
             </div>
 
           </div>
-          
-          <DialogFooter className="flex-col sm:flex-row gap-2">
+          </div>
+
+          <DialogFooter className={FORM_DIALOG_FOOTER}>
             <Button variant="outline" onClick={() => setEditingProduct(null)}>
               Cancel
             </Button>

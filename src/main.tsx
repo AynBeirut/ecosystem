@@ -1,10 +1,27 @@
 import { createRoot } from 'react-dom/client'
 import App from './App'
+import EditorPreviewRoot, { isEditorEmbedFrame } from './embed/EditorPreviewRoot'
 import './index.css'
 import './styles/product-animations.css'
 import { runPwaCleanupOnce } from './lib/pwaCleanup'
 
 runPwaCleanupOnce();
+
+/** After deploy, stale cached index.js points at removed chunks → import fails. Reload once. */
+const CHUNK_RELOAD_KEY = 'grabio_chunk_reload_v1';
+window.addEventListener('unhandledrejection', (event) => {
+  const reason = event.reason as { message?: string } | undefined;
+  const message = String(reason?.message ?? reason ?? '');
+  if (
+    message.includes('Failed to fetch dynamically imported module') ||
+    message.includes('Importing a module script failed')
+  ) {
+    if (!sessionStorage.getItem(CHUNK_RELOAD_KEY)) {
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, '1');
+      window.location.reload();
+    }
+  }
+});
 
 const NATIVE_BUTTON_COOLDOWN_MS = 1200;
 
@@ -42,4 +59,6 @@ const installNativeButtonClickGuard = () => {
 
 installNativeButtonClickGuard();
 
-createRoot(document.getElementById("root")!).render(<App />);
+createRoot(document.getElementById("root")!).render(
+  isEditorEmbedFrame() ? <EditorPreviewRoot /> : <App />,
+);

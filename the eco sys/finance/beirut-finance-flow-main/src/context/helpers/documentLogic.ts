@@ -1,9 +1,7 @@
 // PDF generation + email sending logic for documents.
-// Uses the existing exportDocumentAsPdf renderer and supabase auth user email
-// as the "from" address. Email sending uses a mailto: handoff (no email
-// provider is configured at the data layer).
+// Uses exportDocumentAsPdf (direct PDF download) and mailto: for email handoff.
 
-import { exportDocumentAsPdf, type ExportableType } from "@/lib/pdfExport";
+import { exportDocumentAsPdf, buildDocumentPdfFile, type ExportableType } from "@/lib/pdfExport";
 import type {
   Invoice, Estimate, Receipt, PurchaseOrder, PaymentOrder,
   Client, Supplier, Organization,
@@ -52,16 +50,18 @@ const resolveDocument = (
 ): { doc: any; company: any } | null => {
   const company = ctx.organization
     ? {
-        name: ctx.organization.name,
-        address: ctx.organization.address || "",
-        phone: ctx.organization.phone || "",
-        email: ctx.organization.email || "",
+        name: ctx.organization.name || ctx.companyFallback?.name || '',
+        address: ctx.organization.address || ctx.companyFallback?.address || "",
+        phone: ctx.organization.phone || ctx.companyFallback?.phone || "",
+        email: ctx.organization.email || ctx.companyFallback?.email || "",
+        website: ctx.organization.website || ctx.companyFallback?.website || "",
         logo: ctx.organization.logoUrl || ctx.companyFallback?.logo || "",
-        taxId: ctx.organization.taxId || "",
+        taxId: ctx.organization.taxId || ctx.companyFallback?.taxId || "",
         primaryColor: ctx.companyFallback?.primaryColor,
         secondaryColor: ctx.companyFallback?.secondaryColor,
         signature: ctx.companyFallback?.signature,
         commercialRegistry: ctx.companyFallback?.commercialRegistry,
+        invoiceTemplate: ctx.companyFallback?.invoiceTemplate || "basic",
       }
     : ctx.companyFallback || {};
 
@@ -97,15 +97,15 @@ const resolveDocument = (
 };
 
 /**
- * generatePDF — opens a printable PDF for the given document.
+ * generatePDF — downloads a clean PDF for the given document.
  * Includes items, totals, client/supplier info, and organization info.
  * Returns true on success.
  */
-export const generatePDF = (
+export const generatePDF = async (
   documentType: DocumentType,
   documentId: string,
   ctx: GenerateContext,
-): boolean => {
+): Promise<boolean> => {
   try {
     const resolved = resolveDocument(documentType, documentId, ctx);
     if (!resolved) {
@@ -113,12 +113,35 @@ export const generatePDF = (
       return false;
     }
     const exportableType = TYPE_TO_EXPORTABLE[documentType];
-    const ok = exportDocumentAsPdf(exportableType, resolved.doc, resolved.company);
+    const ok = await exportDocumentAsPdf(exportableType, resolved.doc, resolved.company);
     if (!ok) console.error(`[${LOG}][generatePDF] Renderer failed for ${documentType} ${documentId}`);
     return ok;
   } catch (e) {
     console.error(`[${LOG}][generatePDF]`, e);
     return false;
+  }
+};
+
+/**
+ * generatePdfFile — build the PDF in memory and return as a File object.
+ * Used by the native share sheet (navigator.share) to share the actual PDF.
+ */
+export const generatePdfFile = async (
+  documentType: DocumentType,
+  documentId: string,
+  ctx: GenerateContext,
+): Promise<File | null> => {
+  try {
+    const resolved = resolveDocument(documentType, documentId, ctx);
+    if (!resolved) {
+      console.error(`[${LOG}][generatePdfFile] ${documentType} not found: ${documentId}`);
+      return null;
+    }
+    const exportableType = TYPE_TO_EXPORTABLE[documentType];
+    return await buildDocumentPdfFile(exportableType, resolved.doc, resolved.company);
+  } catch (e) {
+    console.error(`[${LOG}][generatePdfFile]`, e);
+    return null;
   }
 };
 
@@ -130,12 +153,12 @@ export const generatePDF = (
  * email provider; this client-side handoff is the contract used by the
  * existing UI. Adjust here if a transactional sender is added.
  */
-export const sendDocumentEmail = (
+export const sendDocumentEmail = async (
   documentType: DocumentType,
   documentId: string,
   recipientEmail: string,
   ctx: GenerateContext,
-): boolean => {
+): Promise<boolean> => {
   try {
     if (!recipientEmail) {
       console.error(`[${LOG}][sendDocumentEmail] Missing recipient email`);
@@ -147,7 +170,7 @@ export const sendDocumentEmail = (
       return false;
     }
 
-    const pdfOk = generatePDF(documentType, documentId, ctx);
+    const pdfOk = await generatePDF(documentType, documentId, ctx);
     if (!pdfOk) {
       console.error(`[${LOG}][sendDocumentEmail] PDF generation failed`);
       return false;

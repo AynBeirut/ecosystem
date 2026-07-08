@@ -3,7 +3,9 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function userProfile() {
-      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : {};
     }
 
     function isCrmRepUser() {
@@ -36,10 +38,19 @@ service cloud.firestore {
         && p.ownerId == request.auth.uid;
     }
 
+    function isLegacySellerStoreOwner(storeId) {
+      return request.auth != null
+        && storeProfileExists(storeId)
+        && !storeProfileData(storeId).keys().hasAny(['ownerId'])
+        && exists(/databases/$(database)/documents/sellers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/sellers/$(request.auth.uid)).data.storeId == storeId;
+    }
+
     function isStoreOwner(storeId) {
       return request.auth != null && (
         request.auth.uid == storeId ||
-        isStoreOwnerByOwnerId(storeId)
+        isStoreOwnerByOwnerId(storeId) ||
+        isLegacySellerStoreOwner(storeId)
       );
     }
 
@@ -73,22 +84,41 @@ service cloud.firestore {
         && isCommerceEligibleStatus(storeId);
     }
 
+    // Catalog writes — allow unless demo/expired/blocked (owners can manage products during setup)
+    function isCatalogWritableStore(storeId) {
+      return storeProfileExists(storeId)
+        && !isDemoStoreProfile(storeId)
+        && !isBlockedCommerceStatus(storeId);
+    }
+
     function isSubAccountAdmin(storeId) {
       return request.auth != null
-        && exists(/databases/$(database)/documents/subAccounts/$(request.auth.uid))
-        && get(/databases/$(database)/documents/subAccounts/$(request.auth.uid)).data.storeId == storeId
-        && get(/databases/$(database)/documents/subAccounts/$(request.auth.uid)).data.role == 'admin';
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'sub_account'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId is string
+        && exists(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId))
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.storeId == storeId
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.role == 'admin';
     }
 
     function isStoreAdmin(storeId) {
       return isStoreOwner(storeId) || isSubAccountAdmin(storeId);
     }
 
+    function isGrabioOps() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/platformConfig/grabio)
+        && request.auth.uid in get(/databases/$(database)/documents/platformConfig/grabio).data.opsUids;
+    }
+
     function isActiveSubAccountForStore(storeId) {
       return request.auth != null
-        && exists(/databases/$(database)/documents/subAccounts/$(request.auth.uid))
-        && get(/databases/$(database)/documents/subAccounts/$(request.auth.uid)).data.storeId == storeId
-        && get(/databases/$(database)/documents/subAccounts/$(request.auth.uid)).data.status == 'active';
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'sub_account'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId is string
+        && exists(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId))
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.storeId == storeId
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.status == 'active';
     }
 
     function storeHasSalesCrm(storeId) {
@@ -134,6 +164,90 @@ service cloud.firestore {
       match /financeReceipts/{receiptId} {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
       }
+
+      match /financeInvoices/{invoiceId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financePayments/{paymentId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeExpenses/{expenseId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeSuppliers/{supplierId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financePurchaseOrders/{poId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeInventoryMovements/{movementId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeCurrencySettings/{settingId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financePaymentMethods/{methodId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeStaff/{staffId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeStaffPayments/{paymentId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeDeliveryPersons/{personId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeDeliveryOrders/{orderId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeCashCollections/{collectionId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      // POS paired terminals — owner/admin read; writes via Cloud Functions only
+      match /posDevices/{deviceId} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow write: if false;
+      }
+
+      match /posPairingCodes/{code} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow write: if false;
+      }
+
+      match /posInstallTokens/{tokenId} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow write: if false;
+      }
+
+      match /financeCashTransactions/{transactionId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeOperationalExpenses/{expenseId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeExpenseEntries/{entryId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeSettings/{docId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
     }
 
     // StoreProfiles: public read; owner write (doc id legacy OR ownerId for multi-store Phase 2)
@@ -154,11 +268,11 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null
         && request.resource.data.storeId is string
-        && isRealStore(request.resource.data.storeId)
+        && isCatalogWritableStore(request.resource.data.storeId)
         && (isStoreAdmin(request.resource.data.storeId) || isActiveSubAccountForStore(request.resource.data.storeId));
       allow update, delete: if request.auth != null
         && resource.data.storeId is string
-        && isRealStore(resource.data.storeId)
+        && isCatalogWritableStore(resource.data.storeId)
         && (isStoreAdmin(resource.data.storeId) || isActiveSubAccountForStore(resource.data.storeId));
     }
 
@@ -730,6 +844,34 @@ service cloud.firestore {
     }
 
     // Builder accounts — isolated demo stores (no production commerce path)
+    match /platformConfig/grabio {
+      allow read: if isGrabioOps();
+    }
+
+    match /wordpressProvisioningRequests/{requestId} {
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isStoreAdmin(request.resource.data.storeId)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.businessName is string
+        && request.resource.data.contactEmail is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+
+      allow read: if request.auth != null && (
+        isGrabioOps()
+        || (resource.data.storeId is string && isStoreAdmin(resource.data.storeId))
+      );
+
+      allow update: if isGrabioOps()
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.businessName == resource.data.businessName
+        && request.resource.data.contactEmail == resource.data.contactEmail
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
     match /builders/{builderUid} {
       allow read, write: if request.auth != null && request.auth.uid == builderUid;
 

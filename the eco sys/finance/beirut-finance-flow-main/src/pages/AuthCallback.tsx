@@ -1,44 +1,37 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { getRedirectResult } from "firebase/auth";
 import { Loader2 } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { auth, authReady } from "@/integrations/firebase/client";
+import { clearGoogleAuthPending } from "@/lib/grabio/googleAuth";
 import { useToast } from "@/hooks/use-toast";
 
 const AuthCallback = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [message, setMessage] = useState("Completing Google sign-in...");
+  const [message, setMessage] = useState("Completing sign-in...");
 
   useEffect(() => {
     const completeSignIn = async () => {
-      const params = new URLSearchParams(window.location.search);
-      const code = params.get("code");
-      const errorDescription = params.get("error_description") || params.get("error");
-
-      if (errorDescription) {
-        toast({ title: "Google sign-in failed", description: errorDescription, variant: "destructive" });
+      try {
+        await authReady;
+        const result = await getRedirectResult(auth);
+        clearGoogleAuthPending();
+        if (result?.user) {
+          toast({ title: "Welcome", description: "Signed in with Google." });
+          navigate("/invoices", { replace: true });
+          return;
+        }
         navigate("/", { replace: true });
-        return;
-      }
-
-      if (!code) {
-        setMessage("No OAuth code was returned. Redirecting...");
+      } catch (err: unknown) {
+        const description = err instanceof Error ? err.message : "Google sign-in failed";
+        toast({ title: "Google sign-in failed", description, variant: "destructive" });
+        setMessage("Redirecting...");
         navigate("/", { replace: true });
-        return;
       }
-
-      const { error } = await supabase.auth.exchangeCodeForSession(code);
-      if (error) {
-        toast({ title: "Google sign-in failed", description: error.message, variant: "destructive" });
-        navigate("/", { replace: true });
-        return;
-      }
-
-      toast({ title: "Welcome!", description: "Signed in with Google." });
-      navigate("/", { replace: true });
     };
 
-    completeSignIn();
+    void completeSignIn();
   }, [navigate, toast]);
 
   return (

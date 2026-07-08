@@ -34,6 +34,10 @@ import {
 import { Link, useLocation } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
 import OrgSwitcher from "@/components/OrgSwitcher";
+import BrandMark from "@/components/BrandMark";
+import { BRAND } from "@/lib/branding";
+import { usePlayStoreV1Nav } from "@/hooks/usePlayStoreV1Nav";
+import { playStoreWebUrl, isFinanceInAppShell } from "@/lib/playStoreNavScope";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -42,9 +46,11 @@ interface AppLayoutProps {
 
 const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
-  const { user, isDarkMode, currentUserRole } = useAppContext();
+  const { user, isDarkMode, currentUserRole, isGuestDemo, exitGuestDemo } = useAppContext();
   const canManageOrg = currentUserRole === "owner" || currentUserRole === "admin";
   const location = useLocation();
+  const { active: playStoreV1Nav } = usePlayStoreV1Nav();
+  const inAppShell = playStoreV1Nav || isFinanceInAppShell();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -63,7 +69,7 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
       )}>
         <div className="p-4 flex-shrink-0">
           <div className="flex items-center justify-between">
-            <h2 className="text-xl font-bold text-indigo-600 dark:text-indigo-400">AYN BEIRUT</h2>
+            <BrandMark size="sm" linked />
             <Button 
               variant="ghost" 
               size="icon" 
@@ -75,9 +81,9 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
           </div>
           
           {user && (
-            <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-950/30 rounded-lg">
-              <p className="text-sm font-medium text-indigo-700 dark:text-indigo-300">{user.company.name}</p>
-              <p className="text-xs text-indigo-600/70 dark:text-indigo-400/70 mt-1 capitalize">{user.plan} Plan{user.isDemoAccount && " (Demo)"}</p>
+            <div className="mt-4 p-3 bg-teal-50 dark:bg-teal-950/30 rounded-lg">
+              <p className="text-sm font-medium text-teal-900 dark:text-teal-100">{user.company.name}</p>
+              <p className="text-xs text-teal-700/80 dark:text-teal-300/80 mt-1 capitalize">{user.plan} Plan{user.isDemoAccount && " (Demo)"}</p>
             </div>
           )}
         </div>
@@ -85,28 +91,43 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
         {/* Scrollable menu area */}
         <div className="flex-grow overflow-y-auto py-4 px-4 scrollbar-thin scrollbar-thumb-gray-300 dark:scrollbar-thumb-gray-700">
           <div className="space-y-1">
-            <Button 
-              variant="ghost" 
-              className={cn("w-full justify-start", 
-                location.pathname === "/" && "bg-gray-100 dark:bg-gray-800")}
-              asChild
-            >
-              <Link to="/">
-                <Home className="mr-2 h-4 w-4" /> Dashboard
-              </Link>
-            </Button>
+            {playStoreV1Nav ? (
+              <Button 
+                variant="ghost" 
+                className={cn("w-full justify-start", 
+                  location.pathname === "/invoices" && "bg-gray-100 dark:bg-gray-800")}
+                asChild
+              >
+                <Link to="/invoices">
+                  <FileText className="mr-2 h-4 w-4" /> Invoices
+                </Link>
+              </Button>
+            ) : (
+              <>
+                <Button 
+                  variant="ghost" 
+                  className={cn("w-full justify-start", 
+                    location.pathname === "/" && "bg-gray-100 dark:bg-gray-800")}
+                  asChild
+                >
+                  <Link to="/">
+                    <Home className="mr-2 h-4 w-4" /> Dashboard
+                  </Link>
+                </Button>
+                <Button 
+                  variant="ghost" 
+                  className={cn("w-full justify-start", 
+                    location.pathname === "/invoices" && "bg-gray-100 dark:bg-gray-800")}
+                  asChild
+                >
+                  <Link to="/invoices">
+                    <FileText className="mr-2 h-4 w-4" /> Invoices
+                  </Link>
+                </Button>
+              </>
+            )}
 
-            <Button 
-              variant="ghost" 
-              className={cn("w-full justify-start", 
-                location.pathname === "/invoices" && "bg-gray-100 dark:bg-gray-800")}
-              asChild
-            >
-              <Link to="/invoices">
-                <FileText className="mr-2 h-4 w-4" /> Invoices
-              </Link>
-            </Button>
-
+            {!playStoreV1Nav && (
             <Button 
               variant="ghost" 
               className={cn("w-full justify-start", 
@@ -117,7 +138,9 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
                 <FolderOpen className="mr-2 h-4 w-4" /> Projects
               </Link>
             </Button>
+            )}
 
+            {!playStoreV1Nav && (
             <Button 
               variant="ghost" 
               className={cn("w-full justify-start", 
@@ -128,7 +151,9 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
                 <Sparkles className="mr-2 h-4 w-4" /> Proposals (AI)
               </Link>
             </Button>
+            )}
 
+            {!playStoreV1Nav && (
             <Button 
               variant="ghost" 
               className={cn("w-full justify-start", 
@@ -139,6 +164,7 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
                 <CheckSquare className="mr-2 h-4 w-4" /> Tasks & Time
               </Link>
             </Button>
+            )}
 
             <Button 
               variant="ghost" 
@@ -176,22 +202,35 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
             <Button 
               variant="ghost" 
               className={cn("w-full justify-start",
-                location.pathname === "/suppliers" && "bg-gray-100 dark:bg-gray-800")}
+                location.pathname === "/products" && "bg-gray-100 dark:bg-gray-800")}
               asChild
             >
-              <Link to="/suppliers">
-                <Building2 className="mr-2 h-4 w-4" /> Suppliers
+              <Link to="/products">
+                <Package className="mr-2 h-4 w-4" /> Products
               </Link>
             </Button>
 
             <Button 
               variant="ghost" 
               className={cn("w-full justify-start",
-                location.pathname === "/products" && "bg-gray-100 dark:bg-gray-800")}
+                location.pathname === "/reports" && "bg-gray-100 dark:bg-gray-800")}
               asChild
             >
-              <Link to="/products">
-                <Package className="mr-2 h-4 w-4" /> Products
+              <Link to="/reports">
+                <BarChart3 className="mr-2 h-4 w-4" /> Reports
+              </Link>
+            </Button>
+
+            {!playStoreV1Nav && (
+            <>
+            <Button 
+              variant="ghost" 
+              className={cn("w-full justify-start",
+                location.pathname === "/suppliers" && "bg-gray-100 dark:bg-gray-800")}
+              asChild
+            >
+              <Link to="/suppliers">
+                <Building2 className="mr-2 h-4 w-4" /> Suppliers
               </Link>
             </Button>
 
@@ -242,17 +281,6 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
             <Button 
               variant="ghost" 
               className={cn("w-full justify-start",
-                location.pathname === "/reports" && "bg-gray-100 dark:bg-gray-800")}
-              asChild
-            >
-              <Link to="/reports">
-                <BarChart3 className="mr-2 h-4 w-4" /> Reports
-              </Link>
-            </Button>
-
-            <Button 
-              variant="ghost" 
-              className={cn("w-full justify-start",
                 location.pathname === "/purchase-orders" && "bg-gray-100 dark:bg-gray-800")}
               asChild
             >
@@ -271,79 +299,7 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
                 <Image className="mr-2 h-4 w-4" /> Portfolio
               </Link>
             </Button>
-
-            <Button 
-              variant="ghost" 
-              className={cn("w-full justify-start",
-                location.pathname === "/profile" && "bg-gray-100 dark:bg-gray-800")}
-              asChild
-            >
-              <Link to="/profile">
-                <User className="mr-2 h-4 w-4" /> Profile
-              </Link>
-            </Button>
-
-            {user?.plan === "pro" && (
-              <Button 
-                variant="ghost" 
-                className={cn("w-full justify-start",
-                  location.pathname === "/sub-users" && "bg-gray-100 dark:bg-gray-800")}
-                asChild
-              >
-                <Link to="/sub-users">
-                  <User className="mr-2 h-4 w-4" /> Sub Users
-                </Link>
-              </Button>
-            )}
-
-            <Button 
-              variant="ghost" 
-              className={cn("w-full justify-start",
-                location.pathname === "/currency" && "bg-gray-100 dark:bg-gray-800")}
-              asChild
-            >
-              <Link to="/currency">
-                <ArrowRightLeft className="mr-2 h-4 w-4" /> Currency
-              </Link>
-            </Button>
-
-            {canManageOrg && (
-              <Button 
-                variant="ghost" 
-                className={cn("w-full justify-start",
-                  location.pathname === "/admin" && "bg-gray-100 dark:bg-gray-800")}
-                asChild
-              >
-                <Link to="/admin">
-                  <Activity className="mr-2 h-4 w-4" /> Admin & PSA
-                </Link>
-              </Button>
-            )}
-
-            {canManageOrg && (
-              <Button 
-                variant="ghost" 
-                className={cn("w-full justify-start",
-                  location.pathname === "/org/members" && "bg-gray-100 dark:bg-gray-800")}
-                asChild
-              >
-                <Link to="/org/members">
-                  <Users className="mr-2 h-4 w-4" /> Members
-                </Link>
-              </Button>
-            )}
-
-            {canManageOrg && (
-              <Button 
-                variant="ghost" 
-                className={cn("w-full justify-start",
-                  location.pathname === "/payment-methods" && "bg-gray-100 dark:bg-gray-800")}
-                asChild
-              >
-                <Link to="/payment-methods">
-                  <CreditCard className="mr-2 h-4 w-4" /> Payment Methods
-                </Link>
-              </Button>
+            </>
             )}
 
             <Button 
@@ -356,21 +312,115 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
                 <Settings className="mr-2 h-4 w-4" /> Settings
               </Link>
             </Button>
+
+            {!inAppShell && (
+            <Button 
+              variant="ghost" 
+              className="w-full justify-start"
+              asChild
+            >
+              <a href={`${BRAND.ecosystemUrl}/admin/profile`} target="_blank" rel="noopener noreferrer">
+                <User className="mr-2 h-4 w-4" /> Store Profile (Grabio)
+              </a>
+            </Button>
+            )}
+
+            {!playStoreV1Nav && user?.plan === "pro" && (
+              <Button 
+                variant="ghost" 
+                className={cn("w-full justify-start",
+                  location.pathname === "/sub-users" && "bg-gray-100 dark:bg-gray-800")}
+                asChild
+              >
+                <Link to="/sub-users">
+                  <User className="mr-2 h-4 w-4" /> Sub Users
+                </Link>
+              </Button>
+            )}
+
+            {!playStoreV1Nav && (
+            <Button 
+              variant="ghost" 
+              className={cn("w-full justify-start",
+                location.pathname === "/currency" && "bg-gray-100 dark:bg-gray-800")}
+              asChild
+            >
+              <Link to="/currency">
+                <ArrowRightLeft className="mr-2 h-4 w-4" /> Currency
+              </Link>
+            </Button>
+            )}
+
+            {!playStoreV1Nav && canManageOrg && (
+              <Button 
+                variant="ghost" 
+                className={cn("w-full justify-start",
+                  location.pathname === "/admin" && "bg-gray-100 dark:bg-gray-800")}
+                asChild
+              >
+                <Link to="/admin">
+                  <Activity className="mr-2 h-4 w-4" /> Admin & PSA
+                </Link>
+              </Button>
+            )}
+
+            {!playStoreV1Nav && canManageOrg && (
+              <Button 
+                variant="ghost" 
+                className={cn("w-full justify-start",
+                  location.pathname === "/org/members" && "bg-gray-100 dark:bg-gray-800")}
+                asChild
+              >
+                <Link to="/org/members">
+                  <Users className="mr-2 h-4 w-4" /> Members
+                </Link>
+              </Button>
+            )}
+
+            {!playStoreV1Nav && canManageOrg && (
+              <Button 
+                variant="ghost" 
+                className={cn("w-full justify-start",
+                  location.pathname === "/payment-methods" && "bg-gray-100 dark:bg-gray-800")}
+                asChild
+              >
+                <Link to="/payment-methods">
+                  <CreditCard className="mr-2 h-4 w-4" /> Payment Methods
+                </Link>
+              </Button>
+            )}
+
+            {playStoreV1Nav && !inAppShell && (
+              <div className="mt-4 rounded-lg border border-teal-200/80 bg-teal-50/80 dark:bg-teal-950/20 p-3">
+                <p className="text-xs font-medium text-teal-900 dark:text-teal-100">More on desktop</p>
+                <p className="text-xs text-teal-800/80 dark:text-teal-300/80 mt-1">
+                  Inventory, staff, currency &amp; payment setup — use grabio.space on a computer.
+                </p>
+                <a
+                  href={playStoreWebUrl()}
+                  className="text-xs font-medium text-teal-700 dark:text-teal-300 underline mt-2 inline-block"
+                >
+                  grabio.space/invoice
+                </a>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="p-4 border-t border-gray-200 dark:border-gray-800 flex-shrink-0">
-          {user?.plan === "pro" ? (
-            <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
-              <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Pro Account</p>
-              <p className="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1">Unlimited operations</p>
-            </div>
-          ) : (
-            <Link to="/premium">
-              <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700">
-                Upgrade to Pro
-              </Button>
-            </Link>
+          {!playStoreV1Nav && (
+            user?.plan === "pro" ? (
+              <div className="p-3 bg-amber-100 dark:bg-amber-900/30 rounded-lg">
+                <p className="text-sm font-medium text-amber-800 dark:text-amber-300">Pro Account</p>
+                <p className="text-xs text-amber-700/70 dark:text-amber-400/70 mt-1">Unlimited operations</p>
+              </div>
+            ) : (
+              <Link to="/premium">
+                <Button className="w-full bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700">
+                  Upgrade to Pro
+                </Button>
+              </Link>
+            )
           )}
         </div>
       </div>
@@ -405,7 +455,7 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
                 </div>
                 <span className="text-sm font-medium hidden sm:inline">{user.company.name}</span>
                 <span className="text-sm font-medium ml-2 px-2 py-1 bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300 rounded-full">
-                  {user.plan === "pro" ? "Pro" : "Free"}
+                  {isGuestDemo ? "Demo" : user.plan === "pro" ? "Pro" : "Free"}
                 </span>
               </div>
             )}
@@ -413,8 +463,24 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
           </div>
         </header>
 
+        {isGuestDemo && (
+          <div className="bg-teal-50 dark:bg-teal-950/40 border-b border-teal-200 dark:border-teal-800 px-4 py-2.5 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+            <p className="text-sm text-teal-900 dark:text-teal-100">
+              <span className="font-semibold">Demo mode</span> — create one client, product, invoice, estimate, receipt, and purchase. Data stays on this device only.
+            </p>
+            <div className="flex items-center gap-2 shrink-0">
+              <Button size="sm" variant="outline" className="border-teal-300" asChild>
+                <Link to="/" onClick={() => exitGuestDemo()}>Sign up free</Link>
+              </Button>
+              <Button size="sm" variant="ghost" onClick={onLogout}>
+                Exit demo
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Page Content */}
-        <main className="p-6">
+        <main className="p-3 sm:p-6">
           {children}
         </main>
         

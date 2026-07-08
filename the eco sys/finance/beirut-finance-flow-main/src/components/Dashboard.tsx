@@ -8,9 +8,11 @@ import UsageLimits from "@/components/UsageLimits";
 import { FileText, CreditCard, Plus, PlusCircle } from "lucide-react";
 import { Link } from "react-router-dom";
 import { useAppContext } from "@/context/AppContext";
+import { usePlayStoreV1Nav } from "@/hooks/usePlayStoreV1Nav";
 
 const Dashboard = () => {
   const { user, invoices, receipts, accountingSummary } = useAppContext();
+  const { active: playStoreV1Nav } = usePlayStoreV1Nav();
 
   return (
     <div className="space-y-6">
@@ -21,7 +23,7 @@ const Dashboard = () => {
         </div>
         
         <div className="mt-4 md:mt-0 flex flex-col sm:flex-row gap-3">
-          <Button className="bg-indigo-600 hover:bg-indigo-700" asChild>
+          <Button className="bg-[#38B2AC] hover:bg-[#2C9A94] text-white" asChild>
             <Link to="/invoices">
               <Plus className="mr-2 h-4 w-4" />
               New Invoice
@@ -130,8 +132,8 @@ const Dashboard = () => {
         </motion.div>
       </div>
 
-      {/* Low Stock Alert */}
-      {accountingSummary.lowStockProducts.length > 0 && (
+      {/* Low Stock Alert — web-only setup; hidden in Play Store v1 */}
+      {!playStoreV1Nav && accountingSummary.lowStockProducts.length > 0 && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}

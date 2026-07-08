@@ -9,9 +9,10 @@ interface LoginFormProps {
   onLogin: (email: string, password: string) => void;
   onGoogleLogin: () => void;
   isRegister?: boolean;
+  loading?: boolean;
 }
 
-const LoginForm = ({ onLogin, onGoogleLogin, isRegister = false }: LoginFormProps) => {
+const LoginForm = ({ onLogin, onGoogleLogin, isRegister = false, loading = false }: LoginFormProps) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   
@@ -57,8 +58,8 @@ const LoginForm = ({ onLogin, onGoogleLogin, isRegister = false }: LoginFormProp
         </div>
       )}
       
-      <Button type="submit" className="w-full bg-indigo-600 hover:bg-indigo-700">
-        {isRegister ? "Create Account" : "Sign In"}
+      <Button type="submit" className="w-full bg-[#38B2AC] hover:bg-[#2C9A94] text-white" disabled={loading}>
+        {loading ? "Please wait…" : isRegister ? "Create Account" : "Sign In"}
       </Button>
 
       <div className="relative my-6">
@@ -70,7 +71,7 @@ const LoginForm = ({ onLogin, onGoogleLogin, isRegister = false }: LoginFormProp
         </div>
       </div>
 
-      <Button variant="outline" className="w-full" type="button" onClick={onGoogleLogin}>
+      <Button variant="outline" className="w-full" type="button" onClick={onGoogleLogin} disabled={loading}>
         <svg className="mr-2 h-4 w-4" viewBox="0 0 24 24">
           <path
             d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
@@ -93,7 +94,7 @@ const LoginForm = ({ onLogin, onGoogleLogin, isRegister = false }: LoginFormProp
       </Button>
 
       <div className="text-xs text-center text-gray-500 mt-4">
-        For testing, use: test@example.com / password123
+        Use your Grabio account (grabio.space)
       </div>
     </motion.form>
   );

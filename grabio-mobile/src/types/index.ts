@@ -86,6 +86,7 @@ export type RootStackParamList = {
   Purchases: undefined;
   Suppliers: undefined;
   AccountStatement: undefined;
+  InvoiceManager: { path?: string } | undefined;
 };
 
 export type TabParamList = {

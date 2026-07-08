@@ -22,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/context/useAuth';
 import { toast } from '@/components/ui/sonner';
 import { generateSlug } from '@/lib/slugify';
+import ClampedText from '@/components/ClampedText';
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
@@ -506,6 +507,8 @@ const ProductDetail: React.FC = () => {
     );
   }
 
+  const showCommerceActions = store?.storefrontMode !== 'display';
+
   return (
     <div className="min-h-screen bg-gray-50">
       <SEOHead
@@ -563,7 +566,12 @@ const ProductDetail: React.FC = () => {
                   )}
                 </div>
                 
-                <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+                <ClampedText
+                  text={product.name}
+                  maxLines={3}
+                  className="text-3xl font-bold mb-2 block"
+                  as="h1"
+                />
                 
                 <div className="flex items-center mb-4">
                   <span className="text-2xl font-semibold text-market-primary">
@@ -584,7 +592,14 @@ const ProductDetail: React.FC = () => {
                 </div>
                 
                 <div className="mb-6">
-                  <p className="text-gray-700">{product.description}</p>
+                  {product.description ? (
+                    <ClampedText
+                      text={product.description}
+                      maxLines={4}
+                      className="text-gray-700 block"
+                      as="p"
+                    />
+                  ) : null}
                 </div>
                 
                 <div className="flex items-center text-gray-600 mb-2">
@@ -606,7 +621,9 @@ const ProductDetail: React.FC = () => {
                   </Link>
                 )}
                 
-                {/* Quantity Selector */}
+                {/* Quantity + cart — hidden on display-only storefronts */}
+                {showCommerceActions && (
+                <>
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Quantity
@@ -666,6 +683,25 @@ const ProductDetail: React.FC = () => {
                     <ShareButtons url={window.location.href} title={product.name} description={product.description} />
                   </div>
                 </div>
+                </>
+                )}
+
+                {!showCommerceActions && (
+                  <div className="flex items-center gap-2 mb-6">
+                    <Button
+                      variant="outline"
+                      onClick={toggleFavorite}
+                      className="sm:flex-none"
+                    >
+                      <Heart 
+                        className={isFavorite(product.id) ? "mr-2 fill-market-accent text-market-accent" : "mr-2"} 
+                        size={18} 
+                      />
+                      {isFavorite(product.id) ? 'Saved' : 'Save'}
+                    </Button>
+                    <ShareButtons url={window.location.href} title={product.name} description={product.description} />
+                  </div>
+                )}
 
                 <div className="mt-8 border-t pt-6">
                   <h2 className="text-xl font-semibold mb-3">Customer Reviews</h2>

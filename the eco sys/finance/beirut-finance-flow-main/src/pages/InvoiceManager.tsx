@@ -1,16 +1,18 @@
 
-import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { useState, useEffect, useMemo } from "react";
+import { listPaymentMethods } from "@/lib/firestore/paymentMethodsService";
+import { supabase, isSupabaseConfigured } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AppLayout from "@/components/AppLayout";
+import FinancePageShell from "@/components/FinancePageShell";
 import InvoiceList from "@/components/InvoiceList";
-import { Plus, Trash, Mail, FileDown, Send, Phone, Eye } from "lucide-react";
+import { Plus, Trash, Share2, FileDown, Phone, Eye, X, User } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/SearchableCombobox";
 import { CURRENCIES } from "@/services/mockData";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -19,6 +21,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import ShareSheet from "@/components/ShareSheet";
 
 const invoiceSchema = z.object({
   customer: z.string().optional(),
@@ -46,13 +49,14 @@ const InvoiceManager = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>("list");
+  const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [lineItems, setLineItems] = useState<Array<{ id: string, description: string, quantity: number, unitPrice: number, subtotal: number }>>([]);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
-  const [sendMethod, setSendMethod] = useState<"email" | "whatsapp">("email");
-  const [recipientEmail, setRecipientEmail] = useState("");
-  const [recipientPhone, setRecipientPhone] = useState("");
+  const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
+  const [shareRecipientEmail, setShareRecipientEmail] = useState("");
+  const [shareRecipientPhone, setShareRecipientPhone] = useState("");
+  const [shareClientName, setShareClientName] = useState("");
   const [previewInvoiceData, setPreviewInvoiceData] = useState<any>(null);
   const { activeOrganizationId, hasPermission, updateInvoice } = useAppContext() as any;
   const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
@@ -63,15 +67,13 @@ const InvoiceManager = () => {
     let cancelled = false;
     setLoadingPaymentMethods(true);
     (async () => {
-      const { data } = await supabase
-        .from('payment_methods' as any)
-        .select('*')
-        .eq('organization_id', activeOrganizationId)
-        .eq('is_active', true)
-        .order('type');
-      if (!cancelled) {
-        setPaymentMethods((data as any[]) || []);
-        setLoadingPaymentMethods(false);
+      try {
+        const rows = await listPaymentMethods(activeOrganizationId, true);
+        if (!cancelled) setPaymentMethods(rows);
+      } catch {
+        if (!cancelled) setPaymentMethods([]);
+      } finally {
+        if (!cancelled) setLoadingPaymentMethods(false);
       }
     })();
     return () => { cancelled = true; };
@@ -155,12 +157,80 @@ const InvoiceManager = () => {
     };
   };
 
+  const clientOptions = useMemo(
+    () => clients.map((client) => ({
+      value: client.id,
+      label: client.name,
+      keywords: [client.email, client.phone].filter(Boolean).join(' '),
+    })),
+    [clients],
+  );
+
+  const productOptions = useMemo(
+    () => products.map((product) => ({
+      value: product.id,
+      label: `${product.name} — $${product.salePrice.toFixed(2)}`,
+      keywords: product.sku || product.category || '',
+    })),
+    [products],
+  );
+
   const handleClientSelect = (clientId: string) => {
     const selectedClient = clients.find(client => client.id === clientId);
     if (selectedClient) {
       form.setValue('customer', selectedClient.name);
       form.setValue('clientId', clientId);
     }
+  };
+
+  const resetCreateForm = () => {
+    form.reset({
+      customer: "",
+      clientId: "",
+      currency: "USD",
+      tax: 0,
+      discount: 0,
+      notes: "",
+      template: "basic",
+      paymentMethod: "",
+    });
+    setLineItems([]);
+    setEditingInvoiceId(null);
+  };
+
+  const handleEditInvoice = (invoice: {
+    id: string;
+    clientId?: string;
+    clientName?: string;
+    currency?: string;
+    items?: Array<{ id: string; description: string; quantity: number; unitPrice: number; subtotal: number }>;
+    tax?: number;
+    discount?: number;
+    notes?: string;
+    template?: string;
+    paymentMethod?: string;
+  }) => {
+    setEditingInvoiceId(invoice.id);
+    form.reset({
+      customer: invoice.clientName || "",
+      clientId: invoice.clientId || "",
+      currency: invoice.currency || "USD",
+      tax: invoice.tax || 0,
+      discount: invoice.discount || 0,
+      notes: invoice.notes || "",
+      template: invoice.template || "basic",
+      paymentMethod: invoice.paymentMethod || "",
+    });
+    setLineItems(
+      (invoice.items || []).map((item) => ({
+        id: item.id || `item-${Date.now()}-${Math.random()}`,
+        description: item.description || "",
+        quantity: item.quantity || 1,
+        unitPrice: item.unitPrice || 0,
+        subtotal: item.subtotal || (item.quantity || 0) * (item.unitPrice || 0),
+      })),
+    );
+    setActiveTab("create");
   };
 
   const handleProductSelect = (productId: string, itemId: string) => {
@@ -210,6 +280,37 @@ const InvoiceManager = () => {
     const totals = calculateTotals();
     console.log("[InvoiceManager] Calculated totals:", totals);
 
+    if (editingInvoiceId) {
+      try {
+        updateInvoice(editingInvoiceId, {
+          clientId: values.clientId || "",
+          clientName: values.customer,
+          amount: totals.total,
+          currency: values.currency,
+          items: lineItems,
+          tax: values.tax,
+          discount: values.discount,
+          total: totals.total,
+          template: values.template,
+          paymentMethod: values.paymentMethod || null,
+        });
+        toast({
+          title: "Invoice Updated",
+          description: "Your invoice has been saved.",
+        });
+        resetCreateForm();
+        setActiveTab("list");
+      } catch (error) {
+        console.error("[InvoiceManager] Error updating invoice:", error);
+        toast({
+          title: "Error",
+          description: "Failed to update invoice.",
+          variant: "destructive",
+        });
+      }
+      return;
+    }
+
     // Check limit before attempting to create
     const limitCheck = checkLimit("invoices");
     console.log("[InvoiceManager] Limit check result:", limitCheck);
@@ -249,8 +350,7 @@ const InvoiceManager = () => {
           title: "Invoice Created",
           description: `Invoice ${invoiceId} has been created successfully`,
         });
-        form.reset();
-        setLineItems([]);
+        resetCreateForm();
         setActiveTab("list");
       } else {
         console.log("[InvoiceManager] FAILED - createInvoice returned null");
@@ -298,41 +398,16 @@ const InvoiceManager = () => {
 
   const handleSendInvoice = (invoiceId: string) => {
     setSelectedInvoiceId(invoiceId);
-    setIsSendDialogOpen(true);
+    const inv = previewInvoice(invoiceId);
+    const client = inv?.clientId ? clients.find((c) => c.id === inv.clientId) : null;
+    setShareRecipientEmail(client?.email || "");
+    setShareRecipientPhone(client?.phone || "");
+    setShareClientName(inv?.clientName || client?.name || "");
+    setIsShareSheetOpen(true);
   };
 
-  const confirmSendInvoice = () => {
-    if (!selectedInvoiceId) return;
-    
-    let success = false;
-    
-    if (sendMethod === "email" && recipientEmail) {
-      success = sendInvoice(selectedInvoiceId, recipientEmail);
-      if (success) {
-        toast({
-          title: "Invoice Sent",
-          description: `Your invoice has been sent to ${recipientEmail}`,
-        });
-      }
-    } else if (sendMethod === "whatsapp" && recipientPhone) {
-      success = true;
-      toast({
-        title: "WhatsApp Message Prepared",
-        description: `Invoice details ready to send via WhatsApp to ${recipientPhone}`,
-      });
-      
-      const whatsappText = `Hello! I'm sending you invoice ${selectedInvoiceId}. Total amount: ${calculateTotals().total.toFixed(2)} ${form.getValues().currency}.`;
-      const whatsappUrl = `https://wa.me/${recipientPhone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappText)}`;
-      window.open(whatsappUrl, '_blank');
-    }
-    
-    setIsSendDialogOpen(false);
-    setRecipientEmail("");
-    setRecipientPhone("");
-  };
-
-  const handleExportInvoice = (invoiceId: string) => {
-    const success = exportInvoiceAsPdf(invoiceId);
+  const handleExportInvoice = async (invoiceId: string) => {
+    const success = await exportInvoiceAsPdf(invoiceId);
     if (success) {
       toast({
         title: "Invoice Exported",
@@ -358,7 +433,7 @@ const InvoiceManager = () => {
   const totals = calculateTotals();
 
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
@@ -366,7 +441,7 @@ const InvoiceManager = () => {
             <p className="text-gray-500 dark:text-gray-400">Create and manage your invoices</p>
           </div>
           <Button 
-            className="mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700"
+            className="mt-4 sm:mt-0 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700"
             onClick={() => setActiveTab("create")}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -377,9 +452,9 @@ const InvoiceManager = () => {
         <Card>
           <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
-              <TabsList>
+              <TabsList className="grid w-full grid-cols-2 gap-2 h-auto">
                 <TabsTrigger value="list">Invoice List</TabsTrigger>
-                <TabsTrigger value="create">Create Invoice</TabsTrigger>
+                <TabsTrigger value="create">{editingInvoiceId ? "Edit Invoice" : "Create Invoice"}</TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent>
@@ -388,41 +463,82 @@ const InvoiceManager = () => {
                 <InvoiceList 
                   onPreview={handlePreviewInvoice}
                   onSend={handleSendInvoice}
-                  onExport={handleExportInvoice}
+                  onEdit={handleEditInvoice}
                 />
               </div>
             </TabsContent>
             <TabsContent value="create">
               <Form {...form}>
                 <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Client Information</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {clients.length > 0 && (
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">Select Existing Client</label>
-                          <Select onValueChange={handleClientSelect}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select client" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {clients.map(client => (
-                                <SelectItem key={client.id} value={client.id}>
-                                  {client.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Client</label>
+
+                    {clients.length > 0 && !form.watch('clientId') && !form.watch('customer') && (
+                      <SearchableCombobox
+                        options={clientOptions}
+                        value={form.watch('clientId')}
+                        onValueChange={handleClientSelect}
+                        placeholder="Search clients…"
+                        searchPlaceholder="Search by name, email, phone…"
+                        renderOption={(opt) => {
+                          const c = clients.find((cl) => cl.id === opt.value);
+                          return (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{opt.label}</span>
+                              {c && (c.email || c.phone) && (
+                                <span className="text-xs text-muted-foreground">
+                                  {[c.email, c.phone].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }}
+                      />
+                    )}
+
+                    {(() => {
+                      const selId = form.watch('clientId');
+                      const selClient = selId ? clients.find((c) => c.id === selId) : null;
+                      if (!selClient) return null;
+                      return (
+                        <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50/50 dark:border-teal-800 dark:bg-teal-950/30 p-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900">
+                            <User className="h-4 w-4 text-teal-700 dark:text-teal-300" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{selClient.name}</p>
+                            {selClient.email && (
+                              <p className="text-xs text-muted-foreground truncate">{selClient.email}</p>
+                            )}
+                            {selClient.phone && (
+                              <p className="text-xs text-muted-foreground">{selClient.phone}</p>
+                            )}
+                            {(selClient as any).address && (
+                              <p className="text-xs text-muted-foreground truncate">{(selClient as any).address}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              form.setValue('clientId', '');
+                              form.setValue('customer', '');
+                            }}
+                            className="shrink-0 rounded-full p-1 hover:bg-teal-200/60 dark:hover:bg-teal-800/60 transition-colors"
+                            aria-label="Clear client"
+                          >
+                            <X className="h-4 w-4 text-muted-foreground" />
+                          </button>
                         </div>
-                      )}
-                      
+                      );
+                    })()}
+
+                    {!form.watch('clientId') && clients.length === 0 && (
                       <FormField
                         control={form.control}
                         name="customer"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Customer Name</FormLabel>
+                            <FormLabel className="text-xs text-muted-foreground">Or type a name</FormLabel>
                             <FormControl>
                               <Input placeholder="Customer name or company" {...field} />
                             </FormControl>
@@ -430,7 +546,7 @@ const InvoiceManager = () => {
                           </FormItem>
                         )}
                       />
-                    </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -457,25 +573,20 @@ const InvoiceManager = () => {
                             <div className="col-span-12 md:col-span-6">
                               <label className="text-sm font-medium mb-1 block">Description</label>
                               <div className="flex flex-col space-y-2">
-                                {products.length > 0 && (
-                                  <Select onValueChange={(value) => handleProductSelect(value, item.id)}>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select product" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                       {products.map(product => (
-                                        <SelectItem key={product.id} value={product.id}>
-                                          {product.name} - ${product.salePrice.toFixed(2)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                {products.length > 0 ? (
+                                  <SearchableCombobox
+                                    options={productOptions}
+                                    onValueChange={(value) => handleProductSelect(value, item.id)}
+                                    placeholder="Search products…"
+                                    searchPlaceholder="Type product name or SKU…"
+                                  />
+                                ) : (
+                                  <Input
+                                    placeholder="Item description"
+                                    value={item.description}
+                                    onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
+                                  />
                                 )}
-                                <Input
-                                  placeholder="Item description"
-                                  value={item.description}
-                                  onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
-                                />
                               </div>
                             </div>
                             <div className="col-span-3 md:col-span-2">
@@ -652,7 +763,7 @@ const InvoiceManager = () => {
                       type="submit" 
                       className="bg-indigo-600 hover:bg-indigo-700"
                     >
-                      Create Invoice
+                      {editingInvoiceId ? "Save Invoice" : "Create Invoice"}
                     </Button>
 
                     <Button 
@@ -821,6 +932,10 @@ const InvoiceManager = () => {
 
             const payStripe = async () => {
               if ((window as any).__payBusy?.[inv.id]) return;
+              if (!isSupabaseConfigured) {
+                toast({ title: "Online payment unavailable", description: "Stripe checkout is not enabled in Grabio embed.", variant: "destructive" });
+                return;
+              }
               if (isPaid) { toast({ title: "Already paid" }); return; }
               if (!amount || amount <= 0) { toast({ title: "Invalid amount", description: "Invoice total must be greater than 0", variant: "destructive" }); return; }
               setBusy(true);
@@ -929,110 +1044,31 @@ const InvoiceManager = () => {
                 Close
               </Button>
             </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline"
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  if (selectedInvoiceId) {
-                    handleSendInvoice(selectedInvoiceId);
-                  }
-                }}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Send
-              </Button>
-              <Button 
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  if (selectedInvoiceId) {
-                    handleExportInvoice(selectedInvoiceId);
-                  } else {
-                    toast({
-                      title: "Info",
-                      description: "Save the invoice first to export it as PDF",
-                    });
-                  }
-                }}
-              >
-                <FileDown className="mr-2 h-4 w-4" />
-                Save as PDF
-              </Button>
-            </div>
+            <Button 
+              onClick={() => {
+                setIsPreviewOpen(false);
+                if (selectedInvoiceId) {
+                  handleSendInvoice(selectedInvoiceId);
+                }
+              }}
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send Invoice</DialogTitle>
-            <DialogDescription>
-              Choose how you want to send this invoice to your client.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="flex space-x-2">
-              <Button
-                variant={sendMethod === "email" ? "default" : "outline"}
-                className={sendMethod === "email" ? "bg-indigo-600" : ""}
-                onClick={() => setSendMethod("email")}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Email
-              </Button>
-              <Button
-                variant={sendMethod === "whatsapp" ? "default" : "outline"}
-                className={sendMethod === "whatsapp" ? "bg-green-600" : ""}
-                onClick={() => setSendMethod("whatsapp")}
-              >
-                <Phone className="mr-2 h-4 w-4" />
-                WhatsApp
-              </Button>
-            </div>
-            
-            {sendMethod === "email" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Email</label>
-                <Input
-                  type="email"
-                  placeholder="client@example.com"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                />
-              </div>
-            )}
-            
-            {sendMethod === "whatsapp" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Phone Number (with country code)</label>
-                <Input
-                  type="tel"
-                  placeholder="+1234567890"
-                  value={recipientPhone}
-                  onChange={(e) => setRecipientPhone(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={confirmSendInvoice}
-              className="bg-indigo-600"
-              disabled={(sendMethod === "email" && !recipientEmail) || (sendMethod === "whatsapp" && !recipientPhone)}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Send Invoice
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </AppLayout>
+      <ShareSheet
+        open={isShareSheetOpen}
+        onOpenChange={setIsShareSheetOpen}
+        documentId={selectedInvoiceId || ""}
+        documentType="invoice"
+        recipientEmail={shareRecipientEmail}
+        recipientPhone={shareRecipientPhone}
+        clientName={shareClientName}
+      />
+    </FinancePageShell>
   );
 };
 

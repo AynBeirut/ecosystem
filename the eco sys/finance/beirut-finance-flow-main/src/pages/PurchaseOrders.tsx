@@ -1,14 +1,15 @@
 
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import AppLayout from "@/components/AppLayout";
-import { Plus, Trash, Mail, FileDown, Send, Phone, Eye } from "lucide-react";
+import { Plus, Trash, Mail, FileDown, Share2, Phone, Eye, X, Building } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SearchableCombobox } from "@/components/SearchableCombobox";
 import { CURRENCIES } from "@/services/mockData";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -17,6 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import ShareSheet from "@/components/ShareSheet";
 
 // Define schema for purchase order form (without items - handled separately)
 const purchaseOrderSchema = z.object({
@@ -42,10 +44,10 @@ const PurchaseOrders = () => {
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
   const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
-  const [isSendDialogOpen, setIsSendDialogOpen] = useState(false);
-  const [sendMethod, setSendMethod] = useState<"email" | "whatsapp">("email");
-  const [recipientEmail, setRecipientEmail] = useState("");
-  const [recipientPhone, setRecipientPhone] = useState("");
+  const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
+  const [shareRecipientEmail, setShareRecipientEmail] = useState("");
+  const [shareRecipientPhone, setShareRecipientPhone] = useState("");
+  const [shareClientName, setShareClientName] = useState("");
   const [previewPurchaseOrderData, setPreviewPurchaseOrderData] = useState<any>(null);
 
   const form = useForm<z.infer<typeof purchaseOrderSchema>>({
@@ -108,6 +110,24 @@ const PurchaseOrders = () => {
       total: subtotal
     };
   };
+
+  const supplierOptions = useMemo(
+    () => suppliers.map((supplier) => ({
+      value: supplier.id,
+      label: supplier.name,
+      keywords: [supplier.email, supplier.phone].filter(Boolean).join(' '),
+    })),
+    [suppliers],
+  );
+
+  const productOptions = useMemo(
+    () => products.map((product) => ({
+      value: product.id,
+      label: `${product.name} — $${product.salePrice.toFixed(2)}`,
+      keywords: product.sku || product.category || '',
+    })),
+    [products],
+  );
 
   const handleSupplierSelect = (supplierId: string) => {
     const selectedSupplier = suppliers.find(supplier => supplier.id === supplierId);
@@ -243,41 +263,16 @@ const PurchaseOrders = () => {
 
   const handleSendPurchaseOrder = (purchaseOrderId: string) => {
     setSelectedPurchaseOrderId(purchaseOrderId);
-    setIsSendDialogOpen(true);
+    const po = purchaseOrders.find((p) => p.id === purchaseOrderId);
+    const supplier = po?.supplierId ? suppliers.find((s) => s.id === po.supplierId) : null;
+    setShareRecipientEmail(supplier?.email || "");
+    setShareRecipientPhone(supplier?.phone || "");
+    setShareClientName(po?.supplierName || supplier?.name || "");
+    setIsShareSheetOpen(true);
   };
 
-  const confirmSendPurchaseOrder = () => {
-    if (!selectedPurchaseOrderId) return;
-    
-    let success = false;
-    
-    if (sendMethod === "email" && recipientEmail) {
-      success = sendPurchaseOrder(selectedPurchaseOrderId, recipientEmail);
-      if (success) {
-        toast({
-          title: "Purchase Order Sent",
-          description: `Your purchase order has been sent to ${recipientEmail}`,
-        });
-      }
-    } else if (sendMethod === "whatsapp" && recipientPhone) {
-      success = true;
-      toast({
-        title: "WhatsApp Message Prepared",
-        description: `Purchase order details ready to send via WhatsApp to ${recipientPhone}`,
-      });
-      
-      const whatsappText = `Hello! I'm sending you purchase order ${selectedPurchaseOrderId}. Total amount: ${calculateTotals().total.toFixed(2)} ${form.getValues().currency}.`;
-      const whatsappUrl = `https://wa.me/${recipientPhone.replace(/\D/g, '')}?text=${encodeURIComponent(whatsappText)}`;
-      window.open(whatsappUrl, '_blank');
-    }
-    
-    setIsSendDialogOpen(false);
-    setRecipientEmail("");
-    setRecipientPhone("");
-  };
-
-  const handleExportPurchaseOrder = (purchaseOrderId: string) => {
-    const success = exportPurchaseOrderAsPdf(purchaseOrderId);
+  const handleExportPurchaseOrder = async (purchaseOrderId: string) => {
+    const success = await exportPurchaseOrderAsPdf(purchaseOrderId);
     if (success) {
       toast({
         title: "Purchase Order Exported",
@@ -311,7 +306,7 @@ const PurchaseOrders = () => {
             <p className="text-gray-500 dark:text-gray-400">Create and manage your purchase orders</p>
           </div>
           <Button 
-            className="mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700"
+            className="mt-4 sm:mt-0 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700"
             onClick={() => setActiveTab("create")}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -322,7 +317,7 @@ const PurchaseOrders = () => {
         <Card>
           <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
-              <TabsList>
+              <TabsList className="grid w-full grid-cols-2 gap-2 h-auto">
                 <TabsTrigger value="list">Purchase Order List</TabsTrigger>
                 <TabsTrigger value="create">Create Purchase Order</TabsTrigger>
               </TabsList>
@@ -348,8 +343,8 @@ const PurchaseOrders = () => {
                             Preview
                           </Button>
                           <Button variant="outline" size="sm" onClick={() => handleSendPurchaseOrder(purchaseOrder.id)}>
-                            <Send className="mr-2 h-4 w-4" />
-                            Send
+                            <Share2 className="mr-2 h-4 w-4" />
+                            Share
                           </Button>
                           <Button variant="outline" size="sm" onClick={() => handleExportPurchaseOrder(purchaseOrder.id)}>
                             <FileDown className="mr-2 h-4 w-4" />
@@ -367,34 +362,75 @@ const PurchaseOrders = () => {
             <TabsContent value="create">
               <Form {...form}>
                 <form onSubmit={(e) => { e.preventDefault(); onSubmit(); }} className="space-y-6">
-                  <div className="space-y-4">
-                    <h3 className="text-lg font-medium">Supplier Information</h3>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      {suppliers.length > 0 && (
-                        <div>
-                          <label className="text-sm font-medium mb-1 block">Select Existing Supplier</label>
-                          <Select onValueChange={handleSupplierSelect}>
-                            <SelectTrigger>
-                              <SelectValue placeholder="Select supplier" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {suppliers.map(supplier => (
-                                <SelectItem key={supplier.id} value={supplier.id}>
-                                  {supplier.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                  <div className="space-y-3">
+                    <label className="text-sm font-medium">Supplier</label>
+
+                    {suppliers.length > 0 && !form.watch('supplierId') && !form.watch('supplierName') && (
+                      <SearchableCombobox
+                        options={supplierOptions}
+                        value={form.watch('supplierId')}
+                        onValueChange={handleSupplierSelect}
+                        placeholder="Search suppliers…"
+                        searchPlaceholder="Search by name, email, phone…"
+                        renderOption={(opt) => {
+                          const s = suppliers.find((sup) => sup.id === opt.value);
+                          return (
+                            <div className="flex flex-col">
+                              <span className="font-medium">{opt.label}</span>
+                              {s && ((s as any).email || (s as any).phone) && (
+                                <span className="text-xs text-muted-foreground">
+                                  {[(s as any).email, (s as any).phone].filter(Boolean).join(' · ')}
+                                </span>
+                              )}
+                            </div>
+                          );
+                        }}
+                      />
+                    )}
+
+                    {(() => {
+                      const selId = form.watch('supplierId');
+                      const selSupplier = selId ? suppliers.find((s) => s.id === selId) : null;
+                      if (!selSupplier) return null;
+                      return (
+                        <div className="flex items-start gap-3 rounded-lg border border-teal-200 bg-teal-50/50 dark:border-teal-800 dark:bg-teal-950/30 p-3">
+                          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-teal-100 dark:bg-teal-900">
+                            <Building className="h-4 w-4 text-teal-700 dark:text-teal-300" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium text-sm truncate">{selSupplier.name}</p>
+                            {(selSupplier as any).email && (
+                              <p className="text-xs text-muted-foreground truncate">{(selSupplier as any).email}</p>
+                            )}
+                            {(selSupplier as any).phone && (
+                              <p className="text-xs text-muted-foreground">{(selSupplier as any).phone}</p>
+                            )}
+                            {(selSupplier as any).address && (
+                              <p className="text-xs text-muted-foreground truncate">{(selSupplier as any).address}</p>
+                            )}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              form.setValue('supplierId', '');
+                              form.setValue('supplierName', '');
+                            }}
+                            className="shrink-0 rounded-full p-1 hover:bg-teal-200/60 dark:hover:bg-teal-800/60 transition-colors"
+                            aria-label="Clear supplier"
+                          >
+                            <X className="h-4 w-4 text-muted-foreground" />
+                          </button>
                         </div>
-                      )}
-                      
+                      );
+                    })()}
+
+                    {!form.watch('supplierId') && suppliers.length === 0 && (
                       <FormField
                         control={form.control}
                         name="supplierName"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Supplier Name</FormLabel>
+                            <FormLabel className="text-xs text-muted-foreground">Or type a name</FormLabel>
                             <FormControl>
                               <Input placeholder="Supplier name or company" {...field} />
                             </FormControl>
@@ -402,7 +438,7 @@ const PurchaseOrders = () => {
                           </FormItem>
                         )}
                       />
-                    </div>
+                    )}
                   </div>
 
                   <div className="space-y-4">
@@ -429,25 +465,20 @@ const PurchaseOrders = () => {
                             <div className="col-span-12 md:col-span-6">
                               <label className="text-sm font-medium mb-1 block">Description</label>
                               <div className="flex flex-col space-y-2">
-                                {products.length > 0 && (
-                                  <Select onValueChange={(value) => handleProductSelect(value, item.id)}>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select product" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                      {products.map(product => (
-                                        <SelectItem key={product.id} value={product.id}>
-                                          {product.name} - ${product.salePrice.toFixed(2)}
-                                        </SelectItem>
-                                      ))}
-                                    </SelectContent>
-                                  </Select>
+                                {products.length > 0 ? (
+                                  <SearchableCombobox
+                                    options={productOptions}
+                                    onValueChange={(value) => handleProductSelect(value, item.id)}
+                                    placeholder="Search products…"
+                                    searchPlaceholder="Type product name or SKU…"
+                                  />
+                                ) : (
+                                  <Input
+                                    placeholder="Item description"
+                                    value={item.description}
+                                    onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
+                                  />
                                 )}
-                                <Input
-                                  placeholder="Item description"
-                                  value={item.description}
-                                  onChange={(e) => handleLineItemChange(item.id, 'description', e.target.value)}
-                                />
                               </div>
                             </div>
                             <div className="col-span-3 md:col-span-2">
@@ -657,7 +688,7 @@ const PurchaseOrders = () => {
                 }}
               >
                 <Mail className="mr-2 h-4 w-4" />
-                Send
+                Share
               </Button>
               <Button 
                 onClick={() => {
@@ -680,75 +711,15 @@ const PurchaseOrders = () => {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>Send Purchase Order</DialogTitle>
-            <DialogDescription>
-              Choose how you want to send this purchase order.
-            </DialogDescription>
-          </DialogHeader>
-          
-          <div className="space-y-4 py-4">
-            <div className="flex space-x-2">
-              <Button
-                variant={sendMethod === "email" ? "default" : "outline"}
-                className={sendMethod === "email" ? "bg-indigo-600" : ""}
-                onClick={() => setSendMethod("email")}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Email
-              </Button>
-              <Button
-                variant={sendMethod === "whatsapp" ? "default" : "outline"}
-                className={sendMethod === "whatsapp" ? "bg-green-600" : ""}
-                onClick={() => setSendMethod("whatsapp")}
-              >
-                <Phone className="mr-2 h-4 w-4" />
-                WhatsApp
-              </Button>
-            </div>
-            
-            {sendMethod === "email" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Email</label>
-                <Input
-                  type="email"
-                  placeholder="client@example.com"
-                  value={recipientEmail}
-                  onChange={(e) => setRecipientEmail(e.target.value)}
-                />
-              </div>
-            )}
-            
-            {sendMethod === "whatsapp" && (
-              <div>
-                <label className="text-sm font-medium mb-1 block">Recipient Phone Number (with country code)</label>
-                <Input
-                  type="tel"
-                  placeholder="+1234567890"
-                  value={recipientPhone}
-                  onChange={(e) => setRecipientPhone(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button 
-              onClick={confirmSendPurchaseOrder}
-              className="bg-indigo-600"
-              disabled={(sendMethod === "email" && !recipientEmail) || (sendMethod === "whatsapp" && !recipientPhone)}
-            >
-              <Send className="mr-2 h-4 w-4" />
-              Send Purchase Order
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ShareSheet
+        open={isShareSheetOpen}
+        onOpenChange={setIsShareSheetOpen}
+        documentId={selectedPurchaseOrderId || ""}
+        documentType="purchaseOrder"
+        recipientEmail={shareRecipientEmail}
+        recipientPhone={shareRecipientPhone}
+        clientName={shareClientName}
+      />
     </AppLayout>
   );
 };

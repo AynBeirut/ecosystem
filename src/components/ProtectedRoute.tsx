@@ -154,7 +154,15 @@ const ProtectedRoute: React.FC<{
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    const dest = `${location.pathname}${location.search}`;
+    if (dest && dest !== '/login' && !dest.startsWith('/login?')) {
+      try {
+        localStorage.setItem('redirectAfterLogin', dest);
+      } catch {
+        // ignore quota / private mode
+      }
+    }
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   if (requiresAdminIpCheck && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
@@ -187,6 +195,9 @@ const ProtectedRoute: React.FC<{
         user.role === 'sub_account';
 
       if (!hasAccess) {
+        if (user.role === 'user') {
+          return <Navigate to="/subscription" replace state={{ from: location }} />;
+        }
         return <Navigate to="/" replace />;
       }
     } else if (allowedRoles.includes('crm_rep')) {
@@ -194,6 +205,9 @@ const ProtectedRoute: React.FC<{
         return <Navigate to="/" replace />;
       }
     } else if (!allowedRoles.includes(user.role)) {
+      if (user.role === 'user') {
+        return <Navigate to="/subscription" replace state={{ from: location }} />;
+      }
       return <Navigate to="/" replace />;
     }
   }

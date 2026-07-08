@@ -51,6 +51,7 @@ import CustomersScreen from '../screens/owner/CustomersScreen';
 import GatedPurchasesScreen from '../screens/owner/GatedPurchasesScreen';
 import SuppliersScreen from '../screens/owner/SuppliersScreen';
 import AccountStatementScreen from '../screens/owner/AccountStatementScreen';
+import GatedInvoiceManagerScreen from '../screens/owner/GatedInvoiceManagerScreen';
 import CrmMyClientsScreen from '../screens/crm/CrmMyClientsScreen';
 import CrmClientDetailScreen from '../screens/crm/CrmClientDetailScreen';
 
@@ -172,6 +173,7 @@ export default function AppNavigator() {
             <Stack.Screen name="Purchases" component={GatedPurchasesScreen} options={{ headerShown: true, title: 'Purchases' }} />
             <Stack.Screen name="Suppliers" component={SuppliersScreen} options={{ headerShown: true, title: 'Suppliers' }} />
             <Stack.Screen name="AccountStatement" component={AccountStatementScreen} options={{ headerShown: true, title: 'Account Statement' }} />
+            <Stack.Screen name="InvoiceManager" component={GatedInvoiceManagerScreen} options={{ headerShown: false }} />
             <Stack.Screen name="CrmClientDetail" component={CrmClientDetailScreen} options={{ headerShown: true, title: 'Client' }} />
           </>
         )}

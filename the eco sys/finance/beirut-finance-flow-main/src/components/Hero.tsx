@@ -1,8 +1,15 @@
 
 import { motion } from "framer-motion";
+import { Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import BrandMark from "@/components/BrandMark";
+import { BRAND } from "@/lib/branding";
 
-const Hero = () => {
+type HeroProps = {
+  onTryDemo?: () => void;
+};
+
+const Hero = ({ onTryDemo }: HeroProps) => {
   return (
     <motion.div 
       initial={{ opacity: 0, y: 20 }} 
@@ -10,52 +17,48 @@ const Hero = () => {
       transition={{ duration: 0.5 }}
       className="text-center py-12"
     >
-      <h1 className="text-4xl md:text-5xl font-bold tracking-tight text-gray-900 dark:text-white mb-4">
-        AYN <span className="text-indigo-600 dark:text-indigo-400">BEIRUT</span>
-      </h1>
-      <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
-        Smart invoice and expense manager for Lebanese startups and small businesses
+      <div className="mb-4 flex justify-center">
+        <BrandMark size="lg" />
+      </div>
+      <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-2 max-w-2xl mx-auto">
+        {BRAND.tagline}
+      </p>
+      <p className="text-sm text-muted-foreground mb-8">
+        Same account as{" "}
+        <a href={BRAND.ecosystemUrl} className="text-[#38B2AC] hover:underline" target="_blank" rel="noopener noreferrer">
+          grabio.space
+        </a>
       </p>
       <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-        <Button size="lg" className="bg-indigo-600 hover:bg-indigo-700">
-          Get Started
-        </Button>
-        <Button variant="outline" size="lg">
-          Learn More
+        {onTryDemo && (
+          <Button
+            size="lg"
+            className="bg-[#38B2AC] hover:bg-[#2C9A94] text-white"
+            onClick={onTryDemo}
+          >
+            <Sparkles className="h-4 w-4 mr-2" />
+            Try Demo
+          </Button>
+        )}
+        <Button variant="outline" size="lg" asChild>
+          <a href={`${BRAND.ecosystemUrl}/features`} target="_blank" rel="noopener noreferrer">
+            Explore Grabio
+          </a>
         </Button>
       </div>
       <div className="mt-10 flex flex-wrap justify-center gap-6">
-        <div className="flex items-center">
-          <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-full">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600 dark:text-indigo-400">
-              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
-              <polyline points="14 2 14 8 20 8"></polyline>
-              <line x1="16" y1="13" x2="8" y2="13"></line>
-              <line x1="16" y1="17" x2="8" y2="17"></line>
-              <polyline points="10 9 9 9 8 9"></polyline>
-            </svg>
+        {[
+          "Professional Invoices",
+          "Receipt Management",
+          "Multi-Currency Support",
+        ].map((label) => (
+          <div key={label} className="flex items-center">
+            <div className="bg-teal-50 dark:bg-teal-950/30 p-2 rounded-full">
+              <div className="h-5 w-5 rounded-full bg-[#38B2AC]/20 border-2 border-[#38B2AC]" />
+            </div>
+            <span className="ml-2 text-gray-600 dark:text-gray-300">{label}</span>
           </div>
-          <span className="ml-2 text-gray-600 dark:text-gray-300">Professional Invoices</span>
-        </div>
-        <div className="flex items-center">
-          <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-full">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600 dark:text-indigo-400">
-              <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path>
-            </svg>
-          </div>
-          <span className="ml-2 text-gray-600 dark:text-gray-300">Receipt Management</span>
-        </div>
-        <div className="flex items-center">
-          <div className="bg-indigo-100 dark:bg-indigo-900/30 p-2 rounded-full">
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-indigo-600 dark:text-indigo-400">
-              <path d="M20 7h-9"></path>
-              <path d="M14 17H5"></path>
-              <circle cx="17" cy="17" r="3"></circle>
-              <circle cx="7" cy="7" r="3"></circle>
-            </svg>
-          </div>
-          <span className="ml-2 text-gray-600 dark:text-gray-300">Multi-Currency Support</span>
-        </div>
+        ))}
       </div>
     </motion.div>
   );

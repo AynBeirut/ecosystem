@@ -1,48 +1,38 @@
-// Detects expired sessions and triggers silent refresh
+// Detects expired Firebase sessions and listens for sign-out
 import { useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { onAuthStateChanged } from "firebase/auth";
+import { auth } from "@/integrations/firebase/client";
 import { toast } from "sonner";
 import { logError, logInfo } from "@/lib/logger";
 
 export function useSessionGuard() {
   useEffect(() => {
-    let cancelled = false;
-
-    const check = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
-        const exp = (session.expires_at ?? 0) * 1000;
-        const msLeft = exp - Date.now();
-        if (msLeft < 5 * 60 * 1000) {
-          const { error } = await supabase.auth.refreshSession();
-          if (error) {
-            logError("session", "refresh failed", error);
-            toast.error("Your session expired. Please sign in again.");
-          } else {
-            logInfo("session", "refreshed");
-          }
-        }
-      } catch (e) {
-        logError("session", "check failed", e);
+    const unsub = onAuthStateChanged(auth, (user) => {
+      if (!user) {
+        logInfo("session", "signed out");
+        return;
       }
-    };
-
-    check();
-    const id = setInterval(() => { if (!cancelled) check(); }, 60_000);
-    const onVisible = () => { if (document.visibilityState === "visible") check(); };
-    document.addEventListener("visibilitychange", onVisible);
-
-    const { data: sub } = supabase.auth.onAuthStateChange((event) => {
-      if (event === "TOKEN_REFRESHED") logInfo("session", "token refreshed");
-      if (event === "SIGNED_OUT") toast.info("You have been signed out.");
+      user.getIdTokenResult().then((token) => {
+        const expMs = new Date(token.expirationTime).getTime() - Date.now();
+        if (expMs < 5 * 60 * 1000) {
+          logInfo("session", "token near expiry — Firebase auto-refresh active");
+        }
+      }).catch((e) => logError("session", "token check failed", e));
     });
 
+    const onVisible = () => {
+      if (document.visibilityState === "visible" && auth.currentUser) {
+        auth.currentUser.getIdToken(true).catch((e) => {
+          logError("session", "refresh failed", e);
+          toast.error("Your session expired. Please sign in again.");
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+
     return () => {
-      cancelled = true;
-      clearInterval(id);
       document.removeEventListener("visibilitychange", onVisible);
-      sub.subscription.unsubscribe();
+      unsub();
     };
   }, []);
 }

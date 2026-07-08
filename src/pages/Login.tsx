@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { useNavigate, Link, useSearchParams } from 'react-router-dom';
+import { useNavigate, Link, useSearchParams, useLocation } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/sonner';
 import { useAuth } from '@/context/useAuth';
 import { auth } from '@/lib/firebase';
-import { createUserWithEmailAndPassword, updateProfile } from 'firebase/auth';
+import { createUserWithEmailAndPassword, signInWithCustomToken, updateProfile } from 'firebase/auth';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 const Login: React.FC = () => {
@@ -22,19 +22,36 @@ const Login: React.FC = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const { login, googleLogin, user, isLoading } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'signin';
+
+  // DEV-only: `?customToken=…` for local E2E (custom token from Admin SDK)
+  useEffect(() => {
+    const devToken = searchParams.get('customToken');
+    if (!import.meta.env.DEV || !devToken || user) return;
+    void signInWithCustomToken(auth, devToken).catch((err) => {
+      console.error('[Login] dev customToken sign-in failed', err);
+      toast.error('Dev token sign-in failed');
+    });
+  }, [searchParams, user]);
 
   // Redirect if already logged in
   useEffect(() => {
     console.log('[Login] useEffect: user state changed:', user);
     if (user) {
       console.log('[Login] User detected, checking for redirect');
-      // Check if there's a redirect path saved
-      const redirectPath = localStorage.getItem('redirectAfterLogin');
-      console.log('[Login] Redirect path from localStorage:', redirectPath);
-      
-      if (redirectPath) {
+      const fromState = (location.state as { from?: { pathname?: string; search?: string } })?.from;
+      const fromStatePath =
+        fromState?.pathname
+          ? `${fromState.pathname}${fromState.search || ''}`
+          : null;
+      const nextParam = searchParams.get('next');
+      const redirectPath =
+        localStorage.getItem('redirectAfterLogin') || nextParam || fromStatePath;
+      console.log('[Login] Redirect path:', redirectPath);
+
+      if (redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('/login')) {
         localStorage.removeItem('redirectAfterLogin');
         console.log('[Login] Navigating to saved path:', redirectPath);
         navigate(redirectPath, { replace: true });
@@ -56,7 +73,7 @@ const Login: React.FC = () => {
         navigate('/search', { replace: true });
       }
     }
-  }, [user, navigate, searchParams]);
+  }, [user, navigate, searchParams, location.state]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();

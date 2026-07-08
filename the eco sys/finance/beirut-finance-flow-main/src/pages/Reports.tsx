@@ -1,5 +1,5 @@
 import { useState } from "react";
-import AppLayout from "@/components/AppLayout";
+import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { useAccounting } from "@/context/AccountingContext";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -324,7 +324,7 @@ const Reports = () => {
   );
 
   const ExportButtons = ({ reportType }: { reportType: string }) => (
-    <div className="flex gap-2">
+    <div className="flex flex-wrap gap-2">
       <Button variant="outline" size="sm" onClick={() => handleExport('pdf', reportType)}>
         <File className="h-4 w-4 mr-1" /> PDF
       </Button>
@@ -338,7 +338,7 @@ const Reports = () => {
   );
 
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
@@ -347,7 +347,7 @@ const Reports = () => {
           </div>
           
           <Select value={period} onValueChange={(value: any) => setPeriod(value)}>
-            <SelectTrigger className="w-[180px]">
+            <SelectTrigger className="w-full sm:w-[180px]">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>
@@ -396,7 +396,7 @@ const Reports = () => {
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="flex-wrap">
+          <TabsList className="grid grid-cols-2 sm:flex sm:flex-wrap w-full h-auto gap-2">
             <TabsTrigger value="summary">P&L Summary</TabsTrigger>
             <TabsTrigger value="expenses">Expenses</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
@@ -694,7 +694,7 @@ const Reports = () => {
           </TabsContent>
         </Tabs>
       </div>
-    </AppLayout>
+    </FinancePageShell>
   );
 };
 

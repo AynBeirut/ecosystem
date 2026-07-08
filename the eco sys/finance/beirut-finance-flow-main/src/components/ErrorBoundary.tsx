@@ -1,6 +1,6 @@
 import React from "react";
-import { Button } from "@/components/ui/button";
 import { logError } from "@/lib/logger";
+import { isFinanceInAppShell } from "@/lib/playStoreNavScope";
 
 interface State { hasError: boolean; error?: Error }
 
@@ -27,12 +27,18 @@ export class ErrorBoundary extends React.Component<{ children: React.ReactNode; 
             {this.state.error?.message || "An unexpected error occurred."}
           </p>
           <div className="flex gap-2 justify-center">
-            <Button variant="outline" onClick={() => { this.reset(); window.location.reload(); }}>
+            <button
+              className="px-4 py-2 text-sm rounded-md border border-input bg-background hover:bg-accent hover:text-accent-foreground"
+              onClick={() => { this.reset(); window.location.reload(); }}
+            >
               Reload
-            </Button>
-            <Button onClick={() => { this.reset(); window.location.href = "/"; }}>
+            </button>
+            <button
+              className="px-4 py-2 text-sm rounded-md bg-primary text-primary-foreground hover:bg-primary/90"
+              onClick={() => { this.reset(); const base = (import.meta.env.BASE_URL || '/').replace(/\/$/, ''); window.location.href = isFinanceInAppShell() ? `${base}/invoices` : `${base}/`; }}
+            >
               Go to Dashboard
-            </Button>
+            </button>
           </div>
         </div>
       </div>

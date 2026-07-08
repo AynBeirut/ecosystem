@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
   Expense,
   ExpenseEntry,
@@ -16,37 +16,12 @@ import {
   TransactionType,
   CashBucket
 } from '@/types/accounting';
-
-// Storage keys
-const STORAGE_KEYS = {
-  EXPENSES: 'accounting_expenses',
-  EXPENSE_ENTRIES: 'accounting_expense_entries',
-  STAFF: 'accounting_staff',
-  STAFF_PAYMENTS: 'accounting_staff_payments',
-  DELIVERY_PERSONS: 'accounting_delivery_persons',
-  DELIVERY_ORDERS: 'accounting_delivery_orders',
-  CASH_COLLECTIONS: 'accounting_cash_collections',
-  CASH_BALANCE: 'accounting_cash_balance',
-  CASH_TRANSACTIONS: 'accounting_cash_transactions'
-};
-
-// Helper functions for localStorage
-function getItem<T>(key: string, defaultValue: T): T {
-  try {
-    const item = localStorage.getItem(key);
-    return item ? JSON.parse(item) : defaultValue;
-  } catch {
-    return defaultValue;
-  }
-}
-
-function setItem<T>(key: string, value: T): void {
-  try {
-    localStorage.setItem(key, JSON.stringify(value));
-  } catch (error) {
-    console.error(`Failed to save to localStorage: ${key}`, error);
-  }
-}
+import { useAppContext } from '@/context/AppContext';
+import {
+  DEFAULT_CASH_BALANCE,
+  loadAccountingFromFirestore,
+  saveAccountingSlice,
+} from '@/lib/firestore/accountingFirestore';
 
 interface AccountingContextType {
   // Expenses
@@ -92,36 +67,70 @@ interface AccountingContextType {
 
 const AccountingContext = createContext<AccountingContextType | undefined>(undefined);
 
-const DEFAULT_CASH_BALANCE: CashBalance = {
-  cashOnHand: 0,
-  bankBalance: 0,
-  deliveryHeldCash: 0,
-  outstandingClientBalances: 0,
-  lastUpdated: new Date().toISOString()
-};
-
 export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  // State
-  const [expenses, setExpenses] = useState<Expense[]>(() => getItem(STORAGE_KEYS.EXPENSES, []));
-  const [expenseEntries, setExpenseEntries] = useState<ExpenseEntry[]>(() => getItem(STORAGE_KEYS.EXPENSE_ENTRIES, []));
-  const [staff, setStaff] = useState<Staff[]>(() => getItem(STORAGE_KEYS.STAFF, []));
-  const [staffPayments, setStaffPayments] = useState<StaffPayment[]>(() => getItem(STORAGE_KEYS.STAFF_PAYMENTS, []));
-  const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>(() => getItem(STORAGE_KEYS.DELIVERY_PERSONS, []));
-  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>(() => getItem(STORAGE_KEYS.DELIVERY_ORDERS, []));
-  const [cashCollections, setCashCollections] = useState<CashCollection[]>(() => getItem(STORAGE_KEYS.CASH_COLLECTIONS, []));
-  const [cashBalance, setCashBalance] = useState<CashBalance>(() => getItem(STORAGE_KEYS.CASH_BALANCE, DEFAULT_CASH_BALANCE));
-  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>(() => getItem(STORAGE_KEYS.CASH_TRANSACTIONS, []));
+  const { activeOrganizationId: storeId } = useAppContext();
+  const hydratingRef = useRef(true);
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
-  // Persist to localStorage
-  useEffect(() => { setItem(STORAGE_KEYS.EXPENSES, expenses); }, [expenses]);
-  useEffect(() => { setItem(STORAGE_KEYS.EXPENSE_ENTRIES, expenseEntries); }, [expenseEntries]);
-  useEffect(() => { setItem(STORAGE_KEYS.STAFF, staff); }, [staff]);
-  useEffect(() => { setItem(STORAGE_KEYS.STAFF_PAYMENTS, staffPayments); }, [staffPayments]);
-  useEffect(() => { setItem(STORAGE_KEYS.DELIVERY_PERSONS, deliveryPersons); }, [deliveryPersons]);
-  useEffect(() => { setItem(STORAGE_KEYS.DELIVERY_ORDERS, deliveryOrders); }, [deliveryOrders]);
-  useEffect(() => { setItem(STORAGE_KEYS.CASH_COLLECTIONS, cashCollections); }, [cashCollections]);
-  useEffect(() => { setItem(STORAGE_KEYS.CASH_BALANCE, cashBalance); }, [cashBalance]);
-  useEffect(() => { setItem(STORAGE_KEYS.CASH_TRANSACTIONS, cashTransactions); }, [cashTransactions]);
+  const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [expenseEntries, setExpenseEntries] = useState<ExpenseEntry[]>([]);
+  const [staff, setStaff] = useState<Staff[]>([]);
+  const [staffPayments, setStaffPayments] = useState<StaffPayment[]>([]);
+  const [deliveryPersons, setDeliveryPersons] = useState<DeliveryPerson[]>([]);
+  const [deliveryOrders, setDeliveryOrders] = useState<DeliveryOrder[]>([]);
+  const [cashCollections, setCashCollections] = useState<CashCollection[]>([]);
+  const [cashBalance, setCashBalance] = useState<CashBalance>(DEFAULT_CASH_BALANCE);
+  const [cashTransactions, setCashTransactions] = useState<CashTransaction[]>([]);
+
+  const scheduleSave = useCallback(<K extends Parameters<typeof saveAccountingSlice>[1]>(
+    key: K,
+    value: Parameters<typeof saveAccountingSlice>[2],
+  ) => {
+    if (!storeId || hydratingRef.current) return;
+    const timerKey = String(key);
+    if (saveTimers.current[timerKey]) clearTimeout(saveTimers.current[timerKey]);
+    saveTimers.current[timerKey] = setTimeout(() => {
+      void saveAccountingSlice(storeId, key, value).catch((err) => {
+        console.error(`[Accounting] failed to save ${timerKey}:`, err);
+      });
+    }, 600);
+  }, [storeId]);
+
+  useEffect(() => {
+    if (!storeId) {
+      hydratingRef.current = false;
+      return;
+    }
+    let cancelled = false;
+    hydratingRef.current = true;
+    void loadAccountingFromFirestore(storeId).then((data) => {
+      if (cancelled) return;
+      setExpenses(data.expenses);
+      setExpenseEntries(data.expenseEntries);
+      setStaff(data.staff);
+      setStaffPayments(data.staffPayments);
+      setDeliveryPersons(data.deliveryPersons);
+      setDeliveryOrders(data.deliveryOrders);
+      setCashCollections(data.cashCollections);
+      setCashBalance(data.cashBalance || DEFAULT_CASH_BALANCE);
+      setCashTransactions(data.cashTransactions);
+      hydratingRef.current = false;
+    }).catch((err) => {
+      console.error('[Accounting] load failed:', err);
+      hydratingRef.current = false;
+    });
+    return () => { cancelled = true; };
+  }, [storeId]);
+
+  useEffect(() => { scheduleSave('expenses', expenses); }, [expenses, scheduleSave]);
+  useEffect(() => { scheduleSave('expenseEntries', expenseEntries); }, [expenseEntries, scheduleSave]);
+  useEffect(() => { scheduleSave('staff', staff); }, [staff, scheduleSave]);
+  useEffect(() => { scheduleSave('staffPayments', staffPayments); }, [staffPayments, scheduleSave]);
+  useEffect(() => { scheduleSave('deliveryPersons', deliveryPersons); }, [deliveryPersons, scheduleSave]);
+  useEffect(() => { scheduleSave('deliveryOrders', deliveryOrders); }, [deliveryOrders, scheduleSave]);
+  useEffect(() => { scheduleSave('cashCollections', cashCollections); }, [cashCollections, scheduleSave]);
+  useEffect(() => { scheduleSave('cashBalance', cashBalance); }, [cashBalance, scheduleSave]);
+  useEffect(() => { scheduleSave('cashTransactions', cashTransactions); }, [cashTransactions, scheduleSave]);
 
   // ============= EXPENSE FUNCTIONS =============
   const createExpense = (expenseData: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>): string => {

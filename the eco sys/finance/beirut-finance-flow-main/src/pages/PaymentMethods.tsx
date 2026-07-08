@@ -13,19 +13,18 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { useAppContext } from "@/context/AppContext";
-import { supabase } from "@/integrations/supabase/client";
+import {
+  createPaymentMethod,
+  deletePaymentMethod,
+  listPaymentMethods,
+  updatePaymentMethod,
+  type FinancePaymentMethod,
+  type PaymentMethodType,
+} from "@/lib/firestore/paymentMethodsService";
 
-type PMType = "stripe" | "paypal" | "wish" | "omt" | "bank" | "card";
-type PM = {
-  id: string;
-  organization_id: string;
-  type: PMType;
-  label: string | null;
-  config: Record<string, any>;
-  is_active: boolean;
-};
+type PM = FinancePaymentMethod;
 
-const TYPE_LABEL: Record<PMType, string> = {
+const TYPE_LABEL: Record<PaymentMethodType, string> = {
   stripe: "Stripe (cards)",
   paypal: "PayPal",
   wish: "Wish Money",
@@ -35,14 +34,13 @@ const TYPE_LABEL: Record<PMType, string> = {
 };
 
 const PaymentMethods = () => {
-  const { activeOrganizationId, hasPermission } = useAppContext();
+  const { activeOrganizationId, hasPermission, logout } = useAppContext();
   const canManage = hasPermission("manage_payment_methods");
 
   const [items, setItems] = useState<PM[]>([]);
   const [loading, setLoading] = useState(false);
 
-  // form
-  const [type, setType] = useState<PMType>("stripe");
+  const [type, setType] = useState<PaymentMethodType>("stripe");
   const [label, setLabel] = useState("");
   const [stripeKey, setStripeKey] = useState("");
   const [paypalEmail, setPaypalEmail] = useState("");
@@ -53,21 +51,21 @@ const PaymentMethods = () => {
   const load = useCallback(async () => {
     if (!activeOrganizationId) return;
     setLoading(true);
-    const { data, error } = await supabase
-      .from("payment_methods" as any)
-      .select("id, organization_id, type, label, is_active")
-      .eq("organization_id", activeOrganizationId)
-      .order("created_at", { ascending: false });
-    if (error) toast.error(error.message);
-    setItems(((data as any[]) || []) as PM[]);
-    setLoading(false);
+    try {
+      const rows = await listPaymentMethods(activeOrganizationId);
+      setItems(rows);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to load payment methods");
+    } finally {
+      setLoading(false);
+    }
   }, [activeOrganizationId]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => { void load(); }, [load]);
 
   if (!activeOrganizationId) return <Navigate to="/" replace />;
 
-  const buildConfig = (): Record<string, any> => {
+  const buildConfig = (): Record<string, unknown> => {
     switch (type) {
       case "stripe":
       case "card":
@@ -83,9 +81,8 @@ const PaymentMethods = () => {
   };
 
   const handleAdd = async () => {
-    if (!canManage) return;
+    if (!canManage || !activeOrganizationId) return;
     const config = buildConfig();
-    // Minimal validation per type
     if ((type === "stripe" || type === "card") && !String(config.secret_key || "").startsWith("sk_")) {
       toast.error("Stripe secret key must start with sk_");
       return;
@@ -95,41 +92,46 @@ const PaymentMethods = () => {
     if (type === "bank" && !config.details) { toast.error("Bank details required"); return; }
 
     setSaving(true);
-    const { error } = await supabase
-      .from("payment_methods" as any)
-      .insert({
-        organization_id: activeOrganizationId,
+    try {
+      await createPaymentMethod(activeOrganizationId, {
         type,
         label: label.trim() || null,
         config,
         is_active: true,
       });
-    setSaving(false);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Payment method added");
-    setLabel(""); setStripeKey(""); setPaypalEmail(""); setPhone(""); setBankDetails("");
-    load();
+      toast.success("Payment method added");
+      setLabel(""); setStripeKey(""); setPaypalEmail(""); setPhone(""); setBankDetails("");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to add payment method");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleToggle = async (pm: PM, active: boolean) => {
-    const { error } = await supabase
-      .from("payment_methods" as any)
-      .update({ is_active: active })
-      .eq("id", pm.id);
-    if (error) { toast.error(error.message); return; }
-    setItems(items.map((i) => (i.id === pm.id ? { ...i, is_active: active } : i)));
+    if (!activeOrganizationId) return;
+    try {
+      await updatePaymentMethod(activeOrganizationId, pm.id, { is_active: active });
+      setItems(items.map((i) => (i.id === pm.id ? { ...i, is_active: active } : i)));
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to update payment method");
+    }
   };
 
   const handleDelete = async (pm: PM) => {
-    if (!confirm(`Delete ${TYPE_LABEL[pm.type]}?`)) return;
-    const { error } = await supabase.from("payment_methods" as any).delete().eq("id", pm.id);
-    if (error) { toast.error(error.message); return; }
-    toast.success("Deleted");
-    load();
+    if (!activeOrganizationId || !confirm(`Delete ${TYPE_LABEL[pm.type]}?`)) return;
+    try {
+      await deletePaymentMethod(activeOrganizationId, pm.id);
+      toast.success("Deleted");
+      await load();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete payment method");
+    }
   };
 
   return (
-    <AppLayout onLogout={() => supabase.auth.signOut()}>
+    <AppLayout onLogout={logout}>
       <div className="space-y-6 max-w-4xl">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -152,10 +154,10 @@ const PaymentMethods = () => {
             </CardHeader>
             <CardContent className="space-y-3">
               <div className="flex flex-wrap gap-2">
-                <Select value={type} onValueChange={(v: any) => setType(v)}>
+                <Select value={type} onValueChange={(v) => setType(v as PaymentMethodType)}>
                   <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    {(Object.keys(TYPE_LABEL) as PMType[]).map((t) => (
+                    {(Object.keys(TYPE_LABEL) as PaymentMethodType[]).map((t) => (
                       <SelectItem key={t} value={t}>{TYPE_LABEL[t]}</SelectItem>
                     ))}
                   </SelectContent>

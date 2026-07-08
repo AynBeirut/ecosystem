@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
-import AppLayout from "@/components/AppLayout";
+import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
@@ -82,7 +82,7 @@ const ProductsManager = () => {
   };
 
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
@@ -90,7 +90,7 @@ const ProductsManager = () => {
             <p className="text-gray-500 dark:text-gray-400">Manage your products and services</p>
           </div>
           <Button 
-            className="mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700"
+            className="mt-4 sm:mt-0 w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700"
             onClick={() => setActiveTab("add")}
           >
             <Plus className="mr-2 h-4 w-4" />
@@ -99,15 +99,14 @@ const ProductsManager = () => {
         </div>
 
         <Card>
-          <CardHeader>
-            <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
-              <TabsList>
+          <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
+            <CardHeader>
+              <TabsList className="grid w-full grid-cols-2 gap-2 h-auto">
                 <TabsTrigger value="list">Product List</TabsTrigger>
                 <TabsTrigger value="add">Add Product</TabsTrigger>
               </TabsList>
-            </Tabs>
-          </CardHeader>
-          <CardContent>
+            </CardHeader>
+            <CardContent>
             <TabsContent value="list">
               {products.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
@@ -300,9 +299,10 @@ const ProductsManager = () => {
               </Form>
             </TabsContent>
           </CardContent>
+          </Tabs>
         </Card>
       </div>
-    </AppLayout>
+    </FinancePageShell>
   );
 };
 

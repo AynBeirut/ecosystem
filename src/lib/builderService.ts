@@ -11,6 +11,7 @@ import {
 import { auth } from '@/lib/firebase';
 import { generateSlug } from '@/lib/slugify';
 import { getApiBaseUrl } from '@/lib/apiBase';
+import { mergeBrandingIntoStoreProfile } from '@/lib/builderBrandingTransfer';
 import { BUILDER_MAX_DEMO_SLOTS } from '@/lib/builderConstants';
 import type {
   BuilderAccount,
@@ -96,7 +97,7 @@ export async function createDemoStore(builderUid: string, name: string): Promise
   await setDoc(doc(db, 'builders', builderUid, 'demoStores', demoRef.id, 'profile', 'branding'), {
     name: trimmed,
     slug,
-    template: 'default',
+    template: 'modern',
     description: '',
     slogan: '',
   } satisfies BuilderDemoBranding);
@@ -202,8 +203,11 @@ export async function transferDemoToOwnStore(
     throw new Error('Demo already transferred');
   }
 
-  const branding = await getDemoBranding(builderUid, demoId);
-  if (!branding?.name) {
+  const brandingSnap = await getDoc(
+    doc(db, 'builders', builderUid, 'demoStores', demoId, 'profile', 'branding'),
+  );
+  const branding = brandingSnap.exists() ? (brandingSnap.data() as Record<string, unknown>) : {};
+  if (!branding?.name && !demo.name) {
     throw new Error('Demo branding is missing');
   }
 
@@ -211,18 +215,13 @@ export async function transferDemoToOwnStore(
   const storeId = await resolveTargetStoreId(clientUid);
   const timestamp = nowIso();
 
-  const batch = writeBatch(db);
-  batch.set(doc(db, 'storeProfiles', storeId), {
+  const storePayload = mergeBrandingIntoStoreProfile(branding, {
     id: storeId,
     storeId,
     ownerId: clientUid,
     email: clientEmail,
-    name: branding.name,
-    slug: branding.slug || generateSlug(branding.name),
-    description: branding.description || '',
-    slogan: branding.slogan || '',
-    logo: branding.logo || '',
-    template: branding.template || 'default',
+    name: String(branding.name || demo.name),
+    slug: String(branding.slug || generateSlug(String(branding.name || demo.name))),
     isDemo: false,
     subscriptionStatus: 'trial',
     subscriptionTier: 'trial',
@@ -233,6 +232,9 @@ export async function transferDemoToOwnStore(
     transferredFromDemoId: demoId,
     transferredFromBuilderUid: builderUid,
   });
+
+  const batch = writeBatch(db);
+  batch.set(doc(db, 'storeProfiles', storeId), storePayload);
 
   const userRef = doc(db, 'users', clientUid);
   const userSnap = await getDoc(userRef);

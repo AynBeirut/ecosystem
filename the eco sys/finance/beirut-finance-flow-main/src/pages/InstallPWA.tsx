@@ -5,6 +5,7 @@ import { Smartphone, Download, CheckCircle } from "lucide-react";
 import { pwaInstaller } from "@/lib/pwaInstall";
 import AppLayout from "@/components/AppLayout";
 import { useNavigate } from "react-router-dom";
+import { BRAND } from "@/lib/branding";
 
 const InstallPWA = () => {
   const [canInstall, setCanInstall] = useState(false);
@@ -36,7 +37,7 @@ const InstallPWA = () => {
         <div className="mb-6">
           <h1 className="text-3xl font-bold mb-2">Install App</h1>
           <p className="text-muted-foreground">
-            Install Beirut Finance Flow on your device for the best offline experience
+            Install {BRAND.shortName} on your device — syncs with your Grabio store via Firebase
           </p>
         </div>
 
@@ -53,8 +54,8 @@ const InstallPWA = () => {
             </CardHeader>
             <CardContent>
               <p className="text-sm text-muted-foreground">
-                You can now use Beirut Finance Flow even without an internet connection.
-                All your data is stored locally on your device.
+                Your invoices and clients sync to your Grabio store in the cloud.
+                On Android, search <strong>Grabio Invoice</strong> on Google Play once published.
               </p>
             </CardContent>
           </Card>
@@ -99,19 +100,15 @@ const InstallPWA = () => {
                 <ul className="space-y-2 text-sm">
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span><strong>Works Offline:</strong> Access all features without internet</span>
+                    <span><strong>Cloud sync:</strong> Same login as grabio.space — data in your store</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span><strong>Faster Loading:</strong> App launches instantly</span>
+                    <span><strong>PDF export:</strong> Save invoices and estimates as PDF from any screen</span>
                   </li>
                   <li className="flex items-start gap-2">
                     <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span><strong>Native Experience:</strong> Feels like a real app</span>
-                  </li>
-                  <li className="flex items-start gap-2">
-                    <CheckCircle className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                    <span><strong>Your Data Stays Local:</strong> Everything stored on your device</span>
+                    <span><strong>Google Play:</strong> Android app ({BRAND.playStorePackage}) — updates ship via the web, no reinstall</span>
                   </li>
                 </ul>
               </CardContent>

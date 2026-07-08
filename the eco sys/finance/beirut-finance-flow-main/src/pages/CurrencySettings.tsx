@@ -1,7 +1,7 @@
 import { useState } from "react";
 import AppLayout from "@/components/AppLayout";
 import { useAppContext } from "@/context/AppContext";
-import { useSupabaseTable, useSupabaseUserId } from "@/hooks/useSupabaseData";
+import { useFinanceTable } from "@/hooks/useFinanceTable";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -29,8 +29,7 @@ const CURRENCIES = ["USD", "LBP", "EUR", "GBP", "SAR", "AED", "EGP", "JOD"];
 const CurrencySettings = () => {
   const { logout } = useAppContext();
   const { toast } = useToast();
-  const userId = useSupabaseUserId();
-  const { data: rates, loading, insert, update, remove } = useSupabaseTable<CurrencyRate>("currency_settings", userId);
+  const { data: rates, loading, insert, update, remove } = useFinanceTable<CurrencyRate>("currencySettings");
 
   const [fromCurrency, setFromCurrency] = useState("USD");
   const [toCurrency, setToCurrency] = useState("LBP");

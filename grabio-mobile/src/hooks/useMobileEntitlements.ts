@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import { useAuth } from '../context/AuthContext';
-import { canUseMobileModule, type MobileStoreProfile } from '../lib/entitlements';
+import { canUseInvoiceManagerApp, canUseMobileModule, type MobileStoreProfile } from '../lib/entitlements';
 
 export function useMobileEntitlements() {
   const { user } = useAuth();
@@ -30,7 +30,10 @@ export function useMobileEntitlements() {
   }, [load]);
 
   const canUse = useCallback(
-    (moduleId: string) => canUseMobileModule(profile, moduleId),
+    (moduleId: string) => {
+      if (moduleId === 'invoice_manager') return canUseInvoiceManagerApp(profile);
+      return canUseMobileModule(profile, moduleId);
+    },
     [profile],
   );
 
