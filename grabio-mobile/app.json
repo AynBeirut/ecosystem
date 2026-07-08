@@ -2,7 +2,7 @@
   "expo": {
     "name": "Grabio",
     "slug": "grabio-mobile",
-    "version": "1.2.0",
+    "version": "1.2.3",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
@@ -24,7 +24,7 @@
     },
     "scheme": "grabio",
     "android": {
-      "versionCode": 30,
+      "versionCode": 33,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#6366f1"

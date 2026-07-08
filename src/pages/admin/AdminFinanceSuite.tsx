@@ -5,7 +5,7 @@ import { useAuth } from '@/context/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, TrendingUp, CreditCard, Receipt, Landmark } from 'lucide-react';
+import { DollarSign, TrendingUp, CreditCard, Receipt } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 

@@ -1,4 +1,5 @@
 import {
+  MODULE_CATALOG,
   modulesFromSelection,
   normalizeAddOnsFromProfile,
   normalizeTier,
@@ -120,6 +121,16 @@ function modularModulesFromProfile(profile: StoreProfile): Record<string, boolea
     modules[id] = Boolean(on);
   });
 
+  // Tier-included modules (builder, blog_publisher, …) still apply on modular-v2 unless explicitly disabled.
+  const tier = normalizeTier(profile.subscriptionTier);
+  const paidTier: PaidTier = tier === 'trial' ? 'starter' : tier;
+  const tierGranted = modulesFromSelection(paidTier, normalizeAddOnsFromProfile(profile.addOns ?? profile.addOnsMeta));
+  for (const mod of MODULE_CATALOG) {
+    if (mod.billing !== 'tier') continue;
+    if (enabled[mod.id] === false) continue;
+    if (tierGranted[mod.id]) modules[mod.id] = true;
+  }
+
   return modules;
 }
 
@@ -175,4 +186,9 @@ export function canUseModule(
   const entitlements = resolveStoreEntitlements(profile);
   if (!entitlements) return false;
   return Boolean(entitlements.modules[moduleId]);
+}
+
+/** Standalone Invoice Manager app — included with Invoicing & Billing or Invoice Manager module. */
+export function canUseInvoiceManagerApp(profile: StoreProfile | null | undefined): boolean {
+  return canUseModule(profile, 'invoicing') || canUseModule(profile, 'invoice_manager');
 }

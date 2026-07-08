@@ -92,6 +92,7 @@ async function seed(testEnv) {
       db.doc(`users/${SUB_SALES_YMALEK}`).set({
         email: 'sales@ymalek.test',
         role: 'sub_account',
+        subAccountId: SUB_SALES_YMALEK,
       }),
 
       // Sub-admin on indigo
@@ -104,6 +105,7 @@ async function seed(testEnv) {
       db.doc(`users/${SUB_ADMIN_INDIGO}`).set({
         email: 'subadmin@indigo.test',
         role: 'sub_account',
+        subAccountId: SUB_ADMIN_INDIGO,
       }),
 
       // CRM rep (no prod crmReps docs — synthetic shape from crmReps API)

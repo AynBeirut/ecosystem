@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { User, UserRole, Store } from '@/types/product';
 import { auth, authReady } from '@/lib/firebase';
-import { markGoogleAuthPending, clearGoogleAuthPending } from '@/lib/googleAuth';
+import { markGoogleAuthPending, clearGoogleAuthPending, shouldUseGoogleRedirect } from '@/lib/googleAuth';
 import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
@@ -33,6 +33,8 @@ import { AuthContext } from './AuthContextValue';
 import { getFirestore, doc, setDoc, collection, getCountFromServer, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
 import { useCallback } from 'react';
 import { resolveCrmRepUser, persistCrmRepSession, clearCrmRepSession } from '@/lib/crmAuth';
+import { resolveStoreIdForAuthUser } from '@/lib/storeUtils';
+import { waitForAuthToken } from '@/lib/waitForAuthToken';
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -59,7 +61,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             const sellerData = JSON.parse(savedSellerInfo);
             // Ensure storeId is set, use user id as fallback for admin/seller accounts
             const storeId = sellerData.storeId || (auth.currentUser ? auth.currentUser.uid : undefined);
-            setUser((prev) => prev ? { ...prev, ...sellerData, role: sellerData.role || prev.role, storeId } : prev);
+            setUser((prev) => prev ? {
+              ...prev,
+              ...sellerData,
+              id: prev.id,
+              role: sellerData.role || prev.role,
+              storeId,
+            } : prev);
             // Update localStorage with storeId if it was missing
             if (!sellerData.storeId && storeId) {
               localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId }));
@@ -73,8 +81,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
 
   const resolveFirebaseUser = useCallback(async (firebaseUser: FirebaseUser) => {
+    await waitForAuthToken();
+
+    const uid = firebaseUser.uid;
     let baseUser: User = {
-      id: firebaseUser.uid,
+      id: uid,
       name: firebaseUser.displayName || firebaseUser.email?.split('@')[0] || 'User',
       email: firebaseUser.email || '',
       role: 'user',
@@ -86,7 +97,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       storeId: undefined,
     };
 
-    const userProfileRef = doc(db, 'users', firebaseUser.uid);
+    const userProfileRef = doc(db, 'users', uid);
     const userProfileSnap = await getDoc(userProfileRef);
 
     if (userProfileSnap.exists()) {
@@ -101,6 +112,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
           baseUser = {
             ...baseUser,
+            id: uid,
             name: subAccountData.name || baseUser.name,
             role: 'sub_account' as UserRole,
             storeId: subAccountData.storeId,
@@ -121,31 +133,73 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           );
 
           setUser(baseUser);
-          await loadFollows(firebaseUser.uid);
+          await loadFollows(uid);
           return;
         }
       }
 
       const crmRepUser = await resolveCrmRepUser(db, firebaseUser, baseUser);
       if (crmRepUser) {
-        persistCrmRepSession(crmRepUser);
-        setUser(crmRepUser);
-        await loadFollows(firebaseUser.uid);
+        persistCrmRepSession({ ...crmRepUser, id: uid });
+        setUser({ ...crmRepUser, id: uid });
+        await loadFollows(uid);
         return;
       }
     }
 
-    const sellerRef = doc(db, 'sellers', firebaseUser.uid);
+    const sellerRef = doc(db, 'sellers', uid);
     const sellerSnap = await getDoc(sellerRef);
     if (sellerSnap.exists()) {
       const sellerData = sellerSnap.data();
-      const storeId = sellerData.storeId || firebaseUser.uid;
-      baseUser = { ...baseUser, ...sellerData, role: sellerData.role as UserRole, storeId };
-      localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId }));
+      const storeId = sellerData.storeId || uid;
+      baseUser = {
+        ...baseUser,
+        id: uid,
+        ...sellerData,
+        role: sellerData.role as UserRole,
+        storeId,
+      };
+      localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId, userId: uid }));
+    } else {
+      try {
+        const resolvedStoreId = await resolveStoreIdForAuthUser(uid);
+        const profileSnap = await getDoc(doc(db, 'storeProfiles', resolvedStoreId));
+        if (profileSnap.exists()) {
+          const profile = profileSnap.data();
+          const isOwner = profile.ownerId === uid || (!profile.ownerId && resolvedStoreId === uid);
+          if (isOwner) {
+            const storeId = resolvedStoreId;
+            await setDoc(sellerRef, {
+              isSeller: true,
+              sellerSince: new Date().toISOString(),
+              role: 'admin',
+              storeId,
+              userId: uid,
+            }, { merge: true });
+            await setDoc(userProfileRef, {
+              email: firebaseUser.email || '',
+              role: 'admin',
+              activeStoreId: storeId,
+            }, { merge: true });
+            if (!profile.ownerId && resolvedStoreId === uid) {
+              await setDoc(doc(db, 'storeProfiles', storeId), { ownerId: uid }, { merge: true });
+            }
+            baseUser = { ...baseUser, id: uid, role: 'admin', storeId, isSeller: true };
+            localStorage.setItem('sellerInfo', JSON.stringify({
+              isSeller: true,
+              role: 'admin',
+              storeId,
+              userId: uid,
+            }));
+          }
+        }
+      } catch (bootstrapErr) {
+        console.warn('[AuthContext] Store bootstrap skipped', bootstrapErr);
+      }
     }
 
     setUser(baseUser);
-    await loadFollows(firebaseUser.uid);
+    await loadFollows(uid);
   }, [db, loadFollows]);
 
   // Auth init: wait for persistence, subscribe to auth state immediately,
@@ -231,9 +285,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setIsLoading(true);
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
+      await waitForAuthToken();
+      const uid = userCredential.user.uid;
       // Base user object
       let baseUser = {
-        id: userCredential.user.uid,
+        id: uid,
         name: userCredential.user.displayName || userCredential.user.email?.split('@')[0] || 'User',
         email: userCredential.user.email || '',
         role: 'user',
@@ -263,6 +319,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             baseUser = {
               ...baseUser,
+              id: uid,
               name: subAccountData.name || baseUser.name,
               role: 'sub_account' as UserRole,
               storeId: subAccountData.storeId,
@@ -301,8 +358,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const sellerSnap = await getDoc(sellerRef);
       if (sellerSnap.exists()) {
         const sellerData = sellerSnap.data();
-        baseUser = { ...baseUser, ...sellerData, role: sellerData.role as UserRole };
-        localStorage.setItem('sellerInfo', JSON.stringify(sellerData));
+        const storeId = sellerData.storeId || uid;
+        baseUser = { ...baseUser, id: uid, ...sellerData, role: sellerData.role as UserRole, storeId };
+        localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId, userId: uid }));
       }
       setUser(baseUser as User);
       toast.success('Logged in successfully');
@@ -325,6 +383,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
+      if (shouldUseGoogleRedirect()) {
+        markGoogleAuthPending();
+        release();
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       const result = await signInWithPopup(auth, provider);
       if (result?.user) {
         toast.success('Google sign-in successful!');

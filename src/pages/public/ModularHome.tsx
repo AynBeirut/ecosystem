@@ -102,7 +102,7 @@ const ModularHome: React.FC = () => {
       ? '/team/crm'
       : user?.role === 'sub_account'
         ? '/team/dashboard'
-        : '/admin';
+        : '/admin/dashboard';
 
   useEffect(() => {
     trackSEOEvent('page_view');

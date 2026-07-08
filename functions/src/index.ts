@@ -1,4 +1,4 @@
-import express, { Request, Response } from 'express';
+﻿import express, { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
 import cors from 'cors';
@@ -48,13 +48,27 @@ import {
   getSupplierReturnAnalytics,
 } from './api/supplierReturns';
 import { createCrmRep } from './api/crmReps';
-import { transferBuilderDemo } from './api/builderTransfer';
 import { syncDropshipProduct } from './api/dropship';
-import { createPosPairingCode, pairPosDevice, posHeartbeat } from './api/posSync';
+import { createFinanceSsoToken } from './api/financeSso';
 import {
-  checkRealStoreForCommerce,
-  commerceGuardHttpStatus,
-} from './services/storeCommerceGuard';
+  createPosPairingCode,
+  pairPosDevice,
+  posHeartbeat,
+  getPosCatalog,
+  createPosOrder,
+  generatePosInstallToken,
+  autoPairPosDevice,
+  syncPosProducts,
+  syncPosCustomers,
+  syncPosSuppliers,
+  syncPosPurchases,
+  syncPosExpenses,
+  syncPosStaff,
+  syncPosSalaries,
+  syncPosRawMaterials,
+  syncPosRecipes,
+  syncPosRefunds,
+} from './api/posSync';
 import { getPublicProductStock } from './api/publicProductStock';
 import { requireModule } from './middleware/moduleGate';
 const db = admin.firestore();
@@ -87,6 +101,7 @@ app.get('/health', (req, res) => {
   res.json({ 
     status: 'ok', 
     message: 'Grabio API is running',
+    version: 'v3-2026-07-08',
     timestamp: new Date().toISOString(),
     endpoints: [
       '/checkout',
@@ -111,16 +126,25 @@ app.get('/health', (req, res) => {
       '/supplier-returns/update-status',
       '/supplier-returns/ship',
       '/supplier-returns/credit',
-      '/supplier-returns/analytics'
+      '/supplier-returns/analytics',
+      '/pos/pairing-code',
+      '/pos/pair',
+      '/pos/generate-install-token',
+      '/pos/auto-pair',
+      '/pos/heartbeat',
+      '/pos/catalog',
+      '/pos/orders',
+      '/pos/products',
+      '/pos/customers'
     ]
   });
 });
 
-// Temporary SMTP diagnostic endpoint — remove after testing
+// Temporary SMTP diagnostic endpoint ΓÇö remove after testing
 app.get('/test-smtp', async (req, res) => {
   const smtpHost = process.env.SMTP_HOST || '(not set)';
   const smtpUser = process.env.SMTP_USER || '(not set)';
-  const smtpPass = process.env.SMTP_PASS ? '(set, ' + process.env.SMTP_PASS.length + ' chars)' : '(NOT SET — empty)';
+  const smtpPass = process.env.SMTP_PASS ? '(set, ' + process.env.SMTP_PASS.length + ' chars)' : '(NOT SET ΓÇö empty)';
   const toAddr = (req.query.to as string) || 'mooveelectro@gmail.com';
   try {
     const nodemailer = await import('nodemailer');
@@ -137,7 +161,7 @@ app.get('/test-smtp', async (req, res) => {
     const info = await transporter.sendMail({
       from: 'Grabio <no-reply@grabio.space>',
       to: toAddr,
-      subject: 'Grabio SMTP Test — ' + new Date().toISOString(),
+      subject: 'Grabio SMTP Test ΓÇö ' + new Date().toISOString(),
       html: '<p>This is a direct SMTP test from Cloud Run. If you see this, email delivery is working.</p>',
     });
     return res.json({ ok: true, smtpHost, smtpUser, smtpPass, messageId: info.messageId, accepted: info.accepted, rejected: info.rejected });
@@ -221,13 +245,27 @@ app.post('/marketing/unsubscribe', unsubscribeFromStore);
 app.get('/marketing/subscribers', listSubscribers);
 app.post('/marketing/send-campaign', sendCampaign);
 
-// Sales CRM — rep accounts via Admin SDK (keeps owner signed in)
+// Sales CRM ΓÇö rep accounts via Admin SDK (keeps owner signed in)
 app.post('/crm/reps/create', requireModule('crm'), createCrmRep);
 app.post('/dropship/sync-product', requireModule('dropship'), syncDropshipProduct);
-app.post('/builder/transfer-demo', transferBuilderDemo);
+app.post('/finance/sso-token', createFinanceSsoToken);
 app.post('/pos/pairing-code', createPosPairingCode);
 app.post('/pos/pair', pairPosDevice);
+app.post('/pos/generate-install-token', generatePosInstallToken);
+app.post('/pos/auto-pair', autoPairPosDevice);
 app.post('/pos/heartbeat', posHeartbeat);
+app.get('/pos/catalog', getPosCatalog);
+app.post('/pos/orders', createPosOrder);
+app.post('/pos/products', syncPosProducts);
+app.post('/pos/customers', syncPosCustomers);
+app.post('/pos/suppliers', syncPosSuppliers);
+app.post('/pos/purchases', syncPosPurchases);
+app.post('/pos/expenses', syncPosExpenses);
+app.post('/pos/staff', syncPosStaff);
+app.post('/pos/salaries', syncPosSalaries);
+app.post('/pos/raw-materials', syncPosRawMaterials);
+app.post('/pos/recipes', syncPosRecipes);
+app.post('/pos/refunds', syncPosRefunds);
 app.post('/public/product-stock', getPublicProductStock);
 app.get('/marketing/campaigns', listCampaigns);
 
@@ -424,17 +462,6 @@ app.post('/checkout', async (req: Request, res: Response) => {
       itemsByStore[it.storeId].push(it);
     }
     console.log('Items by store:', itemsByStore);
-
-    for (const storeId of Object.keys(itemsByStore)) {
-      const commerceCheck = await checkRealStoreForCommerce(db, storeId);
-      if (!commerceCheck.eligible) {
-        console.error('Checkout blocked for store:', storeId, commerceCheck.code, commerceCheck.message);
-        return res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
-          error: commerceCheck.message,
-          code: commerceCheck.code,
-        });
-      }
-    }
 
     let ordersCreated = 0;
     const orderIds: string[] = [];
@@ -661,7 +688,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           if (tokens.length === 0) continue;
           await sendFcmMulticast(
             tokens,
-            '🛒 New Order Received',
+            '≡ƒ¢Æ New Order Received',
             `${customerName || 'A customer'} just placed an order`,
             { storeId, type: 'new_order', orderId: orderIds[0] || '' },
           );
@@ -671,7 +698,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
       }
     })();
 
-    // Send customer confirmation email directly (simple inline SMTP — reliable in Cloud Run)
+    // Send customer confirmation email directly (simple inline SMTP ΓÇö reliable in Cloud Run)
     const emailAddr = (deliveryInfo?.email || customerEmail || '').trim();
     if (emailAddr && orderIds.length > 0) {
       try {
@@ -690,26 +717,26 @@ app.post('/checkout', async (req: Request, res: Response) => {
         await transporter.sendMail({
           from: 'Grabio <no-reply@grabio.space>',
           to: emailAddr,
-          subject: `Order confirmed — your code is ${shortCode}`,
+          subject: `Order confirmed ΓÇö your code is ${shortCode}`,
           html: `<html><body style="font-family:Arial,sans-serif;color:#1f2937;background:#f8fafc;margin:0;padding:20px;">
             <div style="max-width:520px;margin:0 auto;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.08);">
-              <div style="background:#38B2AC;padding:24px 32px;"><h1 style="color:#fff;margin:0;font-size:22px;">Order Confirmed ✅</h1></div>
+              <div style="background:#38B2AC;padding:24px 32px;"><h1 style="color:#fff;margin:0;font-size:22px;">Order Confirmed Γ£à</h1></div>
               <div style="padding:24px 32px;">
                 <p style="margin:0 0 8px;">Hi <strong>${customerName || 'Customer'}</strong>,</p>
                 <p style="margin:0 0 16px;">Your order has been placed successfully.</p>
                 <div style="background:#f0fdf4;border:1.5px solid #38B2AC;border-radius:10px;padding:16px;margin:0 0 20px;text-align:center;">
                   <p style="color:#6b7280;margin:0 0 6px;font-size:13px;">Your order tracking code</p>
                   <p style="font-size:30px;font-weight:700;color:#38B2AC;letter-spacing:5px;margin:0;">${shortCode}</p>
-                  <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;">Enter this code in the Grabio app → Orders tab</p>
+                  <p style="color:#9ca3af;font-size:11px;margin:8px 0 0;">Enter this code in the Grabio app ΓåÆ Orders tab</p>
                 </div>
                 <p style="margin:0 0 6px;"><strong>Order:</strong> ${orderIds[0]}</p>
                 <p style="margin:0 0 20px;"><strong>Order ID:</strong> ${orderIds[0]}</p>
                 <div style="text-align:center;margin:0 0 8px;">
-                  <a href="${trackUrl}" style="background:#38B2AC;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:15px;display:inline-block;">Track My Order →</a>
+                  <a href="${trackUrl}" style="background:#38B2AC;color:#fff;text-decoration:none;padding:12px 28px;border-radius:8px;font-weight:700;font-size:15px;display:inline-block;">Track My Order ΓåÆ</a>
                 </div>
               </div>
               <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #e5e7eb;">
-                <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center;">© 2026 Grabio · grabio.space</p>
+                <p style="color:#9ca3af;font-size:12px;margin:0;text-align:center;">┬⌐ 2026 Grabio ┬╖ grabio.space</p>
               </div>
             </div>
           </body></html>`,
@@ -720,7 +747,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
       }
     }
 
-    // Also run full notification pipeline (owner email, WhatsApp, CRM) — best effort
+    // Also run full notification pipeline (owner email, WhatsApp, CRM) ΓÇö best effort
     dispatchOrderNotifications(orderIds).catch((notifyErr) => {
       console.warn('Order notification dispatch failed:', notifyErr);
     });
@@ -749,5 +776,5 @@ export { checkLowStockAlert } from './scheduled/checkLowStock';
 // Export Firestore triggers: new order + order status / payment status change notifications
 export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
 export { onOrderCreatedCrmSync } from './triggers/crmOrderSync';
-// Export Firestore trigger: store announcements → notify customers who favorited the store
+// Export Firestore trigger: store announcements ΓåÆ notify customers who favorited the store
 export { onStoreAnnouncement } from './triggers/storeAnnouncements';

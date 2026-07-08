@@ -22,6 +22,7 @@
     "noFallthroughCasesInSwitch": false,
 
     "paths": {
+      "@finance/*": ["./the eco sys/finance/beirut-finance-flow-main/src/*"],
       "@/*": ["./src/*"]
     }
   },

@@ -40,10 +40,15 @@ export const MODULE_ROUTE_MAP: ModuleRouteRule[] = [
   { pathPrefix: '/admin/marketplace', moduleId: 'dropship', enforceOnly: true },
   { pathPrefix: '/admin/service-renewals', moduleId: 'services', enforceOnly: true },
   { pathPrefix: '/admin/sub-accounts', moduleId: 'team', enforceOnly: true },
+  { pathPrefix: '/admin/finance/invoices', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/finance/estimates', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/finance/receipts', moduleId: 'invoice_manager', enforceOnly: true },
+  { pathPrefix: '/admin/finance/clients', moduleId: 'invoice_manager', enforceOnly: true },
+  { pathPrefix: '/admin/finance/products', moduleId: 'invoice_manager', enforceOnly: true },
+  { pathPrefix: '/admin/finance/reports', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/finance/portfolio', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/projects', moduleId: 'projects', enforceOnly: true },
+  { pathPrefix: '/admin/builder', moduleId: 'builder', enforceOnly: true },
   { pathPrefix: '/admin/templates', moduleId: 'builder', enforceOnly: true },
   { pathPrefix: '/admin/blog', moduleId: 'blog_publisher', enforceOnly: true },
   { pathPrefix: '/admin/whitelabel', moduleId: 'whitelabel', enforceOnly: true },
@@ -58,8 +63,10 @@ export const MODULE_ROUTE_MAP: ModuleRouteRule[] = [
 ];
 
 export function moduleForPath(pathname: string): string | null {
-  const rule = MODULE_ROUTE_MAP.find((r) => pathname.startsWith(r.pathPrefix));
-  return rule?.moduleId ?? null;
+  const matches = MODULE_ROUTE_MAP.filter((r) => pathname.startsWith(r.pathPrefix));
+  if (!matches.length) return null;
+  matches.sort((a, b) => b.pathPrefix.length - a.pathPrefix.length);
+  return matches[0].moduleId;
 }
 
 export function navItemsForModules(modules: Record<string, boolean>): Set<string> {

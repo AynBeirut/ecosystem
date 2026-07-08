@@ -1,6 +1,6 @@
 import React from 'react';
-import PurchasesScreen from '../screens/owner/PurchasesScreen';
-import MobileModuleGate from '../components/MobileModuleGate';
+import PurchasesScreen from './PurchasesScreen';
+import MobileModuleGate from '../../components/MobileModuleGate';
 
 export default function GatedPurchasesScreen() {
   return (

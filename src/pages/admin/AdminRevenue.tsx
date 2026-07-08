@@ -10,6 +10,7 @@ import { isCountedSaleStatus, isDateInRange, resolveOrderItemProductKey } from '
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 const cleanTextForPDF = (text: string): string => text.replace(/[^\u0020-\u007E]/g, '?');
 
@@ -26,6 +27,7 @@ interface ProductRevenue {
 
 const AdminRevenue: React.FC = () => {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [productRevenues, setProductRevenues] = useState<ProductRevenue[]>([]);
   const [quarantinedOrdersCount, setQuarantinedOrdersCount] = useState(0);

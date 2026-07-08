@@ -385,6 +385,16 @@ export interface StoreProfile {
   scheduledPlanMigrationAt?: string;
   entitlementBackfillAt?: string;
   packageDraftAppliedAt?: string;
+  /** display = showcase only (no cart); commerce = full store checkout */
+  storefrontMode?: 'display' | 'commerce';
+  builderWizard?: {
+    step?: string;
+    siteIntent?: 'display' | 'blog' | 'ecommerce';
+    businessIntent?: 'store' | 'restaurant' | 'manufacturer';
+    buildMethod?: 'classic' | 'theme_editor' | 'wordpress' | 'import';
+    wordpressRequestId?: string;
+    updatedAt?: string;
+  };
   // Migration tracking
   migrationVersion?: number;
   lastMigrationDate?: string;

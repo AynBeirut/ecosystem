@@ -6,6 +6,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
+import { useMobileEntitlements } from '../../hooks/useMobileEntitlements';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -23,6 +24,8 @@ interface Stats {
 export default function OwnerDashboardScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
+  const { canUse, loading: entitlementsLoading } = useMobileEntitlements();
+  const invoiceManagerEnabled = !entitlementsLoading && canUse('invoice_manager');
   const [stats, setStats] = useState<Stats>({
     totalOrders: 0, pendingOrders: 0, newOrders: [], todayRevenue: 0,
     yesterdayRevenue: 0, todayCount: 0, currency: 'USD', lowStockItems: [],
@@ -142,6 +145,15 @@ export default function OwnerDashboardScreen() {
         {/* Widget 4: Quick Actions */}
         <Text style={[styles.widgetTitle, { marginBottom: 10, marginTop: 4 }]}>⚡ Quick Actions</Text>
         <View style={styles.actionsGrid}>
+          {invoiceManagerEnabled && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#ccfbf1', minWidth: '100%' }]}
+              onPress={() => navigation.navigate('InvoiceManager')}
+            >
+              <Text style={styles.actionIcon}>📄</Text>
+              <Text style={[styles.actionLabel, { color: '#0f766e' }]}>Invoice Manager</Text>
+            </TouchableOpacity>
+          )}
           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('CreateOrder')}>
             <Text style={styles.actionIcon}>➕</Text>
             <Text style={styles.actionLabel}>New Order</Text>

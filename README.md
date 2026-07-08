@@ -7,6 +7,7 @@ A comprehensive e-commerce platform built with React, TypeScript, and Firebase, 
 ## Features
 
 ### For Buyers
+
 - Browse products from multiple stores
 - Add items to cart with delivery address and GPS coordinates
 - Google OAuth authentication
@@ -15,6 +16,7 @@ A comprehensive e-commerce platform built with React, TypeScript, and Firebase, 
 - Dual currency display (USD/LBP)
 
 ### For Sellers (Premium)
+
 - **Complete Store Management**: Create and customize your store profile
 - **Product Management**: Add unlimited products with images and details
 - **Order Processing**: Track orders with customer delivery info and GPS coordinates
@@ -38,6 +40,7 @@ A comprehensive e-commerce platform built with React, TypeScript, and Firebase, 
 - **UI Components**: Custom components with shadcn/ui patterns
 
 ## Authentication
+
 - Google OAuth with popup authentication
 - Firebase Authentication for secure user management
 - Role-based access control (User/Admin/Seller)
@@ -45,6 +48,7 @@ A comprehensive e-commerce platform built with React, TypeScript, and Firebase, 
 ## Development Setup
 
 ### Prerequisites
+
 - Node.js (v18 or higher)
 - npm or yarn
 - Firebase CLI (`npm install -g firebase-tools`)
@@ -56,7 +60,9 @@ npm install
 ```
 
 ### Environment Variables
+
 Create `.env.production` file:
+
 ```env
 VITE_API_BASE=https://us-central1-market-flow-7b074.cloudfunctions.net/api
 VITE_FIREBASE_AUTH_DOMAIN=market-flow-7b074.firebaseapp.com
@@ -67,7 +73,8 @@ VITE_FIREBASE_AUTH_DOMAIN=market-flow-7b074.firebaseapp.com
 ```sh
 npm run dev
 ```
-The app will be available at http://localhost:8080
+
+The app will be available at [http://localhost:8080](http://localhost:8080)
 
 ### Build for Production
 
@@ -82,47 +89,52 @@ firebase deploy --only hosting
 ```
 
 ## Deployment
-- **Live URL**: https://www.grabio.space
+
+- **Live URL**: [https://www.grabio.space](https://www.grabio.space)
 - **Firebase Hosting**: market-flow-7b074.web.app
 - **Firebase Project**: market-flow-7b074
 
 ## Key Features Implementation
 
 ### Dual Currency System
+
 - USD as primary currency
 - LBP conversion with custom exchange rates per store
 - Display both currencies on cart and invoices
 
 ### Delivery Management
+
 - Customer delivery address input
 - City and notes fields
 - GPS coordinates capture
 - Google Maps integration for location viewing
 
 ### Invoice System
+
 - Generate professional PDF invoices
 - Multiple template styles (Modern, Classic, Vibrant)
 - Share via native share API or download
 - Dual currency display on invoices
 
 ### Order Tracking
+
 - Real-time order status updates
 - Product details with quantities and prices
 - Customer delivery information display
 - Store contact information
 
-
-
 To deploy, use Vercel, Netlify, or your preferred static hosting provider. Upload the contents of the `dist/` folder.
 
 ### General Improvements
+
 - Cleaned up old build artifacts and ensured no legacy plugin code remains.
 - README updated with all recent changes and troubleshooting steps.
+
 # HappyBasket
 
 ## Project info
 
-**URL**: https://lovable.dev/projects/350875b5-0b6c-43be-84cb-3347f940fc5b
+**URL**: [https://lovable.dev/projects/350875b5-0b6c-43be-84cb-3347f940fc5b](https://lovable.dev/projects/350875b5-0b6c-43be-84cb-3347f940fc5b)
 
 ## Project Name
 
@@ -174,34 +186,35 @@ npm run dev
 - Click on "New codespace" to launch a new Codespace environment.
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
-
-
 ## Major Changes & Features (2025 Session)
 
 ### Firebase/Firestore Integration
+
 - Seller upgrade logic uses Firestore for persistent seller/admin status (`sellers` collection).
 - Store profile management is connected to Firestore (`storeProfiles` collection), with type safety and error handling.
 - Product management (add/edit/delete) is fully integrated with Firestore (`products` collection), associating products with seller/store ID.
 
 ### Security & Setup
+
 - Firestore security rules provided to allow authenticated users to write to their own data.
 - Guidance for Firebase project/database setup included.
-
-
 - Added Payment Credentials section for store admins to securely enter and save WishPay and Visa/MasterCard details to Firestore (`AdminPayments.tsx`).
 - Added Cash on Delivery as a payment option for regular users in the cart (`Cart.tsx`).
 
 ### UI/UX
+
 - Loading and processing states for async Firestore operations.
 - Toast notifications for success/error feedback.
 
 ### How to Continue Development
+
 - All seller/admin features are now persistent and user-specific.
 - To add more features, follow the Firestore integration patterns in `src/pages/UpgradeToAdmin.tsx`, `src/pages/admin/AdminProfile.tsx`, and `src/pages/admin/AdminProducts.tsx`.
 
 ---
 
 ---
+
 ## What technologies are used for this project?
 
 HappyBasket is built with:
@@ -232,4 +245,10 @@ This repository includes a small `.hintrc` file used to tune webhint/editor warn
 - How to opt-out: remove or rename `.hintrc` in the repo root. Your editor will then show the original webhint warnings again.
 - How to adjust: open `.hintrc` and update or remove specific rules; prefer editing the rules rather than deleting the file so CI behavior remains consistent for the team.
 
-If you'd like, I can revert `.hintrc` and instead fix individual issues strictly (for example by removing all inline styles) — tell me which approach you prefer.
+If you'd like, I can revert `.hintrc` and instead fix individual issues strictly (for example by removing all inline styles) — tell me which approach you prefer.  
+  
+Quick Stack Tip: Since you're using React, don't upload directly from the frontend to R2 using your master API keys. Generate an S3 Pre-signed URL using a lightweight Firebase Cloud Function. The React frontend gets the temporary URL from the function and uploads the image securely straight to R2.
+
+This setup gives you the fast delivery speed your clients want without risking unexpected multi-hundred-dollar bills.
+
+Which project are we configuring this for first? Let me know if you want the boilerplate code for the pre-signed URL upload flow.

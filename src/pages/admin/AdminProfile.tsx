@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { getFirestore, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { consumePackageDraftForStore } from '@/lib/applyPackageDraft';
 import { getAuth, multiFactor, TotpMultiFactorGenerator, type MultiFactorInfo, type TotpSecret } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
-import { getActualStoreId } from '@/lib/storeUtils';
+import { getActualStoreId, resolveStoreIdForAuthUser } from '@/lib/storeUtils';
+import { mapGrabioInvoiceTemplateToFinance } from '@/lib/invoiceTemplateMap';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -59,18 +60,65 @@ const getStatusBadgeClass = (status: 'active' | 'pending' | 'error') => {
 };
 
 type ProfileSectionId =
-  | 'social-media'
   | 'growth-seo'
   | 'invoice'
   | 'product-settings'
-  | 'banners'
-  | 'store-pages'
-  | 'template-colors'
   | 'ai-api'
   | 'custom-domain'
   | 'mfa'
   | 'gdpr'
   | 'marketplace';
+
+/** Fields saved from Profile — invoice, legal identity, and account ops only (not storefront builder). */
+function buildProfileSavePayload(
+  data: StoreProfile,
+  storeId: string,
+  ownerAuthUid: string,
+): Record<string, unknown> {
+  const displayName = String(data.name || '').trim();
+  return {
+    id: storeId,
+    storeId,
+    ownerId: ownerAuthUid,
+    name: displayName,
+    storeName: displayName,
+    location: data.location,
+    slug: data.slug,
+    email: data.email,
+    phone: data.phone,
+    proEmail: data.proEmail,
+    website: data.website,
+    logo: data.logo,
+    description: data.description,
+    invoiceNumberPrefix: data.invoiceNumberPrefix,
+    lastInvoiceNumber: data.lastInvoiceNumber,
+    invoiceTemplate: data.invoiceTemplate,
+    financeDocumentSettings: {
+      invoiceTemplate: mapGrabioInvoiceTemplateToFinance(data.invoiceTemplate),
+      primaryColor: data.templateColors?.primary,
+      secondaryColor: data.templateColors?.secondary ?? data.templateColors?.highlight,
+    },
+    taxNumber: data.taxNumber,
+    productCategories: data.productCategories,
+    priceMultiplier: data.priceMultiplier,
+    seoSettings: data.seoSettings,
+    metaIntegrationSettings: data.metaIntegrationSettings,
+    serviceCatalogSettings: data.serviceCatalogSettings,
+    subscriptionBillingSettings: data.subscriptionBillingSettings,
+    paymentGatewaySettings: data.paymentGatewaySettings,
+    marketplaceIntegrations: data.marketplaceIntegrations,
+    dropshippingPartners: data.dropshippingPartners,
+    customDomain: data.customDomain,
+    customDomainStatus: data.customDomainStatus,
+    sslAutoProvisioningEnabled: data.sslAutoProvisioningEnabled,
+    aiIntegrationSettings: data.aiIntegrationSettings,
+    adminIpWhitelistEnabled: data.adminIpWhitelistEnabled,
+    adminIpAllowlist: data.adminIpAllowlist,
+    isPremium: data.isPremium ?? false,
+    template: data.template || 'modern',
+    status: data.status,
+  };
+}
 
 type ProfileCollapsibleSectionProps = {
   id: ProfileSectionId;
@@ -217,67 +265,93 @@ const AdminProfile: React.FC = () => {
   const db = getFirestore();
   const [formData, setFormData] = useState<StoreProfile>(defaultProfile);
   const [isSaving, setIsSaving] = useState(false);
+  const [profileStoreId, setProfileStoreId] = useState<string | null>(null);
 
-  // Load store profile from Firestore on mount
+  const applyProfileToForm = (data: StoreProfile) => {
+    setFormData({
+      ...defaultProfile,
+      ...data,
+      name: data.name || data.storeName || defaultProfile.name,
+      marketplaceIntegrations: data.marketplaceIntegrations && data.marketplaceIntegrations.length > 0
+        ? data.marketplaceIntegrations
+        : defaultProfile.marketplaceIntegrations,
+      dropshippingPartners: data.dropshippingPartners && data.dropshippingPartners.length > 0
+        ? data.dropshippingPartners
+        : defaultProfile.dropshippingPartners,
+      paymentGatewaySettings: {
+        ...defaultProfile.paymentGatewaySettings,
+        ...(data.paymentGatewaySettings || {}),
+      },
+      seoSettings: {
+        ...defaultProfile.seoSettings,
+        ...(data.seoSettings || {}),
+      },
+      metaIntegrationSettings: {
+        ...defaultProfile.metaIntegrationSettings,
+        ...(data.metaIntegrationSettings || {}),
+      },
+      serviceCatalogSettings: {
+        ...defaultProfile.serviceCatalogSettings,
+        ...(data.serviceCatalogSettings || {}),
+      },
+      subscriptionBillingSettings: {
+        ...defaultProfile.subscriptionBillingSettings,
+        ...(data.subscriptionBillingSettings || {}),
+      },
+      aiIntegrationSettings: {
+        ...defaultProfile.aiIntegrationSettings,
+        ...(data.aiIntegrationSettings || {}),
+      },
+    });
+    setLogoPreview(data.logo || '');
+  };
+
+  const loadProfileFromFirestore = async (authUid: string, fromServer = false) => {
+    const actualStoreId = await resolveStoreIdForAuthUser(authUid);
+    setProfileStoreId(actualStoreId);
+    const profileRef = doc(db, 'storeProfiles', actualStoreId);
+    const profileSnap = fromServer
+      ? await getDocFromServer(profileRef)
+      : await getDoc(profileRef);
+    if (profileSnap.exists()) {
+      applyProfileToForm(profileSnap.data() as StoreProfile);
+    } else {
+      setFormData(defaultProfile);
+      setLogoPreview('');
+    }
+    return actualStoreId;
+  };
+
+  // Load store profile from Firestore on mount / when store binding changes
   useEffect(() => {
-    const fetchProfile = async () => {
-      if (user?.id) {
-        const actualStoreId = getActualStoreId(user);
-        if (!actualStoreId) return;
-        try {
-          const db = getFirestore();
-          const profileRef = doc(db, 'storeProfiles', actualStoreId);
-          const profileSnap = await getDoc(profileRef);
-          if (profileSnap.exists()) {
-            const data = profileSnap.data() as StoreProfile;
-            setFormData({
-              ...defaultProfile,
-              ...data,
-              marketplaceIntegrations: data.marketplaceIntegrations && data.marketplaceIntegrations.length > 0
-                ? data.marketplaceIntegrations
-                : defaultProfile.marketplaceIntegrations,
-              dropshippingPartners: data.dropshippingPartners && data.dropshippingPartners.length > 0
-                ? data.dropshippingPartners
-                : defaultProfile.dropshippingPartners,
-              paymentGatewaySettings: {
-                ...defaultProfile.paymentGatewaySettings,
-                ...(data.paymentGatewaySettings || {}),
-              },
-              seoSettings: {
-                ...defaultProfile.seoSettings,
-                ...(data.seoSettings || {}),
-              },
-              metaIntegrationSettings: {
-                ...defaultProfile.metaIntegrationSettings,
-                ...(data.metaIntegrationSettings || {}),
-              },
-              serviceCatalogSettings: {
-                ...defaultProfile.serviceCatalogSettings,
-                ...(data.serviceCatalogSettings || {}),
-              },
-              subscriptionBillingSettings: {
-                ...defaultProfile.subscriptionBillingSettings,
-                ...(data.subscriptionBillingSettings || {}),
-              },
-              aiIntegrationSettings: {
-                ...defaultProfile.aiIntegrationSettings,
-                ...(data.aiIntegrationSettings || {}),
-              },
-            });
-            setLogoPreview(data.logo || '');
-          } else {
-            setFormData(defaultProfile);
-            setLogoPreview('');
-          }
-        } catch (err) {
+    if (!user?.id) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        if (cancelled) return;
+        await loadProfileFromFirestore(user.id, true);
+      } catch (err) {
+        if (!cancelled) {
           setFormData(defaultProfile);
           setLogoPreview('');
         }
       }
+    })();
+    return () => {
+      cancelled = true;
     };
-    fetchProfile();
-  // defaultProfile is a stable top-level constant; include only user id in deps.
-  }, [user?.id]);
+  }, [user?.id, user?.storeId]);
+
+  useEffect(() => {
+    const onProfileUpdated = (event: Event) => {
+      const detail = (event as CustomEvent<{ storeId?: string }>).detail;
+      if (!user?.id) return;
+      if (detail?.storeId && profileStoreId && detail.storeId !== profileStoreId) return;
+      void loadProfileFromFirestore(user.id, true).catch(() => undefined);
+    };
+    window.addEventListener('grabio:store-profile-updated', onProfileUpdated);
+    return () => window.removeEventListener('grabio:store-profile-updated', onProfileUpdated);
+  }, [user?.id, profileStoreId]);
 
   const [logoFile, setLogoFile] = useState<File | null>(null);
   const [logoPreview, setLogoPreview] = useState<string>('');
@@ -885,7 +959,7 @@ const AdminProfile: React.FC = () => {
       reader.onload = (e) => {
         const result = e.target?.result as string;
         setLogoPreview(result);
-        setFormData({ ...formData, logo: result });
+        setFormData(prev => ({ ...prev, logo: result }));
       };
       reader.readAsDataURL(file);
     }
@@ -1113,48 +1187,93 @@ const AdminProfile: React.FC = () => {
     setIsSaving(true);
     if (user?.id) {
       try {
-        // Auto-generate slug if not provided
-        if (!formData.slug && formData.name) {
-          const autoSlug = await generateUniqueSlug(formData.name, 'storeProfiles', user.id);
-          formData.slug = autoSlug;
+        const actualStoreId = await resolveStoreIdForAuthUser(user.id);
+        setProfileStoreId(actualStoreId);
+        if (!actualStoreId) {
+          throw new Error('Missing store id');
         }
-        
-        // Sanitize formData: replace undefined with null
-        const cleanFormData = Object.fromEntries(
-          Object.entries(formData).map(([k, v]) => [k, v === undefined ? null : v])
-        );
-        // Add required Store fields for marketplace visibility
-        cleanFormData.id = user.id;
-        cleanFormData.storeId = user.id;
-        cleanFormData.ownerId = user.id;
-  if (cleanFormData.isPremium === undefined) cleanFormData.isPremium = false;
-        if (!cleanFormData.template) cleanFormData.template = 'modern';
-  // credits feature removed: do not include allowsCredits
-        const profileRef = doc(db, 'storeProfiles', user.id);
+        let nextSlug = formData.slug;
+        if (!nextSlug && formData.name) {
+          nextSlug = await generateUniqueSlug(formData.name, 'storeProfiles', actualStoreId);
+          setFormData((prev) => ({ ...prev, slug: nextSlug }));
+        }
+
+        const payload = buildProfileSavePayload({ ...formData, slug: nextSlug }, actualStoreId, user.id);
+        if (!payload.slug && payload.name) {
+          payload.slug = await generateUniqueSlug(String(payload.name), 'storeProfiles', actualStoreId);
+        }
+        const profileRef = doc(db, 'storeProfiles', actualStoreId);
         const existingSnap = await getDoc(profileRef);
         const existingProfile = existingSnap.exists()
           ? (existingSnap.data() as StoreProfile)
           : null;
+        const existingFinance = (existingProfile as StoreProfile & { financeDocumentSettings?: Record<string, unknown> })?.financeDocumentSettings ?? {};
         const ecosystemPatch = consumePackageDraftForStore(existingProfile);
-        await setDoc(profileRef, { ...cleanFormData, ...ecosystemPatch }, { merge: true });
+        const displayName = String(formData.name || '').trim();
+        const mergedFinance = {
+          ...existingFinance,
+          ...(payload.financeDocumentSettings as Record<string, unknown>),
+        };
+
+        // 1) Small identity write first (reliable for invoices/PDFs)
+        const identityPatch: Record<string, unknown> = {
+          ownerId: user.id,
+          name: displayName,
+          storeName: displayName,
+          location: formData.location || '',
+          email: formData.email || '',
+          phone: formData.phone || '',
+          website: formData.website || '',
+          proEmail: formData.proEmail || '',
+          taxNumber: formData.taxNumber || '',
+          invoiceNumberPrefix: formData.invoiceNumberPrefix || '',
+          lastInvoiceNumber: formData.lastInvoiceNumber ?? 0,
+          invoiceTemplate: formData.invoiceTemplate || 'modern',
+          financeDocumentSettings: mergedFinance,
+          updatedAt: serverTimestamp(),
+        };
+        if (logoFile && formData.logo) {
+          identityPatch.logo = formData.logo;
+        }
+        await updateDoc(profileRef, identityPatch);
+
+        // 2) Full profile merge (skip logo unless newly uploaded)
+        const fullPayload = { ...payload, ...ecosystemPatch, financeDocumentSettings: mergedFinance, updatedAt: serverTimestamp() };
+        if (!logoFile) {
+          delete fullPayload.logo;
+        }
+        await setDoc(profileRef, fullPayload, { merge: true });
         // Persist storeId in sellers collection and localStorage
         const sellerRef = doc(db, 'sellers', user.id);
-        await setDoc(sellerRef, { storeId: user.id }, { merge: true });
+        await setDoc(sellerRef, { storeId: actualStoreId }, { merge: true });
         // Update localStorage
         const savedSellerInfo = localStorage.getItem('sellerInfo');
   const sellerInfo = savedSellerInfo ? JSON.parse(savedSellerInfo) : {};
-  sellerInfo.storeId = user.id;
+  sellerInfo.storeId = actualStoreId;
   localStorage.setItem('sellerInfo', JSON.stringify(sellerInfo));
         // Update user context with storeId
-        if (setUser) setUser((prev) => prev ? { ...prev, storeId: user.id } : prev);
+        if (setUser) setUser((prev) => prev ? { ...prev, storeId: actualStoreId } : prev);
+        window.dispatchEvent(new CustomEvent('grabio:store-profile-updated', { detail: { storeId: actualStoreId } }));
+        const refreshedSnap = await getDocFromServer(profileRef);
+        if (refreshedSnap.exists()) {
+          const saved = refreshedSnap.data() as StoreProfile;
+          if (displayName && saved.name !== displayName && saved.storeName !== displayName) {
+            throw new Error(
+              `Save did not stick on server (still "${saved.name || saved.storeName || 'empty'}"). Refresh and try again.`,
+            );
+          }
+          applyProfileToForm(saved);
+        }
+        setLogoFile(null);
         toast({
           title: "Success",
-          description: "Store profile updated successfully! (Saved to Firebase)"
+          description: "Profile saved. Invoice Manager will pick up changes automatically.",
         });
       } catch (err) {
+        console.error('[AdminProfile] save failed', err);
         toast({
           title: "Error",
-          description: "Failed to update store profile.",
+          description: err instanceof Error ? err.message : "Failed to update store profile.",
           variant: "destructive"
         });
       }
@@ -1170,11 +1289,25 @@ const AdminProfile: React.FC = () => {
 
   return (
     <AdminPageShell
-      title="Store Profile"
-      description="Manage your store's public profile and essential information"
-      eyebrow="Profile & Store Setup"
+      title="Business & Invoice Settings"
+      description="Legal identity, contact details, and invoice/document appearance. Storefront design is in Theme Editor."
+      eyebrow="Profile & Documents"
       className="max-w-6xl mx-auto"
     >
+        <AdminPanel className="mb-6 border border-[#e3e3e5] bg-muted/30">
+          <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <div>
+              <p className="font-medium text-sm">Storefront pages &amp; theme</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Homepage sections, colors, and store copy — Theme Editor (requires Builder module).
+                Invoice logo and template are in <strong>Invoice Settings</strong> below.
+              </p>
+            </div>
+            <Button type="button" variant="default" onClick={() => navigate('/admin/theme-editor')}>
+              Open Theme Editor
+            </Button>
+          </CardContent>
+        </AdminPanel>
 
         {/* Subscription Card */}
         <AdminPanel className="mb-6 border-2 border-primary">
@@ -1208,68 +1341,12 @@ const AdminProfile: React.FC = () => {
         </AdminPanel>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Logo Upload Section */}
+          {/* Business identity (invoices & documents) */}
           <AdminPanel>
             <CardHeader>
-              <CardTitle>Store Logo</CardTitle>
+              <CardTitle>Business Identity</CardTitle>
               <CardDescription>
-                Upload your store logo. This will be displayed on your store page and in search results.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex flex-col items-center space-y-4">
-                <Avatar className="h-32 w-32">
-                  <AvatarImage src={logoPreview} alt="Store logo" />
-                        <AvatarFallback className="text-2xl">
-                          {(formData.name && formData.name.charAt(0)) || <Camera className="h-8 w-8" />}
-                        </AvatarFallback>
-                </Avatar>
-                
-                <div className="flex flex-col items-center space-y-2">
-                  <Label htmlFor="logo-upload" className="cursor-pointer">
-                    <div className="flex items-center space-x-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors">
-                      <Upload className="h-4 w-4" />
-                      <span>Upload Logo</span>
-                    </div>
-                    <Input
-                      id="logo-upload"
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoChange}
-                      className="hidden"
-                    />
-                  </Label>
-                  <p className="text-xs text-muted-foreground">
-                    PNG, JPG or JPEG (max 5MB)
-                  </p>
-                </div>
-
-                <div className="w-full max-w-xs space-y-2">
-                  <Label htmlFor="logoPosition">Logo Position</Label>
-                  <select
-                    id="logoPosition"
-                    value={formData.logoPosition || 'left'}
-                    onChange={(e) => setFormData(prev => ({ ...prev, logoPosition: e.target.value as 'left' | 'center' | 'right' }))}
-                    className="w-full p-2 border rounded-md"
-                  >
-                    <option value="left">Left of Store Name</option>
-                    <option value="center">Centered Above Store Name</option>
-                    <option value="right">Right of Store Name</option>
-                  </select>
-                  <p className="text-xs text-muted-foreground">
-                    Controls how your logo is positioned in the storefront header.
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </AdminPanel>
-
-          {/* Basic Information */}
-          <AdminPanel>
-            <CardHeader>
-              <CardTitle>Basic Information</CardTitle>
-              <CardDescription>
-                Essential details about your store
+                Name and address shown on invoices and official documents
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1369,61 +1446,6 @@ const AdminProfile: React.FC = () => {
               </div>
               
               <div>
-                <Label htmlFor="slogan">Store Slogan</Label>
-                <Input
-                  id="slogan"
-                  value={formData.slogan}
-                  onChange={(e) => setFormData(prev => ({ ...prev, slogan: e.target.value }))}
-                  placeholder="A catchy tagline for your store"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="description">Store Description</Label>
-                <Textarea
-                  id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-                  placeholder="Tell customers what makes your store special"
-                  rows={4}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="aboutUs">About Us (Optional)</Label>
-                <Textarea
-                  id="aboutUs"
-                  value={formData.aboutUs || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, aboutUs: e.target.value }))}
-                  placeholder="Share your store story and what you stand for"
-                  rows={4}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="mission">Mission (Optional)</Label>
-                  <Textarea
-                    id="mission"
-                    value={formData.mission || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, mission: e.target.value }))}
-                    placeholder="What is your mission?"
-                    rows={3}
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="vision">Vision (Optional)</Label>
-                  <Textarea
-                    id="vision"
-                    value={formData.vision || ''}
-                    onChange={(e) => setFormData(prev => ({ ...prev, vision: e.target.value }))}
-                    placeholder="What is your long-term vision?"
-                    rows={3}
-                  />
-                </div>
-              </div>
-              
-              <div>
                 <Label htmlFor="website">Website URL</Label>
                 <Input
                   id="website"
@@ -1441,7 +1463,7 @@ const AdminProfile: React.FC = () => {
             <CardHeader>
               <CardTitle>Contact Information</CardTitle>
               <CardDescription>
-                How customers can reach you
+                Contact details printed on invoices and business documents
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1490,70 +1512,6 @@ const AdminProfile: React.FC = () => {
           <p className="text-sm text-slate-500 px-1">
             Optional sections below start collapsed. Toggle <span className="font-medium">Hidden / Shown</span> on each card to expand.
           </p>
-
-          {/* Social Media Links */}
-          <ProfileCollapsibleSection
-            id="social-media"
-            title="Social Media"
-            description="Connect your social media accounts (optional)"
-            open={isProfileSectionOpen('social-media')}
-            onOpenChange={(open) => setProfileSectionOpen('social-media', open)}
-          >
-            <CardContent className="space-y-4 pt-0">
-              <div>
-                <Label htmlFor="facebook">Facebook URL</Label>
-                <Input
-                  id="facebook"
-                  type="url"
-                  autoComplete="off"
-                  value={formData.facebook}
-                  onChange={(e) => setFormData(prev => ({ ...prev, facebook: e.target.value }))}
-                  placeholder="https://facebook.com/yourstore"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="instagram">Instagram URL</Label>
-                <Input
-                  id="instagram"
-                  type="url"
-                  autoComplete="off"
-                  value={formData.instagram}
-                  onChange={(e) => setFormData(prev => ({ ...prev, instagram: e.target.value }))}
-                  placeholder="https://instagram.com/yourstore"
-                />
-              </div>
-              
-              <div>
-                <Label htmlFor="twitter">Twitter URL</Label>
-                <Input
-                  id="twitter"
-                  type="url"
-                  autoComplete="off"
-                  value={formData.twitter}
-                  onChange={(e) => setFormData(prev => ({ ...prev, twitter: e.target.value }))}
-                  placeholder="https://twitter.com/yourstore"
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="whatsappBusiness" className="flex items-center gap-2">
-                  <svg viewBox="0 0 24 24" className="w-4 h-4 fill-green-500"><path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413Z"/></svg>
-                  WhatsApp Business Number
-                </Label>
-                <Input
-                  id="whatsappBusiness"
-                  name="whatsappBusiness"
-                  type="tel"
-                  autoComplete="off"
-                  value={formData.whatsappBusiness || ''}
-                  onChange={(e) => setFormData(prev => ({ ...prev, whatsappBusiness: e.target.value.replace(/[^0-9+]/g, '') }))}
-                  placeholder="+9611234567 (international format)"
-                />
-                <p className="text-xs text-muted-foreground mt-1">Customers can order directly via WhatsApp from the product page.</p>
-              </div>
-            </CardContent>
-          </ProfileCollapsibleSection>
 
           <ProfileCollapsibleSection
             id="growth-seo"
@@ -2279,6 +2237,33 @@ const AdminProfile: React.FC = () => {
               </div>
 
               <div>
+                <Label htmlFor="invoiceLogo">Company logo (invoices &amp; PDFs)</Label>
+                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-4">
+                  {logoPreview ? (
+                    <img
+                      src={logoPreview}
+                      alt="Company logo preview"
+                      className="h-16 w-auto max-w-[200px] rounded border bg-white object-contain p-1"
+                    />
+                  ) : (
+                    <div className="h-16 w-28 rounded border border-dashed flex items-center justify-center text-xs text-muted-foreground">
+                      No logo
+                    </div>
+                  )}
+                  <Input
+                    id="invoiceLogo"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={handleLogoChange}
+                    className="max-w-sm"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Shown on invoices, estimates, and receipts. PNG or JPG recommended. Save Changes after upload.
+                </p>
+              </div>
+
+              <div>
                 <Label htmlFor="invoiceTemplate">Invoice Template</Label>
                 <select
                   id="invoiceTemplate"
@@ -2405,191 +2390,6 @@ const AdminProfile: React.FC = () => {
                 <p className="text-xs text-muted-foreground mt-2">
                   These categories will be available when creating composed products
                 </p>
-              </div>
-            </CardContent>
-          </ProfileCollapsibleSection>
-
-          {/* Banner / Carousel Images */}
-          <ProfileCollapsibleSection
-            id="banners"
-            title={<span className="flex items-center gap-2"><ImagePlus className="h-5 w-5" />Banner Images</span>}
-            description="Header and carousel images for your storefront"
-            open={isProfileSectionOpen('banners')}
-            onOpenChange={(open) => setProfileSectionOpen('banners', open)}
-          >
-            <CardContent className="space-y-4 pt-0">
-              <Label htmlFor="carousel-upload" className="cursor-pointer">
-                <div className="flex items-center gap-2 bg-primary text-primary-foreground hover:bg-primary/90 px-4 py-2 rounded-md transition-colors w-fit">
-                  <Upload className="h-4 w-4" />
-                  <span>Add Images</span>
-                </div>
-                <Input id="carousel-upload" type="file" accept="image/*" multiple onChange={handleAddCarouselImages} className="hidden" />
-              </Label>
-              {(formData.carouselImages || []).length > 0 ? (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                  {(formData.carouselImages || []).map((url, idx) => (
-                    <div key={idx} className="relative group rounded-lg overflow-hidden border h-28">
-                      <img src={url} alt={`Banner ${idx + 1}`} className="w-full h-full object-cover" />
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveCarouselImage(idx)}
-                        className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                      >
-                        <X className="h-3 w-3" />
-                      </button>
-                      <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1 rounded">{idx + 1}</span>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No banner images uploaded yet.</p>
-              )}
-            </CardContent>
-          </ProfileCollapsibleSection>
-
-          {/* Custom Pages */}
-          <ProfileCollapsibleSection
-            id="store-pages"
-            title={<span className="flex items-center gap-2"><GripVertical className="h-5 w-5" />Store Pages</span>}
-            description="Custom pages — About Us and Products are built-in"
-            open={isProfileSectionOpen('store-pages')}
-            onOpenChange={(open) => setProfileSectionOpen('store-pages', open)}
-          >
-            <CardContent className="space-y-4 pt-0">
-              {(formData.customPages || []).map((page, idx) => (
-                <div key={page.id} className="border rounded-lg p-4 space-y-3">
-                  <div className="flex items-center gap-2">
-                    <div className="flex flex-col gap-0.5">
-                      <button type="button" onClick={() => handleMovePage(idx, 'up')} disabled={idx === 0} className="hover:bg-accent rounded p-0.5 disabled:opacity-30"><ChevronUp className="h-3 w-3" /></button>
-                      <button type="button" onClick={() => handleMovePage(idx, 'down')} disabled={idx === (formData.customPages || []).length - 1} className="hover:bg-accent rounded p-0.5 disabled:opacity-30"><ChevronDown className="h-3 w-3" /></button>
-                    </div>
-                    <Input
-                      id={`page-name-${page.id}`}
-                      name={`page-name-${page.id}`}
-                      autoComplete="off"
-                      aria-label="Page name"
-                      value={page.name}
-                      onChange={e => handlePageNameChange(page.id, e.target.value)}
-                      placeholder="Page name"
-                      className="flex-1"
-                    />
-                    <button type="button" onClick={() => handleRemovePage(page.id)} className="hover:bg-destructive/20 rounded p-1">
-                      <X className="h-4 w-4 text-destructive" />
-                    </button>
-                  </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <span className="text-xs text-muted-foreground mb-1 block">Page Image</span>
-                      {page.image ? (
-                        <div className="relative group rounded-lg overflow-hidden border h-28">
-                          <img src={page.image} alt={page.name} className="w-full h-full object-cover" />
-                          <button
-                            type="button"
-                            onClick={() => handleRemovePageImage(page.id)}
-                            className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white rounded-full w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ) : (
-                        <Label htmlFor={`page-img-${page.id}`} className="cursor-pointer">
-                          <div className="flex items-center gap-2 border-2 border-dashed rounded-lg h-28 justify-center hover:bg-muted/50 transition-colors text-muted-foreground text-sm">
-                            <ImagePlus className="h-5 w-5" />Upload Image
-                          </div>
-                          <Input id={`page-img-${page.id}`} type="file" accept="image/*" onChange={e => handlePageImageChange(page.id, e)} className="hidden" />
-                        </Label>
-                      )}
-                    </div>
-                    <div>
-                      <Label htmlFor={`page-content-${page.id}`} className="text-xs text-muted-foreground mb-1 block">Page Content</Label>
-                      <Textarea
-                        id={`page-content-${page.id}`}
-                        name={`page-content-${page.id}`}
-                        autoComplete="off"
-                        value={page.content || ''}
-                        onChange={e => handlePageContentChange(page.id, e.target.value)}
-                        placeholder="Write the content for this page..."
-                        rows={4}
-                        className="resize-none"
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-              <div className="flex gap-2">
-                <Input
-                  id="new-page-name"
-                  name="new-page-name"
-                  autoComplete="off"
-                  aria-label="New page name"
-                  value={newPageName}
-                  onChange={e => setNewPageName(e.target.value)}
-                  placeholder="New page name (e.g. Gallery, Contact)"
-                  onKeyDown={e => e.key === 'Enter' && (e.preventDefault(), handleAddPage())}
-                />
-                <Button type="button" variant="outline" onClick={handleAddPage} disabled={!newPageName.trim()}>
-                  <Plus className="h-4 w-4 mr-1" />Add Page
-                </Button>
-              </div>
-            </CardContent>
-          </ProfileCollapsibleSection>
-
-          {/* Template Colors */}
-          <ProfileCollapsibleSection
-            id="template-colors"
-            title={<span className="flex items-center gap-2"><Palette className="h-5 w-5" />Template Colors</span>}
-            description="Primary, secondary, and accent colors for your store template"
-            open={isProfileSectionOpen('template-colors')}
-            onOpenChange={(open) => setProfileSectionOpen('template-colors', open)}
-          >
-            <CardContent className="pt-0">
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                {([
-                  { key: 'primary', label: 'Primary Color', defaultVal: '#0ea5e9' },
-                  { key: 'secondary', label: 'Secondary Color', defaultVal: '#6366f1' },
-                  { key: 'accent', label: 'Accent Color', defaultVal: '#f97316' },
-                ] as const).map(({ key, label, defaultVal }) => (
-                  <div key={key} className="space-y-2">
-                    <Label htmlFor={`color-${key}`}>{label}</Label>
-                    <div className="flex items-center gap-3">
-                      <input
-                        id={`color-${key}`}
-                        name={`color-${key}`}
-                        type="color"
-                        autoComplete="off"
-                        value={formData.templateColors?.[key] || defaultVal}
-                        onChange={e => setFormData(prev => ({
-                          ...prev,
-                          templateColors: {
-                            primary: prev.templateColors?.primary || '#0ea5e9',
-                            secondary: prev.templateColors?.secondary || '#6366f1',
-                            accent: prev.templateColors?.accent || '#f97316',
-                            [key]: e.target.value,
-                          },
-                        }))}
-                        className="h-10 w-10 rounded cursor-pointer border"
-                      />
-                      <Label htmlFor={`color-hex-${key}`} className="sr-only">{label} hex value</Label>
-                      <Input
-                        id={`color-hex-${key}`}
-                        name={`color-hex-${key}`}
-                        autoComplete="off"
-                        value={formData.templateColors?.[key] || defaultVal}
-                        onChange={e => setFormData(prev => ({
-                          ...prev,
-                          templateColors: {
-                            primary: prev.templateColors?.primary || '#0ea5e9',
-                            secondary: prev.templateColors?.secondary || '#6366f1',
-                            accent: prev.templateColors?.accent || '#f97316',
-                            [key]: e.target.value,
-                          },
-                        }))}
-                        placeholder={defaultVal}
-                        className="font-mono text-sm"
-                      />
-                    </div>
-                  </div>
-                ))}
               </div>
             </CardContent>
           </ProfileCollapsibleSection>

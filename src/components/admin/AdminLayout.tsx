@@ -3,7 +3,7 @@ import { Link, Outlet, useLocation } from 'react-router-dom';
 import { ChevronDown, CreditCard, FileText } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { useAdminNavigation } from '@/hooks/useAdminNavigation';
+import { useAdminNavigation, type AdminNavItem } from '@/hooks/useAdminNavigation';
 import MobileHeader from '@/components/MobileHeader';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 import AdminPageFallback from '@/components/admin/AdminPageFallback';
@@ -52,6 +52,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/profile': 'Store Profile',
   '/admin/payments': 'Payments',
   '/admin/delivery': 'Delivery',
+  '/admin/builder': 'Store Builder',
   '/admin/templates': 'Templates',
   '/admin/announcements': 'Announcements',
   '/admin/analytics': 'Analytics',
@@ -62,6 +63,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/customers': 'Customers',
   '/admin/purchases': 'Purchases',
   '/admin/finance': 'Finance Suite',
+  '/admin/finance/invoices': 'Invoice Manager',
   '/admin/staff': 'Staff',
   '/admin/sub-accounts': 'Sub-Accounts',
   '/admin/account-statement': 'Account Statement',
@@ -77,11 +79,45 @@ const PAGE_TITLES: Record<string, string> = {
 function resolvePageTitle(pathname: string, fallback: string) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/admin/crm')) return 'Sales CRM';
+  if (pathname.startsWith('/admin/finance/invoices') || pathname.startsWith('/admin/finance/estimates') || pathname.startsWith('/admin/finance/receipts') || pathname.startsWith('/admin/finance/clients') || pathname.startsWith('/admin/finance/products') || (pathname.startsWith('/admin/finance/reports') && pathname !== '/admin/reports')) return 'Invoice Manager';
   if (pathname.startsWith('/admin/finance')) return 'Finance';
   if (pathname.startsWith('/admin/ai')) return 'AI Tools';
   const segment = pathname.split('/').filter(Boolean).pop();
   if (!segment) return fallback;
   return segment.replace(/-/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function renderSidebarNavItem(
+  item: AdminNavItem,
+  isRouteActive: (route: string) => boolean,
+  activeClass: string,
+  inactiveClass: string,
+) {
+  const Icon = item.icon;
+  const className = `flex items-center rounded-lg px-2.5 py-2 text-sm transition ${
+    isRouteActive(item.to) ? activeClass : inactiveClass
+  }`;
+
+  if (item.external) {
+    return (
+      <a key={item.to} href={item.to} className={className}>
+        <Icon className="mr-2.5 h-4 w-4 shrink-0 opacity-80" />
+        <span>{item.label}</span>
+      </a>
+    );
+  }
+
+  return (
+    <Link
+      key={item.to}
+      to={item.to}
+      onMouseEnter={() => preloadAdminRoute(item.to)}
+      className={className}
+    >
+      <Icon className="mr-2.5 h-4 w-4 shrink-0 opacity-80" />
+      <span>{item.label}</span>
+    </Link>
+  );
 }
 
 export default function AdminLayout() {
@@ -243,24 +279,14 @@ export default function AdminLayout() {
                         <div className="space-y-0.5 px-2 pb-2">
                           {group.items
                             .filter((item) => item.visible)
-                            .map((item) => {
-                              const Icon = item.icon;
-                              return (
-                                <Link
-                                  key={item.to}
-                                  to={item.to}
-                                  onMouseEnter={() => preloadAdminRoute(item.to)}
-                                  className={`flex items-center rounded-lg px-2.5 py-2 text-sm transition ${
-                                    isRouteActive(item.to)
-                                      ? 'bg-teal-500/15 text-teal-300'
-                                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                                  }`}
-                                >
-                                  <Icon className="mr-2.5 h-4 w-4 shrink-0 opacity-80" />
-                                  <span>{item.label}</span>
-                                </Link>
-                              );
-                            })}
+                            .map((item) =>
+                              renderSidebarNavItem(
+                                item,
+                                isRouteActive,
+                                'bg-teal-500/15 text-teal-300',
+                                'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                              ),
+                            )}
                         </div>
                       )}
                     </div>
@@ -290,24 +316,14 @@ export default function AdminLayout() {
                         <div className="space-y-0.5 px-2 pb-2">
                           {group.items
                             .filter((item) => item.visible)
-                            .map((item) => {
-                              const Icon = item.icon;
-                              return (
-                                <Link
-                                  key={item.to}
-                                  to={item.to}
-                                  onMouseEnter={() => preloadAdminRoute(item.to)}
-                                  className={`flex items-center rounded-lg px-2.5 py-2 text-sm transition ${
-                                    isRouteActive(item.to)
-                                      ? 'bg-indigo-500/15 text-indigo-300'
-                                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200'
-                                  }`}
-                                >
-                                  <Icon className="mr-2.5 h-4 w-4 shrink-0 opacity-80" />
-                                  <span>{item.label}</span>
-                                </Link>
-                              );
-                            })}
+                            .map((item) =>
+                              renderSidebarNavItem(
+                                item,
+                                isRouteActive,
+                                'bg-indigo-500/15 text-indigo-300',
+                                'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                              ),
+                            )}
                         </div>
                       )}
                     </div>

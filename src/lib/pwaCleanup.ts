@@ -1,4 +1,4 @@
-const CLEANUP_KEY = 'grabio_pwa_cleanup_v3';
+const CLEANUP_KEY = 'grabio_pwa_cleanup_v4';
 
 /** One-time legacy PWA teardown — avoids re-clearing caches on every refresh (which caused flicker). */
 export function runPwaCleanupOnce(): void {

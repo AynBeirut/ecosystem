@@ -205,7 +205,7 @@ async function main() {
   const builderPath = docPath('builders', TEST_UID);
   const builderWrite = firestoreSet(idToken, builderPath, {
     businessType: 'designer',
-    demoSlotCount: 5,
+    demoSlotCount: 2,
     createdAt: ts,
     updatedAt: ts,
   });

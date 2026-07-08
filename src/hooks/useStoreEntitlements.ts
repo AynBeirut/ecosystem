@@ -1,5 +1,5 @@
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, getDocFromServer } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { resolveStoreEntitlements, type StoreEntitlements } from '@/lib/entitlements';
@@ -12,23 +12,34 @@ export function useStoreEntitlements() {
 
   const storeId = user ? getActualStoreId(user) : null;
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (options?: { silent?: boolean; fromServer?: boolean }) => {
     if (!storeId) {
       setProfile(null);
       setLoading(false);
       return;
     }
-    setLoading(true);
+    if (!options?.silent) setLoading(true);
     try {
-      const snap = await getDoc(doc(getFirestore(), 'storeProfiles', storeId));
+      const ref = doc(getFirestore(), 'storeProfiles', storeId);
+      const snap = options?.fromServer
+        ? await getDocFromServer(ref).catch(() => getDoc(ref))
+        : await getDoc(ref);
       setProfile(snap.exists() ? (snap.data() as StoreProfile) : null);
     } finally {
-      setLoading(false);
+      if (!options?.silent) setLoading(false);
     }
   }, [storeId]);
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    const onProfileUpdated = () => {
+      void load({ silent: true, fromServer: true });
+    };
+    window.addEventListener('grabio:store-profile-updated', onProfileUpdated);
+    return () => window.removeEventListener('grabio:store-profile-updated', onProfileUpdated);
   }, [load]);
 
   const entitlements = useMemo<StoreEntitlements | null>(

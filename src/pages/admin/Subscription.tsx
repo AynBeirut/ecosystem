@@ -1,7 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/useAuth';
 import { Link, useNavigate } from 'react-router-dom';
-import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { StoreProfile } from '@/types/storeProfile';
 import { Button } from '@/components/ui/button';
@@ -34,8 +34,9 @@ import { resolveStoreEntitlements } from '@/lib/entitlements';
 import { PRESET_LIST } from '@/lib/packagePresets';
 import { calculateModularPrice, calculateCustomPrice, MODULE_PRICES } from '@/lib/modularPricing';
 import type { StartingPackageKey } from '@/lib/moduleManifest';
-import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule } from '@/lib/pricingDisplay';
-import type { AddOnKey as PricingAddOnKey } from '@/lib/pricingDisplay';
+import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule, tierMeetsMinimum } from '@/lib/pricingDisplay';
+import type { AddOnKey as PricingAddOnKey, PaidTier as PricingPaidTier } from '@/lib/pricingDisplay';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { getApiBaseUrl } from '@/lib/apiBase';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminModuleIcon from '@/components/admin/AdminModuleIcon';
@@ -206,6 +207,22 @@ const EMPTY_SELECTION: AddOnSelection = {
   extraStorageBlocks: 0,
 };
 
+/** All live modules a store owner can toggle (core + tier + stock — not add-ons or roadmap). */
+const MANAGEABLE_MODULES = MODULE_CATALOG.filter(
+  (m) =>
+    m.billing !== 'addon' &&
+    m.billing !== 'included' &&
+    m.status !== 'planned' &&
+    m.status !== 'coming_soon' &&
+    !isRoadmapModule(m),
+);
+
+function paidTierFromProfile(tier?: string): PricingPaidTier {
+  const normalized = normalizeTier(tier);
+  if (normalized === 'trial' || !normalized) return 'starter';
+  return normalized;
+}
+
 function normalizeTier(tier?: string): SubscriptionTier | null {
   if (!tier) return null;
   if (tier === 'premium') return 'starter';
@@ -262,6 +279,8 @@ export default function Subscription() {
   // Always tracks the exact set of selected modules — presets just pre-fill this
   const defaultShopModules = PRESET_LIST.find(p => p.key === 'pkg_shop')?.defaultModules ?? [];
   const [selectedModules, setSelectedModules] = useState<Set<string>>(new Set(defaultShopModules));
+  const [liveModuleToggles, setLiveModuleToggles] = useState<Record<string, boolean>>({});
+  const [savingLiveModules, setSavingLiveModules] = useState(false);
   const firebaseAuth = getAuth();
 
   const selectedPresetData = modularPreset !== 'custom'
@@ -310,6 +329,50 @@ export default function Subscription() {
 
   const grandTotal = priceBreakdown.totalUsd;
   const modularCheckoutEnabled = ECOSYSTEM_FLAGS.modularCheckout;
+
+  function toggleLiveModule(modId: string) {
+    setLiveModuleToggles((prev) => ({ ...prev, [modId]: !prev[modId] }));
+  }
+
+  const handleSaveLiveModules = async () => {
+    if (!user) return;
+    const storeId = getActualStoreId(user) ?? user.id;
+    setSavingLiveModules(true);
+    try {
+      const db = getFirestore();
+      const profileRef = doc(db, 'storeProfiles', storeId);
+      const existing = (await getDoc(profileRef)).data() as StoreProfile | undefined;
+      const enabledModules = { ...(existing?.enabledModules ?? {}) };
+      for (const mod of MANAGEABLE_MODULES) {
+        enabledModules[mod.id] = Boolean(liveModuleToggles[mod.id]);
+      }
+      await setDoc(
+        profileRef,
+        {
+          enabledModules,
+          pricingVersion: existing?.pricingVersion ?? 'modular-v2',
+          updatedAt: new Date().toISOString(),
+        },
+        { merge: true },
+      );
+      const refreshed = await getDoc(profileRef);
+      if (refreshed.exists()) {
+        setProfile(refreshed.data() as StoreProfile);
+      }
+      toast({
+        title: 'Modules updated',
+        description: 'Your live module settings were saved. Refresh admin pages if a module gate still shows.',
+      });
+    } catch (err) {
+      toast({
+        title: 'Save failed',
+        description: err instanceof Error ? err.message : 'Could not save modules',
+        variant: 'destructive',
+      });
+    } finally {
+      setSavingLiveModules(false);
+    }
+  };
 
   const handleModularSubscribe = async () => {
     if (!user || !modularCheckoutEnabled) return;
@@ -390,7 +453,8 @@ export default function Subscription() {
         return;
       }
       const db = getFirestore();
-      const profileRef = doc(db, 'storeProfiles', user.id);
+      const storeId = getActualStoreId(user) ?? user.id;
+      const profileRef = doc(db, 'storeProfiles', storeId);
       const profileSnap = await getDoc(profileRef);
       if (profileSnap.exists()) {
         setProfile(profileSnap.data() as StoreProfile);
@@ -400,6 +464,17 @@ export default function Subscription() {
     fetchProfile();
     loadSubscriptionInfo();
   }, [user, loadSubscriptionInfo]);
+
+  useEffect(() => {
+    if (!profile) return;
+    const ent = resolveStoreEntitlements(profile);
+    if (!ent) return;
+    const toggles: Record<string, boolean> = {};
+    for (const mod of MANAGEABLE_MODULES) {
+      toggles[mod.id] = Boolean(ent.modules[mod.id]);
+    }
+    setLiveModuleToggles(toggles);
+  }, [profile]);
 
   const handleStartTrial = async () => {
     const currentUser = firebaseAuth.currentUser;
@@ -730,7 +805,9 @@ export default function Subscription() {
   const showModularPackageBuilder =
     ECOSYSTEM_FLAGS.modularEntitlements &&
     !isLegacyUser &&
-    !(hasActiveSubscription && !isModularV2WithModules);
+    !hasActiveSubscription;
+  /** Active subscribers: full module library + save (no checkout). Always shown when subscribed. */
+  const showLiveModuleManager = Boolean(profile) && hasActiveSubscription && !isLegacyUser;
   const canStartTrial = !profile?.hasUsedTrial && !hasActiveSubscription && !isLegacyUser;
   const activeTier = normalizeTier(profile?.subscriptionTier);
   const activeAddOns = normalizeAddOns(profile?.addOns);
@@ -745,6 +822,93 @@ export default function Subscription() {
       backLabel="Back to Store Profile"
       className="max-w-6xl"
     >
+
+      {showLiveModuleManager && (
+        <AdminPanel className="mb-8 border-primary/30 shadow-md bg-white">
+          <CardHeader>
+            <CardTitle>Manage modules</CardTitle>
+            <CardDescription>
+              Add or remove any module for your store — Web Builder, Blog, CRM, POS, AI tools, inventory, and more. Changes apply immediately after save (no new checkout).
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {(['platform', 'apps', 'ai'] as const).map((group) => {
+              const groupModules = MANAGEABLE_MODULES.filter((m) => m.group === group);
+              if (!groupModules.length) return null;
+              const groupLabel = group === 'platform' ? 'Platform' : group === 'apps' ? 'Apps' : 'AI tools';
+              return (
+                <div key={group}>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">{groupLabel}</p>
+                  <div className="grid sm:grid-cols-2 gap-y-1 gap-x-4">
+                    {groupModules.map((mod) => {
+                      const paidTier = paidTierFromProfile(profile?.subscriptionTier);
+                      const tierEligible =
+                        mod.billing === 'core' || !mod.minTier || tierMeetsMinimum(paidTier, mod.minTier);
+                      const isOn = Boolean(liveModuleToggles[mod.id]);
+                      const modPrice = MODULE_PRICES[mod.id];
+                      const priceLabel =
+                        mod.billing === 'core'
+                          ? 'Core'
+                          : modPrice && modPrice.monthly > 0
+                            ? `$${modPrice.monthly}/mo`
+                            : 'Included';
+                      return (
+                        <div
+                          key={mod.id}
+                          className={`flex items-start gap-3 p-2.5 rounded-xl transition-all cursor-pointer ${
+                            !tierEligible
+                              ? 'opacity-40'
+                              : isOn
+                                ? 'bg-green-50 dark:bg-green-950/20 ring-1 ring-green-200/60'
+                                : 'opacity-70 hover:opacity-100 hover:bg-muted/40'
+                          }`}
+                          onClick={() => tierEligible && toggleLiveModule(mod.id)}
+                        >
+                          <Checkbox
+                            checked={isOn}
+                            disabled={!tierEligible}
+                            onCheckedChange={() => tierEligible && toggleLiveModule(mod.id)}
+                            onClick={(e) => e.stopPropagation()}
+                            className="mt-2 shrink-0"
+                          />
+                          <AdminModuleIcon moduleId={mod.id} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium leading-tight">{mod.name}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-2">{mod.summary}</p>
+                            {!tierEligible && mod.minTier && (
+                              <p className="text-xs text-amber-600 mt-1">
+                                Requires {mod.minTier === 'business' ? 'Business' : 'Pro'}+ plan
+                              </p>
+                            )}
+                          </div>
+                          <Badge variant={isOn ? 'default' : 'outline'} className="shrink-0 text-xs">
+                            {tierEligible ? priceLabel : 'Upgrade'}
+                          </Badge>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })}
+            <div className="flex flex-wrap gap-3 pt-2 border-t">
+              <Button onClick={handleSaveLiveModules} disabled={savingLiveModules} size="lg">
+                {savingLiveModules ? 'Saving…' : 'Save module changes'}
+              </Button>
+              {liveModuleToggles.builder && (
+                <Button variant="outline" asChild>
+                  <Link to="/admin/builder">Open Store Builder</Link>
+                </Button>
+              )}
+              {liveModuleToggles.blog_publisher && (
+                <Button variant="outline" asChild>
+                  <Link to="/admin/blog">Open Blog Publisher</Link>
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </AdminPanel>
+      )}
 
       {profile?.nextPlanPreset && (
         <AdminPanel className="mb-8 border-blue-200 bg-blue-50">
@@ -1096,14 +1260,14 @@ export default function Subscription() {
                   )}
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-2">Enabled modules</p>
                   <div className="grid grid-cols-1 gap-1">
-                    {MODULE_CATALOG.filter(m => profile?.enabledModules?.[m.id]).map(m => (
+                    {MODULE_CATALOG.filter(m => entitlements?.modules[m.id]).map(m => (
                       <div key={m.id} className="flex items-center gap-3 text-sm py-1">
                         <span className="text-green-600 font-bold">✓</span>
                         <AdminModuleIcon moduleId={m.id} size="sm" />
                         <span>{m.name}</span>
                       </div>
                     ))}
-                    {!MODULE_CATALOG.some(m => profile?.enabledModules?.[m.id]) && (
+                    {!MODULE_CATALOG.some(m => entitlements?.modules[m.id]) && (
                       <p className="text-xs text-muted-foreground">No modules configured yet.</p>
                     )}
                   </div>

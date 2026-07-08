@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -18,6 +19,10 @@ import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
+import {
+  extractSectionOrderFromDesignImport,
+  layoutImportFirestorePatch,
+} from '@/lib/designImport';
 import { assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
 import type {
   ProductDisplayType, HeroLayout, MenuStyle, ContactFormStyle,
@@ -1082,17 +1087,21 @@ const AdminTemplates: React.FC<AdminTemplatesProps> = ({ demoId }) => {
     { id: 'templates', label: 'Templates', icon: <Eye className="h-4 w-4" /> },
     { id: 'colors',    label: 'Colors',    icon: <Palette className="h-4 w-4" /> },
     { id: 'layout',    label: 'Layout',    icon: <LayoutGrid className="h-4 w-4" /> },
-    { id: 'sections',  label: 'Sections',  icon: <Layers className="h-4 w-4" /> },
+    { id: 'sections',  label: 'Forms & ratings', icon: <Layers className="h-4 w-4" /> },
   ];
 
   // ── render ───────────────────────────────────────────────────────────────
   return (
     <AdminPageShell
-      title={demoMode ? 'Demo Store Design' : 'Store Design'}
-      description={demoMode ? 'Templates, colors, layout, and sections for this demo store' : "Customise your store's look, layout, and sections"}
-      eyebrow={demoMode ? 'Builder Demo' : 'Profile & Store Setup'}
-      backTo={demoMode ? '/builder' : '/admin/profile'}
-      backLabel={demoMode ? 'Back to Builder Dashboard' : 'Back to Store Profile'}
+      title={demoMode ? 'Demo Store Design' : 'Classic Template Editor'}
+      description={
+        demoMode
+          ? 'Templates, colors, layout, and sections for this demo store'
+          : 'Original Grabio drag-and-drop — reorder sections, grid widths, and layout controls'
+      }
+      eyebrow={demoMode ? 'Builder Demo' : 'Classic drag & drop'}
+      backTo={demoMode ? '/builder' : '/admin/dashboard'}
+      backLabel={demoMode ? 'Back to Builder Dashboard' : 'Dashboard'}
       actions={
         <div>
           <label className="cursor-pointer">
@@ -1107,21 +1116,19 @@ const AdminTemplates: React.FC<AdminTemplatesProps> = ({ demoId }) => {
                 try {
                   const text = await file.text();
                   const imported = JSON.parse(text);
-                  await setDoc(designDocRef, { ...imported, hasImportedDesign: true }, { merge: true });
-                  if (imported.template) {
-                    setSelectedTemplate(imported.template);
-                    setPreviewTemplate(imported.template);
+                  const sectionOrderImport = extractSectionOrderFromDesignImport(imported);
+                  if (!sectionOrderImport) {
+                    toast({ title: 'Import Failed', description: 'JSON must include a sectionOrder array.', variant: 'destructive' });
+                    return;
                   }
-                  if (imported.templateColors) setColors({ ...EMPTY_COLORS(), ...imported.templateColors });
-                  if (imported.productDisplayType) setProductDisplayType(imported.productDisplayType);
-                  if (imported.productCardAnimation) setProductCardAnimation(imported.productCardAnimation);
-                  if (imported.heroLayout) setHeroLayout(imported.heroLayout);
-                  if (imported.menuStyle) setMenuStyle(imported.menuStyle);
-                  if (imported.contactFormStyle) setContactFormStyle(imported.contactFormStyle);
-                  if (imported.ratingDisplayType) setRatingDisplayType(imported.ratingDisplayType);
-                  if (imported.aboutLayout) setAboutLayout(imported.aboutLayout);
-                  if (Array.isArray(imported.sectionOrder)) setSectionOrder(imported.sectionOrder);
-                  toast({ title: 'Design Imported', description: 'All settings applied from preset.' });
+                  await setDoc(
+                    designDocRef,
+                    { ...layoutImportFirestorePatch(sectionOrderImport), updatedAt: new Date().toISOString() },
+                    { merge: true },
+                  );
+                  setSectionOrder(sectionOrderImport);
+                  setSelectedTemplate('custom');
+                  toast({ title: 'Layout Imported', description: 'Section order applied to Custom template only.' });
                 } catch (err) {
                   toast({ title: 'Import Failed', description: 'Invalid JSON file.', variant: 'destructive' });
                 }
@@ -1131,15 +1138,30 @@ const AdminTemplates: React.FC<AdminTemplatesProps> = ({ demoId }) => {
               <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
               </svg>
-              Import Design
+              Import layout
             </Button>
           </label>
           <p className="text-xs text-muted-foreground mt-1 text-right">
-            Upload a JSON design file to instantly apply a preset
+            JSON import applies section order only (Custom template)
           </p>
         </div>
       }
     >
+        {!demoMode && (
+          <AdminPanel className="mb-6 border border-violet-200 bg-violet-50/50">
+            <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="font-medium text-sm">Live preview, themes &amp; store content</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Use Theme Editor for Shopify-style preview, themes, colors, and copy.
+                </p>
+              </div>
+              <Button asChild variant="default" size="sm">
+                <Link to="/admin/theme-editor">Open Theme Editor</Link>
+              </Button>
+            </CardContent>
+          </AdminPanel>
+        )}
 
         {/* Tab bar */}
         <div className="flex gap-1 p-1 bg-muted rounded-xl mb-8 overflow-x-auto">
@@ -2311,170 +2333,22 @@ const AdminTemplates: React.FC<AdminTemplatesProps> = ({ demoId }) => {
           </div>
         )}
 
-        {/* ══ SECTIONS TAB ══ */}
+        {/* ══ SECTIONS TAB (form & rating styles — layout DnD lives under Templates → Custom) ══ */}
         {activeTab === 'sections' && (
           <div className="space-y-8">
-            {/* Section ordering */}
-            <AdminPanel>
-              <CardHeader>
-                <CardTitle>Section Order & Visibility</CardTitle>
-                <CardDescription>Control which sections appear and their display order on your storefront</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {sectionOrder
-                    .sort((a, b) => a.order - b.order)
-                    .map((section) => {
-                      const sectionLabels: Record<StoreSectionId, string> = {
-                        hero: 'Hero / Banner',
-                        about: 'About Us',
-                        announcements: 'Announcements',
-                        products: 'Products Catalog',
-                        gallery: 'Gallery',
-                        reviews: 'Customer Reviews',
-                        contact: 'Contact Form',
-                      };
-                      const label = sectionLabels[section.id];
-                      
-                      return (
-                        <div key={section.id} className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                          {/* Drag handle visual */}
-                          <div className="text-muted-foreground cursor-move select-none">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
-                            </svg>
-                          </div>
-                          
-                          {/* Position number */}
-                          <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-                            {section.order + 1}
-                          </span>
-                          
-                          {/* Section label */}
-                          <span className="flex-1 font-medium text-sm">{label}</span>
-                          
-                          {/* Up/Down buttons */}
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentIdx = sectionOrder.findIndex(s => s.id === section.id);
-                                if (currentIdx <= 0) return;
-                                const newOrder = [...sectionOrder];
-                                [newOrder[currentIdx], newOrder[currentIdx - 1]] = [newOrder[currentIdx - 1], newOrder[currentIdx]];
-                                newOrder.forEach((s, idx) => s.order = idx);
-                                setSectionOrder(newOrder);
-                              }}
-                              disabled={section.order === 0}
-                              className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              title="Move up"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentIdx = sectionOrder.findIndex(s => s.id === section.id);
-                                if (currentIdx >= sectionOrder.length - 1) return;
-                                const newOrder = [...sectionOrder];
-                                [newOrder[currentIdx], newOrder[currentIdx + 1]] = [newOrder[currentIdx + 1], newOrder[currentIdx]];
-                                newOrder.forEach((s, idx) => s.order = idx);
-                                setSectionOrder(newOrder);
-                              }}
-                              disabled={section.order === sectionOrder.length - 1}
-                              className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              title="Move down"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                          </div>
-                          
-                          {/* Width controls */}
-                          <div className="flex gap-0.5 border rounded-md overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateSectionOrder(prev =>
-                                  prev.map(s => s.id === section.id ? { ...s, width: 'full' } : s)
-                                );
-                              }}
-                              className={`px-2 py-1 text-xs font-medium transition-colors ${
-                                (section.width || 'full') === 'full'
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-background hover:bg-muted'
-                              }`}
-                              title="Full width - takes entire row"
-                            >
-                              Full
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateSectionOrder(prev =>
-                                  prev.map(s => s.id === section.id ? { ...s, width: 'half' } : s)
-                                );
-                              }}
-                              className={`px-2 py-1 text-xs font-medium transition-colors ${
-                                section.width === 'half'
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-background hover:bg-muted'
-                              }`}
-                              title="Half width - 2 sections per row"
-                            >
-                              1/2
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateSectionOrder(prev =>
-                                  prev.map(s => s.id === section.id ? { ...s, width: 'third' } : s)
-                                );
-                              }}
-                              className={`px-2 py-1 text-xs font-medium transition-colors ${
-                                section.width === 'third'
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-background hover:bg-muted'
-                              }`}
-                              title="Third width - 3 sections per row"
-                            >
-                              1/3
-                            </button>
-                          </div>
-                          
-                          {/* Toggle visibility */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateSectionOrder(prev =>
-                                prev.map(s => s.id === section.id ? { ...s, enabled: !s.enabled } : s)
-                              );
-                            }}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                              section.enabled
-                                ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30'
-                                : 'bg-gray-300/60 text-gray-600 hover:bg-gray-300/80'
-                            }`}
-                          >
-                            {section.enabled ? 'Visible' : 'Hidden'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                </div>
-                <div className="mt-6 p-4 bg-blue-50/50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-900 font-medium mb-2">💡 Layout Guide:</p>
-                  <ul className="text-xs text-blue-800 space-y-1">
-                    <li>• Use <strong>↑↓ arrows</strong> to reorder sections</li>
-                    <li>• Choose <strong>Full</strong> for 1 section per row (full width)</li>
-                    <li>• Choose <strong>1/2</strong> to place 2 sections side-by-side</li>
-                    <li>• Choose <strong>1/3</strong> to place 3 sections side-by-side</li>
-                    <li>• Click <strong>Visible/Hidden</strong> to show or hide sections</li>
-                  </ul>
-                </div>
+            <AdminPanel className="border border-dashed bg-muted/20">
+              <CardContent className="py-4">
+                <p className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">Section drag-and-drop</strong> is on the{' '}
+                  <button
+                    type="button"
+                    className="text-primary underline font-medium"
+                    onClick={() => setActiveTab('templates')}
+                  >
+                    Templates
+                  </button>{' '}
+                  tab — select the <strong>Custom</strong> template for reorder, grid width, and visibility.
+                </p>
               </CardContent>
             </AdminPanel>
 

@@ -15,7 +15,9 @@ function RouteTracker() {
   }, [location]);
   return null;
 }
-import { Toaster } from "sonner";
+import { isPlatformHostname } from '@/lib/platformHosts';
+import { Toaster as SonnerToaster } from "sonner";
+import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "./components/theme-provider";
 import { AuthProvider } from "./context/AuthContext";
 import { CartProvider } from "./context/CartContext";
@@ -49,6 +51,8 @@ import CustomDomainStore from "./pages/CustomDomainStore";
 import CookieConsent from "./components/CookieConsent";
 import PublicPageFallback from "./components/public/PublicPageFallback";
 import AdminLayout from "./components/admin/AdminLayout";
+import EditorPreviewRoot, { isEditorEmbedFrame } from "./embed/EditorPreviewRoot";
+import BuilderMethodGuard from "./components/builder/BuilderMethodGuard";
 
 const ModularHome = lazy(() => import("./pages/public/ModularHome"));
 const Features = lazy(() => import("./pages/public/Features"));
@@ -61,6 +65,7 @@ const AdminProfile = lazy(() => import("./pages/admin/AdminProfile"));
 const AdminPayments = lazy(() => import("./pages/admin/AdminPayments"));
 const AdminDelivery = lazy(() => import("./pages/admin/AdminDelivery"));
 const AdminTemplates = lazy(() => import("./pages/admin/AdminTemplates"));
+const UnifiedBuilderWizard = lazy(() => import("./pages/admin/UnifiedBuilderWizard"));
 const AdminAnnouncements = lazy(() => import("./pages/admin/AdminAnnouncements"));
 const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminRevenue = lazy(() => import("./pages/admin/AdminRevenue"));
@@ -111,9 +116,16 @@ const BuilderOnboarding = lazy(() => import("./pages/onboarding/BuilderOnboardin
 const BuilderDashboard = lazy(() => import("./pages/builder/BuilderDashboard"));
 const BuilderDemoEdit = lazy(() => import("./pages/builder/BuilderDemoEdit"));
 const BuilderDemoPreview = lazy(() => import("./pages/builder/BuilderDemoPreview"));
-const FinanceEstimates = lazy(() => import("./pages/admin/finance/FinanceEstimates"));
-const FinanceReceipts = lazy(() => import("./pages/admin/finance/FinanceReceipts"));
-const FinancePortfolio = lazy(() => import("./pages/admin/finance/FinancePortfolio"));
+const FinanceModuleShell = lazy(() => import("./pages/admin/finance/FinanceModuleShell"));
+const FinanceEmbeddedPage = lazy(() => import("./pages/admin/finance/FinanceEmbeddedPage"));
+import {
+  loadInvoiceManager,
+  loadEstimateManager,
+  loadReceiptManager,
+  loadClientsManager,
+  loadProductsManager,
+  loadFinanceReports,
+} from "./pages/admin/finance/financeEmbeddedLoaders";
 const PosPairing = lazy(() => import("./pages/admin/PosPairing"));
 const AiBuilder = lazy(() => import("./pages/admin/AiBuilder"));
 const BlogPublisher = lazy(() => import("./pages/admin/BlogPublisher"));
@@ -121,6 +133,8 @@ const WhitelabelApp = lazy(() => import("./pages/admin/WhitelabelApp"));
 const StoreBlog = lazy(() => import("./pages/public/StoreBlog"));
 const StoreBlogPost = lazy(() => import("./pages/public/StoreBlogPost"));
 const AdminProjects = lazy(() => import("./pages/admin/AdminProjects"));
+const AdminWordPressQueue = lazy(() => import("./pages/admin/AdminWordPressQueue"));
+const ThemeEditor = lazy(() => import("./pages/admin/ThemeEditor"));
 const ContentCreator = lazy(() => import("./pages/admin/ai/ContentCreator"));
 const MarketStrategy = lazy(() => import("./pages/admin/ai/MarketStrategy"));
 const ProposalWriter = lazy(() => import("./pages/admin/ai/ProposalWriter"));
@@ -128,11 +142,20 @@ const SeoAssistant = lazy(() => import("./pages/admin/ai/SeoAssistant"));
 const BusinessInsights = lazy(() => import("./pages/admin/ai/BusinessInsights"));
 const CampaignWriter = lazy(() => import("./pages/admin/ai/CampaignWriter"));
 
-const PLATFORM_HOSTS = ['localhost', '127.0.0.1', 'grabio.space', 'www.grabio.space', 'market-flow-7b074.web.app'];
 const _hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
+const isCustomDomain = _hostname !== '' && !isPlatformHostname(_hostname);
+
+function AppFooter() {
+  const location = useLocation();
+  if (location.pathname === '/admin/theme-editor') return null;
+  return <Footer />;
+}
 
       function App() {
+        if (isEditorEmbedFrame()) {
+          return <EditorPreviewRoot />;
+        }
+
         return (
           <HelmetProvider>
           <ThemeProvider>
@@ -209,17 +232,30 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
                         <Route path="/payment/failed" element={<ProtectedRoute><PaymentFailed /></ProtectedRoute>} />
                         <Route path="/blocked" element={<ProtectedRoute><Blocked /></ProtectedRoute>} />
+                        {/* Full-screen theme editor — outside AdminLayout (no admin sidebar) */}
+                        <Route
+                          path="/admin/theme-editor"
+                          element={
+                            <ProtectedRoute allowedRoles={['admin']} requiredModule="builder">
+                              <BuilderMethodGuard targetMethod="theme_editor">
+                                <ThemeEditor />
+                              </BuilderMethodGuard>
+                            </ProtectedRoute>
+                          }
+                        />
                         {/* Admin shell + routes */}
                         <Route element={<AdminLayout />}>
                         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
-                        <Route path="/subscription" element={<ProtectedRoute allowedRoles={['admin']}><Subscription /></ProtectedRoute>} />
+                        <Route path="/subscription" element={<ProtectedRoute allowedRoles={['admin', 'user']}><Subscription /></ProtectedRoute>} />
                         <Route path="/admin/dashboard" element={<ProtectedRoute allowedRoles={['admin']}><AdminDashboard /></ProtectedRoute>} />
                         <Route path="/team/dashboard" element={<ProtectedRoute allowedRoles={['sub_account']}><SubAccountDashboard /></ProtectedRoute>} />
                         <Route path="/admin/products" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_inventory" requiredModule="stock"><AdminProducts /></ProtectedRoute>} />
                         <Route path="/admin/profile" element={<ProtectedRoute allowedRoles={['admin']}><AdminProfile /></ProtectedRoute>} />
                         <Route path="/admin/payments" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminPayments /></ProtectedRoute>} />
                         <Route path="/admin/delivery" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="manage_deliveries" requiredModule="delivery"><AdminDelivery /></ProtectedRoute>} />
-                        <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><AdminTemplates /></ProtectedRoute>} />
+                        <Route path="/admin/builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><UnifiedBuilderWizard /></ProtectedRoute>} />
+                        <Route path="/admin/wordpress-queue" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><AdminWordPressQueue /></ProtectedRoute>} />
+                        <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><BuilderMethodGuard targetMethod="classic"><AdminTemplates /></BuilderMethodGuard></ProtectedRoute>} />
                         <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredModule="marketplace"><AdminAnnouncements /></ProtectedRoute>} />
                         <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports" requiredModule="analytics"><AdminAnalytics /></ProtectedRoute>} />
                         <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports" requiredModule="analytics"><AdminRevenue /></ProtectedRoute>} />
@@ -248,9 +284,14 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         <Route path="/admin/expenses" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminExpenses /></ProtectedRoute>} />
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminReports /></ProtectedRoute>} />
                         <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminFinanceSuite /></ProtectedRoute>} />
-                        <Route path="/admin/finance/estimates" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="invoice_manager"><FinanceEstimates /></ProtectedRoute>} />
-                        <Route path="/admin/finance/receipts" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="invoice_manager"><FinanceReceipts /></ProtectedRoute>} />
-                        <Route path="/admin/finance/portfolio" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="invoice_manager"><FinancePortfolio /></ProtectedRoute>} />
+                        <Route element={<ProtectedRoute allowedRoles={['admin']}><FinanceModuleShell /></ProtectedRoute>}>
+                          <Route path="/admin/finance/invoices" element={<FinanceEmbeddedPage loader={loadInvoiceManager} />} />
+                          <Route path="/admin/finance/estimates" element={<FinanceEmbeddedPage loader={loadEstimateManager} />} />
+                          <Route path="/admin/finance/receipts" element={<FinanceEmbeddedPage loader={loadReceiptManager} />} />
+                          <Route path="/admin/finance/clients" element={<FinanceEmbeddedPage loader={loadClientsManager} />} />
+                          <Route path="/admin/finance/products" element={<FinanceEmbeddedPage loader={loadProductsManager} />} />
+                          <Route path="/admin/finance/reports" element={<FinanceEmbeddedPage loader={loadFinanceReports} />} />
+                        </Route>
                         <Route path="/admin/pos" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="pos"><PosPairing /></ProtectedRoute>} />
                         <Route path="/admin/ai-builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="ai_builder"><AiBuilder /></ProtectedRoute>} />
                         <Route path="/admin/blog" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="blog_publisher"><BlogPublisher /></ProtectedRoute>} />
@@ -304,8 +345,9 @@ const isCustomDomain = _hostname !== '' && !PLATFORM_HOSTS.includes(_hostname);
                         )}
                       </Routes>
                       </Suspense>
-                      <Footer />
-                      <Toaster />
+                      <AppFooter />
+                      <SonnerToaster />
+                      <ShadcnToaster />
                       <DebugConsole />
                       <CookieConsent />
                     </BrowserRouter>

@@ -35,19 +35,44 @@ function legacyModules(profile: MobileStoreProfile | null): Record<string, boole
   return modules;
 }
 
-export function canUseMobileModule(profile: MobileStoreProfile | null, moduleId: string): boolean {
+function modularModules(profile: MobileStoreProfile): Record<string, boolean> {
+  const enabled = profile.enabledModules ?? {};
+  const modules: Record<string, boolean> = {};
+
+  CORE_MODULE_IDS.forEach((id) => {
+    modules[id] = enabled[id] !== false;
+  });
+
+  Object.entries(enabled).forEach(([id, on]) => {
+    modules[id] = Boolean(on);
+  });
+
+  return modules;
+}
+
+function resolveMobileModules(profile: MobileStoreProfile | null): Record<string, boolean> {
   if (
     profile?.pricingVersion === 'modular-v2' &&
     profile.enabledModules &&
     Object.keys(profile.enabledModules).length > 0
   ) {
-    return Boolean(profile.enabledModules[moduleId]);
+    return modularModules(profile);
   }
+  return legacyModules(profile);
+}
+
+export function canUseMobileModule(profile: MobileStoreProfile | null, moduleId: string): boolean {
   if (moduleId === 'crm') return hasCrmAddon(profile);
-  return Boolean(legacyModules(profile)[moduleId]);
+  return Boolean(resolveMobileModules(profile)[moduleId]);
+}
+
+/** Standalone Invoice Manager — Invoicing & Billing (core) or Invoice Manager add-on. */
+export function canUseInvoiceManagerApp(profile: MobileStoreProfile | null): boolean {
+  return canUseMobileModule(profile, 'invoicing') || canUseMobileModule(profile, 'invoice_manager');
 }
 
 export const MOBILE_OWNER_SCREENS: Array<{ name: string; moduleId: string }> = [
+  { name: 'InvoiceManager', moduleId: 'invoice_manager' },
   { name: 'Purchases', moduleId: 'stock' },
   { name: 'Suppliers', moduleId: 'stock' },
   { name: 'Inventory', moduleId: 'stock' },

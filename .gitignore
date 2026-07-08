@@ -35,6 +35,7 @@ serviceAccountKey.json
 # Ignore Gradle build output directory
 build
 .credentials.md
+*.keystore
 
 # Large POS reference archive — keep local only (GitHub 100MB limit)
 the eco sys/ecosystem-plan/posfinal-main.zip

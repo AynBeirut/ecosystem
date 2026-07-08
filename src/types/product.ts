@@ -153,6 +153,9 @@ export type Store = {
   subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
   subscriptionStatus?: 'active' | 'canceled' | 'past_due';
   status?: 'online' | 'offline';
+  /** display = showcase only (no cart); commerce = full checkout */
+  storefrontMode?: 'display' | 'commerce';
+  enabledModules?: Record<string, boolean>;
   // Aggregated rating (denormalized) — optional
   rating?: number; // average rating
   ratingCount?: number; // number of reviews
