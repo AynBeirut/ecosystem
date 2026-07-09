@@ -1,5 +1,8 @@
 # Documentation Index
 
+> **Single source of truth (2026-07-09):** Obsidian vault at `~/Documents/grabio-platform-docs/`  
+> Architecture, decisions, open backlog, deploy protocol, and gotchas live there. This folder keeps implementation-specific notes and stubs.
+
 This folder centralizes project markdown documentation.
 
 ## Structure

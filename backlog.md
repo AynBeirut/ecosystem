@@ -1,5 +1,9 @@
 # Backlog — Grabio / Market Flow
 
+> **Canonical backlog moved to Obsidian vault (2026-07-09).**  
+> Open items: `~/Documents/grabio-platform-docs/Backlog/Open.md`  
+> This file is a **legacy archive** — do not add new work here.
+
 ---
 
 ## Workstream B — Invoice Manager native embed (2026-06-23 — **awaiting file-list approval**)
