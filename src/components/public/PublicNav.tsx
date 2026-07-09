@@ -14,31 +14,36 @@ const NAV_LINKS = [
 const PublicNav: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
   const location = useLocation();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
   const isSignedIn = !!user;
-  const dashboardPath = user?.role === 'admin' ? '/admin' : user?.role === 'sub_account' ? '/team/dashboard' : '/';
+  const dashboardPath =
+    user?.role === 'crm_rep'
+      ? '/team/crm'
+      : user?.role === 'sub_account'
+        ? '/team/dashboard'
+        : '/admin/dashboard';
 
   const isActive = (href: string) =>
     href === '/'
       ? location.pathname === '/'
       : location.pathname.startsWith(href);
 
+  const closeMobile = () => setMobileOpen(false);
+
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
       <nav
-        className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16"
+        className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-3"
         aria-label="Main navigation"
       >
-        {/* Logo */}
         <Link
-          to="/"
-          className="flex items-center gap-2 font-bold text-xl text-gray-900 hover:text-teal-600 transition-colors"
+          to="/home"
+          className="flex items-center gap-2 font-bold text-xl text-gray-900 hover:text-teal-600 transition-colors shrink-0"
           aria-label="Grabio home"
         >
           <span className="text-teal-600">Grabio</span>
         </Link>
 
-        {/* Desktop links */}
         <ul className="hidden md:flex items-center gap-1 list-none m-0 p-0">
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
@@ -56,32 +61,33 @@ const PublicNav: React.FC = () => {
           ))}
         </ul>
 
-        {/* Desktop CTAs */}
-        <div className="hidden md:flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2 shrink-0 min-h-[40px]">
           <Link
             to="/search"
-            className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+            className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap"
           >
             Marketplace
           </Link>
-          {isSignedIn ? (
+          {isLoading ? (
+            <div className="h-9 w-[220px] rounded-lg bg-gray-100 animate-pulse" aria-hidden />
+          ) : isSignedIn ? (
             <Link
               to={dashboardPath}
-              className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+              className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors whitespace-nowrap"
             >
-              Dashboard
+              Go to Dashboard
             </Link>
           ) : (
             <>
               <Link
                 to="/login"
-                className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors"
+                className="px-3 py-2 text-sm font-medium text-gray-600 hover:text-gray-900 transition-colors whitespace-nowrap"
               >
                 Sign In
               </Link>
               <Link
                 to="/login?tab=signup"
-                className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors"
+                className="px-4 py-2 text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 rounded-lg transition-colors whitespace-nowrap"
               >
                 Get Started Free
               </Link>
@@ -89,9 +95,9 @@ const PublicNav: React.FC = () => {
           )}
         </div>
 
-        {/* Mobile hamburger */}
         <button
-          className="md:hidden p-2 rounded-md text-gray-600 hover:bg-gray-100 transition-colors"
+          type="button"
+          className="md:hidden p-2.5 rounded-lg text-gray-600 hover:bg-gray-100 transition-colors shrink-0"
           onClick={() => setMobileOpen((v) => !v)}
           aria-label={mobileOpen ? 'Close menu' : 'Open menu'}
           aria-expanded={mobileOpen}
@@ -100,7 +106,6 @@ const PublicNav: React.FC = () => {
         </button>
       </nav>
 
-      {/* Mobile menu */}
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white px-4 pb-4">
           <ul className="flex flex-col gap-1 pt-3 list-none m-0 p-0">
@@ -108,8 +113,8 @@ const PublicNav: React.FC = () => {
               <li key={link.href}>
                 <Link
                   to={link.href}
-                  onClick={() => setMobileOpen(false)}
-                  className={`block px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                  onClick={closeMobile}
+                  className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     isActive(link.href)
                       ? 'text-teal-600 bg-teal-50'
                       : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
@@ -119,48 +124,47 @@ const PublicNav: React.FC = () => {
                 </Link>
               </li>
             ))}
-            <li className="pt-2 border-t border-gray-100 mt-2">
+            <li>
               <Link
                 to="/search"
-                onClick={() => setMobileOpen(false)}
-                className="block px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50"
+                onClick={closeMobile}
+                className="block px-3 py-2.5 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
               >
                 Marketplace
               </Link>
             </li>
-            {isSignedIn ? (
-              <li>
-                <Link
-                  to={dashboardPath}
-                  onClick={() => setMobileOpen(false)}
-                  className="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 text-center rounded-lg"
-                >
-                  Dashboard
-                </Link>
-              </li>
+          </ul>
+
+          <div className="pt-3 mt-3 border-t border-gray-100 grid gap-2 min-h-[52px]">
+            {isLoading ? (
+              <div className="h-11 w-full rounded-xl bg-gray-100 animate-pulse" aria-hidden />
+            ) : isSignedIn ? (
+              <Link
+                to={dashboardPath}
+                onClick={closeMobile}
+                className="block w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 text-center"
+              >
+                Go to Dashboard
+              </Link>
             ) : (
               <>
-                <li>
-                  <Link
-                    to="/login"
-                    onClick={() => setMobileOpen(false)}
-                    className="block px-3 py-2 rounded-md text-sm font-medium text-gray-600 hover:bg-gray-50"
-                  >
-                    Sign In
-                  </Link>
-                </li>
-                <li>
-                  <Link
-                    to="/login?tab=signup"
-                    onClick={() => setMobileOpen(false)}
-                    className="block px-3 py-2 rounded-md text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 text-center rounded-lg"
-                  >
-                    Get Started Free
-                  </Link>
-                </li>
+                <Link
+                  to="/login"
+                  onClick={closeMobile}
+                  className="block w-full py-3 px-4 rounded-xl text-sm font-semibold text-gray-700 bg-gray-100 hover:bg-gray-200 text-center"
+                >
+                  Sign In
+                </Link>
+                <Link
+                  to="/login?tab=signup"
+                  onClick={closeMobile}
+                  className="block w-full py-3 px-4 rounded-xl text-sm font-semibold text-white bg-teal-600 hover:bg-teal-700 text-center"
+                >
+                  Get Started Free
+                </Link>
               </>
             )}
-          </ul>
+          </div>
         </div>
       )}
     </header>

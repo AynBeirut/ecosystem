@@ -5,7 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run build:invoice",
+    "build:main": "vite build",
+    "build:invoice": "npm run build --prefix \"the eco sys/finance/beirut-finance-flow-main\" && node scripts/copy-invoice-dist.cjs",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",
     "health:inventory:lint": "node scripts/health/checkInventoryLintGate.cjs",
@@ -21,7 +23,9 @@
     "test:inventory-invariants": "vitest run src/__tests__/inventoryTransitionInvariants.test.ts",
     "test:ui": "vitest --ui",
     "test:unit": "vitest run src/__tests__",
-    "test:watch": "vitest watch"
+    "test:watch": "vitest watch",
+    "test:firestore-rules": "JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\"",
+    "test:builder-phase1": "npm run build --prefix functions && node scripts/testStoreCommerceGuard.cjs && JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\""
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",
@@ -91,6 +95,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.9.0",
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@tailwindcss/typography": "^0.5.15",
     "@testing-library/jest-dom": "^6.1.0",
     "@testing-library/react": "^14.0.0",

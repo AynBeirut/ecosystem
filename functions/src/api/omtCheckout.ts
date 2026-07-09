@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { activateRecurringServiceSubscriptionsFromOrder } from '../services/orderSubscriptions';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { applyTrialRevenueShareIfNeeded } from '../services/subscriptionEnforcement';
+import { checkRealStoreForCommerce, commerceGuardHttpStatus } from '../services/storeCommerceGuard';
 
 const db = admin.firestore();
 const FRONTEND_BASE_URL = process.env.FRONTEND_BASE_URL || 'https://grabio.space';
@@ -30,6 +31,14 @@ export async function createOmtCheckoutSession(req: Request, res: Response) {
     const storeId = String(orderData.storeId || '').trim();
     if (!storeId) {
       return res.status(400).json({ error: 'Invalid order data: missing store' });
+    }
+
+    const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+    if (!commerceCheck.eligible) {
+      return res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
     }
 
     const storeSnap = await db.collection('storeProfiles').doc(storeId).get();

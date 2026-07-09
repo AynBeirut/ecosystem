@@ -10,9 +10,8 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Clock, Truck, MapPin, Package, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { StoreDeliverySettings, DeliveryZoneSetting, DeliveryPartnerSetting } from '@/types/storeProfile';
 
 const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
@@ -51,7 +50,6 @@ const DEFAULT_ZONES: DeliveryZoneSetting[] = [
 const AdminDelivery: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [isSaving, setIsSaving] = useState(false);
   
   const [deliverySettings, setDeliverySettings] = useState<StoreDeliverySettings>(DEFAULT_DELIVERY_SETTINGS);
@@ -190,23 +188,15 @@ const AdminDelivery: React.FC = () => {
   const activeDeliveryPartners = deliveryPartners.filter((partner) => partner.active && partner.name.trim() !== '');
 
   return (
-    <div className="min-h-screen bg-background">
-  {isMobile && <MobileHeader title="Delivery Settings" />}
-      
-      <div className="p-4 md:p-6">
-        <BackButton />
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Truck className="h-6 w-6" />
-            Delivery Settings
-          </h1>
-          <p className="text-muted-foreground">Configure delivery options and shipping zones for your store</p>
-        </div>
-
+    <AdminPageShell
+      title="Delivery Settings"
+      description="Configure delivery options, zones, and partners"
+      eyebrow="Profile & Store Setup"
+    >
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* Delivery Options */}
           <div className="space-y-4">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Delivery Options</CardTitle>
                 <CardDescription>
@@ -312,9 +302,9 @@ const AdminDelivery: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>General Settings</CardTitle>
                 <CardDescription>
@@ -375,9 +365,9 @@ const AdminDelivery: React.FC = () => {
                   />
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Delivery Partners</CardTitle>
                 <CardDescription>
@@ -473,12 +463,12 @@ const AdminDelivery: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </div>
 
           {/* Delivery Zones */}
           <div className="space-y-4">
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Delivery Zones</CardTitle>
                 <CardDescription>
@@ -549,9 +539,9 @@ const AdminDelivery: React.FC = () => {
                   Add New Zone
                 </Button>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Delivery Summary</CardTitle>
                 <CardDescription>
@@ -584,7 +574,7 @@ const AdminDelivery: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           </div>
         </div>
 
@@ -593,8 +583,7 @@ const AdminDelivery: React.FC = () => {
             {isSaving ? 'Saving...' : 'Save Delivery Settings'}
           </Button>
         </div>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

@@ -3,8 +3,8 @@
 ## App Identity
 - **Package**: `space.grabio.app`
 - **App Name**: Grabio
-- **Current versionCode**: 12
-- **Current versionName**: `1.1.7`
+- **Current versionCode**: 31
+- **Current versionName**: `1.2.1`
 - **minSdkVersion**: 24 (Android 7.0+) — enforced by `@react-native-google-signin`, cannot be lowered
 - **targetSdkVersion**: from `rootProject.ext.targetSdkVersion`
 
@@ -58,8 +58,8 @@ firebase deploy --only functions
 ## Key Files Modified This Session
 
 ### `grabio-mobile/android/app/build.gradle`
-- `versionCode 12`
-- `versionName "1.1.7"`
+- `versionCode 30`
+- `versionName "1.2.0"`
 - `minSdkVersion rootProject.ext.minSdkVersion` (resolves to 24)
 - Signing config uses `grabio-release.keystore`
 
@@ -164,7 +164,9 @@ OrderTracking: { orderId: string; storeId: string };
 | 9 | 1.1.4 | AndroidManifest hardware feature fix |
 | 10 | 1.1.5 | Google Sign-In SHA-1 fix |
 | 11 | 1.1.6 | Both SHA-1s in google-services.json |
-| 12 | 1.1.7 | **CURRENT** — Fixed app icon (webp→png, missing XML closing tags) |
+| 12 | 1.1.7 | Fixed app icon (webp→png, missing XML closing tags) |
+| 30 | 1.2.0 | Sales CRM mobile (clients, visits, geolocation) |
+| 31 | 1.2.1 | **CURRENT** — Invoice Manager hub + platform parity (entitlements, dashboard quick action) |
 
 ## Closed Testing Status (as of Apr 23 2026)
 - ✅ AAB versionCode 12 uploaded to Closed Testing track

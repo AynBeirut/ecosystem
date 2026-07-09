@@ -16,14 +16,12 @@ import { Order } from '@/types/order';
 import { Product } from '@/types/product';
 import { generateRMANumber } from '@/lib/rmaGenerator';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const AdminReturns: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [returns, setReturns] = useState<ReturnRequest[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -239,31 +237,28 @@ const AdminReturns: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Customer Returns" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
-            <h1 className="text-2xl font-bold">Customer Returns (RMA)</h1>
-          </div>
-        </div>
-
+    <AdminPageShell
+      title="Customer Returns (RMA)"
+      description="Manage customer return requests and process refunds/exchanges."
+      eyebrow="Returns"
+      backTo="/admin/dashboard"
+      backLabel="Dashboard"
+    >
         {/* Returns List */}
         <div className="grid gap-4">
           {returns.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <PackageOpen className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No return requests yet.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             returns.map((returnRequest) => {
               const order = orders.find(o => o.id === returnRequest.orderId);
 
               return (
-                <Card key={returnRequest.id}>
+                <AdminPanel key={returnRequest.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
@@ -438,7 +433,7 @@ const AdminReturns: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
@@ -502,8 +497,8 @@ const AdminReturns: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+
+    </AdminPageShell>
   );
 };
 

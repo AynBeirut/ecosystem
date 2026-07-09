@@ -2,27 +2,29 @@ import { auth } from '@/lib/firebase';
 
 const API_BASE =
   (import.meta.env.VITE_API_BASE as string | undefined)?.replace(/\/$/, '') ||
-  'https://api-5nbn2jdbxa-uc.a.run.app';
+  'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
 export const POS_INSTALLER_URL =
   (import.meta.env.VITE_POS_INSTALLER_URL as string | undefined) ||
-  'https://firebasestorage.googleapis.com/v0/b/market-flow-7b074.appspot.com/o/pos-releases%2FGrabio-POS-1.1.0-Setup.exe?alt=media';
+  'https://firebasestorage.googleapis.com/v0/b/market-flow-7b074.firebasestorage.app/o/pos%2FGrabio-POS-Setup.exe?alt=media';
 
 async function getAuthHeaders(): Promise<Record<string, string>> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   const currentUser = auth.currentUser;
-  if (currentUser) {
-    const token = await currentUser.getIdToken();
-    headers.Authorization = `Bearer ${token}`;
+  if (!currentUser) {
+    throw new Error('Sign in required');
   }
+  const token = await currentUser.getIdToken();
+  headers.Authorization = `Bearer ${token}`;
   return headers;
 }
 
 export async function generatePairingCode(storeId: string): Promise<{ code: string; expiresInSeconds: number }> {
+  const headers = await getAuthHeaders();
   const response = await fetch(`${API_BASE}/pos/pairing-code`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ storeId, uid: storeId }),
+    headers,
+    body: JSON.stringify({ storeId }),
   });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {

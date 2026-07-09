@@ -2,10 +2,9 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { getFirestore, collection, query, where, getDocs, doc, getDoc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { toast } from '@/components/ui/sonner';
@@ -19,7 +18,6 @@ type ProductReviewRow = ProductReview & {
 
 const AdminProductReviews: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [storeId, setStoreId] = useState<string | null>(null);
   const [reviews, setReviews] = useState<ProductReviewRow[]>([]);
   const [loading, setLoading] = useState(false);
@@ -147,14 +145,13 @@ const AdminProductReviews: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="Product Reviews" showBackButton />}
-      <div className="max-w-7xl mx-auto p-4 md:p-8">
-        <div className="mb-4">
-          <BackButton to="/admin/dashboard" label="Back to Dashboard" />
-        </div>
-
-        <Card>
+    <AdminPageShell
+      title="Product Reviews"
+      description="Approve or reject customer reviews. Only approved reviews count in product ratings."
+      eyebrow="Commerce"
+      backTo="/admin/dashboard"
+    >
+        <AdminPanel>
           <CardHeader>
             <CardTitle>Product Reviews Moderation</CardTitle>
             <CardDescription>Approve or reject customer reviews. Only approved reviews count in product ratings.</CardDescription>
@@ -204,9 +201,8 @@ const AdminProductReviews: React.FC = () => {
               </div>
             )}
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </AdminPanel>
+    </AdminPageShell>
   );
 };
 

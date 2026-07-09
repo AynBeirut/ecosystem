@@ -13,16 +13,14 @@ import { Trash2, Plus, Edit3, UserPlus, AlertCircle, Mail, Phone, Shield, Chevro
 import { useToast } from '@/hooks/use-toast';
 import { SubAccount, SubAccountRole, ROLE_PERMISSIONS } from '@/types/subaccount';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Checkbox } from '@/components/ui/checkbox';
 
 const AdminSubAccounts: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [subAccounts, setSubAccounts] = useState<SubAccount[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [editingAccount, setEditingAccount] = useState<SubAccount | null>(null);
@@ -278,7 +276,8 @@ const AdminSubAccounts: React.FC = () => {
   };
 
   const handleAddClientToSalesPerson = async (spId: string, spName: string, customer: any) => {
-    if (!user?.storeId) return;
+    const storeId = user?.storeId || user?.id;
+    if (!storeId) return;
     try {
       const db = getFirestore();
       await updateDoc(doc(db, 'customers', customer.id), {
@@ -296,7 +295,8 @@ const AdminSubAccounts: React.FC = () => {
   };
 
   const handleRemoveClientFromSalesPerson = async (customer: any) => {
-    if (!user?.storeId) return;
+    const storeId = user?.storeId || user?.id;
+    if (!storeId) return;
     try {
       const db = getFirestore();
       await updateDoc(doc(db, 'customers', customer.id), {
@@ -315,22 +315,18 @@ const AdminSubAccounts: React.FC = () => {
   const activeCount = subAccounts.filter(a => a.status === 'active').length;
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Sub-Accounts" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/dashboard" label="Back to Dashboard" />}
-            <h1 className="text-2xl font-bold">Sub-Accounts (Team Login)</h1>
-          </div>
-          <Dialog open={isAdding} onOpenChange={setIsAdding}>
-            <DialogTrigger asChild>
-              <Button disabled={activeCount >= MAX_SUB_ACCOUNTS}>
-                <UserPlus className="mr-2 h-4 w-4" />
-                Add Sub-Account
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
+    <AdminPageShell
+      title="Sub-Accounts (Team Login)"
+      description="Create and manage login accounts for your team members."
+      actions={(
+        <Button disabled={activeCount >= MAX_SUB_ACCOUNTS} onClick={() => setIsAdding(true)}>
+          <UserPlus className="mr-2 h-4 w-4" />
+          Add Sub-Account
+        </Button>
+      )}
+    >
+      <Dialog open={isAdding} onOpenChange={setIsAdding}>
+        <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create New Sub-Account</DialogTitle>
                 <DialogDescription>
@@ -429,7 +425,7 @@ const AdminSubAccounts: React.FC = () => {
                       onChange={(e) => setNewAccount({ ...newAccount, commissionRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                       placeholder="5"
                     />
-                    <p className="text-xs text-gray-500 mt-1">Percentage commission on sales</p>
+                    <p className="text-xs text-gray-500 mt-1">Percentage commission on paid sales</p>
                   </div>
                 )}
 
@@ -454,10 +450,9 @@ const AdminSubAccounts: React.FC = () => {
                 <Button onClick={handleAddSubAccount}>Create Account</Button>
               </DialogFooter>
             </DialogContent>
-          </Dialog>
-        </div>
+      </Dialog>
 
-        <Alert className="mb-6">
+      <Alert className="mb-6">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             <strong>Sub-Accounts:</strong> These are separate login accounts for team members. They can sign in and use the system based on their role. 
@@ -467,14 +462,14 @@ const AdminSubAccounts: React.FC = () => {
 
         <div className="grid gap-4">
           {subAccounts.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="pt-6">
                 <p className="text-center text-gray-500">No sub-accounts yet. Create one to give team members access.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             subAccounts.map(account => (
-              <Card key={account.id}>
+              <AdminPanel key={account.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
@@ -535,7 +530,7 @@ const AdminSubAccounts: React.FC = () => {
                     </div>
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
@@ -608,7 +603,7 @@ const AdminSubAccounts: React.FC = () => {
                   const totalPaid   = spOrders.reduce((s, o) => s + (Number(o.amountPaid) || 0), 0);
                   const outstanding = totalSales - totalPaid;
                   const commRate    = sp.commissionRate || 0;
-                  const commEarned  = totalSales * (commRate / 100);
+                  const commEarned  = totalPaid * (commRate / 100);
                   const isExpanded  = expandedSalesPerson === sp.id;
                   const isClientsExpanded = expandedClients === sp.id;
 
@@ -619,7 +614,7 @@ const AdminSubAccounts: React.FC = () => {
                   );
 
                   return (
-                    <Card key={sp.id} className="border-2">
+                    <AdminPanel key={sp.id} className="border-2">
                       <CardHeader className="pb-3">
                         <div className="flex items-start justify-between flex-wrap gap-2">
                           <div>
@@ -666,7 +661,7 @@ const AdminSubAccounts: React.FC = () => {
                             <div className={`text-xl font-bold ${outstanding > 0 ? 'text-orange-600' : 'text-gray-500'}`}>{outstanding.toFixed(2)}</div>
                           </div>
                           <div className="bg-purple-50 rounded-lg p-3 text-center">
-                            <div className="text-xs text-gray-500">Commission Earned</div>
+                            <div className="text-xs text-gray-500">Commission on Paid</div>
                             <div className="text-xl font-bold text-purple-700">
                               {commRate > 0 ? commEarned.toFixed(2) : '—'}
                             </div>
@@ -767,7 +762,7 @@ const AdminSubAccounts: React.FC = () => {
                                     <th className="px-3 py-2 text-right text-xs">Total</th>
                                     <th className="px-3 py-2 text-right text-xs">Paid</th>
                                     <th className="px-3 py-2 text-right text-xs">Balance</th>
-                                    {commRate > 0 && <th className="px-3 py-2 text-right text-xs">Commission</th>}
+                                    {commRate > 0 && <th className="px-3 py-2 text-right text-xs">Commission Paid</th>}
                                     <th className="px-3 py-2 text-left text-xs">Status</th>
                                   </tr>
                                 </thead>
@@ -776,7 +771,7 @@ const AdminSubAccounts: React.FC = () => {
                                     const total     = Number(o.total) || 0;
                                     const paid      = Number(o.amountPaid) || 0;
                                     const balance   = total - paid;
-                                    const orderComm = total * (commRate / 100);
+                                    const orderComm = paid * (commRate / 100);
                                     return (
                                       <tr key={o.id} className="border-b hover:bg-gray-50">
                                         <td className="px-3 py-2">{new Date(o.createdAt).toLocaleDateString('en-GB')}</td>
@@ -812,14 +807,13 @@ const AdminSubAccounts: React.FC = () => {
                           )}
                         </CardContent>
                       )}
-                    </Card>
+                    </AdminPanel>
                   );
                 })}
               </div>
             </div>
           );
         })()}
-      </main>
 
       {/* Edit Dialog */}
       <Dialog open={!!editingAccount} onOpenChange={(open) => !open && setEditingAccount(null)}>
@@ -900,7 +894,7 @@ const AdminSubAccounts: React.FC = () => {
                     onChange={(e) => setEditingAccount({ ...editingAccount, commissionRate: e.target.value === '' ? 0 : (parseFloat(e.target.value) || 0) })}
                     placeholder="5"
                   />
-                  <p className="text-xs text-gray-500 mt-1">Percentage commission on sales</p>
+                  <p className="text-xs text-gray-500 mt-1">Percentage commission on paid sales</p>
                 </div>
               )}
 
@@ -927,7 +921,7 @@ const AdminSubAccounts: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 };
 

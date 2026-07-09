@@ -13,6 +13,7 @@ import Header from '@/components/Header';
 import MobileHeader from '@/components/MobileHeader';
 import { Product, Store } from '@/types/product';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
+import { cachedPublicRead } from '@/lib/publicReadCache';
 import { Search, Filter } from 'lucide-react';
 import {
   Sheet,
@@ -52,26 +53,27 @@ const Marketplace: React.FC = () => {
   // Fetch stores from Firestore on mount
   useEffect(() => {
     const fetchStores = async () => {
-      const db = getFirestore();
-      const storesRef = collection(db, 'storeProfiles');
-      const snapshot = await getDocs(storesRef);
-  const storesList: Store[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Store));
-  // Only show stores that are online
-  setAllStores(storesList.filter(store => store.status === 'online'));
+      const storesList = await cachedPublicRead('marketplace:storeProfiles', async () => {
+        const db = getFirestore();
+        const snapshot = await getDocs(collection(db, 'storeProfiles'));
+        return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Store));
+      });
+      setAllStores(storesList.filter((store) => store.status === 'online'));
     };
-    fetchStores();
+    void fetchStores();
   }, []);
 
   // Fetch products from Firestore on mount
   useEffect(() => {
     const fetchProducts = async () => {
-      const db = getFirestore();
-      const productsRef = collection(db, 'products');
-      const snapshot = await getDocs(productsRef);
-      const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+      const productsList = await cachedPublicRead('marketplace:products', async () => {
+        const db = getFirestore();
+        const snapshot = await getDocs(collection(db, 'products'));
+        return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Product));
+      });
       setAllProducts(productsList);
     };
-    fetchProducts();
+    void fetchProducts();
   }, []);
 
   // Apply filters when dependencies change

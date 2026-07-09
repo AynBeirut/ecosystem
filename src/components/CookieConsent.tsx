@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react';
+import { initGA, trackPageView } from '@/lib/analytics';
+import { initMetaPixel, pixelPageView } from '@/lib/metaPixel';
 
 const CONSENT_KEY = 'grabio_cookie_consent';
 
@@ -33,8 +35,10 @@ export default function CookieConsent() {
   const handleAccept = () => {
     setCookieConsent('accepted');
     setVisible(false);
-    // Reload to let analytics initialize
-    window.location.reload();
+    initGA();
+    initMetaPixel();
+    trackPageView(window.location.pathname + window.location.search);
+    pixelPageView();
   };
 
   const handleDecline = () => {

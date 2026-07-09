@@ -1,33 +1,14 @@
-// This is a basic service worker for PWA offline support and caching.
-self.addEventListener('install', (event) => {
-  self.skipWaiting();
-});
+// Deprecated cache-first worker — replaced with network-only passthrough.
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (event) => {
-  self.clients.claim();
+  event.waitUntil(
+    caches.keys().then((keys) => Promise.all(keys.map((key) => caches.delete(key)))).then(() =>
+      self.clients.claim(),
+    ),
+  );
 });
 
 self.addEventListener('fetch', (event) => {
-  // Skip Firebase Storage requests to avoid CORS issues
-  if (event.request.url.includes('firebasestorage.googleapis.com')) {
-    return;
-  }
-  event.respondWith(
-    caches.open('market-flow-cache-v1').then((cache) => {
-      return cache.match(event.request).then((response) => {
-        return (
-          response ||
-          fetch(event.request).then((networkResponse) => {
-            if (
-              event.request.method === 'GET' &&
-              event.request.url.startsWith('http')
-            ) {
-              cache.put(event.request, networkResponse.clone());
-            }
-            return networkResponse;
-          })
-        );
-      });
-    })
-  );
+  event.respondWith(fetch(event.request));
 });

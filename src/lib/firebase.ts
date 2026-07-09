@@ -1,5 +1,6 @@
 import { initializeApp } from "firebase/app";
 import { getAuth, setPersistence, browserLocalPersistence } from "firebase/auth";
+import { getFirestore } from "firebase/firestore";
 import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
@@ -13,7 +14,9 @@ const firebaseConfig = {
   measurementId: "G-YSSWDNYTSW"
 };
 
-const app = initializeApp(firebaseConfig);
+export const app = initializeApp(firebaseConfig);
 export const auth = getAuth(app);
-setPersistence(auth, browserLocalPersistence);
+/** Await before auth listeners / redirect handling so persistence is ready. */
+export const authReady = setPersistence(auth, browserLocalPersistence);
+export const db = getFirestore(app);
 export const storage = getStorage(app);

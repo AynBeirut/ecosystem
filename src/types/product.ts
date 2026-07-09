@@ -1,5 +1,10 @@
 export type ProductType = 'simple' | 'service' | 'composed';
+export type StockUnitType = 'discrete' | 'continuous';
+/** Same labels as rawMaterials.unit (kg, liter, piece, …) */
+export type StockUnit = 'kg' | 'liter' | 'piece' | 'meter' | 'gram' | 'ml';
 export type ServiceBillingType = 'one-time' | 'monthly' | 'yearly';
+export type SupplierPlatform = 'shein' | 'alibaba' | 'amazon';
+export type SupplierSyncStatus = 'ok' | 'error' | 'pending';
 
 export type Product = {
   id: string;
@@ -14,6 +19,9 @@ export type Product = {
   deliveryTime: string;
   inStock: boolean;
   stock?: number; // Stock quantity
+  /** Whole-unit vs weight/volume; defaults to discrete when unset */
+  stockUnitType?: StockUnitType;
+  stockUnit?: StockUnit;
   rating?: number;
   productType?: ProductType; // Type of product
   sku?: string; // Stock Keeping Unit
@@ -34,6 +42,14 @@ export type Product = {
   expiryDate?: string;
   expiryAlertDays?: number; // days before expiry to alert (default 30)
   expiryNotifiedAt?: string; // ISO date of last expiry notification sent
+  // Per-product dropship (Shein v1)
+  supplierPlatform?: SupplierPlatform;
+  supplierProductUrl?: string;
+  supplierSyncEnabled?: boolean;
+  supplierExternalId?: string;
+  supplierLastSyncAt?: string;
+  supplierLastSyncStatus?: SupplierSyncStatus;
+  supplierLastSyncMessage?: string;
 };
 
 export type Store = {
@@ -137,6 +153,9 @@ export type Store = {
   subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
   subscriptionStatus?: 'active' | 'canceled' | 'past_due';
   status?: 'online' | 'offline';
+  /** display = showcase only (no cart); commerce = full checkout */
+  storefrontMode?: 'display' | 'commerce';
+  enabledModules?: Record<string, boolean>;
   // Aggregated rating (denormalized) — optional
   rating?: number; // average rating
   ratingCount?: number; // number of reviews
@@ -154,7 +173,7 @@ export type StoreAnnouncement = {
   isActive: boolean;
 };
 
-export type UserRole = 'admin' | 'user' | 'sub_account';
+export type UserRole = 'admin' | 'user' | 'sub_account' | 'crm_rep';
 
 export type User = {
   id: string;
@@ -176,6 +195,8 @@ export type User = {
   subAccountId?: string;
   subAccountRole?: 'sales' | 'delivery' | 'manager';
   permissions?: string[];
+  // Sales CRM rep (dedicated role — not sub_account permissions)
+  crmRepId?: string;
 };
 
 export type StoreReview = {

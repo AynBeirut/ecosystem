@@ -3,13 +3,17 @@ import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from '@/context/useAuth';
 import { Navigate, Link, useLocation } from 'react-router-dom';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import ModuleGate from '@/components/ModuleGate';
 
 
 const ProtectedRoute: React.FC<{ 
   children: React.ReactNode; 
   allowedRoles?: string[];
   requiredPermission?: string;
-}> = ({ children, allowedRoles, requiredPermission }) => {
+  /** When VITE_ECOSYSTEM_ENFORCE_MODULES is on, gate by module entitlement */
+  requiredModule?: string;
+}> = ({ children, allowedRoles, requiredPermission, requiredModule }) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
   const [ipCheckState, setIpCheckState] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
@@ -17,17 +21,21 @@ const ProtectedRoute: React.FC<{
 
   const loadingTitle = useMemo(() => {
     const path = location.pathname;
-    if (path === '/admin/customers') return 'Customer Management (CRM)';
+    if (path.startsWith('/admin/crm')) return 'Sales CRM';
+    if (path.startsWith('/team/crm')) return 'Sales CRM';
+    if (path === '/admin/customers') return 'Customer Management';
     if (path.startsWith('/admin')) return 'Admin Panel';
     if (path.startsWith('/team')) return 'Team Dashboard';
     return 'Loading';
   }, [location.pathname]);
 
   const LoadingShell = () => (
-    <main className="container mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold">{loadingTitle}</h1>
-      <div className="mt-4 h-5 w-48 animate-pulse rounded bg-gray-200" />
-    </main>
+    <div className="min-h-[40vh] flex items-center justify-center bg-[#eef2f7]">
+      <div className="rounded-2xl border border-slate-200/80 bg-white px-6 py-5 shadow-sm">
+        <h1 className="text-lg font-semibold text-slate-900">{loadingTitle}</h1>
+        <div className="mt-3 h-2 w-40 animate-pulse rounded-full bg-slate-200" />
+      </div>
+    </div>
   );
 
   const requiresAdminIpCheck = useMemo(() => {
@@ -146,7 +154,15 @@ const ProtectedRoute: React.FC<{
   }
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    const dest = `${location.pathname}${location.search}`;
+    if (dest && dest !== '/login' && !dest.startsWith('/login?')) {
+      try {
+        localStorage.setItem('redirectAfterLogin', dest);
+      } catch {
+        // ignore quota / private mode
+      }
+    }
+    return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
   if (requiresAdminIpCheck && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
@@ -174,14 +190,24 @@ const ProtectedRoute: React.FC<{
   if (allowedRoles) {
     // For admin routes, allow both 'admin' and all sub-accounts
     if (allowedRoles.includes('admin')) {
-      const hasAccess = 
-        user.role === 'admin' || 
+      const hasAccess =
+        user.role === 'admin' ||
         user.role === 'sub_account';
-      
+
       if (!hasAccess) {
+        if (user.role === 'user') {
+          return <Navigate to="/subscription" replace state={{ from: location }} />;
+        }
+        return <Navigate to="/" replace />;
+      }
+    } else if (allowedRoles.includes('crm_rep')) {
+      if (user.role !== 'crm_rep') {
         return <Navigate to="/" replace />;
       }
     } else if (!allowedRoles.includes(user.role)) {
+      if (user.role === 'user') {
+        return <Navigate to="/subscription" replace state={{ from: location }} />;
+      }
       return <Navigate to="/" replace />;
     }
   }
@@ -191,6 +217,14 @@ const ProtectedRoute: React.FC<{
     if (!user.permissions || !user.permissions.includes(requiredPermission)) {
       return <Navigate to="/admin" replace />;
     }
+  }
+
+  if (requiredModule && ECOSYSTEM_FLAGS.enforceModuleGates) {
+    return (
+      <ModuleGate moduleId={requiredModule}>
+        {children}
+      </ModuleGate>
+    );
   }
 
   return <>{children}</>;

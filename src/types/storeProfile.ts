@@ -248,8 +248,12 @@ export interface StoreProfile {
   addOnsMeta?: {
     domainPackage?: boolean;
     whatsappBusiness?: boolean;
+    salesCrm?: boolean;
     manufacturingBom?: boolean;
     extraStorageBlocks?: number;
+  };
+  crmSettings?: {
+    noContactAlertDays?: number;
   };
   subscriptionStatus?: 'trial' | 'active' | 'grace' | 'expired' | 'blocked'; // Subscription status
   subscriptionPlan?: 'monthly' | 'yearly'; // Billing cycle
@@ -359,6 +363,38 @@ export interface StoreProfile {
   serviceCatalogSettings?: ServiceCatalogSettings;
   subscriptionBillingSettings?: SubscriptionBillingSettings;
   aiIntegrationSettings?: AiIntegrationSettings;
+  aiCreditBalance?: number;
+  // Ecosystem modular (Phase 0 — optional; legacy path unchanged when unset)
+  pricingVersion?: 'legacy-v1' | 'modular-v2';
+  businessWorkflow?: 'shop' | 'live_kitchen' | 'factory' | 'ngo' | 'freelancer' | 'custom';
+  startingPackage?:
+    | 'pkg_shop'
+    | 'pkg_live_kitchen'
+    | 'pkg_factory_flow'
+    | 'pkg_ngo'
+    | 'pkg_freelancer';
+  enabledModules?: Record<string, boolean>;
+  composedProductSource?: 'platform' | 'pos';
+  seatCount?: number;
+  posLocationCount?: number;
+  legacyPlanSnapshot?: Record<string, unknown>;
+  nextPlanPreset?: string;
+  nextEnabledModules?: Record<string, boolean>;
+  nextSeatCount?: number;
+  nextPosLocationCount?: number;
+  scheduledPlanMigrationAt?: string;
+  entitlementBackfillAt?: string;
+  packageDraftAppliedAt?: string;
+  /** display = showcase only (no cart); commerce = full store checkout */
+  storefrontMode?: 'display' | 'commerce';
+  builderWizard?: {
+    step?: string;
+    siteIntent?: 'display' | 'blog' | 'ecommerce';
+    businessIntent?: 'store' | 'restaurant' | 'manufacturer';
+    buildMethod?: 'classic' | 'theme_editor' | 'wordpress' | 'import';
+    wordpressRequestId?: string;
+    updatedAt?: string;
+  };
   // Migration tracking
   migrationVersion?: number;
   lastMigrationDate?: string;

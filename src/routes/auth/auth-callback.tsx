@@ -5,28 +5,30 @@ import { useAuth } from "@/context/useAuth";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
-  const { user } = useAuth();
+  const { user, isLoading } = useAuth();
 
   useEffect(() => {
-    console.log('[AuthCallback] Component mounted, user:', user);
-    
-    // If user is already authenticated, redirect to home
+    if (isLoading) return;
+
     if (user) {
-      console.log('[AuthCallback] User found, redirecting to home');
-      setTimeout(() => {
-        navigate('/', { replace: true });
-      }, 100);
+      if (user.role === 'admin') {
+        navigate('/admin', { replace: true });
+      } else if (user.role === 'crm_rep') {
+        navigate('/team/crm', { replace: true });
+      } else if (user.role === 'sub_account') {
+        navigate('/team/dashboard', { replace: true });
+      } else {
+        navigate('/search', { replace: true });
+      }
       return;
     }
-    
-    // Otherwise wait a bit and redirect anyway
+
     const timer = setTimeout(() => {
-      console.log('[AuthCallback] Timeout reached, redirecting to login');
       navigate('/login', { replace: true });
-    }, 2000);
-    
+    }, 3000);
+
     return () => clearTimeout(timer);
-  }, [navigate, user]);
+  }, [navigate, user, isLoading]);
 
   return (
     <div className="min-h-screen flex items-center justify-center">

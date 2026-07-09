@@ -56,9 +56,8 @@ import {
   Mail,
   Globe,
 } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
@@ -318,7 +317,7 @@ interface StatCardProps {
   accent?: string;
 }
 const StatCard: React.FC<StatCardProps> = ({ title, value, sub, icon: Icon, trend, accent = 'text-teal-600' }) => (
-  <Card>
+  <AdminPanel>
     <CardContent className="p-5 flex items-start gap-4">
       <div className={`rounded-full p-2.5 bg-gray-100 flex-shrink-0 ${accent}`}>
         <Icon className="h-5 w-5" />
@@ -335,7 +334,7 @@ const StatCard: React.FC<StatCardProps> = ({ title, value, sub, icon: Icon, tren
         )}
       </div>
     </CardContent>
-  </Card>
+  </AdminPanel>
 );
 
 // ─── Connect screen ───────────────────────────────────────────────────────────
@@ -386,7 +385,6 @@ const ConnectScreen: React.FC<{ onConnect: () => void; loading: boolean; error: 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
 const AdminSEOAudit: React.FC = () => {
-  const isMobile = useIsMobile();
   const [token, setToken]           = useState<string | null>(getStoredToken);
   const [connecting, setConnecting] = useState(false);
   const [oauthError, setOauthError] = useState('');
@@ -507,52 +505,34 @@ const AdminSEOAudit: React.FC = () => {
   const positionColor = avgPosition <= 10 ? 'text-emerald-600' : avgPosition <= 20 ? 'text-amber-600' : 'text-red-500';
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="SEO Audit" />}
-
-      <div className="max-w-7xl mx-auto px-4 py-6 space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div className="flex items-center gap-3">
-            {!isMobile && <BackButton />}
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900">SEO Audit Report</h1>
-              <p className="text-sm text-gray-500 flex items-center gap-2 flex-wrap">
-                <span className="font-mono text-teal-700">grabio.space</span>
-                <span>·</span>
-                <span>Source: Google Search Console + Firestore</span>
-                {lastRefresh && (
-                  <>
-                    <span>·</span>
-                    <span>Live data · {lastRefresh.toLocaleTimeString()}</span>
-                  </>
-                )}
-              </p>
-            </div>
+    <AdminPageShell
+      title="SEO Audit Report"
+      description="Google Search Console + Firestore — grabio.space"
+      className="max-w-7xl mx-auto px-4 py-6"
+      actions={
+        token ? (
+          <div className="flex items-center gap-2">
+            <Select value={timeRange} onValueChange={setTimeRange}>
+              <SelectTrigger className="w-[130px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="7d">Last 7 days</SelectItem>
+                <SelectItem value="28d">Last 28 days</SelectItem>
+                <SelectItem value="90d">Last 90 days</SelectItem>
+                <SelectItem value="180d">Last 6 months</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button variant="outline" size="icon" onClick={() => loadData(token)} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+            </Button>
+            <Button variant="ghost" size="icon" onClick={handleDisconnect} title="Disconnect GSC">
+              <LogOut className="h-4 w-4 text-gray-400" />
+            </Button>
           </div>
-          {token && (
-            <div className="flex items-center gap-2">
-              <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-[130px]">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="28d">Last 28 days</SelectItem>
-                  <SelectItem value="90d">Last 90 days</SelectItem>
-                  <SelectItem value="180d">Last 6 months</SelectItem>
-                </SelectContent>
-              </Select>
-              <Button variant="outline" size="icon" onClick={() => loadData(token)} disabled={loading}>
-                <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-              </Button>
-              <Button variant="ghost" size="icon" onClick={handleDisconnect} title="Disconnect GSC">
-                <LogOut className="h-4 w-4 text-gray-400" />
-              </Button>
-            </div>
-          )}
-        </div>
-
+        ) : undefined
+      }
+    >
         {/* Not connected */}
         {!token && (
           <ConnectScreen onConnect={handleConnect} loading={connecting} error={oauthError} />
@@ -617,7 +597,7 @@ const AdminSEOAudit: React.FC = () => {
 
               {/* ── Traffic Trend ─────────────────────────────────── */}
               <TabsContent value="traffic" className="space-y-6 mt-4">
-                <Card>
+                <AdminPanel>
                   <CardHeader>
                     <CardTitle className="text-base flex items-center justify-between">
                       <span>Organic Traffic Trend — Clicks & Impressions</span>
@@ -654,11 +634,11 @@ const AdminSEOAudit: React.FC = () => {
                       </ResponsiveContainer>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
 
                 {/* On-site behaviour */}
                 {fsStats && fsStats.totalViews > 0 && (
-                  <Card>
+                  <AdminPanel>
                     <CardHeader>
                       <CardTitle className="text-base">On-Site Behaviour — Page Views & Leads</CardTitle>
                     </CardHeader>
@@ -681,13 +661,13 @@ const AdminSEOAudit: React.FC = () => {
                         </AreaChart>
                       </ResponsiveContainer>
                     </CardContent>
-                  </Card>
+                  </AdminPanel>
                 )}
               </TabsContent>
 
               {/* ── Keywords ──────────────────────────────────────── */}
               <TabsContent value="keywords" className="mt-4">
-                <Card>
+                <AdminPanel>
                   <CardHeader>
                     <CardTitle className="text-base">Top Ranking Keywords</CardTitle>
                   </CardHeader>
@@ -732,12 +712,12 @@ const AdminSEOAudit: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               </TabsContent>
 
               {/* ── Pages ─────────────────────────────────────────── */}
               <TabsContent value="pages" className="space-y-6 mt-4">
-                <Card>
+                <AdminPanel>
                   <CardHeader>
                     <CardTitle className="text-base">Top Crawled Pages — Ranking Signal Map</CardTitle>
                   </CardHeader>
@@ -793,11 +773,11 @@ const AdminSEOAudit: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
 
                 {/* Bar chart */}
                 {pages.length > 0 && (
-                  <Card>
+                  <AdminPanel>
                     <CardHeader>
                       <CardTitle className="text-base">Clicks by Page</CardTitle>
                     </CardHeader>
@@ -817,13 +797,13 @@ const AdminSEOAudit: React.FC = () => {
                         </BarChart>
                       </ResponsiveContainer>
                     </CardContent>
-                  </Card>
+                  </AdminPanel>
                 )}
               </TabsContent>
 
               {/* ── Opportunities ─────────────────────────────────── */}
               <TabsContent value="opportunities" className="mt-4 space-y-4">
-                <Card>
+                <AdminPanel>
                   <CardHeader>
                     <CardTitle className="text-base">Ranking Opportunities — Action Plan</CardTitle>
                   </CardHeader>
@@ -927,13 +907,12 @@ const AdminSEOAudit: React.FC = () => {
                       </>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               </TabsContent>
             </Tabs>
           </>
         )}
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

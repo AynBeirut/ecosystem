@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Plus, Edit3, AlertTriangle, Package, FileDown, AlertCircle } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -15,9 +15,8 @@ import { useToast } from '@/hooks/use-toast';
 import { RawMaterial, Supplier } from '@/types/inventory';
 import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
@@ -25,7 +24,6 @@ import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtil
 const AdminRawMaterials: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isAddingMaterial, setIsAddingMaterial] = useState(false);
@@ -404,26 +402,26 @@ const AdminRawMaterials: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Raw Materials" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-            <h1 className="text-2xl font-bold">Raw Materials</h1>
-          </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={exportToPDF}>
-              <FileDown className="mr-2 h-4 w-4" />
-              Export PDF
-            </Button>
-            <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" />
-                Add Material
-              </Button>
-            </DialogTrigger>
+    <AdminPageShell
+      title="Raw Materials"
+      description="Manage raw materials inventory, suppliers, and stock levels"
+      eyebrow="Stock & Catalog"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+      actions={(
+        <>
+          <Button variant="outline" onClick={exportToPDF}>
+            <FileDown className="mr-2 h-4 w-4" />
+            Export PDF
+          </Button>
+          <Button onClick={() => setIsAddingMaterial(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Material
+          </Button>
+        </>
+      )}
+    >
+          <Dialog open={isAddingMaterial} onOpenChange={setIsAddingMaterial}>
             <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Add New Raw Material</DialogTitle>
@@ -578,8 +576,6 @@ const AdminRawMaterials: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          </div>
-        </div>
 
         {/* Low Stock Alert */}
         {lowStockCount > 0 && (
@@ -601,14 +597,14 @@ const AdminRawMaterials: React.FC = () => {
         {/* Materials List */}
         <div className="grid gap-4">
           {filteredMaterials.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">
                   {filterLowStock ? 'No materials below threshold' : 'No materials yet. Add your first material to get started.'}
                 </p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             filteredMaterials.map((material) => {
               const isLowStock = material.currentStock < material.minimumThreshold;
@@ -616,7 +612,7 @@ const AdminRawMaterials: React.FC = () => {
               const supplier = suppliers.find(s => s.id === material.preferredSupplierId);
 
               return (
-                <Card key={material.id} className={isLowStock ? 'border-red-300' : ''}>
+                <AdminPanel key={material.id} className={isLowStock ? 'border-red-300' : ''}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
@@ -697,7 +693,7 @@ const AdminRawMaterials: React.FC = () => {
                       )}
                     </div>
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
@@ -916,8 +912,7 @@ const AdminRawMaterials: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

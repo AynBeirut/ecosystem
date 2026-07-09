@@ -8,6 +8,13 @@ import PublicNav from '@/components/public/PublicNav';
 import PublicFooter from '@/components/public/PublicFooter';
 import { BLOG_POSTS, BLOG_CATEGORIES } from '@/data/blog-posts';
 
+const MODULE_LINKS = [
+  { label: 'Platform modules', href: '/features#platform-features' },
+  { label: 'Mobile & desktop apps', href: '/features#apps-features' },
+  { label: 'AI growth tools', href: '/features#ai-features' },
+  { label: 'Build your package', href: '/pricing' },
+];
+
 const Blog: React.FC = () => {
   const [activeCategory, setActiveCategory] = useState<string>('All');
 
@@ -18,23 +25,21 @@ const Blog: React.FC = () => {
 
   const categories = ['All', ...BLOG_CATEGORIES];
   const filtered =
-    activeCategory === 'All'
-      ? BLOG_POSTS
-      : BLOG_POSTS.filter((p) => p.category === activeCategory);
+    activeCategory === 'All' ? BLOG_POSTS : BLOG_POSTS.filter((p) => p.category === activeCategory);
 
-  const featured = BLOG_POSTS[BLOG_POSTS.length - 1]; // latest post as featured
+  const featured = BLOG_POSTS[BLOG_POSTS.length - 1];
 
   return (
     <>
       <SEOHead
-        title="Grabio Blog — Business Management, POS, and Commerce Guides"
-        description="Practical guides on business management systems, POS software, invoicing, inventory control, and automation — written for small business owners who want results."
+        title="Grabio Blog — Modular Commerce, CRM, and Operations Guides"
+        description="Practical guides on modular business platforms, inventory, invoicing, CRM, and AI tools — for owners building on Grabio."
         url="/blog"
         keywords={[
-          'business management blog',
-          'POS system guide',
-          'invoicing software tips',
-          'inventory management tips',
+          'Grabio blog',
+          'business management guides',
+          'Sales CRM tips',
+          'inventory management',
           'small business operations',
         ]}
       />
@@ -43,19 +48,33 @@ const Blog: React.FC = () => {
         <PublicNav />
 
         <main>
-          {/* ── Hero ── */}
-          <section className="bg-gray-50 border-b border-gray-100 py-14">
+          <section className="bg-gradient-to-br from-teal-600 to-cyan-800 text-white py-14">
             <div className="max-w-4xl mx-auto px-4 sm:px-6 text-center">
-              <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-4">
-                Business Operations Resource Center
-              </h1>
-              <p className="text-lg text-gray-500">
-                Practical guides on running a better business. No filler, no fluff.
+              <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Business Operations Resource Center</h1>
+              <p className="text-lg text-teal-100 mb-2">Practical guides for modular commerce.</p>
+              <p className="text-teal-200/90 max-w-2xl mx-auto">
+                Learn how to run inventory, invoicing, CRM, and growth — on one platform with installable
+                modules.
               </p>
             </div>
           </section>
 
-          {/* ── Featured Post ── */}
+          <section className="border-b border-gray-100 bg-gray-50">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 py-4">
+              <div className="flex flex-wrap gap-2 justify-center">
+                {MODULE_LINKS.map(({ label, href }) => (
+                  <Link
+                    key={href}
+                    to={href}
+                    className="text-xs font-medium px-3 py-1.5 rounded-full bg-white border border-gray-200 text-teal-700 hover:border-teal-300 hover:bg-teal-50"
+                  >
+                    {label}
+                  </Link>
+                ))}
+              </div>
+            </div>
+          </section>
+
           <section className="max-w-6xl mx-auto px-4 sm:px-6 pt-12 pb-4">
             <Link
               to={`/blog/${featured.slug}`}
@@ -75,7 +94,11 @@ const Blog: React.FC = () => {
                     {featured.readingTime} min read
                   </span>
                   <span className="text-sm text-gray-400">
-                    {new Date(featured.publishedAt).toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' })}
+                    {new Date(featured.publishedAt).toLocaleDateString('en-US', {
+                      month: 'long',
+                      day: 'numeric',
+                      year: 'numeric',
+                    })}
                   </span>
                 </div>
               </div>
@@ -87,12 +110,12 @@ const Blog: React.FC = () => {
             </Link>
           </section>
 
-          {/* ── Category filter ── */}
           <section className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
             <div className="flex flex-wrap gap-2" role="navigation" aria-label="Blog categories">
               {categories.map((cat) => (
                 <button
                   key={cat}
+                  type="button"
                   onClick={() => setActiveCategory(cat)}
                   className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                     activeCategory === cat
@@ -106,7 +129,6 @@ const Blog: React.FC = () => {
             </div>
           </section>
 
-          {/* ── Post grid ── */}
           <section className="max-w-6xl mx-auto px-4 sm:px-6 pb-16">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filtered.map((post) => (
@@ -124,10 +146,12 @@ const Blog: React.FC = () => {
                     </h2>
                     <p className="mt-2 text-sm text-gray-500 line-clamp-3 flex-1">{post.description}</p>
 
-                    {/* Tags */}
                     <div className="mt-4 flex flex-wrap gap-1.5">
                       {post.tags.slice(0, 2).map((tag) => (
-                        <span key={tag} className="text-xs text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded">
+                        <span
+                          key={tag}
+                          className="text-xs text-gray-400 bg-gray-50 border border-gray-200 px-2 py-0.5 rounded"
+                        >
                           {tag}
                         </span>
                       ))}
@@ -139,7 +163,10 @@ const Blog: React.FC = () => {
                         {post.readingTime} min read
                       </span>
                       <span className="text-xs text-gray-400">
-                        {new Date(post.publishedAt).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })}
+                        {new Date(post.publishedAt).toLocaleDateString('en-US', {
+                          month: 'short',
+                          year: 'numeric',
+                        })}
                       </span>
                     </div>
                   </div>
@@ -148,16 +175,21 @@ const Blog: React.FC = () => {
             </div>
           </section>
 
-          {/* ── CTA ── */}
           <section className="bg-gray-50 border-t border-gray-100 py-12 text-center">
             <div className="max-w-xl mx-auto px-4 sm:px-6">
               <h2 className="text-xl font-bold text-gray-900 mb-3">Ready to put this into practice?</h2>
               <p className="text-gray-500 text-sm mb-6">
-                Grabio gives you the tools to run the operations described in these guides.
+                Start with core platform features, then toggle CRM, apps, and AI tools as you grow.
               </p>
-              <AuthCTA
-                className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors"
-              />
+              <div className="flex flex-col sm:flex-row gap-3 justify-center">
+                <AuthCTA className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors" />
+                <Link
+                  to="/pricing"
+                  className="px-6 py-3 border border-gray-300 text-gray-700 font-semibold rounded-xl hover:border-gray-400 transition-colors"
+                >
+                  Build your package
+                </Link>
+              </div>
             </div>
           </section>
         </main>

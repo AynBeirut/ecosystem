@@ -19,15 +19,12 @@ import { logAction } from '@/lib/auditLog';
 import { calculateAvailableStock, getComposedStockStatus } from '@/lib/composedProductStock';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { assertCanCreateProduct } from '@/lib/subscriptionEnforcement';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const AdminComposedProducts: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
-  
   // Check if user has permission to manage inventory
   const canManageInventory = user?.role === 'admin' || 
     (user?.role === 'sub_account' && user?.permissions?.includes('manage_inventory'));
@@ -441,22 +438,19 @@ const AdminComposedProducts: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Composed Products" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton label="Back to Dashboard" />}
-            <h1 className="text-2xl font-bold">{canManageInventory ? 'Composed Products' : 'View Composed Products'}</h1>
-          </div>
-          {canManageInventory && hasComposedAccess(storeProfile) && (
-            <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Create Composed Product
-                </Button>
-              </DialogTrigger>
+    <AdminPageShell
+      title={canManageInventory ? 'Composed Products' : 'View Composed Products'}
+      description="Create products from recipes with automatic cost calculation"
+      eyebrow="Inventory"
+      actions={
+        canManageInventory && hasComposedAccess(storeProfile) ? (
+          <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Create Composed Product
+              </Button>
+            </DialogTrigger>
             <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle>Create Composed Product</DialogTitle>
@@ -645,12 +639,13 @@ const AdminComposedProducts: React.FC = () => {
               </DialogFooter>
             </DialogContent>
           </Dialog>
-          )}
-        </div>
+        ) : null
+      }
+    >
 
         {/* Upgrade Prompt for Premium Users */}
         {!hasComposedAccess(storeProfile) ? (
-          <Card className="border-2 border-amber-500 bg-amber-50">
+          <AdminPanel className="border-2 border-amber-500 bg-amber-50">
             <CardContent className="py-12">
               <div className="text-center max-w-md mx-auto">
                 <AlertTriangle className="h-16 w-16 text-amber-600 mx-auto mb-4" />
@@ -664,18 +659,18 @@ const AdminComposedProducts: React.FC = () => {
                 </Button>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         ) : (
           <>
             {/* Composed Products List */}
             <div className="grid gap-4">
               {composedProducts.length === 0 ? (
-                <Card>
+                <AdminPanel>
                   <CardContent className="py-12 text-center">
                     <Package2 className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                     <p className="text-gray-500">No composed products yet. Link products to recipes to get started.</p>
                   </CardContent>
-                </Card>
+                </AdminPanel>
               ) : (
                 composedProducts.map((composedProduct) => {
               const product = products.find(p => p.id === composedProduct.productId);
@@ -692,7 +687,7 @@ const AdminComposedProducts: React.FC = () => {
               const availableUnits = calculateAvailableStock(recipe, rawMaterials);
 
               return (
-                <Card key={composedProduct.id}>
+                <AdminPanel key={composedProduct.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
@@ -781,7 +776,7 @@ const AdminComposedProducts: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
@@ -880,8 +875,7 @@ const AdminComposedProducts: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

@@ -1,6 +1,132 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+
+    function userProfile() {
+      return exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data
+        : {};
+    }
+
+    function isCrmRepUser() {
+      return request.auth != null
+        && userProfile().role == 'crm_rep'
+        && userProfile().crmRepId is string;
+    }
+
+    function crmRepId() {
+      return userProfile().crmRepId;
+    }
+
+    function crmRepData() {
+      return get(/databases/$(database)/documents/crmReps/$(crmRepId())).data;
+    }
+
+    function storeProfileExists(storeId) {
+      return exists(/databases/$(database)/documents/storeProfiles/$(storeId));
+    }
+
+    function storeProfileData(storeId) {
+      return get(/databases/$(database)/documents/storeProfiles/$(storeId)).data;
+    }
+
+    function isStoreOwnerByOwnerId(storeId) {
+      let p = storeProfileData(storeId);
+      return request.auth != null
+        && storeProfileExists(storeId)
+        && p.keys().hasAny(['ownerId'])
+        && p.ownerId == request.auth.uid;
+    }
+
+    function isLegacySellerStoreOwner(storeId) {
+      return request.auth != null
+        && storeProfileExists(storeId)
+        && !storeProfileData(storeId).keys().hasAny(['ownerId'])
+        && exists(/databases/$(database)/documents/sellers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/sellers/$(request.auth.uid)).data.storeId == storeId;
+    }
+
+    function isStoreOwner(storeId) {
+      return request.auth != null && (
+        request.auth.uid == storeId ||
+        isStoreOwnerByOwnerId(storeId) ||
+        isLegacySellerStoreOwner(storeId)
+      );
+    }
+
+    function isDemoStoreProfile(storeId) {
+      let p = storeProfileData(storeId);
+      return storeProfileExists(storeId)
+        && p.keys().hasAny(['isDemo'])
+        && p.isDemo == true;
+    }
+
+    function isBlockedCommerceStatus(storeId) {
+      let p = storeProfileData(storeId);
+      return storeProfileExists(storeId)
+        && p.keys().hasAny(['subscriptionStatus'])
+        && p.subscriptionStatus in ['expired', 'blocked'];
+    }
+
+    function isCommerceEligibleStatus(storeId) {
+      let p = storeProfileData(storeId);
+      return storeProfileExists(storeId) && (
+        !p.keys().hasAny(['subscriptionStatus']) ||
+        p.subscriptionStatus in ['active', 'trial', 'grace', 'grace_period']
+      );
+    }
+
+    // Real store = production commerce path (not builder demo, not blocked/expired)
+    function isRealStore(storeId) {
+      return storeProfileExists(storeId)
+        && !isDemoStoreProfile(storeId)
+        && !isBlockedCommerceStatus(storeId)
+        && isCommerceEligibleStatus(storeId);
+    }
+
+    // Catalog writes — allow unless demo/expired/blocked (owners can manage products during setup)
+    function isCatalogWritableStore(storeId) {
+      return storeProfileExists(storeId)
+        && !isDemoStoreProfile(storeId)
+        && !isBlockedCommerceStatus(storeId);
+    }
+
+    function isSubAccountAdmin(storeId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'sub_account'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId is string
+        && exists(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId))
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.storeId == storeId
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.role == 'admin';
+    }
+
+    function isStoreAdmin(storeId) {
+      return isStoreOwner(storeId) || isSubAccountAdmin(storeId);
+    }
+
+    function isGrabioOps() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/platformConfig/grabio)
+        && request.auth.uid in get(/databases/$(database)/documents/platformConfig/grabio).data.opsUids;
+    }
+
+    function isActiveSubAccountForStore(storeId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'sub_account'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId is string
+        && exists(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId))
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.storeId == storeId
+        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.status == 'active';
+    }
+
+    function storeHasSalesCrm(storeId) {
+      let p = get(/databases/$(database)/documents/storeProfiles/$(storeId)).data;
+      return (p.addOns is list && p.addOns.hasAny(['salesCrm']))
+        || (p.addOnsMeta is map && p.addOnsMeta.salesCrm == true)
+        || (p.enabledModules is map && p.enabledModules.crm == true);
+    }
     // Sellers: allow users to read/write their own seller document
     match /sellers/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
@@ -11,43 +137,159 @@ service cloud.firestore {
       allow get, list: if true;
     }
 
-    // Stores: allow users to read/write their own store document
+    // Stores: owner-scoped subcollections (blog, finance)
     match /stores/{storeId} {
-      allow read, write: if request.auth != null && request.auth.uid == resource.data.ownerId;
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId ||
+        isStoreOwner(storeId)
+      );
+      allow create: if request.auth != null
+        && request.resource.data.ownerId == request.auth.uid;
+      allow update, delete: if request.auth != null && (
+        request.auth.uid == resource.data.ownerId ||
+        isStoreOwner(storeId)
+      );
+
+      // Blog posts: owner can read/write; public posts are readable by all
+      match /blogPosts/{postId} {
+        allow read: if resource.data.status == 'published' && resource.data.visibility == 'public'
+                    || (request.auth != null && isStoreOwner(storeId));
+        allow write: if request.auth != null && isStoreOwner(storeId) && isRealStore(storeId);
+      }
+
+      match /financeEstimates/{estimateId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeReceipts/{receiptId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeInvoices/{invoiceId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financePayments/{paymentId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeExpenses/{expenseId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeSuppliers/{supplierId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financePurchaseOrders/{poId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeInventoryMovements/{movementId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeCurrencySettings/{settingId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financePaymentMethods/{methodId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeStaff/{staffId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeStaffPayments/{paymentId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeDeliveryPersons/{personId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeDeliveryOrders/{orderId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeCashCollections/{collectionId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      // POS paired terminals — owner/admin read; writes via Cloud Functions only
+      match /posDevices/{deviceId} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow write: if false;
+      }
+
+      match /posPairingCodes/{code} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow write: if false;
+      }
+
+      match /posInstallTokens/{tokenId} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow write: if false;
+      }
+
+      match /financeCashTransactions/{transactionId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeOperationalExpenses/{expenseId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeExpenseEntries/{entryId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /financeSettings/{docId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
     }
 
-    // StoreProfiles: allow public read, owner and sub-accounts can write
-    match /storeProfiles/{userId} {
+    // StoreProfiles: public read; owner write (doc id legacy OR ownerId for multi-store Phase 2)
+    match /storeProfiles/{storeId} {
       allow read: if true;
-      // Allow owner to write, or authenticated users updating lastInvoiceNumber
-      allow write: if request.auth != null && (
-        request.auth.uid == userId ||
+      allow create: if request.auth != null && (
+        request.auth.uid == storeId ||
+        request.resource.data.ownerId == request.auth.uid
+      );
+      allow update, delete: if request.auth != null && (
+        isStoreOwner(storeId) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastInvoiceNumber']))
       );
     }
 
-    // Products: allow authenticated users to create products
+    // Products: real stores only; store team write
     match /products/{productId} {
       allow read: if true;
-      allow create: if request.auth != null;
-      allow update, delete: if request.auth != null && (
-        // Allow if user owns the store OR if user's storeId matches product's storeId
-        resource.data.storeId == request.auth.uid ||
-        exists(/databases/$(database)/documents/storeProfiles/$(request.auth.uid))
-      );
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isCatalogWritableStore(request.resource.data.storeId)
+        && (isStoreAdmin(request.resource.data.storeId) || isActiveSubAccountForStore(request.resource.data.storeId));
+      allow update, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isCatalogWritableStore(resource.data.storeId)
+        && (isStoreAdmin(resource.data.storeId) || isActiveSubAccountForStore(resource.data.storeId));
     }
 
-    // Orders: allow authenticated users (including sales people) to create orders,
-    // allow buyers to read/update their own orders,
-    // allow sellers to read/update orders for their store.
-    // Guest users (unauthenticated) may read a single order by its ID (for order tracking).
-    // Note: guest checkout is handled server-side via Cloud Functions (admin SDK bypasses rules).
+    // Orders: real stores only for writes; guest read-by-id for tracking
     match /orders/{orderId} {
-      allow create, update: if request.auth != null;
-      allow get: if true; // orderId is unguessable — safe to allow unauthenticated single-doc read for tracking
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId);
+      allow update: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId);
+      allow get: if true;
       allow list: if request.auth != null;
-      // Allow deletion only for cancelled orders
-      allow delete: if request.auth != null && resource.data.status == 'cancelled';
+      allow delete: if request.auth != null
+        && resource.data.status == 'cancelled'
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId);
     }
 
     // Users -> follows: only owner can create/delete their follow docs
@@ -137,27 +379,46 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Suppliers: only store owners can manage
+    // Suppliers: real store owners only
     match /suppliers/{supplierId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update, delete: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update, delete: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
     }
 
-    // Raw Materials: only store owners can manage
+    // Raw Materials: real store owners only
     match /rawMaterials/{materialId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.storeId;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
     }
 
-    // Purchases: only store owners can manage
+    // Purchases: real store owners only
     match /purchases/{purchaseId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      // Allow deletion only for returned or cancelled purchases
-      allow delete: if request.auth != null && 
-        request.auth.uid == resource.data.storeId && 
-        (resource.data.status == 'returned' || resource.data.status == 'cancelled');
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId)
+        && (resource.data.status == 'returned' || resource.data.status == 'cancelled');
     }
 
     // Customer Returns (RMA): customers can create and read own, store owners can manage
@@ -167,46 +428,130 @@ service cloud.firestore {
         request.auth.uid == resource.data.customerId ||
         request.auth.uid == get(/databases/$(database)/documents/storeProfiles/$(resource.data.storeId)).data.ownerId
       );
-      allow update: if request.auth != null && 
-        request.auth.uid == get(/databases/$(database)/documents/storeProfiles/$(resource.data.storeId)).data.ownerId;
+      allow update: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreOwner(resource.data.storeId);
     }
 
-    // Supplier Returns (SRA): only store owners can manage
+    // Supplier Returns (SRA): real store owners only
     match /supplierReturns/{sraId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      allow delete: if false; // Prevent deletion for audit trail
-    }
-
-    // Sales Returns: only store owners can manage
-    match /salesReturns/{returnId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      allow delete: if false; // Prevent deletion for audit trail
-    }
-
-    // Finished Goods Inventory: only store owners can manage
-    match /finishedGoodsInventory/{itemId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      // Allow deletion only for items with 0 current stock
-      allow delete: if request.auth != null && 
-        request.auth.uid == resource.data.storeId && 
-        resource.data.currentBalance == 0;
-    }
-
-    // Supplier Credits: only store owners can manage
-    match /supplierCredits/{creditId} {
-      allow read, create, update: if request.auth != null;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
       allow delete: if false;
     }
 
-    // Staff: only store owners can manage
-    match /staff/{staffId} {
-      allow read, write: if request.auth != null;
+    // Sales Returns: real store team only
+    match /salesReturns/{returnId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && (
+          isStoreAdmin(resource.data.storeId) ||
+          isActiveSubAccountForStore(resource.data.storeId)
+        );
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && (
+          isStoreAdmin(request.resource.data.storeId) ||
+          isActiveSubAccountForStore(request.resource.data.storeId)
+        );
+      allow delete: if false;
     }
 
-    // Expenses: store owners and managers can manage
+    // Order fulfillment locations (multi-warehouse)
+    match /fulfillmentLocations/{locationId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && (
+          isStoreAdmin(resource.data.storeId) ||
+          isActiveSubAccountForStore(resource.data.storeId)
+        );
+      allow create, update, delete: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+    }
+
+    // Saved order list views (per user within a store)
+    match /orderViews/{viewId} {
+      allow read: if request.auth != null && (
+        request.auth.uid == resource.data.userId ||
+        (resource.data.storeId is string && isStoreAdmin(resource.data.storeId))
+      );
+      allow create: if request.auth != null
+        && request.auth.uid == request.resource.data.userId
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null && request.auth.uid == resource.data.userId;
+    }
+
+    // Finished Goods Inventory: real store owners only
+    match /finishedGoodsInventory/{itemId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId)
+        && resource.data.currentBalance == 0;
+    }
+
+    // Supplier Credits: real store team only
+    match /supplierCredits/{creditId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if false;
+    }
+
+    // Staff: real store owners only
+    match /staff/{staffId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Expenses: real store owners only
     match /expenses/{expenseId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
     }
 
     // Audit Logs: read-only for owners, write allowed for authenticated users
@@ -232,52 +577,159 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
-    // Customers (CRM): only store owners can manage
+    // Customers: real stores only
     match /customers/{customerId} {
-      allow read, create, update, delete: if request.auth != null;
+      allow read: if request.auth != null && (
+        isStoreAdmin(resource.data.storeId) ||
+        isActiveSubAccountForStore(resource.data.storeId) ||
+        (isCrmRepUser()
+          && crmRepData().storeId == resource.data.storeId
+          && resource.data.assignedRepId == crmRepId()
+          && storeHasSalesCrm(resource.data.storeId))
+      );
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && (
+          isStoreAdmin(request.resource.data.storeId) ||
+          isActiveSubAccountForStore(request.resource.data.storeId)
+        );
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow update: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && (
+          isStoreAdmin(resource.data.storeId) ||
+          isActiveSubAccountForStore(resource.data.storeId) ||
+          (isCrmRepUser()
+            && crmRepData().storeId == resource.data.storeId
+            && resource.data.assignedRepId == crmRepId()
+            && storeHasSalesCrm(resource.data.storeId))
+        );
     }
 
-    // Recipes: only store owners can manage
+    // Sales CRM — dedicated field reps (real stores only)
+    match /crmReps/{repId} {
+      allow read: if request.auth != null && (
+        isStoreAdmin(resource.data.storeId) ||
+        (isCrmRepUser() && crmRepId() == repId)
+      );
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId)
+        && storeHasSalesCrm(request.resource.data.storeId);
+      allow update, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Sales CRM — activity logs (real stores only, immutable)
+    match /crmActivities/{activityId} {
+      allow read: if request.auth != null && (
+        isStoreAdmin(resource.data.storeId) ||
+        (isCrmRepUser() && crmRepData().storeId == resource.data.storeId)
+      );
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && storeHasSalesCrm(request.resource.data.storeId)
+        && (
+          isStoreOwner(request.resource.data.storeId) ||
+          (isCrmRepUser()
+            && request.resource.data.repId == crmRepId()
+            && crmRepData().storeId == request.resource.data.storeId)
+        );
+      allow update, delete: if false;
+    }
+
+    // Recipes: real store owners only
     match /recipes/{recipeId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      allow delete: if request.auth != null && request.auth.uid == resource.data.storeId;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
     }
 
-    // Production Batches: only store owners can manage
+    // Production Batches: real store owners only
     match /productionBatches/{batchId} {
-      allow read: if request.auth != null && request.auth.uid == resource.data.storeId;
-      allow create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      // Allow deletion only for cancelled batches
-      allow delete: if request.auth != null && 
-        request.auth.uid == resource.data.storeId && 
-        resource.data.status == 'cancelled';
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId)
+        && resource.data.status == 'cancelled';
     }
 
-    // Sub-Accounts: only store owners can manage
+    // Sub-Accounts: store owner manages team on real stores
     match /subAccounts/{accountId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null && (
+        request.auth.uid == accountId ||
+        (resource.data.storeId is string && isStoreAdmin(resource.data.storeId))
+      );
+      allow create, update, delete: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
     }
 
-    // Purchase Orders: only store owners can manage
+    // Purchase Orders: real store owners only
     match /purchaseOrders/{poId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update, delete: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
     }
 
-    // Composed Products: only store owners can manage
+    // Composed Products: real store team only
     match /composedProducts/{productId} {
       allow read: if true;
-      allow write: if request.auth != null;
+      allow write: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && (isStoreAdmin(request.resource.data.storeId) || isActiveSubAccountForStore(request.resource.data.storeId));
     }
 
-    // Salaries: only store owners can manage
+    // Salaries: real store owners only
     match /salaries/{salaryId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update, delete: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
     }
 
-    // Refund Transactions: only store owners can manage
+    // Refund Transactions: real store owners only
     match /refundTransactions/{refundId} {
-      allow read, write: if request.auth != null;
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update, delete: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
     }
 
     // SEO Events: public write (fire-and-forget tracker), authenticated read only
@@ -307,16 +759,134 @@ service cloud.firestore {
       allow write: if false;
     }
 
-    // Account Payments: store owners can manage (customer receipts / supplier payouts)
-    match /accountPayments/{paymentId} {
-      allow read, create, update: if request.auth != null && request.auth.uid == request.resource.data.storeId;
-      allow read, delete: if request.auth != null && request.auth.uid == resource.data.storeId;
+    // Store announcements: public read; real store owner writes
+    match /announcements/{announcementId} {
+      allow read: if true;
+      allow create, update, delete: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
     }
 
-    // Fallback: allow reads, deny writes by default
+    // Account Payments: real store owners only
+    match /accountPayments/{paymentId} {
+      allow read, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow create, update: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+    }
+
+    // Finished goods — monthly service cost allocations (per store / month)
+    match /monthlyServiceCosts/{costId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Cash collections — delivery / bank deposit reconciliation
+    match /cashCollections/{collectionId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Marketplace sync jobs and per-channel settings (dropship module)
+    match /marketplaceSyncJobs/{jobId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+    }
+
+    match /marketplaceChannelSettings/{settingId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
+      allow update, delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Builder accounts — isolated demo stores (no production commerce path)
+    match /platformConfig/grabio {
+      allow read: if isGrabioOps();
+    }
+
+    match /wordpressProvisioningRequests/{requestId} {
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isStoreAdmin(request.resource.data.storeId)
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.businessName is string
+        && request.resource.data.contactEmail is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+
+      allow read: if request.auth != null && (
+        isGrabioOps()
+        || (resource.data.storeId is string && isStoreAdmin(resource.data.storeId))
+      );
+
+      allow update: if isGrabioOps()
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.businessName == resource.data.businessName
+        && request.resource.data.contactEmail == resource.data.contactEmail
+        && request.resource.data.createdAt == resource.data.createdAt;
+    }
+
+    match /builders/{builderUid} {
+      allow read, write: if request.auth != null && request.auth.uid == builderUid;
+
+      match /demoStores/{demoId} {
+        allow read, write: if request.auth != null && request.auth.uid == builderUid;
+
+        match /{document=**} {
+          allow read, write: if request.auth != null && request.auth.uid == builderUid;
+        }
+      }
+    }
+
+    // Fallback: deny by default (public reads must be explicit above)
     match /{document=**} {
-      allow read: if true;
-      allow write: if false;
+      allow read, write: if false;
     }
   }
 }

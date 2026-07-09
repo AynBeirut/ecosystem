@@ -22,6 +22,7 @@ export function useAuthCTA() {
   if (!user) return { label: 'Get Started Free', href: '/login?tab=signup' };
   if (user.role === 'admin') return { label: 'Visit Dashboard', href: '/admin' };
   if (user.role === 'sub_account') return { label: 'Visit Dashboard', href: '/team/dashboard' };
+  if (user.role === 'crm_rep') return { label: 'Sales CRM', href: '/team/crm' };
   // role === 'user' (buyer / guest — has no store)
   return { label: 'View Pricing', href: '/pricing' };
 }

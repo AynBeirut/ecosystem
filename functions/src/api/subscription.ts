@@ -1,7 +1,17 @@
 import * as admin from 'firebase-admin';
 import { Request, Response } from 'express';
-import { initiatePayment, resolveWebsiteUrl } from '../services/whishPayment';
+import { initiatePayment, resolvePlatformWebsiteUrl, resolveFrontendBaseUrl } from '../services/whishPayment';
+import {
+  calculateModularAmountCents,
+  modularActivationPatch,
+  MODULE_PRICES,
+  ADDON_PRICING,
+} from '../lib/modularPricing';
+import { PACKAGE_PRESETS } from '../lib/moduleManifest';
+import { buildRenewalMigrationPatch } from '../lib/legacyPlanMapping';
+import type { StartingPackageKey } from '../lib/moduleManifest';
 import Stripe from 'stripe';
+import { assertNotDemoStoreProfile } from '../services/storeCommerceGuard';
 
 const db = admin.firestore();
 
@@ -21,6 +31,7 @@ interface SubscriptionPlan {
   addOns?: {
     domainPackage?: boolean;
     whatsappBusiness?: boolean;
+    salesCrm?: boolean;
     extraStorageBlocks?: number;
   };
 }
@@ -50,6 +61,10 @@ const PRICING = {
     extraStoragePer5Gb: {
       monthly: 200,
       yearly: 2400,
+    },
+    salesCrm: {
+      monthly: 1500,
+      yearly: 15000,
     },
   },
 };
@@ -117,12 +132,14 @@ function normalizePaidTier(tier?: string): PaidTier {
 function normalizeAddOns(addOns: unknown): {
   domainPackage: boolean;
   whatsappBusiness: boolean;
+  salesCrm: boolean;
   extraStorageBlocks: number;
 } {
   if (Array.isArray(addOns)) {
     return {
       domainPackage: addOns.includes('domainPackage') || addOns.includes('customDomainHosting'),
       whatsappBusiness: addOns.includes('whatsappBusiness'),
+      salesCrm: addOns.includes('salesCrm'),
       extraStorageBlocks: addOns.includes('extraStorage') || addOns.includes('storage') ? 1 : 0,
     };
   }
@@ -132,6 +149,7 @@ function normalizeAddOns(addOns: unknown): {
   return {
     domainPackage: Boolean(value.domainPackage || value.customDomainHosting),
     whatsappBusiness: Boolean(value.whatsappBusiness),
+    salesCrm: Boolean(value.salesCrm),
     extraStorageBlocks: Math.max(0, Number(value.extraStorageBlocks || (value.storage ? 1 : 0) || 0)),
   };
 }
@@ -140,8 +158,22 @@ function getAddOnArray(addOns: ReturnType<typeof normalizeAddOns>): string[] {
   const result: string[] = [];
   if (addOns.domainPackage) result.push('domainPackage');
   if (addOns.whatsappBusiness) result.push('whatsappBusiness');
+  if (addOns.salesCrm) result.push('salesCrm');
   if (addOns.extraStorageBlocks > 0) result.push('extraStorage');
   return result;
+}
+
+function mergeAddOnMeta(
+  existing: Record<string, unknown> | undefined,
+  incoming: ReturnType<typeof normalizeAddOns>,
+): ReturnType<typeof normalizeAddOns> {
+  const base = normalizeAddOns(existing);
+  return {
+    domainPackage: base.domainPackage || incoming.domainPackage,
+    whatsappBusiness: base.whatsappBusiness || incoming.whatsappBusiness,
+    salesCrm: base.salesCrm || incoming.salesCrm,
+    extraStorageBlocks: Math.max(base.extraStorageBlocks, incoming.extraStorageBlocks),
+  };
 }
 
 function calculateAmount(tier: PaidTier, billing: Billing, addOnsInput: unknown): { amount: number; description: string; addOns: ReturnType<typeof normalizeAddOns> } {
@@ -160,6 +192,10 @@ function calculateAmount(tier: PaidTier, billing: Billing, addOnsInput: unknown)
   if (addOns.extraStorageBlocks > 0) {
     amount += addOns.extraStorageBlocks * PRICING.addOns.extraStoragePer5Gb[billing];
     description += ` + ${addOns.extraStorageBlocks}x Extra Storage`; 
+  }
+  if (addOns.salesCrm) {
+    amount += PRICING.addOns.salesCrm[billing];
+    description += ' + Sales CRM';
   }
 
   return { amount, description, addOns };
@@ -180,6 +216,8 @@ export async function startTrial(req: Request, res: Response) {
     if (!userId || !email) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
+
+    await assertNotDemoStoreProfile(db, userId);
 
     // Check if user already used trial
     const storeRef = db.collection('storeProfiles').doc(userId);
@@ -222,6 +260,8 @@ export async function subscribe(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    await assertNotDemoStoreProfile(db, userId);
+
     const normalizedTier = normalizePaidTier(tier);
     const normalizedBilling: Billing = billing === 'yearly' ? 'yearly' : 'monthly';
 
@@ -229,10 +269,8 @@ export async function subscribe(req: Request, res: Response) {
     const { amount, description, addOns: normalizedAddOns } = calculateAmount(normalizedTier, normalizedBilling, addOns);
 
     // Initialize payment with Whish — detect which merchant domain the request came from
-    const websiteUrl = resolveWebsiteUrl(req.headers.origin as string | undefined);
-    const frontendBase = websiteUrl === 'aynbeirut.com'
-      ? 'https://aynbeirut.com'
-      : 'https://grabio.space';
+    const websiteUrl = resolvePlatformWebsiteUrl(req.headers.origin as string | undefined);
+    const frontendBase = resolveFrontendBaseUrl(req.headers.origin as string | undefined);
     const externalId = Date.now(); // Unique numeric ID for this transaction
     const payment = await initiatePayment({
       amount,
@@ -247,7 +285,11 @@ export async function subscribe(req: Request, res: Response) {
     });
 
     if (!payment.status || !payment.data?.collectUrl) {
-      return res.status(500).json({ error: payment.error || 'Payment initialization failed' });
+      return res.status(502).json({
+        error: payment.error || 'Payment initialization failed',
+        code: payment.code || 'WHISH_ERROR',
+        provider: 'whish',
+      });
     }
 
     // Store pending subscription
@@ -278,6 +320,7 @@ export async function subscribe(req: Request, res: Response) {
  * Activate trial after successful payment
  */
 export async function activateTrial(userId: string, paymentId: string, tier: string) {
+  await assertNotDemoStoreProfile(db, userId);
   const storeRef = db.collection('storeProfiles').doc(userId);
   const normalizedTier: SubscriptionTier = 'trial';
   const trialAmount = 0;
@@ -347,9 +390,16 @@ export async function activateSubscription(
   addOns: unknown,
   amount: number
 ) {
+  await assertNotDemoStoreProfile(db, userId);
   const storeRef = db.collection('storeProfiles').doc(userId);
+  const storeSnap = await storeRef.get();
+  const existingProfile = storeSnap.exists ? storeSnap.data() : {};
   const normalizedTier = normalizePaidTier(tier);
-  const normalizedAddOns = normalizeAddOns(addOns);
+  const incomingAddOns = normalizeAddOns(addOns);
+  const normalizedAddOns = mergeAddOnMeta(
+    (existingProfile?.addOnsMeta as Record<string, unknown> | undefined) ?? existingProfile?.addOns,
+    incomingAddOns,
+  );
   const limits = PLAN_LIMITS[normalizedTier];
   
   const subscriptionEndsAt = new Date();
@@ -368,8 +418,21 @@ export async function activateSubscription(
     nextBillingDate: subscriptionEndsAt.toISOString(),
     lastPaymentDate: new Date().toISOString(),
     lastPaymentAmount: amount / 100, // Store in dollars
-    addOns: getAddOnArray(normalizedAddOns),
+    addOns: (() => {
+      const existingList = Array.isArray(existingProfile?.addOns)
+        ? (existingProfile.addOns as string[])
+        : getAddOnArray(normalizeAddOns(existingProfile?.addOnsMeta ?? existingProfile?.addOns));
+      return [...new Set([...existingList, ...getAddOnArray(normalizedAddOns)])];
+    })(),
     addOnsMeta: normalizedAddOns,
+    ...(normalizedAddOns.salesCrm
+      ? {
+          crmSettings: {
+            noContactAlertDays:
+              (existingProfile?.crmSettings as { noContactAlertDays?: number } | undefined)?.noContactAlertDays ?? 7,
+          },
+        }
+      : {}),
     productLimit: limits.productLimit,
     storageLimitMb: limits.storageLimitMb,
     storage_limit_mb: limits.storageLimitMb,
@@ -542,6 +605,8 @@ export async function subscribeStripe(req: Request, res: Response) {
       return res.status(400).json({ error: 'Missing required fields' });
     }
 
+    await assertNotDemoStoreProfile(db, userId);
+
     const normalizedTier = normalizePaidTier(tier);
     const normalizedBilling: Billing = billing === 'yearly' ? 'yearly' : 'monthly';
     const { amount, description, addOns: normalizedAddOns } = calculateAmount(normalizedTier, normalizedBilling, addOns);
@@ -588,6 +653,229 @@ export async function subscribeStripe(req: Request, res: Response) {
     res.json({ success: true, paymentUrl: session.url, amount });
   } catch (error: unknown) {
     console.error('Subscribe Stripe error:', error);
+    res.status(500).json({ error: getErrorMessage(error) });
+  }
+}
+
+type ModularBilling = 'monthly' | 'yearly';
+
+function isValidPreset(preset: string): preset is StartingPackageKey {
+  return (
+    preset === 'pkg_shop' ||
+    preset === 'pkg_live_kitchen' ||
+    preset === 'pkg_factory_flow' ||
+    preset === 'pkg_ngo' ||
+    preset === 'pkg_freelancer'
+  );
+}
+
+/**
+ * Modular-v2 checkout — charges exactly calculateCustomPrice() (same as web UI).
+ */
+export async function subscribeModular(req: Request, res: Response) {
+  try {
+    const {
+      userId,
+      email,
+      preset,
+      billing,
+      seatCount,
+      posLocationCount,
+      enabledModuleIds,
+      addOnKeys,
+    } = req.body;
+
+    if (!userId || !email || !billing) {
+      return res.status(400).json({ error: 'Missing required fields' });
+    }
+
+    await assertNotDemoStoreProfile(db, userId);
+
+    const moduleIds = Array.isArray(enabledModuleIds)
+      ? enabledModuleIds.map(String).filter(Boolean)
+      : [];
+
+    if (moduleIds.length === 0) {
+      return res.status(400).json({ error: 'Select at least one module' });
+    }
+
+    const unknownModule = moduleIds.find((id) => !MODULE_PRICES[id]);
+    if (unknownModule) {
+      return res.status(400).json({ error: `Unknown module: ${unknownModule}` });
+    }
+
+    const normalizedBilling: ModularBilling = billing === 'yearly' ? 'yearly' : 'monthly';
+    const seats = Math.max(1, Number(seatCount) || 1);
+    const posLocs = Math.max(0, Number(posLocationCount) || 0);
+    const addOnKeyList = Array.isArray(addOnKeys)
+      ? addOnKeys.map(String).filter((k) => ADDON_PRICING[k])
+      : [];
+
+    const presetKey = preset && isValidPreset(String(preset)) ? (preset as StartingPackageKey) : null;
+    const presetLabel = presetKey ? PACKAGE_PRESETS[presetKey].label : 'Custom';
+
+    const { amountCents, totalUsd, description } = calculateModularAmountCents({
+      moduleIds,
+      addOnKeys: addOnKeyList,
+      seatCount: seats,
+      posLocationCount: posLocs,
+      billing: normalizedBilling,
+      presetLabel,
+    });
+
+    if (amountCents <= 0) {
+      return res.status(400).json({ error: 'Invalid checkout amount' });
+    }
+
+    const websiteUrl = resolvePlatformWebsiteUrl(req.headers.origin as string | undefined);
+    const frontendBase = resolveFrontendBaseUrl(req.headers.origin as string | undefined);
+    const externalId = Date.now();
+    const amountUsd = totalUsd;
+
+    const payment = await initiatePayment({
+      amount: amountUsd,
+      currency: 'USD',
+      invoice: description,
+      externalId,
+      websiteUrl,
+      successCallbackUrl: `https://us-central1-market-flow-7b074.cloudfunctions.net/api/webhook/whish?externalId=${externalId}&type=subscription_modular&userId=${userId}`,
+      failureCallbackUrl: `https://us-central1-market-flow-7b074.cloudfunctions.net/api/webhook/whish?externalId=${externalId}&type=subscription_modular&userId=${userId}&status=failed`,
+      successRedirectUrl: `${frontendBase}/payment/success?type=subscription_modular&externalId=${externalId}`,
+      failureRedirectUrl: `${frontendBase}/payment/failed?type=subscription_modular`,
+    });
+
+    if (!payment.status || !payment.data?.collectUrl) {
+      return res.status(502).json({
+        error: payment.error || 'Payment initialization failed',
+        code: payment.code || 'WHISH_ERROR',
+        provider: 'whish',
+      });
+    }
+
+    const storeRef = db.collection('storeProfiles').doc(userId);
+    await storeRef.set(
+      {
+        pendingModularPreset: presetKey || 'custom',
+        pendingModularBilling: normalizedBilling,
+        pendingModularAmount: amountCents,
+        pendingModularSeats: seats,
+        pendingModularPosLocations: posLocs,
+        pendingModularEnabledModules: moduleIds,
+        pendingModularAddOnKeys: addOnKeyList,
+        pendingSubscriptionPaymentId: String(externalId),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true },
+    );
+
+    res.json({
+      success: true,
+      paymentUrl: payment.data.collectUrl,
+      amount: amountUsd,
+      amountCents,
+      pricingVersion: 'modular-v2',
+      description,
+    });
+  } catch (error: unknown) {
+    console.error('Subscribe modular error:', error);
+    res.status(500).json({ error: getErrorMessage(error) });
+  }
+}
+
+export async function activateModularSubscription(userId: string, externalId: string): Promise<void> {
+  await assertNotDemoStoreProfile(db, userId);
+  const storeRef = db.collection('storeProfiles').doc(userId);
+  const snap = await storeRef.get();
+  if (!snap.exists) throw new Error('Store not found');
+  const data = snap.data() || {};
+
+  const enabledModuleIds = Array.isArray(data.pendingModularEnabledModules)
+    ? (data.pendingModularEnabledModules as string[]).filter(Boolean)
+    : [];
+
+  if (enabledModuleIds.length === 0) {
+    throw new Error('No pending modular module selection');
+  }
+
+  const addOnKeys = Array.isArray(data.pendingModularAddOnKeys)
+    ? (data.pendingModularAddOnKeys as string[]).filter(Boolean)
+    : [];
+
+  const presetRaw = String(data.pendingModularPreset || 'custom');
+  const preset = isValidPreset(presetRaw) ? (presetRaw as StartingPackageKey) : null;
+
+  const patch = modularActivationPatch({
+    enabledModuleIds,
+    addOnKeys,
+    preset: preset || 'custom',
+    seatCount: Number(data.pendingModularSeats) || 1,
+    posLocationCount: Number(data.pendingModularPosLocations) || 0,
+    billing: data.pendingModularBilling === 'yearly' ? 'yearly' : 'monthly',
+    amountCents: Number(data.pendingModularAmount) || 0,
+  });
+
+  const endsAt = new Date();
+  if (patch.subscriptionPlan === 'yearly') {
+    endsAt.setFullYear(endsAt.getFullYear() + 1);
+  } else {
+    endsAt.setMonth(endsAt.getMonth() + 1);
+  }
+
+  await storeRef.set(
+    {
+      ...patch,
+      subscriptionStatus: 'active',
+      subscriptionTier: 'starter',
+      subscriptionStartedAt: new Date().toISOString(),
+      subscriptionEndsAt: endsAt.toISOString(),
+      nextBillingDate: endsAt.toISOString(),
+      lastPaymentDate: new Date().toISOString(),
+      lastPaymentAmount: (Number(data.pendingModularAmount) || 0) / 100,
+      billingHistory: admin.firestore.FieldValue.arrayUnion({
+        date: new Date().toISOString(),
+        amount: (Number(data.pendingModularAmount) || 0) / 100,
+        plan: patch.subscriptionPlan,
+        tier: 'modular-v2',
+        status: 'success',
+        transactionId: externalId,
+        description: `Modular ${presetRaw} - ${patch.subscriptionPlan}`,
+      }),
+      pendingModularPreset: admin.firestore.FieldValue.delete(),
+      pendingModularBilling: admin.firestore.FieldValue.delete(),
+      pendingModularAmount: admin.firestore.FieldValue.delete(),
+      pendingModularSeats: admin.firestore.FieldValue.delete(),
+      pendingModularPosLocations: admin.firestore.FieldValue.delete(),
+      pendingModularEnabledModules: admin.firestore.FieldValue.delete(),
+      pendingModularAddOnKeys: admin.firestore.FieldValue.delete(),
+      pendingSubscriptionPaymentId: admin.firestore.FieldValue.delete(),
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+}
+
+/**
+ * Schedule legacy → modular migration at next renewal (no immediate price change).
+ */
+export async function scheduleRenewalMigration(req: Request, res: Response) {
+  try {
+    const { userId } = req.body;
+    if (!userId) return res.status(400).json({ error: 'userId required' });
+
+    const storeRef = db.collection('storeProfiles').doc(userId);
+    const snap = await storeRef.get();
+    if (!snap.exists) return res.status(404).json({ error: 'Store not found' });
+
+    const data = snap.data() || {};
+    const renewalAt = data.subscriptionEndsAt
+      ? new Date(String(data.subscriptionEndsAt))
+      : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+    const patch = buildRenewalMigrationPatch(data, renewalAt.toISOString());
+
+    await storeRef.set(patch, { merge: true });
+    res.json({ success: true, scheduledPlanMigrationAt: patch.scheduledPlanMigrationAt });
+  } catch (error: unknown) {
     res.status(500).json({ error: getErrorMessage(error) });
   }
 }

@@ -8,20 +8,37 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, Package, AlertCircle } from 'lucide-react';
+import { Trash2, Plus, Edit3, Package, AlertCircle, RefreshCw } from 'lucide-react';
+import {
+  buildSupplierFieldsFromUrl,
+  formatSupplierPlatformLabel,
+  formatSupplierSyncLabel,
+  syncDropshipProduct,
+} from '@/lib/dropship';
+import DropshipSupplierFields from '@/components/admin/DropshipSupplierFields';
+import type { SupplierPlatform } from '@/types/product';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { Switch } from '@/components/ui/switch';
 import { Product, ProductType, ServiceBillingType } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
+import ClampedText, {
+  FORM_DIALOG_BODY,
+  FORM_DIALOG_FOOTER,
+  FORM_DIALOG_HEADER,
+  FORM_DIALOG_SHELL,
+  FORM_FILE_BUTTON_CLASS,
+  SelectedFileLabel,
+} from '@/components/ClampedText';
 import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { generateUniqueSlug } from '@/lib/slugify';
 import { assertCanCreateProduct, assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
+import { waitForAuthToken } from '@/lib/waitForAuthToken';
 
 const DEFAULT_PRODUCT_CATEGORIES = [
   'Electronics',
@@ -40,7 +57,6 @@ const DEFAULT_PRODUCT_CATEGORIES = [
 const AdminProducts: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
   const [recipes, setRecipes] = useState<Array<{ id: string; name?: string; costPerUnit?: number }>>([]);
@@ -49,6 +65,7 @@ const AdminProducts: React.FC = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [syncingProductId, setSyncingProductId] = useState<string | null>(null);
   const [servicePolicy, setServicePolicy] = useState({
     allowServiceProducts: true,
     allowRecurringSubscriptions: true,
@@ -56,6 +73,22 @@ const AdminProducts: React.FC = () => {
     minimumServiceDurationMinutes: 0,
     defaultRenewalReminderDays: 7,
   });
+  const [firestoreReady, setFirestoreReady] = useState(false);
+  const storeId = getActualStoreId(user);
+
+  useEffect(() => {
+    if (!user?.id) {
+      setFirestoreReady(false);
+      return;
+    }
+    let cancelled = false;
+    void waitForAuthToken().then((firebaseUser) => {
+      if (!cancelled) setFirestoreReady(Boolean(firebaseUser));
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
   
   // Check if user has permission to manage inventory
   const canManageInventory = user?.role === 'admin' || 
@@ -79,7 +112,34 @@ const AdminProducts: React.FC = () => {
     expiryTracking: false,
     expiryDate: '',
     expiryAlertDays: 30,
+    supplierProductUrl: '',
+    supplierPlatform: 'shein' as SupplierPlatform,
+    dropshipEnabled: false,
   });
+
+  const getSupplierPayload = (
+    enabled: boolean,
+    platform: SupplierPlatform,
+    url: string,
+    productType: ProductType,
+  ) => {
+    if (productType !== 'simple' || !enabled) {
+      return {
+        supplierPlatform: null,
+        supplierProductUrl: null,
+        supplierSyncEnabled: false,
+      };
+    }
+    const trimmed = url.trim();
+    if (!trimmed) {
+      return {
+        supplierPlatform: null,
+        supplierProductUrl: null,
+        supplierSyncEnabled: false,
+      };
+    }
+    return buildSupplierFieldsFromUrl(platform, trimmed);
+  };
 
   const getStockPayload = (productType: ProductType, rawStock: string | number) => {
     if (productType === 'service') {
@@ -92,15 +152,21 @@ const AdminProducts: React.FC = () => {
       inStock: numericStock > 0,
     };
   };
-  // Load products from Firestore on mount and when user changes
+  // Load products from Firestore once auth token is ready for secured collections
   useEffect(() => {
-    const db = getFirestore();
-    const fetchProducts = async () => {
-      if (!user?.storeId) return setProducts([]);
+    if (!firestoreReady) return;
+    if (!storeId) {
+      setProducts([]);
+      return;
+    }
 
+    const db = getFirestore();
+    let cancelled = false;
+
+    const fetchProducts = async () => {
       // Fetch categories from store profile (storeId first, then user.id fallback)
       try {
-        const profileDocIds = Array.from(new Set([user.storeId, user.id].filter(Boolean)));
+        const profileDocIds = Array.from(new Set([storeId, user?.id].filter(Boolean)));
         let loadedCategories: string[] = [];
 
         for (const profileDocId of profileDocIds) {
@@ -146,57 +212,158 @@ const AdminProducts: React.FC = () => {
         console.warn('Failed to load profile categories for products, using defaults:', error);
         setCategories(DEFAULT_PRODUCT_CATEGORIES);
       }
-      
-      // Fetch products
-      const productsRef = collection(db, 'products');
-      const q = query(productsRef, where('storeId', '==', user.storeId));
-      const snapshot = await getDocs(q);
-      const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-      setProducts(productsList);
-      
-      // Fetch finished goods stock for composed products
-      const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
-      const fgQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
-      const fgSnapshot = await getDocs(fgQuery);
-      const stockMap: Record<string, number> = {};
-      fgSnapshot.docs.forEach(doc => {
-        const data = doc.data();
-        if (data.productId && typeof data.currentBalance === 'number') {
-          stockMap[data.productId] = data.currentBalance;
+
+      try {
+        // Fetch products
+        const productsRef = collection(db, 'products');
+        const q = query(productsRef, where('storeId', '==', storeId));
+        const snapshot = await getDocs(q);
+        if (cancelled) return;
+        const productsList: Product[] = snapshot.docs.map((productDoc) => ({
+          id: productDoc.id,
+          ...productDoc.data(),
+        } as Product));
+        setProducts(productsList);
+
+        // Fetch finished goods stock for composed products
+        const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
+        const fgQuery = query(finishedGoodsRef, where('storeId', '==', storeId));
+        const fgSnapshot = await getDocs(fgQuery);
+        if (cancelled) return;
+        const stockMap: Record<string, number> = {};
+        fgSnapshot.docs.forEach((fgDoc) => {
+          const data = fgDoc.data();
+          if (data.productId && typeof data.currentBalance === 'number') {
+            stockMap[data.productId] = data.currentBalance;
+          }
+        });
+        setFinishedGoodsStock(stockMap);
+
+        // Fetch recipes for composed products
+        const recipesRef = collection(db, 'recipes');
+        const recipesQuery = query(recipesRef, where('storeId', '==', storeId));
+        const recipesSnapshot = await getDocs(recipesQuery);
+        if (cancelled) return;
+        const recipesList = recipesSnapshot.docs.map((recipeDoc) => ({
+          id: recipeDoc.id,
+          ...recipeDoc.data(),
+        }));
+        setRecipes(recipesList);
+      } catch (error) {
+        console.error('[AdminProducts] Failed to load products:', error);
+        if (!cancelled) {
+          setProducts([]);
+          setFinishedGoodsStock({});
+          setRecipes([]);
         }
-      });
-      setFinishedGoodsStock(stockMap);
-      
-      // Fetch recipes for composed products
-      const recipesRef = collection(db, 'recipes');
-      const recipesQuery = query(recipesRef, where('storeId', '==', user.storeId));
-      const recipesSnapshot = await getDocs(recipesQuery);
-      const recipesList = recipesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-      setRecipes(recipesList);
+      }
     };
-    fetchProducts();
-  }, [user?.storeId, user?.id]);
+
+    void fetchProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [firestoreReady, storeId, user?.id]);
 
   const categoryOptions = Array.from(new Set([
     ...categories,
     ...(newProduct.category ? [newProduct.category] : []),
   ].map((category) => (typeof category === 'string' ? category.trim() : '')).filter((category) => category.length > 0)));
+  const handleSyncSupplier = async (product: Product) => {
+    if (!storeId) {
+      toast({ title: 'Error', description: 'Store not found', variant: 'destructive' });
+      return;
+    }
+    if (!product.supplierProductUrl?.trim()) {
+      toast({
+        title: 'No supplier link',
+        description: 'Add a supplier product link on this product first.',
+        variant: 'destructive',
+      });
+      return;
+    }
+    if (product.supplierPlatform && product.supplierPlatform !== 'shein') {
+      toast({
+        title: 'Sync not available',
+        description: `${formatSupplierPlatformLabel(product.supplierPlatform)} link saved for reference. Stock sync is Shein-only for now.`,
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSyncingProductId(product.id);
+    const db = getFirestore();
+    try {
+      const result = await syncDropshipProduct(storeId, product.id);
+      const refreshed = {
+        ...product,
+        inStock: Boolean(result.inStock),
+        stock: result.stock ?? (result.inStock ? 1 : 0),
+        supplierLastSyncAt: result.syncedAt,
+        supplierLastSyncStatus: 'ok' as const,
+        supplierLastSyncMessage: result.message,
+        ...(result.imageUpdated && product.image ? {} : {}),
+      };
+      setProducts((prev) => prev.map((p) => (p.id === product.id ? refreshed : p)));
+      if (editingProduct?.id === product.id) {
+        setEditingProduct(refreshed);
+      }
+      toast({
+        title: result.inStock ? 'In stock on Shein' : 'Out of stock on Shein',
+        description: result.message || 'Supplier availability updated.',
+      });
+      const productsRef = collection(db, 'products');
+      const q = query(productsRef, where('storeId', '==', storeId));
+      const snapshot = await getDocs(q);
+      setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
+    } catch (error) {
+      toast({
+        title: 'Sync failed',
+        description: error instanceof Error ? error.message : 'Could not sync with Shein',
+        variant: 'destructive',
+      });
+    } finally {
+      setSyncingProductId(null);
+    }
+  };
+
+  const parseProductPrice = (rawPrice: string | number): number | null => {
+    const priceText = String(rawPrice ?? '').trim();
+    if (!priceText) return null;
+    const parsed = Number(priceText);
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+
   const handleAddProduct = async () => {
     if (isSaving) return;
     setIsSaving(true);
     const db = getFirestore();
-    if (!newProduct.name || !newProduct.price) {
-      toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
+    const parsedPrice = parseProductPrice(newProduct.price);
+    if (!newProduct.name.trim() || parsedPrice === null) {
+      toast({ title: "Error", description: "Please enter a product name and valid price", variant: "destructive" });
       setIsSaving(false);
       return;
     }
-    if (!user?.storeId) {
+    if (!storeId) {
       toast({
         title: "Error",
         description: "Your store is not set up correctly. Please refresh the page or contact support.",
         variant: "destructive"
       });
-      console.warn("Attempted to add product but user.storeId is missing! User:", user);
+      console.warn("Attempted to add product but storeId is missing! User:", user);
+      setIsSaving(false);
+      return;
+    }
+
+    try {
+      await waitForAuthToken();
+    } catch (authErr) {
+      console.error('[AdminProducts] Auth token not ready:', authErr);
+      toast({
+        title: 'Error',
+        description: 'Sign-in is still loading. Please wait a moment and try again.',
+        variant: 'destructive',
+      });
       setIsSaving(false);
       return;
     }
@@ -240,7 +407,7 @@ const AdminProducts: React.FC = () => {
     }
 
     try {
-      await assertCanCreateProduct(db, user.storeId, newProduct.productType);
+      await assertCanCreateProduct(db, storeId, newProduct.productType);
     } catch (error) {
       toast({
         title: 'Plan Limit Reached',
@@ -255,7 +422,7 @@ const AdminProducts: React.FC = () => {
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
-        await assertCanUploadBytes(db, user.storeId, newProduct.imageFile.size);
+        await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
         await new Promise<void>((resolve, reject) => {
@@ -267,7 +434,7 @@ const AdminProducts: React.FC = () => {
           );
         });
         imageUrl = await getDownloadURL(imageRef);
-        await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
+        await trackStorageUsageAfterUpload(db, storeId, newProduct.imageFile.size);
       } catch (error) {
         console.error('Image upload failed:', error);
         toast({ title: "Error", description: `Image upload failed: ${error.message || 'Unknown error'}`, variant: "destructive" });
@@ -275,6 +442,24 @@ const AdminProducts: React.FC = () => {
         return;
       }
     }
+    let supplierFields: Record<string, unknown> = {};
+    try {
+      supplierFields = getSupplierPayload(
+        newProduct.dropshipEnabled,
+        newProduct.supplierPlatform,
+        newProduct.supplierProductUrl,
+        newProduct.productType,
+      );
+    } catch (supplierErr) {
+      toast({
+        title: 'Invalid supplier link',
+        description: supplierErr instanceof Error ? supplierErr.message : 'Check the supplier URL',
+        variant: 'destructive',
+      });
+      setIsSaving(false);
+      return;
+    }
+
     try {
       // Generate unique slug for the product
       const productSlug = await generateUniqueSlug(newProduct.name, 'products', undefined);
@@ -282,12 +467,12 @@ const AdminProducts: React.FC = () => {
       const productData = {
         name: newProduct.name,
         description: newProduct.description,
-        price: parseFloat(newProduct.price),
+        price: parsedPrice,
         category: newProduct.category,
         deliveryTime: newProduct.deliveryTime || '3-5 days',
         image: imageUrl || `https://placehold.co/400x300/38B2AC/fff?text=${encodeURIComponent(newProduct.name)}`,
         imageAlt: String(newProduct.imageAlt || newProduct.name || '').trim(),
-        storeId: user?.storeId || '',
+        storeId: storeId,
         slug: productSlug,
         ...getStockPayload(newProduct.productType, 0),
         rating: 0,
@@ -309,15 +494,35 @@ const AdminProducts: React.FC = () => {
         expiryTracking: newProduct.productType !== 'service' ? newProduct.expiryTracking : undefined,
         expiryDate: newProduct.productType !== 'service' && newProduct.expiryTracking && newProduct.expiryDate ? newProduct.expiryDate : undefined,
         expiryAlertDays: newProduct.productType !== 'service' && newProduct.expiryTracking ? newProduct.expiryAlertDays : undefined,
+        ...supplierFields,
       };
       const cleanProductData = Object.fromEntries(
         Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])
       );
-  const docRef = await addDoc(collection(db, 'products'), cleanProductData);
+      const docRef = await addDoc(collection(db, 'products'), cleanProductData);
+      setProducts((prev) => [...prev, { id: docRef.id, ...(cleanProductData as Product) }]);
+
+      if (
+        newProduct.dropshipEnabled &&
+        newProduct.supplierProductUrl.trim() &&
+        newProduct.supplierPlatform === 'shein' &&
+        storeId
+      ) {
+        try {
+          await syncDropshipProduct(storeId, docRef.id);
+        } catch (syncErr) {
+          console.warn('Initial Shein sync failed after create', syncErr);
+          toast({
+            title: 'Product saved',
+            description: 'Shein sync failed — use Sync now on the product card to retry.',
+            variant: 'destructive',
+          });
+        }
+      }
       
       // Refetch products to get complete data
       const productsRef = collection(db, 'products');
-      const q = query(productsRef, where('storeId', '==', user.storeId));
+      const q = query(productsRef, where('storeId', '==', storeId));
       const snapshot = await getDocs(q);
       const productsList: Product[] = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
       setProducts(productsList);
@@ -326,6 +531,7 @@ const AdminProducts: React.FC = () => {
       name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageAlt: '', imageFile: null, stock: '',
       productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: '',
       expiryTracking: false, expiryDate: '', expiryAlertDays: 30,
+      supplierProductUrl: '', supplierPlatform: 'shein', dropshipEnabled: false,
     });
       setIsAddingProduct(false);
       toast({ title: "Success", description: "Product added successfully!" });
@@ -376,14 +582,38 @@ const AdminProducts: React.FC = () => {
       expiryTracking: product.expiryTracking || false,
       expiryDate: product.expiryDate || '',
       expiryAlertDays: product.expiryAlertDays ?? 30,
+      supplierProductUrl: product.supplierProductUrl || '',
+      supplierPlatform: (product.supplierPlatform || 'shein') as SupplierPlatform,
+      dropshipEnabled: Boolean(product.supplierProductUrl?.trim()),
     });
   };
 
   const handleUpdateProduct = async () => {
     if (isSaving) return;
     const db = getFirestore();
-    if (!editingProduct || !newProduct.name || !newProduct.price) {
+    const parsedPrice = parseProductPrice(newProduct.price);
+    if (!editingProduct || !newProduct.name.trim() || parsedPrice === null) {
       toast({ title: "Error", description: "Please fill in required fields", variant: "destructive" });
+      return;
+    }
+    if (!storeId) {
+      toast({
+        title: "Error",
+        description: "Your store is not set up correctly. Please refresh the page or contact support.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      await waitForAuthToken();
+    } catch (authErr) {
+      console.error('[AdminProducts] Auth token not ready:', authErr);
+      toast({
+        title: 'Error',
+        description: 'Sign-in is still loading. Please wait a moment and try again.',
+        variant: 'destructive',
+      });
       return;
     }
 
@@ -414,7 +644,7 @@ const AdminProducts: React.FC = () => {
       // Check for active production batches
       const batchesRef = collection(db, 'productionBatches');
       const batchesQuery = query(batchesRef, 
-        where('storeId', '==', user.storeId),
+        where('storeId', '==', storeId),
         where('productId', '==', editingProduct.id),
         where('status', 'in', ['pending', 'in-progress'])
       );
@@ -430,9 +660,9 @@ const AdminProducts: React.FC = () => {
       }
     }
 
-    if (editingProduct.productType !== 'composed' && newProduct.productType === 'composed' && user?.storeId) {
+    if (editingProduct.productType !== 'composed' && newProduct.productType === 'composed' && storeId) {
       try {
-        await assertCanCreateProduct(db, user.storeId, 'composed');
+        await assertCanCreateProduct(db, storeId, 'composed');
       } catch (error) {
         toast({
           title: 'Plan Limit Reached',
@@ -443,12 +673,29 @@ const AdminProducts: React.FC = () => {
       }
     }
 
+    let supplierFields: Record<string, unknown> = {};
+    try {
+      supplierFields = getSupplierPayload(
+        newProduct.dropshipEnabled,
+        newProduct.supplierPlatform,
+        newProduct.supplierProductUrl,
+        newProduct.productType,
+      );
+    } catch (supplierErr) {
+      toast({
+        title: 'Invalid supplier link',
+        description: supplierErr instanceof Error ? supplierErr.message : 'Check the supplier URL',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setIsSaving(true);
     let imageUrl = newProduct.image;
     if (newProduct.imageFile) {
       try {
-        if (user?.storeId) {
-          await assertCanUploadBytes(db, user.storeId, newProduct.imageFile.size);
+        if (storeId) {
+          await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
         }
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
@@ -461,30 +708,45 @@ const AdminProducts: React.FC = () => {
           );
         });
         imageUrl = await getDownloadURL(imageRef);
-        if (user?.storeId) {
-          await trackStorageUsageAfterUpload(db, user.storeId, newProduct.imageFile.size);
+        if (storeId) {
+          await trackStorageUsageAfterUpload(db, storeId, newProduct.imageFile.size);
         }
       } catch {
         toast({ title: "Error", description: "Image upload failed.", variant: "destructive" });
+        setIsSaving(false);
         return;
       }
     }
+
+    const resolvedImage = newProduct.imageFile
+      ? imageUrl
+      : newProduct.image.trim() || editingProduct.image || '';
+
     try {
       // Generate slug if product doesn't have one yet
       const productSlug = editingProduct.slug || await generateUniqueSlug(newProduct.name, 'products', editingProduct.id);
       
+      const hasDropshipLink =
+        newProduct.dropshipEnabled &&
+        newProduct.productType === 'simple' &&
+        Boolean(newProduct.supplierProductUrl.trim());
+
       const updatedProduct = {
         name: newProduct.name,
         description: newProduct.description,
-        price: parseFloat(newProduct.price),
+        price: parsedPrice,
         category: newProduct.category,
         deliveryTime: newProduct.deliveryTime,
-        image: imageUrl || editingProduct.image,
+        image: resolvedImage,
         imageAlt: String(newProduct.imageAlt || newProduct.name || '').trim(),
         storeId: editingProduct.storeId,
         slug: productSlug,
-        // NOTE: stock is NOT updated here — it is controlled only by purchase entries and damage/waste records
-        inStock: newProduct.productType === 'service' ? true : (editingProduct.stock ?? 0) > 0,
+        // Dropship: stock/inStock updated via Sync now. Otherwise stock comes from purchases.
+        ...(hasDropshipLink
+          ? {}
+          : {
+              inStock: newProduct.productType === 'service' ? true : (editingProduct.stock ?? 0) > 0,
+            }),
         rating: editingProduct.rating,
         productType: newProduct.productType,
         isService: newProduct.productType === 'service',
@@ -505,17 +767,31 @@ const AdminProducts: React.FC = () => {
         expiryTracking: newProduct.productType !== 'service' ? newProduct.expiryTracking : undefined,
         expiryDate: newProduct.productType !== 'service' && newProduct.expiryTracking && newProduct.expiryDate ? newProduct.expiryDate : undefined,
         expiryAlertDays: newProduct.productType !== 'service' && newProduct.expiryTracking ? newProduct.expiryAlertDays : undefined,
+        ...supplierFields,
       };
       const cleanUpdatedProduct = Object.fromEntries(
         Object.entries(updatedProduct).map(([k, v]) => [k, v === undefined ? null : v])
       );
   await updateDoc(doc(db, 'products', editingProduct.id), cleanUpdatedProduct);
+
+      if (hasDropshipLink && newProduct.supplierPlatform === 'shein' && storeId) {
+        try {
+          await syncDropshipProduct(storeId, editingProduct.id);
+        } catch (syncErr) {
+          console.warn('Shein sync failed after update', syncErr);
+          toast({
+            title: 'Saved',
+            description: 'Product saved but Shein sync failed — tap Sync now to retry.',
+            variant: 'destructive',
+          });
+        }
+      }
       
       // Update composedProducts collection if this is a composed product
       if (newProduct.productType === 'composed' && newProduct.recipeId) {
         const composedRef = collection(db, 'composedProducts');
         const composedQuery = query(composedRef, 
-          where('storeId', '==', user.storeId),
+          where('storeId', '==', storeId),
           where('productId', '==', editingProduct.id)
         );
         const composedSnapshot = await getDocs(composedQuery);
@@ -531,12 +807,18 @@ const AdminProducts: React.FC = () => {
         }
       }
       
-      setProducts(products.map(p => p.id === editingProduct.id ? { id: editingProduct.id, ...updatedProduct } : p));
+      if (storeId) {
+        const productsRef = collection(db, 'products');
+        const q = query(productsRef, where('storeId', '==', storeId));
+        const snapshot = await getDocs(q);
+        setProducts(snapshot.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
+      }
       setEditingProduct(null);
   setNewProduct({
     name: '', description: '', price: '', category: '', deliveryTime: '', image: '', imageAlt: '', imageFile: null, stock: '',
     productType: 'simple', serviceCost: '', serviceDuration: '', serviceBillingType: 'one-time', renewalReminderDays: '', recipeId: '',
     expiryTracking: false, expiryDate: '', expiryAlertDays: 30,
+    supplierProductUrl: '', supplierPlatform: 'shein', dropshipEnabled: false,
   });
       toast({ title: "Success", description: "Product updated successfully!" });
     } catch (err) {
@@ -555,41 +837,31 @@ const AdminProducts: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Manage Products" />}
-      <div className="p-4 md:p-6">
-        <BackButton to={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'} label="Back to Inventory" />
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Package className="h-6 w-6" />
-                {canManageInventory ? 'Manage Products' : 'View Products'}
-              </h1>
-              <p className="text-muted-foreground">
-                {canManageInventory 
-                  ? 'Add, edit, and manage your store products'
-                  : 'View your store products'}
-              </p>
-            </div>
-            
-            {canManageInventory && (
-              <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
-                <DialogTrigger asChild>
-                  <Button>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Product
-                  </Button>
-                </DialogTrigger>
-              <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-                <DialogHeader>
+    <AdminPageShell
+      title={canManageInventory ? 'Manage Products' : 'View Products'}
+      description={canManageInventory ? 'Add, edit, and manage your store products' : 'View your store products'}
+      eyebrow="Daily Operations"
+      backTo={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'}
+      backLabel="Back to Inventory"
+      actions={
+        canManageInventory && (
+          <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Add Product
+              </Button>
+            </DialogTrigger>
+              <DialogContent className={FORM_DIALOG_SHELL}>
+                <DialogHeader className={FORM_DIALOG_HEADER}>
                   <DialogTitle>Add New Product</DialogTitle>
-                  <DialogDescription>
-                    Fill in the product details below.
+                  <DialogDescription className="text-xs">
+                    Fill in the details below.
                   </DialogDescription>
                 </DialogHeader>
-                
-                <div className="space-y-4">
+
+                <div className={FORM_DIALOG_BODY}>
+                <div className="space-y-4 min-w-0 max-w-full">
                   <div>
                     <Label htmlFor="name">Product Name *</Label>
                     <Input
@@ -607,7 +879,7 @@ const AdminProducts: React.FC = () => {
                       type="number"
                       step="0.01"
                       value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
-                      onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value === '' ? 0 : e.target.value }))}
+                      onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value }))}
                       placeholder="0.00"
                     />
                   </div>
@@ -729,8 +1001,6 @@ const AdminProducts: React.FC = () => {
                     </Alert>
                   )}
 
-
-
                   {newProduct.productType !== 'service' && (
                   <div className="space-y-3 border rounded-md p-3">
                     <div className="flex items-center space-x-2">
@@ -768,9 +1038,50 @@ const AdminProducts: React.FC = () => {
                     )}
                   </div>
                   )}
+
+                  {newProduct.productType === 'simple' && (
+                    <DropshipSupplierFields
+                      idPrefix="add"
+                      enabled={newProduct.dropshipEnabled}
+                      platform={newProduct.supplierPlatform}
+                      productUrl={newProduct.supplierProductUrl}
+                      onEnabledChange={(enabled) =>
+                        setNewProduct((prev) => ({
+                          ...prev,
+                          dropshipEnabled: enabled,
+                          ...(enabled ? {} : { supplierProductUrl: '' }),
+                        }))
+                      }
+                      onPlatformChange={(platform) =>
+                        setNewProduct((prev) => ({ ...prev, supplierPlatform: platform }))
+                      }
+                      onUrlChange={(url) =>
+                        setNewProduct((prev) => ({ ...prev, supplierProductUrl: url }))
+                      }
+                    />
+                  )}
                   
                   <div>
                     <Label htmlFor="image">Image URL</Label>
+                    {newProduct.image && (
+                      <>
+                        <img
+                          src={newProduct.image}
+                          alt={newProduct.imageAlt || newProduct.name || 'Product'}
+                          className="w-full h-32 object-cover rounded-md border mb-2 mt-1"
+                        />
+                        {(newProduct.imageAlt || newProduct.name) && (
+                          <p className="text-xs text-muted-foreground mb-2 min-w-0">
+                            Alt preview:{' '}
+                            <ClampedText
+                              text={newProduct.imageAlt || newProduct.name}
+                              maxLines={2}
+                              className="inline"
+                            />
+                          </p>
+                        )}
+                      </>
+                    )}
                     <Input
                       id="image"
                       value={newProduct.image}
@@ -784,27 +1095,43 @@ const AdminProducts: React.FC = () => {
                       onChange={(e) => setNewProduct(prev => ({ ...prev, imageAlt: e.target.value }))}
                       placeholder="Describe this product image for accessibility"
                     />
-                    <Label htmlFor="imageFile" className="mt-2 block">Or upload image</Label>
-                    <div className="flex gap-2 items-center">
+                    <Label className="mt-2 block">Or upload image</Label>
+                    <div className="flex flex-col gap-2 mt-1">
                       <Input
-                        id="imageFile"
+                        id="imageFileGallery"
+                        type="file"
+                        accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                        className="hidden"
+                        onChange={(e) =>
+                          setNewProduct((prev) => ({ ...prev, imageFile: e.target.files?.[0] || null }))
+                        }
+                      />
+                      <Input
+                        id="imageFileCamera"
                         type="file"
                         accept="image/*"
                         capture="environment"
-                        style={{ display: 'none' }}
-                        onChange={e => setNewProduct(prev => ({ ...prev, imageFile: e.target.files?.[0] || null }))}
+                        className="hidden"
+                        onChange={(e) =>
+                          setNewProduct((prev) => ({ ...prev, imageFile: e.target.files?.[0] || null }))
+                        }
                       />
                       <Button
                         type="button"
-                        variant="outline"
-                        className="w-full md:w-auto"
-                        onClick={() => document.getElementById('imageFile')?.click()}
+                        variant="default"
+                        className={FORM_FILE_BUTTON_CLASS}
+                        onClick={() => document.getElementById('imageFileGallery')?.click()}
                       >
-                        {newProduct.imageFile ? 'Image Selected' : 'Upload from Device'}
+                        <SelectedFileLabel file={newProduct.imageFile} idleLabel="Choose from gallery" />
                       </Button>
-                      {newProduct.imageFile && (
-                        <span className="truncate text-xs text-gray-500 max-w-[120px]">{newProduct.imageFile.name}</span>
-                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => document.getElementById('imageFileCamera')?.click()}
+                      >
+                        Take photo (camera)
+                      </Button>
                     </div>
                     {uploadProgress !== null && (
                       <div className="mt-2">
@@ -822,28 +1149,33 @@ const AdminProducts: React.FC = () => {
                     )}
                   </div>
                 </div>
-                
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setIsAddingProduct(false)}>
+                </div>
+
+                <DialogFooter className={FORM_DIALOG_FOOTER}>
+                  <Button type="button" variant="outline" onClick={() => setIsAddingProduct(false)}>
                     Cancel
                   </Button>
-                  <Button onClick={handleAddProduct} disabled={isSaving}>
+                  <Button type="button" onClick={handleAddProduct} disabled={isSaving}>
                     {isSaving ? 'Saving...' : 'Add Product'}
                   </Button>
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-            )}
-          </div>
-        </div>
-
+        )
+      }
+    >
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {products.map((product) => (
-            <Card key={product.id}>
+            <AdminPanel key={product.id}>
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="text-lg">{product.name}</CardTitle>
+                    <ClampedText
+                      text={product.name}
+                      maxLines={2}
+                      className="text-lg font-semibold leading-none tracking-tight"
+                      as="h3"
+                    />
                     <CardDescription className="text-xl font-bold text-primary">
                       ${product.price}
                     </CardDescription>
@@ -871,6 +1203,11 @@ const AdminProducts: React.FC = () => {
                     {product.expiryTracking && product.expiryDate && isExpiringSoon(product) && (
                       <Badge className="bg-orange-500 text-white hover:bg-orange-600">
                         Expires in {getDaysUntilExpiry(product.expiryDate)}d
+                      </Badge>
+                    )}
+                    {product.supplierProductUrl && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {formatSupplierPlatformLabel(product.supplierPlatform)}
                       </Badge>
                     )}
                   </div>
@@ -913,6 +1250,12 @@ const AdminProducts: React.FC = () => {
                   })()}
                 </div>
 
+                {product.supplierProductUrl && (
+                  <p className="text-[10px] text-muted-foreground mb-2 line-clamp-2">
+                    {formatSupplierSyncLabel(product)}
+                  </p>
+                )}
+
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
                   <span>Delivery: {product.deliveryTime}</span>
                   <span>•</span>
@@ -927,6 +1270,22 @@ const AdminProducts: React.FC = () => {
                   )}
                 </div>
                 
+                <div className="flex flex-col gap-2">
+                  {canManageInventory &&
+                    product.supplierProductUrl &&
+                    product.productType === 'simple' &&
+                    (product.supplierPlatform === 'shein' || !product.supplierPlatform) && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full h-8 text-xs"
+                      disabled={syncingProductId === product.id}
+                      onClick={() => handleSyncSupplier(product)}
+                    >
+                      <RefreshCw className={`h-3 w-3 mr-1 ${syncingProductId === product.id ? 'animate-spin' : ''}`} />
+                      {syncingProductId === product.id ? 'Syncing…' : 'Sync stock (Shein)'}
+                    </Button>
+                  )}
                 <div className="flex gap-2">
                   {canManageInventory && (
                     <>
@@ -952,13 +1311,14 @@ const AdminProducts: React.FC = () => {
                     <Badge variant="secondary" className="w-full justify-center">View Only</Badge>
                   )}
                 </div>
+                </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ))}
           
           {products.length === 0 && (
             <div className="col-span-full">
-              <Card>
+              <AdminPanel>
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <Package className="h-12 w-12 text-muted-foreground mb-4" />
                   <h3 className="text-lg font-semibold mb-2">No Products Yet</h3>
@@ -974,23 +1334,23 @@ const AdminProducts: React.FC = () => {
                     </Button>
                   )}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             </div>
           )}
         </div>
-      </div>
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
-        <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
-          <DialogHeader>
+        <DialogContent className={FORM_DIALOG_SHELL}>
+          <DialogHeader className={FORM_DIALOG_HEADER}>
             <DialogTitle>Edit Product</DialogTitle>
-            <DialogDescription>
-              Update your product details below.
+            <DialogDescription className="text-xs">
+              Update product details below.
             </DialogDescription>
           </DialogHeader>
-          
-          <div className="space-y-4">
+
+          <div className={FORM_DIALOG_BODY}>
+          <div className="space-y-4 min-w-0 max-w-full">
             <div>
               <Label htmlFor="edit-name">Product Name *</Label>
               <Input
@@ -1008,7 +1368,7 @@ const AdminProducts: React.FC = () => {
                 type="number"
                 step="0.01"
                 value={newProduct.price === 0 || newProduct.price === '' ? '' : newProduct.price}
-                onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value === '' ? 0 : e.target.value }))}
+                onChange={(e) => setNewProduct(prev => ({ ...prev, price: e.target.value }))}
                 placeholder="0.00"
               />
             </div>
@@ -1195,15 +1555,61 @@ const AdminProducts: React.FC = () => {
               )}
             </div>
             )}
+
+            {newProduct.productType === 'simple' && (
+              <DropshipSupplierFields
+                idPrefix="edit"
+                enabled={newProduct.dropshipEnabled}
+                platform={newProduct.supplierPlatform}
+                productUrl={newProduct.supplierProductUrl}
+                onEnabledChange={(enabled) =>
+                  setNewProduct((prev) => ({
+                    ...prev,
+                    dropshipEnabled: enabled,
+                    ...(enabled ? {} : { supplierProductUrl: '' }),
+                  }))
+                }
+                onPlatformChange={(platform) =>
+                  setNewProduct((prev) => ({ ...prev, supplierPlatform: platform }))
+                }
+                onUrlChange={(url) =>
+                  setNewProduct((prev) => ({ ...prev, supplierProductUrl: url }))
+                }
+              />
+            )}
             
             <div>
               <Label htmlFor="edit-image">Image URL</Label>
+              {(editingProduct?.image || newProduct.imageFile) && (
+                <>
+                <img
+                  src={
+                    newProduct.imageFile
+                      ? URL.createObjectURL(newProduct.imageFile)
+                      : newProduct.image || editingProduct?.image
+                  }
+                  alt={newProduct.imageAlt || editingProduct?.name || 'Product'}
+                  className="w-full h-32 object-cover rounded-md border mb-2"
+                />
+                {(newProduct.imageAlt || editingProduct?.name) && (
+                  <p className="text-xs text-muted-foreground mb-2 min-w-0">
+                    Alt preview:{' '}
+                    <ClampedText
+                      text={newProduct.imageAlt || editingProduct?.name || ''}
+                      maxLines={2}
+                      className="inline"
+                    />
+                  </p>
+                )}
+                </>
+              )}
               <Input
                 id="edit-image"
                 value={newProduct.image}
                 onChange={(e) => setNewProduct(prev => ({ ...prev, image: e.target.value }))}
                 placeholder="https://example.com/image.jpg"
               />
+              <p className="text-[10px] text-muted-foreground mt-1">Direct image URL or upload below.</p>
               <Label htmlFor="edit-imageAlt" className="mt-2 block">Image Alt Text</Label>
               <Input
                 id="edit-imageAlt"
@@ -1211,10 +1617,70 @@ const AdminProducts: React.FC = () => {
                 onChange={(e) => setNewProduct(prev => ({ ...prev, imageAlt: e.target.value }))}
                 placeholder="Describe this product image for accessibility"
               />
+              <Label className="mt-2 block">Or replace image from device</Label>
+              <div className="flex flex-col gap-2 mt-1">
+                <Input
+                  id="editImageFileGallery"
+                  type="file"
+                  accept="image/png,image/jpeg,image/jpg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={(e) =>
+                    setNewProduct((prev) => ({
+                      ...prev,
+                      imageFile: e.target.files?.[0] || null,
+                    }))
+                  }
+                />
+                <Input
+                  id="editImageFileCamera"
+                  type="file"
+                  accept="image/*"
+                  capture="environment"
+                  className="hidden"
+                  onChange={(e) =>
+                    setNewProduct((prev) => ({
+                      ...prev,
+                      imageFile: e.target.files?.[0] || null,
+                    }))
+                  }
+                />
+                <Button
+                  type="button"
+                  variant="default"
+                  className={FORM_FILE_BUTTON_CLASS}
+                  onClick={() => document.getElementById('editImageFileGallery')?.click()}
+                >
+                  <SelectedFileLabel file={newProduct.imageFile} idleLabel="Choose from gallery" />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => document.getElementById('editImageFileCamera')?.click()}
+                >
+                  Take photo (camera)
+                </Button>
+              </div>
+              {uploadProgress !== null && editingProduct && (
+                <div className="mt-2">
+                  <div className="flex justify-between text-xs text-gray-500 mb-1">
+                    <span>Uploading...</span>
+                    <span>{uploadProgress}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div
+                      className="bg-primary h-2 rounded-full transition-all duration-200"
+                      style={{ width: `${uploadProgress}%` }}
+                    />
+                  </div>
+                </div>
+              )}
             </div>
+
           </div>
-          
-          <DialogFooter>
+          </div>
+
+          <DialogFooter className={FORM_DIALOG_FOOTER}>
             <Button variant="outline" onClick={() => setEditingProduct(null)}>
               Cancel
             </Button>
@@ -1224,7 +1690,7 @@ const AdminProducts: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </AdminPageShell>
   );
 };
 

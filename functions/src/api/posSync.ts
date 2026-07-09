@@ -154,11 +154,50 @@ function mapRecipeIngredients(
   });
 }
 
+async function resolveStoreIdForOwnerUid(uid: string): Promise<string> {
+  const sellerSnap = await db.collection('sellers').doc(uid).get();
+  if (sellerSnap.exists) {
+    const sellerStoreId = String(sellerSnap.data()?.storeId || '').trim();
+    if (sellerStoreId) return sellerStoreId;
+  }
+
+  const userSnap = await db.collection('users').doc(uid).get();
+  if (userSnap.exists) {
+    const data = userSnap.data() || {};
+    const active =
+      String(data.activeStoreId || data.primaryStoreId || data.storeId || '').trim();
+    if (active) return active;
+  }
+
+  return uid;
+}
+
+async function assertOwnerOfStore(uid: string, storeId: string): Promise<boolean> {
+  if (!uid || !storeId) return false;
+  if (uid === storeId) return true;
+
+  const profile = (await db.collection('storeProfiles').doc(storeId).get()).data();
+  if (profile?.ownerId === uid) return true;
+
+  const resolved = await resolveStoreIdForOwnerUid(uid);
+  return resolved === storeId;
+}
+
 export async function createPosPairingCode(req: Request, res: Response): Promise<void> {
   try {
-    const storeId = String(req.body?.storeId || '').trim();
-    const uid = String(req.body?.uid || '').trim();
-    if (!storeId || !uid || storeId !== uid) {
+    const authHeader = req.get('authorization') || '';
+    const bearerToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7).trim() : '';
+    if (!bearerToken) {
+      res.status(401).json({ error: 'Unauthorized' });
+      return;
+    }
+
+    const decoded = await admin.auth().verifyIdToken(bearerToken);
+    const uid = decoded.uid;
+    const requestedStoreId = String(req.body?.storeId || '').trim();
+    const storeId = requestedStoreId || (await resolveStoreIdForOwnerUid(uid));
+
+    if (!(await assertOwnerOfStore(uid, storeId))) {
       res.status(403).json({ error: 'Unauthorized' });
       return;
     }
@@ -562,7 +601,14 @@ export async function generatePosInstallToken(req: Request, res: Response): Prom
     }
 
     const decoded = await admin.auth().verifyIdToken(bearerToken);
-    const storeId = decoded.uid;
+    const uid = decoded.uid;
+    const requestedStoreId = String(req.body?.storeId || '').trim();
+    const storeId = requestedStoreId || (await resolveStoreIdForOwnerUid(uid));
+
+    if (!(await assertOwnerOfStore(uid, storeId))) {
+      res.status(403).json({ error: 'Unauthorized' });
+      return;
+    }
 
     const profile = (await db.collection('storeProfiles').doc(storeId).get()).data();
     if (!canUseModule(profile, 'pos')) {
@@ -576,6 +622,7 @@ export async function generatePosInstallToken(req: Request, res: Response): Prom
     await db.collection('posInstallTokens').doc(token).set({
       storeId,
       deviceName,
+      createdBy: uid,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
       used: false,
     });

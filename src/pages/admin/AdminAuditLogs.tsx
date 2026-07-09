@@ -6,9 +6,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 type AuditLogEntry = {
   id: string;
@@ -62,7 +61,6 @@ const tryStringify = (value: unknown): string => {
 
 const AdminAuditLogs: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [logs, setLogs] = useState<AuditLogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
@@ -150,18 +148,13 @@ const AdminAuditLogs: React.FC = () => {
   }, [logs, search, actionFilter, entityFilter, dateFrom, dateTo]);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="System Logs" showBackButton={true} /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center gap-4 mb-6">
-          {!isMobile && <BackButton to="/admin/dashboard" label="Back to Dashboard" />}
-          <div>
-            <h1 className="text-2xl font-bold">System Logs</h1>
-            <p className="text-sm text-gray-600">Track movement and changes across your store (read-only)</p>
-          </div>
-        </div>
-
-        <Card className="mb-6">
+    <AdminPageShell
+      title="System Logs"
+      description="Track movement and changes across your store (read-only)"
+      backTo="/admin/dashboard"
+      backLabel="Dashboard"
+    >
+        <AdminPanel className="mb-6">
           <CardHeader>
             <CardTitle>Filters</CardTitle>
             <CardDescription>Search by action, entity, user, date, or value changes</CardDescription>
@@ -199,7 +192,7 @@ const AdminAuditLogs: React.FC = () => {
               <Input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         <div className="mb-4 text-sm text-gray-600">
           {loading ? 'Loading logs...' : `${filteredLogs.length} log entries`}
@@ -207,11 +200,11 @@ const AdminAuditLogs: React.FC = () => {
 
         <div className="space-y-3">
           {!loading && filteredLogs.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-8 text-center text-gray-500">
                 No logs found for the selected filters.
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : null}
 
           {filteredLogs.map((log) => {
@@ -222,7 +215,7 @@ const AdminAuditLogs: React.FC = () => {
             const eventTime = log.createdAt || log.timestamp;
 
             return (
-              <Card key={log.id}>
+              <AdminPanel key={log.id}>
                 <CardContent className="pt-4">
                   <div className="flex flex-wrap items-center gap-2 mb-2">
                     <Badge variant="secondary">{action}</Badge>
@@ -249,12 +242,12 @@ const AdminAuditLogs: React.FC = () => {
                     </details>
                   ) : null}
                 </CardContent>
-              </Card>
+              </AdminPanel>
             );
           })}
         </div>
-      </main>
-    </div>
+
+    </AdminPageShell>
   );
 };
 

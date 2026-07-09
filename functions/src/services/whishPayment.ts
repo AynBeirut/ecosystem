@@ -25,6 +25,19 @@ function getWhishHeaders(websiteUrl: string) {
 /** Allowed merchant domains — both should be registered with Whish (ask Steven to whitelist both) */
 const ALLOWED_WHISH_DOMAINS = ['grabio.space', 'aynbeirut.com'];
 
+/** Platform subscription billing — prefer WHISH_WEBSITE_URL env (registered merchant domain). */
+export function resolvePlatformWebsiteUrl(origin?: string): string {
+  const configured = String(process.env.WHISH_WEBSITE_URL || '').trim().replace(/^www\./, '');
+  if (configured) return configured;
+  return resolveWebsiteUrl(origin);
+}
+
+/** Where the user should land after payment — follows the site they started from. */
+export function resolveFrontendBaseUrl(origin?: string): string {
+  const host = resolveWebsiteUrl(origin);
+  return host === 'aynbeirut.com' ? 'https://aynbeirut.com' : 'https://grabio.space';
+}
+
 /** Extract a clean hostname from an origin/referer value, defaulting to grabio.space */
 export function resolveWebsiteUrl(origin?: string): string {
   if (!origin) return WHISH_CONFIG.defaultWebsiteUrl;

@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, doc, getDoc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -12,19 +13,18 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { RotateCcw, Plus, CheckCircle, XCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { Order } from '@/types/order';
+import { Order, PaymentRecord } from '@/types/order';
 import { SalesReturn, SalesReturnItem } from '@/types/salesReturns';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const SalesReturns: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   
   const [returns, setReturns] = useState<SalesReturn[]>([]);
+  const [allOrders, setAllOrders] = useState<(Order & { id: string })[]>([]);
   const [orders, setOrders] = useState<(Order & { id: string })[]>([]);
   const [products, setProducts] = useState<any[]>([]);
   const [isCreatingReturn, setIsCreatingReturn] = useState(false);
@@ -62,8 +62,10 @@ const SalesReturns: React.FC = () => {
           fetchCollection('products'),
         ]);
 
+        const typedOrders = ordersData as (Order & { id: string })[];
         setReturns(returnsData as SalesReturn[]);
-        setOrders((ordersData as (Order & { id: string })[]).filter(o => o.status === 'delivered' || o.status === 'returned'));
+        setAllOrders(typedOrders);
+        setOrders(typedOrders.filter(o => o.status === 'delivered' || o.status === 'returned'));
         setProducts(productsData);
       } catch (error) {
         console.error('Error fetching data:', error);
@@ -397,7 +399,9 @@ const SalesReturns: React.FC = () => {
           fetchCollection('products'),
         ]);
         
-        setOrders((ordersData as (Order & { id: string })[]).filter(o => o.status === 'delivered'));
+        const typedOrders = ordersData as (Order & { id: string })[];
+        setAllOrders(typedOrders);
+        setOrders(typedOrders.filter(o => o.status === 'delivered' || o.status === 'returned'));
         setProducts(productsData);
       }
 
@@ -428,22 +432,48 @@ const SalesReturns: React.FC = () => {
 
   const selectedOrder = orders.find(o => o.id === newReturn.orderId);
 
+  const paymentRefunds = useMemo(() => {
+    const rows: OrderPaymentRefund[] = [];
+    for (const order of allOrders) {
+      for (const payment of order.paymentHistory || []) {
+        if (payment.entryType === 'refund' || Number(payment.amount || 0) < 0) {
+          rows.push({ order, payment });
+        }
+      }
+    }
+    return rows.sort((a, b) => {
+      const aTime = new Date(a.payment.recordedAt || a.payment.date || 0).getTime();
+      const bTime = new Date(b.payment.recordedAt || b.payment.date || 0).getTime();
+      return bTime - aTime;
+    });
+  }, [allOrders]);
+
+  const getPaymentRefundInventoryNote = (order: Order & { id: string }, payment: PaymentRecord) => {
+    const meta = order.lastRefundInventoryRestore;
+    if (!meta || meta.refundId !== payment.id) return null;
+    if (meta.manualAdjustmentRequired) {
+      return `Stock not auto-restored (${meta.skippedFractionalQty ?? 0} unit(s) need manual adjustment).`;
+    }
+    if ((meta.restoredLines ?? 0) > 0) {
+      return `Stock restored for ${meta.restoredLines} line(s).`;
+    }
+    return null;
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50 pb-20">
-      {isMobile ? <MobileHeader title="Sales Returns" /> : null}
-      
-      <main className="container mx-auto p-4 md:p-6 max-w-7xl">
-        <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4 mb-6">
-          {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-          <div className="flex-1">
-            <h1 className="text-2xl md:text-3xl font-bold text-gray-900">Sales Returns & Refunds</h1>
-            <p className="text-gray-500 mt-1 text-sm md:text-base">Process customer returns and issue refunds</p>
-          </div>
-          <Button onClick={() => setIsCreatingReturn(true)} className="w-full sm:w-auto">
-            <Plus className="h-4 w-4 mr-2" />
-            Create Return
-          </Button>
-        </div>
+    <AdminPageShell
+      title="Sales Returns & Refunds"
+      description="Process customer returns and issue refunds"
+      eyebrow="Daily Operations"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+      actions={(
+        <Button onClick={() => setIsCreatingReturn(true)} className="w-full sm:w-auto">
+          <Plus className="h-4 w-4 mr-2" />
+          Create Return
+        </Button>
+      )}
+    >
 
         {/* Create Return Dialog */}
         <Dialog
@@ -482,7 +512,7 @@ const SalesReturns: React.FC = () => {
                     <Label className="text-base md:text-lg font-semibold">Items to Return</Label>
                     <div className="space-y-3 mt-2">
                       {newReturn.items.map((item, index) => (
-                        <Card key={index}>
+                        <AdminPanel key={index}>
                           <CardContent className="p-3 md:p-4">
                             <div className="space-y-3">
                               <div>
@@ -522,7 +552,7 @@ const SalesReturns: React.FC = () => {
                               </div>
                             </div>
                           </CardContent>
-                        </Card>
+                        </AdminPanel>
                       ))}
                     </div>
                   </div>
@@ -623,18 +653,79 @@ const SalesReturns: React.FC = () => {
           </Dialog>
         )}
 
+        {paymentRefunds.length > 0 && (
+          <div className="grid gap-4 mb-6">
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">Order payment refunds</h2>
+              <p className="text-sm text-gray-500 mt-1">
+                Refunds recorded from Admin → Orders appear here. Use Create Return for physical item returns.
+              </p>
+            </div>
+            {paymentRefunds.map(({ order, payment }) => {
+              const inventoryNote = getPaymentRefundInventoryNote(order, payment);
+              return (
+                <AdminPanel key={`${order.id}-${payment.id}`}>
+                  <CardHeader className="pb-2">
+                    <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                      <div>
+                        <CardTitle className="flex items-center gap-2 text-base md:text-lg">
+                          {payment.id}
+                          <Badge className="bg-red-100 text-red-800">REFUND</Badge>
+                        </CardTitle>
+                        <CardDescription>
+                          Invoice: {order.invoiceNumber || order.orderNumber || order.id}
+                          {' | '}
+                          Customer: {order.customerName || '—'}
+                          {' | '}
+                          {new Date(payment.date).toLocaleDateString()}
+                        </CardDescription>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => navigate('/admin/orders')}>
+                        View in Orders
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">
+                        {payment.method} · {payment.recordedBy || 'Admin'}
+                      </span>
+                      <span className="text-lg font-bold text-red-600">
+                        ${Math.abs(Number(payment.amount || 0)).toFixed(2)}
+                      </span>
+                    </div>
+                    {payment.notes ? (
+                      <p className="text-sm p-2 bg-gray-50 rounded">{payment.notes}</p>
+                    ) : null}
+                    {inventoryNote ? (
+                      <p className="text-sm p-2 bg-amber-50 rounded border border-amber-200 text-amber-900">
+                        {inventoryNote}
+                      </p>
+                    ) : null}
+                  </CardContent>
+                </AdminPanel>
+              );
+            })}
+          </div>
+        )}
+
         {/* Returns List */}
         <div className="grid gap-4">
+          <h2 className="text-lg font-semibold text-gray-900">Physical sales returns</h2>
           {returns.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <RotateCcw className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                <p className="text-gray-500">No sales returns yet. Create your first return to get started.</p>
+                <p className="text-gray-500">
+                  {paymentRefunds.length > 0
+                    ? 'No physical return documents yet. Payment refunds from Orders are listed above.'
+                    : 'No sales returns yet. Create your first return to get started.'}
+                </p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             returns.map((returnDoc) => (
-              <Card key={returnDoc.id}>
+              <AdminPanel key={returnDoc.id}>
                 <CardHeader>
                   <div className="flex items-start justify-between">
                     <div>
@@ -690,12 +781,11 @@ const SalesReturns: React.FC = () => {
                     )}
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))
           )}
         </div>
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

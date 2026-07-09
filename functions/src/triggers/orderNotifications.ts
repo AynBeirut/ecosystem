@@ -1,6 +1,8 @@
 import { onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
 import { trackOrderPurchaseConversion } from '../services/metaConversion';
+import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
+import { getFcmTokensForStoreOwner, getFcmTokensForUser, sendFcmMulticast } from '../services/fcmTokens';
 
 const db = admin.firestore;
 
@@ -19,12 +21,7 @@ const PAYMENT_MESSAGES: Record<string, { title: string; body: (id: string) => st
 };
 
 async function getFcmTokens(userId: string): Promise<string[]> {
-  const fcmSnap = await admin.firestore()
-    .collection('users')
-    .doc(userId)
-    .collection('fcmTokens')
-    .get();
-  return fcmSnap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => d.id).filter(Boolean);
+  return getFcmTokensForUser(userId);
 }
 
 async function sendFcm(
@@ -33,14 +30,7 @@ async function sendFcm(
   body: string,
   data: Record<string, string>,
 ): Promise<void> {
-  if (tokens.length === 0) return;
-  await admin.messaging().sendEachForMulticast({
-    tokens,
-    notification: { title, body },
-    data,
-    android: { priority: 'high' },
-    apns: { payload: { aps: { sound: 'default', badge: 1 } } },
-  });
+  await sendFcmMulticast(tokens, title, body, data);
 }
 
 async function sendOwnerNotification(
@@ -52,17 +42,7 @@ async function sendOwnerNotification(
 ): Promise<void> {
   if (!storeId) return;
 
-  // Look up the store owner
-  const ownerSnap = await admin.firestore()
-    .collection('users')
-    .where('storeId', '==', storeId)
-    .limit(1)
-    .get();
-
-  if (ownerSnap.empty) return;
-
-  const ownerId = ownerSnap.docs[0].id;
-  const tokens = await getFcmTokens(ownerId);
+  const tokens = await getFcmTokensForStoreOwner(storeId);
   await sendFcm(tokens, title, body, { storeId, type, orderId });
 }
 
@@ -168,6 +148,17 @@ export const onOrderStatusChanged = onDocumentUpdated(
           await trackOrderPurchaseConversion(orderId, after as Record<string, unknown>);
         } catch (err) {
           console.warn('Meta purchase conversion tracking failed:', err);
+        }
+        try {
+          const items = (after.items ?? after.lineItems ?? []) as Array<{
+            productId?: string;
+            quantity?: number;
+          }>;
+          if (storeId && items.length > 0) {
+            await deductComposedIngredientsOnSale(storeId, orderId, items);
+          }
+        } catch (err) {
+          console.warn('Kitchen sale deduction failed:', err);
         }
       }
     }

@@ -3,7 +3,8 @@
     "source": "functions"
   },
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
   },
   "storage": {
     "rules": "storage.rules"
@@ -15,7 +16,7 @@
     },
     "firestore": {
       "host": "127.0.0.1",
-      "port": 8080
+      "port": 8200
     },
     "auth": {
       "host": "127.0.0.1",
@@ -37,11 +38,32 @@
     ],
     "rewrites": [
       {
-        "source": "!/@(sg|sd|grabio-product-description|seo-report).html",
+        "source": "/invoice/**",
+        "destination": "/invoice/index.html"
+      },
+      {
+        "source": "/assets/**",
+        "destination": "/404.html"
+      },
+      {
+        "source": "!/@(sg|sd|grabio-product-description|seo-report|privacy|home-pagetest).html",
         "destination": "/index.html"
       }
     ],
     "headers": [
+      {
+        "source": "/.well-known/assetlinks.json",
+        "headers": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          },
+          {
+            "key": "Cache-Control",
+            "value": "public, max-age=3600"
+          }
+        ]
+      },
       {
         "source": "**",
         "headers": [
@@ -66,6 +88,15 @@
           {
             "key": "Cache-Control",
             "value": "public, max-age=31536000, immutable"
+          }
+        ]
+      },
+      {
+        "source": "/@(sw|service-worker).js",
+        "headers": [
+          {
+            "key": "Cache-Control",
+            "value": "no-cache, no-store, must-revalidate"
           }
         ]
       }

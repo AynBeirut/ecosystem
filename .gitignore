@@ -35,5 +35,36 @@ serviceAccountKey.json
 # Ignore Gradle build output directory
 build
 .credentials.md
+*.keystore
 
+# Large POS reference archive — keep local only (GitHub 100MB limit)
+the eco sys/ecosystem-plan/posfinal-main.zip
 
+# Entire ecosystem tree — lives in ecosystem.git, not grabio.space
+the eco sys/
+
+# Ecosystem-only root artifacts (see ecosystem.git)
+LINUX-BUILDER-PROMPT.md
+pos-client/
+
+# OAuth / verification values belong in .credentials.md (gitignored) — never commit here
+
+# Local env — never commit secrets (use .env.local.example as template)
+.env
+.env.local
+.env.production
+.env.staging
+.env.*.local
+!**/.env.local.example
+
+# Finance app local env
+the eco sys/finance/beirut-finance-flow-main/.env
+the eco sys/finance/beirut-finance-flow-main/.env.production
+the eco sys/publish-insight-main/.env
+
+# TWA / mobile release binaries — build artifacts, not source
+the eco sys/finance/twa/release/
+grabio-mobile/release/
+*.apk
+*.aab
+*.apk.idsig

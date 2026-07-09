@@ -68,6 +68,7 @@ export interface Order {
 export type RootStackParamList = {
   Login: undefined;
   MainTabs: { screen?: keyof TabParamList } | undefined;
+  CrmClientDetail: { clientId: string; clientName: string };
   StoreDetail: { storeId: string; storeName: string };
   ProductDetail: { product: Product; storeName: string };
   Cart: undefined;
@@ -85,6 +86,7 @@ export type RootStackParamList = {
   Purchases: undefined;
   Suppliers: undefined;
   AccountStatement: undefined;
+  InvoiceManager: { path?: string } | undefined;
 };
 
 export type TabParamList = {
@@ -93,8 +95,8 @@ export type TabParamList = {
   MyOrders: undefined;
   Cart: undefined;
   OwnerTab: undefined;
-  // Owner-specific tabs
   OwnerHome: undefined;
   OwnerCustomers: undefined;
   OwnerDashboard: undefined;
+  CrmClients: undefined;
 };

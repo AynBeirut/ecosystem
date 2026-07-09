@@ -37,9 +37,6 @@ export async function applyPaidOrderInventoryDeduction(
   }
 
   const fgSnapshot = await db.collection('finishedGoodsInventory').where('storeId', '==', storeId).get();
-  if (fgSnapshot.empty) {
-    return { updated: 0, skippedAlreadyApplied: 0, missingMatches: items.length };
-  }
 
   const nowIso = new Date().toISOString();
   const batch = db.batch();
@@ -54,7 +51,9 @@ export async function applyPaidOrderInventoryDeduction(
 
     if (!productKey || quantity <= 0) continue;
 
-    const matchingFG = fgSnapshot.docs.find((docSnap: FirebaseFirestore.QueryDocumentSnapshot) => {
+    const matchingFG = fgSnapshot.empty
+      ? undefined
+      : fgSnapshot.docs.find((docSnap: FirebaseFirestore.QueryDocumentSnapshot) => {
       const fgData = docSnap.data() || {};
       return fgData.productId === productKey || fgData.composedProductId === productKey;
     });

@@ -3,10 +3,9 @@ import { getFirestore, collection, query, where, getDocs } from 'firebase/firest
 import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
+import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
@@ -30,7 +29,6 @@ const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow
 
 const AdminOrderNotifications: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [storeId, setStoreId] = useState<string | null>(null);
   const [logs, setLogs] = useState<OrderNotificationLog[]>([]);
   const [loading, setLoading] = useState(false);
@@ -108,14 +106,13 @@ const AdminOrderNotifications: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="Order Notifications" showBackButton />}
-      <div className="max-w-7xl mx-auto p-4 md:p-8">
-        <div className="mb-4">
-          <BackButton to="/admin/dashboard" label="Back to Dashboard" />
-        </div>
-
-        <Card>
+    <AdminPageShell
+      title="Order Notification Logs"
+      description="Email and WhatsApp delivery status with retry support."
+      eyebrow="Operations"
+      backTo="/admin/dashboard"
+    >
+        <AdminPanel>
           <CardHeader>
             <CardTitle>Order Notification Logs</CardTitle>
             <CardDescription>Email and WhatsApp delivery status with retry support.</CardDescription>
@@ -157,9 +154,8 @@ const AdminOrderNotifications: React.FC = () => {
               </div>
             )}
           </CardContent>
-        </Card>
-      </div>
-    </div>
+        </AdminPanel>
+    </AdminPageShell>
   );
 };
 

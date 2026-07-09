@@ -18,13 +18,12 @@ export function GoogleSignIn() {
       const provider = new GoogleAuthProvider();
       await signInWithPopup(auth, provider);
       toast.success('Signed in successfully!');
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const err = error as { code?: string };
       console.error('Google sign-in error:', error);
-      if (error.code === 'auth/popup-closed-by-user') {
+      if (err.code === 'auth/popup-closed-by-user') {
         toast.error('Sign-in cancelled');
-      } else if (error.code === 'auth/popup-blocked') {
-        toast.error('Pop-up blocked. Please allow pop-ups for this site.');
-      } else {
+      } else if (err.code !== 'auth/cancelled-popup-request') {
         toast.error('Failed to sign in with Google');
       }
     } finally {

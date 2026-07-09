@@ -1,6 +1,9 @@
 # 🚀 Master Build & Deployment Checklist
 **Last Updated:** April 18, 2026
 
+> **Canonical deploy rules:** `~/Documents/grabio-platform-docs/Deploy/Protocol.md`  
+> This checklist is a historical feature backlog. Non-negotiable gates live in the vault.
+
 ---
 
 ## ✅ ALREADY LIVE

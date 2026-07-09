@@ -5,10 +5,9 @@ import { useAuth } from '@/context/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, TrendingUp, CreditCard, Receipt, Landmark } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import { DollarSign, TrendingUp, CreditCard, Receipt } from 'lucide-react';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const money = (value: number) => `$${Number.isFinite(value) ? value.toFixed(2) : '0.00'}`;
 
@@ -22,7 +21,6 @@ type FinanceTotals = {
 
 const AdminFinanceSuite: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [loading, setLoading] = useState(true);
   const [totals, setTotals] = useState<FinanceTotals>({
     grossRevenue: 0,
@@ -100,20 +98,9 @@ const AdminFinanceSuite: React.FC = () => {
   const netCapital = useMemo(() => totals.grossRevenue - totals.totalExpenses, [totals.grossRevenue, totals.totalExpenses]);
 
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Finance Suite" />}
-      <div className="p-4 md:p-6">
-        <BackButton />
-        <div className="mb-6">
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Landmark className="h-6 w-6" />
-            Finance Suite
-          </h1>
-          <p className="text-muted-foreground">Balance, capital, credit and bill-pay control center.</p>
-        </div>
-
+    <AdminPageShell title="Finance Suite" description="Balance, capital, credit and bill-pay control center." backTo="/admin/dashboard">
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-          <Card>
+          <AdminPanel>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <DollarSign className="h-4 w-4" />
@@ -127,9 +114,9 @@ const AdminFinanceSuite: React.FC = () => {
                 {balanceNow >= 0 ? 'Positive cash position' : 'Negative cash position'}
               </Badge>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
-          <Card>
+          <AdminPanel>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
@@ -141,9 +128,9 @@ const AdminFinanceSuite: React.FC = () => {
               <div className="text-2xl font-bold">{loading ? '...' : money(netCapital)}</div>
               <p className="text-xs text-muted-foreground mt-2">Gross: {money(totals.grossRevenue)}</p>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
-          <Card>
+          <AdminPanel>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <CreditCard className="h-4 w-4" />
@@ -155,9 +142,9 @@ const AdminFinanceSuite: React.FC = () => {
               <div className="text-2xl font-bold">{loading ? '...' : money(totals.receivable)}</div>
               <p className="text-xs text-muted-foreground mt-2">Collected: {money(totals.paidRevenue)}</p>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
-          <Card>
+          <AdminPanel>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm flex items-center gap-2">
                 <Receipt className="h-4 w-4" />
@@ -169,11 +156,11 @@ const AdminFinanceSuite: React.FC = () => {
               <div className="text-2xl font-bold">{loading ? '...' : money(totals.monthlyExpenses)}</div>
               <p className="text-xs text-muted-foreground mt-2">This month expenses</p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Balance Module</CardTitle>
               <CardDescription>Track incoming payments and current cash position.</CardDescription>
@@ -183,9 +170,9 @@ const AdminFinanceSuite: React.FC = () => {
                 <Link to="/admin/payments">Open Payments</Link>
               </Button>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Capital Module</CardTitle>
               <CardDescription>Analyze profitability and capital movement.</CardDescription>
@@ -195,9 +182,9 @@ const AdminFinanceSuite: React.FC = () => {
                 <Link to="/admin/revenue">Open Revenue</Link>
               </Button>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Credit Module</CardTitle>
               <CardDescription>Monitor receivables and account statement.</CardDescription>
@@ -207,9 +194,9 @@ const AdminFinanceSuite: React.FC = () => {
                 <Link to="/admin/account-statement">Open Statement</Link>
               </Button>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Bill Pay Module</CardTitle>
               <CardDescription>Manage expenses and bank reconciliation.</CardDescription>
@@ -222,10 +209,9 @@ const AdminFinanceSuite: React.FC = () => {
                 <Link to="/admin/bank-reconciliation">Open Reconciliation</Link>
               </Button>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

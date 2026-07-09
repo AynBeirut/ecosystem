@@ -5,13 +5,12 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { BarChart, LineChart, Line, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, TrendingDown, Users, ShoppingCart, DollarSign, Package, Eye, Calendar } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const AdminAnalytics: React.FC = () => {
   const { user } = useAuth();
-  const isMobile = useIsMobile();
   const [timeRange, setTimeRange] = useState('7d');
   const [loading, setLoading] = useState(true);
   
@@ -210,6 +209,15 @@ const AdminAnalytics: React.FC = () => {
 
   const COLORS = ['hsl(var(--primary))', 'hsl(var(--secondary))', 'hsl(var(--accent))', '#f59e0b', '#8b5cf6'];
 
+  const statGradients = [
+    'from-slate-600 to-slate-800',
+    'from-violet-500 to-purple-700',
+    'from-emerald-500 to-teal-700',
+    'from-orange-400 to-orange-600',
+    'from-sky-500 to-blue-700',
+    'from-teal-500 to-teal-700',
+  ];
+
   const stats = [
     {
       title: 'Total Revenue',
@@ -257,7 +265,7 @@ const AdminAnalytics: React.FC = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
+      <div className="flex items-center justify-center py-24">
         <div className="text-center">
           <div className="text-lg">Loading analytics...</div>
         </div>
@@ -266,120 +274,28 @@ const AdminAnalytics: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-background">
-  {isMobile && <MobileHeader title="Analytics" />}
-      
-      <div className="p-4 md:p-6">
-        {!isMobile && <BackButton to="/admin/dashboard" label="Back to Dashboard" />}
-        <div className="mb-6">
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <BarChart className="h-6 w-6" />
-                Analytics
-              </h1>
-              <p className="text-muted-foreground">Track your store performance and insights</p>
-            </div>
-            
-            <div className="flex items-center gap-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
-              <Select value={timeRange} onValueChange={setTimeRange}>
-                <SelectTrigger className="w-32">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="7d">Last 7 days</SelectItem>
-                  <SelectItem value="30d">Last 30 days</SelectItem>
-                  <SelectItem value="90d">Last 3 months</SelectItem>
-                  <SelectItem value="1y">Last year</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-        </div>
+    <AdminPageShell
+      title="Analytics"
+      description="Track your store performance and insights"
+      eyebrow="Business Tools"
+    >
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-4 mb-6">
+        {stats.slice(0, 6).map((stat, index) => (
+          <AdminStatCard
+            key={stat.title}
+            title={stat.title}
+            value={stat.value}
+            icon={stat.icon}
+            gradient={statGradients[index]}
+            subtitle={stat.change}
+            valueClassName={stat.title === 'Gross Profit' && !stat.isPositive ? 'text-red-600' : undefined}
+          />
+        ))}
+      </div>
 
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
-          {stats.map((stat, index) => {
-            const IconComponent = stat.icon;
-            return (
-              <Card key={index}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">{stat.title}</CardTitle>
-                  <IconComponent className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{stat.value}</div>
-                  <p className={`text-xs flex items-center text-muted-foreground`}>
-                    {stat.change}
-                  </p>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Sales Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Sales Overview</CardTitle>
-              <CardDescription>Daily sales and order trends</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="name" className="text-xs" />
-                  <YAxis className="text-xs" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '6px'
-                    }}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="sales" 
-                    stroke="hsl(var(--primary))" 
-                    strokeWidth={2}
-                    dot={{ fill: 'hsl(var(--primary))' }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          {/* Orders Chart */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Order Volume</CardTitle>
-              <CardDescription>Number of orders per day</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={salesData}>
-                  <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                  <XAxis dataKey="name" className="text-xs" />
-                  <YAxis className="text-xs" />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'hsl(var(--card))',
-                      border: '1px solid hsl(var(--border))',
-                      borderRadius: '6px'
-                    }}
-                  />
-                  <Bar dataKey="orders" fill="hsl(var(--primary))" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
           {/* Category Performance */}
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Sales by Category</CardTitle>
               <CardDescription>Revenue distribution across product categories</CardDescription>
@@ -430,10 +346,10 @@ const AdminAnalytics: React.FC = () => {
                 </div>
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
 
           {/* Top Products */}
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle>Top Products</CardTitle>
               <CardDescription>Best performing products with profit margins</CardDescription>
@@ -461,12 +377,12 @@ const AdminAnalytics: React.FC = () => {
                 ))}
               </div>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle className="text-lg">Total Categories</CardTitle>
             </CardHeader>
@@ -476,9 +392,9 @@ const AdminAnalytics: React.FC = () => {
                 Product categories
               </p>
             </CardContent>
-          </Card>
+          </AdminPanel>
           
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle className="text-lg">Best Category</CardTitle>
             </CardHeader>
@@ -488,9 +404,9 @@ const AdminAnalytics: React.FC = () => {
                 {categoryData[0] ? `$${categoryData[0].sales} revenue` : 'No sales yet'}
               </p>
             </CardContent>
-          </Card>
+          </AdminPanel>
           
-          <Card>
+          <AdminPanel>
             <CardHeader>
               <CardTitle className="text-lg">Top Product Sales</CardTitle>
             </CardHeader>
@@ -500,10 +416,9 @@ const AdminAnalytics: React.FC = () => {
                 {topProducts[0]?.name || 'No products sold'}
               </p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

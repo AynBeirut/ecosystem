@@ -11,8 +11,9 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { Package, AlertTriangle, History, Download, Edit, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign, AlertCircle, FileText } from 'lucide-react';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminStatCard from '@/components/admin/AdminStatCard';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { FinishedGoodsItem, StockTransaction, FinishedGoodsAdjustment, MonthlyServiceCost } from '@/types/finishedGoods';
 import { logAction } from '@/lib/auditLog';
@@ -1080,60 +1081,22 @@ const AdminFinishedGoods: React.FC = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile && <MobileHeader title="Finished Goods" showBackButton={true} />}
-      <div className="container mx-auto p-4 md:p-6">
-        <div className="mb-4 md:mb-6">
-          {!isMobile && <BackButton to="/admin/inventory" label="Back to Inventory" />}
-        </div>
-
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <div>
-            <h1 className="text-2xl md:text-3xl font-bold">Finished Goods Inventory</h1>
-            <p className="text-gray-600 text-sm md:text-base mt-1">Track manufactured items ready for sale</p>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{finishedGoods.length}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Total Value</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">${getTotalValue().toFixed(2)}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Current Stock</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{finishedGoods.reduce((sum, item) => sum + item.currentBalance, 0)}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-sm font-medium text-gray-600">Low Stock Items</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold text-orange-600">{getLowStockCount()}</div>
-            </CardContent>
-          </Card>
+    <AdminPageShell
+      title="Finished Goods Inventory"
+      description="Track manufactured items ready for sale"
+      eyebrow="Stock & Catalog"
+      backTo="/admin/inventory"
+      backLabel="Back to Inventory"
+    >
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+          <AdminStatCard title="Total Items" value={finishedGoods.length} icon={Package} gradient="from-teal-500 to-teal-700" />
+          <AdminStatCard title="Total Value" value={`$${getTotalValue().toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" />
+          <AdminStatCard title="Current Stock" value={finishedGoods.reduce((sum, item) => sum + item.currentBalance, 0)} icon={History} gradient="from-sky-500 to-blue-700" />
+          <AdminStatCard title="Low Stock" value={getLowStockCount()} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" valueClassName="text-orange-600" />
         </div>
 
         {/* Service Cost Calculation Section */}
-        <Card className="mb-6">
+        <AdminPanel className="mb-6">
           <CardHeader>
             <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
               <div>
@@ -1172,9 +1135,9 @@ const AdminFinishedGoods: React.FC = () => {
               </div>
             </CardContent>
           )}
-        </Card>
+        </AdminPanel>
 
-        <Card className="mb-6">
+        <AdminPanel className="mb-6">
           <CardHeader>
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
               <CardTitle>Search & Filters</CardTitle>
@@ -1248,12 +1211,12 @@ const AdminFinishedGoods: React.FC = () => {
               </div>
             </div>
           </CardContent>
-        </Card>
+        </AdminPanel>
 
         {isMobile ? (
           <div className="space-y-4">
             {filteredGoods.map((item) => (
-              <Card key={item.id} className="overflow-hidden">
+              <AdminPanel key={item.id} className="overflow-hidden">
                 <CardHeader className="pb-3">
                   <div className="flex justify-between items-start">
                     <div>
@@ -1336,11 +1299,11 @@ const AdminFinishedGoods: React.FC = () => {
 
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             ))}
           </div>
         ) : (
-          <Card>
+          <AdminPanel>
             <CardContent className="p-0">
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -1432,9 +1395,8 @@ const AdminFinishedGoods: React.FC = () => {
                 </div>
               )}
             </CardContent>
-          </Card>
+          </AdminPanel>
         )}
-      </div>
 
       {/* Edit Item Dialog */}
       <Dialog open={!!editingItem} onOpenChange={(open) => !open && setEditingItem(null)}>
@@ -2013,8 +1975,8 @@ const AdminFinishedGoods: React.FC = () => {
             </div>
           </DialogContent>
         </Dialog>
-      )}
-    </div>
+        )}
+    </AdminPageShell>
   );
 };
 

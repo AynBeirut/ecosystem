@@ -13,14 +13,12 @@ import { DollarSign, Plus, Calendar } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { StaffMember, SalaryPayment } from '@/types/staff';
 import { logAction } from '@/lib/auditLog';
-import MobileHeader from '@/components/MobileHeader';
-import BackButton from '@/components/BackButton';
-import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 
 const AdminSalaries: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const isMobile = useIsMobile();
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [payments, setPayments] = useState<SalaryPayment[]>([]);
   const [isProcessingPayment, setIsProcessingPayment] = useState(false);
@@ -137,28 +135,25 @@ const AdminSalaries: React.FC = () => {
   const getTotalPaid = () => getCurrentMonthPayments().reduce((sum, p) => sum + p.totalAmount, 0);
 
   return (
-    <div className="min-h-screen bg-gray-50">
-      {isMobile ? <MobileHeader title="Salary Management" /> : null}
-      <main className="container mx-auto px-4 py-8">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-4">
-            {!isMobile && <BackButton />}
-            <h1 className="text-2xl font-bold">Salary Management</h1>
-          </div>
-          <div className="flex gap-2">
-            <Input
-              type="month"
-              value={selectedMonth}
-              onChange={(e) => setSelectedMonth(e.target.value)}
-              className="w-48"
-            />
-            <Dialog open={isProcessingPayment} onOpenChange={setIsProcessingPayment}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Process Payment
-                </Button>
-              </DialogTrigger>
+    <AdminPageShell
+      title="Salary Management"
+      description="Track and process staff salaries, commissions, and bonuses"
+      eyebrow="Business Tools"
+      actions={(
+        <div className="flex flex-wrap gap-2">
+          <Input
+            type="month"
+            value={selectedMonth}
+            onChange={(e) => setSelectedMonth(e.target.value)}
+            className="w-48"
+          />
+          <Dialog open={isProcessingPayment} onOpenChange={setIsProcessingPayment}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Process Payment
+              </Button>
+            </DialogTrigger>
               <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                   <DialogTitle>Process Salary Payment</DialogTitle>
@@ -265,49 +260,50 @@ const AdminSalaries: React.FC = () => {
                 </DialogFooter>
               </DialogContent>
             </Dialog>
-          </div>
         </div>
+      )}
+    >
 
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-          <Card>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold">{getCurrentMonthPayments().length}</div>
               <p className="text-xs text-gray-500">Payments This Month</p>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold">${getTotalPaid().toFixed(2)}</div>
               <p className="text-xs text-gray-500">Total Paid</p>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold">
                 ${getCurrentMonthPayments().reduce((sum, p) => sum + p.commissionAmount, 0).toFixed(2)}
               </div>
               <p className="text-xs text-gray-500">Total Commissions</p>
             </CardContent>
-          </Card>
-          <Card>
+          </AdminPanel>
+          <AdminPanel>
             <CardContent className="pt-6">
               <div className="text-2xl font-bold">
                 ${getCurrentMonthPayments().reduce((sum, p) => sum + p.baseSalary, 0).toFixed(2)}
               </div>
               <p className="text-xs text-gray-500">Base Salaries</p>
             </CardContent>
-          </Card>
+          </AdminPanel>
         </div>
 
         <div className="grid gap-4">
           <h2 className="text-xl font-semibold">Staff Salary Overview</h2>
           {staff.length === 0 ? (
-            <Card>
+            <AdminPanel>
               <CardContent className="py-12 text-center">
                 <DollarSign className="mx-auto h-12 w-12 text-gray-400 mb-4" />
                 <p className="text-gray-500">No active staff members.</p>
               </CardContent>
-            </Card>
+            </AdminPanel>
           ) : (
             staff.map((member) => {
               const memberPayments = getStaffPayments(member.id);
@@ -315,7 +311,7 @@ const AdminSalaries: React.FC = () => {
               const totalPaid = memberPayments.reduce((sum, p) => sum + p.totalAmount, 0);
 
               return (
-                <Card key={member.id}>
+                <AdminPanel key={member.id}>
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div>
@@ -368,13 +364,12 @@ const AdminSalaries: React.FC = () => {
                       </div>
                     )}
                   </CardContent>
-                </Card>
+                </AdminPanel>
               );
             })
           )}
         </div>
-      </main>
-    </div>
+    </AdminPageShell>
   );
 };
 

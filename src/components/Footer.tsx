@@ -1,5 +1,22 @@
 import React from 'react';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
+import PoweredByEmoove from '@/components/PoweredByEmoove';
+
+const PUBLIC_MARKETING_PATHS = new Set([
+  '/home',
+  '/features',
+  '/pricing',
+  '/use-cases',
+  '/about',
+  '/blog',
+  '/onboarding/package',
+]);
+
+const ADMIN_SHELL_PREFIXES = ['/admin', '/team/dashboard'];
+
+function isAdminShellPath(pathname: string) {
+  return pathname === '/subscription' || ADMIN_SHELL_PREFIXES.some((prefix) => pathname.startsWith(prefix));
+}
 
 const Footer: React.FC = () => {
   const navigate = useNavigate();
@@ -7,14 +24,16 @@ const Footer: React.FC = () => {
   const year = new Date().getFullYear();
   const isHome = location.pathname === '/';
   const isLogin = location.pathname === '/login';
+  const isPublicMarketing =
+    PUBLIC_MARKETING_PATHS.has(location.pathname) ||
+    location.pathname.startsWith('/blog/');
+
+  if (isPublicMarketing || isAdminShellPath(location.pathname)) return null;
 
   return (
     <footer className="w-full bg-gray-100 border-t py-4 mt-8 flex flex-col items-center gap-2">
       <div className="text-xs text-gray-500">
-        © {year} Powered by{' '}
-        <a href="https://www.aynbeirut.cm" target="_blank" rel="noopener noreferrer" className="text-market-primary hover:underline">
-          AYN BEIRUT
-        </a>
+        © {year} <PoweredByEmoove />
       </div>
       <div className="text-xs text-gray-600 flex items-center gap-2">
         <Link to="/contact" className="text-market-primary hover:underline font-medium">Contact Us</Link>
@@ -23,10 +42,10 @@ const Footer: React.FC = () => {
       </div>
       {!isHome && !isLogin && (
         <button
-          onClick={() => navigate('/')}
+          onClick={() => navigate('/search')}
           className="px-4 py-2 rounded bg-market-primary text-white hover:bg-market-primary/90 text-xs font-medium"
         >
-          Go Back Home
+          Go to Marketplace
         </button>
       )}
     </footer>

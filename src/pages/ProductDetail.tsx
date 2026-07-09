@@ -7,6 +7,8 @@ import { pixelAddToCart, pixelViewContent, trackMetaConversionEvent } from '@/li
 import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
+import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
+import { fetchPublicProductStock } from '@/lib/publicProductStockService';
 import Header from '@/components/Header';
 import WhatsAppChatWidget from '@/components/WhatsAppChatWidget';
 import { Button } from '@/components/ui/button';
@@ -20,6 +22,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useAuth } from '@/context/useAuth';
 import { toast } from '@/components/ui/sonner';
 import { generateSlug } from '@/lib/slugify';
+import ClampedText from '@/components/ClampedText';
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
@@ -131,21 +134,33 @@ const ProductDetail: React.FC = () => {
         // Calculate stock for composed products
         let finalProduct: Product = { id: productId, ...productData } as Product;
         if (finalProduct.productType === 'composed' && finalProduct.recipeId && productData.storeId) {
-          // Fetch recipe and raw materials
-          const recipesRef = collection(db, 'recipes');
-          const recipeQuery = query(recipesRef, where('storeId', '==', productData.storeId));
-          const recipesSnap = await getDocs(recipeQuery);
-          const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
-          
-          const rawMaterialsRef = collection(db, 'rawMaterials');
-          const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', productData.storeId));
-          const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
-          const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawMaterial));
-          
-          const recipe = recipesList.find(r => r.id === finalProduct.recipeId);
-          const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
-          finalProduct.stock = availableStock;
-          finalProduct.inStock = availableStock > 0;
+          if (ECOSYSTEM_FLAGS.publicProductStockApi) {
+            try {
+              const stockItems = await fetchPublicProductStock(productData.storeId, [productId]);
+              const stock = stockItems[0];
+              if (stock) {
+                finalProduct.stock = stock.availableStock;
+                finalProduct.inStock = stock.inStock;
+              }
+            } catch (stockErr) {
+              console.error('ProductDetail: public stock API failed', stockErr);
+            }
+          } else {
+            const recipesRef = collection(db, 'recipes');
+            const recipeQuery = query(recipesRef, where('storeId', '==', productData.storeId));
+            const recipesSnap = await getDocs(recipeQuery);
+            const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
+
+            const rawMaterialsRef = collection(db, 'rawMaterials');
+            const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', productData.storeId));
+            const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
+            const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawMaterial));
+
+            const recipe = recipesList.find(r => r.id === finalProduct.recipeId);
+            const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
+            finalProduct.stock = availableStock;
+            finalProduct.inStock = availableStock > 0;
+          }
         }
         
         setProduct(finalProduct);
@@ -492,6 +507,8 @@ const ProductDetail: React.FC = () => {
     );
   }
 
+  const showCommerceActions = store?.storefrontMode !== 'display';
+
   return (
     <div className="min-h-screen bg-gray-50">
       <SEOHead
@@ -549,7 +566,12 @@ const ProductDetail: React.FC = () => {
                   )}
                 </div>
                 
-                <h1 className="text-3xl font-bold mb-2">{product.name}</h1>
+                <ClampedText
+                  text={product.name}
+                  maxLines={3}
+                  className="text-3xl font-bold mb-2 block"
+                  as="h1"
+                />
                 
                 <div className="flex items-center mb-4">
                   <span className="text-2xl font-semibold text-market-primary">
@@ -570,7 +592,14 @@ const ProductDetail: React.FC = () => {
                 </div>
                 
                 <div className="mb-6">
-                  <p className="text-gray-700">{product.description}</p>
+                  {product.description ? (
+                    <ClampedText
+                      text={product.description}
+                      maxLines={4}
+                      className="text-gray-700 block"
+                      as="p"
+                    />
+                  ) : null}
                 </div>
                 
                 <div className="flex items-center text-gray-600 mb-2">
@@ -592,7 +621,9 @@ const ProductDetail: React.FC = () => {
                   </Link>
                 )}
                 
-                {/* Quantity Selector */}
+                {/* Quantity + cart — hidden on display-only storefronts */}
+                {showCommerceActions && (
+                <>
                 <div className="mb-6">
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Quantity
@@ -652,6 +683,25 @@ const ProductDetail: React.FC = () => {
                     <ShareButtons url={window.location.href} title={product.name} description={product.description} />
                   </div>
                 </div>
+                </>
+                )}
+
+                {!showCommerceActions && (
+                  <div className="flex items-center gap-2 mb-6">
+                    <Button
+                      variant="outline"
+                      onClick={toggleFavorite}
+                      className="sm:flex-none"
+                    >
+                      <Heart 
+                        className={isFavorite(product.id) ? "mr-2 fill-market-accent text-market-accent" : "mr-2"} 
+                        size={18} 
+                      />
+                      {isFavorite(product.id) ? 'Saved' : 'Save'}
+                    </Button>
+                    <ShareButtons url={window.location.href} title={product.name} description={product.description} />
+                  </div>
+                )}
 
                 <div className="mt-8 border-t pt-6">
                   <h2 className="text-xl font-semibold mb-3">Customer Reviews</h2>

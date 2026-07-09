@@ -1,20 +1,28 @@
 import React, { useState, useEffect } from 'react';
-import BackButton from '@/components/BackButton';
+import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { getAuth } from 'firebase/auth';
+import { useModuleEntitlement } from '@/hooks/useModuleEntitlement';
+import { getApiBaseUrl } from '@/lib/apiBase';
 import {
   Palette, Eye, Check, Upload, Trash2, ChevronLeft, ChevronRight,
   LayoutGrid, Layers, Settings2, Save,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
+import AdminPageShell from '@/components/admin/AdminPageShell';
+import AdminPanel from '@/components/admin/AdminPanel';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
+import {
+  extractSectionOrderFromDesignImport,
+  layoutImportFirestorePatch,
+} from '@/lib/designImport';
 import { assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
 import type {
   ProductDisplayType, HeroLayout, MenuStyle, ContactFormStyle,
@@ -292,13 +300,48 @@ const SECTION_ANIMATION_OPTIONS: Array<{ id: SectionAnimation; label: string }> 
   { id: 'zoom', label: 'Zoom' },
 ];
 
+// ── AI agent prompts ─────────────────────────────────────────────────────────
+const AI_STORE_TASKS = [
+  { id: 'tagline', label: '✨ Generate store tagline', prompt: (name: string, type: string) => `Write 3 short, catchy taglines for a ${type} store named "${name}". Each on its own line. Keep each under 10 words.` },
+  { id: 'about', label: '📝 Write About section', prompt: (name: string, type: string) => `Write a professional About Us section (3 short paragraphs) for a ${type} store named "${name}". Warm, trustworthy tone.` },
+  { id: 'welcome', label: '👋 Write welcome message', prompt: (name: string, type: string) => `Write a warm welcome message (2-3 sentences) for the homepage of a ${type} store named "${name}".` },
+  { id: 'colors', label: '🎨 Suggest color palette', prompt: (name: string, type: string) => `Suggest a color palette for a ${type} store named "${name}". Give 3 palette options with hex codes for: primary, background, accent, and text. Format clearly.` },
+  { id: 'seo_title', label: '🔍 Generate SEO title & meta', prompt: (name: string, type: string) => `Write an SEO meta title (under 60 chars) and meta description (under 155 chars) for a ${type} store named "${name}".` },
+];
+
+type AdminTemplatesProps = {
+  /** When set, read/write design under builders/{uid}/demoStores/{demoId}/profile/branding */
+  demoId?: string;
+};
+
 // ── component ────────────────────────────────────────────────────────────────
-const AdminTemplates: React.FC = () => {
+const AdminTemplates: React.FC<AdminTemplatesProps> = ({ demoId }) => {
   const { toast } = useToast();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  const storeId = getActualStoreId(user);
+  const demoMode = Boolean(demoId && user?.id);
+  const builderUid = user?.id ?? '';
+  const storeId = demoMode ? demoId! : getActualStoreId(user);
   const db = getFirestore();
+  const firebaseAuth = getAuth();
+  const { enabled: hasAiBuilder } = useModuleEntitlement('ai_builder');
+  const canPersist = demoMode ? Boolean(demoId && builderUid) : Boolean(storeId);
+  const designDocRef = demoMode
+    ? doc(db, 'builders', builderUid, 'demoStores', demoId!, 'profile', 'branding')
+    : storeId
+      ? doc(db, 'storeProfiles', storeId)
+      : null;
+
+  const mediaRoot = demoMode
+    ? `builder-demos/${builderUid}/${demoId}`
+    : `store-media/${storeId ?? 'unknown'}`;
+
+  // AI agent state
+  const [aiOpen, setAiOpen] = useState(false);
+  const [aiTask, setAiTask] = useState(AI_STORE_TASKS[0].id);
+  const [aiBusinessType, setAiBusinessType] = useState('');
+  const [aiOutput, setAiOutput] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
 
   // Tab
   const [activeTab, setActiveTab] = useState<TabId>('templates');
@@ -601,8 +644,8 @@ const AdminTemplates: React.FC = () => {
 
   useEffect(() => {
     const load = async () => {
-      if (!storeId) return;
-      const snap = await getDoc(doc(db, 'storeProfiles', storeId));
+      if (!designDocRef) return;
+      const snap = await getDoc(designDocRef);
       if (!snap.exists()) return;
       const d = snap.data();
       // templates tab
@@ -650,7 +693,7 @@ const AdminTemplates: React.FC = () => {
     };
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [storeId]);
+  }, [demoId, storeId, builderUid]);
 
   // ── warn before leaving with unsaved changes ─────────────────────────────
   useEffect(() => {
@@ -684,6 +727,32 @@ const AdminTemplates: React.FC = () => {
     custom:       { shell: 'bg-gradient-to-br from-emerald-100 via-teal-50 to-cyan-100', header: 'bg-gradient-to-r from-teal-600 to-cyan-600 shadow-lg', block: 'bg-white shadow-md hover:shadow-lg transition-shadow border-teal-200', title: 'text-white font-semibold' },
   };
 
+  const handleAiGenerate = async () => {
+    const storeName = (user as { storeName?: string } | null)?.storeName || 'My Store';
+    const businessType = aiBusinessType.trim() || 'retail';
+    const task = AI_STORE_TASKS.find(t => t.id === aiTask);
+    if (!task) return;
+    const prompt = task.prompt(storeName, businessType);
+    const token = await firebaseAuth.currentUser?.getIdToken();
+    if (!token) return;
+    setAiLoading(true);
+    setAiOutput('');
+    try {
+      const res = await fetch(`${getApiBaseUrl()}/ai/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ storeId, tool: 'ai_builder', prompt }),
+      });
+      const data = await res.json() as { success: boolean; content?: string; message?: string };
+      if (!data.success) throw new Error(data.message || 'Generation failed');
+      setAiOutput(data.content ?? '');
+    } catch (err) {
+      toast({ title: 'AI Error', description: err instanceof Error ? err.message : 'Failed', variant: 'destructive' });
+    } finally {
+      setAiLoading(false);
+    }
+  };
+
   const handleSelectTemplate = async (templateId: TemplateId) => {
     setSelectedTemplate(templateId);
     const found = templates.find(t => t.id === templateId);
@@ -704,8 +773,8 @@ const AdminTemplates: React.FC = () => {
         setVisualStyle(found.layoutConfig.visualStyle);
       }
     }
-    if (storeId) {
-      const updateData: any = {
+    if (designDocRef) {
+      const updateData: Record<string, unknown> = {
         template: templateId,
         templateColors: found?.defaultPalette ?? colors,
       };
@@ -724,14 +793,14 @@ const AdminTemplates: React.FC = () => {
         updateData.visualStyle = found.layoutConfig.visualStyle;
       }
       
-      await setDoc(doc(db, 'storeProfiles', storeId), updateData, { merge: true });
+      await setDoc(designDocRef, updateData, { merge: true });
     }
     toast({ title: 'Template Applied', description: `Now using the ${found?.name} template with complete layout settings.` });
   };
 
   const saveMediaSettings = async (next: { backgroundImage?: string; carouselImages?: string[]; galleryImages?: string[] }) => {
-    if (!storeId) return;
-    await setDoc(doc(db, 'storeProfiles', storeId), {
+    if (!designDocRef) return;
+    await setDoc(designDocRef, {
       ...(next.backgroundImage !== undefined ? { storeBackgroundImage: next.backgroundImage } : {}),
       ...(next.carouselImages !== undefined ? { carouselImages: next.carouselImages } : {}),
       ...(next.galleryImages !== undefined ? { galleryImages: next.galleryImages } : {}),
@@ -739,18 +808,18 @@ const AdminTemplates: React.FC = () => {
   };
 
   const uploadSingleImage = async (file: File, folder: 'background' | 'carousel' | 'gallery') => {
-    if (storeId) await assertCanUploadBytes(db, storeId, file.size);
-    const path = `store-media/${storeId ?? 'unknown'}/${folder}/${Date.now()}_${encodeURIComponent(file.name)}`;
+    if (!demoMode && storeId) await assertCanUploadBytes(db, storeId, file.size);
+    const path = `${mediaRoot}/${folder}/${Date.now()}_${encodeURIComponent(file.name)}`;
     const imageRef = ref(storage, path);
     await uploadBytes(imageRef, file);
-    if (storeId) await trackStorageUsageAfterUpload(db, storeId, file.size);
+    if (!demoMode && storeId) await trackStorageUsageAfterUpload(db, storeId, file.size);
     return getDownloadURL(imageRef);
   };
 
   const handleBackgroundUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !storeId) return;
+    if (!file || !canPersist) return;
     setUploadingSection('background');
     try {
       const url = await uploadSingleImage(file, 'background');
@@ -764,7 +833,7 @@ const AdminTemplates: React.FC = () => {
   const handleMultiUpload = async (e: React.ChangeEvent<HTMLInputElement>, mode: 'carousel' | 'gallery') => {
     const files = Array.from(e.target.files || []);
     e.target.value = '';
-    if (!files.length || !storeId) return;
+    if (!files.length || !canPersist) return;
     setUploadingSection(mode);
     try {
       const urls = await Promise.all(files.map(f => uploadSingleImage(f, mode)));
@@ -824,10 +893,10 @@ const AdminTemplates: React.FC = () => {
   };
 
   const saveColors = async () => {
-    if (!storeId) return;
+    if (!designDocRef) return;
     setSavingColors(true);
     try {
-      await setDoc(doc(db, 'storeProfiles', storeId), { templateColors: colors }, { merge: true });
+      await setDoc(designDocRef, { templateColors: colors }, { merge: true });
       setHasUnsavedColors(false);
       toast({ title: 'Colors Saved', description: 'Your custom palette is live.' });
     } catch { toast({ title: 'Save Failed', variant: 'destructive' }); }
@@ -836,10 +905,10 @@ const AdminTemplates: React.FC = () => {
 
   // ── layout handlers ──────────────────────────────────────────────────────
   const saveLayout = async () => {
-    if (!storeId) return;
+    if (!designDocRef) return;
     setSavingLayout(true);
     try {
-      await setDoc(doc(db, 'storeProfiles', storeId), { 
+      await setDoc(designDocRef, { 
         productDisplayType, 
         productCardAnimation, 
         heroLayout, 
@@ -859,10 +928,10 @@ const AdminTemplates: React.FC = () => {
 
   // ── sections handlers ────────────────────────────────────────────────────
   const saveSections = async () => {
-    if (!storeId) return;
+    if (!designDocRef) return;
     setSavingSections(true);
     try {
-      await setDoc(doc(db, 'storeProfiles', storeId), { contactFormStyle, ratingDisplayType, sectionOrder }, { merge: true });
+      await setDoc(designDocRef, { contactFormStyle, ratingDisplayType, sectionOrder }, { merge: true });
       setHasUnsavedSections(false);
       toast({ title: 'Sections Saved', description: 'Section styles updated.' });
     } catch { toast({ title: 'Save Failed', variant: 'destructive' }); }
@@ -947,10 +1016,10 @@ const AdminTemplates: React.FC = () => {
   };
 
   const uploadSectionBackgroundImage = async (sectionId: StoreSectionId, file: File) => {
-    if (!storeId) return;
+    if (!canPersist) return;
     try {
-      await assertCanUploadBytes(db, storeId, file.size);
-      const path = `store-media/${storeId}/section-backgrounds/${sectionId}/${Date.now()}_${encodeURIComponent(file.name)}`;
+      if (!demoMode && storeId) await assertCanUploadBytes(db, storeId, file.size);
+      const path = `${mediaRoot}/section-backgrounds/${sectionId}/${Date.now()}_${encodeURIComponent(file.name)}`;
       const imageRef = ref(storage, path);
       await uploadBytes(imageRef, file);
       await trackStorageUsageAfterUpload(db, storeId, file.size);
@@ -1018,73 +1087,81 @@ const AdminTemplates: React.FC = () => {
     { id: 'templates', label: 'Templates', icon: <Eye className="h-4 w-4" /> },
     { id: 'colors',    label: 'Colors',    icon: <Palette className="h-4 w-4" /> },
     { id: 'layout',    label: 'Layout',    icon: <LayoutGrid className="h-4 w-4" /> },
-    { id: 'sections',  label: 'Sections',  icon: <Layers className="h-4 w-4" /> },
+    { id: 'sections',  label: 'Forms & ratings', icon: <Layers className="h-4 w-4" /> },
   ];
 
   // ── render ───────────────────────────────────────────────────────────────
   return (
-    <div className="min-h-screen bg-background">
-      {isMobile && <MobileHeader title="Store Design" />}
-
-      <div className="p-4 md:p-6">
-        <BackButton to="/admin/profile" label="Back to Store Profile" />
-
-        <div className="mb-6">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <h1 className="text-2xl font-bold flex items-center gap-2">
-                <Settings2 className="h-6 w-6" /> Store Design
-              </h1>
-              <p className="text-muted-foreground">Customise your store's look, layout, and sections</p>
-            </div>
-            <div>
-              <label className="cursor-pointer">
-                <input
-                  type="file"
-                  accept="application/json,.json"
-                  className="hidden"
-                  onChange={async (e) => {
-                    if (!storeId) return;
-                    const file = e.target.files?.[0];
-                    if (!file) return;
-                    try {
-                      const text = await file.text();
-                      const imported = JSON.parse(text);
-                      // Mark store as having imported design for white-label header
-                      await setDoc(doc(db, 'storeProfiles', storeId), { ...imported, hasImportedDesign: true }, { merge: true });
-                      // Update local state
-                      if (imported.template) {
-                        setSelectedTemplate(imported.template);
-                        setPreviewTemplate(imported.template);
-                      }
-                      if (imported.templateColors) setColors({ ...EMPTY_COLORS(), ...imported.templateColors });
-                      if (imported.productDisplayType) setProductDisplayType(imported.productDisplayType);
-                      if (imported.productCardAnimation) setProductCardAnimation(imported.productCardAnimation);
-                      if (imported.heroLayout) setHeroLayout(imported.heroLayout);
-                      if (imported.menuStyle) setMenuStyle(imported.menuStyle);
-                      if (imported.contactFormStyle) setContactFormStyle(imported.contactFormStyle);
-                      if (imported.ratingDisplayType) setRatingDisplayType(imported.ratingDisplayType);
-                      if (imported.aboutLayout) setAboutLayout(imported.aboutLayout);
-                      if (Array.isArray(imported.sectionOrder)) setSectionOrder(imported.sectionOrder);
-                      toast({ title: 'Design Imported', description: 'All settings applied from preset.' });
-                    } catch (err) {
-                      toast({ title: 'Import Failed', description: 'Invalid JSON file.', variant: 'destructive' });
-                    }
-                  }}
-                />
-                <Button variant="outline" size="sm" className="gap-2" as="span">
-                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
-                  </svg>
-                  Import Design
-                </Button>
-              </label>
-              <p className="text-xs text-muted-foreground mt-1 text-right">
-                💡 Upload a JSON design file to instantly apply a preset
-              </p>
-            </div>
-          </div>
+    <AdminPageShell
+      title={demoMode ? 'Demo Store Design' : 'Classic Template Editor'}
+      description={
+        demoMode
+          ? 'Templates, colors, layout, and sections for this demo store'
+          : 'Original Grabio drag-and-drop — reorder sections, grid widths, and layout controls'
+      }
+      eyebrow={demoMode ? 'Builder Demo' : 'Classic drag & drop'}
+      backTo={demoMode ? '/builder' : '/admin/dashboard'}
+      backLabel={demoMode ? 'Back to Builder Dashboard' : 'Dashboard'}
+      actions={
+        <div>
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept="application/json,.json"
+              className="hidden"
+              onChange={async (e) => {
+                if (!designDocRef) return;
+                const file = e.target.files?.[0];
+                if (!file) return;
+                try {
+                  const text = await file.text();
+                  const imported = JSON.parse(text);
+                  const sectionOrderImport = extractSectionOrderFromDesignImport(imported);
+                  if (!sectionOrderImport) {
+                    toast({ title: 'Import Failed', description: 'JSON must include a sectionOrder array.', variant: 'destructive' });
+                    return;
+                  }
+                  await setDoc(
+                    designDocRef,
+                    { ...layoutImportFirestorePatch(sectionOrderImport), updatedAt: new Date().toISOString() },
+                    { merge: true },
+                  );
+                  setSectionOrder(sectionOrderImport);
+                  setSelectedTemplate('custom');
+                  toast({ title: 'Layout Imported', description: 'Section order applied to Custom template only.' });
+                } catch (err) {
+                  toast({ title: 'Import Failed', description: 'Invalid JSON file.', variant: 'destructive' });
+                }
+              }}
+            />
+            <Button variant="outline" size="sm" className="gap-2" as="span">
+              <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+              </svg>
+              Import layout
+            </Button>
+          </label>
+          <p className="text-xs text-muted-foreground mt-1 text-right">
+            JSON import applies section order only (Custom template)
+          </p>
         </div>
+      }
+    >
+        {!demoMode && (
+          <AdminPanel className="mb-6 border border-violet-200 bg-violet-50/50">
+            <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+              <div>
+                <p className="font-medium text-sm">Live preview, themes &amp; store content</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Use Theme Editor for Shopify-style preview, themes, colors, and copy.
+                </p>
+              </div>
+              <Button asChild variant="default" size="sm">
+                <Link to="/admin/theme-editor">Open Theme Editor</Link>
+              </Button>
+            </CardContent>
+          </AdminPanel>
+        )}
 
         {/* Tab bar */}
         <div className="flex gap-1 p-1 bg-muted rounded-xl mb-8 overflow-x-auto">
@@ -1111,7 +1188,7 @@ const AdminTemplates: React.FC = () => {
             {/* Template cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {templates.map(tmpl => (
-                <Card key={tmpl.id} className={`relative overflow-hidden ${selectedTemplate === tmpl.id ? 'ring-2 ring-primary' : ''}`}>
+                <AdminPanel key={tmpl.id} className={`relative overflow-hidden ${selectedTemplate === tmpl.id ? 'ring-2 ring-primary' : ''}`}>
                   {selectedTemplate === tmpl.id && (
                     <div className="absolute top-2 right-2 z-10">
                       <Badge className="bg-primary text-primary-foreground"><Check className="h-3 w-3 mr-1" />Active</Badge>
@@ -1252,13 +1329,13 @@ const AdminTemplates: React.FC = () => {
                       </div>
                     </div>
                   </CardContent>
-                </Card>
+                </AdminPanel>
               ))}
             </div>
 
             {/* Section Order & Visibility - only show when Custom template is selected */}
             {selectedTemplate === 'custom' && (
-              <Card className="border-2 border-primary/30 shadow-lg">
+              <AdminPanel className="border-2 border-primary/30 shadow-lg">
                 <CardHeader className="bg-primary/5">
                   <CardTitle className="flex items-center gap-2">
                     <Layers className="h-5 w-5" />
@@ -1697,11 +1774,11 @@ const AdminTemplates: React.FC = () => {
                     </p>
                   </div>
                 </CardContent>
-              </Card>
+              </AdminPanel>
             )}
 
             {/* Media upload */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Store Images</CardTitle>
                 <CardDescription>Hero background, carousel slides, and photo gallery</CardDescription>
@@ -1807,7 +1884,7 @@ const AdminTemplates: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Auto-save Notice */}
             <div className="p-4 rounded-lg bg-green-50 border border-green-200 text-sm text-green-800">
@@ -1820,7 +1897,7 @@ const AdminTemplates: React.FC = () => {
         {activeTab === 'colors' && (
           <div className="space-y-8">
             {/* Enhanced Live Preview */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Eye className="h-5 w-5" />
@@ -1912,10 +1989,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Preset Palettes */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Preset Palettes</CardTitle>
                 <CardDescription>10 curated palettes for the {templates.find(t => t.id === selectedTemplate)?.name} template — click to apply all 7 colors at once</CardDescription>
@@ -1939,10 +2016,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Free-pick color pickers */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Custom Colors</CardTitle>
                 <CardDescription>Fine-tune each color to match your brand — changes preview instantly</CardDescription>
@@ -1988,10 +2065,10 @@ const AdminTemplates: React.FC = () => {
                   )})}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Hero/Banner Layout Style */}
-            <Card className="border-2 border-primary/20 shadow-lg">
+            <AdminPanel className="border-2 border-primary/20 shadow-lg">
               <CardHeader className="bg-gradient-to-r from-primary/5 to-primary/10">
                 <CardTitle className="flex items-center gap-2">
                   <LayoutGrid className="h-5 w-5" />
@@ -2072,7 +2149,7 @@ const AdminTemplates: React.FC = () => {
                   <strong>💡 Tip:</strong> Banner colors are configured above (Banner Background & Banner Text Color). Choose a layout that complements your brand - Fullscreen for impact, Minimal for simplicity, Split for visual balance.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Save Colors Section */}
             <div className="flex justify-between items-center">
@@ -2098,7 +2175,7 @@ const AdminTemplates: React.FC = () => {
         {activeTab === 'layout' && (
           <div className="space-y-8">
             {/* Product display */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Product Display</CardTitle>
                 <CardDescription>How products appear on your store — all include smooth entry animations</CardDescription>
@@ -2144,10 +2221,10 @@ const AdminTemplates: React.FC = () => {
                   )}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Product hover animation */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Product Hover Animation</CardTitle>
                 <CardDescription>Choose how product cards animate when users hover over them — adds visual interest and interactivity</CardDescription>
@@ -2162,10 +2239,10 @@ const AdminTemplates: React.FC = () => {
                   <strong>💡 Tip:</strong> Hover animations are subtle on mobile but create an engaging experience on desktop. Try "Parallax" or "3D Lift" for modern stores.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Menu style */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Navigation Menu Style</CardTitle>
                 <CardDescription>How the top navigation bar appears to customers</CardDescription>
@@ -2177,10 +2254,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* About layout */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>About Us Layout</CardTitle>
                 <CardDescription>Control how your About / Mission / Vision section appears (when filled in Store Profile)</CardDescription>
@@ -2192,10 +2269,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Page Layout */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Page Layout</CardTitle>
                 <CardDescription>Choose how content is positioned on the page — full-width for modern edge-to-edge design or contained for classic centered layout</CardDescription>
@@ -2210,10 +2287,10 @@ const AdminTemplates: React.FC = () => {
                   <strong>🎨 Pro Tip:</strong> "Hybrid" gives you the best of both worlds — full-width hero banner with contained content sections for optimal readability.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Store Card Style */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Store Info Card Style</CardTitle>
                 <CardDescription>Control how your store information card (logo, description, contact) is displayed</CardDescription>
@@ -2225,10 +2302,10 @@ const AdminTemplates: React.FC = () => {
                   ))}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Visual Style */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Visual Style</CardTitle>
                 <CardDescription>Choose the overall visual aesthetic for borders and corners throughout your store</CardDescription>
@@ -2243,7 +2320,7 @@ const AdminTemplates: React.FC = () => {
                   <strong>✨ Style Guide:</strong> "Rounded" is friendly and modern, "Sharp" is professional and bold, "Mixed" combines both for unique visual interest.
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             <div className="flex justify-end gap-3 items-center">
               {hasUnsavedLayout && (
@@ -2256,175 +2333,27 @@ const AdminTemplates: React.FC = () => {
           </div>
         )}
 
-        {/* ══ SECTIONS TAB ══ */}
+        {/* ══ SECTIONS TAB (form & rating styles — layout DnD lives under Templates → Custom) ══ */}
         {activeTab === 'sections' && (
           <div className="space-y-8">
-            {/* Section ordering */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Section Order & Visibility</CardTitle>
-                <CardDescription>Control which sections appear and their display order on your storefront</CardDescription>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {sectionOrder
-                    .sort((a, b) => a.order - b.order)
-                    .map((section) => {
-                      const sectionLabels: Record<StoreSectionId, string> = {
-                        hero: 'Hero / Banner',
-                        about: 'About Us',
-                        announcements: 'Announcements',
-                        products: 'Products Catalog',
-                        gallery: 'Gallery',
-                        reviews: 'Customer Reviews',
-                        contact: 'Contact Form',
-                      };
-                      const label = sectionLabels[section.id];
-                      
-                      return (
-                        <div key={section.id} className="flex items-center gap-3 p-3 border rounded-lg bg-muted/30 hover:bg-muted/50 transition-colors">
-                          {/* Drag handle visual */}
-                          <div className="text-muted-foreground cursor-move select-none">
-                            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
-                              <path d="M7 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 2zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 7 14zm6-8a2 2 0 1 0-.001-4.001A2 2 0 0 0 13 6zm0 2a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 8zm0 6a2 2 0 1 0 .001 4.001A2 2 0 0 0 13 14z" />
-                            </svg>
-                          </div>
-                          
-                          {/* Position number */}
-                          <span className="w-6 h-6 rounded-full bg-primary/20 text-primary text-xs font-bold flex items-center justify-center shrink-0">
-                            {section.order + 1}
-                          </span>
-                          
-                          {/* Section label */}
-                          <span className="flex-1 font-medium text-sm">{label}</span>
-                          
-                          {/* Up/Down buttons */}
-                          <div className="flex gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentIdx = sectionOrder.findIndex(s => s.id === section.id);
-                                if (currentIdx <= 0) return;
-                                const newOrder = [...sectionOrder];
-                                [newOrder[currentIdx], newOrder[currentIdx - 1]] = [newOrder[currentIdx - 1], newOrder[currentIdx]];
-                                newOrder.forEach((s, idx) => s.order = idx);
-                                setSectionOrder(newOrder);
-                              }}
-                              disabled={section.order === 0}
-                              className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              title="Move up"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                              </svg>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                const currentIdx = sectionOrder.findIndex(s => s.id === section.id);
-                                if (currentIdx >= sectionOrder.length - 1) return;
-                                const newOrder = [...sectionOrder];
-                                [newOrder[currentIdx], newOrder[currentIdx + 1]] = [newOrder[currentIdx + 1], newOrder[currentIdx]];
-                                newOrder.forEach((s, idx) => s.order = idx);
-                                setSectionOrder(newOrder);
-                              }}
-                              disabled={section.order === sectionOrder.length - 1}
-                              className="p-1.5 rounded hover:bg-background disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-                              title="Move down"
-                            >
-                              <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                              </svg>
-                            </button>
-                          </div>
-                          
-                          {/* Width controls */}
-                          <div className="flex gap-0.5 border rounded-md overflow-hidden">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateSectionOrder(prev =>
-                                  prev.map(s => s.id === section.id ? { ...s, width: 'full' } : s)
-                                );
-                              }}
-                              className={`px-2 py-1 text-xs font-medium transition-colors ${
-                                (section.width || 'full') === 'full'
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-background hover:bg-muted'
-                              }`}
-                              title="Full width - takes entire row"
-                            >
-                              Full
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateSectionOrder(prev =>
-                                  prev.map(s => s.id === section.id ? { ...s, width: 'half' } : s)
-                                );
-                              }}
-                              className={`px-2 py-1 text-xs font-medium transition-colors ${
-                                section.width === 'half'
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-background hover:bg-muted'
-                              }`}
-                              title="Half width - 2 sections per row"
-                            >
-                              1/2
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                updateSectionOrder(prev =>
-                                  prev.map(s => s.id === section.id ? { ...s, width: 'third' } : s)
-                                );
-                              }}
-                              className={`px-2 py-1 text-xs font-medium transition-colors ${
-                                section.width === 'third'
-                                  ? 'bg-primary/20 text-primary'
-                                  : 'bg-background hover:bg-muted'
-                              }`}
-                              title="Third width - 3 sections per row"
-                            >
-                              1/3
-                            </button>
-                          </div>
-                          
-                          {/* Toggle visibility */}
-                          <button
-                            type="button"
-                            onClick={() => {
-                              updateSectionOrder(prev =>
-                                prev.map(s => s.id === section.id ? { ...s, enabled: !s.enabled } : s)
-                              );
-                            }}
-                            className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all ${
-                              section.enabled
-                                ? 'bg-green-500/20 text-green-700 hover:bg-green-500/30'
-                                : 'bg-gray-300/60 text-gray-600 hover:bg-gray-300/80'
-                            }`}
-                          >
-                            {section.enabled ? 'Visible' : 'Hidden'}
-                          </button>
-                        </div>
-                      );
-                    })}
-                </div>
-                <div className="mt-6 p-4 bg-blue-50/50 border border-blue-200 rounded-lg">
-                  <p className="text-sm text-blue-900 font-medium mb-2">💡 Layout Guide:</p>
-                  <ul className="text-xs text-blue-800 space-y-1">
-                    <li>• Use <strong>↑↓ arrows</strong> to reorder sections</li>
-                    <li>• Choose <strong>Full</strong> for 1 section per row (full width)</li>
-                    <li>• Choose <strong>1/2</strong> to place 2 sections side-by-side</li>
-                    <li>• Choose <strong>1/3</strong> to place 3 sections side-by-side</li>
-                    <li>• Click <strong>Visible/Hidden</strong> to show or hide sections</li>
-                  </ul>
-                </div>
+            <AdminPanel className="border border-dashed bg-muted/20">
+              <CardContent className="py-4">
+                <p className="text-sm text-muted-foreground">
+                  <strong className="text-foreground">Section drag-and-drop</strong> is on the{' '}
+                  <button
+                    type="button"
+                    className="text-primary underline font-medium"
+                    onClick={() => setActiveTab('templates')}
+                  >
+                    Templates
+                  </button>{' '}
+                  tab — select the <strong>Custom</strong> template for reorder, grid width, and visibility.
+                </p>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Contact form */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Contact Form Style</CardTitle>
                 <CardDescription>Choose which fields and layout appear on your Contact Us page</CardDescription>
@@ -2460,10 +2389,10 @@ const AdminTemplates: React.FC = () => {
                   </div>
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             {/* Rating display */}
-            <Card>
+            <AdminPanel>
               <CardHeader>
                 <CardTitle>Rating Display Style</CardTitle>
                 <CardDescription>How customer ratings appear on your store — only visible to customers viewing your store</CardDescription>
@@ -2521,7 +2450,7 @@ const AdminTemplates: React.FC = () => {
                   )}
                 </div>
               </CardContent>
-            </Card>
+            </AdminPanel>
 
             <div className="flex justify-end gap-3 items-center">
               {hasUnsavedSections && (
@@ -2534,18 +2463,104 @@ const AdminTemplates: React.FC = () => {
           </div>
         )}
 
+        {/* ── AI Agent ──────────────────────────────────────────────────── */}
+        {hasAiBuilder && (
+          <div className="mt-8">
+            <button
+              type="button"
+              onClick={() => setAiOpen(o => !o)}
+              className="w-full flex items-center justify-between px-4 py-3 rounded-xl border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors"
+            >
+              <span className="font-semibold flex items-center gap-2">
+                <span>🤖</span> AI Store Assistant
+                <Badge variant="secondary" className="text-xs">ai_builder</Badge>
+              </span>
+              <span className="text-muted-foreground text-sm">{aiOpen ? '▲ Close' : '▼ Open'}</span>
+            </button>
+
+            {aiOpen && (
+              <AdminPanel className="mt-3 border-primary/20">
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base">Generate store content with AI</CardTitle>
+                  <CardDescription>
+                    Uses your AI Builder credits. Results are copyable — apply them manually where needed.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-sm font-medium block mb-1">What to generate</label>
+                      <select
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                        value={aiTask}
+                        onChange={e => { setAiTask(e.target.value); setAiOutput(''); }}
+                      >
+                        {AI_STORE_TASKS.map(t => (
+                          <option key={t.id} value={t.id}>{t.label}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-sm font-medium block mb-1">Business type</label>
+                      <input
+                        type="text"
+                        className="w-full border rounded-md px-3 py-2 text-sm"
+                        placeholder="e.g. bakery, clothing boutique, electronics"
+                        value={aiBusinessType}
+                        onChange={e => setAiBusinessType(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <Button onClick={() => void handleAiGenerate()} disabled={aiLoading} className="w-full">
+                    {aiLoading ? 'Generating…' : 'Generate with AI'}
+                  </Button>
+                  {aiOutput && (
+                    <div className="rounded-lg border bg-muted/30 p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">Result</span>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => { void navigator.clipboard.writeText(aiOutput); toast({ title: 'Copied!' }); }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
+                      <pre className="whitespace-pre-wrap text-sm leading-relaxed font-sans">{aiOutput}</pre>
+                    </div>
+                  )}
+                </CardContent>
+              </AdminPanel>
+            )}
+          </div>
+        )}
+
+        {!hasAiBuilder && (
+          <div className="mt-6 rounded-xl border border-dashed border-muted-foreground/30 p-4 text-center">
+            <p className="text-sm text-muted-foreground">
+              🤖 <span className="font-medium">AI Store Assistant</span> — enable the <span className="font-medium">AI Builder</span> module in your{' '}
+              <a href="/subscription" className="underline text-primary">subscription</a> to generate taglines, about text, and color palettes with AI.
+            </p>
+          </div>
+        )}
+
         <div className="mt-6 flex justify-end">
           <Button
             type="button"
             variant="secondary"
-            onClick={() => window.open(`/store/${storeSlug}`, '_blank', 'noopener,noreferrer')}
-            disabled={!storeSlug}
+            onClick={() => {
+              if (demoMode && demoId) {
+                window.open(`/builder/demo/${demoId}/preview`, '_blank', 'noopener,noreferrer');
+                return;
+              }
+              window.open(`/store/${storeSlug}`, '_blank', 'noopener,noreferrer');
+            }}
+            disabled={demoMode ? !demoId : !storeSlug}
           >
-            Visit Store Profile
+            {demoMode ? 'Preview demo store' : 'Visit Store Profile'}
           </Button>
         </div>
-      </div>
-    </div>
+    </AdminPageShell>
   );
 };
 

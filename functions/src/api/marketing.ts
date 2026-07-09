@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import * as nodemailer from 'nodemailer';
+import { checkRealStoreForCommerce, commerceGuardHttpStatus } from '../services/storeCommerceGuard';
 
 const SMTP_CONFIG = {
   host: process.env.SMTP_HOST || 'mail.grabio.space',
@@ -39,6 +40,15 @@ export async function subscribeToStore(req: Request, res: Response): Promise<voi
 
   try {
     const db = admin.firestore();
+    const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+    if (!commerceCheck.eligible) {
+      res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
+      return;
+    }
+
     const subscriberRef = db
       .collection('storeProfiles')
       .doc(storeId)
@@ -71,6 +81,15 @@ export async function unsubscribeFromStore(req: Request, res: Response): Promise
   }
   try {
     const db = admin.firestore();
+    const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+    if (!commerceCheck.eligible) {
+      res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
+      return;
+    }
+
     await db
       .collection('storeProfiles')
       .doc(storeId)
@@ -108,6 +127,15 @@ export async function listSubscribers(req: Request, res: Response): Promise<void
     await admin.auth().verifyIdToken(token);
 
     const db = admin.firestore();
+    const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+    if (!commerceCheck.eligible) {
+      res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
+      return;
+    }
+
     const snap = await db
       .collection('storeProfiles')
       .doc(storeId)
@@ -158,6 +186,15 @@ export async function sendCampaign(req: Request, res: Response): Promise<void> {
     // Verify caller is the store owner
     const decoded = await admin.auth().verifyIdToken(token);
     const db = admin.firestore();
+
+    const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+    if (!commerceCheck.eligible) {
+      res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
+      return;
+    }
 
     const storeSnap = await db.collection('storeProfiles').doc(storeId).get();
     if (!storeSnap.exists || storeSnap.data()?.ownerId !== decoded.uid) {
@@ -257,6 +294,15 @@ export async function listCampaigns(req: Request, res: Response): Promise<void> 
   try {
     await admin.auth().verifyIdToken(token);
     const db = admin.firestore();
+    const commerceCheck = await checkRealStoreForCommerce(db, storeId);
+    if (!commerceCheck.eligible) {
+      res.status(commerceGuardHttpStatus(commerceCheck.code)).json({
+        error: commerceCheck.message,
+        code: commerceCheck.code,
+      });
+      return;
+    }
+
     const snap = await db
       .collection('storeProfiles')
       .doc(storeId)

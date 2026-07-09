@@ -33,6 +33,13 @@ service firebase.storage {
         && request.resource.contentType.matches('image/.*');
     }
 
+    // POS installers
+    // Path: pos/{filename}
+    match /pos/{filename} {
+      allow read: if true;
+      allow write: if false;
+    }
+
     // Deny everything else by default
     match /{allPaths=**} {
       allow read, write: if false;
