@@ -1,6 +1,14 @@
 import * as admin from 'firebase-admin';
+import { glPostOrderSaleRecognized } from '../lib/ledger/platformGlBridge';
+import {
+  orderDateFromData,
+  orderTotalFromData,
+  type ResolvedCogsLine,
+} from '../lib/ledger/resolveOrderCogs';
 
 const db = admin.firestore();
+
+const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
 type OrderItemLike = {
   productId?: string;
@@ -43,6 +51,7 @@ export async function applyPaidOrderInventoryDeduction(
   let updates = 0;
   let skippedAlreadyApplied = 0;
   let missingMatches = 0;
+  const cogsLines: ResolvedCogsLine[] = [];
 
   for (const item of items) {
     const productKey = resolveOrderItemProductKey(item);
@@ -110,6 +119,11 @@ export async function applyPaidOrderInventoryDeduction(
         updatedAt: nowIso,
       });
 
+      const simpleCost = round2(Number(productData.costPrice || 0));
+      if (simpleCost > 0) {
+        cogsLines.push({ productKey, quantity, unitCost: simpleCost });
+      }
+
       updates += 1;
       continue;
     }
@@ -153,6 +167,8 @@ export async function applyPaidOrderInventoryDeduction(
       updatedAt: nowIso,
     });
 
+    cogsLines.push({ productKey, quantity, unitCost: costPrice });
+
     updates += 1;
   }
 
@@ -165,6 +181,19 @@ export async function applyPaidOrderInventoryDeduction(
       inventoryDeductedAt: nowIso,
       inventoryDeductionSource: paymentSource,
       updatedAt: nowIso,
+    });
+  }
+
+  if (updates > 0) {
+    await glPostOrderSaleRecognized(storeId, {
+      id: orderId,
+      storeId,
+      date: orderDateFromData(orderData),
+      total: orderTotalFromData(orderData),
+      paymentMethod: typeof orderData.paymentMethod === 'string' ? orderData.paymentMethod : 'card',
+      invoiceNumber: typeof orderData.invoiceNumber === 'string' ? orderData.invoiceNumber : orderId,
+      cogsLines,
+      isCashSale: true,
     });
   }
 

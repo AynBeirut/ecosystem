@@ -12,7 +12,23 @@
     <meta name="description" content="Grabio — modular business platform for commerce, operations, and growth." />
     <meta name="theme-color" content="#38B2AC" />
     <meta name="google-site-verification" content="M4C5HUFGk8LfYuUSQlZeL5kES8i4HwgH5fufQn59hs0" />
-    <link rel="manifest" href="/manifest.json" />
+    <script>
+      (function () {
+        var h = location.hostname;
+        if (h !== 'localhost' && h !== '127.0.0.1') {
+          var link = document.createElement('link');
+          link.rel = 'manifest';
+          link.href = '/manifest.json';
+          document.head.appendChild(link);
+          return;
+        }
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function (rs) {
+            rs.forEach(function (r) { r.unregister(); });
+          });
+        }
+      })();
+    </script>
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />
     <link rel="icon" type="image/png" sizes="512x512" href="/icon-512x512.png" />
     <link rel="apple-touch-icon" href="/icon-192x192.png" />

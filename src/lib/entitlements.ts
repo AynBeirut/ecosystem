@@ -15,6 +15,11 @@ import {
   type StartingPackageKey,
 } from '@/lib/moduleManifest';
 import type { StoreProfile } from '@/types/storeProfile';
+import {
+  resolveModularProductLimit,
+  resolveModularStorageLimitMb,
+  resolveModularAllowsCatalogImages,
+} from '@/lib/modularPackageLimits';
 
 export type EntitlementLimits = {
   productLimit: number | null;
@@ -22,6 +27,7 @@ export type EntitlementLimits = {
   monthlyOperationsLimit: number | null;
   allowsComposed: boolean;
   allowsManufacturing: boolean;
+  allowsCatalogImages: boolean;
 };
 
 export type StoreEntitlements = {
@@ -44,6 +50,7 @@ const LEGACY_LIMITS: Record<SubscriptionTier, EntitlementLimits> = {
     monthlyOperationsLimit: 30,
     allowsComposed: false,
     allowsManufacturing: false,
+    allowsCatalogImages: true,
   },
   starter: {
     productLimit: 8,
@@ -51,6 +58,7 @@ const LEGACY_LIMITS: Record<SubscriptionTier, EntitlementLimits> = {
     monthlyOperationsLimit: null,
     allowsComposed: true,
     allowsManufacturing: false,
+    allowsCatalogImages: true,
   },
   pro: {
     productLimit: 20,
@@ -58,6 +66,7 @@ const LEGACY_LIMITS: Record<SubscriptionTier, EntitlementLimits> = {
     monthlyOperationsLimit: null,
     allowsComposed: true,
     allowsManufacturing: true,
+    allowsCatalogImages: true,
   },
   business: {
     productLimit: 50,
@@ -65,6 +74,7 @@ const LEGACY_LIMITS: Record<SubscriptionTier, EntitlementLimits> = {
     monthlyOperationsLimit: null,
     allowsComposed: true,
     allowsManufacturing: true,
+    allowsCatalogImages: true,
   },
 };
 
@@ -134,7 +144,53 @@ function modularModulesFromProfile(profile: StoreProfile): Record<string, boolea
   return modules;
 }
 
+function effectiveSubscriptionTier(profile: StoreProfile): SubscriptionTier {
+  const status = profile.subscriptionStatus;
+  if (status === 'active' || status === 'grace') {
+    return normalizeTier(profile.subscriptionTier);
+  }
+  if (status === 'trial') {
+    return 'trial';
+  }
+  // Missing, expired, or unpaid — trial limits (500 MB, 10 products), not paid starter defaults.
+  return 'trial';
+}
+
 function limitsFromProfile(tier: SubscriptionTier, profile: StoreProfile): EntitlementLimits {
+  const status = profile.subscriptionStatus;
+  const isModular = profile.pricingVersion === 'modular-v2';
+  const isPaidModular = isModular && (status === 'active' || status === 'grace' || status === 'grace_period');
+
+  if (isPaidModular) {
+    const productLimit = resolveModularProductLimit(profile);
+    return {
+      productLimit,
+      storageLimitMb: resolveModularStorageLimitMb(profile),
+      monthlyOperationsLimit: null,
+      allowsComposed:
+        profile.allowsComposedProducts ??
+        Boolean(profile.enabledModules?.restaurant || profile.enabledModules?.factory),
+      allowsManufacturing:
+        profile.allowsManufacturing ?? Boolean(profile.enabledModules?.factory),
+      allowsCatalogImages: resolveModularAllowsCatalogImages(profile),
+    };
+  }
+
+  if (isModular) {
+    const base = LEGACY_LIMITS.trial;
+    return {
+      productLimit: profile.productLimit ?? base.productLimit,
+      storageLimitMb: profile.storageLimitMb ?? profile.storage_limit_mb ?? base.storageLimitMb,
+      monthlyOperationsLimit:
+        profile.monthlyOperationsLimit ??
+        profile.monthly_operations_limit ??
+        base.monthlyOperationsLimit,
+      allowsComposed: profile.allowsComposedProducts ?? base.allowsComposed,
+      allowsManufacturing: profile.allowsManufacturing ?? base.allowsManufacturing,
+      allowsCatalogImages: resolveModularAllowsCatalogImages(profile),
+    };
+  }
+
   const base = LEGACY_LIMITS[tier];
   return {
     productLimit: profile.productLimit ?? base.productLimit,
@@ -145,13 +201,14 @@ function limitsFromProfile(tier: SubscriptionTier, profile: StoreProfile): Entit
       base.monthlyOperationsLimit,
     allowsComposed: profile.allowsComposedProducts ?? base.allowsComposed,
     allowsManufacturing: profile.allowsManufacturing ?? base.allowsManufacturing,
+    allowsCatalogImages: profile.allowsCatalogImages ?? base.allowsCatalogImages,
   };
 }
 
 export function resolveStoreEntitlements(profile: StoreProfile | null | undefined): StoreEntitlements | null {
   if (!profile) return null;
 
-  const tier = normalizeTier(profile.subscriptionTier);
+  const tier = effectiveSubscriptionTier(profile);
   const pricingVersion: PricingVersion =
     profile.pricingVersion === 'modular-v2' ? 'modular-v2' : 'legacy-v1';
 

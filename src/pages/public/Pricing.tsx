@@ -27,7 +27,8 @@ import {
   tierMeetsMinimum,
 } from '@/lib/pricingDisplay';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
-import { PRESET_LIST } from '@/lib/packagePresets';
+import { ORDERED_PRESET_LIST } from '@/lib/packagePresets';
+import { CORE_ENTRY_PACKAGES, INDUSTRY_PACKAGES } from '@/lib/modularPackageLimits';
 import { calculateModularPrice } from '@/lib/modularPricing';
 import { getStatusBadgeClass, getStatusLabel } from '@/lib/publicModulesContent';
 
@@ -294,12 +295,13 @@ const Pricing: React.FC = () => {
           {ECOSYSTEM_FLAGS.modularEntitlements && (
             <section className="py-10 border-b border-gray-100 bg-white">
               <div className="max-w-5xl mx-auto px-4">
-                <h2 className="text-2xl font-bold text-gray-900 mb-2">Modular packages (rev. 5)</h2>
+                <h2 className="text-2xl font-bold text-gray-900 mb-2">Modular packages</h2>
                 <p className="text-gray-500 mb-6 text-sm">
-                  Preset + $24/extra user + $15/extra POS — e.g. 3-user Kitchen ≈ $75/mo vs Odoo $93.
+                  Start small and scale — Shop adds +10 products per extra $10/mo above $27.
                 </p>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {PRESET_LIST.map((p) => {
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">Core plans</h3>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                  {ORDERED_PRESET_LIST.filter((p) => CORE_ENTRY_PACKAGES.includes(p.key)).map((p) => {
                     const price = calculateModularPrice({
                       preset: p.key,
                       seatCount: 1,
@@ -310,11 +312,42 @@ const Pricing: React.FC = () => {
                       <Link
                         key={p.key}
                         to={`/login?tab=signup&preset=${p.key}`}
-                        className="border rounded-xl p-4 hover:border-teal-500 transition-colors"
+                        className="border rounded-xl p-4 hover:border-teal-500 transition-colors flex flex-col"
                       >
                         <p className="font-semibold text-gray-900">{p.label}</p>
                         <p className="text-teal-600 font-bold mt-1">${price.totalUsd}/mo</p>
-                        <p className="text-xs text-gray-400 mt-2">1 user included</p>
+                        <ul className="mt-3 space-y-1 text-xs text-gray-500 flex-1">
+                          {p.limitLines.map((line) => (
+                            <li key={line}>• {line}</li>
+                          ))}
+                        </ul>
+                        <p className="text-xs text-gray-400 mt-3">1 user included</p>
+                      </Link>
+                    );
+                  })}
+                </div>
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">Industry workflows</h3>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {ORDERED_PRESET_LIST.filter((p) => INDUSTRY_PACKAGES.includes(p.key)).map((p) => {
+                    const price = calculateModularPrice({
+                      preset: p.key,
+                      seatCount: 1,
+                      posLocationCount: p.defaultModules.includes('pos') ? 1 : 0,
+                      billing: 'monthly',
+                    });
+                    return (
+                      <Link
+                        key={p.key}
+                        to={`/login?tab=signup&preset=${p.key}`}
+                        className="border rounded-xl p-4 hover:border-teal-500 transition-colors flex flex-col"
+                      >
+                        <p className="font-semibold text-gray-900">{p.label}</p>
+                        <p className="text-teal-600 font-bold mt-1">${price.totalUsd}/mo</p>
+                        <ul className="mt-3 space-y-1 text-xs text-gray-500 flex-1">
+                          {p.limitLines.map((line) => (
+                            <li key={line}>• {line}</li>
+                          ))}
+                        </ul>
                       </Link>
                     );
                   })}

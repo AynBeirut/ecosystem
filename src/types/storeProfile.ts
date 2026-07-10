@@ -368,11 +368,16 @@ export interface StoreProfile {
   pricingVersion?: 'legacy-v1' | 'modular-v2';
   businessWorkflow?: 'shop' | 'live_kitchen' | 'factory' | 'ngo' | 'freelancer' | 'custom';
   startingPackage?:
+    | 'pkg_invoice'
+    | 'pkg_mini_shop'
+    | 'pkg_business_backend'
     | 'pkg_shop'
     | 'pkg_live_kitchen'
     | 'pkg_factory_flow'
     | 'pkg_ngo'
     | 'pkg_freelancer';
+  /** Cached modular bill (monthly USD) for product-cap expansion (+10 products per $10 above $27). */
+  modularMonthlyUsd?: number;
   enabledModules?: Record<string, boolean>;
   composedProductSource?: 'platform' | 'pos';
   seatCount?: number;
@@ -387,6 +392,8 @@ export interface StoreProfile {
   packageDraftAppliedAt?: string;
   /** display = showcase only (no cart); commerce = full store checkout */
   storefrontMode?: 'display' | 'commerce';
+  /** Business Backend: text/SKU catalog only — no product image uploads */
+  allowsCatalogImages?: boolean;
   builderWizard?: {
     step?: string;
     siteIntent?: 'display' | 'blog' | 'ecommerce';

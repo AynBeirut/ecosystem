@@ -9,7 +9,7 @@ import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { MODULE_CATALOG, isRoadmapModule } from '@/lib/pricingDisplay';
-import { PRESET_LIST, buildProfileFromPreset } from '@/lib/packagePresets';
+import { PRESET_LIST, ORDERED_PRESET_LIST, buildProfileFromPreset } from '@/lib/packagePresets';
 import {
   applyModuleToggle,
   enforceWorkflowExclusivity,
@@ -204,8 +204,8 @@ const PackageOnboarding: React.FC = () => {
       </div>
 
       {path === 'preset' && (
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-          {PRESET_LIST.map((preset) => (
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+          {ORDERED_PRESET_LIST.map((preset) => (
             <Card
               key={preset.key}
               className={`cursor-pointer rounded-xl shadow-sm hover:shadow-md transition-shadow ${selectedPreset === preset.key ? 'ring-2 ring-primary' : ''}`}
@@ -214,6 +214,11 @@ const PackageOnboarding: React.FC = () => {
               <CardHeader className="pb-2">
                 <CardTitle className="text-lg">{preset.label}</CardTitle>
                 <CardDescription>${preset.monthlyUsd}/mo · 1 user</CardDescription>
+                <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                  {preset.limitLines.map((line) => (
+                    <li key={line}>• {line}</li>
+                  ))}
+                </ul>
               </CardHeader>
             </Card>
           ))}

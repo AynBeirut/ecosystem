@@ -81,12 +81,12 @@ const AdminSupplierCredits = lazy(() => import("./pages/admin/AdminSupplierCredi
 const AdminStaff = lazy(() => import("./pages/admin/AdminStaff"));
 const AdminSalaries = lazy(() => import("./pages/admin/AdminSalaries"));
 const AdminSubAccounts = lazy(() => import("./pages/admin/AdminSubAccounts"));
-const AdminExpenses = lazy(() => import("./pages/admin/AdminExpenses"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminInventory = lazy(() => import("./pages/admin/AdminInventory"));
 const AdminProduction = lazy(() => import("./pages/admin/AdminProduction"));
 const AdminAccountStatement = lazy(() => import("./pages/admin/AdminAccountStatement"));
 const AdminBankReconciliation = lazy(() => import("./pages/admin/AdminBankReconciliation"));
+const AdminDeliveryWallet = lazy(() => import("./pages/admin/AdminDeliveryWallet"));
 const AdminFinanceSuite = lazy(() => import("./pages/admin/AdminFinanceSuite"));
 const AdminMarketplaceSync = lazy(() => import("./pages/admin/AdminMarketplaceSync"));
 const AdminSEOAnalytics = lazy(() => import("./pages/admin/AdminSEOAnalytics"));
@@ -122,9 +122,8 @@ import {
   loadInvoiceManager,
   loadEstimateManager,
   loadReceiptManager,
-  loadClientsManager,
-  loadProductsManager,
   loadFinanceReports,
+  loadExpenseManager,
 } from "./pages/admin/finance/financeEmbeddedLoaders";
 const PosPairing = lazy(() => import("./pages/admin/PosPairing"));
 const AiBuilder = lazy(() => import("./pages/admin/AiBuilder"));
@@ -141,6 +140,8 @@ const ProposalWriter = lazy(() => import("./pages/admin/ai/ProposalWriter"));
 const SeoAssistant = lazy(() => import("./pages/admin/ai/SeoAssistant"));
 const BusinessInsights = lazy(() => import("./pages/admin/ai/BusinessInsights"));
 const CampaignWriter = lazy(() => import("./pages/admin/ai/CampaignWriter"));
+const AdminAiAgent = lazy(() => import("./pages/admin/AdminAiAgent"));
+import InvoiceSpaRedirect from "./components/InvoiceSpaRedirect";
 
 const _hostname = typeof window !== 'undefined' ? window.location.hostname : '';
 const isCustomDomain = _hostname !== '' && !isPlatformHostname(_hostname);
@@ -281,16 +282,17 @@ function AppFooter() {
                         <Route path="/admin/salaries" element={<ProtectedRoute allowedRoles={['admin']}><AdminSalaries /></ProtectedRoute>} />
                         <Route path="/admin/sub-accounts" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="team"><AdminSubAccounts /></ProtectedRoute>} />
                         {/* Financial */}
-                        <Route path="/admin/expenses" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminExpenses /></ProtectedRoute>} />
+                        <Route path="/admin/expenses" element={<Navigate to="/admin/finance/expenses" replace />} />
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminReports /></ProtectedRoute>} />
                         <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminFinanceSuite /></ProtectedRoute>} />
                         <Route element={<ProtectedRoute allowedRoles={['admin']}><FinanceModuleShell /></ProtectedRoute>}>
                           <Route path="/admin/finance/invoices" element={<FinanceEmbeddedPage loader={loadInvoiceManager} />} />
                           <Route path="/admin/finance/estimates" element={<FinanceEmbeddedPage loader={loadEstimateManager} />} />
                           <Route path="/admin/finance/receipts" element={<FinanceEmbeddedPage loader={loadReceiptManager} />} />
-                          <Route path="/admin/finance/clients" element={<FinanceEmbeddedPage loader={loadClientsManager} />} />
-                          <Route path="/admin/finance/products" element={<FinanceEmbeddedPage loader={loadProductsManager} />} />
+                          <Route path="/admin/finance/clients" element={<Navigate to="/admin/customers" replace />} />
+                          <Route path="/admin/finance/products" element={<Navigate to="/admin/products" replace />} />
                           <Route path="/admin/finance/reports" element={<FinanceEmbeddedPage loader={loadFinanceReports} />} />
+                          <Route path="/admin/finance/expenses" element={<FinanceEmbeddedPage loader={loadExpenseManager} />} />
                         </Route>
                         <Route path="/admin/pos" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="pos"><PosPairing /></ProtectedRoute>} />
                         <Route path="/admin/ai-builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="ai_builder"><AiBuilder /></ProtectedRoute>} />
@@ -298,6 +300,7 @@ function AppFooter() {
                         <Route path="/admin/whitelabel" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="whitelabel"><WhitelabelApp /></ProtectedRoute>} />
                         <Route path="/admin/projects" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="projects"><AdminProjects /></ProtectedRoute>} />
                         <Route path="/admin/ai/content-creator" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="content_creator"><ContentCreator /></ProtectedRoute>} />
+                        <Route path="/admin/ai-agent" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="ai_agent"><AdminAiAgent /></ProtectedRoute>} />
                         <Route path="/admin/ai/market-strategy" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="market_strategy"><MarketStrategy /></ProtectedRoute>} />
                         <Route path="/admin/ai/proposal-writer" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="proposal_writer"><ProposalWriter /></ProtectedRoute>} />
                         <Route path="/admin/ai/seo-assistant" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="seo_assistant"><SeoAssistant /></ProtectedRoute>} />
@@ -308,6 +311,7 @@ function AppFooter() {
                         <Route path="/admin/order-notifications" element={<ProtectedRoute allowedRoles={['admin']}><AdminOrderNotifications /></ProtectedRoute>} />
                         <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminAccountStatement /></ProtectedRoute>} />
                         <Route path="/admin/cash-collection" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminBankReconciliation /></ProtectedRoute>} />
+                        <Route path="/admin/delivery-wallet" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminDeliveryWallet /></ProtectedRoute>} />
                         <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminBankReconciliation /></ProtectedRoute>} />
                         <Route path="/admin/service-renewals" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="services"><AdminServiceRenewals /></ProtectedRoute>} />
                         <Route path="/admin/audit-logs" element={<ProtectedRoute allowedRoles={['admin']}><AdminAuditLogs /></ProtectedRoute>} />
@@ -327,6 +331,8 @@ function AppFooter() {
                         </Route>
                         </Route>
                         <Route path="/team/crm" element={<ProtectedRoute allowedRoles={['crm_rep']} requiredModule="crm"><CrmRepPortal /></ProtectedRoute>} />
+                        {/* Standalone invoice SPA — escape hatch when client-side nav hits /invoice/* */}
+                        <Route path="/invoice/*" element={<InvoiceSpaRedirect />} />
                         {/* Public marketing pages — must be BEFORE /:slug */}
                         <Route path="/features" element={<Features />} />
                         <Route path="/pricing" element={<Pricing />} />

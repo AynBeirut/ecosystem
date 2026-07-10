@@ -5,8 +5,8 @@ import { getStorage } from "firebase/storage";
 
 const firebaseConfig = {
   apiKey: "AIzaSyA0jzU0136sQM4QpBz6J0TYEsPn2JDTn1U",
-  // Use environment variable for authDomain so it matches the deployed domain in production
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "market-flow-7b074.firebaseapp.com",
+  // Must match the page origin in production (grabio.space) or redirect sign-in loses the session.
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "grabio.space",
   projectId: "market-flow-7b074",
   storageBucket: "market-flow-7b074.firebasestorage.app",
   messagingSenderId: "997465465802",

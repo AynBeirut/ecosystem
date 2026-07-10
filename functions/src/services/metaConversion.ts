@@ -58,6 +58,21 @@ function extractMetaError(payload: unknown): string {
   return 'Unknown Meta API error';
 }
 
+/** Firestore rejects undefined anywhere in nested objects. */
+function omitUndefinedDeep<T>(value: T): T {
+  if (value === undefined) return value;
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => omitUndefinedDeep(item)) as T;
+  }
+  const result: Record<string, unknown> = {};
+  for (const [key, val] of Object.entries(value as Record<string, unknown>)) {
+    if (val === undefined) continue;
+    result[key] = omitUndefinedDeep(val);
+  }
+  return result as T;
+}
+
 export async function trackMetaConversion(input: MetaConversionInput): Promise<MetaConversionResult> {
   const storeId = String(input.storeId || '').trim();
   const eventName = String(input.eventName || '').trim();
@@ -85,15 +100,15 @@ export async function trackMetaConversion(input: MetaConversionInput): Promise<M
   const eventTime = Number.isFinite(input.eventTime) ? Number(input.eventTime) : Math.floor(Date.now() / 1000);
   const eventId = String(input.eventId || `${storeId}-${eventName}-${eventTime}`).trim();
 
-  const userData = {
+  const userData = omitUndefinedDeep({
     em: normalizeAndHash(input.userData?.email),
     ph: normalizePhoneAndHash(input.userData?.phone),
     external_id: normalizeAndHash(input.userData?.externalId),
     client_ip_address: input.userData?.clientIpAddress || undefined,
     client_user_agent: input.userData?.clientUserAgent || undefined,
-  };
+  });
 
-  const eventPayload = {
+  const eventPayload = omitUndefinedDeep({
     event_name: eventName,
     event_time: eventTime,
     event_id: eventId,
@@ -101,7 +116,7 @@ export async function trackMetaConversion(input: MetaConversionInput): Promise<M
     action_source: input.actionSource || 'website',
     user_data: userData,
     custom_data: input.customData || {},
-  };
+  });
 
   const eventLogRef = db.collection('metaConversionEvents').doc();
 
@@ -140,7 +155,7 @@ export async function trackMetaConversion(input: MetaConversionInput): Promise<M
     }
   }
 
-  await eventLogRef.set({
+  await eventLogRef.set(omitUndefinedDeep({
     storeId,
     orderId: input.orderId || null,
     source: input.source,
@@ -152,7 +167,7 @@ export async function trackMetaConversion(input: MetaConversionInput): Promise<M
     reason: reason || null,
     eventPayload,
     createdAt: admin.firestore.FieldValue.serverTimestamp(),
-  });
+  }));
 
   await storeRef.set({
     metaIntegrationSettings: {

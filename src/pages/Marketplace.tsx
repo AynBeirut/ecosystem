@@ -78,6 +78,18 @@ const Marketplace: React.FC = () => {
 
   // Apply filters when dependencies change
   useEffect(() => {
+    const onlineStoreIds = new Set(allStores.map((store) => store.id));
+
+    const isMarketplaceVisible = (product: Product): boolean => {
+      if (!onlineStoreIds.has(product.storeId)) return false;
+      // Admin "Visible Online" toggle is stored as inStock.
+      if (product.inStock === false) return false;
+      // Services / supplier-synced dropship SKUs may keep local stock at 0 while listed.
+      if (product.productType === 'service' || product.supplierSyncEnabled) return true;
+      if (product.inStock === true) return true;
+      return typeof product.stock !== 'number' || product.stock > 0;
+    };
+
     // Filter products and deduplicate by id
     const filtered = allProducts.filter(product => {
       const matchesSearch = searchQuery === '' || 
@@ -86,7 +98,7 @@ const Marketplace: React.FC = () => {
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
       const matchesLocation = !location_ || 
         allStores.find(store => store.id === product.storeId)?.location.toLowerCase().includes(location_.toLowerCase());
-      return matchesSearch && matchesPrice && matchesLocation && product.inStock && (typeof product.stock !== 'number' || product.stock > 0);
+      return matchesSearch && matchesPrice && matchesLocation && isMarketplaceVisible(product);
     });
     // Deduplicate by product id
     const deduped = Array.from(new Map(filtered.map(p => [p.id, p])).values());

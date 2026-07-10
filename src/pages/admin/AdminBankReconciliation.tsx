@@ -3,6 +3,7 @@ import { addDoc, collection, getDocs, getFirestore, query, serverTimestamp, wher
 import { useAuth } from '@/context/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
+import { glPostCashCollectionDeposit } from '@/lib/platformGl';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { isCountedSaleStatus } from '@/lib/salesRules';
 import { Order } from '@/types/order';
@@ -287,7 +288,7 @@ const AdminBankReconciliation: React.FC = () => {
         amount: Number(order.remainingCash.toFixed(2)),
       }));
 
-      await addDoc(collection(db, 'cashCollections'), {
+      const collectionRef = await addDoc(collection(db, 'cashCollections'), {
         storeId: user.storeId,
         collectionDate,
         bankAccount: bankAccount.trim(),
@@ -300,6 +301,13 @@ const AdminBankReconciliation: React.FC = () => {
         createdByName: user.name || 'Unknown User',
         createdAt: serverTimestamp(),
       });
+
+      await glPostCashCollectionDeposit(
+        user.storeId,
+        collectionRef.id,
+        Number(selectedTotal.toFixed(2)),
+        new Date(collectionDate).toISOString(),
+      );
 
       toast({
         title: 'Success',

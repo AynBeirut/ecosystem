@@ -1,7 +1,8 @@
 import React from 'react';
-import { FinanceEmbedProvider } from '../../the eco sys/finance/beirut-finance-flow-main/src/context/FinanceEmbedContext';
-import { AppProvider } from '../../the eco sys/finance/beirut-finance-flow-main/src/context/AppContext';
-import { AccountingProvider } from '../../the eco sys/finance/beirut-finance-flow-main/src/context/AccountingContext';
+import './wireFinanceOnLoad';
+import { FinanceEmbedProvider } from '../../suba eco sys/finance/beirut-finance-flow-main/src/context/FinanceEmbedContext';
+import { AppProvider } from '../../suba eco sys/finance/beirut-finance-flow-main/src/context/AppContext';
+import { AccountingProvider } from '../../suba eco sys/finance/beirut-finance-flow-main/src/context/AccountingContext';
 
 const FINANCE_EMBED_BASE = '/admin/finance';
 

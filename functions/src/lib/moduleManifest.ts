@@ -9,6 +9,9 @@ export type BusinessWorkflow =
   | 'custom';
 
 export type StartingPackageKey =
+  | 'pkg_invoice'
+  | 'pkg_mini_shop'
+  | 'pkg_business_backend'
   | 'pkg_shop'
   | 'pkg_live_kitchen'
   | 'pkg_factory_flow'
@@ -36,6 +39,27 @@ export const PACKAGE_PRESETS: Record<
     yearlyUsd: number;
   }
 > = {
+  pkg_invoice: {
+    label: 'Invoice Manager',
+    workflow: 'freelancer',
+    defaultModules: ['invoicing', 'invoice_manager', 'admin_mobile'],
+    monthlyUsd: 5,
+    yearlyUsd: 50,
+  },
+  pkg_mini_shop: {
+    label: 'Mini Shop',
+    workflow: 'shop',
+    defaultModules: ['invoicing', 'marketplace', 'payments', 'stock', 'admin_mobile'],
+    monthlyUsd: 10,
+    yearlyUsd: 100,
+  },
+  pkg_business_backend: {
+    label: 'Business Backend',
+    workflow: 'shop',
+    defaultModules: ['invoicing', 'analytics', 'payments', 'delivery', 'stock', 'admin_mobile'],
+    monthlyUsd: 19,
+    yearlyUsd: 190,
+  },
   pkg_shop: {
     label: 'Shop',
     workflow: 'shop',

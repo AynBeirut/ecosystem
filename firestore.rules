@@ -68,12 +68,63 @@ service cloud.firestore {
         && p.subscriptionStatus in ['expired', 'blocked'];
     }
 
-    function isCommerceEligibleStatus(storeId) {
+    function isLegacyEligibleStore(storeId) {
       let p = storeProfileData(storeId);
-      return storeProfileExists(storeId) && (
-        !p.keys().hasAny(['subscriptionStatus']) ||
-        p.subscriptionStatus in ['active', 'trial', 'grace', 'grace_period']
+      return storeProfileExists(storeId)
+        && p.keys().hasAny(['isLegacyUser'])
+        && p.isLegacyUser == true;
+    }
+
+    // Paid/trial/grace only — missing subscriptionStatus is NOT eligible (closes free-account bypass).
+    function hasValidSubscription(storeId) {
+      return isLegacyEligibleStore(storeId) || (
+        storeProfileExists(storeId)
+        && storeProfileData(storeId).keys().hasAny(['subscriptionStatus'])
+        && storeProfileData(storeId).subscriptionStatus in ['active', 'trial', 'grace', 'grace_period']
       );
+    }
+
+    function isCommerceEligibleStatus(storeId) {
+      return hasValidSubscription(storeId);
+    }
+
+    function catalogProductCount(storeId) {
+      let p = storeProfileData(storeId);
+      return p.keys().hasAny(['catalogProductCount']) && p.catalogProductCount is int
+        ? p.catalogProductCount
+        : 0;
+    }
+
+    function modularPresetProductLimit(p) {
+      return p.startingPackage == 'pkg_invoice' ? 0
+        : p.startingPackage == 'pkg_mini_shop' ? 15
+        : p.startingPackage == 'pkg_business_backend' ? 50
+        : (p.startingPackage == 'pkg_shop'
+            || p.startingPackage == 'pkg_live_kitchen'
+            || p.startingPackage == 'pkg_factory_flow') ? 50
+        : 10;
+    }
+
+    function effectiveProductLimit(storeId) {
+      let p = storeProfileData(storeId);
+      let tier = p.keys().hasAny(['subscriptionTier']) ? p.subscriptionTier : 'trial';
+      let status = p.keys().hasAny(['subscriptionStatus']) ? p.subscriptionStatus : null;
+      let legacyLimit = status == null || !(status in ['active', 'trial', 'grace', 'grace_period'])
+        ? 10
+        : tier == 'business' ? 50
+        : tier == 'pro' ? 20
+        : tier == 'starter' ? 8
+        : 10;
+      return p.keys().hasAny(['productLimit']) && p.productLimit is int
+        ? p.productLimit
+        : (p.keys().hasAny(['pricingVersion']) && p.pricingVersion == 'modular-v2'
+            && p.keys().hasAny(['startingPackage']))
+          ? modularPresetProductLimit(p)
+          : legacyLimit;
+    }
+
+    function isUnderProductLimit(storeId) {
+      return catalogProductCount(storeId) < effectiveProductLimit(storeId);
     }
 
     // Real store = production commerce path (not builder demo, not blocked/expired)
@@ -84,11 +135,16 @@ service cloud.firestore {
         && isCommerceEligibleStatus(storeId);
     }
 
-    // Catalog writes — allow unless demo/expired/blocked (owners can manage products during setup)
+    // Catalog writes require valid subscription + product cap (count on storeProfiles).
     function isCatalogWritableStore(storeId) {
       return storeProfileExists(storeId)
         && !isDemoStoreProfile(storeId)
-        && !isBlockedCommerceStatus(storeId);
+        && !isBlockedCommerceStatus(storeId)
+        && hasValidSubscription(storeId);
+    }
+
+    function canCreateCatalogProduct(storeId) {
+      return isCatalogWritableStore(storeId) && isUnderProductLimit(storeId);
     }
 
     function isSubAccountAdmin(storeId) {
@@ -185,6 +241,10 @@ service cloud.firestore {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
       }
 
+      match /financePaymentOrders/{paymentOrderId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
       match /financeInventoryMovements/{movementId} {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
       }
@@ -246,6 +306,51 @@ service cloud.firestore {
       }
 
       match /financeSettings/{docId} {
+        allow read: if isStoreAdmin(storeId);
+        allow write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /ledgerAccounts/{accountId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /journalEntries/{entryId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /journalLines/{lineId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /ledgerMeta/{docId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /ledgerPeriodClosures/{periodId} {
+        allow read: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow create, update: if isStoreAdmin(storeId) && isRealStore(storeId)
+          && request.resource.data.keys().hasAll(['storeId', 'periodType', 'startDate', 'endDate', 'label', 'isClosed', 'history'])
+          && request.resource.data.storeId == storeId
+          && request.resource.data.periodType in ['month', 'quarter']
+          && request.resource.data.isClosed is bool
+          && request.resource.data.history is list;
+        allow delete: if false;
+      }
+
+      // Platform COD delivery wallet (Admin Orders path — unprefixed subcollections)
+      match /deliveryPersons/{personId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /deliveryOrders/{orderId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /cashCollections/{collectionId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /cashBalance/{docId} {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
       }
     }
@@ -268,7 +373,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if request.auth != null
         && request.resource.data.storeId is string
-        && isCatalogWritableStore(request.resource.data.storeId)
+        && canCreateCatalogProduct(request.resource.data.storeId)
         && (isStoreAdmin(request.resource.data.storeId) || isActiveSubAccountForStore(request.resource.data.storeId));
       allow update, delete: if request.auth != null
         && resource.data.storeId is string
@@ -379,15 +484,15 @@ service cloud.firestore {
       allow create, update, delete: if false;
     }
 
-    // Suppliers: real store owners only
+    // Suppliers: platform catalog — finance reads/writes via tableMap
     match /suppliers/{supplierId} {
       allow read: if request.auth != null
         && resource.data.storeId is string
-        && isStoreAdmin(resource.data.storeId);
+        && (isStoreAdmin(resource.data.storeId) || isActiveSubAccountForStore(resource.data.storeId));
       allow create, update, delete: if request.auth != null
         && request.resource.data.storeId is string
         && isRealStore(request.resource.data.storeId)
-        && isStoreAdmin(request.resource.data.storeId);
+        && (isStoreAdmin(request.resource.data.storeId) || isActiveSubAccountForStore(request.resource.data.storeId));
     }
 
     // Raw Materials: real store owners only
@@ -405,15 +510,15 @@ service cloud.firestore {
         && isStoreAdmin(resource.data.storeId);
     }
 
-    // Purchases: real store owners only
+    // Purchases: platform PO / receiving — finance reads for AP; admin owns inventory
     match /purchases/{purchaseId} {
       allow read: if request.auth != null
         && resource.data.storeId is string
-        && isStoreAdmin(resource.data.storeId);
+        && (isStoreAdmin(resource.data.storeId) || isActiveSubAccountForStore(resource.data.storeId));
       allow create, update: if request.auth != null
         && request.resource.data.storeId is string
         && isRealStore(request.resource.data.storeId)
-        && isStoreAdmin(request.resource.data.storeId);
+        && (isStoreAdmin(request.resource.data.storeId) || isActiveSubAccountForStore(request.resource.data.storeId));
       allow delete: if request.auth != null
         && resource.data.storeId is string
         && isRealStore(resource.data.storeId)

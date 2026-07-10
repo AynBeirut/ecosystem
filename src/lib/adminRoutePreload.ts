@@ -20,6 +20,7 @@ const ROUTE_PRELOADERS: Record<string, Preloader> = {
   '/admin/sub-accounts': () => import('@/pages/admin/AdminSubAccounts'),
   '/admin/account-statement': () => import('@/pages/admin/AdminAccountStatement'),
   '/admin/cash-collection': () => import('@/pages/admin/AdminBankReconciliation'),
+  '/admin/delivery-wallet': () => import('@/pages/admin/AdminDeliveryWallet'),
   '/admin/bank-reconciliation': () => import('@/pages/admin/AdminBankReconciliation'),
   '/admin/crm/pipeline': () => import('@/pages/admin/crm/CrmPipeline'),
   '/subscription': () => import('@/pages/admin/Subscription'),

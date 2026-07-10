@@ -68,6 +68,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/sub-accounts': 'Sub-Accounts',
   '/admin/account-statement': 'Account Statement',
   '/admin/cash-collection': 'Cash Collection',
+  '/admin/delivery-wallet': 'Delivery Wallets',
   '/admin/audit-logs': 'Store Logs',
   '/admin/seo-analytics': 'SEO Analytics',
   '/admin/seo-audit': 'SEO Audit',

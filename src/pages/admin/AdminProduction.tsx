@@ -21,6 +21,7 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { glPostProductionComplete } from '@/lib/platformGl';
 
 // Helper to clean non-ASCII characters for PDF export
 const cleanTextForPDF = (text: string): string => {
@@ -1055,9 +1056,9 @@ const AdminProduction: React.FC = () => {
             currentBalance: freshTotalQty,
             quantityManufactured: round3Prod((fresh.quantityManufactured || 0) + actualQty),
             transactions: [...(fresh.transactions || []), transaction],
-            batchQueue: [...(fresh.batchQueue || []), batchDetails],
             costPrice: Math.round(freshWeightedAvg * 10000) / 10000,
             totalValue: round3Prod(freshTotalQty * freshWeightedAvg),
+            valuationMethod: 'WEIGHTED_AVERAGE',
             updatedAt: nowIso,
           });
         } else {
@@ -1080,9 +1081,8 @@ const AdminProduction: React.FC = () => {
             costPrice: totalCostPerUnit,
             sellingPrice: composedProduct.price || composedProduct.sellingPrice || (totalCostPerUnit * 2.5),
             totalValue: round3Prod(actualQty * totalCostPerUnit),
-            valuationMethod: 'FIFO',
+            valuationMethod: 'WEIGHTED_AVERAGE',
             transactions: [transaction],
-            batchQueue: [batchDetails],
             storeId: user.storeId,
             createdBy: user.id,
             createdAt: nowIso,
@@ -1116,6 +1116,15 @@ const AdminProduction: React.FC = () => {
       
       console.log('✅ Production completed successfully, marking operationSucceeded = true');
       operationSucceeded = true;
+
+      if (user?.storeId) {
+        await glPostProductionComplete(
+          user.storeId,
+          completingBatch.id,
+          totalMaterialCost,
+          nowIso,
+        );
+      }
     } catch (error) {
       console.error('Error completing production:', error);
       toast({ title: "Error", description: "Failed to complete production", variant: "destructive" });

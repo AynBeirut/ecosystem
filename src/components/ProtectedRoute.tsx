@@ -1,10 +1,13 @@
 
 import React, { useEffect, useMemo, useState } from "react";
 import { useAuth } from '@/context/useAuth';
-import { Navigate, Link, useLocation } from 'react-router-dom';
+import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import ModuleGate from '@/components/ModuleGate';
+import { checkSubscriptionAccess } from '@/lib/subscriptionGuard';
+import type { StoreProfile } from '@/types/storeProfile';
+import { getActualStoreId } from '@/lib/storeUtils';
 
 
 const ProtectedRoute: React.FC<{ 
@@ -16,8 +19,11 @@ const ProtectedRoute: React.FC<{
 }> = ({ children, allowedRoles, requiredPermission, requiredModule }) => {
   const { user, isLoading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
   const [ipCheckState, setIpCheckState] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
   const [ipCheckMessage, setIpCheckMessage] = useState('');
+  const [subscriptionState, setSubscriptionState] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
+  const [subscriptionMessage, setSubscriptionMessage] = useState('');
 
   const loadingTitle = useMemo(() => {
     const path = location.pathname;
@@ -148,6 +154,71 @@ const ProtectedRoute: React.FC<{
     };
   }, [user, requiresAdminIpCheck]);
 
+  const requiresSubscriptionCheck = useMemo(() => {
+    if (!user) return false;
+    if (user.role !== 'admin' && user.role !== 'sub_account') return false;
+    const path = location.pathname;
+    if (path === '/subscription' || path.startsWith('/subscription/')) return false;
+    if (path.startsWith('/admin/builder') || path.startsWith('/admin/theme-editor')) return false;
+    return path.startsWith('/admin') || path.startsWith('/team');
+  }, [user, location.pathname]);
+
+  useEffect(() => {
+    if (!user || !requiresSubscriptionCheck) {
+      setSubscriptionState('idle');
+      setSubscriptionMessage('');
+      return;
+    }
+
+    let cancelled = false;
+
+    const verifySubscription = async () => {
+      setSubscriptionState('checking');
+      setSubscriptionMessage('');
+
+      try {
+        const db = getFirestore();
+        const storeId = getActualStoreId(user);
+        if (!storeId) {
+          if (!cancelled) {
+            setSubscriptionState('blocked');
+            setSubscriptionMessage('Store not found for this account.');
+          }
+          return;
+        }
+
+        const profileSnap = await getDoc(doc(db, 'storeProfiles', storeId));
+        const profile = profileSnap.exists()
+          ? ({ id: storeId, ...profileSnap.data() } as StoreProfile)
+          : null;
+        const access = checkSubscriptionAccess(profile);
+
+        if (!cancelled) {
+          if (access.allowed) {
+            setSubscriptionState('allowed');
+          } else {
+            setSubscriptionState('blocked');
+            setSubscriptionMessage(access.message || 'No active subscription found.');
+            if (access.redirectTo) {
+              navigate(access.redirectTo, { replace: true, state: { from: location } });
+            }
+          }
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setSubscriptionState('blocked');
+          setSubscriptionMessage(err instanceof Error ? err.message : 'Subscription check failed.');
+        }
+      }
+    };
+
+    void verifySubscription();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user, requiresSubscriptionCheck, navigate, location]);
+
   // Wait for auth state to finish loading before making redirect decisions
   if (isLoading) {
     return <LoadingShell />;
@@ -167,6 +238,29 @@ const ProtectedRoute: React.FC<{
 
   if (requiresAdminIpCheck && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
     return <LoadingShell />;
+  }
+
+  if (requiresSubscriptionCheck && (subscriptionState === 'idle' || subscriptionState === 'checking')) {
+    return <LoadingShell />;
+  }
+
+  if (requiresSubscriptionCheck && subscriptionState === 'blocked') {
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center px-4">
+        <div className="max-w-lg w-full border rounded-lg p-6 space-y-3 bg-white">
+          <h2 className="text-lg font-semibold">Subscription required</h2>
+          <p className="text-sm text-gray-600">
+            {subscriptionMessage || 'Start a trial or subscribe to use admin features.'}
+          </p>
+          <div className="flex gap-2">
+            <Link to="/subscription" className="inline-flex items-center px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm">
+              View plans
+            </Link>
+            <Link to="/" className="inline-flex items-center px-3 py-2 rounded-md border text-sm">Marketplace</Link>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   if (requiresAdminIpCheck && ipCheckState === 'blocked') {
@@ -204,7 +298,7 @@ const ProtectedRoute: React.FC<{
       if (user.role !== 'crm_rep') {
         return <Navigate to="/" replace />;
       }
-    } else if (!allowedRoles.includes(user.role)) {
+    } else if (user.role && !allowedRoles.includes(user.role)) {
       if (user.role === 'user') {
         return <Navigate to="/subscription" replace state={{ from: location }} />;
       }

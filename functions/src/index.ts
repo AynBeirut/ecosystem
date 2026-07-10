@@ -1,4 +1,4 @@
-﻿import express, { Request, Response } from 'express';
+import express, { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
 import cors from 'cors';
@@ -35,6 +35,7 @@ import { sendContactEmail } from './api/contact';
 import { checkCustomDomainStatus, registerCustomDomain } from './api/domain';
 import { exportGdprData, requestGdprDelete } from './api/gdpr';
 import { getAiModels, saveAiSettings, getAiCreditBalance, deductAiCredits, generateAiContent } from './api/ai';
+import { queryAgent } from './api/agent';
 import { connectFacebookShop, connectInstagramShopping, createMetaAdsCampaign, enableDynamicProductAds, getMetaCatalogFeed, syncMetaCatalog, trackMetaConversionEvent } from './api/metaCatalog';
 import { getRobotsTxt, getSitemap, submitSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
@@ -224,6 +225,7 @@ app.post('/ai/generate', generateAiContent);
 app.post('/ai/settings', saveAiSettings);
 app.post('/ai/credits/balance', getAiCreditBalance);
 app.post('/ai/credits/deduct', deductAiCredits);
+app.post('/agent/query', queryAgent);
 
 // Sitemap for SEO
 app.get('/sitemap.xml', getSitemap);
@@ -778,3 +780,4 @@ export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotificati
 export { onOrderCreatedCrmSync } from './triggers/crmOrderSync';
 // Export Firestore trigger: store announcements ΓåÆ notify customers who favorited the store
 export { onStoreAnnouncement } from './triggers/storeAnnouncements';
+export { onCatalogProductWritten } from './triggers/syncCatalogProductCount';

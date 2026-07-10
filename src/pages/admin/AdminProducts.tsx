@@ -1,4 +1,14 @@
 import React, { useState, useEffect } from 'react';
+import { Link } from 'react-router-dom';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -6,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Plus, Edit3, Package, AlertCircle, RefreshCw } from 'lucide-react';
 import {
@@ -32,11 +42,11 @@ import ClampedText, {
   FORM_FILE_BUTTON_CLASS,
   SelectedFileLabel,
 } from '@/components/ClampedText';
-import { getFirestore, collection, query, where, getDocs, addDoc, doc, updateDoc, deleteDoc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc, runTransaction, increment } from 'firebase/firestore';
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '@/lib/firebase';
 import { generateUniqueSlug } from '@/lib/slugify';
-import { assertCanCreateProduct, assertCanUploadBytes, trackStorageUsageAfterUpload } from '@/lib/subscriptionEnforcement';
+import { assertCanCreateProduct, assertCanUploadBytes, assertCanUploadCatalogImage, trackStorageUsageAfterUpload, getSubscriptionSnapshot } from '@/lib/subscriptionEnforcement';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
 
@@ -74,7 +84,16 @@ const AdminProducts: React.FC = () => {
     defaultRenewalReminderDays: 7,
   });
   const [firestoreReady, setFirestoreReady] = useState(false);
+  const [planLimits, setPlanLimits] = useState<{
+    productLimit: number | null;
+    storageLimitMb: number | null;
+    storageUsedMb: number;
+    allowsCatalogImages: boolean;
+  } | null>(null);
+  const [limitDialogOpen, setLimitDialogOpen] = useState(false);
+  const [limitDialogMessage, setLimitDialogMessage] = useState('');
   const storeId = getActualStoreId(user);
+  const catalogImagesAllowed = planLimits?.allowsCatalogImages !== false;
 
   useEffect(() => {
     if (!user?.id) {
@@ -265,6 +284,47 @@ const AdminProducts: React.FC = () => {
     };
   }, [firestoreReady, storeId, user?.id]);
 
+  useEffect(() => {
+    if (!firestoreReady || !storeId) {
+      setPlanLimits(null);
+      return;
+    }
+    const db = getFirestore();
+    void getSubscriptionSnapshot(db, storeId)
+      .then((snapshot) => {
+        setPlanLimits({
+          productLimit: snapshot.productLimit,
+          storageLimitMb: snapshot.storageLimitMb,
+          storageUsedMb: snapshot.storageUsedMb,
+          allowsCatalogImages: snapshot.allowsCatalogImages,
+        });
+      })
+      .catch(() => setPlanLimits(null));
+  }, [firestoreReady, storeId, products.length]);
+
+  const openAddProductDialog = async () => {
+    if (!storeId) {
+      toast({ title: 'Error', description: 'Store not found', variant: 'destructive' });
+      return;
+    }
+    const db = getFirestore();
+    try {
+      await assertCanCreateProduct(db, storeId, newProduct.productType);
+      setIsAddingProduct(true);
+    } catch (error) {
+      const message = error instanceof Error
+        ? error.message
+        : 'Your current plan does not allow adding more products.';
+      setLimitDialogMessage(message);
+      setLimitDialogOpen(true);
+      toast({
+        title: 'Plan limit reached',
+        description: message,
+        variant: 'destructive',
+      });
+    }
+  };
+
   const categoryOptions = Array.from(new Set([
     ...categories,
     ...(newProduct.category ? [newProduct.category] : []),
@@ -420,8 +480,12 @@ const AdminProducts: React.FC = () => {
 
     setIsSaving(true);
     let imageUrl = newProduct.image;
-    if (newProduct.imageFile) {
+    const catalogImagesAllowed = planLimits?.allowsCatalogImages !== false;
+    if (!catalogImagesAllowed) {
+      imageUrl = '';
+    } else if (newProduct.imageFile) {
       try {
+        await assertCanUploadCatalogImage(db, storeId);
         await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
         const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
@@ -437,7 +501,12 @@ const AdminProducts: React.FC = () => {
         await trackStorageUsageAfterUpload(db, storeId, newProduct.imageFile.size);
       } catch (error) {
         console.error('Image upload failed:', error);
-        toast({ title: "Error", description: `Image upload failed: ${error.message || 'Unknown error'}`, variant: "destructive" });
+        const message = error instanceof Error ? error.message : 'Image upload failed.';
+        if (message.toLowerCase().includes('storage limit')) {
+          setLimitDialogMessage(message);
+          setLimitDialogOpen(true);
+        }
+        toast({ title: 'Storage limit reached', description: message, variant: 'destructive' });
         setIsSaving(false);
         return;
       }
@@ -499,8 +568,15 @@ const AdminProducts: React.FC = () => {
       const cleanProductData = Object.fromEntries(
         Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])
       );
-      const docRef = await addDoc(collection(db, 'products'), cleanProductData);
-      setProducts((prev) => [...prev, { id: docRef.id, ...(cleanProductData as Product) }]);
+      const productRef = doc(collection(db, 'products'));
+      await runTransaction(db, async (tx) => {
+        tx.set(productRef, cleanProductData);
+        tx.update(doc(db, 'storeProfiles', storeId), {
+          catalogProductCount: increment(1),
+          updatedAt: new Date().toISOString(),
+        });
+      });
+      setProducts((prev) => [...prev, { id: productRef.id, ...(cleanProductData as Product) }]);
 
       if (
         newProduct.dropshipEnabled &&
@@ -509,7 +585,7 @@ const AdminProducts: React.FC = () => {
         storeId
       ) {
         try {
-          await syncDropshipProduct(storeId, docRef.id);
+          await syncDropshipProduct(storeId, productRef.id);
         } catch (syncErr) {
           console.warn('Initial Shein sync failed after create', syncErr);
           toast({
@@ -537,7 +613,16 @@ const AdminProducts: React.FC = () => {
       toast({ title: "Success", description: "Product added successfully!" });
     } catch (err) {
       console.error('Failed to add product:', err);
-      toast({ title: "Error", description: `Failed to add product: ${err.message || 'Unknown error'}`, variant: "destructive" });
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      if (message.includes('permission') || message.includes('PERMISSION_DENIED') || message.includes('plan limit')) {
+        setLimitDialogMessage(
+          message.includes('permission') || message.includes('PERMISSION_DENIED')
+            ? 'Your subscription or product limit blocks new products. Subscribe or upgrade to continue.'
+            : message,
+        );
+        setLimitDialogOpen(true);
+      }
+      toast({ title: 'Error', description: `Failed to add product: ${message}`, variant: 'destructive' });
     } finally {
       setIsSaving(false);
     }
@@ -551,7 +636,14 @@ const AdminProducts: React.FC = () => {
     try {
       console.log('Attempting to delete product:', productId);
       const db = getFirestore();
-      await deleteDoc(doc(db, 'products', productId));
+      if (!storeId) throw new Error('Store not found');
+      await runTransaction(db, async (tx) => {
+        tx.delete(doc(db, 'products', productId));
+        tx.update(doc(db, 'storeProfiles', storeId), {
+          catalogProductCount: increment(-1),
+          updatedAt: new Date().toISOString(),
+        });
+      });
       setProducts(products.filter(p => p.id !== productId));
       toast({ title: "Success", description: "Product deleted successfully!" });
       console.log('Product deleted successfully');
@@ -692,9 +784,13 @@ const AdminProducts: React.FC = () => {
 
     setIsSaving(true);
     let imageUrl = newProduct.image;
-    if (newProduct.imageFile) {
+    const catalogImagesAllowed = planLimits?.allowsCatalogImages !== false;
+    if (!catalogImagesAllowed) {
+      imageUrl = editingProduct?.image?.includes('placehold.co') ? editingProduct.image : '';
+    } else if (newProduct.imageFile) {
       try {
         if (storeId) {
+          await assertCanUploadCatalogImage(db, storeId);
           await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
         }
         const safeFileName = encodeURIComponent(newProduct.imageFile.name);
@@ -844,15 +940,235 @@ const AdminProducts: React.FC = () => {
       backTo={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'}
       backLabel="Back to Inventory"
       actions={
-        canManageInventory && (
-          <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="h-4 w-4 mr-2" />
-                Add Product
-              </Button>
-            </DialogTrigger>
-              <DialogContent className={FORM_DIALOG_SHELL}>
+        canManageInventory ? (
+          <Button type="button" onClick={() => void openAddProductDialog()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Product
+          </Button>
+        ) : undefined
+      }
+    >
+        {planLimits?.productLimit != null && products.length >= planLimits.productLimit && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              You have {products.length} products but your plan allows {planLimits.productLimit}.
+              {' '}
+              Add modules or upgrade (+10 products per $10/mo above $27 Shop).
+              {' '}
+              <Link to="/admin/subscription" className="font-medium underline">
+                Upgrade your plan
+              </Link>
+              .
+            </AlertDescription>
+          </Alert>
+        )}
+        {!catalogImagesAllowed && (
+          <Alert className="mb-4">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Business Backend plan: catalog is text/SKU only — product images are not included.
+              {' '}
+              <Link to="/admin/subscription" className="font-medium underline">
+                Upgrade to Mini Shop or Shop
+              </Link>
+              {' '}
+              to add images.
+            </AlertDescription>
+          </Alert>
+        )}
+        {planLimits?.storageLimitMb != null && planLimits.storageUsedMb >= planLimits.storageLimitMb * 0.9 && (
+          <Alert className="mb-4 border-amber-500/50 bg-amber-50 text-amber-900">
+            <AlertCircle className="h-4 w-4" />
+            <AlertDescription>
+              Storage is nearly full ({planLimits.storageUsedMb.toFixed(1)} MB of {planLimits.storageLimitMb} MB).
+              {' '}
+              <Link to="/admin/subscription" className="font-medium underline">
+                Upgrade for more storage
+              </Link>
+              .
+            </AlertDescription>
+          </Alert>
+        )}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {products.map((product) => (
+            <AdminPanel key={product.id}>
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between">
+                  <div>
+                    <ClampedText
+                      text={product.name}
+                      maxLines={2}
+                      className="text-lg font-semibold leading-none tracking-tight"
+                      as="h3"
+                    />
+                    <CardDescription className="text-xl font-bold text-primary">
+                      ${product.price}
+                    </CardDescription>
+                  </div>
+                  <div className="flex flex-col gap-1 items-end">
+                    <Badge variant="secondary">{product.category}</Badge>
+                    <Badge variant={
+                      product.productType === 'service' ? 'default' : 
+                      product.productType === 'composed' ? 'outline' : 
+                      'secondary'
+                    }>
+                      {product.productType === 'service'
+                        ? (product.serviceBillingType === 'monthly'
+                            ? 'Service • Monthly'
+                            : product.serviceBillingType === 'yearly'
+                              ? 'Service • Yearly'
+                              : 'Service • One-Time')
+                        : 
+                       product.productType === 'composed' ? 'Composed' : 
+                       'Item'}
+                    </Badge>
+                    {product.expiryTracking && product.expiryDate && hasExpired(product) && (
+                      <Badge variant="destructive">Expired</Badge>
+                    )}
+                    {product.expiryTracking && product.expiryDate && isExpiringSoon(product) && (
+                      <Badge className="bg-orange-500 text-white hover:bg-orange-600">
+                        Expires in {getDaysUntilExpiry(product.expiryDate)}d
+                      </Badge>
+                    )}
+                    {product.supplierProductUrl && (
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                        {formatSupplierPlatformLabel(product.supplierPlatform)}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent>
+                <img 
+                  src={product.image || (product as any).imageUrl} 
+                  alt={product.imageAlt || product.name}
+                  className="w-full h-32 object-cover rounded-md mb-3"
+                />
+                
+                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                  {product.description}
+                </p>
+                
+                {/* Stock Information */}
+                <div className="mb-3 p-2 bg-muted rounded-md">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm font-medium">Stock Quantity:</span>
+                    <span className={`text-lg font-bold ${
+                      (() => {
+                        if (product.productType === 'service') return 'text-muted-foreground';
+                        const actualStock = finishedGoodsStock[product.id] ?? product.stock ?? 0;
+                        return actualStock <= 10 ? 'text-red-600' : 
+                               actualStock <= 50 ? 'text-yellow-600' : 
+                               'text-green-600';
+                      })()
+                    }`}>
+                      {product.productType === 'service' ? 'N/A' : (finishedGoodsStock[product.id] ?? product.stock ?? 0)}
+                    </span>
+                  </div>
+                  {(() => {
+                    if (product.productType === 'service') return null;
+                    const actualStock = finishedGoodsStock[product.id] ?? product.stock ?? 0;
+                    return actualStock <= 10 && (
+                      <p className="text-xs text-red-600 mt-1">⚠️ Low stock alert!</p>
+                    );
+                  })()}
+                </div>
+
+                {product.supplierProductUrl && (
+                  <p className="text-[10px] text-muted-foreground mb-2 line-clamp-2">
+                    {formatSupplierSyncLabel(product)}
+                  </p>
+                )}
+
+                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
+                  <span>Delivery: {product.deliveryTime}</span>
+                  <span>•</span>
+                  <span className={product.inStock ? "text-green-600" : "text-red-600"}>
+                    {product.inStock ? "Visible Online" : "Hidden Online"}
+                  </span>
+                  {canManageInventory && (
+                    <>
+                      <Switch checked={product.inStock} onCheckedChange={() => handleToggleStock(product)} className="ml-2" />
+                      <span className="ml-1">Display Online</span>
+                    </>
+                  )}
+                </div>
+                
+                <div className="flex flex-col gap-2">
+                  {canManageInventory &&
+                    product.supplierProductUrl &&
+                    product.productType === 'simple' &&
+                    (product.supplierPlatform === 'shein' || !product.supplierPlatform) && (
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      className="w-full h-8 text-xs"
+                      disabled={syncingProductId === product.id}
+                      onClick={() => handleSyncSupplier(product)}
+                    >
+                      <RefreshCw className={`h-3 w-3 mr-1 ${syncingProductId === product.id ? 'animate-spin' : ''}`} />
+                      {syncingProductId === product.id ? 'Syncing…' : 'Sync stock (Shein)'}
+                    </Button>
+                  )}
+                <div className="flex gap-2">
+                  {canManageInventory && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditProduct(product)}
+                        className="flex-1"
+                      >
+                        <Edit3 className="h-3 w-3 mr-1" />
+                        Edit
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        onClick={() => handleDeleteProduct(product.id)}
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
+                    </>
+                  )}
+                  {!canManageInventory && (
+                    <Badge variant="secondary" className="w-full justify-center">View Only</Badge>
+                  )}
+                </div>
+                </div>
+              </CardContent>
+            </AdminPanel>
+          ))}
+          
+          {products.length === 0 && (
+            <div className="col-span-full">
+              <AdminPanel>
+                <CardContent className="flex flex-col items-center justify-center py-12">
+                  <Package className="h-12 w-12 text-muted-foreground mb-4" />
+                  <h3 className="text-lg font-semibold mb-2">No Products Yet</h3>
+                  <p className="text-muted-foreground text-center mb-4">
+                    {canManageInventory 
+                      ? "Start building your store by adding your first product"
+                      : "No products available to view"}
+                  </p>
+                  {canManageInventory && (
+                    <Button onClick={() => void openAddProductDialog()}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Your First Product
+                    </Button>
+                  )}
+                </CardContent>
+              </AdminPanel>
+            </div>
+          )}
+        </div>
+
+
+      {/* Add Product Dialog */}
+      <Dialog open={isAddingProduct} onOpenChange={setIsAddingProduct}>
+        <DialogContent className={FORM_DIALOG_SHELL}>
                 <DialogHeader className={FORM_DIALOG_HEADER}>
                   <DialogTitle>Add New Product</DialogTitle>
                   <DialogDescription className="text-xs">
@@ -1061,6 +1377,7 @@ const AdminProducts: React.FC = () => {
                     />
                   )}
                   
+                  {catalogImagesAllowed ? (
                   <div>
                     <Label htmlFor="image">Image URL</Label>
                     {newProduct.image && (
@@ -1148,6 +1465,11 @@ const AdminProducts: React.FC = () => {
                       </div>
                     )}
                   </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
+                      Products use a name-based placeholder — image uploads are not on your plan.
+                    </p>
+                  )}
                 </div>
                 </div>
 
@@ -1160,184 +1482,7 @@ const AdminProducts: React.FC = () => {
                   </Button>
                 </DialogFooter>
               </DialogContent>
-            </Dialog>
-        )
-      }
-    >
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {products.map((product) => (
-            <AdminPanel key={product.id}>
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <ClampedText
-                      text={product.name}
-                      maxLines={2}
-                      className="text-lg font-semibold leading-none tracking-tight"
-                      as="h3"
-                    />
-                    <CardDescription className="text-xl font-bold text-primary">
-                      ${product.price}
-                    </CardDescription>
-                  </div>
-                  <div className="flex flex-col gap-1 items-end">
-                    <Badge variant="secondary">{product.category}</Badge>
-                    <Badge variant={
-                      product.productType === 'service' ? 'default' : 
-                      product.productType === 'composed' ? 'outline' : 
-                      'secondary'
-                    }>
-                      {product.productType === 'service'
-                        ? (product.serviceBillingType === 'monthly'
-                            ? 'Service • Monthly'
-                            : product.serviceBillingType === 'yearly'
-                              ? 'Service • Yearly'
-                              : 'Service • One-Time')
-                        : 
-                       product.productType === 'composed' ? 'Composed' : 
-                       'Item'}
-                    </Badge>
-                    {product.expiryTracking && product.expiryDate && hasExpired(product) && (
-                      <Badge variant="destructive">Expired</Badge>
-                    )}
-                    {product.expiryTracking && product.expiryDate && isExpiringSoon(product) && (
-                      <Badge className="bg-orange-500 text-white hover:bg-orange-600">
-                        Expires in {getDaysUntilExpiry(product.expiryDate)}d
-                      </Badge>
-                    )}
-                    {product.supplierProductUrl && (
-                      <Badge variant="outline" className="text-[10px] px-1.5 py-0">
-                        {formatSupplierPlatformLabel(product.supplierPlatform)}
-                      </Badge>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-              
-              <CardContent>
-                <img 
-                  src={product.image || (product as any).imageUrl} 
-                  alt={product.imageAlt || product.name}
-                  className="w-full h-32 object-cover rounded-md mb-3"
-                />
-                
-                <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
-                  {product.description}
-                </p>
-                
-                {/* Stock Information */}
-                <div className="mb-3 p-2 bg-muted rounded-md">
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm font-medium">Stock Quantity:</span>
-                    <span className={`text-lg font-bold ${
-                      (() => {
-                        if (product.productType === 'service') return 'text-muted-foreground';
-                        const actualStock = finishedGoodsStock[product.id] ?? product.stock ?? 0;
-                        return actualStock <= 10 ? 'text-red-600' : 
-                               actualStock <= 50 ? 'text-yellow-600' : 
-                               'text-green-600';
-                      })()
-                    }`}>
-                      {product.productType === 'service' ? 'N/A' : (finishedGoodsStock[product.id] ?? product.stock ?? 0)}
-                    </span>
-                  </div>
-                  {(() => {
-                    if (product.productType === 'service') return null;
-                    const actualStock = finishedGoodsStock[product.id] ?? product.stock ?? 0;
-                    return actualStock <= 10 && (
-                      <p className="text-xs text-red-600 mt-1">⚠️ Low stock alert!</p>
-                    );
-                  })()}
-                </div>
-
-                {product.supplierProductUrl && (
-                  <p className="text-[10px] text-muted-foreground mb-2 line-clamp-2">
-                    {formatSupplierSyncLabel(product)}
-                  </p>
-                )}
-
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4">
-                  <span>Delivery: {product.deliveryTime}</span>
-                  <span>•</span>
-                  <span className={product.inStock ? "text-green-600" : "text-red-600"}>
-                    {product.inStock ? "Visible Online" : "Hidden Online"}
-                  </span>
-                  {canManageInventory && (
-                    <>
-                      <Switch checked={product.inStock} onCheckedChange={() => handleToggleStock(product)} className="ml-2" />
-                      <span className="ml-1">Display Online</span>
-                    </>
-                  )}
-                </div>
-                
-                <div className="flex flex-col gap-2">
-                  {canManageInventory &&
-                    product.supplierProductUrl &&
-                    product.productType === 'simple' &&
-                    (product.supplierPlatform === 'shein' || !product.supplierPlatform) && (
-                    <Button
-                      variant="secondary"
-                      size="sm"
-                      className="w-full h-8 text-xs"
-                      disabled={syncingProductId === product.id}
-                      onClick={() => handleSyncSupplier(product)}
-                    >
-                      <RefreshCw className={`h-3 w-3 mr-1 ${syncingProductId === product.id ? 'animate-spin' : ''}`} />
-                      {syncingProductId === product.id ? 'Syncing…' : 'Sync stock (Shein)'}
-                    </Button>
-                  )}
-                <div className="flex gap-2">
-                  {canManageInventory && (
-                    <>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEditProduct(product)}
-                        className="flex-1"
-                      >
-                        <Edit3 className="h-3 w-3 mr-1" />
-                        Edit
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => handleDeleteProduct(product.id)}
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </Button>
-                    </>
-                  )}
-                  {!canManageInventory && (
-                    <Badge variant="secondary" className="w-full justify-center">View Only</Badge>
-                  )}
-                </div>
-                </div>
-              </CardContent>
-            </AdminPanel>
-          ))}
-          
-          {products.length === 0 && (
-            <div className="col-span-full">
-              <AdminPanel>
-                <CardContent className="flex flex-col items-center justify-center py-12">
-                  <Package className="h-12 w-12 text-muted-foreground mb-4" />
-                  <h3 className="text-lg font-semibold mb-2">No Products Yet</h3>
-                  <p className="text-muted-foreground text-center mb-4">
-                    {canManageInventory 
-                      ? "Start building your store by adding your first product"
-                      : "No products available to view"}
-                  </p>
-                  {canManageInventory && (
-                    <Button onClick={() => setIsAddingProduct(true)}>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Your First Product
-                    </Button>
-                  )}
-                </CardContent>
-              </AdminPanel>
-            </div>
-          )}
-        </div>
+      </Dialog>
 
       {/* Edit Product Dialog */}
       <Dialog open={!!editingProduct} onOpenChange={() => setEditingProduct(null)}>
@@ -1578,6 +1723,7 @@ const AdminProducts: React.FC = () => {
               />
             )}
             
+            {catalogImagesAllowed ? (
             <div>
               <Label htmlFor="edit-image">Image URL</Label>
               {(editingProduct?.image || newProduct.imageFile) && (
@@ -1676,6 +1822,11 @@ const AdminProducts: React.FC = () => {
                 </div>
               )}
             </div>
+            ) : (
+              <p className="text-sm text-muted-foreground rounded-lg border border-dashed p-3">
+                Products use a name-based placeholder — image uploads are not on your plan.
+              </p>
+            )}
 
           </div>
           </div>
@@ -1690,6 +1841,20 @@ const AdminProducts: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <AlertDialog open={limitDialogOpen} onOpenChange={setLimitDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Plan limit reached</AlertDialogTitle>
+            <AlertDialogDescription>{limitDialogMessage}</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogAction asChild>
+              <Link to="/admin/subscription">View plans &amp; upgrade</Link>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </AdminPageShell>
   );
 };

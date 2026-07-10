@@ -11,7 +11,7 @@ import { FileText, Download, Printer } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { Supplier, PurchaseOrder } from '@/types/inventory';
-import { exportToCSV } from '@/lib/exportUtils';
+import { fetchFinanceExpenses, fetchPlatformPurchases } from '@/lib/financeData';
 
 const AdminSupplierStatements: React.FC = () => {
   const { user } = useAuth();
@@ -43,19 +43,26 @@ const AdminSupplierStatements: React.FC = () => {
     const fetchPurchaseOrders = async () => {
       if (!user?.storeId || !selectedSupplierId) return;
       const db = getFirestore();
-      const ordersRef = collection(db, 'purchaseOrders');
-      const q = query(
-        ordersRef,
-        where('storeId', '==', user.storeId),
-        where('supplierId', '==', selectedSupplierId)
-      );
-      const snapshot = await getDocs(q);
-      const ordersList = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as PurchaseOrder));
-      setPurchaseOrders(ordersList.sort((a, b) => 
-        new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()
+      const purchases = await fetchPlatformPurchases(db, user.storeId);
+      const ordersList = purchases
+        .filter((po) => po.supplierId === selectedSupplierId)
+        .map((po) => ({
+          id: po.id,
+          purchaseOrderNumber: String(po.purchaseOrderNumber || po.poNumber || po.id),
+          poNumber: String(po.poNumber || po.purchaseOrderNumber || po.id),
+          supplierId: String(po.supplierId || ''),
+          supplierName: String(po.supplierName || ''),
+          items: (po.items as PurchaseOrder['items']) || [],
+          totalCost: Number(po.totalCost ?? po.total ?? po.totalAmount ?? 0),
+          totalAmount: Number(po.totalAmount ?? po.total ?? po.totalCost ?? 0),
+          orderDate: String(po.orderDate ?? po.createdAt ?? ''),
+          receivedDate: po.receivedDate ? String(po.receivedDate) : undefined,
+          status: (String(po.status) === 'received' ? 'received' : String(po.status) === 'cancelled' ? 'cancelled' : po.status === 'confirmed' || po.status === 'ordered' ? 'approved' : 'pending') as PurchaseOrder['status'],
+          createdAt: String(po.createdAt ?? ''),
+          updatedAt: String(po.updatedAt ?? ''),
+        } as PurchaseOrder));
+      setPurchaseOrders(ordersList.sort((a, b) =>
+        new Date(b.orderDate || 0).getTime() - new Date(a.orderDate || 0).getTime()
       ));
     };
     fetchPurchaseOrders();

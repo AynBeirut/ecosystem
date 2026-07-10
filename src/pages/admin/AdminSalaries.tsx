@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast';
 import { StaffMember, SalaryPayment } from '@/types/staff';
 import { logAction } from '@/lib/auditLog';
 import AdminPageShell from '@/components/admin/AdminPageShell';
+import { glPostPayrollPayment } from '@/lib/platformGl';
 import AdminPanel from '@/components/admin/AdminPanel';
 
 const AdminSalaries: React.FC = () => {
@@ -96,6 +97,8 @@ const AdminSalaries: React.FC = () => {
 
       const docRef = await addDoc(collection(db, 'salaryPayments'), paymentData);
       setPayments([{ id: docRef.id, ...paymentData }, ...payments]);
+
+      await glPostPayrollPayment(user.storeId, docRef.id, totalAmount, paymentData.paymentDate, 'bank');
 
       await logAction(
         user.id,

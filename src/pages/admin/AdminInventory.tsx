@@ -185,7 +185,6 @@ const AdminInventory: React.FC = () => {
           <AdminNavCard title="Recipes" description="Create and manage recipes for composed products" icon={ChefHat} gradient="from-pink-500 to-rose-700" onClick={() => navigate('/admin/recipes')} />
           <AdminNavCard title="Production" description="Plan and track daily production batches" icon={Factory} gradient="from-indigo-500 to-indigo-700" onClick={() => navigate('/admin/production')} />
           <AdminNavCard title="Finished Goods" description="Track manufactured items ready for sale" icon={Package} gradient="from-green-500 to-emerald-700" onClick={() => navigate('/admin/finished-goods')} />
-          <AdminNavCard title="Expenses" description="Track and manage business expenses and operational costs" icon={DollarSign} gradient="from-amber-500 to-orange-600" onClick={() => navigate('/admin/expenses')} />
         </div>
 
         {/* Summary Cards */}
@@ -387,7 +386,7 @@ const AdminInventory: React.FC = () => {
             <AdminPanel>
               <CardHeader>
                 <CardTitle>Finished Goods</CardTitle>
-                <CardDescription>Manufactured items ready for sale with FIFO cost tracking</CardDescription>
+                <CardDescription>Manufactured items ready for sale with weighted-average cost tracking</CardDescription>
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">

@@ -72,8 +72,8 @@ export interface FinishedGoodsItem {
   // Transaction history (embedded)
   transactions: StockTransaction[];
   
-  // FIFO batch tracking
-  batchQueue: {
+  // Legacy FIFO batch tracking (no longer written on new production; existing docs may retain data)
+  batchQueue?: {
     batchId: string;
     batchNumber: string;
     quantity: number;

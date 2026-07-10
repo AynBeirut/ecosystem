@@ -12,6 +12,7 @@ import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { initArabicPDF, writeText, cleanTextForPDF } from '@/lib/arabicPDF';
 import { isCountedSaleStatus, isDateInRange, normalizeDateString, resolveOrderItemProductKey } from '@/lib/salesRules';
+import { fetchFinanceExpenses } from '@/lib/financeData';
 
 interface StatementLineItem {
   productId?: string;
@@ -707,30 +708,22 @@ const AdminAccountStatement: React.FC = () => {
   const fetchExpenses = async () => {
     try {
       const db = getFirestore();
-      const expensesQuery = query(
-        collection(db, 'expenses'),
-        where('storeId', '==', user?.storeId)
-      );
-      const expensesSnapshot = await getDocs(expensesQuery);
-      
+      if (!user?.storeId) return;
+      const financeExpenses = await fetchFinanceExpenses(db, user.storeId);
+
       const expensesList: ExpenseRecord[] = [];
       let total = 0;
-      
-      expensesSnapshot.forEach(doc => {
-        const expense = doc.data();
+
+      financeExpenses.forEach((expense) => {
         let dateStr = 'N/A';
         if (expense.date) {
           dateStr = expense.date;
         } else if (expense.createdAt) {
-          if (typeof expense.createdAt === 'string') {
-            dateStr = expense.createdAt;
-          } else if (expense.createdAt.toDate) {
-            dateStr = expense.createdAt.toDate().toLocaleDateString();
-          }
+          dateStr = String(expense.createdAt);
         }
-        
+
         expensesList.push({
-          id: doc.id,
+          id: expense.id,
           date: dateStr,
           category: expense.category || 'Other',
           description: expense.description || 'N/A',

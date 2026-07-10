@@ -29,7 +29,8 @@ import {
   Settings2,
   Layers,
   Receipt,
-  LayoutGrid
+  LayoutGrid,
+  Wallet,
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
@@ -76,6 +77,7 @@ const DEFAULT_QUICK_ACTION_IDS = [
   'payments',
   'account-statement',
   'cash-collection',
+  'delivery-wallet',
   'delivery',
   'announcements',
   'analytics',
@@ -105,6 +107,7 @@ const QUICK_ACTION_GRADIENTS: Record<string, string> = {
   payments: 'from-amber-500 to-orange-600',
   'account-statement': 'from-slate-600 to-slate-800',
   'cash-collection': 'from-green-500 to-emerald-700',
+  'delivery-wallet': 'from-amber-500 to-orange-600',
   'invoice-manager': 'from-teal-500 to-cyan-700',
   finance: 'from-cyan-500 to-blue-700',
   staff: 'from-pink-500 to-rose-700',
@@ -283,6 +286,7 @@ const AdminDashboard: React.FC = () => {
     },
     { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
     { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
+    { id: 'delivery-wallet', to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: user?.role === 'admin' },
     { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
     { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
     { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' && moduleVisible('team') },
@@ -555,6 +559,7 @@ const AdminDashboard: React.FC = () => {
           },
           { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
           { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
+          { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: user?.role === 'admin' },
           { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
           { to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' },
           { to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' },

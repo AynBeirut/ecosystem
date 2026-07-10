@@ -4,6 +4,7 @@ import {
   modulesRecordFromList,
   type StartingPackageKey,
 } from './moduleManifest';
+import { modularLimitsPatch } from './modularPackageLimits';
 
 export type ModularBilling = 'monthly' | 'yearly';
 
@@ -144,18 +145,39 @@ export function modularActivationPatch(input: {
   const preset = presetKey ? PACKAGE_PRESETS[presetKey] : null;
   const addOnMeta = addOnMetaFromKeys(input.addOnKeys);
   const addOnList = [...new Set(input.addOnKeys.filter((k) => ADDON_PRICING[k]))];
+  const enabledModules = modulesRecordFromList(input.enabledModuleIds);
+  const breakdown = calculateCustomPrice({
+    moduleIds: input.enabledModuleIds,
+    addOnKeys: input.addOnKeys,
+    seatCount: input.seatCount,
+    posLocationCount: input.posLocationCount,
+    billing: input.billing,
+  });
+  const limitsProfile = {
+    startingPackage: presetKey || undefined,
+    enabledModules,
+    modularMonthlyUsd: breakdown.totalUsd,
+    addOns: addOnList,
+    addOnsMeta: addOnMeta,
+  };
+  const limits = modularLimitsPatch(limitsProfile);
 
   return {
     pricingVersion: 'modular-v2',
     startingPackage: presetKey || 'custom',
     businessWorkflow: preset?.workflow ?? 'custom',
-    enabledModules: modulesRecordFromList(input.enabledModuleIds),
+    enabledModules,
     seatCount: input.seatCount,
     posLocationCount: input.posLocationCount,
     subscriptionPlan: input.billing,
     composedProductSource: 'platform',
     addOns: addOnList,
     addOnsMeta: addOnMeta,
+    modularMonthlyUsd: breakdown.totalUsd,
+    productLimit: limits.productLimit,
+    storageLimitMb: limits.storageLimitMb,
+    storage_limit_mb: limits.storageLimitMb,
+    allowsCatalogImages: limits.allowsCatalogImages,
     ...(addOnMeta.salesCrm ? { crmSettings: { noContactAlertDays: 7 } } : {}),
     pendingModularPreset: null,
     pendingModularBilling: null,

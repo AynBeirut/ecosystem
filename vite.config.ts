@@ -4,7 +4,7 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { financeInternalAlias } from "./src/vite-finance-alias";
 
-const financeSrcPath = path.resolve(__dirname, "the eco sys/finance/beirut-finance-flow-main/src");
+const financeSrcPath = path.resolve(__dirname, "suba eco sys/finance/beirut-finance-flow-main/src");
 const mainSrcPath = path.resolve(__dirname, "src");
 const rootNodeModules = path.resolve(__dirname, "node_modules");
 
@@ -51,6 +51,11 @@ export default defineConfig(({ mode }) => ({
       "react-router",
       "react-router-dom",
       "@tanstack/react-query",
+      "firebase",
+      "firebase/app",
+      "firebase/auth",
+      "firebase/firestore",
+      "firebase/storage",
     ],
     alias: {
       react: path.resolve(rootNodeModules, "react"),

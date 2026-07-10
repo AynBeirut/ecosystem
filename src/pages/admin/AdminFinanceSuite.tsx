@@ -5,9 +5,11 @@ import { useAuth } from '@/context/useAuth';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { DollarSign, TrendingUp, CreditCard, Receipt } from 'lucide-react';
+import { DollarSign, TrendingUp, CreditCard, Receipt, Info } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { fetchFinanceExpenses } from '@/lib/financeData';
 
 const money = (value: number) => `$${Number.isFinite(value) ? value.toFixed(2) : '0.00'}`;
 
@@ -40,9 +42,9 @@ const AdminFinanceSuite: React.FC = () => {
 
       try {
         const db = getFirestore();
-        const [ordersSnap, expensesSnap] = await Promise.all([
+        const [ordersSnap, expenses] = await Promise.all([
           getDocs(query(collection(db, 'orders'), where('storeId', '==', storeId))),
-          getDocs(query(collection(db, 'expenses'), where('storeId', '==', storeId))),
+          fetchFinanceExpenses(db, storeId),
         ]);
 
         const now = new Date();
@@ -69,8 +71,7 @@ const AdminFinanceSuite: React.FC = () => {
         let totalExpenses = 0;
         let monthlyExpenses = 0;
 
-        expensesSnap.forEach((expenseDoc) => {
-          const data = expenseDoc.data() as Record<string, unknown>;
+        expenses.forEach((data) => {
           const amount = Number(data.amount || 0);
           if (!Number.isFinite(amount) || amount <= 0) return;
 
@@ -99,6 +100,26 @@ const AdminFinanceSuite: React.FC = () => {
 
   return (
     <AdminPageShell title="Finance Suite" description="Balance, capital, credit and bill-pay control center." backTo="/admin/dashboard">
+        <Alert className="mb-6 border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/60 dark:bg-amber-950/30 dark:text-amber-50">
+          <Info className="h-4 w-4" />
+          <AlertTitle className="flex flex-wrap items-center gap-2">
+            Legacy view
+            <Badge variant="outline" className="border-amber-300 bg-white/60 text-amber-900 dark:border-amber-800 dark:bg-transparent dark:text-amber-100">
+              Finance Suite
+            </Badge>
+          </AlertTitle>
+          <AlertDescription className="text-amber-900/90 dark:text-amber-100/90">
+            For accounting reports, use{' '}
+            <Link
+              to="/invoice/accounting"
+              className="font-medium text-amber-950 underline underline-offset-2 hover:text-amber-800 dark:text-amber-50 dark:hover:text-amber-200"
+            >
+              Invoice Manager → Accounting
+            </Link>{' '}
+            (Trial Balance / Balance Sheet).
+          </AlertDescription>
+        </Alert>
+
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <AdminPanel>
             <CardHeader className="pb-2">
@@ -203,7 +224,7 @@ const AdminFinanceSuite: React.FC = () => {
             </CardHeader>
             <CardContent className="space-y-2">
               <Button asChild className="w-full" variant="outline">
-                <Link to="/admin/expenses">Open Expenses</Link>
+                <Link to="/admin/finance/expenses">Open Expenses</Link>
               </Button>
               <Button asChild className="w-full" variant="outline">
                 <Link to="/admin/bank-reconciliation">Open Reconciliation</Link>

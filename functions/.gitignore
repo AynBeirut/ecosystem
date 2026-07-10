@@ -1,5 +1,5 @@
-# Compiled JavaScript files
-lib/
+# Compiled JavaScript output (functions/lib only — not functions/src/lib)
+/lib/
 *.js
 *.js.map
 
