@@ -7,6 +7,10 @@ import {
   autoPostOrderSaleReversal,
   autoPostPayrollPayment,
   autoPostProductionComplete,
+  autoPostProductionReversal,
+  autoPostProductionStart,
+  autoPostProductionWipCompleteFlow,
+  type ProductionReversalInput,
   type OrderCogsLine,
   type PlatformOrderInput,
 } from './platformAutoPosting';
@@ -39,6 +43,31 @@ export async function glPostOrderSaleReversal(
   });
 }
 
+export async function glPostProductionStart(
+  storeId: string,
+  batchId: string,
+  materialsCost: number,
+  date: string,
+): Promise<void> {
+  await wrapGl('production-start', async () => {
+    const accounts = await ensureDefaultChartOfAccounts(storeId);
+    await autoPostProductionStart(storeId, batchId, materialsCost, date, accounts);
+  });
+}
+
+export async function glPostProductionWipComplete(
+  storeId: string,
+  batchId: string,
+  costStart: number,
+  costActual: number,
+  date: string,
+): Promise<void> {
+  await wrapGl('production-complete-wip', async () => {
+    const accounts = await ensureDefaultChartOfAccounts(storeId);
+    await autoPostProductionWipCompleteFlow(storeId, batchId, costStart, costActual, date, accounts);
+  });
+}
+
 export async function glPostProductionComplete(
   storeId: string,
   batchId: string,
@@ -48,6 +77,19 @@ export async function glPostProductionComplete(
   await wrapGl('production-complete', async () => {
     const accounts = await ensureDefaultChartOfAccounts(storeId);
     await autoPostProductionComplete(storeId, batchId, materialsCost, date, accounts);
+  });
+}
+
+export async function glPostProductionReversal(
+  storeId: string,
+  batchId: string,
+  reversalId: string,
+  input: ProductionReversalInput,
+  date: string,
+): Promise<void> {
+  await wrapGl('production-reversal', async () => {
+    const accounts = await ensureDefaultChartOfAccounts(storeId);
+    await autoPostProductionReversal(storeId, batchId, reversalId, input, date, accounts);
   });
 }
 

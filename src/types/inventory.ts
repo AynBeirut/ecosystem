@@ -124,6 +124,18 @@ export interface ProductionBatch {
   completionDate?: string;
   productName?: string;
   materialsCost?: number;
+  wipGlStartedAt?: string;
+  plannedQuantityAtStart?: number;
+  materialsCostAtStart?: number;
+  materialsUsedAtStart?: Array<{
+    rawMaterialId: string;
+    materialName: string;
+    quantityUsed: number;
+    unitCost: number;
+    totalCost: number;
+  }>;
+  materialsCostAtComplete?: number;
+  wipVarianceCost?: number;
 }
 
 export type ProductionBatchStatus = 'planned' | 'in_progress' | 'completed' | 'cancelled';

@@ -137,11 +137,23 @@ export async function postJournalEntry(
 export async function ensureDefaultChartOfAccounts(storeId: string): Promise<LedgerAccount[]> {
   const col = getDb().collection('stores').doc(storeId).collection('ledgerAccounts');
   const snap = await col.get();
+
   if (!snap.empty) {
-    return snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
+    const accounts: LedgerAccount[] = snap.docs.map((d: FirebaseFirestore.QueryDocumentSnapshot) => {
       const data = d.data();
       return { id: d.id, code: String(data.code), name: String(data.name), isActive: data.isActive !== false };
     });
+    const existingCodes = new Set(accounts.map((a) => a.code));
+    const missing = buildDefaultLedgerAccounts(storeId).filter((seed) => !existingCodes.has(seed.code));
+    if (missing.length > 0) {
+      const batch = getDb().batch();
+      for (const seed of missing) {
+        batch.set(col.doc(seed.id), seed);
+        accounts.push({ id: seed.id, code: seed.code, name: seed.name, isActive: true });
+      }
+      await batch.commit();
+    }
+    return accounts;
   }
 
   const accounts = buildDefaultLedgerAccounts(storeId);

@@ -21,7 +21,20 @@ import { useIsMobile } from '@/hooks/use-mobile';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { glPostProductionComplete } from '@/lib/platformGl';
+import {
+  glPostProductionComplete,
+  glPostProductionReversal,
+  glPostProductionStart,
+  glPostProductionWipComplete,
+} from '@/lib/platformGl';
+import {
+  isWipEnabledBatch,
+  materialUsageDelta,
+  productionVarianceCost,
+  resolveProductionMaterials,
+  sumMaterialCost,
+  type ProductionMaterialLine,
+} from '@/lib/productionMaterials';
 
 // Helper to clean non-ASCII characters for PDF export
 const cleanTextForPDF = (text: string): string => {
@@ -530,10 +543,49 @@ const AdminProduction: React.FC = () => {
 
     try {
       const db = getFirestore();
-      
+      const nowIso = new Date().toISOString();
+      const wipEnabled = isWipEnabledBatch(batch);
+      const costStart = Math.round((Number((batch as { materialsCostAtStart?: number }).materialsCostAtStart) || 0) * 100) / 100;
+      const costComplete = Math.round((Number((batch as { materialsCostAtComplete?: number }).materialsCostAtComplete ?? batch.materialsCost) || 0) * 100) / 100;
+      const varianceCost = Math.round((Number((batch as { wipVarianceCost?: number }).wipVarianceCost) || productionVarianceCost(costStart, costComplete)) * 100) / 100;
+
+      if (batch.status === 'in_progress' && wipEnabled && costStart > 0) {
+        await glPostProductionReversal(user.storeId, batch.id, `del-${Date.now()}`, {
+          wipEnabled: true,
+          materialsCostAtStart: costStart,
+          materialsCostAtComplete: 0,
+          varianceCost: 0,
+        }, nowIso);
+
+        const materialsAtStart = (batch as { materialsUsedAtStart?: ProductionMaterialLine[] }).materialsUsedAtStart;
+        const commitBatch = writeBatch(db);
+        if (Array.isArray(materialsAtStart)) {
+          for (const line of materialsAtStart) {
+            if (!line.rawMaterialId || line.quantityUsed <= 0) continue;
+            commitBatch.update(doc(db, 'rawMaterials', line.rawMaterialId), {
+              currentStock: increment(line.quantityUsed),
+              updatedAt: nowIso,
+            });
+          }
+        }
+        commitBatch.delete(doc(db, 'productionBatches', batch.id));
+        await commitBatch.commit();
+        setBatches(batches.filter((b) => b.id !== batch.id));
+        toast({ title: 'Success', description: 'In-progress batch cancelled — WIP and raw materials restored' });
+        return;
+      }
+
       // If batch is completed, reverse finished goods and restore raw materials
       if (batch.status === 'completed' && batch.actualQuantity) {
-        const nowIso = new Date().toISOString();
+        if (costComplete > 0) {
+          await glPostProductionReversal(user.storeId, batch.id, `del-${Date.now()}`, {
+            wipEnabled,
+            materialsCostAtStart: wipEnabled ? costStart : undefined,
+            materialsCostAtComplete: costComplete,
+            varianceCost: wipEnabled ? varianceCost : undefined,
+          }, nowIso);
+        }
+
         const commitBatch = writeBatch(db);
         let restoredRawMaterialsCount = 0;
 
@@ -680,17 +732,105 @@ const AdminProduction: React.FC = () => {
     if (!user?.storeId) return;
     try {
       const db = getFirestore();
-      const batchRef = doc(db, 'productionBatches', batch.id);
+      const plannedQty = Number(batch.quantity || 0);
+      if (plannedQty <= 0) {
+        toast({ title: 'Error', description: 'Planned quantity must be greater than 0', variant: 'destructive' });
+        return;
+      }
+
+      const candidateProductIds = Array.from(new Set([
+        batch.composedProductId,
+        batch.productId,
+      ].filter((value): value is string => typeof value === 'string' && value.trim().length > 0)));
+
+      let productDoc = null as Awaited<ReturnType<typeof getDoc>> | null;
+      let resolvedProductId = candidateProductIds[0] || '';
+      for (const candidateId of candidateProductIds) {
+        const candidateDoc = await getDoc(doc(db, 'products', candidateId));
+        if (candidateDoc.exists()) {
+          productDoc = candidateDoc;
+          resolvedProductId = candidateId;
+          break;
+        }
+      }
+      if (!productDoc?.exists()) {
+        toast({ title: 'Error', description: 'Product not found for this batch', variant: 'destructive' });
+        return;
+      }
+
+      const composedProduct = { id: productDoc.id, ...productDoc.data() } as ComposedProduct;
+      const resolvedRecipeId = composedProduct.recipeId || batch.recipeId || '';
+      if (!resolvedRecipeId) {
+        toast({ title: 'Error', description: 'Recipe not linked to product', variant: 'destructive' });
+        return;
+      }
+
+      const recipeDoc = await getDoc(doc(db, 'recipes', resolvedRecipeId));
+      if (!recipeDoc.exists()) {
+        toast({ title: 'Error', description: 'Recipe not found', variant: 'destructive' });
+        return;
+      }
+      const recipe = { id: recipeDoc.id, ...recipeDoc.data() } as Recipe;
+
+      const resolved = await resolveProductionMaterials(recipe, plannedQty, async (rawMaterialId) => {
+        const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', rawMaterialId));
+        if (!rawMaterialDoc.exists()) return null;
+        return { id: rawMaterialDoc.id, ...rawMaterialDoc.data() } as RawMaterial;
+      });
+
+      if (resolved.insufficientStock) {
+        toast({
+          title: 'Insufficient Stock',
+          description: `Not enough ${resolved.insufficientStock.materialName}. Need: ${resolved.insufficientStock.need}, Available: ${resolved.insufficientStock.available}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (resolved.zeroCostMaterials.length > 0) {
+        toast({
+          title: 'Zero Cost Materials',
+          description: `Update costs for: ${resolved.zeroCostMaterials.join(', ')}`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      if (resolved.lines.length === 0) {
+        toast({ title: 'Error', description: 'No valid recipe ingredients to issue', variant: 'destructive' });
+        return;
+      }
+
+      const nowIso = new Date().toISOString();
+      const commitBatch = writeBatch(db);
+      for (const [rawMaterialId, quantityUsed] of resolved.rawMaterialUsageMap.entries()) {
+        commitBatch.update(doc(db, 'rawMaterials', rawMaterialId), {
+          currentStock: increment(-quantityUsed),
+          updatedAt: nowIso,
+        });
+      }
+
       const updateData = {
         status: 'in_progress' as ProductionBatchStatus,
-        startDate: new Date().toISOString(),
+        startDate: nowIso,
+        wipGlStartedAt: nowIso,
+        plannedQuantityAtStart: plannedQty,
+        materialsCostAtStart: resolved.totalCost,
+        materialsUsedAtStart: resolved.lines,
+        recipeId: resolvedRecipeId,
+        productId: resolvedProductId,
+        composedProductId: resolvedProductId,
       };
-      await updateDoc(batchRef, updateData);
-      setBatches(batches.map(b => b.id === batch.id ? { ...b, ...updateData } : b));
-      toast({ title: "Success", description: "Production started!" });
+
+      commitBatch.update(doc(db, 'productionBatches', batch.id), updateData);
+      await commitBatch.commit();
+
+      await glPostProductionStart(user.storeId, batch.id, resolved.totalCost, nowIso);
+      setBatches(batches.map((b) => (b.id === batch.id ? { ...b, ...updateData } : b)));
+      toast({ title: 'Success', description: 'Production started — materials issued to WIP' });
     } catch (error) {
       console.error('Error starting production:', error);
-      toast({ title: "Error", description: "Failed to start production", variant: "destructive" });
+      toast({ title: 'Error', description: 'Failed to start production', variant: 'destructive' });
     }
   };
 
@@ -1002,13 +1142,44 @@ const AdminProduction: React.FC = () => {
 
       const nowIso = new Date().toISOString();
       const commitBatch = writeBatch(db);
+      const wipEnabled = isWipEnabledBatch(effectiveBatch);
+      const materialsAtStart = (effectiveBatch as { materialsUsedAtStart?: ProductionMaterialLine[] }).materialsUsedAtStart;
+      const costStart = wipEnabled ? Math.round((Number(effectiveBatch.materialsCostAtStart) || 0) * 100) / 100 : 0;
+      const varianceCost = wipEnabled ? productionVarianceCost(costStart, totalMaterialCost) : 0;
 
-      // Queue raw material stock updates
-      for (const [rawMaterialId, quantityUsed] of rawMaterialUsageMap.entries()) {
-        commitBatch.update(doc(db, 'rawMaterials', rawMaterialId), {
-          currentStock: increment(-quantityUsed),
-          updatedAt: nowIso,
-        });
+      if (wipEnabled && materialsAtStart?.length) {
+        const deltaMap = materialUsageDelta(materialsAtStart, materialsUsed);
+        for (const [rawMaterialId, deltaQty] of deltaMap.entries()) {
+          if (deltaQty <= 0) continue;
+          const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', rawMaterialId));
+          if (!rawMaterialDoc.exists()) continue;
+          const currentStock = Number(rawMaterialDoc.data()?.currentStock || 0);
+          if (currentStock < deltaQty) {
+            const name = materialsUsed.find((m) => m.rawMaterialId === rawMaterialId)?.materialName || rawMaterialId;
+            toast({
+              title: 'Insufficient Stock',
+              description: `Not enough ${name} for variance. Need extra: ${deltaQty}, Available: ${currentStock}`,
+              variant: 'destructive',
+            });
+            setIsCompleting(false);
+            isOperatingRef.current = false;
+            return;
+          }
+        }
+        for (const [rawMaterialId, deltaQty] of deltaMap.entries()) {
+          if (Math.abs(deltaQty) < 0.000001) continue;
+          commitBatch.update(doc(db, 'rawMaterials', rawMaterialId), {
+            currentStock: increment(-deltaQty),
+            updatedAt: nowIso,
+          });
+        }
+      } else {
+        for (const [rawMaterialId, quantityUsed] of rawMaterialUsageMap.entries()) {
+          commitBatch.update(doc(db, 'rawMaterials', rawMaterialId), {
+            currentStock: increment(-quantityUsed),
+            updatedAt: nowIso,
+          });
+        }
       }
       
       // Capture FG doc identity before committing batch; actual write happens
@@ -1027,6 +1198,8 @@ const AdminProduction: React.FC = () => {
         composedProductId: resolvedProductId,
         recipeId: resolvedRecipeId,
         materialsCost: totalMaterialCost,
+        materialsCostAtComplete: totalMaterialCost,
+        wipVarianceCost: wipEnabled ? varianceCost : null,
         totalCost: totalCostPerUnit * actualQty,
         costPerUnit: totalCostPerUnit,
         materialsUsed,
@@ -1118,12 +1291,22 @@ const AdminProduction: React.FC = () => {
       operationSucceeded = true;
 
       if (user?.storeId) {
-        await glPostProductionComplete(
-          user.storeId,
-          completingBatch.id,
-          totalMaterialCost,
-          nowIso,
-        );
+        if (wipEnabled && effectiveBatch.wipGlStartedAt) {
+          await glPostProductionWipComplete(
+            user.storeId,
+            completingBatch.id,
+            costStart,
+            totalMaterialCost,
+            nowIso,
+          );
+        } else {
+          await glPostProductionComplete(
+            user.storeId,
+            completingBatch.id,
+            totalMaterialCost,
+            nowIso,
+          );
+        }
       }
     } catch (error) {
       console.error('Error completing production:', error);
