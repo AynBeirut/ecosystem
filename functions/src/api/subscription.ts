@@ -661,6 +661,9 @@ type ModularBilling = 'monthly' | 'yearly';
 
 function isValidPreset(preset: string): preset is StartingPackageKey {
   return (
+    preset === 'pkg_invoice' ||
+    preset === 'pkg_mini_shop' ||
+    preset === 'pkg_business_backend' ||
     preset === 'pkg_shop' ||
     preset === 'pkg_live_kitchen' ||
     preset === 'pkg_factory_flow' ||

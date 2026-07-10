@@ -30,6 +30,64 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 
+type PurchaseItemLike = PurchaseItem & { unitCost?: unknown; rawPrice?: unknown; price?: unknown };
+
+function parseNumberish(value: unknown): number {
+  if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
+  const parsed = Number.parseFloat(String(value ?? ''));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function resolveItemUnitPrice(item: PurchaseItemLike): number {
+  if (typeof item.unitPrice === 'number' && Number.isFinite(item.unitPrice)) return item.unitPrice;
+  if (typeof item.unitCost === 'number' && Number.isFinite(item.unitCost)) return item.unitCost;
+  return parseNumberish(item.unitPrice ?? item.unitCost ?? item.rawPrice ?? item.price);
+}
+
+function resolvePurchaseTotal(purchase: Pick<Purchase, 'totalAmount' | 'total' | 'totalCost'>): number {
+  return parseNumberish(purchase.totalAmount ?? purchase.total ?? purchase.totalCost);
+}
+
+function resolveItemLineTotal(item: PurchaseItemLike): number {
+  return parseNumberish(item.quantity) * resolveItemUnitPrice(item);
+}
+
+function formatMoney(value: unknown, decimals = 2): string {
+  return parseNumberish(value).toFixed(decimals);
+}
+
+function normalizePurchaseItem(item: PurchaseItemLike): PurchaseItem {
+  return {
+    ...item,
+    quantity: parseNumberish(item.quantity),
+    unitPrice: resolveItemUnitPrice(item),
+    receivedQuantity: parseNumberish(item.receivedQuantity),
+  };
+}
+
+function normalizePurchase(purchase: Purchase): Purchase {
+  const items = Array.isArray(purchase.items) ? purchase.items.map((item) => normalizePurchaseItem(item)) : [];
+  const paymentHistory = Array.isArray(purchase.paymentHistory)
+    ? purchase.paymentHistory.map((payment) => ({
+        ...payment,
+        amount: parseNumberish(payment.amount),
+      }))
+    : [];
+  const amountPaid = parseNumberish(
+    purchase.amountPaid ?? paymentHistory.reduce((sum, payment) => sum + payment.amount, 0),
+  );
+  const totalAmount = resolvePurchaseTotal(purchase);
+  return {
+    ...purchase,
+    items,
+    paymentHistory,
+    amountPaid,
+    totalAmount: totalAmount || purchase.totalAmount,
+    total: parseNumberish(purchase.total) || totalAmount,
+    totalCost: parseNumberish(purchase.totalCost) || totalAmount,
+  };
+}
+
 const AdminPurchases: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -124,24 +182,14 @@ const AdminPurchases: React.FC = () => {
       const purchasesRef = collection(db, 'purchases');
       const purchasesQuery = query(purchasesRef, where('storeId', '==', user.storeId));
       const purchasesSnapshot = await getDocs(purchasesQuery);
-      const purchasesList: Purchase[] = purchasesSnapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Purchase));
-      
-      // Fix amountPaid from paymentHistory if missing
-      const fixedPurchases = purchasesList.map(purchase => {
-        if (purchase.paymentHistory && purchase.paymentHistory.length > 0) {
-          const calculatedPaid = purchase.paymentHistory.reduce((sum, payment) => sum + (payment.amount || 0), 0);
-          if (purchase.amountPaid !== calculatedPaid) {
-            // Sync amountPaid with paymentHistory total
-            return { ...purchase, amountPaid: calculatedPaid };
-          }
-        }
-        return purchase;
-      });
-      
-      setPurchases(fixedPurchases.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
+      const purchasesList: Purchase[] = purchasesSnapshot.docs.map(doc =>
+        normalizePurchase({
+          id: doc.id,
+          ...doc.data(),
+        } as Purchase),
+      );
+
+      setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
 
       // Fetch suppliers
       const suppliersRef = collection(db, 'suppliers');
@@ -212,27 +260,16 @@ const AdminPurchases: React.FC = () => {
 
   // Format currency with LBP conversion
 
-  const formatCurrency = (amount: number, showDual: boolean = true): string => {
-    const usd = `$${amount.toFixed(2)}`;
+  const formatCurrency = (amount: unknown, showDual: boolean = true): string => {
+    const safeAmount = parseNumberish(amount);
+    const usd = `$${formatMoney(safeAmount)}`;
     
     if (showDual && storeProfile?.customExchangeRate && storeProfile.customExchangeRate > 0) {
-      const lbp = (amount * storeProfile.customExchangeRate).toFixed(0);
+      const lbp = formatMoney(safeAmount * storeProfile.customExchangeRate, 0);
       return `${usd} (${Number(lbp).toLocaleString()} LBP)`;
     }
     
     return usd;
-  };
-
-  const parseNumberish = (value: unknown): number => {
-    if (typeof value === 'number') return Number.isFinite(value) ? value : 0;
-    const parsed = Number.parseFloat(String(value ?? ''));
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const resolveItemUnitPrice = (item: PurchaseItem & { unitCost?: unknown; unitPrice?: unknown }): number => {
-    if (typeof item.unitPrice === 'number') return item.unitPrice;
-    if (typeof item.unitCost === 'number') return item.unitCost;
-    return parseNumberish(item.unitPrice ?? item.unitCost);
   };
 
   const calculateTotal = (items: PurchaseItem[], taxType: string = 'none', taxRate: number = 0): number => {
@@ -1186,7 +1223,7 @@ const AdminPurchases: React.FC = () => {
   const handleSendEmail = (purchase: Purchase) => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     const subject = `Purchase Order ${purchase.invoiceNumber || purchase.poNumber}`;
-    const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: $${purchase.totalAmount.toFixed(2)}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
+    const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: $${resolvePurchaseTotal(purchase).toFixed(2)}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
       const product = simpleProducts.find(p => p.id === item.productId);
       const itemName = material?.name || product?.name || item.materialName || 'Item';
@@ -1200,12 +1237,13 @@ const AdminPurchases: React.FC = () => {
 
   const handleSendWhatsApp = (purchase: Purchase) => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
-    const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: $${purchase.totalAmount.toFixed(2)}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${purchase.items.map(item => {
+    const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: $${formatMoney(resolvePurchaseTotal(purchase))}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${(purchase.items ?? []).map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
       const product = simpleProducts.find(p => p.id === item.productId);
       const itemName = material?.name || product?.name || item.materialName || 'Item';
       const itemUnit = material?.unit || item.unit || 'unit';
-      return `• ${itemName}: ${item.quantity} ${itemUnit} @ $${item.unitPrice} = $${(item.quantity * item.unitPrice).toFixed(2)}`;
+      const unitPrice = resolveItemUnitPrice(item);
+      return `• ${itemName}: ${item.quantity} ${itemUnit} @ $${formatMoney(unitPrice)} = $${formatMoney(resolveItemLineTotal(item))}`;
     }).join('\n')}\n\nThank you!\n${storeProfile?.name || 'Your Store'}`;
     
     const whatsappUrl = `https://wa.me/${supplier?.phone?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
@@ -1505,13 +1543,25 @@ const AdminPurchases: React.FC = () => {
             if (!freshSnap.exists()) return;
             const freshData = freshSnap.data() as { stock?: number; costPrice?: number };
             const freshStock = Number(freshData.stock || 0);
+            const freshCost = Number(freshData.costPrice || 0);
             const newStock = freshStock + receivedQty;
 
-            console.log(`✅ Updating product stock: ${freshStock} + ${receivedQty} = ${newStock}`);
+            const currentValue = freshStock * freshCost;
+            const newValue = receivedQty * itemUnitCost;
+            const totalValue = currentValue + newValue;
+            let newCostPerUnit: number;
+            if (freshStock === 0) {
+              newCostPerUnit = itemUnitCost;
+            } else {
+              newCostPerUnit = newStock > 0 ? (totalValue / newStock) : itemUnitCost;
+            }
+            newCostPerUnit = round4(newCostPerUnit);
+
+            console.log(`✅ Updating product stock: ${freshStock} + ${receivedQty} = ${newStock}, Cost ${freshCost.toFixed(4)} → ${newCostPerUnit.toFixed(4)}`);
 
             tx.update(productRef, {
               stock: newStock,
-              costPrice: itemUnitCost,
+              costPrice: newCostPerUnit,
               updatedAt: new Date().toISOString(),
             });
           });
@@ -1701,25 +1751,25 @@ const AdminPurchases: React.FC = () => {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
             <div>
               <p style="margin: 0; color: #666; font-size: 12px;">Purchase Total</p>
-              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${(purchase.totalAmount || purchase.total || 0).toFixed(2)}</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${formatMoney(resolvePurchaseTotal(purchase))}</p>
             </div>
             <div style="text-align: right;">
               <p style="margin: 0; color: #666; font-size: 12px;">Previous Payments</p>
-              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${((purchase.amountPaid || 0) - payment.amount).toFixed(2)}</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${formatMoney(parseNumberish(purchase.amountPaid) - parseNumberish(payment.amount))}</p>
             </div>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; text-align: center;">
             <p style="margin: 0; color: #666; font-size: 14px;">PAYMENT AMOUNT</p>
-            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #10b981;">$${payment.amount.toFixed(2)}</p>
+            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #10b981;">$${formatMoney(payment.amount)}</p>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; margin-top: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 16px; font-weight: 600;">Total Paid:</span>
-              <span style="font-size: 18px; font-weight: bold;">$${(purchase.amountPaid || 0).toFixed(2)}</span>
+              <span style="font-size: 18px; font-weight: bold;">$${formatMoney(purchase.amountPaid)}</span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
               <span style="font-size: 16px; font-weight: 600;">Balance Due:</span>
-              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">$${((purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0)).toFixed(2)}</span>
+              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">$${formatMoney(resolvePurchaseTotal(purchase) - parseNumberish(purchase.amountPaid))}</span>
             </div>
           </div>
         </div>
@@ -2093,7 +2143,7 @@ const AdminPurchases: React.FC = () => {
                         </div>
                         <div className="col-span-2">
                           <Label className="text-xs">Total</Label>
-                          <p className="text-sm font-medium">${lineTotal.toFixed(2)}</p>
+                          <p className="text-sm font-medium">${formatMoney(lineTotal)}</p>
                         </div>
                         <div className="col-span-1">
                           <Button
@@ -2311,25 +2361,25 @@ const AdminPurchases: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-sm text-gray-500">Total Amount</p>
-                        <p className="font-bold text-lg">${purchase.totalAmount.toFixed(2)}</p>
+                        <p className="font-bold text-lg">${formatMoney(resolvePurchaseTotal(purchase))}</p>
                       </div>
                       {purchase.status === 'received' && (
                         <div>
                           <p className="text-sm text-gray-500">Amount Paid</p>
-                          <p className="font-bold text-lg text-green-600">${(purchase.amountPaid || 0).toFixed(2)}</p>
+                          <p className="font-bold text-lg text-green-600">${formatMoney(purchase.amountPaid)}</p>
                         </div>
                       )}
                       {purchase.status === 'received' && purchase.paymentStatus !== 'paid' && (
                         <div>
                           <p className="text-sm text-gray-500">Amount Due</p>
                           <p className="font-bold text-lg text-red-600">
-                            ${((purchase.totalAmount || purchase.total || 0) - (purchase.amountPaid || 0)).toFixed(2)}
+                            ${formatMoney(resolvePurchaseTotal(purchase) - parseNumberish(purchase.amountPaid))}
                           </p>
                         </div>
                       )}
                       <div>
                         <p className="text-sm text-gray-500">Items</p>
-                        <p className="font-medium">{purchase.items.length} item(s)</p>
+                        <p className="font-medium">{(purchase.items ?? []).length} item(s)</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Expected Delivery</p>
@@ -2353,18 +2403,19 @@ const AdminPurchases: React.FC = () => {
                     <div className="border-t pt-3">
                       <p className="text-sm font-semibold mb-2">Items:</p>
                       <div className="space-y-1">
-                        {purchase.items.map((item, idx) => {
+                        {(purchase.items ?? []).map((item, idx) => {
                           const material = rawMaterials.find(m => m.id === item.rawMaterialId);
                           const product = simpleProducts.find(p => p.id === item.productId);
                           const itemName = material?.name || product?.name || item.materialName || 'Unknown';
                           const itemUnit = material?.unit || item.unit || 'unit';
+                          const unitPrice = resolveItemUnitPrice(item);
                           return (
                             <div key={idx} className="text-sm flex justify-between">
                               <span>
-                                {itemName}: {item.quantity} {itemUnit} @ ${item.unitPrice}
-                                {item.receivedQuantity > 0 && ` (Received: ${item.receivedQuantity})`}
+                                {itemName}: {item.quantity} {itemUnit} @ ${formatMoney(unitPrice)}
+                                {parseNumberish(item.receivedQuantity) > 0 && ` (Received: ${item.receivedQuantity})`}
                               </span>
-                              <span className="font-medium">${(item.quantity * item.unitPrice).toFixed(2)}</span>
+                              <span className="font-medium">${formatMoney(resolveItemLineTotal(item))}</span>
                             </div>
                           );
                         })}
@@ -2382,7 +2433,7 @@ const AdminPurchases: React.FC = () => {
                           {purchase.paymentHistory.map((payment, idx) => (
                             <div key={idx} className="flex items-center justify-between p-2 bg-green-50 rounded border border-green-200">
                               <div className="flex-1">
-                                <p className="text-sm font-medium">${payment.amount.toFixed(2)} - {payment.method}</p>
+                                <p className="text-sm font-medium">${formatMoney(payment.amount)} - {payment.method}</p>
                                 <p className="text-xs text-gray-600">
                                   {new Date(payment.date).toLocaleDateString()} by {payment.recordedBy}
                                 </p>
@@ -2453,7 +2504,7 @@ const AdminPurchases: React.FC = () => {
                       <div className="col-span-2">
                         <Label className="text-xs">New Stock</Label>
                         <p className="font-bold text-green-600">
-                          {((material?.currentStock || 0) + item.receivedQuantity).toFixed(2)}
+                          {formatMoney(parseNumberish(material?.currentStock ?? product?.stock) + parseNumberish(item.receivedQuantity))}
                         </p>
                       </div>
                     </div>

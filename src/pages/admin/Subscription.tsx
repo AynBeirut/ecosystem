@@ -31,7 +31,7 @@ import {
 } from '@/components/ui/dialog';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { resolveStoreEntitlements } from '@/lib/entitlements';
-import { PRESET_LIST } from '@/lib/packagePresets';
+import { PRESET_LIST, ORDERED_PRESET_LIST } from '@/lib/packagePresets';
 import { calculateModularPrice, calculateCustomPrice, MODULE_PRICES } from '@/lib/modularPricing';
 import type { StartingPackageKey } from '@/lib/moduleManifest';
 import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule, tierMeetsMinimum } from '@/lib/pricingDisplay';
@@ -946,8 +946,8 @@ export default function Subscription() {
             {/* Step 1: Base preset */}
             <div>
               <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">1 — Choose your base</p>
-              <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {PRESET_LIST.map((p) => (
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
+                {ORDERED_PRESET_LIST.map((p) => (
                   <button
                     key={p.key}
                     type="button"
@@ -960,6 +960,11 @@ export default function Subscription() {
                   >
                     <p className="font-semibold">{p.label}</p>
                     <p className="text-sm text-muted-foreground">${p.monthlyUsd}/mo · ${p.yearlyUsd}/yr</p>
+                    <ul className="mt-2 space-y-0.5 text-xs text-muted-foreground">
+                      {p.limitLines.map((line) => (
+                        <li key={line}>• {line}</li>
+                      ))}
+                    </ul>
                   </button>
                 ))}
                 {/* Custom / build from scratch */}

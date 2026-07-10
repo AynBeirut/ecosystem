@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   BarChart,
+  Bot,
   Clock,
   CreditCard,
   DollarSign,
@@ -20,6 +21,7 @@ import {
   TrendingUp,
   User,
   Users,
+  Wallet,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
@@ -145,6 +147,7 @@ export function useAdminNavigation() {
           },
           { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
           { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
+          { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: user?.role === 'admin' },
           { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
           {
             to: '/admin/sub-accounts',
@@ -159,6 +162,12 @@ export function useAdminNavigation() {
             visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('dropship')),
           },
           { to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: user?.role === 'admin' },
+          {
+            to: '/admin/ai-agent',
+            label: 'AI Agent',
+            icon: Bot,
+            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('ai_agent')),
+          },
         ],
       },
     ];

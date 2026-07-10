@@ -217,11 +217,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!mounted) return;
 
-      // Subscribe immediately — Firebase fires this after redirect/popup without
-      // needing an explicit getRedirectResult call.
       unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (!mounted) return;
-        console.log('[AuthContext] onAuthStateChanged fired, user:', firebaseUser?.email ?? null);
+        if (import.meta.env.DEV) {
+          console.log('[AuthContext] onAuthStateChanged fired, user:', firebaseUser?.email ?? null);
+        }
 
         if (!firebaseUser) {
           setUser(null);
@@ -254,9 +254,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           });
       });
 
-      // getRedirectResult non-blocking — only used to show a success toast.
-      // Do NOT await this before subscribing; it can hang due to cross-origin
-      // iframe restrictions when authDomain !== app origin (e.g. on localhost).
       getRedirectResult(auth)
         .then((result) => {
           if (result?.user && mounted) {

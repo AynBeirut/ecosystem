@@ -101,6 +101,24 @@ export function pixelPurchase(params: {
   });
 }
 
+function compactUserData(
+  userData?: {
+    email?: string;
+    phone?: string;
+    externalId?: string;
+  },
+): Record<string, string> | undefined {
+  if (!userData) return undefined;
+  const out: Record<string, string> = {};
+  const email = String(userData.email || '').trim();
+  const phone = String(userData.phone || '').trim();
+  const externalId = String(userData.externalId || '').trim();
+  if (email) out.email = email;
+  if (phone) out.phone = phone;
+  if (externalId) out.externalId = externalId;
+  return Object.keys(out).length > 0 ? out : undefined;
+}
+
 export async function trackMetaConversionEvent(params: {
   storeId: string;
   eventName: 'PageView' | 'ViewContent' | 'AddToCart' | 'InitiateCheckout' | 'Purchase';
@@ -118,6 +136,7 @@ export async function trackMetaConversionEvent(params: {
   if (!params.storeId || !params.eventName) return;
 
   try {
+    const userData = compactUserData(params.userData);
     const response = await fetch(`${META_API_URL}/meta/conversion/track`, {
       method: 'POST',
       headers: {
@@ -132,7 +151,7 @@ export async function trackMetaConversionEvent(params: {
         contentIds: params.contentIds || [],
         contentName: params.contentName,
         eventSourceUrl: typeof window !== 'undefined' ? window.location.href : '',
-        userData: params.userData || {},
+        ...(userData ? { userData } : {}),
       }),
       keepalive: true,
     });

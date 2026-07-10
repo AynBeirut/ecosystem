@@ -2,6 +2,7 @@ import type { Firestore } from 'firebase-admin/firestore';
 
 export type StoreCommerceProfile = {
   isDemo?: boolean;
+  isLegacyUser?: boolean;
   subscriptionStatus?: string | null;
 };
 
@@ -20,7 +21,7 @@ const ACTIVE_STATUSES = new Set(['active', 'trial', 'grace', 'grace_period']);
 
 /**
  * Pure eligibility check — used by server guards and unit tests.
- * Legacy stores without subscriptionStatus remain eligible unless isDemo or blocked.
+ * Stores without subscriptionStatus are NOT eligible unless isLegacyUser.
  */
 export function evaluateStoreCommerceEligibility(
   profile: StoreCommerceProfile | null | undefined,
@@ -50,7 +51,19 @@ export function evaluateStoreCommerceEligibility(
     };
   }
 
+  if (profile.isLegacyUser === true) {
+    return { eligible: true, code: 'OK', message: 'OK' };
+  }
+
   const status = profile.subscriptionStatus;
+  if (!status) {
+    return {
+      eligible: false,
+      code: 'SUBSCRIPTION_INACTIVE',
+      message: 'No active subscription. Subscribe to use commerce features.',
+    };
+  }
+
   if (status === 'expired' || status === 'blocked') {
     return {
       eligible: false,
@@ -59,7 +72,7 @@ export function evaluateStoreCommerceEligibility(
     };
   }
 
-  if (status && !ACTIVE_STATUSES.has(status)) {
+  if (!ACTIVE_STATUSES.has(status)) {
     return {
       eligible: false,
       code: 'SUBSCRIPTION_INACTIVE',

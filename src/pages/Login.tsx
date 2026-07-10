@@ -38,9 +38,7 @@ const Login: React.FC = () => {
 
   // Redirect if already logged in
   useEffect(() => {
-    console.log('[Login] useEffect: user state changed:', user);
-    if (user) {
-      console.log('[Login] User detected, checking for redirect');
+    if (!user) return;
       const fromState = (location.state as { from?: { pathname?: string; search?: string } })?.from;
       const fromStatePath =
         fromState?.pathname
@@ -49,11 +47,9 @@ const Login: React.FC = () => {
       const nextParam = searchParams.get('next');
       const redirectPath =
         localStorage.getItem('redirectAfterLogin') || nextParam || fromStatePath;
-      console.log('[Login] Redirect path:', redirectPath);
 
       if (redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('/login')) {
         localStorage.removeItem('redirectAfterLogin');
-        console.log('[Login] Navigating to saved path:', redirectPath);
         navigate(redirectPath, { replace: true });
       } else if (user.role === 'crm_rep') {
         navigate('/team/crm', { replace: true });
@@ -69,10 +65,8 @@ const Login: React.FC = () => {
       } else if (user.role === 'sub_account') {
         navigate('/team/dashboard', { replace: true });
       } else {
-        console.log('[Login] No redirect path, navigating to marketplace');
         navigate('/search', { replace: true });
       }
-    }
   }, [user, navigate, searchParams, location.state]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
@@ -123,9 +117,6 @@ const Login: React.FC = () => {
     }
   };
 
-  // Show spinner only while a previous session is being restored (e.g. returning user).
-  // Do NOT block while isLoading is true for a popup sign-in in progress — that would
-  // hide the form and confuse the user if the popup is closed.
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">

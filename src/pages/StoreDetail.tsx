@@ -527,21 +527,28 @@ const StoreDetail: React.FC = () => {
         let recipesList: Recipe[] = [];
         let rawMaterialsList: RawMaterial[] = [];
         if (!ECOSYSTEM_FLAGS.publicProductStockApi) {
-          const recipesRef = collection(db, 'recipes');
-          const recipesQuery = query(recipesRef, where('storeId', '==', docId));
-          const recipesSnap = await getDocs(recipesQuery);
-          recipesList = recipesSnap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          } as Recipe));
+          try {
+            const recipesRef = collection(db, 'recipes');
+            const recipesQuery = query(recipesRef, where('storeId', '==', docId));
+            const recipesSnap = await getDocs(recipesQuery);
+            recipesList = recipesSnap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            } as Recipe));
 
-          const rawMaterialsRef = collection(db, 'rawMaterials');
-          const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', docId));
-          const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
-          rawMaterialsList = rawMaterialsSnap.docs.map((doc) => ({
-            id: doc.id,
-            ...doc.data(),
-          } as RawMaterial));
+            const rawMaterialsRef = collection(db, 'rawMaterials');
+            const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', docId));
+            const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
+            rawMaterialsList = rawMaterialsSnap.docs.map((doc) => ({
+              id: doc.id,
+              ...doc.data(),
+            } as RawMaterial));
+          } catch (stockErr) {
+            // Guests cannot read recipes/rawMaterials — still show the storefront catalog.
+            if (import.meta.env.DEV) {
+              console.warn('Stock enrichment skipped (permissions or offline)', stockErr);
+            }
+          }
         }
 
         // Fetch products for this store

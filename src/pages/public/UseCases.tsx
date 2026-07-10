@@ -102,7 +102,7 @@ const USE_CASES = [
     features: [
       'Bill of Materials and production runs',
       'Raw materials with expiry tracking',
-      'Finished goods valuation (FIFO/LIFO)',
+      'Finished goods valuation (weighted average)',
       'Factory module on Pro plan and above',
       'Marketplace and invoicing included',
       'Business Insights AI — in development',

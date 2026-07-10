@@ -20,6 +20,22 @@ export function isCountedSaleStatus(status?: string): boolean {
   return COUNTED_SALE_STATUSES.includes(status as (typeof COUNTED_SALE_STATUSES)[number]);
 }
 
+/** Cash-on-delivery: unpaid cash order — cash sits with courier until wallet settlement. */
+export function isPlatformOrderCod(order: {
+  paymentMethod?: string;
+  paymentStatus?: string;
+  amountPaid?: number;
+  total?: number;
+}): boolean {
+  const pm = (order.paymentMethod || 'cash').toLowerCase();
+  const isCashMethod = pm === 'cash' || pm === 'cod' || pm === 'cash_on_delivery';
+  if (!isCashMethod) return false;
+  const paid = Math.round((Number(order.amountPaid) || 0) * 100) / 100;
+  const total = Math.round((Number(order.total) || 0) * 100) / 100;
+  const ps = (order.paymentStatus || 'unpaid').toLowerCase();
+  return ps !== 'paid' && paid < total;
+}
+
 export function resolveOrderItemProductKey(item: OrderItemLike | null | undefined): string {
   return item?.productId || item?.composedProductId || item?.id || '';
 }

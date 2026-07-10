@@ -1,4 +1,5 @@
 import React, { Suspense, useEffect, useState } from 'react';
+import '@/embed/wireFinanceOnLoad';
 import { wireFinanceFirebaseFromGrabio } from '@/embed/financeFirebaseBridge';
 import FinanceAppBridge from '@/embed/FinanceAppBridge';
 import AdminPageFallback from '@/components/admin/AdminPageFallback';

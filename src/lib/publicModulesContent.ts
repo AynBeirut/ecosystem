@@ -58,7 +58,7 @@ export const MODULE_FEATURE_ITEMS: Record<string, string[]> = {
     'Real-time stock levels',
     'Expiry and low-stock alerts',
     'Purchase orders and suppliers',
-    'FIFO/LIFO costing',
+    'Weighted-average costing',
     'Multi-location visibility',
   ],
   factory: [

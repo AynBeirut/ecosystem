@@ -58,77 +58,70 @@ const ProductDetail: React.FC = () => {
       setIsLoading(true);
       try {
         const db = getFirestore();
-        let productData: any = null;
+        let productData: Record<string, unknown> | null = null;
         let productId: string = identifier;
-        
-        // Check if identifier is a slug or Firebase ID
-        // Slugs: lowercase, hyphens, no uppercase (e.g., "iphone-15-pro")
-        // Firebase IDs: mixed case, no hyphens, 20-28 chars
-        const isSlug = identifier.includes('-') && !/[A-Z0-9]{10,}/.test(identifier);
-        
-        if (isSlug && storeSlug) {
-          // Search by slug within store
-          // First get store ID from store slug
+
+        if (storeSlug) {
           const storesRef = collection(db, 'storeProfiles');
           const storeQuery = query(storesRef, where('slug', '==', storeSlug));
           const storeSnap = await getDocs(storeQuery);
-          
-          if (!storeSnap.empty) {
-            const storeId = storeSnap.docs[0].id;
-            const storeData = { id: storeId, ...storeSnap.docs[0].data() };
-            setStore(storeData as Store);
-            
-            // Now search for product by slug within this store
-            const productsRef = collection(db, 'products');
-            const productQuery = query(
-              productsRef, 
-              where('slug', '==', identifier),
-              where('storeId', '==', storeId)
-            );
-            const productSnap = await getDocs(productQuery);
-            
-            if (!productSnap.empty) {
-              productId = productSnap.docs[0].id;
-              productData = productSnap.docs[0].data();
-            } else {
-              setError('Product not found');
-              setIsLoading(false);
-              return;
-            }
-          } else {
+
+          if (storeSnap.empty) {
             setError('Store not found');
             setIsLoading(false);
             return;
           }
-        } else {
-          // Direct ID lookup (backward compatibility)
+
+          const resolvedStoreId = storeSnap.docs[0].id;
+          const storeData = { id: resolvedStoreId, ...storeSnap.docs[0].data() };
+          setStore(storeData as Store);
+
+          const productsRef = collection(db, 'products');
+          const productQuery = query(
+            productsRef,
+            where('slug', '==', identifier),
+            where('storeId', '==', resolvedStoreId),
+          );
+          const productSnap = await getDocs(productQuery);
+
+          if (!productSnap.empty) {
+            productId = productSnap.docs[0].id;
+            productData = productSnap.docs[0].data();
+          }
+        }
+
+        if (!productData) {
           const productRef = doc(db, 'products', identifier);
           const productSnap = await getDoc(productRef);
-          
+
           if (!productSnap.exists()) {
             setError('Product not found');
             setIsLoading(false);
             return;
           }
-          
+
           productData = productSnap.data();
           productId = identifier;
-          
-          // Fetch store
+
           if (productData.storeId) {
-            const storeRef = doc(db, 'storeProfiles', productData.storeId);
+            const storeRef = doc(db, 'storeProfiles', productData.storeId as string);
             const storeSnap = await getDoc(storeRef);
             if (storeSnap.exists()) {
               const storeData = { id: productData.storeId, ...storeSnap.data() };
               setStore(storeData as Store);
-              
-              // Redirect to slug URL if both product and store have slugs
-              if (productData.slug && storeData.slug) {
+
+              if (productData.slug && storeData.slug && !storeSlug) {
                 navigate(`/${storeData.slug}/product/${productData.slug}`, { replace: true });
                 return;
               }
             }
           }
+        }
+
+        if (!productData) {
+          setError('Product not found');
+          setIsLoading(false);
+          return;
         }
         
         // Calculate stock for composed products

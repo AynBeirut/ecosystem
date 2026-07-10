@@ -31,6 +31,7 @@ const EXPIRED_STORE = 'expiredStorePhase1001';
 const BUILDER_UID = 'builderPhase1001';
 const LEGACY_STORE = 'legacyStorePhase1001';
 const GRACE_PERIOD_STORE = 'gracePeriodStore001';
+const UNPAID_STORE = 'unpaidStorePhase1001';
 
 const now = () => new Date().toISOString();
 
@@ -176,13 +177,22 @@ async function seed(testEnv) {
       db.doc(`storeProfiles/${LEGACY_STORE}`).set({
         name: 'Legacy Real Store',
         ownerId: LEGACY_STORE,
+        isLegacyUser: true,
+        catalogProductCount: 0,
       }),
       db.doc(`storeProfiles/${GRACE_PERIOD_STORE}`).set({
         name: 'Grace Period Store',
         subscriptionStatus: 'grace_period',
         ownerId: GRACE_PERIOD_STORE,
+        catalogProductCount: 0,
+      }),
+      db.doc(`storeProfiles/${UNPAID_STORE}`).set({
+        name: 'Unpaid Store',
+        ownerId: UNPAID_STORE,
+        catalogProductCount: 10,
       }),
       db.doc(`users/${BUILDER_UID}`).set({ email: 'builder@test.local', role: 'builder' }),
+      db.doc(`users/${UNPAID_STORE}`).set({ email: 'unpaid@test.local', role: 'admin' }),
       db.doc(`builders/${BUILDER_UID}`).set({
         businessType: 'designer',
         demoSlotCount: 0,
@@ -532,6 +542,20 @@ async function main() {
         })
       );
       return `owner uid=${GRACE_PERIOD_STORE} subscriptionStatus=grace_period product create → OK`;
+    })
+  );
+
+  cases.push(
+    await runCase('P1-10', 'unpaid store at product cap cannot create product', async () => {
+      const db = testEnv.authenticatedContext(UNPAID_STORE).firestore();
+      await assertFails(
+        db.collection('products').doc('prod-unpaid-fail').set({
+          storeId: UNPAID_STORE,
+          name: 'Should Be Blocked',
+          price: 5,
+        })
+      );
+      return `owner uid=${UNPAID_STORE} no subscription + catalogProductCount=10 → PERMISSION_DENIED (expected)`;
     })
   );
 

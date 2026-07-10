@@ -9,7 +9,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { useToast } from '@/hooks/use-toast';
+import { fetchFinanceExpenses } from '@/lib/financeData';
 import { Package, AlertTriangle, History, Download, Edit, TrendingDown, Trash2, RefreshCw, Calculator, DollarSign, AlertCircle, FileText } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
@@ -231,15 +231,11 @@ const AdminFinishedGoods: React.FC = () => {
       });
       
       // Fetch expenses from start of month until end date (today if current month)
-      const expensesRef = collection(db, 'expenses');
-      const expensesQuery = query(
-        expensesRef,
-        where('storeId', '==', user.storeId),
-        where('date', '>=', monthStart),
-        where('date', '<=', monthEnd)
-      );
-      const expensesSnapshot = await getDocs(expensesQuery);
-      const expenses = expensesSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Expense));
+      const allExpenses = await fetchFinanceExpenses(db, user.storeId);
+      const expenses = allExpenses.filter((exp) => {
+        const d = String(exp.date || '').slice(0, 10);
+        return d >= monthStart && d <= monthEnd;
+      }) as Expense[];
       
       console.log('💰 Expenses Found:', expenses.length, expenses.map(e => ({ date: e.date, amount: e.amount, category: e.category })));
       

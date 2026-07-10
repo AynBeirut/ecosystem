@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -74,6 +74,7 @@ const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
 const gdpr_1 = require("./api/gdpr");
 const ai_1 = require("./api/ai");
+const agent_1 = require("./api/agent");
 const metaCatalog_1 = require("./api/metaCatalog");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
@@ -229,6 +230,7 @@ app.post('/ai/generate', ai_1.generateAiContent);
 app.post('/ai/settings', ai_1.saveAiSettings);
 app.post('/ai/credits/balance', ai_1.getAiCreditBalance);
 app.post('/ai/credits/deduct', ai_1.deductAiCredits);
+app.post('/agent/query', agent_1.queryAgent);
 // Sitemap for SEO
 app.get('/sitemap.xml', sitemap_1.getSitemap);
 app.get('/robots.txt', sitemap_1.getRobotsTxt);
@@ -677,3 +679,5 @@ Object.defineProperty(exports, "onOrderCreatedCrmSync", { enumerable: true, get:
 // Export Firestore trigger: store announcements ΓåÆ notify customers who favorited the store
 var storeAnnouncements_1 = require("./triggers/storeAnnouncements");
 Object.defineProperty(exports, "onStoreAnnouncement", { enumerable: true, get: function () { return storeAnnouncements_1.onStoreAnnouncement; } });
+var syncCatalogProductCount_1 = require("./triggers/syncCatalogProductCount");
+Object.defineProperty(exports, "onCatalogProductWritten", { enumerable: true, get: function () { return syncCatalogProductCount_1.onCatalogProductWritten; } });

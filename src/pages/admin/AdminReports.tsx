@@ -19,6 +19,7 @@ import { SalaryPayment } from '@/types/staff';
 import { ProductionBatch } from '@/types/production';
 import { Order } from '@/types/order';
 import { exportToCSV, exportToPDF } from '@/lib/exportUtils';
+import { fetchFinanceExpenses } from '@/lib/financeData';
 
 const AdminReports: React.FC = () => {
   const { user } = useAuth();
@@ -49,7 +50,7 @@ const AdminReports: React.FC = () => {
       };
 
       const [expensesData, purchasesData, ordersData, materialsData, customersData, salariesData, batchesData] = await Promise.all([
-        fetchCollection('expenses'),
+        fetchFinanceExpenses(db, user.storeId),
         fetchCollection('purchases'),
         fetchCollection('orders'),
         fetchCollection('rawMaterials'),

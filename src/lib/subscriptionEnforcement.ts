@@ -9,6 +9,9 @@ import {
   increment,
   Firestore,
 } from 'firebase/firestore';
+import { resolveStoreEntitlements } from '@/lib/entitlements';
+import type { StoreProfile } from '@/types/storeProfile';
+import { getCatalogProductCount } from '@/lib/catalogProductCount';
 
 type Tier = 'trial' | 'starter' | 'pro' | 'business';
 
@@ -22,6 +25,7 @@ export interface SubscriptionSnapshot {
   monthlyOperationsLimit: number | null;
   monthlyOperationsCount: number;
   operationsMonthKey: string | null;
+  allowsCatalogImages: boolean;
 }
 
 function normalizeTier(rawTier: unknown): Tier {
@@ -46,25 +50,24 @@ function getMonthKey(date = new Date()): string {
 
 export async function getSubscriptionSnapshot(db: Firestore, storeId: string): Promise<SubscriptionSnapshot> {
   const profileSnap = await getDoc(doc(db, 'storeProfiles', storeId));
-  const data = profileSnap.exists() ? profileSnap.data() : {};
+  const profileData = profileSnap.exists() ? profileSnap.data() : {};
+  const profile = { id: storeId, ...profileData } as StoreProfile;
+  const entitlements = resolveStoreEntitlements(profile);
+  const limits = entitlements?.limits;
 
-  const tier = normalizeTier(data?.subscriptionTier);
-  const productLimitRaw = data?.productLimit ?? data?.product_limit;
-  const storageLimitRaw = data?.storageLimitMb ?? data?.storage_limit_mb;
-  const monthlyOperationsLimitRaw = data?.monthlyOperationsLimit ?? data?.monthly_operations_limit;
-  const storageUsedRaw = data?.storageUsedMb ?? data?.storage_usage_mb ?? data?.currentStorageUsageMb ?? 0;
-  const monthlyOperationsCountRaw = data?.monthlyOperationsCount ?? data?.monthly_operations_count ?? 0;
+  const tier = normalizeTier(profileData?.subscriptionTier);
+  const storageUsedRaw = profileData?.storageUsedMb ?? profileData?.storage_usage_mb ?? profileData?.currentStorageUsageMb ?? 0;
+  const monthlyOperationsCountRaw = profileData?.monthlyOperationsCount ?? profileData?.monthly_operations_count ?? 0;
 
   return {
     tier,
-    productLimit: productLimitRaw === null || productLimitRaw === undefined ? null : toNumber(productLimitRaw, 0),
-    storageLimitMb: storageLimitRaw === null || storageLimitRaw === undefined ? null : toNumber(storageLimitRaw, 0),
+    productLimit: limits?.productLimit ?? null,
+    storageLimitMb: limits?.storageLimitMb ?? null,
     storageUsedMb: toNumber(storageUsedRaw, 0),
-    monthlyOperationsLimit: monthlyOperationsLimitRaw === null || monthlyOperationsLimitRaw === undefined
-      ? null
-      : toNumber(monthlyOperationsLimitRaw, 0),
+    monthlyOperationsLimit: limits?.monthlyOperationsLimit ?? null,
     monthlyOperationsCount: toNumber(monthlyOperationsCountRaw, 0),
-    operationsMonthKey: typeof data?.operationsMonthKey === 'string' ? data.operationsMonthKey : null,
+    operationsMonthKey: typeof profileData?.operationsMonthKey === 'string' ? profileData.operationsMonthKey : null,
+    allowsCatalogImages: limits?.allowsCatalogImages ?? true,
   };
 }
 
@@ -76,10 +79,19 @@ export async function assertCanCreateProduct(db: Firestore, storeId: string, pro
   }
 
   if (snapshot.productLimit !== null) {
-    const productsSnap = await getDocs(query(collection(db, 'products'), where('storeId', '==', storeId)));
-    if (productsSnap.size >= snapshot.productLimit) {
+    const productCount = await getCatalogProductCount(db, storeId);
+    if (productCount >= snapshot.productLimit) {
       throw new Error(`Your plan limit is ${snapshot.productLimit} products. Upgrade to add more products.`);
     }
+  }
+}
+
+export async function assertCanUploadCatalogImage(db: Firestore, storeId: string): Promise<void> {
+  const snapshot = await getSubscriptionSnapshot(db, storeId);
+  if (!snapshot.allowsCatalogImages) {
+    throw new Error(
+      'Your plan does not include product images. Upgrade to Mini Shop or Shop to upload catalog images.',
+    );
   }
 }
 

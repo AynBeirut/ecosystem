@@ -28,6 +28,10 @@ import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
+
+const devLog = (...args: unknown[]) => {
+  if (import.meta.env.DEV) devLog(...args);
+};
 import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
 import {
   decideRefundRestoreQuantity,
@@ -36,6 +40,10 @@ import {
 } from '@/lib/stockUnitType';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 import { syncOrderToCrmClient } from '@/lib/crmOrderSync';
+import { glPostOrderSaleRecognized, glPostOrderSaleReversal, type OrderCogsLine } from '@/lib/platformGl';
+import { orderGlInputFromOrder, resolveOrderCogsLines } from '@/lib/resolveOrderCogs';
+import { isPlatformOrderCod } from '@/lib/salesRules';
+import { syncCodOrderToDeliveryWallet } from '@/lib/deliveryWalletService';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
@@ -806,11 +814,11 @@ const AdminOrders: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       if (!user?.storeId) {
-        console.log('AdminOrders: No storeId found for user', user);
+        devLog('AdminOrders: No storeId found for user', user);
         setLoading(false);
         return;
       }
-      console.log('AdminOrders: Fetching orders for storeId:', user.storeId);
+      devLog('AdminOrders: Fetching orders for storeId:', user.storeId);
       setLoading(true);
       const db = getFirestore();
 
@@ -818,7 +826,7 @@ const AdminOrders: React.FC = () => {
         const ref = collection(db, collectionName);
         const q = query(ref, where('storeId', '==', user.storeId));
         const snapshot = await getDocs(q);
-        console.log(`AdminOrders: Found ${snapshot.docs.length} ${collectionName} for storeId:`, user.storeId);
+        devLog(`AdminOrders: Found ${snapshot.docs.length} ${collectionName} for storeId:`, user.storeId);
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       };
 
@@ -847,7 +855,7 @@ const AdminOrders: React.FC = () => {
             (d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) } as FulfillmentLocation),
           );
         } catch (locationsErr) {
-          console.warn('AdminOrders: fulfillmentLocations skipped', locationsErr);
+          devLog('AdminOrders: fulfillmentLocations skipped', locationsErr);
         }
         setFulfillmentLocations(locations);
 
@@ -864,11 +872,11 @@ const AdminOrders: React.FC = () => {
             .map((viewDoc) => ({ id: viewDoc.id, ...(viewDoc.data() as Record<string, unknown>) } as SavedOrderView))
             .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
         } catch (viewsErr) {
-          console.warn('AdminOrders: orderViews skipped', viewsErr);
+          devLog('AdminOrders: orderViews skipped', viewsErr);
         }
         setSavedOrderViews(views);
 
-        console.log('AdminOrders: Orders fetched:', ordersData);
+        devLog('AdminOrders: Orders fetched:', ordersData);
         
         // Convert Firestore Timestamps and sort orders
         const ordersWithDates = (ordersData as (Order & { id: string })[]).map(order => {
@@ -1024,15 +1032,15 @@ const AdminOrders: React.FC = () => {
   const formatCurrency = (amount: number, showDual: boolean = true): string => {
     const usd = `$${amount.toFixed(2)}`;
     
-    console.log('formatCurrency called:', { amount, showDual, hasProfile: !!storeProfile, rate: storeProfile?.customExchangeRate });
+    devLog('formatCurrency called:', { amount, showDual, hasProfile: !!storeProfile, rate: storeProfile?.customExchangeRate });
     
     if (showDual && storeProfile?.customExchangeRate && storeProfile.customExchangeRate > 0) {
       const lbp = (amount * storeProfile.customExchangeRate).toFixed(0);
-      console.log('Showing dual currency:', { usd, lbp });
+      devLog('Showing dual currency:', { usd, lbp });
       return `${usd}<br/><span style="font-size: 12px; color: #666;">${Number(lbp).toLocaleString()} LBP</span>`;
     }
     
-    console.log('Showing USD only');
+    devLog('Showing USD only');
     return usd;
   };
 
@@ -1096,7 +1104,7 @@ const AdminOrders: React.FC = () => {
 
   const handleCreateOrder = async () => {
     if (isCreatingOrderRef.current) {
-      console.log('⚠️ Create order operation already in progress');
+      devLog('⚠️ Create order operation already in progress');
       return;
     }
 
@@ -1209,9 +1217,9 @@ const AdminOrders: React.FC = () => {
         });
       }
 
-      console.log('Creating order with data:', orderData);
+      devLog('Creating order with data:', orderData);
       const docRef = await addDoc(collection(db, 'orders'), orderData);
-      console.log('Order created successfully, ID:', docRef.id);
+      devLog('Order created successfully, ID:', docRef.id);
       setOrders([{ id: docRef.id, ...orderData }, ...orders]);
 
       const ownerStoreId = getActualStoreId(user) || user.storeId;
@@ -1238,14 +1246,14 @@ const AdminOrders: React.FC = () => {
       // Update customer stats
       if (customer) {
         try {
-          console.log('Updating customer stats for:', customer.id);
+          devLog('Updating customer stats for:', customer.id);
           const customerRef = doc(db, 'customers', customer.id);
           await updateDoc(customerRef, {
             totalOrders: (customer.totalOrders || 0) + 1,
             lifetimeValue: (customer.lifetimeValue || 0) + financialCheck.normalized.total,
             lastOrderDate: new Date().toISOString(),
           });
-          console.log('Customer stats updated successfully');
+          devLog('Customer stats updated successfully');
         } catch (updateError) {
           console.error('Failed to update customer stats:', updateError);
           // Don't fail the order creation if customer update fails
@@ -1260,7 +1268,7 @@ const AdminOrders: React.FC = () => {
               assignedSalesPerson: newOrder.assignedSalesPerson,
               assignedSalesPersonName: salesPerson?.name || '',
             });
-            console.log('Customer auto-linked to salesman:', newOrder.assignedSalesPerson);
+            devLog('Customer auto-linked to salesman:', newOrder.assignedSalesPerson);
           } catch (linkError) {
             console.error('Failed to auto-link customer to salesman:', linkError);
           }
@@ -1268,9 +1276,9 @@ const AdminOrders: React.FC = () => {
       }
 
       try {
-        console.log('Logging action...');
+        devLog('Logging action...');
         await logAction(user.id, user.name, user.role, 'create', 'order', docRef.id, { newValue: orderData }, user.storeId);
-        console.log('Action logged successfully');
+        devLog('Action logged successfully');
       } catch (logError) {
         console.error('Failed to log action:', logError);
         // Don't fail the order creation if logging fails
@@ -1420,6 +1428,7 @@ const AdminOrders: React.FC = () => {
           where('storeId', '==', user.storeId)
         );
         const fgSnapshot = await getDocs(fgQuery);
+        const cogsLines: OrderCogsLine[] = [];
 
         for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
           const item = order.items[lineIdx];
@@ -1432,6 +1441,8 @@ const AdminOrders: React.FC = () => {
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
+            const fgCost = (matchingFG.data().costPrice as number) || 0;
+            cogsLines.push({ productKey: itemProductId, quantity: item.quantity, unitCost: fgCost });
             await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
               const qty = item.quantity;
               const cost = (fgData.costPrice as number) || 0;
@@ -1472,6 +1483,29 @@ const AdminOrders: React.FC = () => {
 
         if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
           await applyRawMaterialStockFromOrder(db, order, 'consume');
+        }
+
+        const glCogs = cogsLines.length > 0
+          ? cogsLines
+          : await resolveOrderCogsLines(user.storeId, order.items);
+        await glPostOrderSaleRecognized(
+          user.storeId,
+          orderGlInputFromOrder({ ...order, id: orderId, storeId: user.storeId }, glCogs),
+        );
+
+        if (isPlatformOrderCod({ ...order, id: orderId })) {
+          await syncCodOrderToDeliveryWallet(user.storeId, {
+            id: orderId,
+            storeId: user.storeId,
+            invoiceNumber: order.invoiceNumber,
+            customerName: order.customerName,
+            total: order.total,
+            paymentMethod: order.paymentMethod,
+            paymentStatus: order.paymentStatus,
+            amountPaid: order.amountPaid,
+            assignedDeliveryPerson: order.assignedDeliveryPerson,
+            assignedDeliveryPersonName: order.assignedDeliveryPersonName,
+          });
         }
       }
       
@@ -1866,7 +1900,7 @@ const AdminOrders: React.FC = () => {
 
   const handleVoidPayments = async () => {
     if (isVoidingPaymentRef.current) {
-      console.log('⚠️ Void payment operation already in progress');
+      devLog('⚠️ Void payment operation already in progress');
       return;
     }
 
@@ -2013,7 +2047,7 @@ const AdminOrders: React.FC = () => {
 
   const handleRefundOrder = async () => {
     if (isRefundingOrderRef.current) {
-      console.log('⚠️ Refund operation already in progress');
+      devLog('⚠️ Refund operation already in progress');
       return;
     }
 
@@ -2109,6 +2143,27 @@ const AdminOrders: React.FC = () => {
             : {}),
         },
       });
+
+      if (sanitizedRefundAmount > 0) {
+        const refundRatio = totalAmount > 0 ? sanitizedRefundAmount / totalAmount : 1;
+        const cogsLines = await resolveOrderCogsLines(user.storeId, refundingOrder.items);
+        const scaledCogs = cogsLines.map((line) => ({
+          ...line,
+          quantity: Math.round(line.quantity * refundRatio * 1000) / 1000,
+        }));
+        await glPostOrderSaleReversal(
+          user.storeId,
+          orderGlInputFromOrder(
+            {
+              ...refundingOrder,
+              storeId: user.storeId,
+              total: sanitizedRefundAmount,
+            },
+            scaledCogs,
+          ),
+          refundRecord.id,
+        );
+      }
 
       const updatedOrder = {
         ...refundingOrder,

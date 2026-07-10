@@ -14,16 +14,25 @@ function resolveWithExtensions(basePath: string): string | null {
 /** Route @/ to finance src or main src based on the importing file. */
 export function financeInternalAlias(financeSrc: string, mainSrc: string): Plugin {
   const financeMarker = path.normalize(financeSrc);
+  const legacyFinanceMarker = path.normalize(
+    financeSrc.replace(`${path.sep}suba eco sys${path.sep}`, `${path.sep}the eco sys${path.sep}`),
+  );
+  const isFinanceImporter = (importer?: string) => {
+    if (!importer) return false;
+    const norm = path.normalize(importer);
+    return (
+      norm.includes(financeMarker) ||
+      norm.includes(legacyFinanceMarker) ||
+      norm.includes('beirut-finance-flow-main')
+    );
+  };
   return {
     name: 'grabio-internal-alias',
     enforce: 'pre',
     resolveId(source, importer) {
       if (!source.startsWith('@/')) return null;
       const rel = source.slice(2);
-      const norm = importer ? path.normalize(importer) : '';
-      const root = norm.includes(financeMarker) || norm.includes('beirut-finance-flow-main')
-        ? financeSrc
-        : mainSrc;
+      const root = isFinanceImporter(importer) ? financeSrc : mainSrc;
       return resolveWithExtensions(path.join(root, rel));
     },
   };

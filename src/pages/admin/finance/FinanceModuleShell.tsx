@@ -9,8 +9,7 @@ const FINANCE_IM_NAV = [
   { to: '/admin/finance/invoices', label: 'Invoices' },
   { to: '/admin/finance/estimates', label: 'Estimates' },
   { to: '/admin/finance/receipts', label: 'Receipts' },
-  { to: '/admin/finance/clients', label: 'Clients' },
-  { to: '/admin/finance/products', label: 'Products' },
+  { to: '/admin/finance/expenses', label: 'Expenses' },
   { to: '/admin/finance/reports', label: 'Reports' },
 ] as const;
 
@@ -23,7 +22,7 @@ const FinanceModuleShell: React.FC = () => {
     <FinanceInvoiceModuleGate>
       <AdminPageShell
         title="Invoice Manager"
-        description="Invoices, estimates, receipts, clients, and reports."
+        description="Invoices, estimates, receipts, expenses, and reports. Customers and catalog live under Sales & Stock."
         eyebrow="Business Tools"
         backTo="/admin/dashboard"
         backLabel="Dashboard"

@@ -12,6 +12,7 @@ import { Trash2, Plus, Edit3, Users, AlertCircle } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { StaffMember } from '@/types/staff';
 import { logAction } from '@/lib/auditLog';
+import { financeExpensesCollection } from '@/lib/financeData';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -145,17 +146,18 @@ const AdminStaff: React.FC = () => {
       });
       
       // Delete only future/current salary expenses (today onwards) for this staff member
-      const expensesRef = collection(db, 'expenses');
+      const expensesRef = financeExpensesCollection(db, user.storeId);
       const salaryExpensesQuery = query(
-        expensesRef, 
-        where('staffId', '==', staffId),
-        where('storeId', '==', user?.storeId)
+        expensesRef,
+        where('linkedStaffId', '==', staffId),
+        where('storeId', '==', user.storeId)
       );
       const salaryExpensesSnapshot = await getDocs(salaryExpensesQuery);
       
       // Filter and delete only expenses from today onwards (keep historical records)
       const futureExpenses = salaryExpensesSnapshot.docs.filter(doc => {
-        const expenseDate = doc.data().date;
+        const data = doc.data();
+        const expenseDate = String(data.startDate || data.expenseDate || data.date || '');
         return expenseDate >= today;
       });
       

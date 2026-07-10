@@ -1,9 +1,9 @@
-/** Prefer full-page redirect over popup (popup breaks on custom domain / COOP). */
+/** Redirect only on mobile / dev. Desktop grabio.space uses popup (COOP warnings are benign). */
 export function shouldUseGoogleRedirect(): boolean {
   if (typeof window === 'undefined') return false;
-  const host = window.location.hostname;
   if (import.meta.env.DEV) return true;
-  return host === 'grabio.space' || host === 'www.grabio.space' || host.endsWith('.grabio.space');
+  const ua = navigator.userAgent || '';
+  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
 }
 
 export const GOOGLE_AUTH_PENDING_KEY = 'grabio_google_auth_pending';
