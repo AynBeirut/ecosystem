@@ -15,7 +15,7 @@ function resolveWithExtensions(basePath: string): string | null {
 export function financeInternalAlias(financeSrc: string, mainSrc: string): Plugin {
   const financeMarker = path.normalize(financeSrc);
   const legacyFinanceMarker = path.normalize(
-    financeSrc.replace(`${path.sep}suba eco sys${path.sep}`, `${path.sep}the eco sys${path.sep}`),
+    financeSrc.replace(`${path.sep}vendor${path.sep}`, `${path.sep}suba eco sys${path.sep}`),
   );
   const isFinanceImporter = (importer?: string) => {
     if (!importer) return false;
@@ -23,7 +23,8 @@ export function financeInternalAlias(financeSrc: string, mainSrc: string): Plugi
     return (
       norm.includes(financeMarker) ||
       norm.includes(legacyFinanceMarker) ||
-      norm.includes('beirut-finance-flow-main')
+      norm.includes('beirut-finance-flow-main') ||
+      norm.includes(`${path.sep}vendor${path.sep}`)
     );
   };
   return {

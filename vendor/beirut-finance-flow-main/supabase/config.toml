@@ -1,0 +1,10 @@
+project_id = "bkxflwxkqnyohhussbvv"
+
+[functions.generate-proposal]
+verify_jwt = false
+
+[functions.stripe-webhook]
+verify_jwt = false
+
+[functions.paypal-webhook]
+verify_jwt = false

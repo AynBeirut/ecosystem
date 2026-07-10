@@ -4,7 +4,7 @@
  */
 import { getApp } from 'firebase/app';
 import { auth, authReady, db, storage } from '@/lib/firebase';
-import { setFinanceFirebaseBridge } from '../../suba eco sys/finance/beirut-finance-flow-main/src/integrations/firebase/embedBridge';
+import { setFinanceFirebaseBridge } from '../../vendor/beirut-finance-flow-main/src/integrations/firebase/embedBridge';
 
 setFinanceFirebaseBridge({
   app: getApp(),

@@ -6,8 +6,9 @@ const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.resolve(__dirname, '..');
-const SRC = path.join(ROOT, 'suba eco sys/finance/beirut-finance-flow-main/dist');
-const SRC_LEGACY = path.join(ROOT, 'the eco sys/finance/beirut-finance-flow-main/dist');
+const SRC = path.join(ROOT, 'vendor/beirut-finance-flow-main/dist');
+const SRC_LEGACY = path.join(ROOT, 'suba eco sys/finance/beirut-finance-flow-main/dist');
+const SRC_LEGACY2 = path.join(ROOT, 'the eco sys/finance/beirut-finance-flow-main/dist');
 const DEST = path.join(ROOT, 'dist/invoice');
 
 function copyRecursive(from, to) {
@@ -42,10 +43,13 @@ function sanitizeInvoiceIndex(indexPath) {
 let source = SRC;
 if (!fs.existsSync(path.join(SRC, 'index.html'))) {
   if (fs.existsSync(path.join(SRC_LEGACY, 'index.html'))) {
-    console.warn('⚠️ Using legacy invoice dist path (the eco sys/...)');
+    console.warn('⚠️ Using legacy invoice dist path (suba eco sys/...)');
     source = SRC_LEGACY;
+  } else if (fs.existsSync(path.join(SRC_LEGACY2, 'index.html'))) {
+    console.warn('⚠️ Using legacy invoice dist path (the eco sys/...)');
+    source = SRC_LEGACY2;
   } else {
-    console.error('❌ Invoice Manager build missing. Run: npm run build --prefix "suba eco sys/finance/beirut-finance-flow-main"');
+    console.error('❌ Invoice Manager build missing. Run: npm run build:invoice');
     process.exit(1);
   }
 }

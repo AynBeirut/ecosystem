@@ -4,7 +4,8 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { financeInternalAlias } from "./src/vite-finance-alias";
 
-const financeSrcPath = path.resolve(__dirname, "suba eco sys/finance/beirut-finance-flow-main/src");
+const financeSrcPath = path.resolve(__dirname, "vendor/beirut-finance-flow-main/src");
+const financeNodeModules = path.resolve(__dirname, "vendor/beirut-finance-flow-main/node_modules");
 const mainSrcPath = path.resolve(__dirname, "src");
 const rootNodeModules = path.resolve(__dirname, "node_modules");
 
@@ -65,5 +66,6 @@ export default defineConfig(({ mode }) => ({
       "react-router": path.resolve(rootNodeModules, "react-router"),
       "react-router-dom": path.resolve(rootNodeModules, "react-router-dom"),
     },
+    modules: [financeNodeModules, rootNodeModules, "node_modules"],
   },
 }));

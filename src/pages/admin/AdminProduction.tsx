@@ -48,7 +48,8 @@ const STATUS_CONFIG: Record<ProductionBatchStatus, { label: string; color: strin
   cancelled: { label: 'Cancelled', color: 'bg-red-100 text-red-800', icon: AlertCircle },
 };
 
-const PRODUCTION_COMPLETION_LOCKDOWN = true;
+/** Default locked; set VITE_PRODUCTION_COMPLETION_LOCKDOWN=false at staging build time to lift. */
+const PRODUCTION_COMPLETION_LOCKDOWN = import.meta.env.VITE_PRODUCTION_COMPLETION_LOCKDOWN !== 'false';
 const PRODUCTION_COMPLETION_LOCKDOWN_REASON =
   'Completed production batches are locked to protect raw-material and finished-goods counts.';
 

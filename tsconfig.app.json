@@ -22,7 +22,7 @@
     "noFallthroughCasesInSwitch": false,
 
     "paths": {
-      "@finance/*": ["./suba eco sys/finance/beirut-finance-flow-main/src/*"],
+      "@finance/*": ["./vendor/beirut-finance-flow-main/src/*"],
       "@/*": ["./src/*"]
     }
   },

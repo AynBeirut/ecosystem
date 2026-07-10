@@ -57,6 +57,12 @@ pos-client/
 .env.*.local
 !**/.env.local.example
 
+# Vendored finance build artifacts (source is committed under vendor/)
+vendor/beirut-finance-flow-main/node_modules
+vendor/beirut-finance-flow-main/dist
+vendor/beirut-finance-flow-main/.env
+vendor/beirut-finance-flow-main/.env.*
+
 # Finance app local env
 the eco sys/finance/beirut-finance-flow-main/.env
 the eco sys/finance/beirut-finance-flow-main/.env.production

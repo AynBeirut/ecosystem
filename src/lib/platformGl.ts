@@ -11,6 +11,6 @@ export {
   glPostDeliveryWalletSettlement,
   type PlatformOrderInput,
   type ProductionReversalInput,
-} from '../../suba eco sys/finance/beirut-finance-flow-main/src/lib/ledger/glBridge';
+} from '../../vendor/beirut-finance-flow-main/src/lib/ledger/glBridge';
 
-export type { OrderCogsLine } from '../../suba eco sys/finance/beirut-finance-flow-main/src/lib/ledger/autoPosting';
+export type { OrderCogsLine } from '../../vendor/beirut-finance-flow-main/src/lib/ledger/autoPosting';
