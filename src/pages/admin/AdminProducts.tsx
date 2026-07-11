@@ -43,8 +43,7 @@ import ClampedText, {
   SelectedFileLabel,
 } from '@/components/ClampedText';
 import { getFirestore, collection, query, where, getDocs, doc, updateDoc, deleteDoc, getDoc, runTransaction, increment } from 'firebase/firestore';
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '@/lib/firebase';
+import { uploadProductImage } from '@/lib/productImageUpload';
 import { generateUniqueSlug } from '@/lib/slugify';
 import { assertCanCreateProduct, assertCanUploadBytes, assertCanUploadCatalogImage, trackStorageUsageAfterUpload, getSubscriptionSnapshot } from '@/lib/subscriptionEnforcement';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
@@ -487,19 +486,15 @@ const AdminProducts: React.FC = () => {
       try {
         await assertCanUploadCatalogImage(db, storeId);
         await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
-        const safeFileName = encodeURIComponent(newProduct.imageFile.name);
-        const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
-        await new Promise<void>((resolve, reject) => {
-          const task = uploadBytesResumable(imageRef, newProduct.imageFile!);
-          task.on('state_changed',
-            (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-            (err) => { setUploadProgress(null); reject(err); },
-            () => { setUploadProgress(null); resolve(); }
-          );
-        });
-        imageUrl = await getDownloadURL(imageRef);
+        imageUrl = await uploadProductImage(
+          newProduct.imageFile,
+          storeId,
+          (percent) => setUploadProgress(percent),
+        );
+        setUploadProgress(null);
         await trackStorageUsageAfterUpload(db, storeId, newProduct.imageFile.size);
       } catch (error) {
+        setUploadProgress(null);
         console.error('Image upload failed:', error);
         const message = error instanceof Error ? error.message : 'Image upload failed.';
         if (message.toLowerCase().includes('storage limit')) {
@@ -793,21 +788,17 @@ const AdminProducts: React.FC = () => {
           await assertCanUploadCatalogImage(db, storeId);
           await assertCanUploadBytes(db, storeId, newProduct.imageFile.size);
         }
-        const safeFileName = encodeURIComponent(newProduct.imageFile.name);
-        const imageRef = ref(storage, `products/${Date.now()}_${safeFileName}`);
-        await new Promise<void>((resolve, reject) => {
-          const task = uploadBytesResumable(imageRef, newProduct.imageFile!);
-          task.on('state_changed',
-            (snap) => setUploadProgress(Math.round((snap.bytesTransferred / snap.totalBytes) * 100)),
-            (err) => { setUploadProgress(null); reject(err); },
-            () => { setUploadProgress(null); resolve(); }
-          );
-        });
-        imageUrl = await getDownloadURL(imageRef);
+        imageUrl = await uploadProductImage(
+          newProduct.imageFile,
+          storeId,
+          (percent) => setUploadProgress(percent),
+        );
+        setUploadProgress(null);
         if (storeId) {
           await trackStorageUsageAfterUpload(db, storeId, newProduct.imageFile.size);
         }
       } catch {
+        setUploadProgress(null);
         toast({ title: "Error", description: "Image upload failed.", variant: "destructive" });
         setIsSaving(false);
         return;

@@ -1,8 +1,14 @@
 import express, { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2';
+import { defineSecret } from 'firebase-functions/params';
 import cors from 'cors';
 import dotenv from 'dotenv';
+
+// R2 credentials live in Secret Manager (never committed). Non-secret R2 config
+// (account id, bucket, public URL) comes from functions/.env.
+const R2_ACCESS_KEY_ID = defineSecret('R2_ACCESS_KEY_ID');
+const R2_SECRET_ACCESS_KEY = defineSecret('R2_SECRET_ACCESS_KEY');
 
 // Initialize Firebase Admin first
 console.log('TOP-LEVEL LOG: Cloud Function module loaded');
@@ -71,6 +77,7 @@ import {
   syncPosRefunds,
 } from './api/posSync';
 import { getPublicProductStock } from './api/publicProductStock';
+import { presignR2Upload } from './api/r2';
 import { requireModule } from './middleware/moduleGate';
 const db = admin.firestore();
 
@@ -269,6 +276,7 @@ app.post('/pos/raw-materials', syncPosRawMaterials);
 app.post('/pos/recipes', syncPosRecipes);
 app.post('/pos/refunds', syncPosRefunds);
 app.post('/public/product-stock', getPublicProductStock);
+app.post('/r2/presign', presignR2Upload);
 app.get('/marketing/campaigns', listCampaigns);
 
 app.post('/notifications/order/retry', async (req: Request, res: Response) => {
@@ -765,6 +773,7 @@ export const api = functions.https.onRequest(
   {
     cors: true,
     region: 'us-central1',
+    secrets: [R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY],
   },
   app
 );
