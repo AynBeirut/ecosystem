@@ -1,0 +1,61 @@
+"Invoice No.","Client Name","Add Items","Measurement Unit","Qty","Rate","Discount Rate","Discount","Tax","Tax Amount","Amount","Description","Product Code"
+"INV7","A La Saj","Battery 200 Ah","Pcs","2.0","200.0","0.0","0.0","0.0","0.0","400.0","Warranty 1 year",""
+"INV7","A La Saj","Galvanized Metal Structure","N/A","12.0","50.0","0.0","0.0","0.0","0.0","600.0","Warranty 10 years",""
+"INV7","A La Saj","Inverter Talaia 3.5 kw","Pcs","1.0","500.0","0.0","0.0","0.0","0.0","500.0","Warranty 1 year",""
+"INV7","A La Saj","Jinko 550W","N/A","4.0","165.0","0.0","0.0","0.0","0.0","660.0","",""
+"INV7","A La Saj","Transport","N/A","1.0","100.0","0.0","0.0","0.0","0.0","100.0","",""
+"INV8","Lebanese Alternative Learning","Electronic Repair","Pcs","2.0","15.0","0.0","0.0","0.0","0.0","30.0","","Router"
+"INV6","Stayha","Battery Inter Conaction","Mettre","4.0","10.0","0.0","0.0","0.0","0.0","40.0","",""
+"INV6","Stayha","DC Cable","Mettre","10.0","5.0","0.0","0.0","0.0","0.0","50.0","",""
+"INV6","Stayha","Electrical Panel Control","F. Box","1.0","500.0","0.0","0.0","0.0","0.0","500.0","With surge protection AC/DC",""
+"INV6","Stayha","InfiniSolar Voltronic Inverteur 6 KW","Pcs","1.0","1150.0","0.0","0.0","0.0","0.0","1150.0","Warranty 1 Year",""
+"INV6","Stayha","Isolation tube flexible 32","Mettre","9.0","3.0","0.0","0.0","0.0","0.0","27.0","",""
+"INV6","Stayha","Jinko 550W","N/A","8.0","185.0","0.0","0.0","0.0","0.0","1480.0","",""
+"INV6","Stayha","Lithium Battery Eitai 6 Kwh","N/A","2.0","1825.0","0.0","0.0","0.0","0.0","3650.0","",""
+"INV6","Stayha","Solar Dc Cable","Mettre","30.0","4.0","0.0","0.0","0.0","0.0","120.0","",""
+"INV6","Stayha","Transport & Installation","Worker","1.0","500.0","0.0","0.0","0.0","0.0","500.0","",""
+"INV10","DUBLIN
+Front Line Defenders","Logistique service","N/A","1.0","850.0","0.0","0.0","0.0","0.0","850.0","Accommodation 
+Digital Security 
+Logistique service","For Sawtonna "
+"INV11","Het Actiefonds,","Logistique service","N/A","1.0","2200.0","0.0","0.0","0.0","0.0","2200.0","Logistique service","For Sawtonna "
+"INV12","CTO","Prototype full system","N/A","20.0","150.0","0.0","0.0","0.0","0.0","3000.0","","ARDUINO 
+WH1602 IIC/I2C
+WATER PUMP
+L298N
+TDS SENSOR
+SENSOR SOIL W/MOD
+TURBIDITY SENSOR
+LOAD CELL 
+HX711
+DHT11
+JWMM
+JWMF
+JWFF"
+"INV13","Marley Quodsy (Sawtona)","Secure Cloud Backup","N/A","1.0","200.0","0.0","0.0","0.0","0.0","200.0","Implementation of encrypted cloud storage, data encrypted before leaving devices, zero-knowledge provider setup, and reliable backup testing.",""
+"INV13","Marley Quodsy (Sawtona)","Virtual Private Network (VPN)","N/A","1.0","150.0","0.0","0.0","0.0","0.0","150.0","‎Setup of secure VPN with encrypted internet traffic, hidden IP addresses, and strict no-logs policy to ensure privacy and safe team access",""
+"INV13","Marley Quodsy (Sawtona)","‎Server Security","N/A","1.0","350.0","0.0","0.0","0.0","0.0","350.0","‎Includes strict access control, SSH keys & strong passwords, disabling unnecessary services, firewall configuration, regular OS/software updates, log aggregation, and disk data encryption",""
+"INV14","DUBLIN
+Front Line Defenders","Logistique service","N/A","1.0","850.0","0.0","0.0","0.0","0.0","850.0","Accommodation 
+Digital Security 
+Logistique service","For Sawtonna "
+"INV15","She can","Hosting, Domain,","Month ","6.0","0.0","0.0","0.0","0.0","0.0","0.0","",""
+"INV15","She can","Website","N/A","1.0","450.0","0.0","0.0","0.0","0.0","450.0","3 email outlook",""
+"INV16","Astral","Contactor X3 Phase 80 A","N/A","1.0","130.0","0.0","0.0","0.0","0.0","130.0","",""
+"INV16","Astral","EDL FIX","N/A","1.0","50.0","0.0","0.0","0.0","0.0","50.0","Phase lost",""
+"INV16","Astral","Really de phase protection","Pcs ","2.0","75.0","0.0","0.0","0.0","0.0","150.0","",""
+"INV16","Astral","Renew Main control panel","N/A","1.0","180.0","0.0","0.0","0.0","0.0","180.0","",""
+"INV17","Indigo Communication Arts (Cyprus)","Hosting Service","N/A","1.0","660.0","0.0","0.0","0.0","0.0","660.0","","Server Rent"
+"INV17","Indigo Communication Arts (Cyprus)","Migration Services","N/A","1.0","350.0","0.0","0.0","0.0","0.0","350.0","","Data Migration"
+"INV17","Indigo Communication Arts (Cyprus)","Platform building","N/A","1.0","3000.0","0.0","0.0","0.0","0.0","3000.0","","AI website Builder"
+"INV18","Mr Majed","Migration Services","N/A","1.0","250.0","0.0","0.0","0.0","0.0","250.0","","Data Migration"
+"INV19","LAL","AC Cable 4x6","Mettre","30.0","6.0","0.0","0.0","0.0","0.0","180.0","",""
+"INV19","LAL","Deye Battery 12 KW","Pcs","1.0","1500.0","0.0","0.0","0.0","0.0","1500.0"," Warranty 5 year ",""
+"INV19","LAL","Deye Hybrid Inverteur 6 KW","Pcs","1.0","1000.0","0.0","0.0","0.0","0.0","1000.0","Warranty 5 Year",""
+"INV19","LAL","Electrical Panel Control","F. Box","1.0","300.0","0.0","0.0","0.0","0.0","300.0","With surge protection AC/DC",""
+"INV19","LAL","Transport & Installation","Worker","1.0","250.0","0.0","0.0","0.0","0.0","250.0","",""
+"INV20","Serene","Deye Hybrid Inverteur 6 KW","Pcs","1.0","850.0","0.0","0.0","0.0","0.0","850.0","Warranty 1 Year",""
+"INV20","Serene","Deye Lithium 16 KWH","Pcs","1.0","1900.0","0.0","0.0","0.0","0.0","1900.0","","5 Years Warranty"
+"INV20","Serene","Electrical Panel Control","F. Box","1.0","500.0","0.0","0.0","0.0","0.0","500.0","With  AC/DC cables and breakers SPD ","Transport+ installation "
+"INV20","Serene","Galvanized Metal Structure","N/A","10.0","65.0","0.0","0.0","0.0","0.0","650.0","Warranty 10 years",""
+"INV20","Serene","longi himo x10 640w","Pcs","10.0","110.0","0.0","0.0","0.0","0.0","1100.0","25 Years Warranty ","Bificial N-type"
