@@ -51,6 +51,7 @@ import { createCrmRep } from './api/crmReps';
 import { syncDropshipProduct } from './api/dropship';
 import { createPosPairingCode, pairPosDevice, posHeartbeat } from './api/posSync';
 import { getPublicProductStock } from './api/publicProductStock';
+import { provisionLiveKitchen } from './api/adminProvision';
 import { requireModule } from './middleware/moduleGate';
 const db = admin.firestore();
 
@@ -160,6 +161,9 @@ app.post('/subscription/subscribe-modular', subscribeModular);
 app.post('/subscription/schedule-migration', scheduleRenewalMigration);
 app.post('/subscription/cancel', cancelSubscription);
 app.get('/subscription/info', getSubscriptionInfo);
+
+// Admin-only package provisioning (requires ADMIN_PROVISION_SECRET header)
+app.post('/admin/provision-live-kitchen', provisionLiveKitchen);
 
 // Webhook endpoint for Whish payment gateway (Whish calls successCallbackUrl via GET)
 app.get('/webhook/whish', handleWhishWebhook);
