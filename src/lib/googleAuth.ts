@@ -1,8 +1,6 @@
-/** Prefer full-page redirect over popup (popup breaks in embedded browsers / COOP). */
+/** Prefer full-page redirect over popup (popup breaks under COOP / embedded browsers). */
 export function shouldUseGoogleRedirect(): boolean {
-  if (import.meta.env.DEV) return true;
-  const host = typeof window !== 'undefined' ? window.location.hostname : '';
-  return host === 'localhost' || host === '127.0.0.1';
+  return true;
 }
 
 export const GOOGLE_AUTH_PENDING_KEY = 'grabio_google_auth_pending';
