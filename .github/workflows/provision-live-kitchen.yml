@@ -1,0 +1,36 @@
+name: Provision Live Kitchen
+
+on:
+  workflow_dispatch:
+    inputs:
+      email:
+        description: 'Account email to provision'
+        required: true
+        type: string
+
+jobs:
+  provision:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Write service account key
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          if [ -z "$FIREBASE_SERVICE_ACCOUNT" ]; then
+            echo "FIREBASE_SERVICE_ACCOUNT secret is not configured"
+            exit 1
+          fi
+          echo "$FIREBASE_SERVICE_ACCOUNT" > serviceAccountKey.json
+
+      - name: Provision Live Kitchen package
+        run: node scripts/provisionLiveKitchenPackage.cjs "${{ inputs.email }}" --write
