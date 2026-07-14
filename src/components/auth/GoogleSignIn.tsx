@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { Button } from "@/components/ui/button";
 import { auth } from '@/lib/firebase';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth';
 import { toast } from 'sonner';
 import { acquire, release } from '@/lib/popupLock';
+import { markGoogleAuthPending, shouldUseGoogleRedirect } from '@/lib/googleAuth';
 
 export function GoogleSignIn() {
   const [loading, setLoading] = useState(false);
@@ -16,6 +17,12 @@ export function GoogleSignIn() {
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      if (shouldUseGoogleRedirect()) {
+        markGoogleAuthPending();
+        release();
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       await signInWithPopup(auth, provider);
       toast.success('Signed in successfully!');
     } catch (error: unknown) {
