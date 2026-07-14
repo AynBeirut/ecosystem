@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { User, UserRole, Store } from '@/types/product';
 import { auth, authReady } from '@/lib/firebase';
-import { markGoogleAuthPending, clearGoogleAuthPending } from '@/lib/googleAuth';
+import { markGoogleAuthPending, clearGoogleAuthPending, shouldUseGoogleRedirect } from '@/lib/googleAuth';
 import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
@@ -323,6 +323,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
+
+    if (shouldUseGoogleRedirect()) {
+      markGoogleAuthPending();
+      release();
+      await signInWithRedirect(auth, provider);
+      return;
+    }
 
     try {
       const result = await signInWithPopup(auth, provider);
