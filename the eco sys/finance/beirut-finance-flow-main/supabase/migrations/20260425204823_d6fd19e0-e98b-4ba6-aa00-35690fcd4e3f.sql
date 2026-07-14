@@ -1,0 +1,1 @@
+ALTER TABLE public.timesheets ADD COLUMN IF NOT EXISTS needs_sync boolean NOT NULL DEFAULT false;
