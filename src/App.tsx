@@ -104,27 +104,17 @@ const AdminReturns = lazy(() => import("./pages/admin/AdminReturns"));
 const AdminFinishedGoods = lazy(() => import("./pages/admin/AdminFinishedGoods"));
 const Subscription = lazy(() => import("./pages/admin/Subscription"));
 const CrmModuleShell = lazy(() => import("./pages/admin/crm/CrmModuleShell"));
-const CrmPipeline = lazy(() => import("./pages/admin/crm/CrmPipeline"));
-const CrmActivities = lazy(() => import("./pages/admin/crm/CrmActivities"));
-const CrmMap = lazy(() => import("./pages/admin/crm/CrmMap"));
-const CrmPerformance = lazy(() => import("./pages/admin/crm/CrmPerformance"));
-const CrmClientProfile = lazy(() => import("./pages/admin/crm/CrmClientProfile"));
-const AdminCrmReps = lazy(() => import("./pages/admin/AdminCrmReps"));
 const CrmRepPortal = lazy(() => import("./pages/team/CrmRepPortal"));
 const PackageOnboarding = lazy(() => import("./pages/onboarding/PackageOnboarding"));
 const BuilderOnboarding = lazy(() => import("./pages/onboarding/BuilderOnboarding"));
+const FreelancerOnboarding = lazy(() => import("./pages/onboarding/FreelancerOnboarding"));
+const FreelancerPortal = lazy(() => import("./pages/freelancer/FreelancerPortal"));
+const Careers = lazy(() => import("./pages/public/Careers"));
+const CareersApply = lazy(() => import("./pages/public/CareersApply"));
 const BuilderDashboard = lazy(() => import("./pages/builder/BuilderDashboard"));
 const BuilderDemoEdit = lazy(() => import("./pages/builder/BuilderDemoEdit"));
 const BuilderDemoPreview = lazy(() => import("./pages/builder/BuilderDemoPreview"));
 const FinanceModuleShell = lazy(() => import("./pages/admin/finance/FinanceModuleShell"));
-const FinanceEmbeddedPage = lazy(() => import("./pages/admin/finance/FinanceEmbeddedPage"));
-import {
-  loadInvoiceManager,
-  loadEstimateManager,
-  loadReceiptManager,
-  loadFinanceReports,
-  loadExpenseManager,
-} from "./pages/admin/finance/financeEmbeddedLoaders";
 const PosPairing = lazy(() => import("./pages/admin/PosPairing"));
 const AiBuilder = lazy(() => import("./pages/admin/AiBuilder"));
 const BlogPublisher = lazy(() => import("./pages/admin/BlogPublisher"));
@@ -205,6 +195,7 @@ function AppFooter() {
                         <Route path="/" element={<ModularHome />} />
                         <Route path="/home" element={<ModularHome />} />
                         <Route path="/search" element={<Marketplace />} />
+                        <Route path="/marketplace" element={<Navigate to="/search" replace />} />
                         <Route path="/store/:slug" element={<StoreDetail />} />
                         <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
                         <Route path="/store/:slug/blog" element={<StoreBlog />} />
@@ -226,6 +217,8 @@ function AppFooter() {
                         <Route path="/upgrade" element={<ProtectedRoute><UpgradeToAdmin /></ProtectedRoute>} />
                         <Route path="/onboarding/package" element={<ProtectedRoute allowedRoles={['admin']}><PackageOnboarding /></ProtectedRoute>} />
                         <Route path="/onboarding/builder" element={<ProtectedRoute><BuilderOnboarding /></ProtectedRoute>} />
+                        <Route path="/onboarding/freelancer" element={<ProtectedRoute><FreelancerOnboarding /></ProtectedRoute>} />
+                        <Route path="/freelancer" element={<ProtectedRoute allowedRoles={['freelancer']}><FreelancerPortal /></ProtectedRoute>} />
                         <Route path="/builder" element={<ProtectedRoute><BuilderDashboard /></ProtectedRoute>} />
                         <Route path="/builder/demo/:demoId/edit" element={<ProtectedRoute><BuilderDemoEdit /></ProtectedRoute>} />
                         <Route path="/builder/demo/:demoId/preview" element={<ProtectedRoute><BuilderDemoPreview /></ProtectedRoute>} />
@@ -285,15 +278,9 @@ function AppFooter() {
                         <Route path="/admin/expenses" element={<Navigate to="/admin/finance/expenses" replace />} />
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminReports /></ProtectedRoute>} />
                         <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminFinanceSuite /></ProtectedRoute>} />
-                        <Route element={<ProtectedRoute allowedRoles={['admin']}><FinanceModuleShell /></ProtectedRoute>}>
-                          <Route path="/admin/finance/invoices" element={<FinanceEmbeddedPage loader={loadInvoiceManager} />} />
-                          <Route path="/admin/finance/estimates" element={<FinanceEmbeddedPage loader={loadEstimateManager} />} />
-                          <Route path="/admin/finance/receipts" element={<FinanceEmbeddedPage loader={loadReceiptManager} />} />
-                          <Route path="/admin/finance/clients" element={<Navigate to="/admin/customers" replace />} />
-                          <Route path="/admin/finance/products" element={<Navigate to="/admin/products" replace />} />
-                          <Route path="/admin/finance/reports" element={<FinanceEmbeddedPage loader={loadFinanceReports} />} />
-                          <Route path="/admin/finance/expenses" element={<FinanceEmbeddedPage loader={loadExpenseManager} />} />
-                        </Route>
+                        <Route path="/admin/finance/clients" element={<Navigate to="/admin/customers" replace />} />
+                        <Route path="/admin/finance/products" element={<Navigate to="/admin/products" replace />} />
+                        <Route path="/admin/finance/*" element={<ProtectedRoute allowedRoles={['admin']}><FinanceModuleShell /></ProtectedRoute>} />
                         <Route path="/admin/pos" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="pos"><PosPairing /></ProtectedRoute>} />
                         <Route path="/admin/ai-builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="ai_builder"><AiBuilder /></ProtectedRoute>} />
                         <Route path="/admin/blog" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="blog_publisher"><BlogPublisher /></ProtectedRoute>} />
@@ -320,15 +307,8 @@ function AppFooter() {
                         {/* Customer directory (orders/billing) */}
                         <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />
                         {/* Sales CRM add-on */}
-                        <Route path="/admin/crm" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="crm"><CrmModuleShell /></ProtectedRoute>}>
-                          <Route index element={<Navigate to="pipeline" replace />} />
-                          <Route path="pipeline" element={<CrmPipeline />} />
-                          <Route path="activities" element={<CrmActivities />} />
-                          <Route path="map" element={<CrmMap />} />
-                          <Route path="performance" element={<CrmPerformance />} />
-                          <Route path="clients/:clientId" element={<CrmClientProfile />} />
-                          <Route path="reps" element={<AdminCrmReps />} />
-                        </Route>
+                        <Route path="/admin/crm" element={<Navigate to="/admin/crm/dashboard" replace />} />
+                        <Route path="/admin/crm/*" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="crm"><CrmModuleShell /></ProtectedRoute>} />
                         </Route>
                         <Route path="/team/crm" element={<ProtectedRoute allowedRoles={['crm_rep']} requiredModule="crm"><CrmRepPortal /></ProtectedRoute>} />
                         {/* Standalone invoice SPA — escape hatch when client-side nav hits /invoice/* */}
@@ -338,6 +318,8 @@ function AppFooter() {
                         <Route path="/pricing" element={<Pricing />} />
                         <Route path="/use-cases" element={<UseCases />} />
                         <Route path="/about" element={<About />} />
+                        <Route path="/careers" element={<Careers />} />
+                        <Route path="/careers/apply/:track" element={<CareersApply />} />
                         <Route path="/blog" element={<Blog />} />
                         <Route path="/blog/:slug" element={<BlogPost />} />
                         {/* Short store URLs: /:slug and /:slug/product/:productSlug */}

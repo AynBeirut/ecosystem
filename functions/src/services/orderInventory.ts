@@ -190,6 +190,7 @@ export async function applyPaidOrderInventoryDeduction(
       storeId,
       date: orderDateFromData(orderData),
       total: orderTotalFromData(orderData),
+      taxAmount: round2(Number(orderData.taxAmount || 0)),
       paymentMethod: typeof orderData.paymentMethod === 'string' ? orderData.paymentMethod : 'card',
       invoiceNumber: typeof orderData.invoiceNumber === 'string' ? orderData.invoiceNumber : orderId,
       cogsLines,

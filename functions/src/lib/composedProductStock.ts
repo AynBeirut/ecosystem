@@ -1,7 +1,8 @@
 /** Mirror of src/lib/composedProductStock.ts — keep stock math in sync. */
 
 export interface StockIngredient {
-  rawMaterialId: string;
+  rawMaterialId?: string;
+  materialId?: string;
   quantity?: number;
 }
 
@@ -9,11 +10,17 @@ export interface StockRecipe {
   id?: string;
   ingredients?: StockIngredient[];
   materials?: StockIngredient[];
+  outputQuantity?: number;
+  yieldQuantity?: number;
 }
 
 export interface StockRawMaterial {
   id?: string;
   currentStock?: number;
+}
+
+export function normalizeIngredientId(ingredient: StockIngredient): string {
+  return String(ingredient.rawMaterialId || ingredient.materialId || '').trim();
 }
 
 export function recipeIngredients(recipe: StockRecipe | undefined): StockIngredient[] {
@@ -41,7 +48,7 @@ export function calculateAvailableStock(
 
   let minUnits = Infinity;
   for (const ingredient of ingredients) {
-    const rawMaterial = rawMaterialsMap.get(ingredient.rawMaterialId);
+    const rawMaterial = rawMaterialsMap.get(normalizeIngredientId(ingredient));
     if (!rawMaterial) return 0;
 
     const availableStock = Number(rawMaterial.currentStock || 0);

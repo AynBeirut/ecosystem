@@ -30,7 +30,8 @@ alwaysApply: false
 `pos/Grabio-POS-Setup.exe` in Firebase Storage (public read). Admin: `/admin/pos`
 
 ## Rules
+- **Inherits Rules 1–26** from `/home/anwar/.cursor/rules/anwar.mdc` — credentials, workspace docs, client-access gate, USB backup: same as all projects.
 - POS stays offline-first; sync is additive, not a rewrite
 - `composedProductSource` set at pair time: `platform` | `pos`
 - No prod Firebase deploy without owner approval
-- Credentials only in `.credentials.md` (gitignored)
+- Credentials only in `.credentials.md` (gitignored) — full Rule 20 entry standard; USB backup when updated

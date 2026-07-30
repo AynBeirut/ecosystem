@@ -5,6 +5,7 @@ import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { getApiBaseUrl } from '@/lib/apiBase';
+import { updateCrmRep } from '@/lib/crmService';
 import type { CrmRep } from '@/types/crm';
 import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,8 +25,11 @@ export default function AdminCrmReps() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
+  const [assignedTerritory, setAssignedTerritory] = useState('');
+  const [dailyVisitTarget, setDailyVisitTarget] = useState('');
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
+  const [editingTargets, setEditingTargets] = useState<Record<string, { territory: string; target: string }>>({});
 
   const loadReps = useCallback(async () => {
     if (!storeId) {
@@ -37,6 +41,14 @@ export default function AdminCrmReps() {
     const list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as CrmRep));
     list.sort((a, b) => a.name.localeCompare(b.name));
     setReps(list);
+    const edits: Record<string, { territory: string; target: string }> = {};
+    for (const r of list) {
+      edits[r.id] = {
+        territory: r.assignedTerritory || '',
+        target: r.dailyVisitTarget != null ? String(r.dailyVisitTarget) : '',
+      };
+    }
+    setEditingTargets(edits);
     setLoading(false);
   }, [storeId]);
 
@@ -73,18 +85,27 @@ export default function AdminCrmReps() {
         }),
       });
 
-      const data = (await response.json()) as { success?: boolean; error?: string; email?: string };
+      const data = (await response.json()) as { success?: boolean; error?: string; email?: string; repId?: string };
       if (!response.ok || !data.success) {
         throw new Error(data.error || 'Failed to create CRM rep');
+      }
+
+      if (data.repId && (assignedTerritory.trim() || dailyVisitTarget.trim())) {
+        await updateCrmRep(data.repId, {
+          assignedTerritory: assignedTerritory.trim() || null,
+          dailyVisitTarget: dailyVisitTarget.trim() ? parseInt(dailyVisitTarget, 10) : null,
+        });
       }
 
       setName('');
       setEmail('');
       setPhone('');
+      setAssignedTerritory('');
+      setDailyVisitTarget('');
       setPassword('');
       toast({
         title: 'CRM rep created',
-        description: `${data.email || email.trim()} can sign in on web or mobile. Your session was not affected.`,
+        description: `${data.email || email.trim()} can sign in on web or mobile.`,
         duration: 6000,
       });
       await loadReps();
@@ -96,6 +117,25 @@ export default function AdminCrmReps() {
       });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveRepSettings = async (rep: CrmRep) => {
+    const edit = editingTargets[rep.id];
+    if (!edit) return;
+    try {
+      await updateCrmRep(rep.id, {
+        assignedTerritory: edit.territory.trim() || null,
+        dailyVisitTarget: edit.target.trim() ? parseInt(edit.target, 10) : null,
+      });
+      toast({ title: 'Rep updated' });
+      await loadReps();
+    } catch (err) {
+      toast({
+        title: 'Update failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
     }
   };
 
@@ -114,14 +154,14 @@ export default function AdminCrmReps() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Users className="h-5 w-5" />
-            CRM reps
+            Sales reps
           </CardTitle>
           <CardDescription>
-            Rep accounts are created on the server (Admin SDK). Your owner login stays active — no sign-out when adding a rep.
+            Rep accounts for field visits. Set territory and daily visit target for the morning dashboard.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label htmlFor="rep-name">Name</Label>
               <Input id="rep-name" value={name} onChange={(e) => setName(e.target.value)} />
@@ -133,6 +173,14 @@ export default function AdminCrmReps() {
             <div>
               <Label htmlFor="rep-phone">Phone</Label>
               <Input id="rep-phone" value={phone} onChange={(e) => setPhone(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="rep-territory">Assigned territory</Label>
+              <Input id="rep-territory" value={assignedTerritory} onChange={(e) => setAssignedTerritory(e.target.value)} placeholder="e.g. Metn" />
+            </div>
+            <div>
+              <Label htmlFor="rep-target">Daily visit target</Label>
+              <Input id="rep-target" type="number" min="0" value={dailyVisitTarget} onChange={(e) => setDailyVisitTarget(e.target.value)} placeholder="35" />
             </div>
             <div>
               <Label htmlFor="rep-password">Password</Label>
@@ -157,20 +205,49 @@ export default function AdminCrmReps() {
           ) : (
             <ul className="divide-y rounded-md border bg-white">
               {reps.map((rep) => (
-                <li key={rep.id} className="flex items-center justify-between px-4 py-3 gap-2 flex-wrap">
-                  <div>
-                    <p className="font-medium">{rep.name}</p>
-                    <p className="text-sm text-muted-foreground">{rep.email}</p>
-                    {rep.firebaseUid ? (
-                      <p className="text-xs text-muted-foreground font-mono mt-1">Auth linked</p>
-                    ) : (
-                      <p className="text-xs text-amber-700 mt-1">No login linked</p>
-                    )}
+                <li key={rep.id} className="px-4 py-4 gap-3 space-y-3">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div>
+                      <p className="font-medium">{rep.name}</p>
+                      <p className="text-sm text-muted-foreground">{rep.email}</p>
+                      {rep.phone ? <p className="text-sm text-muted-foreground">{rep.phone}</p> : null}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Badge variant={rep.status === 'active' ? 'default' : 'secondary'}>{rep.status}</Badge>
+                      <Button variant="outline" size="sm" onClick={() => void toggleStatus(rep)}>
+                        {rep.status === 'active' ? 'Suspend' : 'Activate'}
+                      </Button>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Badge variant={rep.status === 'active' ? 'default' : 'secondary'}>{rep.status}</Badge>
-                    <Button variant="outline" size="sm" onClick={() => void toggleStatus(rep)}>
-                      {rep.status === 'active' ? 'Suspend' : 'Activate'}
+                  <div className="grid gap-3 sm:grid-cols-3 items-end">
+                    <div>
+                      <Label className="text-xs">Territory</Label>
+                      <Input
+                        value={editingTargets[rep.id]?.territory ?? ''}
+                        onChange={(e) =>
+                          setEditingTargets((prev) => ({
+                            ...prev,
+                            [rep.id]: { ...prev[rep.id], territory: e.target.value, target: prev[rep.id]?.target ?? '' },
+                          }))
+                        }
+                      />
+                    </div>
+                    <div>
+                      <Label className="text-xs">Daily target</Label>
+                      <Input
+                        type="number"
+                        min="0"
+                        value={editingTargets[rep.id]?.target ?? ''}
+                        onChange={(e) =>
+                          setEditingTargets((prev) => ({
+                            ...prev,
+                            [rep.id]: { territory: prev[rep.id]?.territory ?? '', target: e.target.value },
+                          }))
+                        }
+                      />
+                    </div>
+                    <Button variant="secondary" size="sm" onClick={() => void saveRepSettings(rep)}>
+                      Save settings
                     </Button>
                   </div>
                 </li>

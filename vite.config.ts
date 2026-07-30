@@ -44,6 +44,12 @@ export default defineConfig(({ mode }) => ({
     financeInternalAlias(financeSrcPath, mainSrcPath),
     mode === 'development' &&
     componentTagger(),
+    {
+      name: 'grabio-build-id',
+      transformIndexHtml(html) {
+        return html.replace('__GRABIO_BUILD_ID__', String(Date.now()));
+      },
+    },
   ].filter(Boolean),
   resolve: {
     dedupe: [

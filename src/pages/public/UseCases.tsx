@@ -2,10 +2,9 @@ import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import AuthCTA from '@/components/public/AuthCTA';
 import { ShoppingBag, Coffee, Truck, Wrench, Factory, Building2, ArrowRight, CheckCircle } from 'lucide-react';
-import SEOHead from '@/components/SEOHead';
+import PublicPageShell from '@/components/public/PublicPageShell';
+import { cn } from '@/lib/utils';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
-import PublicNav from '@/components/public/PublicNav';
-import PublicFooter from '@/components/public/PublicFooter';
 
 const USE_CASES = [
   {
@@ -143,147 +142,126 @@ const UseCases: React.FC = () => {
   }, []);
 
   return (
-    <>
-      <SEOHead
-        title="Grabio Use Cases — Retail, F&B, Wholesale, Agencies, and More"
-        description="See how Grabio modular platform adapts to your industry — activate core features on your plan and add CRM, production, apps, and AI tools as you grow."
-        url="/use-cases"
-        keywords={[
-          'Grabio use cases',
-          'retail management software',
-          'restaurant inventory software',
-          'agency CRM PSA',
-          'manufacturing inventory software',
-        ]}
-      />
-
-      <div className="flex flex-col min-h-screen bg-white">
-        <PublicNav />
-
-        <main>
-          <section className="bg-gradient-to-br from-teal-600 to-cyan-800 text-white py-16">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6 text-center">
-              <h1 className="text-4xl md:text-5xl font-extrabold mb-4">Built for Your Industry</h1>
-              <p className="text-lg text-teal-100 mb-2">One sign-in — all your data in one place.</p>
-              <p className="text-teal-200/90">
-                Start with core platform features on your plan. Toggle optional modules, apps, and add-ons
-                to match how your business actually works.
-              </p>
-              <div className="flex flex-wrap gap-3 justify-center mt-8">
-                {USE_CASES.map((uc) => (
-                  <a
-                    key={uc.id}
-                    href={`#${uc.id}`}
-                    className="px-4 py-2 text-sm font-medium bg-white/15 hover:bg-white/25 rounded-full transition-colors"
-                  >
-                    {uc.title}
-                  </a>
-                ))}
-              </div>
-            </div>
-          </section>
-
-          <div className="max-w-6xl mx-auto px-4 sm:px-6 py-16 space-y-20">
-            {USE_CASES.map(
-              (
-                { id, icon: Icon, title, headline, description, features, modules, featureLink, featureLinkLabel, blogLink, blogLinkLabel },
-                i,
-              ) => (
-                <section key={id} id={id} className="scroll-mt-20" aria-labelledby={`${id}-heading`}>
-                  <div className={`grid md:grid-cols-2 gap-10 items-start ${i % 2 === 1 ? 'md:grid-flow-dense' : ''}`}>
-                    <div className={i % 2 === 1 ? 'md:col-start-2' : ''}>
-                      <div className="flex items-center gap-3 mb-4">
-                        <div className="w-10 h-10 bg-teal-50 text-teal-600 rounded-xl flex items-center justify-center">
-                          <Icon className="h-5 w-5" />
-                        </div>
-                        <span className="text-sm font-semibold text-gray-500">{title}</span>
-                      </div>
-                      <h2 id={`${id}-heading`} className="text-2xl md:text-3xl font-bold text-gray-900 mb-4 leading-tight">
-                        {headline}
-                      </h2>
-                      <p className="text-gray-500 leading-relaxed mb-4">{description}</p>
-                      <div className="flex flex-wrap gap-1.5 mb-6">
-                        {modules.map((mod) => (
-                          <Link
-                            key={mod}
-                            to={`/features#${mod}`}
-                            className="text-[10px] font-mono bg-teal-50 text-teal-700 border border-teal-100 px-2 py-0.5 rounded hover:bg-teal-100"
-                          >
-                            grabio_{mod}
-                          </Link>
-                        ))}
-                      </div>
-                      <div className="flex flex-col gap-2">
-                        <Link
-                          to={featureLink}
-                          className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700"
-                        >
-                          {featureLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                        <Link
-                          to={blogLink}
-                          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
-                        >
-                          {blogLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                        <Link
-                          to="/pricing"
-                          className="inline-flex items-center gap-2 text-sm text-gray-500 hover:text-gray-700"
-                        >
-                          Build your module package <ArrowRight className="h-3.5 w-3.5" />
-                        </Link>
-                      </div>
+    <PublicPageShell
+      title="Grabio Use Cases — Retail, F&B, Wholesale, Agencies, and More"
+      description="See how Grabio modular platform adapts to your industry — activate core features on your plan and add CRM, production, apps, and AI tools as you grow."
+      url="/use-cases"
+      keywords={[
+        'Grabio use cases',
+        'retail management software',
+        'restaurant inventory software',
+        'agency CRM PSA',
+        'manufacturing inventory software',
+      ]}
+      eyebrow="Industries"
+      heroTitle="Built for your industry"
+      heroDescription="Start with core platform features on your plan. Toggle optional modules, apps, and add-ons to match how your business works."
+      heroActions={
+        <div className="public-subnav">
+          {USE_CASES.map((uc) => (
+            <a key={uc.id} href={`#${uc.id}`} className="public-subnav-link">
+              {uc.title}
+            </a>
+          ))}
+        </div>
+      }
+      subnav={[
+        { label: 'Features', href: '/features' },
+        { label: 'Pricing', href: '/pricing' },
+        { label: 'Blog', href: '/blog' },
+      ]}
+    >
+      <div className="space-y-6">
+        {USE_CASES.map(
+          (
+            { id, icon: Icon, title, headline, description, features, modules, featureLink, featureLinkLabel, blogLink, blogLinkLabel },
+            i,
+          ) => (
+            <section key={id} id={id} className="public-panel scroll-mt-24" aria-labelledby={`${id}-heading`}>
+              <div className={cn('grid md:grid-cols-2 gap-8 items-start', i % 2 === 1 && 'md:[direction:rtl] md:*:[direction:ltr]')}>
+                <div>
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-teal-50 text-teal-600">
+                      <Icon className="h-5 w-5" />
                     </div>
-
-                    <div
-                      className={`bg-gray-50 rounded-2xl border border-gray-100 p-6 ${i % 2 === 1 ? 'md:col-start-1 md:row-start-1' : ''}`}
-                    >
-                      <p className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
-                        Key capabilities for {title.toLowerCase()}
-                      </p>
-                      <ul className="space-y-3">
-                        {features.map((feature) => (
-                          <li key={feature} className="flex items-start gap-3 text-sm text-gray-700">
-                            <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
-                            {feature}
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
+                    <span className="text-sm font-semibold text-slate-500">{title}</span>
                   </div>
-                </section>
-              ),
-            )}
-          </div>
+                  <h2 id={`${id}-heading`} className="text-2xl md:text-3xl font-bold text-slate-900 mb-4 leading-tight">
+                    {headline}
+                  </h2>
+                  <p className="text-slate-600 leading-relaxed mb-4">{description}</p>
+                  <div className="flex flex-wrap gap-1.5 mb-6">
+                    {modules.map((mod) => (
+                      <Link
+                        key={mod}
+                        to={`/features#${mod}`}
+                        className="rounded border border-teal-100 bg-teal-50 px-2 py-0.5 text-[10px] font-mono text-teal-700 hover:bg-teal-100"
+                      >
+                        grabio_{mod}
+                      </Link>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <Link
+                      to={featureLink}
+                      className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700"
+                    >
+                      {featureLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                    <Link
+                      to={blogLink}
+                      className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
+                    >
+                      {blogLinkLabel} <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                    <Link
+                      to="/pricing"
+                      className="inline-flex items-center gap-2 text-sm text-slate-500 hover:text-slate-700"
+                    >
+                      Build your module package <ArrowRight className="h-3.5 w-3.5" />
+                    </Link>
+                  </div>
+                </div>
 
-          <section className="bg-gradient-to-br from-teal-600 to-cyan-700 py-16 text-white text-center">
-            <div className="max-w-2xl mx-auto px-4 sm:px-6">
-              <h2 className="text-3xl font-extrabold mb-4">Your industry. Your module stack.</h2>
-              <p className="text-teal-100 text-lg mb-8">
-                Start free, pick a base plan, and toggle only the modules you need.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <AuthCTA className="px-8 py-4 font-semibold bg-white text-teal-700 rounded-xl hover:bg-teal-50 transition-colors" />
-                <Link
-                  to="/features"
-                  className="px-8 py-4 font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors"
-                >
-                  Explore Features
-                </Link>
-                <Link
-                  to="/pricing"
-                  className="px-8 py-4 font-semibold border-2 border-white/40 text-white rounded-xl hover:bg-white/10 transition-colors"
-                >
-                  View Pricing
-                </Link>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6">
+                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
+                    Key capabilities for {title.toLowerCase()}
+                  </p>
+                  <ul className="space-y-3">
+                    {features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-3 text-sm text-slate-700">
+                        <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
               </div>
-            </div>
-          </section>
-        </main>
-
-        <PublicFooter />
+            </section>
+          ),
+        )}
       </div>
-    </>
+
+      <section className="public-panel text-center">
+        <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-3">Your industry. Your module stack.</h2>
+        <p className="text-slate-600 mb-6">Start free, pick a base plan, and toggle only the modules you need.</p>
+        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+          <AuthCTA className="px-6 py-3 font-semibold bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors" />
+          <Link
+            to="/features"
+            className="px-6 py-3 font-semibold border border-slate-300 text-slate-700 rounded-xl hover:bg-white transition-colors"
+          >
+            Explore Features
+          </Link>
+          <Link
+            to="/pricing"
+            className="px-6 py-3 font-semibold border border-slate-300 text-slate-700 rounded-xl hover:bg-white transition-colors"
+          >
+            View Pricing
+          </Link>
+        </div>
+      </section>
+    </PublicPageShell>
   );
 };
 

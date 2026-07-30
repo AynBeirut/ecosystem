@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Trash2, Plus, ArrowRightLeft, RefreshCw } from "lucide-react";
+import { SUPPORTED_CURRENCIES } from "@/lib/money/currencies";
 
 interface CurrencyRate {
   id: string;
@@ -24,7 +25,7 @@ interface CurrencyRate {
   updated_at: string;
 }
 
-const CURRENCIES = ["USD", "LBP", "EUR", "GBP", "SAR", "AED", "EGP", "JOD"];
+const CURRENCY_CODES = SUPPORTED_CURRENCIES.map((currency) => currency.code);
 
 const CurrencySettings = () => {
   const { logout } = useAppContext();
@@ -119,13 +120,13 @@ const CurrencySettings = () => {
                 <div className="space-y-2">
                   <Label>From</Label>
                   <select value={fromCurrency} onChange={e => setFromCurrency(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {CURRENCY_CODES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <Label>To</Label>
                   <select value={toCurrency} onChange={e => setToCurrency(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {CURRENCY_CODES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>
@@ -161,13 +162,13 @@ const CurrencySettings = () => {
                 <div className="space-y-2">
                   <Label>From</Label>
                   <select value={convFrom} onChange={e => setConvFrom(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {CURRENCY_CODES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
                 <div className="space-y-2">
                   <Label>To</Label>
                   <select value={convTo} onChange={e => setConvTo(e.target.value)} className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm">
-                    {CURRENCIES.map(c => <option key={c} value={c}>{c}</option>)}
+                    {CURRENCY_CODES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                 </div>
               </div>

@@ -15,7 +15,7 @@ import {
   CheckCircle,
   Clock
 } from 'lucide-react';
-import { getFirestore, collection, query, where, getDocs, orderBy, limit } from 'firebase/firestore';
+import { getSubAccountHomePath, isManagerSubAccount } from '@/lib/subAccountAccess';
 
 const SubAccountDashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -27,10 +27,15 @@ const SubAccountDashboard: React.FC = () => {
     completedToday: 0,
   });
 
-  // Redirect admins to full dashboard
+  // Redirect admins and managers to full admin dashboard
   useEffect(() => {
     if (user && user.role === 'admin') {
       navigate('/admin/dashboard');
+      return;
+    }
+    if (user && isManagerSubAccount(user)) {
+      navigate('/admin/dashboard');
+      return;
     }
     if (!user || user.role !== 'sub_account') {
       navigate('/login');
@@ -45,8 +50,8 @@ const SubAccountDashboard: React.FC = () => {
       const today = new Date().toISOString().split('T')[0];
 
       try {
-        // Sales person stats
-        if (user.subAccountRole === 'sales' && user.id) {
+        // Sales / cashier stats
+        if ((user.subAccountRole === 'sales' || user.subAccountRole === 'cashier') && user.id) {
           const ordersRef = collection(db, 'orders');
           const myOrdersQuery = query(
             ordersRef, 
@@ -102,6 +107,7 @@ const SubAccountDashboard: React.FC = () => {
   const getRoleColor = () => {
     switch (user.subAccountRole) {
       case 'sales': return 'bg-blue-100 text-blue-800';
+      case 'cashier': return 'bg-amber-100 text-amber-800';
       case 'delivery': return 'bg-green-100 text-green-800';
       case 'manager': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -111,6 +117,7 @@ const SubAccountDashboard: React.FC = () => {
   const getRoleDisplay = () => {
     switch (user.subAccountRole) {
       case 'sales': return 'Sales Person';
+      case 'cashier': return 'Cashier';
       case 'delivery': return 'Delivery Person';
       case 'manager': return 'Manager';
       default: return 'Team Member';
@@ -131,7 +138,7 @@ const SubAccountDashboard: React.FC = () => {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
-          {user.subAccountRole === 'sales' && (
+          {(user.subAccountRole === 'sales' || user.subAccountRole === 'cashier') && (
             <>
               <AdminStatCard title="My Orders" value={stats.myOrders} icon={ShoppingCart} gradient="from-orange-400 to-orange-600" subtitle="Total orders created" />
               <AdminStatCard title="Pending" value={stats.pendingOrders} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Awaiting confirmation" />
@@ -172,7 +179,7 @@ const SubAccountDashboard: React.FC = () => {
                   onClick={() => navigate('/admin/customers')}
                 >
                   <Users className="h-6 w-6" />
-                  <span>Customers</span>
+                  <span>{user.subAccountRole === 'cashier' ? 'Customer Lookup' : 'Customers'}</span>
                 </Button>
               )}
 

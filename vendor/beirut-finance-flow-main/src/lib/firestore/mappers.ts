@@ -62,23 +62,96 @@ function mapPlatformPurchaseItems(items: unknown): PurchaseOrder['items'] {
   });
 }
 
+function derivePlatformPurchasePaymentStatus(
+  data: Record<string, unknown>,
+  total: number,
+): PurchaseOrder['paymentStatus'] {
+  const raw = String(data.paymentStatus || '').toLowerCase();
+  if (raw === 'paid' || raw === 'unpaid' || raw === 'partial') return raw;
+  const amountPaid = Number(data.amountPaid ?? data.paidAmount ?? 0) || 0;
+  if (total > 0 && amountPaid >= total) return 'paid';
+  if (amountPaid > 0) return 'partial';
+  return 'unpaid';
+}
+
 /** Top-level `purchases` doc → finance PurchaseOrder. */
 export function mapFsPlatformPurchase(id: string, data: Record<string, unknown>): PurchaseOrder {
   const items = mapPlatformPurchaseItems(data.items);
-  const amount = Number(
+  const total = Number(
     data.total ?? data.totalCost ?? data.totalAmount ?? data.amount
       ?? items.reduce((s, i) => s + i.subtotal, 0),
   ) || 0;
+  const amountPaid = Number(data.amountPaid ?? data.paidAmount ?? 0) || 0;
   return {
     id,
     date: String(data.orderDate ?? data.date ?? data.createdAt ?? nowIso()),
     supplierId: data.supplierId != null ? String(data.supplierId) : undefined,
     supplierName: String(data.supplierName ?? ''),
     items,
-    amount,
+    amount: total,
+    total,
+    paidAmount: amountPaid,
+    paymentStatus: derivePlatformPurchasePaymentStatus(data, total),
     currency: String(data.currency ?? 'USD'),
     status: mapPlatformPurchaseStatus(String(data.status ?? 'draft')),
     notes: data.notes ? String(data.notes) : undefined,
+    source: 'platform',
+    subtotal: Number(data.subtotal ?? 0) || undefined,
+    taxRate: Number(data.taxRate ?? 0) || undefined,
+    taxAmount: Number(data.taxAmount ?? data.vat ?? 0) || undefined,
+    taxType: data.taxType != null ? String(data.taxType) : undefined,
+    totalCost: Number(data.totalCost ?? 0) || undefined,
+  };
+}
+
+function mapPlatformOrderItems(items: unknown): Invoice['items'] {
+  if (!Array.isArray(items)) return [];
+  return items.map((raw, idx) => {
+    const item = raw as Record<string, unknown>;
+    const quantity = Number(item.quantity) || 0;
+    const unitPrice = Number(item.unitPrice ?? item.price ?? 0) || 0;
+    const subtotal = Number(item.total ?? item.subtotal ?? quantity * unitPrice) || 0;
+    return {
+      id: String(item.id || item.productId || `item-${idx}`),
+      description: String(item.name || item.description || 'Item'),
+      quantity,
+      unitPrice,
+      subtotal,
+      rawPrice: unitPrice,
+    };
+  });
+}
+
+function mapPlatformOrderInvoiceStatus(data: Record<string, unknown>): Invoice['status'] {
+  const paymentStatus = String(data.paymentStatus || '').toLowerCase();
+  const status = String(data.status || '').toLowerCase();
+  const total = Number(data.total || 0) || 0;
+  const amountPaid = Number(data.amountPaid ?? data.paidAmount ?? (paymentStatus === 'paid' ? total : 0)) || 0;
+  if (paymentStatus === 'paid' || ['completed', 'delivered', 'paid'].includes(status)) return 'paid';
+  if (amountPaid > 0 && amountPaid < total) return 'partial';
+  if (status === 'pending_manual_payment') return 'pending_manual_payment';
+  return 'sent';
+}
+
+/** Top-level `orders` doc -> finance Invoice view. */
+export function mapFsPlatformOrder(id: string, data: Record<string, unknown>): Invoice {
+  const items = mapPlatformOrderItems(data.items);
+  const total = Number(data.total ?? data.amountPaid ?? items.reduce((s, i) => s + i.subtotal, 0)) || 0;
+  const amountPaid = Number(data.amountPaid ?? data.paidAmount ?? (String(data.paymentStatus || '').toLowerCase() === 'paid' ? total : 0)) || 0;
+  return {
+    id,
+    date: String(data.posSaleTimestamp ?? data.date ?? data.createdAt ?? nowIso()),
+    clientId: data.customerId != null ? String(data.customerId) : undefined,
+    clientName: String(data.customerName ?? 'Walk-in Customer'),
+    items,
+    amount: total,
+    currency: String(data.currency ?? 'USD'),
+    status: mapPlatformOrderInvoiceStatus(data),
+    total,
+    notes: data.invoiceNumber ? `Source invoice: ${String(data.invoiceNumber)}` : undefined,
+    paymentMethod: data.paymentMethod ? String(data.paymentMethod) : undefined,
+    paidAmount: amountPaid,
+    paidAt: amountPaid > 0 ? String(data.updatedAt ?? data.posSaleTimestamp ?? data.createdAt ?? nowIso()) : undefined,
   };
 }
 
@@ -181,16 +254,21 @@ export function mapFsEstimate(id: string, data: Record<string, unknown>): Estima
 }
 
 export function mapFsPurchaseOrder(id: string, data: Record<string, unknown>): PurchaseOrder {
+  const amount = Number(data.amount ?? data.total ?? 0);
+  const paidAmount = Number(data.paidAmount ?? data.paid_amount ?? 0) || 0;
   return {
     id,
     date: String(data.date ?? data.createdAt ?? nowIso()),
     supplierId: data.supplierId != null ? String(data.supplierId) : data.supplier_id != null ? String(data.supplier_id) : undefined,
     supplierName: String(data.supplierName ?? data.supplier_name ?? ''),
     items: (data.lineItems ?? data.items ?? []) as PurchaseOrder['items'],
-    amount: Number(data.amount ?? 0),
+    amount,
+    total: amount,
+    paidAmount: paidAmount || undefined,
     currency: String(data.currency ?? 'USD'),
     status: String(data.status ?? 'draft') as PurchaseOrder['status'],
     notes: data.notes ? String(data.notes) : undefined,
+    source: 'finance',
   };
 }
 

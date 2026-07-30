@@ -154,7 +154,17 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId is string
         && exists(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId))
         && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.storeId == storeId
-        && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.role == 'admin';
+        && (
+          get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.role == 'admin'
+          || get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.role == 'manager'
+        );
+    }
+
+    function isLinkedSubAccount(accountId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'sub_account'
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId == accountId;
     }
 
     function isStoreAdmin(storeId) {
@@ -322,8 +332,32 @@ service cloud.firestore {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
       }
 
+      match /journalEntryKeys/{sourceKey} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
       match /ledgerMeta/{docId} {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /pcgClientAccounts/{accountId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /fixedAssets/{assetId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /bankRecSessions/{sessionId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+
+        match /statementLines/{lineId} {
+          allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        }
+
+        match /bankRecMatches/{matchId} {
+          allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        }
       }
 
       match /ledgerPeriodClosures/{periodId} {
@@ -335,6 +369,14 @@ service cloud.firestore {
           && request.resource.data.isClosed is bool
           && request.resource.data.history is list;
         allow delete: if false;
+      }
+
+      match /ledgerCostCenters/{centerId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+      }
+
+      match /recurringVoucherTemplates/{templateId} {
+        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
       }
 
       // Platform COD delivery wallet (Admin Orders path — unprefixed subcollections)
@@ -365,6 +407,10 @@ service cloud.firestore {
       allow update, delete: if request.auth != null && (
         isStoreOwner(storeId) ||
         (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['lastInvoiceNumber']))
+      ) && (
+        !request.resource.data.diff(resource.data).affectedKeys().hasAny(['accountingMode']) ||
+        resource.data.get('accountingModeLocked', false) != true ||
+        request.resource.data.accountingMode == resource.data.get('accountingMode', 'international')
       );
     }
 
@@ -786,13 +832,31 @@ service cloud.firestore {
     // Sub-Accounts: store owner manages team on real stores
     match /subAccounts/{accountId} {
       allow read: if request.auth != null && (
-        request.auth.uid == accountId ||
+        isLinkedSubAccount(accountId) ||
         (resource.data.storeId is string && isStoreAdmin(resource.data.storeId))
       );
-      allow create, update, delete: if request.auth != null
+      allow create: if request.auth != null
         && request.resource.data.storeId is string
         && isRealStore(request.resource.data.storeId)
         && isStoreAdmin(request.resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
+      allow update: if request.auth != null && (
+        (
+          isLinkedSubAccount(accountId)
+          && request.resource.data.storeId == resource.data.storeId
+          && request.resource.data.role == resource.data.role
+          && request.resource.data.permissions == resource.data.permissions
+          && request.resource.data.status == resource.data.status
+        )
+        || (
+          request.resource.data.storeId is string
+          && isRealStore(request.resource.data.storeId)
+          && isStoreAdmin(request.resource.data.storeId)
+        )
+      );
     }
 
     // Purchase Orders: real store owners only
@@ -986,6 +1050,33 @@ service cloud.firestore {
         match /{document=**} {
           allow read, write: if request.auth != null && request.auth.uid == builderUid;
         }
+      }
+    }
+
+    match /careerApplications/{applicationId} {
+      allow create: if request.resource.data.track is string
+        && request.resource.data.name is string
+        && request.resource.data.email is string
+        && request.resource.data.status == 'pending'
+        && request.resource.data.createdAt is string
+        && request.resource.data.updatedAt is string;
+      allow read: if request.auth != null && (
+        isGrabioOps()
+        || resource.data.applicantUid == request.auth.uid
+        || resource.data.email == request.auth.token.email
+      );
+      allow update: if isGrabioOps();
+    }
+
+    match /platformFreelancers/{freelancerUid} {
+      allow read, write: if request.auth != null && request.auth.uid == freelancerUid;
+    }
+
+    match /accountingFreelancers/{freelancerUid} {
+      allow read, write: if request.auth != null && request.auth.uid == freelancerUid;
+
+      match /testSandboxes/{sandboxId} {
+        allow read, write: if request.auth != null && request.auth.uid == freelancerUid;
       }
     }
 

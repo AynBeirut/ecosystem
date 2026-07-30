@@ -22,6 +22,17 @@ try {
 }
 
 const db = admin.firestore();
+const CATALOG_PRODUCT_COUNT_VERSION = 2;
+
+function isCatalogCountableProductData(data) {
+  if (!data) return false;
+  const rawType = String(data.productType ?? data.type ?? '').trim().toLowerCase();
+  const itemType = String(data.itemType ?? '').trim().toLowerCase();
+  if (data.isSellable === false) return false;
+  if (data.excludeFromCatalogCount === true) return false;
+  if (itemType === 'raw_material' || itemType === 'ingredient') return false;
+  return !['raw_material', 'raw-material', 'ingredient', 'material', 'component', 'recipe_ingredient'].includes(rawType);
+}
 
 async function main() {
   const storesSnap = await db.collection('storeProfiles').get();
@@ -30,16 +41,18 @@ async function main() {
   for (const storeDoc of storesSnap.docs) {
     const storeId = storeDoc.id;
     const productsSnap = await db.collection('products').where('storeId', '==', storeId).get();
-    const count = productsSnap.size;
+    const count = productsSnap.docs.filter((doc) => isCatalogCountableProductData(doc.data() || {})).length;
     const current = storeDoc.data().catalogProductCount;
+    const currentVersion = storeDoc.data().catalogProductCountVersion;
 
-    if (current === count) continue;
+    if (current === count && currentVersion === CATALOG_PRODUCT_COUNT_VERSION) continue;
 
-    console.log(`${storeDoc.data().slug || storeDoc.data().name || storeId}: ${current ?? '—'} → ${count}`);
+    console.log(`${storeDoc.data().slug || storeDoc.data().name || storeId}: ${current ?? '—'} → ${count} (v${currentVersion ?? 0} → v${CATALOG_PRODUCT_COUNT_VERSION})`);
     if (!dryRun) {
       await storeDoc.ref.set(
         {
           catalogProductCount: count,
+          catalogProductCountVersion: CATALOG_PRODUCT_COUNT_VERSION,
           catalogProductCountSyncedAt: new Date().toISOString(),
           updatedAt: new Date().toISOString(),
         },

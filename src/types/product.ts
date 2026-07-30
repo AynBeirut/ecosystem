@@ -173,7 +173,7 @@ export type StoreAnnouncement = {
   isActive: boolean;
 };
 
-export type UserRole = 'admin' | 'user' | 'sub_account' | 'crm_rep';
+export type UserRole = 'admin' | 'user' | 'sub_account' | 'crm_rep' | 'freelancer';
 
 export type User = {
   id: string;
@@ -193,7 +193,8 @@ export type User = {
   following?: string[];
   // Sub-account properties
   subAccountId?: string;
-  subAccountRole?: 'sales' | 'delivery' | 'manager';
+  subAccountRole?: 'sales' | 'delivery' | 'manager' | 'cashier' | 'web_maintenance' | 'accounting';
+  freelancerTrack?: 'designer_builder' | 'accounting';
   permissions?: string[];
   // Sales CRM rep (dedicated role — not sub_account permissions)
   crmRepId?: string;

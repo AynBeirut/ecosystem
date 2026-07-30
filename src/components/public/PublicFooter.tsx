@@ -31,6 +31,7 @@ const PublicFooter: React.FC = () => (
         <div>
           <h3 className="text-white font-semibold text-sm mb-4">Company</h3>
           <ul className="space-y-2 text-sm list-none p-0 m-0">
+            <li><Link to="/careers" className="hover:text-white transition-colors">Careers</Link></li>
             <li><Link to="/about" className="hover:text-white transition-colors">About</Link></li>
             <li><Link to="/blog" className="hover:text-white transition-colors">Blog</Link></li>
             <li><Link to="/contact" className="hover:text-white transition-colors">Contact</Link></li>

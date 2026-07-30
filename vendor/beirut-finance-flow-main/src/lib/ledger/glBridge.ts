@@ -203,9 +203,7 @@ export async function glPostPurchasePayment(storeId: string, payment: PaymentOrd
 
 /** Post GL for platform purchases already received (idempotent). */
 export async function glSyncPurchasesOnLoad(storeId: string, purchaseOrders: PurchaseOrder[]): Promise<void> {
-  const receivable = purchaseOrders.filter(
-    (po) => po.status === 'fulfilled' || po.status === 'approved',
-  );
+  const receivable = purchaseOrders.filter((po) => po.status === 'fulfilled');
   for (const po of receivable) {
     await glPostPurchaseReceived(storeId, po);
   }

@@ -9,7 +9,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
-import { Building2, Plus, Users } from "lucide-react";
+import { Building2, FileText, Plus, Users } from "lucide-react";
+import { openAccountingWithFocus } from "@/lib/ledger/ledgerActivity";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -161,7 +162,24 @@ const ClientsManager = () => {
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-4">
+                        <div className="flex items-center gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              openAccountingWithFocus({
+                                kind: "client",
+                                clientId: client.id,
+                                clientName: client.name,
+                                label: `Client · ${client.name}`,
+                              });
+                            }}
+                          >
+                            <FileText className="h-4 w-4 mr-1" />
+                            Vouchers
+                          </Button>
                           <div className="text-right">
                             <p className="text-sm text-muted-foreground">Outstanding</p>
                             <p className="font-bold">{formatCurrency(outstanding, "USD")}</p>

@@ -1,6 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { useAppContext } from '@/context/AppContext';
 import { getFinanceAuth } from '@/integrations/firebase/client';
+import { getFinanceStoreId } from '@/lib/firestore/storeContext';
 import {
   ensureDefaultChartOfAccounts,
   loadLedgerBundle,
@@ -20,6 +21,7 @@ import {
 } from '@/lib/ledger/postingService';
 import { buildTrialBalance } from '@/lib/ledger/trialBalance';
 import { buildBalanceSheet } from '@/lib/ledger/balanceSheet';
+import { voucherEventForType } from '@/lib/ledger/voucherSerial';
 import type {
   JournalEntry,
   JournalLine,
@@ -29,6 +31,8 @@ import type {
   PeriodLockType,
   TrialBalanceReport,
   BalanceSheetReport,
+  VoucherMeta,
+  VoucherType,
 } from '@/types/generalLedger';
 import { toast } from 'sonner';
 
@@ -52,6 +56,20 @@ interface LedgerContextType {
     memo: string;
     lines: JournalLineInput[];
   }) => Promise<PostJournalResult>;
+  postVoucherEntry: (params: {
+    date: string;
+    memo: string;
+    lines: JournalLineInput[];
+    voucherType: VoucherType;
+    voucherMeta?: VoucherMeta;
+  }) => Promise<PostJournalResult>;
+  postAdjustmentEntry: (params: {
+    date: string;
+    memo: string;
+    lines: JournalLineInput[];
+    sourceId: string;
+    event: string;
+  }) => Promise<PostJournalResult>;
   setOpeningBalance: (accountId: string, amount: number, date: string) => Promise<void>;
   closePeriod: (periodType: PeriodLockType, year: number, monthOrQuarter: number, note?: string) => Promise<LedgerPeriodClosure>;
   reopenPeriod: (periodId: string, reason: string) => Promise<LedgerPeriodClosure>;
@@ -62,7 +80,8 @@ interface LedgerContextType {
 const LedgerContext = createContext<LedgerContextType | undefined>(undefined);
 
 export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeOrganizationId: storeId } = useAppContext();
+  const { activeOrganizationId } = useAppContext();
+  const storeId = getFinanceStoreId() || activeOrganizationId;
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<LedgerAccount[]>([]);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
@@ -97,6 +116,13 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     };
   }, []);
 
+  const resolveJournalActor = useCallback((): string => {
+    const user = getFinanceAuth().currentUser;
+    if (!user) throw new Error('Sign in to post journal entries.');
+    const identity = user.email || user.displayName || user.uid;
+    return identity === user.uid ? user.uid : `${identity} (${user.uid})`;
+  }, []);
+
   const refreshLedger = useCallback(async () => {
     if (!storeId) {
       setAccounts([]);
@@ -122,10 +148,18 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
 
   const ensureCoa = useCallback(async () => {
     if (!storeId) return [];
-    const seeded = await ensureDefaultChartOfAccounts(storeId);
-    setAccounts(seeded);
+    // Load posted history first — COA seed/merge must not block trial balance reads.
     await refreshLedger();
-    return seeded;
+    try {
+      const seeded = await ensureDefaultChartOfAccounts(storeId);
+      setAccounts(seeded);
+      await refreshLedger();
+      return seeded;
+    } catch (err) {
+      console.error('[Ledger] COA ensure failed', err);
+      toast.error('Chart of accounts sync failed. Try Refresh if reports look empty.');
+      return [];
+    }
   }, [storeId, refreshLedger]);
 
   useEffect(() => {
@@ -146,8 +180,57 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     [accounts, entries, lines, asOfDate],
   );
 
+  const postVoucherEntry = useCallback(
+    async (params: {
+      date: string;
+      memo: string;
+      lines: JournalLineInput[];
+      voucherType: VoucherType;
+      voucherMeta?: VoucherMeta;
+    }) => {
+      if (!storeId) throw new Error('No active store');
+      const validation = validateBalancedLines(params.lines);
+      if (!validation.valid) throw new Error(validation.message);
+
+      let accts = accounts;
+      if (!accts.length) accts = await ensureCoa();
+
+      const event = voucherEventForType(params.voucherType);
+
+      const result = await postJournalEntry(
+        {
+          storeId,
+          date: params.date,
+          memo: params.memo,
+          sourceType: 'manual',
+          sourceId: `${params.voucherType.toLowerCase()}-${Date.now()}`,
+          event,
+          createdBy: resolveJournalActor(),
+          voucherType: params.voucherType,
+          voucherMeta: params.voucherMeta,
+          lines: params.lines,
+        },
+        new Map(accts.map((a) => [a.id, a])),
+      );
+
+      await refreshLedger();
+      return result;
+    },
+    [storeId, accounts, ensureCoa, refreshLedger, resolveJournalActor],
+  );
+
   const postManualEntry = useCallback(
-    async (params: { date: string; memo: string; lines: JournalLineInput[] }) => {
+    async (params: { date: string; memo: string; lines: JournalLineInput[] }) =>
+      postVoucherEntry({
+        ...params,
+        voucherType: 'JV',
+        voucherMeta: {},
+      }),
+    [postVoucherEntry],
+  );
+
+  const postAdjustmentEntry = useCallback(
+    async (params: { date: string; memo: string; lines: JournalLineInput[]; sourceId: string; event: string }) => {
       if (!storeId) throw new Error('No active store');
       const validation = validateBalancedLines(params.lines);
       if (!validation.valid) throw new Error(validation.message);
@@ -160,9 +243,11 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           storeId,
           date: params.date,
           memo: params.memo,
-          sourceType: 'manual',
-          sourceId: `manual-${Date.now()}`,
-          event: 'post',
+          sourceType: 'adjustment',
+          sourceId: params.sourceId,
+          event: params.event,
+          createdBy: resolveJournalActor(),
+          voucherType: 'JV',
           lines: params.lines,
         },
         new Map(accts.map((a) => [a.id, a])),
@@ -171,7 +256,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       await refreshLedger();
       return result;
     },
-    [storeId, accounts, ensureCoa, refreshLedger],
+    [storeId, accounts, ensureCoa, refreshLedger, resolveJournalActor],
   );
 
   const setOpeningBalance = useCallback(
@@ -231,6 +316,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     ensureCoa,
     refreshLedger,
     postManualEntry,
+    postVoucherEntry,
+    postAdjustmentEntry,
     setOpeningBalance,
     closePeriod,
     reopenPeriod,

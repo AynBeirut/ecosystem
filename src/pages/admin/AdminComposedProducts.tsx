@@ -15,6 +15,7 @@ import { ComposedProduct, Recipe, RawMaterial } from '@/types/inventory';
 import { Product } from '@/types/product';
 import { StoreProfile } from '@/types/storeProfile';
 import { hasComposedAccess } from '@/lib/subscriptionHelper';
+import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
 import { logAction } from '@/lib/auditLog';
 import { calculateAvailableStock, getComposedStockStatus } from '@/lib/composedProductStock';
 import { getActualStoreId } from '@/lib/storeUtils';
@@ -46,6 +47,91 @@ const AdminComposedProducts: React.FC = () => {
     materials: [] as { rawMaterialId: string; quantity: number | string }[],
     sellingPrice: 0,
   });
+
+  // Inline "quick add raw material" so the user never leaves this page.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddIndex, setQuickAddIndex] = useState<number | null>(null);
+  const [savingQuickMaterial, setSavingQuickMaterial] = useState(false);
+  const [quickMaterial, setQuickMaterial] = useState({
+    name: '',
+    unit: 'kg' as RawMaterial['unit'],
+    costPerUnit: '' as number | '',
+  });
+
+  const ADD_NEW_MATERIAL = '__add_new_material__';
+
+  const openQuickAdd = (index: number | null) => {
+    setQuickAddIndex(index);
+    setQuickMaterial({ name: '', unit: 'kg', costPerUnit: '' });
+    setQuickAddOpen(true);
+  };
+
+  const handleSaveQuickMaterial = async () => {
+    if (!user?.storeId) return;
+    const cost = typeof quickMaterial.costPerUnit === 'number' ? quickMaterial.costPerUnit : parseFloat(String(quickMaterial.costPerUnit));
+    if (!quickMaterial.name.trim()) {
+      toast({ title: 'Error', description: 'Material name is required', variant: 'destructive' });
+      return;
+    }
+    if (!cost || cost <= 0) {
+      toast({ title: 'Error', description: 'Cost per unit must be greater than zero (needed for costing)', variant: 'destructive' });
+      return;
+    }
+
+    setSavingQuickMaterial(true);
+    try {
+      const db = getFirestore();
+      const storePrefix = user.storeId.substring(0, 5).toUpperCase();
+      const sku = generateSKU(storePrefix, 'MAT', rawMaterials.length + 1);
+      const barcode = generateBarcode();
+      const nowIso = new Date().toISOString();
+
+      // No stock required to define a material — currentStock defaults to 0.
+      const materialData = {
+        name: quickMaterial.name.trim(),
+        unit: quickMaterial.unit,
+        currentStock: 0,
+        minimumThreshold: 0,
+        reorderPoint: 0,
+        costPerUnit: cost,
+        preferredSupplierId: '',
+        storageLocation: '',
+        expiryTracking: false,
+        sku,
+        barcode,
+        storeId: user.storeId,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        warrantyStartDate: nowIso,
+      };
+
+      const docRef = await addDoc(collection(db, 'rawMaterials'), materialData);
+      const created = { id: docRef.id, ...materialData } as RawMaterial;
+      setRawMaterials((prev) => [...prev, created]);
+
+      // Assign into the target material row (or append a new row).
+      setNewProduct((prev) => {
+        const materials = [...prev.materials];
+        if (quickAddIndex != null && quickAddIndex < materials.length) {
+          materials[quickAddIndex] = { ...materials[quickAddIndex], rawMaterialId: created.id };
+        } else {
+          materials.push({ rawMaterialId: created.id, quantity: '' });
+        }
+        return { ...prev, materials };
+      });
+
+      await logAction(user.id, user.name, user.role, 'create', 'rawMaterial', docRef.id, { newValue: materialData }, user.storeId);
+
+      setQuickAddOpen(false);
+      setQuickAddIndex(null);
+      toast({ title: 'Material added', description: `${created.name} is now available.` });
+    } catch (error) {
+      console.error('Error quick-adding material:', error);
+      toast({ title: 'Error', description: 'Failed to add material', variant: 'destructive' });
+    } finally {
+      setSavingQuickMaterial(false);
+    }
+  };
 
   // Load composed products, recipes, products, and raw materials
   useEffect(() => {
@@ -196,9 +282,19 @@ const AdminComposedProducts: React.FC = () => {
       const recipeData = {
         name: `Recipe for ${newProduct.name}`,
         description: `Auto-generated recipe for ${newProduct.name}`,
+        ingredients: normalizedMaterials.map((material) => ({
+          rawMaterialId: material.rawMaterialId,
+          materialName: rawMaterials.find((raw) => raw.id === material.rawMaterialId)?.name || '',
+          quantity: material.quantity,
+          unit: rawMaterials.find((raw) => raw.id === material.rawMaterialId)?.unit || '',
+          cost: calculateLineCost(material.rawMaterialId, material.quantity),
+        })),
         materials: normalizedMaterials,
+        outputQuantity: 1,
+        outputYield: 1,
         yieldQuantity: 1,
         yieldUnit: 'unit',
+        totalCost,
         costPerUnit: totalCost,
         storeId: user.storeId,
         createdAt: new Date().toISOString(),
@@ -512,16 +608,18 @@ const AdminComposedProducts: React.FC = () => {
                       variant="outline" 
                       size="sm"
                       onClick={addMaterial}
-                      disabled={rawMaterials.length === 0}
                     >
                       <Plus className="mr-1 h-4 w-4" />
                       Add Material
                     </Button>
                   </div>
 
-                  {rawMaterials.length === 0 ? (
-                    <div className="p-4 border border-dashed rounded text-center text-yellow-600 text-sm">
-                      ⚠️ No raw materials found. Please add raw materials first in the Raw Materials section.
+                  {rawMaterials.length === 0 && newProduct.materials.length === 0 ? (
+                    <div className="p-4 border border-dashed rounded text-center text-sm space-y-2">
+                      <p className="text-yellow-600">⚠️ No raw materials yet.</p>
+                      <Button type="button" variant="outline" size="sm" onClick={() => openQuickAdd(null)}>
+                        <Plus className="mr-1 h-4 w-4" /> Add raw material
+                      </Button>
                     </div>
                   ) : newProduct.materials.length === 0 ? (
                     <div className="p-4 border border-dashed rounded text-center text-gray-500 text-sm">
@@ -537,12 +635,21 @@ const AdminComposedProducts: React.FC = () => {
                             <div className="flex-1">
                               <Select
                                 value={material.rawMaterialId}
-                                onValueChange={(value) => updateMaterial(index, 'rawMaterialId', value)}
+                                onValueChange={(value) => {
+                                  if (value === ADD_NEW_MATERIAL) {
+                                    openQuickAdd(index);
+                                    return;
+                                  }
+                                  updateMaterial(index, 'rawMaterialId', value);
+                                }}
                               >
                                 <SelectTrigger>
                                   <SelectValue placeholder="-- Select raw material --" />
                                 </SelectTrigger>
                                 <SelectContent>
+                                  <SelectItem value={ADD_NEW_MATERIAL} className="text-primary font-medium">
+                                    + Add new raw material
+                                  </SelectItem>
                                   {rawMaterials.map(rm => (
                                     <SelectItem key={rm.id} value={rm.id}>
                                       {rm.name} (${(rm.costPerUnit || 0).toFixed(2)}/{rm.unit})
@@ -875,6 +982,68 @@ const AdminComposedProducts: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Quick Add Raw Material (inline, no page change needed) */}
+        <Dialog open={quickAddOpen} onOpenChange={(open) => { if (!open) { setQuickAddOpen(false); setQuickAddIndex(null); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add New Raw Material</DialogTitle>
+              <DialogDescription>Quickly define a material to use here. No stock needed — set it later in Raw Materials.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <div>
+                <Label htmlFor="quick-mat-name">Material Name *</Label>
+                <Input
+                  id="quick-mat-name"
+                  value={quickMaterial.name}
+                  onChange={(e) => setQuickMaterial({ ...quickMaterial, name: e.target.value })}
+                  placeholder="e.g., Chicken Breast"
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="quick-mat-unit">Unit</Label>
+                  <Select
+                    value={quickMaterial.unit}
+                    onValueChange={(value: any) => setQuickMaterial({ ...quickMaterial, unit: value })}
+                  >
+                    <SelectTrigger id="quick-mat-unit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                      <SelectItem value="gram">Gram (g)</SelectItem>
+                      <SelectItem value="liter">Liter (L)</SelectItem>
+                      <SelectItem value="ml">Milliliter (mL)</SelectItem>
+                      <SelectItem value="piece">Piece</SelectItem>
+                      <SelectItem value="meter">Meter (m)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="quick-mat-cost">Cost Per Unit *</Label>
+                  <Input
+                    id="quick-mat-cost"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={quickMaterial.costPerUnit === '' ? '' : quickMaterial.costPerUnit}
+                    onChange={(e) => setQuickMaterial({ ...quickMaterial, costPerUnit: e.target.value === '' ? '' : (parseFloat(e.target.value) || 0) })}
+                    placeholder="e.g., 2.50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Required for costing</p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setQuickAddOpen(false); setQuickAddIndex(null); }} disabled={savingQuickMaterial}>Cancel</Button>
+              <Button onClick={handleSaveQuickMaterial} disabled={savingQuickMaterial}>
+                {savingQuickMaterial ? 'Adding…' : 'Add & Use'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </AdminPageShell>
   );
 };

@@ -292,6 +292,7 @@ export interface StoreProfile {
   expiryReminder3Sent?: boolean; // Whether 3-day reminder was sent
   // Multi-currency support
   mainCurrency?: string; // Main currency for calculations (USD, EUR, LBP)
+  numberFormat?: 'full' | 'compact'; // Large-number display: 89,500,000 vs 89.5M (default 'full')
   secondaryCurrency?: string; // Display currency
   customExchangeRate?: number; // Custom exchange rate
   exchangeRateMode?: 'manual' | 'auto';
@@ -347,6 +348,7 @@ export interface StoreProfile {
   sslAutoProvisioningEnabled?: boolean;
   sslAutoProvisioningLastCheckedAt?: string;
   sslAutoProvisioningLastStatus?: 'pending' | 'active' | 'error';
+  systemGuideEnabled?: boolean;
   adminIpWhitelistEnabled?: boolean;
   adminIpAllowlist?: string[];
   // Product settings
@@ -392,6 +394,12 @@ export interface StoreProfile {
   packageDraftAppliedAt?: string;
   /** display = showcase only (no cart); commerce = full store checkout */
   storefrontMode?: 'display' | 'commerce';
+  /** Per-store GL template: international (default) or Lebanese PCG-style COA. */
+  accountingMode?: 'international' | 'lebanese';
+  /** Entry/display language for accounting screens (Lebanese defaults to bilingual). */
+  accountingLanguage?: 'en' | 'ar' | 'bilingual';
+  /** Set true after first posted journal entry — accountingMode becomes immutable. */
+  accountingModeLocked?: boolean;
   /** Business Backend: text/SKU catalog only — no product image uploads */
   allowsCatalogImages?: boolean;
   builderWizard?: {

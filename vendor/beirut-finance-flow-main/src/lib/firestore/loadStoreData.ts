@@ -6,12 +6,14 @@ import {
   mapFsSupplier,
   mapFsProduct,
   mapFsInvoice,
+  mapFsPlatformOrder,
   mapFsEstimate,
   mapFsPaymentOrder,
   mapFsReceipt,
   mapFsPayment,
   mapFsExpense,
   mapFsPlatformPurchase,
+  mapFsPurchaseOrder,
 } from './mappers';
 import {
   buildFinishedGoodsCostMap,
@@ -62,24 +64,28 @@ export async function loadStoreData(storeId: string): Promise<LoadedStoreData> {
     finishedGoodsSnap,
     suppliersSnap,
     purchasesSnap,
+    ordersSnap,
     invoices,
     estimates,
     receipts,
     payments,
     expenses,
     paymentOrders,
+    financePurchaseOrders,
   ] = await Promise.all([
     getDocs(query(collection(getFinanceDb(), 'customers'), where('storeId', '==', storeId))),
     getDocs(query(collection(getFinanceDb(), 'products'), where('storeId', '==', storeId))),
     getDocs(query(collection(getFinanceDb(), 'finishedGoodsInventory'), where('storeId', '==', storeId))),
     getDocs(query(collection(getFinanceDb(), 'suppliers'), where('storeId', '==', storeId))),
     getDocs(query(collection(getFinanceDb(), 'purchases'), where('storeId', '==', storeId))),
+    getDocs(query(collection(getFinanceDb(), 'orders'), where('storeId', '==', storeId))),
     loadStoreSubcollection(storeId, 'invoices', mapFsInvoice),
     loadStoreSubcollection(storeId, 'estimates', mapFsEstimate),
     loadStoreSubcollection(storeId, 'receipts', mapFsReceipt),
     loadStoreSubcollection(storeId, 'payments', mapFsPayment),
     loadStoreSubcollection(storeId, 'expenses', mapFsExpense),
     loadStoreSubcollection(storeId, 'paymentOrders', mapFsPaymentOrder),
+    loadStoreSubcollection(storeId, 'purchaseOrders', mapFsPurchaseOrder),
   ]);
 
   const clients = customersSnap.docs.map((d) => mapFsClient(d.id, d.data() as Record<string, unknown>));
@@ -91,15 +97,24 @@ export async function loadStoreData(storeId: string): Promise<LoadedStoreData> {
     fgCostMap,
   );
   const suppliers = suppliersSnap.docs.map((d) => mapFsSupplier(d.id, d.data() as Record<string, unknown>));
-  const purchaseOrders = purchasesSnap.docs.map((d) =>
+  const platformPurchaseOrders = purchasesSnap.docs.map((d) =>
     mapFsPlatformPurchase(d.id, d.data() as Record<string, unknown>),
+  );
+  const purchaseOrdersById = new Map<string, PurchaseOrder>();
+  for (const po of platformPurchaseOrders) purchaseOrdersById.set(po.id, po);
+  for (const po of financePurchaseOrders) {
+    if (!purchaseOrdersById.has(po.id)) purchaseOrdersById.set(po.id, po);
+  }
+  const purchaseOrders = [...purchaseOrdersById.values()];
+  const fallbackInvoices = ordersSnap.docs.map((d) =>
+    mapFsPlatformOrder(d.id, d.data() as Record<string, unknown>),
   );
 
   return {
     clients,
     suppliers,
     products,
-    invoices,
+    invoices: invoices.length > 0 ? invoices : fallbackInvoices,
     estimates,
     purchaseOrders,
     paymentOrders,

@@ -47,6 +47,7 @@ export const MODULE_ROUTE_MAP: ModuleRouteRule[] = [
   { pathPrefix: '/admin/finance/clients', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/finance/products', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/finance/expenses', moduleId: 'invoice_manager', enforceOnly: true },
+  { pathPrefix: '/admin/finance/accounting', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/finance/portfolio', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/projects', moduleId: 'projects', enforceOnly: true },
   { pathPrefix: '/admin/builder', moduleId: 'builder', enforceOnly: true },

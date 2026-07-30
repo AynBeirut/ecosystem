@@ -106,6 +106,97 @@
   .card-hover {
     @apply transition-all duration-200 hover:shadow-lg hover:-translate-y-1;
   }
+
+  .marketplace-page {
+    @apply antialiased;
+  }
+
+  .marketplace-search::placeholder {
+    color: rgb(163 163 163);
+  }
+
+  .marketplace-segment__btn {
+    @apply inline-flex flex-1 items-center justify-center gap-1.5 rounded-full px-4 py-2 text-sm font-medium text-neutral-500 transition-all md:flex-none md:min-w-[7.5rem];
+  }
+
+  .marketplace-segment__btn--active {
+    @apply bg-white text-neutral-900 shadow-sm;
+  }
+
+  .marketplace-store-card {
+    @apply will-change-transform;
+  }
+
+  .home-dashboard {
+    background-color: hsl(var(--admin-bg));
+    color: hsl(var(--admin-text));
+  }
+
+  .home-feature-icon {
+    @apply ring-1 ring-white/20;
+  }
+
+  .public-page-shell {
+    @apply min-h-screen flex flex-col;
+    background-color: #f5f5f7;
+    color: #0f172a;
+  }
+
+  .public-page-hero {
+    @apply max-w-6xl mx-auto w-full px-4 sm:px-6 pt-6 md:pt-8;
+  }
+
+  .public-page-hero-card {
+    @apply rounded-3xl border border-slate-200/80 bg-white px-5 py-6 md:px-8 md:py-8 shadow-sm;
+  }
+
+  .public-page-eyebrow {
+    @apply mb-2 text-xs font-bold uppercase tracking-[0.16em] text-teal-700;
+  }
+
+  .public-page-title {
+    @apply text-3xl md:text-4xl font-bold tracking-tight text-slate-900;
+  }
+
+  .public-page-lead {
+    @apply mt-3 max-w-3xl text-base md:text-lg leading-relaxed text-slate-600;
+  }
+
+  .public-page-hero-actions {
+    @apply mt-5 flex flex-wrap items-center gap-3;
+  }
+
+  .public-page-main {
+    @apply max-w-6xl mx-auto w-full flex-1 px-4 sm:px-6 pb-12 md:pb-16 space-y-6;
+  }
+
+  .public-panel {
+    @apply rounded-3xl border border-slate-200/80 bg-white p-5 md:p-6 shadow-sm;
+  }
+
+  .public-subnav {
+    @apply flex flex-wrap gap-2;
+  }
+
+  .public-subnav-link {
+    @apply inline-flex items-center rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-semibold text-slate-700 transition-colors hover:border-teal-300 hover:bg-teal-50 hover:text-teal-800;
+  }
+
+  .public-subnav-link-active {
+    @apply border-teal-300 bg-teal-50 text-teal-800;
+  }
+
+  .public-segment {
+    @apply inline-flex items-center rounded-xl border border-slate-200 bg-slate-50 p-1;
+  }
+
+  .public-segment-btn {
+    @apply rounded-lg px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:text-slate-900;
+  }
+
+  .public-segment-btn-active {
+    @apply bg-teal-600 text-white shadow-sm;
+  }
   
   .nav-link {
     @apply text-gray-600 hover:text-market-primary transition-colors duration-200;
@@ -121,6 +212,714 @@
   
   .btn-accent {
     @apply bg-market-accent text-white hover:bg-market-accent/90 transition-colors;
+  }
+
+  /* ── Admin theme system (scoped via data-admin-theme on AdminLayout) ── */
+  /* Soft charcoal greys — Apple/Mercedes comfort for long sessions (not void black) */
+  [data-admin-theme="dark"] {
+    color-scheme: dark;
+    --admin-bg: 225 8% 17%;
+    --admin-sidebar: 225 9% 14%;
+    --admin-elevated: 225 7% 21%;
+    --admin-elevated-hover: 225 7% 24%;
+    --admin-border: 225 8% 28%;
+    --admin-border-subtle: 225 8% 23%;
+    --admin-text: 210 14% 91%;
+    --admin-text-muted: 215 9% 68%;
+    --admin-text-subtle: 215 8% 54%;
+    --admin-hero: 222 11% 20%;
+
+    --background: var(--admin-bg);
+    --foreground: var(--admin-text);
+    --card: var(--admin-elevated);
+    --card-foreground: var(--admin-text);
+    --popover: var(--admin-elevated);
+    --popover-foreground: var(--admin-text);
+    --muted: var(--admin-elevated-hover);
+    --muted-foreground: var(--admin-text-muted);
+    --border: var(--admin-border-subtle);
+    --input: var(--admin-border);
+    --ring: 174 58% 48%;
+    --accent: var(--admin-elevated-hover);
+    --accent-foreground: var(--admin-text);
+    @apply bg-background text-foreground;
+  }
+
+  [data-admin-theme="light"] {
+    color-scheme: light;
+    --background: 214 32% 95%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 187 60% 45%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    @apply bg-background text-foreground;
+  }
+
+  [data-admin-theme="dark"] .admin-shell-mobile-bar {
+    @apply border-border/80 bg-background/95;
+  }
+
+  [data-admin-theme="light"] .admin-shell-mobile-bar {
+    @apply border-slate-200/80 bg-white/80;
+  }
+
+  [data-admin-theme="dark"] .admin-shell-footer {
+    @apply border-border/80 bg-background;
+  }
+
+  [data-admin-theme="light"] .admin-shell-footer {
+    @apply border-slate-200 bg-gray-100;
+  }
+
+  [data-admin-theme="dark"] .admin-shell-sidebar {
+    background-color: hsl(var(--admin-sidebar));
+    @apply text-[hsl(var(--admin-text-muted))] border-r border-border/60;
+  }
+
+  [data-admin-theme="dark"] .admin-shell-mobile-hero {
+    background-color: hsl(var(--admin-hero));
+    @apply rounded-xl border border-border/70 text-[hsl(var(--admin-text))];
+  }
+
+  [data-admin-theme="light"] .admin-shell-mobile-hero {
+    @apply rounded-xl border border-slate-200/80 bg-[#0b1220] text-white;
+  }
+
+  [data-admin-theme="light"] .admin-shell-sidebar {
+    @apply bg-[#0f172a] text-slate-300 border-r border-white/5;
+  }
+
+  [data-admin-theme="light"] .admin-shell-sidebar .admin-shell-section-label {
+    @apply text-slate-500;
+  }
+
+  [data-admin-theme="dark"] .admin-shell-nav-group {
+    @apply rounded-xl border border-border/50 bg-[hsl(var(--admin-elevated)/0.45)];
+  }
+
+  [data-admin-theme="light"] .admin-shell-nav-group {
+    @apply rounded-xl border border-white/5 bg-white/[0.02];
+  }
+
+  [data-admin-theme="dark"] .admin-shell-nav-item {
+    @apply text-[hsl(var(--admin-text-muted))] hover:bg-[hsl(var(--admin-elevated-hover)/0.65)] hover:text-[hsl(var(--admin-text))];
+  }
+
+  [data-admin-theme="dark"] .admin-shell-section-label {
+    @apply text-[hsl(var(--admin-text-subtle))];
+  }
+
+  [data-admin-theme="dark"] .admin-shell-user-mobile {
+    background-color: hsl(var(--admin-elevated) / 0.75);
+    @apply border-border/70;
+  }
+
+  [data-admin-theme="light"] .admin-shell-user-mobile {
+    @apply border-slate-200 bg-white;
+  }
+
+  [data-admin-theme="dark"] .admin-shell-status-btn {
+    color: hsl(var(--admin-text-muted));
+    background-color: hsl(var(--admin-elevated) / 0.8);
+    @apply border-border/70 hover:bg-[hsl(var(--admin-elevated-hover))];
+  }
+
+  [data-admin-theme="light"] .admin-shell-status-btn {
+    @apply text-slate-600 bg-white border-slate-200 hover:bg-slate-50;
+  }
+
+  [data-admin-theme="dark"] .admin-theme-toggle {
+    @apply rounded-xl border border-border/60 bg-[hsl(var(--admin-elevated)/0.5)] px-3 py-2.5;
+  }
+
+  [data-admin-theme="dark"] .admin-page-hero {
+    background-color: hsl(var(--admin-hero));
+    @apply relative mb-6 overflow-hidden rounded-2xl border border-border/50 py-4 px-4 text-[hsl(var(--admin-text))] md:px-5;
+    box-shadow:
+      inset 0 1px 0 hsl(0 0% 100% / 0.06),
+      0 12px 40px -20px hsl(220 20% 5% / 0.45);
+  }
+
+  [data-admin-theme="light"] .admin-page-hero {
+    @apply relative mb-6 overflow-hidden rounded-xl bg-[#0b1220] py-4 px-4 text-white md:px-5;
+  }
+
+  /* ── Admin white surfaces: light tokens inside, works on obsidian + light shell ── */
+  .admin-surface,
+  .admin-panel,
+  .admin-stat-tile,
+  .admin-dashboard-stat-tile,
+  .admin-dashboard-surface {
+    color-scheme: light;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 187 60% 45%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    @apply rounded-2xl border border-white/80 !bg-white !text-slate-900 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5;
+  }
+
+  [data-admin-theme="dark"] main .bg-card {
+    color-scheme: light;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 187 60% 45%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    @apply !bg-white !text-slate-900;
+  }
+
+  /* Legacy admin pages that use raw bg-white (Account Statement, etc.) */
+  [data-admin-theme="dark"] main .bg-white,
+  [data-admin-theme="dark"] main .bg-gray-50,
+  [data-admin-theme="dark"] main .bg-gray-100,
+  [data-admin-theme="dark"] main .bg-blue-50 {
+    color-scheme: light;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 187 60% 45%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    --destructive: 0 84.2% 60.2%;
+    --destructive-foreground: 210 40% 98%;
+    @apply !text-slate-900;
+  }
+
+  [data-admin-theme="dark"] main .bg-white input:not([type="checkbox"]):not([type="radio"]),
+  [data-admin-theme="dark"] main .bg-white select,
+  [data-admin-theme="dark"] main .bg-white textarea {
+    color-scheme: light;
+    background-color: #fff;
+    border-color: rgb(203 213 225);
+    color: rgb(15 23 42);
+  }
+
+  .admin-panel-interactive,
+  .admin-stat-tile-interactive,
+  .admin-dashboard-stat-tile-interactive {
+    @apply cursor-pointer hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300;
+  }
+
+  .admin-section-label,
+  .admin-dashboard-section-label,
+  .admin-stat-label,
+  .admin-dashboard-stat-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400;
+  }
+
+  .admin-stat-label,
+  .admin-dashboard-stat-label {
+    @apply text-[11px] tracking-wider;
+  }
+
+  .admin-stat-value,
+  .admin-dashboard-stat-value {
+    @apply text-2xl font-bold tracking-tight text-slate-900;
+  }
+
+  .admin-heading,
+  .admin-dashboard-heading {
+    @apply text-lg font-semibold tracking-tight text-slate-900;
+  }
+
+  .admin-list-item,
+  .admin-dashboard-list-item {
+    @apply rounded-xl border border-slate-100 bg-slate-50/80 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all;
+  }
+
+  [data-admin-theme="dark"] .admin-page-heading {
+    @apply text-xl font-semibold text-[hsl(var(--admin-text))];
+  }
+
+  [data-admin-theme="light"] .admin-page-heading {
+    @apply text-xl font-semibold text-slate-900;
+  }
+
+  .admin-surface input:focus-visible,
+  .admin-surface textarea:focus-visible,
+  .admin-surface select:focus-visible,
+  .admin-surface [role="combobox"]:focus-visible,
+  [data-admin-theme="dark"] main .bg-card input:focus-visible,
+  [data-admin-theme="dark"] main .bg-card textarea:focus-visible,
+  [data-admin-theme="dark"] main .bg-card select:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(0 0% 100%),
+      0 0 0 4px hsl(187 60% 45% / 0.35),
+      0 0 12px hsl(187 60% 45% / 0.1);
+  }
+
+  .admin-surface table tbody tr:hover,
+  [data-admin-theme="dark"] main .bg-card table tbody tr:hover {
+    background-color: hsl(210 40% 96.1%);
+  }
+
+  [data-admin-theme="dark"] .admin-subnav-link {
+    @apply px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border;
+    color: hsl(var(--admin-text-muted));
+    background-color: hsl(var(--admin-elevated) / 0.65);
+    border-color: hsl(var(--admin-border-subtle) / 0.85);
+  }
+
+  [data-admin-theme="dark"] .admin-subnav-link:hover {
+    color: hsl(var(--admin-text));
+    background-color: hsl(var(--admin-elevated-hover));
+  }
+
+  [data-admin-theme="light"] .admin-subnav-link {
+    @apply px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border bg-white text-slate-700 border-slate-200 hover:bg-slate-50;
+  }
+
+  [data-admin-theme="dark"] .admin-subnav-link--active {
+    color: hsl(var(--admin-text));
+    background-color: hsl(var(--admin-hero));
+    border-color: hsl(var(--admin-border) / 0.9);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05);
+  }
+
+  [data-admin-theme="light"] .admin-subnav-link--active {
+    @apply bg-[#0b1220] text-white border-slate-700;
+  }
+
+  [data-admin-theme="dark"] input:focus-visible,
+  [data-admin-theme="dark"] textarea:focus-visible,
+  [data-admin-theme="dark"] select:focus-visible,
+  [data-admin-theme="dark"] [role="combobox"]:focus-visible {
+    outline: none;
+    box-shadow:
+      0 0 0 2px hsl(var(--admin-bg)),
+      0 0 0 4px hsl(174 58% 48% / 0.35),
+      0 0 16px hsl(174 58% 48% / 0.12);
+  }
+
+  [data-admin-theme="dark"] table tbody tr {
+    transition: background-color 0.15s ease;
+  }
+
+  [data-admin-theme="dark"] table tbody tr:hover {
+    background-color: hsl(var(--admin-elevated-hover) / 0.55);
+  }
+
+  [data-admin-theme="dark"] .admin-touch-target,
+  [data-admin-theme="light"] .admin-touch-target {
+    @apply min-h-12 px-6 text-base;
+  }
+
+  [data-admin-theme="dark"] .admin-status-pill {
+    @apply inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs font-medium;
+    border-color: hsl(var(--admin-border-subtle) / 0.9);
+    background-color: hsl(var(--admin-elevated) / 0.85);
+    color: hsl(var(--admin-text-muted));
+  }
+
+  [data-admin-theme="dark"] .admin-status-pill--ok {
+    @apply border-emerald-500/25 bg-emerald-500/10 text-emerald-300;
+  }
+
+  [data-admin-theme="dark"] .admin-status-pill--warn {
+    @apply border-amber-500/25 bg-amber-500/10 text-amber-300;
+  }
+
+  [data-admin-theme="dark"] .admin-status-pill--muted {
+    border-color: hsl(var(--admin-border-subtle) / 0.75);
+    background-color: hsl(var(--admin-elevated) / 0.55);
+    color: hsl(var(--admin-text-subtle));
+  }
+
+  /* Finance embed: light tokens for inner cards — no full-width white slab */
+  .finance-embed-theme {
+    color-scheme: light;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --card: 0 0% 100%;
+    --card-foreground: 222.2 84% 4.9%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 222.2 84% 4.9%;
+    --muted: 210 40% 96.1%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+    --border: 214.3 31.8% 91.4%;
+    --input: 214.3 31.8% 91.4%;
+    --ring: 187 60% 45%;
+    --accent: 210 40% 96.1%;
+    --accent-foreground: 222.2 47.4% 11.2%;
+    @apply min-w-0 space-y-4;
+  }
+
+  .finance-embed-theme .bg-card,
+  .finance-embed-content .bg-card {
+    @apply rounded-2xl border border-white/80 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.1)] ring-1 ring-slate-900/5;
+  }
+
+  .finance-embed-content {
+    @apply min-w-0;
+  }
+
+  [data-admin-theme="dark"] .finance-as-of-toolbar .finance-as-of-label {
+    color: hsl(var(--admin-text));
+    @apply font-medium;
+  }
+
+  [data-admin-theme="light"] .finance-as-of-toolbar .finance-as-of-label {
+    @apply text-slate-700 font-medium;
+  }
+
+  [data-admin-theme="dark"] .finance-as-of-toolbar .finance-as-of-input,
+  [data-admin-theme="dark"] .finance-as-of-toolbar button {
+    color-scheme: light;
+  }
+
+  [data-admin-theme="dark"] .finance-as-of-toolbar .finance-as-of-input {
+    @apply bg-white text-slate-900 border-slate-300;
+  }
+
+  [data-admin-theme="dark"] .finance-as-of-toolbar button {
+    @apply border-slate-300 bg-white text-slate-800 hover:bg-slate-50;
+  }
+
+  [data-admin-theme="dark"] .finance-embed-theme .finance-page-header h1 {
+    color: hsl(var(--admin-text));
+  }
+
+  [data-admin-theme="dark"] .finance-embed-theme .finance-page-header p {
+    color: hsl(var(--admin-text-muted));
+  }
+
+  [data-admin-theme="dark"] .finance-embed-theme .finance-as-of-label,
+  [data-admin-theme="dark"] .finance-embed-theme label.text-xs {
+    color: hsl(var(--admin-text));
+    font-weight: 500;
+  }
+  [data-admin-theme="dark"] main input[type="date"],
+  [data-admin-theme="dark"] main input[type="datetime-local"],
+  [data-admin-theme="dark"] main input[type="time"],
+  [data-admin-theme="dark"] .finance-embed-theme input:not([type="checkbox"]):not([type="radio"]),
+  [data-admin-theme="dark"] .finance-embed-theme select,
+  [data-admin-theme="dark"] .finance-embed-theme textarea,
+  [data-admin-theme="dark"] .finance-embed-theme .finance-embed-select,
+  [data-admin-theme="dark"] .finance-embed-theme [role="combobox"] {
+    color-scheme: light;
+    background-color: #fff;
+    color: rgb(15 23 42);
+    border-color: rgb(203 213 225);
+  }
+
+  /* Date / select controls — readable on dark admin shell (continued above) */
+
+  [data-admin-theme="light"] .finance-embed-theme .finance-as-of-label {
+    @apply text-slate-700;
+  }
+
+  .admin-embed-loader {
+    @apply flex flex-col items-center justify-center gap-4 text-center;
+  }
+
+  .admin-embed-loader--compact {
+    @apply min-h-[160px] py-10;
+  }
+
+  .admin-embed-loader:not(.admin-embed-loader--compact) {
+    @apply min-h-[220px] py-12;
+  }
+
+  .admin-embed-loader__ring {
+    @apply relative h-12 w-12;
+  }
+
+  .admin-embed-loader__ring::before {
+    content: '';
+    @apply absolute inset-0 rounded-full border-2 border-teal-500/20;
+  }
+
+  .admin-embed-loader__core {
+    @apply absolute inset-0 rounded-full border-2 border-transparent border-t-teal-400 border-r-teal-500/60 animate-spin;
+    box-shadow: 0 0 24px rgba(45, 212, 191, 0.25);
+  }
+
+  .admin-embed-loader__label {
+    @apply text-sm font-medium tracking-wide;
+  }
+
+  [data-admin-theme="dark"] .admin-embed-loader__label {
+    color: hsl(var(--admin-text-muted));
+  }
+
+  [data-admin-theme="light"] .admin-embed-loader__label {
+    @apply text-slate-600;
+  }
+
+  .finance-tab-host,
+  .crm-tab-host {
+    @apply min-w-0;
+  }
+
+  .finance-embed-theme .finance-accounting-tabs-shell {
+    @apply flex w-full flex-col gap-2;
+  }
+
+  .finance-embed-theme .finance-accounting-tabs-row {
+    @apply flex h-auto w-full flex-wrap items-stretch justify-start gap-1.5 rounded-2xl border p-1.5;
+    background-color: hsl(var(--admin-elevated) / 0.55);
+    border-color: hsl(var(--admin-border-subtle) / 0.65);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05);
+  }
+
+  [data-admin-theme="light"] .finance-embed-theme .finance-accounting-tabs-row {
+    @apply border-slate-200/90 bg-slate-100/80;
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.65);
+  }
+
+  .finance-embed-theme .finance-accounting-tab {
+    display: inline-flex;
+    min-height: 2.75rem;
+    flex: 1 1 0%;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+    white-space: nowrap;
+    border-radius: 0.75rem;
+    border-width: 1px;
+    border-color: transparent;
+    padding: 0.5rem 0.625rem;
+    font-size: 0.75rem;
+    line-height: 1rem;
+    font-weight: 500;
+    transition-property: all;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+    transition-duration: 150ms;
+    color: hsl(var(--admin-text-muted));
+  }
+
+  @media (min-width: 640px) {
+    .finance-embed-theme .finance-accounting-tab {
+      min-width: 8.5rem;
+      flex: none;
+      padding-left: 0.75rem;
+      padding-right: 0.75rem;
+      font-size: 0.875rem;
+      line-height: 1.25rem;
+    }
+  }
+
+  .finance-embed-theme .finance-accounting-tab:hover {
+    color: hsl(var(--admin-text));
+    background-color: hsl(var(--admin-elevated-hover) / 0.45);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] {
+    color: rgb(15 23 42);
+    background-color: #fff;
+    border-color: hsl(174 58% 48% / 0.22);
+    box-shadow:
+      0 0 0 1px hsl(174 58% 48% / 0.12),
+      0 10px 24px -12px rgba(15, 23, 42, 0.35);
+  }
+
+  .finance-accounting-tab__icon-wrap {
+    @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors;
+  }
+
+  .finance-accounting-tab__icon {
+    @apply h-3.5 w-3.5;
+  }
+
+  .finance-accounting-tab__label {
+    @apply truncate leading-tight;
+  }
+
+  .finance-accounting-tab__icon-wrap--blue {
+    color: rgb(37 99 235);
+    background-color: rgb(37 99 235 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--violet {
+    color: rgb(124 58 237);
+    background-color: rgb(124 58 237 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--amber {
+    color: rgb(217 119 6);
+    background-color: rgb(217 119 6 / 0.14);
+  }
+
+  .finance-accounting-tab__icon-wrap--emerald {
+    color: rgb(5 150 105);
+    background-color: rgb(5 150 105 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--orange {
+    color: rgb(234 88 12);
+    background-color: rgb(234 88 12 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--cyan {
+    color: rgb(8 145 178);
+    background-color: rgb(8 145 178 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--rose {
+    color: rgb(225 29 72);
+    background-color: rgb(225 29 72 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--indigo {
+    color: rgb(79 70 229);
+    background-color: rgb(79 70 229 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--teal {
+    color: rgb(13 148 136);
+    background-color: rgb(13 148 136 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--sky {
+    color: rgb(2 132 199);
+    background-color: rgb(2 132 199 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--purple {
+    color: rgb(147 51 234);
+    background-color: rgb(147 51 234 / 0.12);
+  }
+
+  .finance-accounting-tab__icon-wrap--slate {
+    color: rgb(71 85 105);
+    background-color: rgb(71 85 105 / 0.12);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--blue {
+    color: rgb(255 255 255);
+    background-color: rgb(37 99 235);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--violet {
+    color: rgb(255 255 255);
+    background-color: rgb(124 58 237);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--amber {
+    color: rgb(255 255 255);
+    background-color: rgb(217 119 6);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--emerald {
+    color: rgb(255 255 255);
+    background-color: rgb(5 150 105);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--orange {
+    color: rgb(255 255 255);
+    background-color: rgb(234 88 12);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--cyan {
+    color: rgb(255 255 255);
+    background-color: rgb(8 145 178);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--rose {
+    color: rgb(255 255 255);
+    background-color: rgb(225 29 72);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--indigo {
+    color: rgb(255 255 255);
+    background-color: rgb(79 70 229);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--teal {
+    color: rgb(255 255 255);
+    background-color: rgb(13 148 136);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--sky {
+    color: rgb(255 255 255);
+    background-color: rgb(2 132 199);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--purple {
+    color: rgb(255 255 255);
+    background-color: rgb(147 51 234);
+  }
+
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--slate {
+    color: rgb(255 255 255);
+    background-color: rgb(71 85 105);
+  }
+
+  [data-admin-theme="light"] .finance-embed-theme .finance-accounting-tab {
+    @apply text-slate-600;
+  }
+
+  [data-admin-theme="light"] .finance-embed-theme .finance-accounting-tab:hover {
+    @apply bg-white/70 text-slate-900;
+  }
+
+  [data-admin-theme="light"] .finance-embed-theme .finance-accounting-tab[data-state="active"] {
+    @apply border-teal-500/20 bg-white text-slate-900;
+    box-shadow:
+      0 0 0 1px hsl(174 58% 48% / 0.1),
+      0 8px 20px -10px rgba(15, 23, 42, 0.18);
+  }
+
+  .finance-accounting-stat__icon {
+    @apply inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-lg;
+  }
+  .finance-accounting-stat__icon--emerald { color: rgb(5 150 105); background-color: rgb(5 150 105 / 0.12); }
+  .finance-accounting-stat__icon--cyan { color: rgb(8 145 178); background-color: rgb(8 145 178 / 0.12); }
+  .finance-accounting-stat__icon--blue { color: rgb(37 99 235); background-color: rgb(37 99 235 / 0.12); }
+  .finance-accounting-stat__icon--orange { color: rgb(234 88 12); background-color: rgb(234 88 12 / 0.12); }
+  .finance-accounting-stat__icon--indigo { color: rgb(79 70 229); background-color: rgb(79 70 229 / 0.12); }
+  .finance-accounting-stat__icon--rose { color: rgb(225 29 72); background-color: rgb(225 29 72 / 0.12); }
+
+  .admin-batch-toolbar {
+    @apply rounded-2xl border p-3;
+    background-color: hsl(var(--admin-elevated) / 0.55);
+    border-color: hsl(var(--admin-border-subtle) / 0.65);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05);
+  }
+
+  [data-admin-theme="light"] .admin-batch-toolbar {
+    @apply border-slate-200/90 bg-white/90;
+  }
+
+  [data-admin-theme="dark"] .admin-batch-toolbar button:disabled {
+    @apply opacity-45;
   }
 }
 

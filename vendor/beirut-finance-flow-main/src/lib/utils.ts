@@ -1,26 +1,18 @@
 
 import { type ClassValue, clsx } from "clsx"
 import { twMerge } from "tailwind-merge"
- 
+import { formatMoney, type NumberFormatStyle } from "@/lib/money/format"
+
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number, currency = 'USD'): string {
-  const code = String(currency || 'USD').trim().toUpperCase() || 'USD';
-  const safeCode = /^[A-Z]{3}$/.test(code) ? code : 'USD';
-  const formatter = new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency: safeCode,
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  });
-
-  // Special case for Lebanese Pound - show in thousands
-  if (safeCode === 'LBP' && amount >= 1000) {
-    const inThousands = amount / 1000;
-    return `${formatter.format(inThousands)}K`;
-  }
-  
-  return formatter.format(amount);
+/**
+ * Unified currency formatter. Delegates to the shared money lib so the Invoice
+ * Manager, main app, and backend format identically. Honors per-currency
+ * decimals (LBP=0, USD=2) and the store's large-number style — replaces the old
+ * broken `/1000 + "K"` LBP hack.
+ */
+export function formatCurrency(amount: number, currency = 'USD', style?: NumberFormatStyle): string {
+  return formatMoney(amount, { currency, style });
 }

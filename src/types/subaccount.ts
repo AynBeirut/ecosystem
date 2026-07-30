@@ -1,4 +1,10 @@
-export type SubAccountRole = 'sales' | 'delivery' | 'manager';
+export type SubAccountRole =
+  | 'sales'
+  | 'delivery'
+  | 'manager'
+  | 'cashier'
+  | 'web_maintenance'
+  | 'accounting';
 
 export type SubAccountPermission = 
   | 'view_orders'
@@ -42,6 +48,12 @@ export const ROLE_PERMISSIONS: Record<SubAccountRole, SubAccountPermission[]> = 
     'manage_deliveries',
     'view_customers',
   ],
+  cashier: [
+    'view_orders',
+    'create_orders',
+    'view_customers',
+    'process_payments',
+  ],
   manager: [
     'view_orders',
     'create_orders',
@@ -52,6 +64,17 @@ export const ROLE_PERMISSIONS: Record<SubAccountRole, SubAccountPermission[]> = 
     'manage_customers',
     'view_reports',
     'manage_deliveries',
+    'process_payments',
+  ],
+  web_maintenance: [
+    'view_orders',
+    'view_inventory',
+    'view_customers',
+    'view_reports',
+  ],
+  accounting: [
+    'view_orders',
+    'view_reports',
     'process_payments',
   ],
 };

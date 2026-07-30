@@ -9,12 +9,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Users, Plus, Edit2, Trash2, Star, DollarSign, TrendingUp, Award } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Star, DollarSign, TrendingUp, Award, FileText } from 'lucide-react';
+import { openAccountingWithFocus } from '../../../vendor/beirut-finance-flow-main/src/lib/ledger/ledgerActivity';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { logAction } from '@/lib/auditLog';
+import { getActualStoreId } from '@/lib/storeUtils';
 
 const CUSTOMER_TIERS = [
   { value: 'bronze', label: 'Bronze', color: 'bg-orange-100 text-orange-800', minPercent: 0 },
@@ -22,6 +24,58 @@ const CUSTOMER_TIERS = [
   { value: 'gold', label: 'Gold', color: 'bg-yellow-100 text-yellow-800', minPercent: 50 },
   { value: 'platinum', label: 'Platinum', color: 'bg-purple-100 text-purple-800', minPercent: 75 },
 ];
+
+type CustomerStatus = 'active' | 'inactive' | 'suspended';
+
+type Customer = {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  address?: string;
+  city?: string;
+  country?: string;
+  taxId?: string;
+  creditLimit: number;
+  paymentTerms?: string;
+  loyaltyPoints: number;
+  status: CustomerStatus;
+  notes?: string;
+  assignedSalesPerson?: string;
+  assignedSalesPersonName?: string;
+  lifetimeValue?: number;
+  totalOrders?: number;
+  lastOrderDate?: string | null;
+  storeId?: string;
+  createdAt?: string;
+  createdBy?: string;
+};
+
+function normalizeCustomer(docId: string, data: Record<string, unknown>): Customer {
+  return {
+    id: docId,
+    name: typeof data.name === 'string' ? data.name : '',
+    email: typeof data.email === 'string' ? data.email : '',
+    phone: typeof data.phone === 'string' ? data.phone : '',
+    address: typeof data.address === 'string' ? data.address : '',
+    city: typeof data.city === 'string' ? data.city : '',
+    country: typeof data.country === 'string' ? data.country : '',
+    taxId: typeof data.taxId === 'string' ? data.taxId : '',
+    creditLimit: Number(data.creditLimit || 0),
+    paymentTerms: typeof data.paymentTerms === 'string' ? data.paymentTerms : '',
+    loyaltyPoints: Number(data.loyaltyPoints || 0),
+    status: data.status === 'inactive' || data.status === 'suspended' ? data.status : 'active',
+    notes: typeof data.notes === 'string' ? data.notes : '',
+    assignedSalesPerson: typeof data.assignedSalesPerson === 'string' ? data.assignedSalesPerson : '',
+    assignedSalesPersonName: typeof data.assignedSalesPersonName === 'string' ? data.assignedSalesPersonName : '',
+    lifetimeValue: Number(data.lifetimeValue || 0),
+    totalOrders: Number(data.totalOrders || 0),
+    lastOrderDate: typeof data.lastOrderDate === 'string' ? data.lastOrderDate : null,
+    storeId: typeof data.storeId === 'string' ? data.storeId : '',
+    createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
+    createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
+  };
+}
 
 // CustomerForm component moved outside to prevent recreation on every render
 const CustomerForm: React.FC<{ 
@@ -189,10 +243,14 @@ const AdminCustomers: React.FC = () => {
   const { toast } = useToast();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesPersons, setSalesPersons] = useState<{ id: string; name: string }[]>([]);
+  const [customersError, setCustomersError] = useState('');
   const [isAddingCustomer, setIsAddingCustomer] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterTier, setFilterTier] = useState<string>('all');
+  const storeId = getActualStoreId(user);
+  const canManageCustomers = user?.role === 'admin' || user?.permissions?.includes('manage_customers');
+  const isCashierLookupOnly = user?.role === 'sub_account' && user?.subAccountRole === 'cashier';
   const [newCustomer, setNewCustomer] = useState({
     name: '',
     email: '',
@@ -212,23 +270,37 @@ const AdminCustomers: React.FC = () => {
 
   useEffect(() => {
     const fetchCustomers = async () => {
-      if (!user?.storeId) return;
-      const db = getFirestore();
-      const customersRef = collection(db, 'customers');
-      const q = query(customersRef, where('storeId', '==', user.storeId));
-      const snapshot = await getDocs(q);
-      const customersList: Customer[] = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data()
-      } as Customer));
-      setCustomers(customersList);
+      if (!storeId) return;
+      try {
+        setCustomersError('');
+        const db = getFirestore();
+        const customersRef = collection(db, 'customers');
+        const q = query(customersRef, where('storeId', '==', storeId));
+        const snapshot = await getDocs(q);
+        const customersList: Customer[] = snapshot.docs.map((customerDoc) =>
+          normalizeCustomer(customerDoc.id, customerDoc.data() as Record<string, unknown>),
+        );
+        setCustomers(customersList);
 
-      // Fetch salespeople from subAccounts
-      const saSnap = await getDocs(query(collection(db, 'subAccounts'), where('storeId', '==', user.storeId), where('role', '==', 'sales')));
-      setSalesPersons(saSnap.docs.map(d => ({ id: d.id, name: (d.data() as any).name || '' })));
+        const saSnap = await getDocs(
+          query(collection(db, 'subAccounts'), where('storeId', '==', storeId), where('role', '==', 'sales')),
+        );
+        setSalesPersons(saSnap.docs.map((d) => ({ id: d.id, name: String((d.data() as { name?: unknown }).name || '') })));
+      } catch (error) {
+        console.error('Failed to load customers:', error);
+        setCustomers([]);
+        setSalesPersons([]);
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        setCustomersError(message);
+        toast({
+          title: 'Failed to load customers',
+          description: message,
+          variant: 'destructive',
+        });
+      }
     };
-    fetchCustomers();
-  }, [user?.storeId]);
+    void fetchCustomers();
+  }, [storeId, toast]);
 
   const getEffectiveTierPoints = (customer: Customer): number => {
     const loyaltyPoints = Number(customer.loyaltyPoints || 0);
@@ -258,7 +330,7 @@ const AdminCustomers: React.FC = () => {
   };
 
   const handleAddCustomer = async () => {
-    if (!newCustomer.name || !user?.storeId) {
+    if (!newCustomer.name || !storeId || !user?.id) {
       toast({ title: "Error", description: "Please fill all required fields", variant: "destructive" });
       return;
     }
@@ -270,13 +342,13 @@ const AdminCustomers: React.FC = () => {
         lifetimeValue: 0,
         totalOrders: 0,
         lastOrderDate: null,
-        storeId: user.storeId,
+        storeId,
         createdAt: new Date().toISOString(),
         createdBy: user.id,
       };
 
       const docRef = await addDoc(collection(db, 'customers'), customerData);
-      const newCustomerObj = { id: docRef.id, ...customerData };
+      const newCustomerObj = normalizeCustomer(docRef.id, customerData as unknown as Record<string, unknown>);
       setCustomers([...customers, newCustomerObj]);
 
       await logAction(
@@ -287,7 +359,7 @@ const AdminCustomers: React.FC = () => {
         'customer',
         docRef.id,
         { newValue: customerData },
-        user.storeId
+        storeId
       );
 
       setNewCustomer({
@@ -315,7 +387,7 @@ const AdminCustomers: React.FC = () => {
   };
 
   const handleUpdateCustomer = async () => {
-    if (!editingCustomer || !user?.storeId) return;
+    if (!editingCustomer || !storeId || !user?.id) return;
 
     try {
       const db = getFirestore();
@@ -353,7 +425,7 @@ const AdminCustomers: React.FC = () => {
           oldValue: customers.find(c => c.id === editingCustomer.id),
           newValue: editingCustomer 
         },
-        user.storeId
+        storeId
       );
 
       setEditingCustomer(null);
@@ -366,7 +438,7 @@ const AdminCustomers: React.FC = () => {
 
   const handleDeleteCustomer = async (customer: Customer) => {
     if (!confirm(`Delete customer "${customer.name}"? This will also delete their order history.`)) return;
-    if (!user?.storeId) return;
+    if (!storeId || !user?.id) return;
 
     try {
       const db = getFirestore();
@@ -381,7 +453,7 @@ const AdminCustomers: React.FC = () => {
         'customer',
         customer.id,
         { oldValue: customer },
-        user.storeId
+        storeId
       );
 
       toast({ title: "Success", description: "Customer deleted successfully!" });
@@ -426,13 +498,14 @@ const AdminCustomers: React.FC = () => {
   return (
     <AdminPageShell
       title="Customer Management (CRM)"
+      description={isCashierLookupOnly ? 'Search and view customer profiles. Creating or editing customers requires a manager or sales account.' : undefined}
       eyebrow="Sales & Customers"
-      actions={(
+      actions={canManageCustomers ? (
         <Button onClick={() => setIsAddingCustomer(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Add Customer
         </Button>
-      )}
+      ) : undefined}
     >
       <Dialog open={isAddingCustomer} onOpenChange={setIsAddingCustomer}>
         <DialogContent className="w-[95vw] max-w-2xl max-h-[90vh] overflow-y-auto">
@@ -458,6 +531,14 @@ const AdminCustomers: React.FC = () => {
           <AdminStatCard title="Loyalty Points" value={totalLoyaltyPoints.toLocaleString()} icon={Award} gradient="from-violet-500 to-purple-700" subtitle="Total across customers" />
           <AdminStatCard title="Avg Credit Limit" value={`$${avgCreditLimit.toFixed(0)}`} icon={DollarSign} gradient="from-sky-500 to-blue-700" subtitle="Per customer average" />
         </div>
+
+        {customersError && (
+          <AdminPanel className="mb-6 border-red-200 bg-red-50">
+            <CardContent className="py-4 text-sm text-red-700">
+              Failed to load customers: {customersError}
+            </CardContent>
+          </AdminPanel>
+        )}
 
         <div className="flex gap-4 mb-6">
           <Input
@@ -515,19 +596,38 @@ const AdminCustomers: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => setEditingCustomer(customer)}
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            openAccountingWithFocus({
+                              kind: 'client',
+                              clientId: customer.id,
+                              clientName: customer.name,
+                              label: `Client · ${customer.name}`,
+                            })
+                          }
                         >
-                          <Edit2 className="h-4 w-4" />
+                          <FileText className="h-4 w-4 mr-1" />
+                          Vouchers
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          onClick={() => handleDeleteCustomer(customer)}
-                        >
-                          <Trash2 className="h-4 w-4 text-red-500" />
-                        </Button>
+                        {canManageCustomers && (
+                          <>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setEditingCustomer(customer)}
+                            >
+                              <Edit2 className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => handleDeleteCustomer(customer)}
+                            >
+                              <Trash2 className="h-4 w-4 text-red-500" />
+                            </Button>
+                          </>
+                        )}
                       </div>
                     </div>
                   </CardHeader>

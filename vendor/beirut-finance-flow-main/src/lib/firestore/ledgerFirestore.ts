@@ -4,16 +4,48 @@ import {
   getDoc,
   getDocs,
   setDoc,
+  updateDoc,
   writeBatch,
 } from 'firebase/firestore';
 import { getFinanceDb } from '@/integrations/firebase/client';
 import type { JournalEntry, JournalLine, LedgerAccount, LedgerPeriodClosure } from '@/types/generalLedger';
 import {
   buildDefaultLedgerAccounts,
+  coaModeVersion,
   ledgerAccountDocId,
 } from '@/lib/ledger/defaultChartOfAccounts';
+import { resolveStoreAccountingMode } from '@/lib/grabio/accountingMode';
 
 const nowIso = () => new Date().toISOString();
+const FIRESTORE_BATCH_LIMIT = 400;
+
+async function commitAccountSeeds(storeId: string, seeds: Omit<LedgerAccount, 'id'>[]): Promise<LedgerAccount[]> {
+  const db = getFinanceDb();
+  const accounts: LedgerAccount[] = [];
+  for (let i = 0; i < seeds.length; i += FIRESTORE_BATCH_LIMIT) {
+    const batch = writeBatch(db);
+    for (const seed of seeds.slice(i, i + FIRESTORE_BATCH_LIMIT)) {
+      const id = ledgerAccountDocId(seed.code);
+      const account: LedgerAccount = { ...seed, id };
+      accounts.push(account);
+      batch.set(doc(accountsCol(storeId), id), account);
+    }
+    await batch.commit();
+  }
+  return accounts;
+}
+
+async function mergeMissingAccountSeeds(
+  storeId: string,
+  existing: LedgerAccount[],
+  mode: Awaited<ReturnType<typeof resolveStoreAccountingMode>>,
+): Promise<LedgerAccount[]> {
+  const existingCodes = new Set(existing.map((a) => a.code));
+  const missing = buildDefaultLedgerAccounts(storeId, mode).filter((seed) => !existingCodes.has(seed.code));
+  if (missing.length === 0) return existing;
+  const created = await commitAccountSeeds(storeId, missing);
+  return [...existing, ...created];
+}
 
 function accountsCol(storeId: string) {
   return collection(getFinanceDb(), 'stores', storeId, 'ledgerAccounts');
@@ -48,49 +80,54 @@ export async function isCoaInitialized(storeId: string): Promise<boolean> {
 }
 
 export async function ensureDefaultChartOfAccounts(storeId: string): Promise<LedgerAccount[]> {
+  const mode = await resolveStoreAccountingMode(storeId);
+  const expectedVersion = coaModeVersion(mode);
+  const metaRef = doc(getFinanceDb(), 'stores', storeId, 'ledgerMeta', 'coa');
   const existing = await loadLedgerAccounts(storeId);
+
   if (existing.length > 0) {
-    const existingCodes = new Set(existing.map((a) => a.code));
-    const missing = buildDefaultLedgerAccounts(storeId).filter((seed) => !existingCodes.has(seed.code));
-    if (missing.length > 0) {
-      const batch = writeBatch(getFinanceDb());
-      for (const seed of missing) {
-        const id = ledgerAccountDocId(seed.code);
-        const account: LedgerAccount = { ...seed, id };
-        batch.set(doc(accountsCol(storeId), id), account);
-        existing.push(account);
-      }
-      await batch.commit();
-    }
+    const merged = await mergeMissingAccountSeeds(storeId, existing, mode);
     await setDoc(
-      doc(getFinanceDb(), 'stores', storeId, 'ledgerMeta', 'coa'),
-      { storeId, initialized: true, updatedAt: nowIso() },
+      metaRef,
+      {
+        storeId,
+        initialized: true,
+        coaMode: mode,
+        coaVersion: expectedVersion,
+        accountCount: merged.length,
+        updatedAt: nowIso(),
+      },
       { merge: true },
     );
-    return existing;
+    return merged;
   }
 
-  const seeds = buildDefaultLedgerAccounts(storeId);
-  const batch = writeBatch(getFinanceDb());
-  const accounts: LedgerAccount[] = [];
+  const seeds = buildDefaultLedgerAccounts(storeId, mode);
+  const accounts = await commitAccountSeeds(storeId, seeds);
 
-  for (const seed of seeds) {
-    const id = ledgerAccountDocId(seed.code);
-    const account: LedgerAccount = { ...seed, id };
-    accounts.push(account);
-    batch.set(doc(accountsCol(storeId), id), account);
-  }
-
-  batch.set(doc(getFinanceDb(), 'stores', storeId, 'ledgerMeta', 'coa'), {
+  await setDoc(metaRef, {
     storeId,
     initialized: true,
     accountCount: accounts.length,
+    coaMode: mode,
+    coaVersion: expectedVersion,
     createdAt: nowIso(),
     updatedAt: nowIso(),
   });
 
-  await batch.commit();
   return accounts;
+}
+
+export async function updateLedgerAccountNames(
+  storeId: string,
+  accountId: string,
+  patch: { name?: string; nameAr?: string },
+): Promise<void> {
+  const ref = doc(getFinanceDb(), 'stores', storeId, 'ledgerAccounts', accountId);
+  await updateDoc(ref, {
+    ...patch,
+    updatedAt: nowIso(),
+  });
 }
 
 function closuresCol(storeId: string) {

@@ -13,7 +13,6 @@ import {
   Clock, 
   User, 
   Users,
-  Palette, 
   Megaphone,
   BarChart,
   ShoppingCart,
@@ -28,14 +27,17 @@ import {
   ChevronDown,
   Settings2,
   Layers,
+  LayoutTemplate,
   Receipt,
   LayoutGrid,
+  Paintbrush,
   Wallet,
 } from 'lucide-react';
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
 import { fetchUsdToLbpRateFresh, getUsdToLbpRate, formatLbp } from '@/lib/currency';
+import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { isCountedSaleStatus } from '@/lib/salesRules';
@@ -45,7 +47,10 @@ import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { canUseInvoiceManagerApp } from '@/lib/entitlements';
 import { INVOICE_MANAGER_EMBED_URL } from '@/lib/invoiceApp';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { canAccessBusinessTools } from '@/lib/subAccountAccess';
+import { cn } from '@/lib/utils';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
+import { adminDashboardStatTileClass, adminDashboardStatTileInteractiveClass, adminDashboardSurfaceClass, adminDashboardSectionLabelClass, adminDashboardListItemClass, adminDashboardStatLabelClass, adminDashboardStatValueClass, adminDashboardHeadingClass, adminOutlineButtonClass } from '@/lib/adminStyles';
 
 type RecentEvent = {
   type: 'product' | 'order' | 'announcement';
@@ -72,6 +77,7 @@ const MAX_QUICK_ACTIONS = 12;
 const DEFAULT_QUICK_ACTION_IDS = [
   'invoice-manager',
   'customers',
+  'sales-crm',
   'orders',
   'inventory',
   'payments',
@@ -89,6 +95,7 @@ const DEFAULT_QUICK_ACTION_IDS = [
 const MOBILE_DEFAULT_QUICK_ACTION_IDS = [
   'invoice-manager',
   'customers',
+  'sales-crm',
   'orders',
   'inventory',
   'payments',
@@ -144,6 +151,7 @@ const STAT_TILES = {
 
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
+  const { money, currency: baseCurrency } = useStoreCurrency();
   const navigate = useNavigate();
   const location = useLocation();
   const [store, setStore] = useState<Record<string, unknown> | null>(null);
@@ -239,10 +247,14 @@ const AdminDashboard: React.FC = () => {
   const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
   const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
   const { canUse: canUseModule, profile } = useStoreEntitlements();
-  const crmEnabled = user?.role === 'admin' && canUseModule('crm');
-  const invoiceManagerEnabled = user?.role === 'admin' && canUseInvoiceManagerApp(profile);
+  const canUseBusinessTools = canAccessBusinessTools(user);
+  /** Phase 1 field sales — always show for store owners; ModuleGate handles entitlement on routes. */
+  const crmEnabled = user?.role === 'admin';
+  const invoiceManagerEnabled = canUseBusinessTools && canUseInvoiceManagerApp(profile);
+  const financeSuiteVisible = canUseBusinessTools && !invoiceManagerEnabled;
   const moduleVisible = (moduleId: string) =>
     !ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule(moduleId);
+  const builderVisible = user?.role === 'admin' && moduleVisible('builder');
 
   const quickActionStorageKey = useMemo(() => {
     if (!user?.id) return 'dashboardQuickActions:guest';
@@ -271,7 +283,7 @@ const AdminDashboard: React.FC = () => {
     { id: 'customers', to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
     {
       id: 'sales-crm',
-      to: '/admin/crm',
+      to: '/admin/crm/dashboard',
       label: 'Sales CRM',
       icon: LayoutGrid,
       visible: crmEnabled,
@@ -284,16 +296,16 @@ const AdminDashboard: React.FC = () => {
       icon: Receipt,
       visible: canUseModule('invoicing') || canUseModule('invoice_manager'),
     },
-    { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
-    { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
-    { id: 'delivery-wallet', to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: user?.role === 'admin' },
-    { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
-    { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
+    { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: canUseBusinessTools },
+    { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: canUseBusinessTools },
+    { id: 'delivery-wallet', to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
+    { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
+    { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },
     { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' && moduleVisible('team') },
     { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
-    { id: 'builder', to: '/admin/builder', label: 'Store Builder', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
-    { id: 'theme-editor', to: '/admin/theme-editor', label: 'Theme Editor', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
-    { id: 'templates', to: '/admin/templates', label: 'Classic Templates', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
+    { id: 'classic-template', to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
+    { id: 'theme-editor', to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: builderVisible },
+    { id: 'wordpress-builder', to: '/admin/builder', label: 'WordPress Builder', icon: Globe, visible: builderVisible },
     { id: 'marketing', to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
     { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
     { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
@@ -301,7 +313,7 @@ const AdminDashboard: React.FC = () => {
     { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' && moduleVisible('dropship') },
     { id: 'product-reviews', to: '/admin/product-reviews', label: 'Product Reviews', icon: Star, visible: user?.role === 'admin' },
     { id: 'notification-logs', to: '/admin/order-notifications', label: 'Notification Logs', icon: Bell, visible: user?.role === 'admin' },
-    { id: 'store-logs', to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: user?.role === 'admin' },
+    { id: 'store-logs', to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: canUseBusinessTools },
     { id: 'delivery', to: '/admin/delivery', label: 'Delivery', icon: Package, visible: canManageDeliveries },
     { id: 'announcements', to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
     { id: 'analytics', to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: canViewReports },
@@ -489,6 +501,7 @@ const AdminDashboard: React.FC = () => {
     daily_stock: false,
     daily_sales: false,
     setup_profile: false,
+    setup_template: false,
     setup_system: false,
   });
 
@@ -520,7 +533,7 @@ const AdminDashboard: React.FC = () => {
           { to: '/admin/orders', label: 'Orders', icon: Package, visible: true },
           { to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
           {
-            to: '/admin/crm/pipeline',
+            to: '/admin/crm/dashboard',
             label: 'Sales CRM',
             icon: LayoutGrid,
             visible: crmEnabled,
@@ -536,10 +549,7 @@ const AdminDashboard: React.FC = () => {
         title: 'Profile & Store Setup',
         items: [
           { to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
-          { to: '/admin/builder', label: 'Store Builder', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
-          { to: '/admin/theme-editor', label: 'Theme Editor', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
           { to: '/admin/payments', label: 'Payment Settings', icon: CreditCard, visible: user?.role === 'admin' && canProcessPayments },
-          { to: '/admin/templates', label: 'Classic Templates', icon: Palette, visible: user?.role === 'admin' && moduleVisible('builder') },
           { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
           { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
@@ -547,23 +557,32 @@ const AdminDashboard: React.FC = () => {
         ],
       },
       {
+        id: 'setup_template',
+        title: 'Template',
+        items: [
+          { to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
+          { to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: builderVisible },
+          { to: '/admin/builder', label: 'WordPress Builder', icon: Globe, visible: builderVisible },
+        ],
+      },
+      {
         id: 'setup_system',
         title: 'Business Tools',
         items: [
-          { to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: user?.role === 'admin' },
+          { to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
           {
             to: INVOICE_MANAGER_EMBED_URL,
             label: 'Invoice Manager',
             icon: Receipt,
             visible: invoiceManagerEnabled,
           },
-          { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: user?.role === 'admin' },
-          { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: user?.role === 'admin' },
-          { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: user?.role === 'admin' },
-          { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: user?.role === 'admin' },
+          { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: canUseBusinessTools },
+          { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: canUseBusinessTools },
+          { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
+          { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },
           { to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' },
           { to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' },
-          { to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: user?.role === 'admin' },
+          { to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: canUseBusinessTools },
         ],
       },
     ],
@@ -814,46 +833,46 @@ const AdminDashboard: React.FC = () => {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <Link to="/admin/inventory" className="h-full group">
-              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
+              <Card className={cn('h-full min-h-[120px] p-4 overflow-hidden', adminDashboardStatTileClass, adminDashboardStatTileInteractiveClass)}>
                 <CardContent className="h-full flex items-center gap-4 p-0">
                   <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.products.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.products.glow} transition-shadow`}>
                     <Package className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Products</div>
-                    <div className="text-2xl font-bold tracking-tight text-slate-900">{productCount}</div>
+                    <div className={adminDashboardStatLabelClass}>Products</div>
+                    <div className={adminDashboardStatValueClass}>{productCount}</div>
                   </div>
                 </CardContent>
               </Card>
             </Link>
 
             <Link to="/admin/orders" className="h-full group">
-              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
+              <Card className={cn('h-full min-h-[120px] p-4 overflow-hidden', adminDashboardStatTileClass, adminDashboardStatTileInteractiveClass)}>
                 <CardContent className="h-full flex items-center gap-4 p-0">
                   <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.orders.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.orders.glow} transition-shadow`}>
                     <Clock className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Orders</div>
-                    <div className="text-2xl font-bold tracking-tight text-slate-900">{orderCount}</div>
+                    <div className={adminDashboardStatLabelClass}>Orders</div>
+                    <div className={adminDashboardStatValueClass}>{orderCount}</div>
                   </div>
                 </CardContent>
               </Card>
             </Link>
 
             <Link to="/admin/revenue" className="h-full group">
-              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
+              <Card className={cn('h-full min-h-[120px] p-4 overflow-hidden', adminDashboardStatTileClass, adminDashboardStatTileInteractiveClass)}>
                 <CardContent className="h-full flex items-center gap-4 p-0">
                   <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.revenue.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.revenue.glow} transition-shadow`}>
                     <CreditCard className="h-5 w-5" />
                   </div>
                   <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Revenue</div>
-                    <div className="text-2xl font-bold tracking-tight text-slate-900">${revenue.toFixed(2)}</div>
+                    <div className={adminDashboardStatLabelClass}>Revenue</div>
+                    <div className={adminDashboardStatValueClass}>{money(revenue)}</div>
                     {quarantinedRevenueOrders > 0 && (
                       <div className="text-xs text-amber-600">Quarantined: {quarantinedRevenueOrders}</div>
                     )}
-                    {usdToLbpRate ? (
+                    {baseCurrency !== 'LBP' && (usdToLbpRate ? (
                       <div
                         className="text-xs text-slate-500 truncate"
                         title={`≈ ${formatLbp(revenue, usdToLbpRate)}`}
@@ -862,21 +881,21 @@ const AdminDashboard: React.FC = () => {
                       </div>
                     ) : (
                       <div className="text-xs text-slate-400">LBP estimate unavailable</div>
-                    )}
+                    ))}
                   </div>
                 </CardContent>
               </Card>
             </Link>
 
             <Link to="/admin/customers" className="h-full group">
-              <Card className="h-full min-h-[120px] p-4 cursor-pointer rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] hover:shadow-[0_20px_50px_-16px_rgba(15,23,42,0.18)] hover:-translate-y-0.5 transition-all duration-300 overflow-hidden ring-1 ring-slate-900/5">
+              <Card className={cn('h-full min-h-[120px] p-4 overflow-hidden', adminDashboardStatTileClass, adminDashboardStatTileInteractiveClass)}>
                 <CardContent className="h-full flex items-center gap-4 p-0">
                   <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.customers.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.customers.glow} transition-shadow`}>
                     <User className="h-5 w-5" />
                   </div>
                   <div>
-                    <div className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Customers</div>
-                    <div className="text-2xl font-bold tracking-tight text-slate-900">{customerCount}</div>
+                    <div className={adminDashboardStatLabelClass}>Customers</div>
+                    <div className={adminDashboardStatValueClass}>{customerCount}</div>
                   </div>
                 </CardContent>
               </Card>
@@ -885,16 +904,16 @@ const AdminDashboard: React.FC = () => {
 
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 items-start">
             <div className="lg:col-span-2 space-y-6">
-              <div className="rounded-2xl border border-white/80 bg-white p-4 md:p-5 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5">
+              <div className={cn('p-4 md:p-5', adminDashboardSurfaceClass)}>
                 <div className="flex items-center justify-between mb-4 gap-2 flex-wrap">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Shortcuts</p>
-                    <h3 className="text-lg font-semibold tracking-tight text-slate-900">Quick Actions</h3>
+                    <p className={adminDashboardSectionLabelClass}>Shortcuts</p>
+                    <h3 className={adminDashboardHeadingClass}>Quick Actions</h3>
                   </div>
                   <Button
                     variant="outline"
                     size="sm"
-                    className="rounded-lg border-slate-200 text-slate-700 hover:bg-slate-50"
+                    className={cn('rounded-lg', adminOutlineButtonClass)}
                     onClick={() => setShowQuickActionManager((prev) => !prev)}
                   >
                     {showQuickActionManager ? 'Done' : 'Customize'}
@@ -948,7 +967,7 @@ const AdminDashboard: React.FC = () => {
                       const Icon = item.icon;
                       const gradient = QUICK_ACTION_GRADIENTS[item.id] || DEFAULT_QUICK_GRADIENT;
                       return (
-                        <Link key={item.id} to={item.to} className="relative group flex items-center gap-3 p-3 rounded-xl bg-slate-50/80 border border-slate-200/70 hover:bg-white hover:border-slate-300/80 hover:shadow-[0_12px_32px_-10px_rgba(15,23,42,0.15)] hover:-translate-y-0.5 transition-all duration-300">
+                        <Link key={item.id} to={item.to} className={cn('relative group flex items-center gap-3 p-3', adminDashboardListItemClass, 'hover:-translate-y-0.5')}>
                           {showQuickActionManager && (
                             <button
                               type="button"
@@ -973,11 +992,11 @@ const AdminDashboard: React.FC = () => {
                 )}
               </div>
 
-              <div className="rounded-2xl border border-white/80 bg-white p-4 md:p-5 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5">
+              <div className={cn('p-4 md:p-5', adminDashboardSurfaceClass)}>
                 <div className="flex items-center justify-between mb-4">
                   <div>
-                    <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Live feed</p>
-                    <h3 className="text-lg font-semibold tracking-tight text-slate-900">Recent Activity</h3>
+                    <p className={adminDashboardSectionLabelClass}>Live feed</p>
+                    <h3 className={adminDashboardHeadingClass}>Recent Activity</h3>
                   </div>
                   <Link to="/admin/audit-logs" className="text-sm font-medium text-teal-700 hover:text-teal-800">View all</Link>
                 </div>
@@ -989,7 +1008,7 @@ const AdminDashboard: React.FC = () => {
                       const meta = ACTIVITY_META[ev.type];
                       const ActivityIcon = meta.Icon;
                       return (
-                      <li key={idx} className="p-3 rounded-xl border border-slate-100 bg-slate-50/50 hover:bg-white hover:border-slate-200 hover:shadow-sm transition-all">
+                      <li key={idx} className={cn('p-3', adminDashboardListItemClass)}>
                         <div className="flex items-center gap-3">
                           <div className={`h-9 w-9 shrink-0 rounded-xl bg-gradient-to-br ${meta.gradient} flex items-center justify-center text-white shadow-sm`}>
                             <ActivityIcon className="h-4 w-4" />
@@ -1012,43 +1031,43 @@ const AdminDashboard: React.FC = () => {
 
             <div>
               <div className="mb-3">
-                <p className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-400">Overview</p>
-                <h3 className="text-lg font-semibold tracking-tight text-slate-900">Store Summary</h3>
+                <p className={adminDashboardSectionLabelClass}>Overview</p>
+                <h3 className={adminDashboardHeadingClass}>Store Summary</h3>
               </div>
-              <Card className="rounded-2xl border-white/80 bg-white shadow-[0_8px_30px_-12px_rgba(15,23,42,0.12)] ring-1 ring-slate-900/5 overflow-hidden">
+              <Card className={cn('overflow-hidden', adminDashboardSurfaceClass)}>
               <CardContent className="pt-5 pb-2">
                 <dl className="divide-y divide-slate-100">
                     <div className="flex items-start justify-between gap-3 py-3 first:pt-0">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Store Name</dt>
+                      <dt className={adminDashboardStatLabelClass}>Store Name</dt>
                       <dd className="text-sm font-semibold text-slate-900 text-right">{storeName}</dd>
                     </div>
                     <div className="flex items-start justify-between gap-3 py-3">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Location</dt>
+                      <dt className={adminDashboardStatLabelClass}>Location</dt>
                       <dd className="text-sm text-slate-700 text-right">Lebanon</dd>
                     </div>
                     <div className="flex items-start justify-between gap-3 py-3">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Template</dt>
+                      <dt className={adminDashboardStatLabelClass}>Template</dt>
                       <dd className="text-sm text-slate-700 text-right">Vibrant</dd>
                     </div>
                     <div className="flex items-start justify-between gap-3 py-3">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Announcements</dt>
+                      <dt className={adminDashboardStatLabelClass}>Announcements</dt>
                       <dd className="text-sm text-slate-700 text-right">1 active</dd>
                     </div>
                     {user?.role === 'sub_account' && (
                     <div className="flex items-start justify-between gap-3 py-3">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Seller Plan</dt>
+                      <dt className={adminDashboardStatLabelClass}>Seller Plan</dt>
                       <dd className="text-sm text-slate-700 text-right">#4 — 12 mo free</dd>
                     </div>
                     )}
                     <div className="py-3">
-                      <dt className="text-[11px] font-semibold uppercase tracking-wider text-slate-400 mb-2">Exchange Rate (USD → LBP)</dt>
+                      <dt className={cn(adminDashboardStatLabelClass, 'mb-2')}>Exchange Rate (USD → LBP)</dt>
                       <dd>
                         {editingRate ? (
                           <div className="flex items-center gap-2">
                             <input
                               value={editRateValue}
                               onChange={e => setEditRateValue(e.target.value)}
-                              className="border border-slate-200 rounded-lg px-2 py-1.5 w-32 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-teal-500/30"
+                              className="border border-slate-200 rounded-lg px-2 py-1.5 w-32 text-sm bg-white text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/30"
                               placeholder="e.g. 15000"
                             />
                             <button

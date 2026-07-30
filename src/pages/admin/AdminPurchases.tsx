@@ -21,6 +21,9 @@ import { StoreProfile } from '@/types/storeProfile';
 import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
+import { formatMoney as fmtMoney } from '@/lib/money/format';
+import { glPostPurchaseReceived } from '@/lib/platformGl';
+import { purchaseOrderForGlReceive } from '@/lib/purchaseGlInput';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -260,16 +263,29 @@ const AdminPurchases: React.FC = () => {
 
   // Format currency with LBP conversion
 
+  // Base currency + large-number style from the store profile (multi-currency).
+  const baseCurrency = storeProfile?.mainCurrency || 'USD';
+  const numberStyle: 'full' | 'compact' = storeProfile?.numberFormat === 'compact' ? 'compact' : 'full';
+  const secondaryCurrency = storeProfile?.secondaryCurrency && storeProfile.secondaryCurrency !== baseCurrency
+    ? storeProfile.secondaryCurrency
+    : undefined;
+  const secondaryRate = typeof storeProfile?.customExchangeRate === 'number' && storeProfile.customExchangeRate > 0
+    ? storeProfile.customExchangeRate
+    : undefined;
+
+  /** Plain-text money in the store's base currency (JSX + toasts + WhatsApp). */
+  const money = (amount: unknown): string =>
+    fmtMoney(parseNumberish(amount), { currency: baseCurrency, style: numberStyle });
+
+  /** Base + optional secondary (display-only) — used in HTML receipts/PDF. */
   const formatCurrency = (amount: unknown, showDual: boolean = true): string => {
     const safeAmount = parseNumberish(amount);
-    const usd = `$${formatMoney(safeAmount)}`;
-    
-    if (showDual && storeProfile?.customExchangeRate && storeProfile.customExchangeRate > 0) {
-      const lbp = formatMoney(safeAmount * storeProfile.customExchangeRate, 0);
-      return `${usd} (${Number(lbp).toLocaleString()} LBP)`;
+    const primary = money(safeAmount);
+    if (showDual && secondaryCurrency && secondaryRate) {
+      const secondary = fmtMoney(safeAmount * secondaryRate, { currency: secondaryCurrency, style: numberStyle });
+      return `${primary} (${secondary})`;
     }
-    
-    return usd;
+    return primary;
   };
 
   const calculateTotal = (items: PurchaseItem[], taxType: string = 'none', taxRate: number = 0): number => {
@@ -1223,12 +1239,12 @@ const AdminPurchases: React.FC = () => {
   const handleSendEmail = (purchase: Purchase) => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
     const subject = `Purchase Order ${purchase.invoiceNumber || purchase.poNumber}`;
-    const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: $${resolvePurchaseTotal(purchase).toFixed(2)}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
+    const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: ${money(resolvePurchaseTotal(purchase))}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
       const product = simpleProducts.find(p => p.id === item.productId);
       const itemName = material?.name || product?.name || item.materialName || 'Item';
       const itemUnit = material?.unit || item.unit || 'unit';
-      return `- ${itemName}: ${item.quantity} ${itemUnit} @ $${item.unitPrice}`;
+      return `- ${itemName}: ${item.quantity} ${itemUnit} @ ${money(item.unitPrice)}`;
     }).join('\n')}\n\nBest regards,\n${storeProfile?.name || 'Your Store'}`;
     
     const mailtoLink = `mailto:${supplier?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
@@ -1237,13 +1253,13 @@ const AdminPurchases: React.FC = () => {
 
   const handleSendWhatsApp = (purchase: Purchase) => {
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
-    const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: $${formatMoney(resolvePurchaseTotal(purchase))}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${(purchase.items ?? []).map(item => {
+    const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: ${money(resolvePurchaseTotal(purchase))}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${(purchase.items ?? []).map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
       const product = simpleProducts.find(p => p.id === item.productId);
       const itemName = material?.name || product?.name || item.materialName || 'Item';
       const itemUnit = material?.unit || item.unit || 'unit';
       const unitPrice = resolveItemUnitPrice(item);
-      return `• ${itemName}: ${item.quantity} ${itemUnit} @ $${formatMoney(unitPrice)} = $${formatMoney(resolveItemLineTotal(item))}`;
+      return `• ${itemName}: ${item.quantity} ${itemUnit} @ ${money(unitPrice)} = ${money(resolveItemLineTotal(item))}`;
     }).join('\n')}\n\nThank you!\n${storeProfile?.name || 'Your Store'}`;
     
     const whatsappUrl = `https://wa.me/${supplier?.phone?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
@@ -1491,9 +1507,6 @@ const AdminPurchases: React.FC = () => {
         updatedAt: new Date().toISOString(),
       });
 
-      // Mark operation as succeeded immediately after status update
-      operationSucceeded = true;
-
       const purchaseWithTax = receivingPurchase as Purchase & {
         taxType?: 'none' | 'VAT' | 'TTC';
         taxRate?: number;
@@ -1677,6 +1690,14 @@ const AdminPurchases: React.FC = () => {
       } as Purchase));
       setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
 
+      const glPurchase = purchaseOrderForGlReceive({
+        ...receivingPurchase,
+        receivedDate: new Date().toISOString(),
+        status: 'received',
+      });
+      await glPostPurchaseReceived(user.storeId, glPurchase);
+      operationSucceeded = true;
+
       // Audit log (don't block dialog close if this fails)
       try {
         await logAction(
@@ -1751,25 +1772,25 @@ const AdminPurchases: React.FC = () => {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
             <div>
               <p style="margin: 0; color: #666; font-size: 12px;">Purchase Total</p>
-              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${formatMoney(resolvePurchaseTotal(purchase))}</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">${money(resolvePurchaseTotal(purchase))}</p>
             </div>
             <div style="text-align: right;">
               <p style="margin: 0; color: #666; font-size: 12px;">Previous Payments</p>
-              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${formatMoney(parseNumberish(purchase.amountPaid) - parseNumberish(payment.amount))}</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">${money(parseNumberish(purchase.amountPaid) - parseNumberish(payment.amount))}</p>
             </div>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; text-align: center;">
             <p style="margin: 0; color: #666; font-size: 14px;">PAYMENT AMOUNT</p>
-            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #10b981;">$${formatMoney(payment.amount)}</p>
+            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: #10b981;">${money(payment.amount)}</p>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; margin-top: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 16px; font-weight: 600;">Total Paid:</span>
-              <span style="font-size: 18px; font-weight: bold;">$${formatMoney(purchase.amountPaid)}</span>
+              <span style="font-size: 18px; font-weight: bold;">${money(purchase.amountPaid)}</span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
               <span style="font-size: 16px; font-weight: 600;">Balance Due:</span>
-              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">$${formatMoney(resolvePurchaseTotal(purchase) - parseNumberish(purchase.amountPaid))}</span>
+              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">${money(resolvePurchaseTotal(purchase) - parseNumberish(purchase.amountPaid))}</span>
             </div>
           </div>
         </div>
@@ -1836,7 +1857,7 @@ const AdminPurchases: React.FC = () => {
       try {
         await navigator.share({
           title: `Payment Voucher ${payment.id}`,
-          text: `Payment of $${payment.amount.toFixed(2)} recorded for PO ${purchase.invoiceNumber || purchase.purchaseOrderNumber}`,
+          text: `Payment of ${money(payment.amount)} recorded for PO ${purchase.invoiceNumber || purchase.purchaseOrderNumber}`,
         });
       } catch (error) {
         console.error('Error sharing:', error);
@@ -1938,8 +1959,8 @@ const AdminPurchases: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <AdminStatCard title="Purchase Orders" value={purchaseStats.total} icon={ShoppingCart} gradient="from-teal-500 to-teal-700" subtitle="All POs on record" />
         <AdminStatCard title="Open POs" value={purchaseStats.openOrders} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Pending or confirmed" />
-        <AdminStatCard title="Total PO Value" value={`$${purchaseStats.totalValue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Sum of all orders" />
-        <AdminStatCard title="Amount Due" value={`$${purchaseStats.amountDue.toFixed(2)}`} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 ? 'text-orange-600' : undefined} />
+        <AdminStatCard title="Total PO Value" value={money(purchaseStats.totalValue)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Sum of all orders" />
+        <AdminStatCard title="Amount Due" value={money(purchaseStats.amountDue)} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 ? 'text-orange-600' : undefined} />
       </div>
 
       <Dialog open={isAddingPurchase} onOpenChange={setIsAddingPurchase}>
@@ -2143,7 +2164,7 @@ const AdminPurchases: React.FC = () => {
                         </div>
                         <div className="col-span-2">
                           <Label className="text-xs">Total</Label>
-                          <p className="text-sm font-medium">${formatMoney(lineTotal)}</p>
+                          <p className="text-sm font-medium">{money(lineTotal)}</p>
                         </div>
                         <div className="col-span-1">
                           <Button
@@ -2163,17 +2184,17 @@ const AdminPurchases: React.FC = () => {
                     <div className="mt-2 p-3 bg-gray-100 rounded space-y-2">
                       <div className="flex justify-between">
                         <span>Subtotal:</span>
-                        <span>${newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0).toFixed(2)}</span>
+                        <span>{money(newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}</span>
                       </div>
                       {newPurchase.taxType !== 'none' && (
                         <div className="flex justify-between">
                           <span>Tax ({newPurchase.taxRate}%):</span>
-                          <span>${(newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (newPurchase.taxRate / 100)).toFixed(2)}</span>
+                          <span>{money(newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (newPurchase.taxRate / 100))}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-lg font-bold border-t pt-2">
                         <span>Total Amount:</span>
-                        <span>${calculateTotal(newPurchase.items, newPurchase.taxType, newPurchase.taxRate).toFixed(2)}</span>
+                        <span>{money(calculateTotal(newPurchase.items, newPurchase.taxType, newPurchase.taxRate))}</span>
                       </div>
                     </div>
                   )}
@@ -2361,19 +2382,19 @@ const AdminPurchases: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-sm text-gray-500">Total Amount</p>
-                        <p className="font-bold text-lg">${formatMoney(resolvePurchaseTotal(purchase))}</p>
+                        <p className="font-bold text-lg">{money(resolvePurchaseTotal(purchase))}</p>
                       </div>
                       {purchase.status === 'received' && (
                         <div>
                           <p className="text-sm text-gray-500">Amount Paid</p>
-                          <p className="font-bold text-lg text-green-600">${formatMoney(purchase.amountPaid)}</p>
+                          <p className="font-bold text-lg text-green-600">{money(purchase.amountPaid)}</p>
                         </div>
                       )}
                       {purchase.status === 'received' && purchase.paymentStatus !== 'paid' && (
                         <div>
                           <p className="text-sm text-gray-500">Amount Due</p>
                           <p className="font-bold text-lg text-red-600">
-                            ${formatMoney(resolvePurchaseTotal(purchase) - parseNumberish(purchase.amountPaid))}
+                            {money(resolvePurchaseTotal(purchase) - parseNumberish(purchase.amountPaid))}
                           </p>
                         </div>
                       )}
@@ -2412,10 +2433,10 @@ const AdminPurchases: React.FC = () => {
                           return (
                             <div key={idx} className="text-sm flex justify-between">
                               <span>
-                                {itemName}: {item.quantity} {itemUnit} @ ${formatMoney(unitPrice)}
+                                {itemName}: {item.quantity} {itemUnit} @ {money(unitPrice)}
                                 {parseNumberish(item.receivedQuantity) > 0 && ` (Received: ${item.receivedQuantity})`}
                               </span>
-                              <span className="font-medium">${formatMoney(resolveItemLineTotal(item))}</span>
+                              <span className="font-medium">{money(resolveItemLineTotal(item))}</span>
                             </div>
                           );
                         })}
@@ -2433,7 +2454,7 @@ const AdminPurchases: React.FC = () => {
                           {purchase.paymentHistory.map((payment, idx) => (
                             <div key={idx} className="flex items-center justify-between p-2 bg-green-50 rounded border border-green-200">
                               <div className="flex-1">
-                                <p className="text-sm font-medium">${formatMoney(payment.amount)} - {payment.method}</p>
+                                <p className="text-sm font-medium">{money(payment.amount)} - {payment.method}</p>
                                 <p className="text-xs text-gray-600">
                                   {new Date(payment.date).toLocaleDateString()} by {payment.recordedBy}
                                 </p>

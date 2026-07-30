@@ -19,6 +19,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { getSubAccountHomePath, isManagerSubAccount } from '@/lib/subAccountAccess';
 
 // Helper function to determine if a color is light or dark
 const isColorLight = (color: string): boolean => {
@@ -51,6 +52,8 @@ interface HeaderProps {
   subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium';
   hasCustomDomain?: boolean;
   hasImportedDesign?: boolean;
+  /** Light frosted bar for marketplace / browse pages */
+  variant?: 'brand' | 'light';
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -61,7 +64,8 @@ const Header: React.FC<HeaderProps> = ({
   primaryColor,
   subscriptionTier,
   hasCustomDomain = false,
-  hasImportedDesign = false
+  hasImportedDesign = false,
+  variant = 'brand',
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, logout } = useAuth();
@@ -77,17 +81,20 @@ const Header: React.FC<HeaderProps> = ({
   // White-label conditions: Pro/Business/Enterprise OR Custom Domain OR Imported Design
   const isPaidTier = ['pro', 'business', 'premium'].includes(subscriptionTier || '');
   const useWhiteLabel = isPaidTier || hasCustomDomain || hasImportedDesign;
+  const isLightVariant = variant === 'light';
   
   // Use store color or default Grabio green
-  const headerBgColor = useWhiteLabel && primaryColor 
-    ? primaryColor 
-    : 'rgb(56, 178, 172)'; // Grabio brand color #38B2AC
+  const headerBgColor = isLightVariant
+    ? undefined
+    : useWhiteLabel && primaryColor 
+      ? primaryColor 
+      : 'rgb(56, 178, 172)'; // Grabio brand color #38B2AC
   
   // Determine text color based on background
-  const isLightBg = primaryColor ? isColorLight(primaryColor) : false;
-  const textColor = isLightBg ? 'text-gray-900' : 'text-white';
-  const hoverColor = isLightBg ? 'hover:text-gray-700' : 'hover:text-white/80';
-  const iconBg = isLightBg ? 'text-gray-600 hover:bg-gray-100' : 'text-white hover:bg-white/10';
+  const isLightBg = isLightVariant || (primaryColor ? isColorLight(primaryColor) : false);
+  const textColor = isLightBg ? 'text-neutral-900' : 'text-white';
+  const hoverColor = isLightBg ? 'hover:text-neutral-600' : 'hover:text-white/80';
+  const iconBg = isLightBg ? 'text-neutral-600 hover:bg-neutral-100' : 'text-white hover:bg-white/10';
   const logoContainerClass = logoPosition === 'center'
     ? 'flex-col items-center text-center'
     : logoPosition === 'right'
@@ -95,7 +102,14 @@ const Header: React.FC<HeaderProps> = ({
       : 'flex-row';
 
   return (
-    <header className="shadow-sm sticky top-0 z-50" style={{ backgroundColor: headerBgColor }}>
+    <header
+      className={
+        isLightVariant
+          ? 'sticky top-0 z-50 border-b border-black/[0.06] bg-white/85 backdrop-blur-xl shadow-none'
+          : 'shadow-sm sticky top-0 z-50'
+      }
+      style={headerBgColor ? { backgroundColor: headerBgColor } : undefined}
+    >
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
@@ -103,15 +117,15 @@ const Header: React.FC<HeaderProps> = ({
             {useWhiteLabel && storeLogo && (
               <img src={storeLogo} alt={storeName} className="h-8 w-8 object-cover rounded" />
             )}
-            <span className={`text-xl font-bold ${textColor}`}>
-              {useWhiteLabel && storeName ? storeName : 'Home'}
+            <span className={`text-xl font-bold ${isLightVariant && !useWhiteLabel ? 'text-teal-600' : textColor}`}>
+              {useWhiteLabel && storeName ? storeName : isLightVariant ? 'Grabio' : 'Home'}
             </span>
           </Link>
 
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             {user && (user.role === 'admin' || user.role === 'sub_account') && !useWhiteLabel && (
-              <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className={`${textColor} ${hoverColor}`}>
+              <Link to={user.role === 'admin' || isManagerSubAccount(user) ? '/admin/dashboard' : '/team/dashboard'} className={`${textColor} ${hoverColor}`}>
                 Dashboard
               </Link>
             )}
@@ -186,7 +200,7 @@ const Header: React.FC<HeaderProps> = ({
                     
                     {(user.role === 'admin' || user.role === 'sub_account') ? (
                       <DropdownMenuItem asChild>
-                        <Link to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'} className="flex cursor-pointer items-center">
+                        <Link to={user.role === 'admin' || isManagerSubAccount(user) ? '/admin/dashboard' : '/team/dashboard'} className="flex cursor-pointer items-center">
                           <Store className="mr-2 h-4 w-4" />
                           <span>Manage Store</span>
                         </Link>
@@ -270,7 +284,7 @@ const Header: React.FC<HeaderProps> = ({
               
               {user && (user.role === 'admin' || user.role === 'sub_account') && (
                 <Link
-                  to={user.role === 'admin' ? '/admin/dashboard' : '/team/dashboard'}
+                  to={user.role === 'admin' || isManagerSubAccount(user) ? '/admin/dashboard' : '/team/dashboard'}
                   className={`px-2 py-1 ${textColor} ${hoverColor}`}
                   onClick={toggleMenu}
                 >

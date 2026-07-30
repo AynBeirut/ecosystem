@@ -1,19 +1,6 @@
-import { isPlayStoreV1Shell } from '@/lib/playStoreNavScope';
-
-/** Redirect on mobile / dev / TWA only. Desktop uses popup (works on grabio.space). */
+/** Full-page redirect — avoids COOP / popup console errors on Firebase Hosting. */
 export function shouldUseGoogleRedirect(): boolean {
-  if (typeof window === 'undefined') return false;
-  if (import.meta.env.DEV) return true;
-
-  const host = window.location.hostname;
-  if (host === 'localhost' || host === '127.0.0.1') return true;
-
-  if (isPlayStoreV1Shell()) return true;
-
-  const ua = navigator.userAgent || '';
-  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
-
-  return false;
+  return typeof window !== 'undefined';
 }
 
 export const GOOGLE_AUTH_PENDING_KEY = 'grabio_invoice_google_auth_pending';

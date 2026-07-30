@@ -1,4 +1,6 @@
 
+import { SUPPORTED_CURRENCIES } from "@/lib/money/currencies";
+
 export const TEST_USER = {
   id: "test-user-1",
   email: "test@example.com",
@@ -78,8 +80,4 @@ export const CATEGORIES = [
   "Miscellaneous"
 ];
 
-export const CURRENCIES = [
-  { code: "USD", symbol: "$", name: "US Dollar" },
-  { code: "LBP", symbol: "L£", name: "Lebanese Pound" },
-  { code: "EUR", symbol: "€", name: "Euro" }
-];
+export const CURRENCIES = SUPPORTED_CURRENCIES;

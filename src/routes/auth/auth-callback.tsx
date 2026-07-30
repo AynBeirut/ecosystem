@@ -1,6 +1,7 @@
 
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { getSubAccountHomePath } from "@/lib/subAccountAccess";
 import { useAuth } from "@/context/useAuth";
 
 export default function AuthCallback() {
@@ -16,7 +17,7 @@ export default function AuthCallback() {
       } else if (user.role === 'crm_rep') {
         navigate('/team/crm', { replace: true });
       } else if (user.role === 'sub_account') {
-        navigate('/team/dashboard', { replace: true });
+        navigate(getSubAccountHomePath(user), { replace: true });
       } else {
         navigate('/search', { replace: true });
       }

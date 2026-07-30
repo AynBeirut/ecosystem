@@ -18,6 +18,24 @@ interface Statement {
   storeId: string;
 }
 
+type TimestampLike = {
+  toDate?: () => Date;
+};
+
+const parseStatementDate = (value: unknown): Date | null => {
+  if (!value) return null;
+  if (typeof value === 'object' && value !== null && typeof (value as TimestampLike).toDate === 'function') {
+    return (value as TimestampLike).toDate!();
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const parsed = new Date(value);
+    if (!Number.isNaN(parsed.getTime())) return parsed;
+  }
+  return null;
+};
+
+const getStatementTime = (value: unknown): number => parseStatementDate(value)?.getTime() ?? 0;
+
 export default function AccountStatementScreen() {
   const { user } = useAuth();
   const [entries, setEntries] = useState<Statement[]>([]);
@@ -43,22 +61,20 @@ export default function AccountStatementScreen() {
     // Load all 4 sources and merge client-side
     const loads = [
       firestore().collection('accountStatements').where('storeId', '==', sid).get(),
-      firestore().collection('expenses').where('storeId', '==', sid).get(),
+      firestore().collection('stores').doc(sid).collection('financeExpenses').get(),
       firestore().collection('purchases').where('storeId', '==', sid).get(),
       firestore().collection('orders').where('storeId', '==', sid).get(),
     ];
 
-    let unsubStatements: (() => void) | undefined;
-
     // Use real-time listener for accountStatements so new entries appear instantly
-    unsubStatements = firestore()
+    const unsubStatements = firestore()
       .collection('accountStatements')
       .where('storeId', '==', sid)
       .onSnapshot(() => {
         Promise.all(loads.map((_, i) => {
           const queries = [
             firestore().collection('accountStatements').where('storeId', '==', sid).get(),
-            firestore().collection('expenses').where('storeId', '==', sid).get(),
+            firestore().collection('stores').doc(sid).collection('financeExpenses').get(),
             firestore().collection('purchases').where('storeId', '==', sid).get(),
             firestore().collection('orders').where('storeId', '==', sid).get(),
           ];
@@ -78,10 +94,10 @@ export default function AccountStatementScreen() {
               id: `exp_${d.id}`,
               storeId: sid,
               type: 'expense',
-              description: `${data.category || 'Expense'}${data.description ? ': ' + data.description : ''}`,
+              description: `${data.category || 'Expense'}${data.description ? ': ' + data.description : data.name ? ': ' + data.name : ''}`,
               amount: data.amount || 0,
               direction: 'out',
-              createdAt: data.createdAt,
+              createdAt: data.createdAt || data.expenseDate || data.startDate || data.date,
             });
           });
 
@@ -117,8 +133,8 @@ export default function AccountStatementScreen() {
           });
 
           merged.sort((a, b) => {
-            const da = (a.createdAt as any)?.toDate?.()?.getTime() ?? 0;
-            const db2 = (b.createdAt as any)?.toDate?.()?.getTime() ?? 0;
+            const da = getStatementTime(a.createdAt ?? a.date);
+            const db2 = getStatementTime(b.createdAt ?? b.date);
             return db2 - da;
           });
 
@@ -287,7 +303,7 @@ export default function AccountStatementScreen() {
           <Text style={styles.empty}>{activeFilter === 'in' ? 'No sales yet.' : activeFilter === 'out' ? 'No expenses or purchases yet.' : 'No account entries yet.'}</Text>
         ) : (
           filteredEntries.map((e) => {
-            const date = e.createdAt?.toDate?.() || e.date?.toDate?.();
+            const date = parseStatementDate(e.createdAt) || parseStatementDate(e.date);
             return (
               <View key={e.id} style={styles.card}>
                 <View style={styles.cardRow}>

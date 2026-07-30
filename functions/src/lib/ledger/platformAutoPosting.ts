@@ -1,20 +1,51 @@
+import * as admin from 'firebase-admin';
 import { GL_ACCOUNT_CODES } from './defaultChartOfAccounts';
 import { hasMaterialVariance, productionVarianceCost } from './productionWipCore';
 import {
+  buildCogsInventoryReliefLines,
+  buildCogsInventoryReversalLines,
+  parseCogsReliefSplit,
+} from './cogsInventoryRelief';
+import {
   accountByCode,
   accountsMap,
+  buildSourceKey,
+  getPostedAccountNetDebitBalance,
+  loadJournalLinesForEntry,
   postJournalEntry,
   type JournalLineInput,
   type LedgerAccount,
   type PostJournalResult,
 } from './postingService';
+import {
+  INPUT_VAT_CODE,
+  resolvePurchaseReceiveSplit,
+  type PurchaseReceiveInput,
+} from './purchaseReceiveAmounts';
+
+function getDb() {
+  return admin.firestore();
+}
 
 const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
+
+const EXPENSE_GL_MAP: Record<string, string> = {
+  rent: GL_ACCOUNT_CODES.RENT,
+  utilities: GL_ACCOUNT_CODES.UTILITIES,
+  payroll: GL_ACCOUNT_CODES.PAYROLL,
+  marketing: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
+  insurance: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
+  other: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
+};
 
 function cashOrBank(method?: string): string {
   const m = (method || '').toLowerCase();
   if (m === 'bank' || m === 'card' || m === 'stripe' || m === 'square') return GL_ACCOUNT_CODES.BANK;
   return GL_ACCOUNT_CODES.CASH;
+}
+
+function expenseAccountCode(category?: string): string {
+  return EXPENSE_GL_MAP[(category || '').toLowerCase()] || GL_ACCOUNT_CODES.GENERAL_EXPENSE;
 }
 
 export type OrderCogsLine = {
@@ -28,11 +59,46 @@ export type PlatformOrderInput = {
   storeId: string;
   date: string;
   total: number;
+  taxAmount?: number;
   paymentMethod?: string;
   invoiceNumber?: string;
   cogsLines: OrderCogsLine[];
   isCashSale?: boolean;
   isCodDelivery?: boolean;
+};
+
+function normalizeOrderTax(total: number, taxAmount?: number): number {
+  const gross = round2(total);
+  if (gross <= 0) return 0;
+  const tax = round2(Number(taxAmount) || 0);
+  if (tax <= 0) return 0;
+  return Math.min(gross, tax);
+}
+
+export type PlatformPurchaseItem = {
+  quantity?: number;
+  unitCost?: number;
+  unitPrice?: number;
+  rawPrice?: number;
+  subtotal?: number;
+};
+
+export type PlatformPurchaseInput = PurchaseReceiveInput & {
+  id: string;
+  date: string;
+  supplierName?: string;
+  totalAmount?: number;
+  status?: string;
+  items?: PlatformPurchaseItem[];
+};
+
+export type PlatformExpenseInput = {
+  id: string;
+  date: string;
+  category?: string;
+  description?: string;
+  amount: number;
+  paymentMethod?: string;
 };
 
 export function isPlatformOrderCashSale(paymentMethod?: string): boolean {
@@ -53,12 +119,18 @@ export async function autoPostOrderSaleRecognized(
   accounts: LedgerAccount[],
   createdBy?: string,
 ): Promise<PostJournalResult | null> {
-  const revenueAmount = round2(order.total);
-  if (revenueAmount <= 0) return null;
+  const grossAmount = round2(order.total);
+  if (grossAmount <= 0) return null;
+  const taxAmount = normalizeOrderTax(grossAmount, order.taxAmount);
+  const revenueAmount = round2(grossAmount - taxAmount);
 
   const revenue = accountByCode(accounts, GL_ACCOUNT_CODES.REVENUE);
+  const taxPayable = taxAmount > 0
+    ? accountByCode(accounts, GL_ACCOUNT_CODES.TAX_PAYABLE)
+    : null;
   const cogsAcct = accountByCode(accounts, GL_ACCOUNT_CODES.COGS);
   const fgInv = accountByCode(accounts, GL_ACCOUNT_CODES.FG_INVENTORY);
+  const rawInv = accountByCode(accounts, GL_ACCOUNT_CODES.INVENTORY);
   const isCod = order.isCodDelivery === true;
   const cashSale = !isCod && order.isCashSale !== false && isPlatformOrderCashSale(order.paymentMethod);
   const debitAcct = isCod
@@ -67,15 +139,26 @@ export async function autoPostOrderSaleRecognized(
       ? accountByCode(accounts, cashOrBank(order.paymentMethod))
       : accountByCode(accounts, GL_ACCOUNT_CODES.AR);
 
-  const lines: JournalLineInput[] = [
-    { accountId: debitAcct.id, debit: revenueAmount, credit: 0, description: 'Order sale' },
-    { accountId: revenue.id, debit: 0, credit: revenueAmount, description: 'Sales revenue' },
-  ];
+  const lines: JournalLineInput[] = [{ accountId: debitAcct.id, debit: grossAmount, credit: 0, description: 'Order sale' }];
+  if (revenueAmount > 0) {
+    lines.push({ accountId: revenue.id, debit: 0, credit: revenueAmount, description: 'Sales revenue' });
+  }
+  if (taxPayable && taxAmount > 0) {
+    lines.push({ accountId: taxPayable.id, debit: 0, credit: taxAmount, description: 'Sales tax payable' });
+  }
 
   const totalCogs = computeCogs(order.cogsLines);
   if (totalCogs > 0) {
-    lines.push({ accountId: cogsAcct.id, debit: totalCogs, credit: 0, description: 'COGS' });
-    lines.push({ accountId: fgInv.id, debit: 0, credit: totalCogs, description: 'FG inventory relief' });
+    const fgBalance = await getPostedAccountNetDebitBalance(storeId, fgInv);
+    lines.push(
+      ...buildCogsInventoryReliefLines(
+        totalCogs,
+        cogsAcct.id,
+        fgInv.id,
+        rawInv.id,
+        fgBalance,
+      ),
+    );
   }
 
   return postJournalEntry(
@@ -86,6 +169,7 @@ export async function autoPostOrderSaleRecognized(
       sourceType: 'order',
       sourceId: order.id,
       event: 'sale-recognized',
+      voucherType: 'RV',
       createdBy,
       lines,
     },
@@ -103,10 +187,16 @@ export async function autoPostOrderSaleReversal(
 ): Promise<PostJournalResult | null> {
   const total = round2(order.total);
   if (total <= 0) return null;
+  const taxAmount = normalizeOrderTax(total, order.taxAmount);
+  const revenueAmount = round2(total - taxAmount);
 
   const revenue = accountByCode(accounts, GL_ACCOUNT_CODES.REVENUE);
+  const taxPayable = taxAmount > 0
+    ? accountByCode(accounts, GL_ACCOUNT_CODES.TAX_PAYABLE)
+    : null;
   const cogsAcct = accountByCode(accounts, GL_ACCOUNT_CODES.COGS);
   const fgInv = accountByCode(accounts, GL_ACCOUNT_CODES.FG_INVENTORY);
+  const rawInv = accountByCode(accounts, GL_ACCOUNT_CODES.INVENTORY);
   const isCod = order.isCodDelivery === true;
   const cashSale = !isCod && order.isCashSale !== false && isPlatformOrderCashSale(order.paymentMethod);
   const debitAcct = isCod
@@ -115,15 +205,33 @@ export async function autoPostOrderSaleReversal(
       ? accountByCode(accounts, cashOrBank(order.paymentMethod))
       : accountByCode(accounts, GL_ACCOUNT_CODES.AR);
 
-  const lines: JournalLineInput[] = [
-    { accountId: revenue.id, debit: total, credit: 0, description: 'Reverse order revenue' },
-    { accountId: debitAcct.id, debit: 0, credit: total, description: 'Reverse cash/AR' },
-  ];
+  const lines: JournalLineInput[] = [];
+  if (revenueAmount > 0) {
+    lines.push({ accountId: revenue.id, debit: revenueAmount, credit: 0, description: 'Reverse order revenue' });
+  }
+  if (taxPayable && taxAmount > 0) {
+    lines.push({ accountId: taxPayable.id, debit: taxAmount, credit: 0, description: 'Reverse sales tax payable' });
+  }
+  lines.push({ accountId: debitAcct.id, debit: 0, credit: total, description: 'Reverse cash/AR' });
 
   const totalCogs = computeCogs(order.cogsLines);
   if (totalCogs > 0) {
-    lines.push({ accountId: fgInv.id, debit: totalCogs, credit: 0, description: 'Restore FG inventory' });
-    lines.push({ accountId: cogsAcct.id, debit: 0, credit: totalCogs, description: 'Reverse COGS' });
+    const saleKey = buildSourceKey('order', order.id, 'sale-recognized');
+    const saleEntrySnap = await getDb()
+      .collection('stores')
+      .doc(storeId)
+      .collection('journalEntries')
+      .where('sourceKey', '==', saleKey)
+      .limit(1)
+      .get();
+    let split = { fgRelief: totalCogs, rawRelief: 0 };
+    if (!saleEntrySnap.empty) {
+      const saleLines = await loadJournalLinesForEntry(storeId, saleEntrySnap.docs[0].id);
+      split = parseCogsReliefSplit(saleLines, fgInv.id, rawInv.id, totalCogs);
+    }
+    lines.push(
+      ...buildCogsInventoryReversalLines(totalCogs, cogsAcct.id, fgInv.id, rawInv.id, split),
+    );
   }
 
   return postJournalEntry(
@@ -136,6 +244,123 @@ export async function autoPostOrderSaleReversal(
       event: `reversal-${reversalId}`,
       createdBy,
       lines,
+    },
+    accountsMap(accounts),
+  );
+}
+
+function accountByCodeForPosting(accounts: LedgerAccount[], code: string): LedgerAccount | null {
+  return accounts.find((a) => a.code === code) ?? null;
+}
+
+async function ensureAccountActive(
+  storeId: string,
+  accounts: LedgerAccount[],
+  code: string,
+): Promise<LedgerAccount | null> {
+  const acct = accounts.find((a) => a.code === code);
+  if (!acct) return null;
+  if (acct.isActive !== false) return acct;
+  const now = new Date().toISOString();
+  await getDb()
+    .collection('stores')
+    .doc(storeId)
+    .collection('ledgerAccounts')
+    .doc(acct.id)
+    .update({ isActive: true, updatedAt: now });
+  return { ...acct, isActive: true };
+}
+
+export async function autoPostPurchaseReceived(
+  storeId: string,
+  purchase: PlatformPurchaseInput,
+  accounts: LedgerAccount[],
+  createdBy?: string,
+): Promise<PostJournalResult | null> {
+  const status = (purchase.status || 'received').toLowerCase();
+  if (!['received', 'fulfilled', 'approved', 'paid'].includes(status)) return null;
+
+  const split = resolvePurchaseReceiveSplit(purchase);
+  if (!split || split.apCredit <= 0) return null;
+
+  const inventory = accountByCode(accounts, GL_ACCOUNT_CODES.INVENTORY);
+  const ap = accountByCode(accounts, GL_ACCOUNT_CODES.AP);
+  let inputVatAcct: LedgerAccount | null = null;
+  if (split.inputVatDebit > 0) {
+    inputVatAcct = await ensureAccountActive(storeId, accounts, INPUT_VAT_CODE);
+    if (inputVatAcct) {
+      const idx = accounts.findIndex((a) => a.id === inputVatAcct!.id);
+      if (idx >= 0) accounts[idx] = inputVatAcct;
+    }
+  } else {
+    inputVatAcct = accountByCodeForPosting(accounts, INPUT_VAT_CODE);
+  }
+
+  const lines: JournalLineInput[] = [
+    {
+      accountId: inventory.id,
+      debit: split.inventoryDebit,
+      credit: 0,
+      description: 'Inventory received (net)',
+    },
+  ];
+  if (split.inputVatDebit > 0 && inputVatAcct) {
+    lines.push({
+      accountId: inputVatAcct.id,
+      debit: split.inputVatDebit,
+      credit: 0,
+      description: 'Input VAT on purchase',
+    });
+  } else if (split.inputVatDebit > 0) {
+    lines[0].debit = round2(lines[0].debit + split.inputVatDebit);
+  }
+  lines.push({
+    accountId: ap.id,
+    debit: 0,
+    credit: split.apCredit,
+    description: 'Accounts payable (TTC)',
+  });
+
+  return postJournalEntry(
+    {
+      storeId,
+      date: purchase.date,
+      memo: `Purchase ${purchase.id} — ${purchase.supplierName || ''}`.trim(),
+      sourceType: 'purchase',
+      sourceId: purchase.id,
+      event: 'received',
+      createdBy,
+      lines,
+    },
+    accountsMap(accounts),
+  );
+}
+
+export async function autoPostExpensePaid(
+  storeId: string,
+  expense: PlatformExpenseInput,
+  accounts: LedgerAccount[],
+  createdBy?: string,
+): Promise<PostJournalResult | null> {
+  const amount = round2(expense.amount);
+  if (amount <= 0) return null;
+
+  const expenseAcct = accountByCode(accounts, expenseAccountCode(expense.category));
+  const cashAcct = accountByCode(accounts, cashOrBank(expense.paymentMethod));
+
+  return postJournalEntry(
+    {
+      storeId,
+      date: expense.date,
+      memo: `Expense ${expense.id} — ${expense.description || expense.category || ''}`.trim(),
+      sourceType: 'expense',
+      sourceId: expense.id,
+      event: 'paid',
+      createdBy,
+      lines: [
+        { accountId: expenseAcct.id, debit: amount, credit: 0, description: 'Expense paid' },
+        { accountId: cashAcct.id, debit: 0, credit: amount, description: 'Cash/bank payment' },
+      ],
     },
     accountsMap(accounts),
   );

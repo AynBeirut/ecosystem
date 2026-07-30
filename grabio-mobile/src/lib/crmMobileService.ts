@@ -7,12 +7,19 @@ export type CrmClient = {
   name?: string;
   phone?: string;
   email?: string;
+  customerCode?: string;
+  customerType?: string;
+  district?: string;
+  area?: string;
+  location?: { lat: number; lng: number; accuracy?: number };
+  lastVisitDate?: string;
   pipelineStage?: string;
   assignedRepId?: string;
   nextFollowUpAt?: string;
   dealValue?: number;
   lastActivityAt?: string;
   crmEnabled?: boolean;
+  status?: string;
 };
 
 export async function fetchAssignedClients(storeId: string, repId: string): Promise<CrmClient[]> {
@@ -48,9 +55,14 @@ export async function logActivity(input: {
   notes: string;
   followUpAt: string | null;
   location: { lat: number; lng: number; accuracy?: number } | null;
+  timeIn?: string;
+  timeOut?: string | null;
+  visitCompleted?: boolean;
+  orderTaken?: boolean;
   createdBy: string;
 }) {
   const stageAfter = pipelineFromResult(input.result);
+  const timeIn = input.timeIn || input.loggedAt;
   await firestore().collection('crmActivities').add({
     storeId: input.storeId,
     customerId: input.customerId,
@@ -58,10 +70,14 @@ export async function logActivity(input: {
     repName: input.repName,
     type: input.type,
     loggedAt: input.loggedAt,
+    timeIn,
+    timeOut: input.timeOut || null,
     result: input.result,
     notes: input.notes,
     followUpAt: input.followUpAt,
     location: input.location,
+    visitCompleted: input.visitCompleted ?? (input.type === 'visit'),
+    orderTaken: input.orderTaken ?? false,
     pipelineStageAfter: stageAfter,
     createdBy: input.createdBy,
     source: 'mobile',
@@ -76,6 +92,10 @@ export async function logActivity(input: {
   };
   if (input.followUpAt) customerUpdate.nextFollowUpAt = input.followUpAt;
   if (stageAfter) customerUpdate.pipelineStage = stageAfter;
+  const visitDone = input.visitCompleted ?? (input.type === 'visit');
+  if (input.type === 'visit' && visitDone) {
+    customerUpdate.lastVisitDate = input.loggedAt;
+  }
 
   await firestore().collection('customers').doc(input.customerId).update(customerUpdate);
 }

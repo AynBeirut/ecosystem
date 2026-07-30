@@ -10,11 +10,10 @@ import {
   signOut,
   onAuthStateChanged,
   getRedirectResult,
-  signInWithPopup,
   signInWithRedirect,
+  signInWithPopup,
   User as FirebaseUser,
 } from 'firebase/auth';
-import { acquire, release } from '@/lib/popupLock';
 
 export type AuthContextType = {
   user: User | null;
@@ -30,11 +29,58 @@ export type AuthContextType = {
 
 import { AuthContext } from './AuthContextValue';
 
-import { getFirestore, doc, setDoc, collection, getCountFromServer, getDoc, getDocs, deleteDoc } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, getCountFromServer } from 'firebase/firestore';
 import { useCallback } from 'react';
 import { resolveCrmRepUser, persistCrmRepSession, clearCrmRepSession } from '@/lib/crmAuth';
 import { resolveStoreIdForAuthUser } from '@/lib/storeUtils';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
+import { ensureSubAccountProfile } from '@/lib/subAccountAuth';
+import { hydrateFreelancerUser } from '@/lib/freelancerAuth';
+
+async function hydrateAdminSellerUser(
+  db: ReturnType<typeof getFirestore>,
+  uid: string,
+  baseUser: User,
+  hints?: { storeId?: string; sellerData?: Record<string, unknown> },
+): Promise<User> {
+  const storeId =
+    (typeof hints?.storeId === 'string' && hints.storeId.trim()) ||
+    (typeof hints?.sellerData?.storeId === 'string' && String(hints.sellerData.storeId).trim()) ||
+    uid;
+  const sellerPayload = {
+    isSeller: true,
+    role: 'admin' as UserRole,
+    storeId,
+    userId: uid,
+    ...(hints?.sellerData || {}),
+  };
+  await setDoc(doc(db, 'sellers', uid), sellerPayload, { merge: true });
+  await setDoc(
+    doc(db, 'users', uid),
+    {
+      email: baseUser.email || '',
+      name: baseUser.name,
+      role: 'admin',
+      storeId,
+      activeStoreId: storeId,
+      updatedAt: new Date().toISOString(),
+    },
+    { merge: true },
+  );
+  localStorage.removeItem('subAccountInfo');
+  localStorage.setItem(
+    'sellerInfo',
+    JSON.stringify({ ...sellerPayload, sellerSince: hints?.sellerData?.sellerSince }),
+  );
+  return {
+    ...baseUser,
+    id: uid,
+    ...sellerPayload,
+    role: 'admin',
+    storeId,
+    isSeller: true,
+  };
+}
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
@@ -103,6 +149,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (userProfileSnap.exists()) {
       const userProfile = userProfileSnap.data();
 
+      if (userProfile.role === 'freelancer' || userProfile.freelancerTrack) {
+        const freelancerUser = await hydrateFreelancerUser(db, uid, baseUser);
+        if (freelancerUser) {
+          setUser(freelancerUser);
+          await loadFollows(uid);
+          return;
+        }
+      }
+
       if (userProfile.role === 'sub_account' && userProfile.subAccountId) {
         const subAccountRef = doc(db, 'subAccounts', userProfile.subAccountId);
         const subAccountSnap = await getDoc(subAccountRef);
@@ -121,6 +176,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             subAccountId: userProfile.subAccountId,
           };
 
+          localStorage.removeItem('sellerInfo');
           localStorage.setItem(
             'subAccountInfo',
             JSON.stringify({
@@ -138,6 +194,61 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
       }
 
+      if (userProfile.role === 'admin') {
+        const sellerSnap = await getDoc(doc(db, 'sellers', uid));
+        const sellerData = sellerSnap.exists() ? sellerSnap.data() : {};
+        const adminUser = await hydrateAdminSellerUser(db, uid, baseUser, {
+          storeId: typeof userProfile.storeId === 'string' ? userProfile.storeId : undefined,
+          sellerData,
+        });
+        setUser(adminUser);
+        await loadFollows(uid);
+        return;
+      }
+
+      // Legacy store owners: users/{uid} may exist (dashboard prefs) without role — sellers doc is source of truth.
+      const legacySellerSnap = await getDoc(doc(db, 'sellers', uid));
+      if (legacySellerSnap.exists()) {
+        const legacySeller = legacySellerSnap.data();
+        if (legacySeller?.role === 'admin' || legacySeller?.isSeller === true) {
+          const adminUser = await hydrateAdminSellerUser(db, uid, baseUser, {
+            storeId: typeof legacySeller.storeId === 'string' ? legacySeller.storeId : undefined,
+            sellerData: legacySeller,
+          });
+          await setDoc(
+            userProfileRef,
+            {
+              email: firebaseUser.email || userProfile.email || '',
+              name: baseUser.name,
+              role: 'admin',
+              activeStoreId: adminUser.storeId,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true },
+          );
+          setUser(adminUser);
+          await loadFollows(uid);
+          return;
+        }
+      }
+
+      const repairedSubAccount = await ensureSubAccountProfile({
+        db,
+        uid,
+        email: firebaseUser.email || '',
+        displayName: firebaseUser.displayName,
+        defaultUser: baseUser,
+      });
+
+      if (repairedSubAccount) {
+        const { user: repairedUser, subAccountInfo } = repairedSubAccount;
+        localStorage.removeItem('sellerInfo');
+        localStorage.setItem('subAccountInfo', JSON.stringify(subAccountInfo));
+        setUser(repairedUser);
+        await loadFollows(uid);
+        return;
+      }
+
       const crmRepUser = await resolveCrmRepUser(db, firebaseUser, baseUser);
       if (crmRepUser) {
         persistCrmRepSession({ ...crmRepUser, id: uid });
@@ -152,6 +263,23 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (sellerSnap.exists()) {
       const sellerData = sellerSnap.data();
       const storeId = sellerData.storeId || uid;
+      if (sellerData.role === 'admin' || sellerData.isSeller === true) {
+        const adminUser = await hydrateAdminSellerUser(db, uid, baseUser, { storeId, sellerData });
+        await setDoc(
+          userProfileRef,
+          {
+            email: firebaseUser.email || '',
+            name: baseUser.name,
+            role: 'admin',
+            activeStoreId: storeId,
+            updatedAt: new Date().toISOString(),
+          },
+          { merge: true },
+        );
+        setUser(adminUser);
+        await loadFollows(uid);
+        return;
+      }
       baseUser = {
         ...baseUser,
         id: uid,
@@ -202,8 +330,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     await loadFollows(uid);
   }, [db, loadFollows]);
 
-  // Auth init: wait for persistence, subscribe to auth state immediately,
-  // then call getRedirectResult non-blocking (it can hang in cross-origin setups).
+  // Auth init: finish Google redirect (if any) before subscribing — avoids null flash → login loop.
   useEffect(() => {
     let mounted = true;
     let unsubscribe: (() => void) | undefined;
@@ -217,6 +344,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       if (!mounted) return;
 
+      try {
+        const redirectResult = await getRedirectResult(auth);
+        if (redirectResult?.user && mounted) {
+          toast.success('Google sign-in successful');
+        }
+      } catch (err: unknown) {
+        const code = (err as { code?: string })?.code;
+        if (code && code !== 'auth/no-auth-event') {
+          console.error('[AuthContext] Redirect result error:', err);
+        }
+      } finally {
+        clearGoogleAuthPending();
+      }
+
       unsubscribe = onAuthStateChanged(auth, (firebaseUser) => {
         if (!mounted) return;
         if (import.meta.env.DEV) {
@@ -225,7 +366,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         if (!firebaseUser) {
           setUser(null);
-          clearGoogleAuthPending();
           setIsLoading(false);
           return;
         }
@@ -249,23 +389,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             });
           })
           .finally(() => {
-            clearGoogleAuthPending();
             if (mounted) setIsLoading(false);
           });
       });
-
-      getRedirectResult(auth)
-        .then((result) => {
-          if (result?.user && mounted) {
-            toast.success('Google sign-in successful');
-          }
-        })
-        .catch((err: unknown) => {
-          const code = (err as { code?: string })?.code;
-          if (code && code !== 'auth/no-auth-event') {
-            console.error('[AuthContext] Redirect result error:', err);
-          }
-        });
     };
 
     void init();
@@ -302,6 +428,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       
       if (userProfileSnap.exists()) {
         const userProfile = userProfileSnap.data();
+
+        if (userProfile.role === 'freelancer' || userProfile.freelancerTrack) {
+          const freelancerUser = await hydrateFreelancerUser(db, uid, baseUser as User);
+          if (freelancerUser) {
+            setUser(freelancerUser);
+            toast.success(`Welcome back, ${freelancerUser.name}!`);
+            setIsLoading(false);
+            return;
+          }
+        }
         
         // If this is a sub-account, load their profile and permissions
         if (userProfile.role === 'sub_account' && userProfile.subAccountId) {
@@ -325,6 +461,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               subAccountId: userProfile.subAccountId,
             };
             
+            localStorage.removeItem('sellerInfo');
             localStorage.setItem('subAccountInfo', JSON.stringify({
               role: 'sub_account',
               subAccountRole: subAccountData.role,
@@ -340,11 +477,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           }
         }
 
+        const repairedSubAccount = await ensureSubAccountProfile({
+          db,
+          uid,
+          email: userCredential.user.email || '',
+          displayName: userCredential.user.displayName,
+          defaultUser: baseUser as User,
+        });
+
+        if (repairedSubAccount) {
+          const { user: repairedUser, subAccountInfo } = repairedSubAccount;
+          localStorage.removeItem('sellerInfo');
+          localStorage.setItem('subAccountInfo', JSON.stringify(subAccountInfo));
+          setUser(repairedUser);
+          toast.success(`Welcome back, ${repairedUser.name}!`);
+          setIsLoading(false);
+          return;
+        }
+
         const crmRepUser = await resolveCrmRepUser(db, userCredential.user, baseUser as User);
         if (crmRepUser) {
           persistCrmRepSession(crmRepUser);
-          setUser(crmRepUser);
-          toast.success(`Welcome back, ${crmRepUser.name}!`);
+          setUser({ ...crmRepUser, id: uid });
+          await loadFollows(uid);
+          setIsLoading(false);
+          return;
+        }
+
+        if (userProfile.role === 'admin') {
+          const sellerSnap = await getDoc(doc(db, 'sellers', uid));
+          const sellerData = sellerSnap.exists() ? sellerSnap.data() : {};
+          const adminUser = await hydrateAdminSellerUser(db, uid, baseUser as User, {
+            storeId: typeof userProfile.storeId === 'string' ? userProfile.storeId : undefined,
+            sellerData,
+          });
+          setUser(adminUser);
+          toast.success('Logged in successfully');
           setIsLoading(false);
           return;
         }
@@ -371,43 +539,27 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const googleLogin = async () => {
-    if (!acquire()) {
-      toast.error('Sign-in already in progress. Please complete the open sign-in window.');
-      return;
-    }
-
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
       if (shouldUseGoogleRedirect()) {
         markGoogleAuthPending();
-        release();
         await signInWithRedirect(auth, provider);
         return;
       }
-      const result = await signInWithPopup(auth, provider);
-      if (result?.user) {
-        toast.success('Google sign-in successful!');
-      }
+      setIsLoading(true);
+      await signInWithPopup(auth, provider);
+      toast.success('Google sign-in successful');
     } catch (error) {
       const e = error as { code?: string; message?: string };
       console.error('Google login error:', e);
-      if (
-        e.code === 'auth/popup-blocked' ||
-        e.code === 'auth/operation-not-supported-in-this-environment'
-      ) {
-        // Fall back to full-page redirect when popup is explicitly blocked
-        markGoogleAuthPending();
-        release();
-        await signInWithRedirect(auth, provider);
-        return;
-      }
-      if (e.code !== 'auth/popup-closed-by-user' && e.code !== 'auth/cancelled-popup-request') {
-        toast.error(e?.message || 'An error occurred during Google login');
-      }
+      clearGoogleAuthPending();
+      toast.error(e?.message || 'An error occurred during Google login');
     } finally {
-      release();
+      if (!shouldUseGoogleRedirect()) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -465,6 +617,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const upgradeToAdmin = async () => {
     if (!user) throw new Error('No user');
+    const storeId = await resolveStoreIdForAuthUser(user.id);
     // Get seller count from Firestore
     const sellersCol = collection(db, 'sellers');
     const snapshot = await getCountFromServer(sellersCol);
@@ -478,29 +631,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         sellerSince: new Date().toISOString(),
         sellerIndex: count,
         role: 'admin',
+        storeId,
         userId: user.id
-      });
+      }, { merge: true });
+      await setDoc(doc(db, 'users', user.id), {
+        role: 'admin',
+        storeId,
+        email: user.email || '',
+      }, { merge: true });
       // Update user context
       setUser((prev) => prev ? {
         ...prev,
         isSeller: true,
         sellerSince: new Date().toISOString(),
         sellerIndex: count,
-        role: 'admin'
+        role: 'admin',
+        storeId,
       } : prev);
       localStorage.setItem('sellerInfo', JSON.stringify({
         isSeller: true,
         sellerSince: new Date().toISOString(),
         sellerIndex: count,
         role: 'admin',
+        storeId,
         userId: user.id
       }));
     } else {
       // If already seller, ensure role is admin in context and localStorage
-      setUser((prev) => prev ? { ...prev, role: 'admin' } : prev);
+      setUser((prev) => prev ? { ...prev, role: 'admin', storeId: prev.storeId || storeId } : prev);
       localStorage.setItem('sellerInfo', JSON.stringify({
         ...user,
         role: 'admin',
+        storeId: user.storeId || storeId,
       }));
     }
   };

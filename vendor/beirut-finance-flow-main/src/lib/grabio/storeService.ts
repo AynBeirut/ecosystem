@@ -107,6 +107,15 @@ export function storeProfileToCompany(profile: GrabioStoreProfile): StoreCompany
   };
 }
 
+/** Drop undefined keys so Firestore updateDoc/setDoc never throws. */
+function stripUndefinedRecord(input: Record<string, unknown>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(input)) {
+    if (value !== undefined) out[key] = value;
+  }
+  return out;
+}
+
 /** Persist IM document styling only — company identity fields are edited in Grabio Admin Profile. */
 export async function updateFinanceDocumentSettings(
   storeId: string,
@@ -117,7 +126,7 @@ export async function updateFinanceDocumentSettings(
   if (!snap.exists()) return;
 
   const current = (snap.data() as GrabioStoreProfile).financeDocumentSettings ?? {};
-  const merged = { ...current, ...patch };
+  const merged = stripUndefinedRecord({ ...current, ...patch });
   const grabioTemplate =
     patch.invoiceTemplate !== undefined
       ? mapFinanceInvoiceTemplateToGrabio(patch.invoiceTemplate)

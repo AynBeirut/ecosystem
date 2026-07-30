@@ -5,7 +5,7 @@ export function normalizeSupabaseError(err: any): string {
   const code = err.code || err.status;
 
   if (code === "PGRST301" || msg.includes("jwt") || msg.includes("token")) return "Your session expired. Please sign in again.";
-  if (code === "42501" || msg.includes("row-level security") || msg.includes("permission denied"))
+  if (code === "42501" || code === "permission-denied" || msg.includes("permission") || msg.includes("insufficient"))
     return "You don't have permission to perform this action.";
   if (code === "23505" || msg.includes("duplicate key")) return "This record already exists.";
   if (code === "23503" || msg.includes("foreign key")) return "Related record is missing or in use.";

@@ -24,6 +24,7 @@ const Footer: React.FC = () => {
   const year = new Date().getFullYear();
   const isHome = location.pathname === '/';
   const isLogin = location.pathname === '/login';
+  const isMarketplace = location.pathname === '/search' || location.pathname === '/marketplace';
   const isPublicMarketing =
     PUBLIC_MARKETING_PATHS.has(location.pathname) ||
     location.pathname.startsWith('/blog/');
@@ -40,7 +41,7 @@ const Footer: React.FC = () => {
         <span className="text-gray-400">·</span>
         <a href="mailto:support@grabio.space" className="text-market-primary hover:underline">support@grabio.space</a>
       </div>
-      {!isHome && !isLogin && (
+      {!isHome && !isLogin && !isMarketplace && (
         <button
           onClick={() => navigate('/search')}
           className="px-4 py-2 rounded bg-market-primary text-white hover:bg-market-primary/90 text-xs font-medium"

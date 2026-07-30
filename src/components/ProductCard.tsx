@@ -12,6 +12,7 @@ import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
 import { generateSlug } from '@/lib/slugify';
 import { pixelAddToCart, trackMetaConversionEvent } from '@/lib/metaPixel';
 import ClampedText from '@/components/ClampedText';
+import { formatMoney } from '@/lib/money/format';
 
   type ProductDisplayType = 'grid-standard' | 'grid-large' | 'list' | 'masonry' | 'spotlight';
   type ProductCardAnimation = 'none' | 'parallax' | 'lift-3d' | 'glow-pulse' | 'slide-reveal' | 'zoom-tilt';
@@ -21,15 +22,26 @@ import ClampedText from '@/components/ClampedText';
     linkToStore?: boolean;
     whatsappNumber?: string; // Store's WhatsApp Business number
     storeName?: string;      // Store display name (used in WhatsApp message)
-    currency?: string;       // Store currency, e.g. "USD"
+    currency?: string;       // Store base currency, e.g. "USD"
+    secondaryCurrency?: string; // Optional display currency (e.g. "LBP")
+    exchangeRate?: number;      // base -> secondary rate (display only)
     displayType?: ProductDisplayType;
     animation?: ProductCardAnimation;
     /** When false, hides cart/checkout actions (display-only storefronts). Defaults to true. */
     showCommerceActions?: boolean;
   };
 
-const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsappNumber, storeName, currency, displayType = 'grid-standard', animation = 'none', showCommerceActions = true }) => {
+const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsappNumber, storeName, currency, secondaryCurrency, exchangeRate, displayType = 'grid-standard', animation = 'none', showCommerceActions = true }) => {
   const navigate = useNavigate();
+  const storeMeta = product.store as { mainCurrency?: string; secondaryCurrency?: string; customExchangeRate?: number } | undefined;
+  const priceCurrency = currency || storeMeta?.mainCurrency || 'USD';
+  const secCurrency = secondaryCurrency || storeMeta?.secondaryCurrency;
+  const secRate = exchangeRate ?? storeMeta?.customExchangeRate;
+  const priceText = formatMoney(Number(product.price || 0), {
+    currency: priceCurrency,
+    style: 'full',
+    secondary: secCurrency && secRate && secRate > 0 ? { currency: secCurrency, rate: secRate } : undefined,
+  });
   const { addToCart } = useCart();
   const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
   const favorite = isFavorite(product.id);
@@ -122,7 +134,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
                   </div>
                 )}
                 <div className="flex items-baseline gap-2">
-                  <span className="font-medium text-market-primary">${product.price.toFixed(2)}</span>
+                  <span className="font-medium text-market-primary">{priceText}</span>
                   {product.deliveryTime && <span className="text-xs text-gray-400">{product.deliveryTime}</span>}
                 </div>
               </div>
@@ -208,7 +220,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product, linkToStore, whatsap
           )}
           <div className="flex justify-between items-baseline">
             <span className="font-medium text-market-primary">
-              ${product.price.toFixed(2)}
+              {priceText}
             </span>
             <span className="text-xs text-gray-500">
               {product.deliveryTime}

@@ -42,7 +42,7 @@
         "destination": "/invoice/index.html"
       },
       {
-        "source": "!/@(sg|sd|grabio-product-description|seo-report|privacy|home-pagetest).html",
+        "source": "!/assets/**",
         "destination": "/index.html"
       }
     ],

@@ -15,5 +15,9 @@ export default function FinancePageShell({ children, onLogout }: FinancePageShel
     return <div className="finance-embed-content min-w-0">{children}</div>;
   }
 
-  return <AppLayout onLogout={onLogout ?? (() => undefined)}>{children}</AppLayout>;
+  return (
+    <AppLayout onLogout={onLogout ?? (() => undefined)}>
+      <div className="finance-embed-theme min-w-0">{children}</div>
+    </AppLayout>
+  );
 }

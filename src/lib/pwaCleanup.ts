@@ -37,7 +37,7 @@ export function runPwaCleanupOnLocalDev(): void {
   teardownPwa();
 }
 
-const CLEANUP_KEY = 'grabio_pwa_cleanup_v5';
+const CLEANUP_KEY = 'grabio_pwa_cleanup_v8';
 
 /** One-time legacy PWA teardown on production — avoids re-clearing caches every refresh. */
 export function runPwaCleanupOnce(): void {

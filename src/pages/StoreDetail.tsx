@@ -1330,7 +1330,7 @@ const StoreDetail: React.FC = () => {
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
                   <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} showCommerceActions={showCommerceActions} />
+                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} />
                   </div>
                 ))}
               </div>
@@ -1934,7 +1934,7 @@ const StoreDetail: React.FC = () => {
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
                   <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} showCommerceActions={showCommerceActions} />
+                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} />
                   </div>
                 ))}
               </div>

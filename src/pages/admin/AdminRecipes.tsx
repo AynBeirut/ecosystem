@@ -12,15 +12,47 @@ import { Trash2, Plus, Edit3, ChefHat, Minus } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Recipe, RecipeIngredient, RawMaterial } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
+import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
 import { logAction } from '@/lib/auditLog';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 import { getActualStoreId } from '@/lib/storeUtils';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { useSystemGuide } from '@/hooks/useSystemGuide';
+import SystemGuideInfo from '@/components/system-guide/SystemGuideInfo';
+
+type RecipeShape = Recipe & {
+  materials?: Array<{
+    rawMaterialId?: string;
+    materialId?: string;
+    quantity?: number | string;
+    unit?: string;
+    materialName?: string;
+    cost?: number;
+  }>;
+};
+
+function recipeIngredientsForUi(recipe: RecipeShape | undefined): RecipeIngredient[] {
+  if (!recipe) return [];
+  if (Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
+    return recipe.ingredients;
+  }
+  if (Array.isArray(recipe.materials) && recipe.materials.length > 0) {
+    return recipe.materials.map((material) => ({
+      rawMaterialId: String(material.rawMaterialId || material.materialId || ''),
+      materialName: String(material.materialName || ''),
+      quantity: Number(material.quantity || 0),
+      unit: String(material.unit || ''),
+      cost: Number(material.cost || 0),
+    }));
+  }
+  return [];
+}
 
 const AdminRecipes: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { enabled: systemGuideEnabled } = useSystemGuide();
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
@@ -37,6 +69,24 @@ const AdminRecipes: React.FC = () => {
     instructions: '',
     ingredients: [] as RecipeIngredient[],
   });
+
+  // Inline "quick add raw material" so the user never leaves the recipe page.
+  const [quickAddOpen, setQuickAddOpen] = useState(false);
+  const [quickAddTarget, setQuickAddTarget] = useState<{ mode: 'new' | 'edit'; index: number } | null>(null);
+  const [savingQuickMaterial, setSavingQuickMaterial] = useState(false);
+  const [quickMaterial, setQuickMaterial] = useState({
+    name: '',
+    unit: 'kg' as RawMaterial['unit'],
+    costPerUnit: '' as number | '',
+  });
+
+  const ADD_NEW_MATERIAL = '__add_new_material__';
+
+  const openQuickAdd = (mode: 'new' | 'edit', index: number) => {
+    setQuickAddTarget({ mode, index });
+    setQuickMaterial({ name: '', unit: 'kg', costPerUnit: '' });
+    setQuickAddOpen(true);
+  };
 
   // Load recipes and raw materials
   useEffect(() => {
@@ -70,7 +120,7 @@ const AdminRecipes: React.FC = () => {
         return {
           id: doc.id,
           ...data,
-          ingredients: Array.isArray(data.ingredients) ? data.ingredients : [],
+          ingredients: recipeIngredientsForUi(data as RecipeShape),
         } as Recipe;
       });
       setRecipes(recipesList);
@@ -415,9 +465,97 @@ const AdminRecipes: React.FC = () => {
     setEditingRecipe({ ...recipe, ingredients: updated });
   };
 
+  // Assign a material to the ingredient row that opened the quick-add (works for
+  // both the create and edit recipe dialogs), keeping the ingredient unit in sync.
+  const assignMaterialToTarget = (material: RawMaterial) => {
+    if (!quickAddTarget) return;
+    const { mode, index } = quickAddTarget;
+    if (mode === 'new') {
+      const updated = [...newRecipe.ingredients];
+      updated[index] = { ...updated[index], rawMaterialId: material.id, unit: material.unit };
+      setNewRecipe({ ...newRecipe, ingredients: updated });
+    } else if (editingRecipe) {
+      const currentIngredients = Array.isArray(editingRecipe.ingredients) ? editingRecipe.ingredients : [];
+      const updated = [...currentIngredients];
+      updated[index] = { ...updated[index], rawMaterialId: material.id, unit: material.unit };
+      setEditingRecipe({ ...editingRecipe, ingredients: updated });
+    }
+  };
+
+  const handleSaveQuickMaterial = async () => {
+    if (!user?.storeId) return;
+    const cost = typeof quickMaterial.costPerUnit === 'number' ? quickMaterial.costPerUnit : parseFloat(String(quickMaterial.costPerUnit));
+    if (!quickMaterial.name.trim()) {
+      toast({ title: 'Error', description: 'Material name is required', variant: 'destructive' });
+      return;
+    }
+    if (!cost || cost <= 0) {
+      toast({ title: 'Error', description: 'Cost per unit must be greater than zero (needed for recipe costing)', variant: 'destructive' });
+      return;
+    }
+
+    setSavingQuickMaterial(true);
+    try {
+      const db = getFirestore();
+      const storePrefix = user.storeId.substring(0, 5).toUpperCase();
+      const sku = generateSKU(storePrefix, 'MAT', rawMaterials.length + 1);
+      const barcode = generateBarcode();
+      const nowIso = new Date().toISOString();
+
+      // No stock required to define a material — currentStock defaults to 0.
+      const materialData = {
+        name: quickMaterial.name.trim(),
+        unit: quickMaterial.unit,
+        currentStock: 0,
+        minimumThreshold: 0,
+        reorderPoint: 0,
+        costPerUnit: cost,
+        preferredSupplierId: '',
+        storageLocation: '',
+        expiryTracking: false,
+        sku,
+        barcode,
+        storeId: user.storeId,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        warrantyStartDate: nowIso,
+      };
+
+      const docRef = await addDoc(collection(db, 'rawMaterials'), materialData);
+      const created = { id: docRef.id, ...materialData } as RawMaterial;
+      setRawMaterials((prev) => [...prev, created]);
+      assignMaterialToTarget(created);
+
+      await logAction(user.id, user.name, user.role, 'create', 'rawMaterial', docRef.id, { newValue: materialData }, user.storeId);
+
+      setQuickAddOpen(false);
+      setQuickAddTarget(null);
+      toast({ title: 'Material added', description: `${created.name} is now available in this recipe.` });
+    } catch (error) {
+      console.error('Error quick-adding material:', error);
+      toast({ title: 'Error', description: 'Failed to add material', variant: 'destructive' });
+    } finally {
+      setSavingQuickMaterial(false);
+    }
+  };
+
   return (
     <AdminPageShell
-      title="Recipes"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          Recipes
+          <SystemGuideInfo
+            enabled={systemGuideEnabled}
+            label="What Recipes does"
+            title="Recipes"
+            content={[
+              'Recipes tell Grabio which raw materials make up a finished item and how much of each one is used.',
+              'Use this screen to build or edit that formula so cost calculations and stock deductions follow the recipe you save.',
+            ]}
+            className="border-white/25 text-white/80 hover:text-white"
+          />
+        </span>
+      )}
       description="Manage your product recipes and their raw material composition"
       eyebrow="Inventory"
       backTo="/admin/inventory"
@@ -552,12 +690,23 @@ const AdminRecipes: React.FC = () => {
                           <Label className="text-xs">Material</Label>
                           <Select
                             value={ingredient.rawMaterialId}
-                            onValueChange={(value) => updateIngredient(index, 'rawMaterialId', value)}
+                            onValueChange={(value) => {
+                              if (value === ADD_NEW_MATERIAL) {
+                                openQuickAdd('new', index);
+                                return;
+                              }
+                              const mat = rawMaterials.find(m => m.id === value);
+                              updateIngredient(index, 'rawMaterialId', value);
+                              if (mat) updateIngredient(index, 'unit', mat.unit);
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select material" />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value={ADD_NEW_MATERIAL} className="text-primary font-medium">
+                                + Add new raw material
+                              </SelectItem>
                               {rawMaterials.map(mat => (
                                 <SelectItem key={mat.id} value={mat.id}>
                                   {mat.name} (${ (mat.costPerUnit || 0)}/{mat.unit})
@@ -873,12 +1022,23 @@ const AdminRecipes: React.FC = () => {
                           <Label className="text-xs">Material</Label>
                           <Select
                             value={ingredient.rawMaterialId}
-                            onValueChange={(value) => updateEditIngredient(editingRecipe, index, 'rawMaterialId', value)}
+                            onValueChange={(value) => {
+                              if (value === ADD_NEW_MATERIAL) {
+                                openQuickAdd('edit', index);
+                                return;
+                              }
+                              const mat = rawMaterials.find(m => m.id === value);
+                              updateEditIngredient(editingRecipe, index, 'rawMaterialId', value);
+                              if (mat) updateEditIngredient(editingRecipe, index, 'unit', mat.unit);
+                            }}
                           >
                             <SelectTrigger>
                               <SelectValue placeholder="Select material" />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value={ADD_NEW_MATERIAL} className="text-primary font-medium">
+                                + Add new raw material
+                              </SelectItem>
                               {rawMaterials.map(mat => (
                                 <SelectItem key={mat.id} value={mat.id}>
                                   {mat.name} (${(mat.costPerUnit || 0)}/{mat.unit})
@@ -983,6 +1143,68 @@ const AdminRecipes: React.FC = () => {
             </DialogContent>
           </Dialog>
         )}
+
+        {/* Quick Add Raw Material (inline, no page change needed) */}
+        <Dialog open={quickAddOpen} onOpenChange={(open) => { if (!open) { setQuickAddOpen(false); setQuickAddTarget(null); } }}>
+          <DialogContent className="max-w-md">
+            <DialogHeader>
+              <DialogTitle>Add New Raw Material</DialogTitle>
+              <DialogDescription>Quickly define a material to use in this recipe. No stock needed — set it later in Raw Materials.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <div>
+                <Label htmlFor="quick-mat-name">Material Name *</Label>
+                <Input
+                  id="quick-mat-name"
+                  value={quickMaterial.name}
+                  onChange={(e) => setQuickMaterial({ ...quickMaterial, name: e.target.value })}
+                  placeholder="e.g., Chicken Breast"
+                  autoFocus
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="quick-mat-unit">Unit</Label>
+                  <Select
+                    value={quickMaterial.unit}
+                    onValueChange={(value: any) => setQuickMaterial({ ...quickMaterial, unit: value })}
+                  >
+                    <SelectTrigger id="quick-mat-unit">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="kg">Kilogram (kg)</SelectItem>
+                      <SelectItem value="gram">Gram (g)</SelectItem>
+                      <SelectItem value="liter">Liter (L)</SelectItem>
+                      <SelectItem value="ml">Milliliter (mL)</SelectItem>
+                      <SelectItem value="piece">Piece</SelectItem>
+                      <SelectItem value="meter">Meter (m)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label htmlFor="quick-mat-cost">Cost Per Unit *</Label>
+                  <Input
+                    id="quick-mat-cost"
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    value={quickMaterial.costPerUnit === '' ? '' : quickMaterial.costPerUnit}
+                    onChange={(e) => setQuickMaterial({ ...quickMaterial, costPerUnit: e.target.value === '' ? '' : (parseFloat(e.target.value) || 0) })}
+                    placeholder="e.g., 2.50"
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Required for recipe costing</p>
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => { setQuickAddOpen(false); setQuickAddTarget(null); }} disabled={savingQuickMaterial}>Cancel</Button>
+              <Button onClick={handleSaveQuickMaterial} disabled={savingQuickMaterial}>
+                {savingQuickMaterial ? 'Adding…' : 'Add & Use'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </AdminPageShell>
   );
 };

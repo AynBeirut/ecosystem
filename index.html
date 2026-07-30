@@ -12,6 +12,7 @@
     <meta name="description" content="Grabio — modular business platform for commerce, operations, and growth." />
     <meta name="theme-color" content="#38B2AC" />
     <meta name="google-site-verification" content="M4C5HUFGk8LfYuUSQlZeL5kES8i4HwgH5fufQn59hs0" />
+    <meta name="grabio-build" content="__GRABIO_BUILD_ID__" />
     <script>
       (function () {
         var h = location.hostname;
@@ -20,13 +21,102 @@
           link.rel = 'manifest';
           link.href = '/manifest.json';
           document.head.appendChild(link);
-          return;
-        }
-        if ('serviceWorker' in navigator) {
+        } else if ('serviceWorker' in navigator) {
           navigator.serviceWorker.getRegistrations().then(function (rs) {
             rs.forEach(function (r) { r.unregister(); });
           });
         }
+
+        var BUILD_KEY = 'grabio_build_id';
+        var RELOAD_KEY = 'grabio_chunk_reload_v3';
+        var MAX_RELOADS = 3;
+        var buildMeta = document.querySelector('meta[name="grabio-build"]');
+        var buildId = buildMeta && buildMeta.getAttribute('content');
+        if (buildId && buildId !== '__GRABIO_BUILD_ID__') {
+          try {
+            var storedBuild = localStorage.getItem(BUILD_KEY);
+            if (storedBuild && storedBuild !== buildId) {
+              localStorage.setItem(BUILD_KEY, buildId);
+              sessionStorage.removeItem(RELOAD_KEY);
+              hardRecover(true);
+              return;
+            }
+            localStorage.setItem(BUILD_KEY, buildId);
+          } catch (e) {}
+        }
+
+        function hardRecover(forceBuild) {
+          var count = 0;
+          try {
+            count = parseInt(sessionStorage.getItem(RELOAD_KEY) || '0', 10);
+          } catch (e) {}
+          if (!forceBuild && count >= MAX_RELOADS) return;
+          try {
+            sessionStorage.setItem(RELOAD_KEY, String(count + 1));
+          } catch (e) {}
+
+          var done = false;
+          function reloadNow() {
+            if (done) return;
+            done = true;
+            var u = new URL(location.href);
+            u.searchParams.set('_v', String(Date.now()));
+            location.replace(u.toString());
+          }
+
+          var tasks = [];
+          if ('serviceWorker' in navigator) {
+            tasks.push(
+              navigator.serviceWorker.getRegistrations().then(function (rs) {
+                return Promise.all(rs.map(function (r) { return r.unregister(); }));
+              }),
+            );
+          }
+          if ('caches' in window) {
+            tasks.push(
+              caches.keys().then(function (keys) {
+                return Promise.all(keys.map(function (k) { return caches.delete(k); }));
+              }),
+            );
+          }
+
+          if (tasks.length) {
+            Promise.all(tasks).finally(reloadNow);
+            setTimeout(reloadNow, 1200);
+          } else {
+            reloadNow();
+          }
+        }
+
+        window.__grabioHardRecover = hardRecover;
+
+        window.addEventListener('unhandledrejection', function (event) {
+          var reason = event.reason;
+          var message = String((reason && reason.message) || reason || '');
+          if (
+            message.indexOf('Failed to fetch dynamically imported module') >= 0 ||
+            message.indexOf('Importing a module script failed') >= 0
+          ) {
+            event.preventDefault();
+            hardRecover(false);
+          }
+        });
+
+        window.addEventListener(
+          'error',
+          function (event) {
+            var target = event.target;
+            if (
+              target &&
+              target.tagName === 'SCRIPT' &&
+              target.src &&
+              target.src.indexOf('/assets/') >= 0
+            ) {
+              hardRecover(false);
+            }
+          },
+          true,
+        );
       })();
     </script>
     <link rel="icon" type="image/png" sizes="192x192" href="/icon-192x192.png" />

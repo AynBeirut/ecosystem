@@ -1,6 +1,6 @@
 import type { BuilderBusinessType } from '@/types/builder';
 
-export const BUILDER_MAX_DEMO_SLOTS = 2;
+export const BUILDER_MAX_DEMO_SLOTS = 3;
 
 export const BUILDER_BUSINESS_TYPES: Array<{
   id: BuilderBusinessType;

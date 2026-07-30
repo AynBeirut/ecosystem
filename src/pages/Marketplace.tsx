@@ -1,11 +1,8 @@
-
 import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import SEOHead from '@/components/SEOHead';
-// import { PRODUCTS } from '@/data/mockData';
 import ProductCard from '@/components/ProductCard';
 import StoreCard from '@/components/StoreCard';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Slider } from '@/components/ui/slider';
@@ -14,7 +11,7 @@ import MobileHeader from '@/components/MobileHeader';
 import { Product, Store } from '@/types/product';
 import { getFirestore, collection, getDocs } from 'firebase/firestore';
 import { cachedPublicRead } from '@/lib/publicReadCache';
-import { Search, Filter } from 'lucide-react';
+import { Package, Search, SlidersHorizontal, Store as StoreIcon } from 'lucide-react';
 import {
   Sheet,
   SheetContent,
@@ -24,15 +21,18 @@ import {
   SheetTrigger,
 } from '@/components/ui/sheet';
 import { Button } from '@/components/ui/button';
-import { useIsMobile } from '@/hooks/use-mobile';
 import { useAuth } from '@/context/useAuth';
+import { useIsMobile } from '@/hooks/use-mobile';
+import { cn } from '@/lib/utils';
+
+type BrowseTab = 'stores' | 'products';
 
 const Marketplace: React.FC = () => {
   const location = useLocation();
   const isMobile = useIsMobile();
   const { user } = useAuth();
-  
-  // Filter states
+
+  const [activeTab, setActiveTab] = useState<BrowseTab>('stores');
   const [searchQuery, setSearchQuery] = useState('');
   const [priceRange, setPriceRange] = useState([0, 20000]);
   const [allProducts, setAllProducts] = useState<Product[]>([]);
@@ -40,72 +40,73 @@ const Marketplace: React.FC = () => {
   const [filteredStores, setFilteredStores] = useState<Store[]>([]);
   const [allStores, setAllStores] = useState<Store[]>([]);
   const [location_, setLocation] = useState('');
+  const [loading, setLoading] = useState(true);
 
-  // Set search query from URL parameter if present
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const query = params.get('q');
-    if (query) {
-      setSearchQuery(query);
-    }
+    if (query) setSearchQuery(query);
   }, [location]);
 
-  // Fetch stores from Firestore on mount
   useEffect(() => {
-    const fetchStores = async () => {
-      const storesList = await cachedPublicRead('marketplace:storeProfiles', async () => {
-        const db = getFirestore();
-        const snapshot = await getDocs(collection(db, 'storeProfiles'));
-        return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Store));
-      });
-      setAllStores(storesList.filter((store) => store.status === 'online'));
+    let cancelled = false;
+    const load = async () => {
+      setLoading(true);
+      try {
+        const [storesList, productsList] = await Promise.all([
+          cachedPublicRead('marketplace:storeProfiles', async () => {
+            const db = getFirestore();
+            const snapshot = await getDocs(collection(db, 'storeProfiles'));
+            return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Store));
+          }),
+          cachedPublicRead('marketplace:products', async () => {
+            const db = getFirestore();
+            const snapshot = await getDocs(collection(db, 'products'));
+            return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Product));
+          }),
+        ]);
+        if (cancelled) return;
+        setAllStores(storesList.filter((store) => store.status === 'online'));
+        setAllProducts(productsList);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
     };
-    void fetchStores();
+    void load();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  // Fetch products from Firestore on mount
-  useEffect(() => {
-    const fetchProducts = async () => {
-      const productsList = await cachedPublicRead('marketplace:products', async () => {
-        const db = getFirestore();
-        const snapshot = await getDocs(collection(db, 'products'));
-        return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Product));
-      });
-      setAllProducts(productsList);
-    };
-    void fetchProducts();
-  }, []);
-
-  // Apply filters when dependencies change
   useEffect(() => {
     const onlineStoreIds = new Set(allStores.map((store) => store.id));
 
     const isMarketplaceVisible = (product: Product): boolean => {
       if (!onlineStoreIds.has(product.storeId)) return false;
-      // Admin "Visible Online" toggle is stored as inStock.
       if (product.inStock === false) return false;
-      // Services / supplier-synced dropship SKUs may keep local stock at 0 while listed.
       if (product.productType === 'service' || product.supplierSyncEnabled) return true;
       if (product.inStock === true) return true;
       return typeof product.stock !== 'number' || product.stock > 0;
     };
 
-    // Filter products and deduplicate by id
-    const filtered = allProducts.filter(product => {
-      const matchesSearch = searchQuery === '' || 
-        product.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    const filtered = allProducts.filter((product) => {
+      const matchesSearch =
+        searchQuery === '' ||
+        product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         product.description.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
-      const matchesLocation = !location_ || 
-        allStores.find(store => store.id === product.storeId)?.location.toLowerCase().includes(location_.toLowerCase());
+      const matchesLocation =
+        !location_ ||
+        allStores
+          .find((store) => store.id === product.storeId)
+          ?.location.toLowerCase()
+          .includes(location_.toLowerCase());
       return matchesSearch && matchesPrice && matchesLocation && isMarketplaceVisible(product);
     });
-    // Deduplicate by product id
-    const deduped = Array.from(new Map(filtered.map(p => [p.id, p])).values());
-    // Prioritize products from followed stores (if user has follows)
-    // useAuth provides user directly
+
+    const deduped = Array.from(new Map(filtered.map((p) => [p.id, p])).values());
     let ordered = deduped;
-    if (user && user.following && user.following.length > 0) {
+    if (user?.following?.length) {
       const followingSet = new Set(user.following);
       ordered = deduped.slice().sort((a, b) => {
         const aFollow = followingSet.has(a.storeId) ? 0 : 1;
@@ -115,138 +116,166 @@ const Marketplace: React.FC = () => {
     }
     setFilteredProducts(ordered);
 
-    // Filter stores
-    let filteredStores = allStores.filter(store => {
-      const matchesSearch = searchQuery === '' || 
-        store.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    let nextStores = allStores.filter((store) => {
+      const matchesSearch =
+        searchQuery === '' ||
+        store.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
         store.description.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesLocation = !location_ || 
-        store.location.toLowerCase().includes(location_.toLowerCase());
+      const matchesLocation =
+        !location_ || store.location.toLowerCase().includes(location_.toLowerCase());
       return matchesSearch && matchesLocation;
     });
-    // If no stores match, show all online stores as fallback
-    if (filteredStores.length === 0 && allStores.length > 0) {
-      filteredStores = allStores;
-    }
-    setFilteredStores(filteredStores);
+    if (nextStores.length === 0 && allStores.length > 0) nextStores = allStores;
+    setFilteredStores(nextStores);
   }, [searchQuery, priceRange, location_, allStores, allProducts, user]);
-
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    // Search is already applied via the effect
-  };
 
   const resetFilters = () => {
     setSearchQuery('');
-  setPriceRange([0, 20000]);
+    setPriceRange([0, 20000]);
     setLocation('');
   };
 
+  const resultCount = activeTab === 'stores' ? filteredStores.length : filteredProducts.length;
+
   return (
-    <div className="min-h-screen bg-gray-50 flex flex-col">
+    <div className="marketplace-page min-h-screen flex flex-col bg-[#f5f5f7] text-neutral-900">
       <SEOHead
-        title="Market Space"
-        description="Discover and shop from local stores in Lebanon. Browse thousands of products and support local businesses on Grabio."
-        url="https://grabio.space/"
+        title="Marketplace"
+        description="Discover and shop from local stores in Lebanon."
+        url="https://grabio.space/search"
       />
-      {!isMobile ? <Header /> : <MobileHeader title="Market Space" showBackButton={false} />}
-      <main className="container mx-auto px-3 md:px-4 py-3 md:py-6 flex-1">
-        <div className="flex flex-col md:flex-row justify-between items-start gap-3 md:gap-4 mb-3 md:mb-6">
-          {!isMobile && <h1 className="text-2xl font-bold whitespace-nowrap">Market Space</h1>}
-          <div className="flex items-center w-full gap-2">
-            <form onSubmit={handleSearch} className="relative flex-grow">
-              <Input
-                type="search"
-                placeholder="Search Market Space..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 h-10 text-sm md:text-base"
-              />
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={16} />
-            </form>
+      {!isMobile ? (
+        <Header variant="light" />
+      ) : (
+        <MobileHeader title="Marketplace" showBackButton={false} showHomeButton variant="light" />
+      )}
+
+      <div className="marketplace-toolbar sticky top-14 z-40 border-b border-black/[0.06] bg-white/80 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-6xl flex-col gap-3 px-4 py-3 md:flex-row md:items-center md:gap-4 md:py-3.5">
+          <form onSubmit={(e) => e.preventDefault()} className="relative min-w-0 flex-1">
+            <Search className="pointer-events-none absolute left-3.5 top-1/2 h-4 w-4 -translate-y-1/2 text-neutral-400" />
+            <Input
+              type="search"
+              placeholder="Search stores and products"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="marketplace-search h-10 rounded-full border-0 bg-neutral-100 pl-10 pr-4 text-[15px] shadow-none ring-0 focus-visible:ring-2 focus-visible:ring-teal-500/30"
+            />
+          </form>
+
+          <div className="flex items-center gap-2">
+            <div className="marketplace-segment flex flex-1 rounded-full bg-neutral-100 p-1 md:flex-none">
+              <button
+                type="button"
+                onClick={() => setActiveTab('stores')}
+                className={cn('marketplace-segment__btn', activeTab === 'stores' && 'marketplace-segment__btn--active')}
+              >
+                <StoreIcon className="h-3.5 w-3.5" aria-hidden />
+                Stores
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveTab('products')}
+                className={cn('marketplace-segment__btn', activeTab === 'products' && 'marketplace-segment__btn--active')}
+              >
+                <Package className="h-3.5 w-3.5" aria-hidden />
+                Products
+              </button>
+            </div>
+
             <Sheet>
               <SheetTrigger asChild>
-                <Button variant="outline" size="icon" className="shrink-0 h-10 w-10">
-                  <Filter size={18} />
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="h-10 w-10 shrink-0 rounded-full border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50"
+                >
+                  <SlidersHorizontal className="h-4 w-4" />
                 </Button>
               </SheetTrigger>
               <SheetContent>
                 <SheetHeader>
                   <SheetTitle>Filters</SheetTitle>
-                  <SheetDescription>
-                    Narrow down your search results
-                  </SheetDescription>
+                  <SheetDescription>Refine what you see</SheetDescription>
                 </SheetHeader>
                 <div className="grid gap-6 py-6">
                   <div className="space-y-2">
-                    <Label>Price Range: ${priceRange[0]} - ${priceRange[1]}</Label>
-                    <Slider
-                      defaultValue={[0, 20000]}
-                      max={20000}
-                      step={50}
-                      value={priceRange}
-                      onValueChange={setPriceRange}
-                    />
+                    <Label>Price: ${priceRange[0]} – ${priceRange[1]}</Label>
+                    <Slider max={20000} step={50} value={priceRange} onValueChange={setPriceRange} />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="location">Location</Label>
                     <Input
                       id="location"
-                      placeholder="Filter by location..."
+                      placeholder="City or area"
                       value={location_}
                       onChange={(e) => setLocation(e.target.value)}
                     />
                   </div>
-                  <Button onClick={resetFilters} variant="outline">
-                    Reset Filters
+                  <Button onClick={resetFilters} variant="outline" className="rounded-full">
+                    Reset filters
                   </Button>
                 </div>
               </SheetContent>
             </Sheet>
           </div>
         </div>
-        {/* Debug: Show store counts */}
-        {/* <div className="mb-4 text-sm text-gray-500">Total stores fetched: {allStores.length} | Filtered stores: {filteredStores.length}</div> */}
+      </div>
 
-        <Tabs defaultValue="products" className="mb-4 md:mb-8">
-          <TabsList className="w-full md:w-auto grid grid-cols-2 md:flex h-10">
-            <TabsTrigger value="products" className="flex-1 md:flex-none text-sm">Products</TabsTrigger>
-            <TabsTrigger value="stores" className="flex-1 md:flex-none text-sm">Stores</TabsTrigger>
-          </TabsList>
-          
-          <TabsContent value="products">
-            {filteredProducts.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 animate-fade-in">
-                {filteredProducts.map((product) => (
-                  <ProductCard key={product.id} product={product} linkToStore />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 md:py-12 text-gray-500">
-                <div className="mb-4">No products found matching your criteria</div>
-                <Button onClick={resetFilters} variant="outline">Reset Filters</Button>
-              </div>
-            )}
-          </TabsContent>
-          
-          <TabsContent value="stores">
-            {filteredStores.length > 0 ? (
-              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3 md:gap-6 animate-fade-in">
-                {filteredStores.map((store) => (
-                  <StoreCard key={store.id} store={store} />
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 md:py-12 text-gray-500">
-                <div className="mb-4">No stores found matching your criteria</div>
-                <Button onClick={resetFilters} variant="outline">Reset Filters</Button>
-              </div>
-            )}
-          </TabsContent>
-        </Tabs>
+      <main className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 md:py-8">
+        {!loading && (
+          <p className="mb-4 text-xs font-medium uppercase tracking-[0.12em] text-neutral-500">
+            {resultCount} {activeTab}
+          </p>
+        )}
+
+        {activeTab === 'stores' ? (
+          loading ? (
+            <GridSkeleton />
+          ) : filteredStores.length > 0 ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredStores.map((store) => (
+                <StoreCard key={store.id} store={store} />
+              ))}
+            </div>
+          ) : (
+            <EmptyState onReset={resetFilters} label="No stores match your search" />
+          )
+        ) : loading ? (
+          <GridSkeleton />
+        ) : filteredProducts.length > 0 ? (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {filteredProducts.map((product) => (
+              <ProductCard key={product.id} product={product} linkToStore />
+            ))}
+          </div>
+        ) : (
+          <EmptyState onReset={resetFilters} label="No products match your search" />
+        )}
       </main>
     </div>
   );
 };
+
+function EmptyState({ label, onReset }: { label: string; onReset: () => void }) {
+  return (
+    <div className="rounded-3xl border border-dashed border-neutral-200 bg-white px-6 py-16 text-center">
+      <p className="text-[15px] text-neutral-600">{label}</p>
+      <Button onClick={onReset} variant="outline" className="mt-4 rounded-full px-5">
+        Reset filters
+      </Button>
+    </div>
+  );
+}
+
+function GridSkeleton() {
+  return (
+    <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+      {Array.from({ length: 8 }).map((_, index) => (
+        <div key={index} className="h-[280px] animate-pulse rounded-3xl bg-neutral-200/70" />
+      ))}
+    </div>
+  );
+}
 
 export default Marketplace;

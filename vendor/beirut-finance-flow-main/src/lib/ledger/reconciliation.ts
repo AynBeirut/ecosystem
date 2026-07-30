@@ -41,10 +41,10 @@ export function buildReconciliationReport(
 ): ReconciliationReport {
   const tb = buildTrialBalance(accounts, entries, lines, { endDate: asOfDate });
 
-  const glCash = tbBalanceForCodes(tb, ['1000']);
-  const glBank = tbBalanceForCodes(tb, ['1010']);
-  const glAr = tbBalanceForCodes(tb, ['1100']);
-  const glAp = -tbBalanceForCodes(tb, ['2000']);
+  const glCash = tbBalanceForCodes(tb, ['102']);
+  const glBank = tbBalanceForCodes(tb, ['106', '105']);
+  const glAr = tbBalanceForCodes(tb, ['110']);
+  const glAp = -tbBalanceForCodes(tb, ['201']);
 
   const rows: ReconciliationRow[] = [
     {

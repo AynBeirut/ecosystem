@@ -12,6 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { Plus, Building2, Phone, Mail, MapPin, FileText, TrendingUp, TrendingDown } from "lucide-react";
+import { openAccountingWithFocus } from "@/lib/ledger/ledgerActivity";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -206,6 +207,23 @@ const SuppliersManager = () => {
                           </div>
                           
                           <div className="flex items-center gap-4">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openAccountingWithFocus({
+                                  kind: "supplier",
+                                  supplierId: supplier.id,
+                                  supplierName: supplier.name,
+                                  label: `Supplier · ${supplier.name}`,
+                                });
+                              }}
+                            >
+                              <FileText className="h-4 w-4 mr-1" />
+                              Vouchers
+                            </Button>
                             <div className="text-right">
                               <p className="text-sm text-muted-foreground">Total Purchases</p>
                               <p className="font-bold">{formatCurrency(statement?.totalPurchases || 0, "USD")}</p>

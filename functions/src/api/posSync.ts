@@ -4,10 +4,18 @@ import * as crypto from 'crypto';
 import { canUseModule } from '../lib/entitlements';
 import {
   calculateAvailableStock,
+  normalizeIngredientId,
   recipeIngredients,
   StockRawMaterial,
   StockRecipe,
 } from '../lib/composedProductStock';
+import {
+  glPostExpensePaid,
+  glPostOrderSaleReversal,
+  glPostPayrollPayment,
+  glPostPurchaseReceived,
+} from '../lib/ledger/platformGlBridge';
+import { resolveOrderCogsLines } from '../lib/ledger/resolveOrderCogs';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
 
@@ -41,6 +49,26 @@ type PosOrderTotalsInput = {
   discount?: number | string;
   discountAmount?: number | string;
   total?: number | string;
+};
+
+type PosOrderCustomerInput = {
+  customerId?: unknown;
+  customer_id?: unknown;
+  customerLocalId?: unknown;
+  localCustomerId?: unknown;
+  clientId?: unknown;
+  client_id?: unknown;
+  customerName?: unknown;
+  customer_name?: unknown;
+  clientName?: unknown;
+  customerPhone?: unknown;
+  customer_phone?: unknown;
+  phone?: unknown;
+  customerEmail?: unknown;
+  customer_email?: unknown;
+  email?: unknown;
+  customer?: Record<string, unknown>;
+  client?: Record<string, unknown>;
 };
 
 function hashToken(token: string): string {
@@ -141,15 +169,254 @@ function readPosAuthFromBody(req: Request): { storeId: string; deviceId: string;
 function mapRecipeIngredients(
   recipe: StockRecipe | undefined,
   rawMaterialsById: Map<string, Record<string, unknown>>,
-): Array<{ materialId: string; name: string; quantity: number; unit: string }> {
+): Array<{ rawMaterialId: string; materialId: string; name: string; quantity: number; unit: string }> {
   return recipeIngredients(recipe).map((ingredient) => {
-    const materialId = String(ingredient.rawMaterialId || '').trim();
-    const material = rawMaterialsById.get(materialId) || {};
+    const rawMaterialId = normalizeIngredientId(ingredient);
+    const material = rawMaterialsById.get(rawMaterialId) || {};
     return {
-      materialId,
+      rawMaterialId,
+      materialId: rawMaterialId,
       name: String(material.name || material.materialName || '').trim(),
       quantity: Number(ingredient.quantity || 0),
       unit: String(material.unit || '').trim(),
+    };
+  });
+}
+
+function normalizeIsoTimestamp(value: unknown): string {
+  const raw = String(value || '').trim();
+  return raw || new Date().toISOString();
+}
+
+function normalizeOptionalString(value: unknown): string {
+  return String(value || '').trim();
+}
+
+function firstNonEmptyString(...values: unknown[]): string {
+  for (const value of values) {
+    const normalized = normalizeOptionalString(value);
+    if (normalized) return normalized;
+  }
+  return '';
+}
+
+async function markGlPostingPosted(ref: FirebaseFirestore.DocumentReference): Promise<void> {
+  await ref.set(
+    {
+      glPostingStatus: 'posted',
+      glPostedAt: admin.firestore.FieldValue.serverTimestamp(),
+      glPostingError: admin.firestore.FieldValue.delete(),
+    },
+    { merge: true },
+  );
+}
+
+async function markGlPostingFailed(
+  ref: FirebaseFirestore.DocumentReference,
+  error: unknown,
+): Promise<void> {
+  const message = error instanceof Error ? error.message : String(error);
+  await ref.set(
+    {
+      glPostingStatus: 'failed',
+      glPostingFailedAt: admin.firestore.FieldValue.serverTimestamp(),
+      glPostingError: message,
+    },
+    { merge: true },
+  );
+}
+
+async function findPosOrderBySaleId(
+  storeId: string,
+  saleId: string,
+): Promise<{ id: string; data: Record<string, unknown> } | null> {
+  const trimmedSaleId = String(saleId || '').trim();
+  if (!trimmedSaleId) return null;
+
+  const localSaleSnap = await db.collection('orders').where('localSaleId', '==', trimmedSaleId).limit(10).get();
+  const localMatch = localSaleSnap.docs.find(
+    (doc: FirebaseFirestore.QueryDocumentSnapshot) => doc.data()?.storeId === storeId,
+  );
+  if (localMatch) {
+    return { id: localMatch.id, data: localMatch.data() as Record<string, unknown> };
+  }
+
+  const legacySaleSnap = await db.collection('orders').where('posSaleId', '==', trimmedSaleId).limit(10).get();
+  const legacyMatch = legacySaleSnap.docs.find(
+    (doc: FirebaseFirestore.QueryDocumentSnapshot) => doc.data()?.storeId === storeId,
+  );
+  if (legacyMatch) {
+    return { id: legacyMatch.id, data: legacyMatch.data() as Record<string, unknown> };
+  }
+
+  return null;
+}
+
+function extractOrderCustomerInput(body: Record<string, unknown>): {
+  customerLocalId: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+} {
+  const customerObj =
+    body.customer && typeof body.customer === 'object' ? (body.customer as Record<string, unknown>) : {};
+  const clientObj =
+    body.client && typeof body.client === 'object' ? (body.client as Record<string, unknown>) : {};
+
+  return {
+    customerLocalId: firstNonEmptyString(
+      body.customerId,
+      body.customer_id,
+      body.customerLocalId,
+      body.localCustomerId,
+      body.clientId,
+      body.client_id,
+      customerObj.customerId,
+      customerObj.id,
+      customerObj.localId,
+      clientObj.customerId,
+      clientObj.id,
+      clientObj.localId,
+    ),
+    customerName: firstNonEmptyString(
+      body.customerName,
+      body.customer_name,
+      body.clientName,
+      customerObj.name,
+      customerObj.customerName,
+      clientObj.name,
+      clientObj.customerName,
+    ),
+    customerPhone: firstNonEmptyString(
+      body.customerPhone,
+      body.customer_phone,
+      body.phone,
+      customerObj.phone,
+      customerObj.customerPhone,
+      clientObj.phone,
+      clientObj.customerPhone,
+    ),
+    customerEmail: firstNonEmptyString(
+      body.customerEmail,
+      body.customer_email,
+      body.email,
+      customerObj.email,
+      customerObj.customerEmail,
+      clientObj.email,
+      clientObj.customerEmail,
+    ),
+  };
+}
+
+async function lookupCustomerByField(
+  field: 'phone' | 'email' | 'name',
+  value: string,
+  storeId: string,
+): Promise<{ id: string; data: Record<string, unknown> } | null> {
+  if (!value) return null;
+  const snap = await db.collection('customers').where(field, '==', value).limit(10).get();
+  const match = snap.docs.find(
+    (doc: FirebaseFirestore.QueryDocumentSnapshot) => doc.data()?.storeId === storeId,
+  );
+  if (!match) return null;
+  return { id: match.id, data: match.data() as Record<string, unknown> };
+}
+
+async function resolveOrderCustomer(
+  storeId: string,
+  raw: {
+    customerLocalId: string;
+    customerName: string;
+    customerPhone: string;
+    customerEmail: string;
+  },
+): Promise<{
+  customerId?: string;
+  customerName: string;
+  customerPhone: string;
+  customerEmail: string;
+}> {
+  const docCandidates = Array.from(
+    new Set(
+      [raw.customerLocalId]
+        .filter(Boolean)
+        .flatMap((id) =>
+          id.startsWith(`pos-${storeId}-`) ? [id] : [`pos-${storeId}-${id}`, id],
+        ),
+    ),
+  );
+
+  for (const docId of docCandidates) {
+    const snap = await db.collection('customers').doc(docId).get();
+    if (snap.exists && snap.data()?.storeId === storeId) {
+      const data = snap.data() as Record<string, unknown>;
+      return {
+        customerId: snap.id,
+        customerName: firstNonEmptyString(raw.customerName, data.name, data.customerName, 'Walk-in Customer'),
+        customerPhone: firstNonEmptyString(raw.customerPhone, data.phone, data.customerPhone),
+        customerEmail: firstNonEmptyString(raw.customerEmail, data.email, data.customerEmail),
+      };
+    }
+  }
+
+  const fieldMatch =
+    (await lookupCustomerByField('email', raw.customerEmail, storeId)) ||
+    (await lookupCustomerByField('phone', raw.customerPhone, storeId)) ||
+    (await lookupCustomerByField('name', raw.customerName, storeId));
+
+  if (fieldMatch) {
+    return {
+      customerId: fieldMatch.id,
+      customerName: firstNonEmptyString(raw.customerName, fieldMatch.data.name, 'Walk-in Customer'),
+      customerPhone: firstNonEmptyString(raw.customerPhone, fieldMatch.data.phone),
+      customerEmail: firstNonEmptyString(raw.customerEmail, fieldMatch.data.email),
+    };
+  }
+
+  const customerName =
+    raw.customerName ||
+    raw.customerPhone ||
+    raw.customerEmail ||
+    'Walk-in Customer';
+
+  return {
+    customerName,
+    customerPhone: raw.customerPhone,
+    customerEmail: raw.customerEmail,
+  };
+}
+
+async function resolvePosOrderProductIds(
+  storeId: string,
+  items: Array<{
+    productId: string;
+    name: string;
+    quantity: number;
+    price: number;
+    unitPrice: number;
+    total: number;
+  }>,
+): Promise<Array<Record<string, unknown>>> {
+  const productsSnap = await db.collection('products').where('storeId', '==', storeId).get();
+  const byAnyId = new Map<string, string>();
+
+  productsSnap.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+    const data = doc.data() as Record<string, unknown>;
+    byAnyId.set(doc.id, doc.id);
+    const localId = String(data.localId || '').trim();
+    if (localId) {
+      byAnyId.set(localId, doc.id);
+      byAnyId.set(`pos-${storeId}-${localId}`, doc.id);
+    }
+  });
+
+  return items.map((item) => {
+    const rawProductId = String(item.productId || '').trim();
+    const resolvedProductId = byAnyId.get(rawProductId) || rawProductId;
+    return {
+      ...item,
+      productId: resolvedProductId,
+      ...(resolvedProductId !== rawProductId ? { posProductLocalId: rawProductId } : {}),
     };
   });
 }
@@ -391,6 +658,7 @@ export async function getPosCatalog(req: Request, res: Response): Promise<void> 
 
 export async function createPosOrder(req: Request, res: Response): Promise<void> {
   try {
+    const body = (req.body || {}) as Record<string, unknown>;
     const {
       storeId,
       deviceId,
@@ -401,7 +669,7 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
       paymentMethod,
       timestamp,
       composedProductSource: composedProductSourceInput,
-    } = req.body as {
+    } = body as {
       storeId?: string;
       deviceId?: string;
       deviceToken?: string;
@@ -471,6 +739,11 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
       return;
     }
 
+    const resolvedItems = await resolvePosOrderProductIds(
+      authResult.auth.storeId,
+      normalizedItems,
+    );
+
     const totalsInput = totals || {};
     const subtotal = Number(totalsInput.subtotal ?? 0);
     const taxAmount = Number(totalsInput.taxAmount ?? totalsInput.tax ?? 0);
@@ -483,6 +756,11 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
 
     const saleTimestamp =
       typeof timestamp === 'string' && timestamp.trim() ? timestamp.trim() : new Date().toISOString();
+
+    const resolvedCustomer = await resolveOrderCustomer(
+      authResult.auth.storeId,
+      extractOrderCustomerInput(body),
+    );
 
     const orderRef = db.collection('orders').doc();
     const writeResult = await db.runTransaction(async (tx: unknown) => {
@@ -523,7 +801,11 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
         localSaleId: normalizedLocalSaleId,
         composedProductSource,
         invoiceNumber,
-        items: normalizedItems,
+        ...(resolvedCustomer.customerId ? { customerId: resolvedCustomer.customerId } : {}),
+        customerName: resolvedCustomer.customerName,
+        ...(resolvedCustomer.customerPhone ? { customerPhone: resolvedCustomer.customerPhone } : {}),
+        ...(resolvedCustomer.customerEmail ? { customerEmail: resolvedCustomer.customerEmail } : {}),
+        items: resolvedItems,
         subtotal: Number.isFinite(subtotal) ? subtotal : 0,
         taxType: 'none',
         taxRate: 0,
@@ -832,31 +1114,94 @@ export async function syncPosPurchases(req: Request, res: Response): Promise<voi
     if (!Array.isArray(purchases) || purchases.length === 0) { res.status(400).json({ error: 'purchases array required' }); return; }
 
     const batch = db.batch();
+    const stagedPurchases: Array<{
+      ref: FirebaseFirestore.DocumentReference;
+      docId: string;
+      date: string;
+      supplierName: string;
+      items: Record<string, unknown>[];
+      totalAmount: number;
+      totalCost: number;
+      subtotal: number;
+      taxAmount: number;
+      taxType: string;
+      taxRate: number;
+      status: string;
+    }> = [];
     let count = 0;
     for (const p of purchases) {
       const localId = String(p.id || '').trim();
       if (!localId) continue;
-      const docRef = db.collection('purchases').doc(`pos-${authResult.auth.storeId}-${localId}`);
+      const docId = `pos-${authResult.auth.storeId}-${localId}`;
+      const docRef = db.collection('purchases').doc(docId);
+      const date = normalizeIsoTimestamp(p.date || p.delivery_date);
+      const supplierName = String(p.supplierName || p.supplier_name || '').trim();
+      const items = Array.isArray(p.items) ? p.items : [];
+      const totalAmount = Number(p.totalAmount || p.total_amount || p.total) || 0;
+      const status = String(p.status || 'received').trim();
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
         supplierId: String(p.supplierId || p.supplier_id || '').trim(),
-        supplierName: String(p.supplierName || p.supplier_name || '').trim(),
-        date: String(p.date || p.delivery_date || '').trim(),
+        supplierName,
+        date,
         invoiceNumber: String(p.invoiceNumber || p.invoice_number || '').trim(),
-        items: Array.isArray(p.items) ? p.items : [],
-        totalAmount: Number(p.totalAmount || p.total_amount || p.total) || 0,
+        items,
+        totalAmount,
+        totalCost: Number(p.totalCost || p.total_cost) || totalAmount,
+        subtotal: Number(p.subtotal) || 0,
+        taxAmount: Number(p.taxAmount || p.tax_amount || p.vat) || 0,
+        taxType: String(p.taxType || p.tax_type || '').trim(),
+        taxRate: Number(p.taxRate || p.tax_rate) || 0,
         paidAmount: Number(p.paidAmount || p.paid_amount) || 0,
-        status: String(p.status || 'received').trim(),
+        status,
         notes: String(p.notes || '').trim(),
         source: 'pos',
         posDeviceId: authResult.auth.deviceId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      stagedPurchases.push({
+        ref: docRef,
+        docId,
+        date,
+        supplierName,
+        items,
+        totalAmount,
+        status,
+        subtotal: Number(p.subtotal) || 0,
+        taxAmount: Number(p.taxAmount || p.tax_amount || p.vat) || 0,
+        taxType: String(p.taxType || p.tax_type || '').trim(),
+        taxRate: Number(p.taxRate || p.tax_rate) || 0,
+        totalCost: Number(p.totalCost || p.total_cost) || totalAmount,
+      });
       count++;
     }
     await batch.commit();
+
+    for (const purchase of stagedPurchases) {
+      try {
+        await glPostPurchaseReceived(authResult.auth.storeId, {
+          id: purchase.docId,
+          date: purchase.date,
+          supplierName: purchase.supplierName,
+          items: purchase.items as Array<Record<string, unknown>>,
+          totalAmount: purchase.totalAmount,
+          totalCost: purchase.totalCost,
+          total: purchase.totalCost,
+          subtotal: purchase.subtotal,
+          taxAmount: purchase.taxAmount,
+          taxType: purchase.taxType,
+          taxRate: purchase.taxRate,
+          status: purchase.status,
+        });
+        await markGlPostingPosted(purchase.ref);
+      } catch (error) {
+        await markGlPostingFailed(purchase.ref, error);
+        throw error;
+      }
+    }
+
     res.status(200).json({ success: true, synced: count });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Purchases sync failed' });
@@ -871,20 +1216,35 @@ export async function syncPosExpenses(req: Request, res: Response): Promise<void
     if (!Array.isArray(expenses) || expenses.length === 0) { res.status(400).json({ error: 'expenses array required' }); return; }
 
     const batch = db.batch();
+    const stagedExpenses: Array<{
+      ref: FirebaseFirestore.DocumentReference;
+      docId: string;
+      date: string;
+      category: string;
+      description: string;
+      amount: number;
+      paymentMethod: string;
+    }> = [];
     let count = 0;
     for (const e of expenses) {
       const localId = String(e.id || '').trim();
       if (!localId) continue;
-      const docRef = db.collection('expenses').doc(`pos-${authResult.auth.storeId}-${localId}`);
+      const docId = `pos-${authResult.auth.storeId}-${localId}`;
+      const docRef = db.collection('expenses').doc(docId);
+      const category = String(e.category || '').trim();
+      const description = String(e.description || '').trim();
+      const amount = Number(e.amount) || 0;
+      const date = normalizeIsoTimestamp(e.date);
+      const paymentMethod = String(e.paymentMethod || e.payment_method || 'cash').trim();
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
-        category: String(e.category || '').trim(),
+        category,
         subcategory: String(e.subcategory || '').trim(),
-        description: String(e.description || '').trim(),
-        amount: Number(e.amount) || 0,
-        date: String(e.date || '').trim(),
-        paymentMethod: String(e.paymentMethod || e.payment_method || 'cash').trim(),
+        description,
+        amount,
+        date,
+        paymentMethod,
         reference: String(e.reference || '').trim(),
         vendor: String(e.vendor || '').trim(),
         status: String(e.status || 'paid').trim(),
@@ -894,9 +1254,28 @@ export async function syncPosExpenses(req: Request, res: Response): Promise<void
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      stagedExpenses.push({ ref: docRef, docId, date, category, description, amount, paymentMethod });
       count++;
     }
     await batch.commit();
+
+    for (const expense of stagedExpenses) {
+      try {
+        await glPostExpensePaid(authResult.auth.storeId, {
+          id: expense.docId,
+          date: expense.date,
+          category: expense.category,
+          description: expense.description,
+          amount: expense.amount,
+          paymentMethod: expense.paymentMethod,
+        });
+        await markGlPostingPosted(expense.ref);
+      } catch (error) {
+        await markGlPostingFailed(expense.ref, error);
+        throw error;
+      }
+    }
+
     res.status(200).json({ success: true, synced: count });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Expenses sync failed' });
@@ -919,12 +1298,17 @@ export async function syncPosStaff(req: Request, res: Response): Promise<void> {
     for (const s of staff) {
       const localId = String(s.id || '').trim();
       if (!localId) continue;
+      const firstName = String(s.firstName || '').trim();
+      const lastName = String(s.lastName || '').trim();
+      const displayName = [firstName, lastName].filter(Boolean).join(' ').trim() || firstName || lastName;
       const docRef = db.collection('staff').doc(`pos-${authResult.auth.storeId}-${localId}`);
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
-        firstName: String(s.firstName || '').trim(),
-        lastName: String(s.lastName || '').trim(),
+        firstName,
+        lastName,
+        name: displayName,
+        staffName: displayName,
         phone: String(s.phone || '').trim(),
         email: String(s.email || '').trim(),
         position: String(s.position || '').trim(),
@@ -958,34 +1342,90 @@ export async function syncPosSalaries(req: Request, res: Response): Promise<void
     if (!authResult.ok) { res.status(authResult.status).json({ error: authResult.error }); return; }
     if (!Array.isArray(salaries) || salaries.length === 0) { res.status(400).json({ error: 'salaries array required' }); return; }
 
+    const staffSnap = await db.collection('staff').where('storeId', '==', authResult.auth.storeId).get();
+    const staffByLocalId = new Map<string, { staffName: string }>();
+    const staffByDocId = new Map<string, { staffName: string }>();
+    staffSnap.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+      const data = doc.data() as { localId?: unknown; firstName?: unknown; lastName?: unknown; name?: unknown; staffName?: unknown };
+      const firstName = String(data.firstName || '').trim();
+      const lastName = String(data.lastName || '').trim();
+      const displayName =
+        String(data.staffName || '').trim() ||
+        String(data.name || '').trim() ||
+        [firstName, lastName].filter(Boolean).join(' ').trim();
+      const localId = String(data.localId || '').trim();
+      if (displayName) {
+        if (localId) staffByLocalId.set(localId, { staffName: displayName });
+        staffByDocId.set(doc.id, { staffName: displayName });
+      }
+    });
+
     const batch = db.batch();
+    const stagedSalaries: Array<{
+      ref: FirebaseFirestore.DocumentReference;
+      docId: string;
+      netAmount: number;
+      paymentDate: string;
+      paymentMethod: string;
+    }> = [];
     let count = 0;
     for (const s of salaries) {
       const localId = String(s.id || '').trim();
       if (!localId) continue;
-      const docRef = db.collection('salaryPayments').doc(`pos-${authResult.auth.storeId}-${localId}`);
+      const docId = `pos-${authResult.auth.storeId}-${localId}`;
+      const docRef = db.collection('salaryPayments').doc(docId);
+      const staffId = String(s.staffId || '').trim();
+      const netAmount = Number(s.netAmount) || 0;
+      const amount = netAmount;
+      const paymentMethod = String(s.paymentMethod || 'cash').trim();
+      const paymentDate = normalizeIsoTimestamp(s.paymentDate);
+      const resolvedStaffName =
+        String(s.staffName || s.employeeName || s.name || '').trim() ||
+        staffByLocalId.get(staffId)?.staffName ||
+        staffByDocId.get(staffId)?.staffName ||
+        '';
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
-        staffId: String(s.staffId || '').trim(),
+        staffId,
+        staffName: resolvedStaffName,
         paymentType: String(s.paymentType || '').trim(),
         paymentPeriod: String(s.paymentPeriod || '').trim(),
         baseAmount: Number(s.baseAmount) || 0,
         overtimeAmount: Number(s.overtimeAmount) || 0,
         bonusAmount: Number(s.bonusAmount) || 0,
         deductions: Number(s.deductions) || 0,
-        netAmount: Number(s.netAmount) || 0,
-        paymentMethod: String(s.paymentMethod || 'cash').trim(),
-        paymentDate: String(s.paymentDate || '').trim(),
+        amount,
+        netAmount,
+        paymentMethod,
+        paymentDate,
         status: String(s.status || 'paid').trim(),
         source: 'pos',
         posDeviceId: authResult.auth.deviceId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      stagedSalaries.push({ ref: docRef, docId, netAmount, paymentDate, paymentMethod });
       count++;
     }
     await batch.commit();
+
+    for (const salary of stagedSalaries) {
+      try {
+        await glPostPayrollPayment(
+          authResult.auth.storeId,
+          salary.docId,
+          salary.netAmount,
+          salary.paymentDate,
+          salary.paymentMethod,
+        );
+        await markGlPostingPosted(salary.ref);
+      } catch (error) {
+        await markGlPostingFailed(salary.ref, error);
+        throw error;
+      }
+    }
+
     res.status(200).json({ success: true, synced: count });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Salaries sync failed' });
@@ -1042,6 +1482,20 @@ export async function syncPosRecipes(req: Request, res: Response): Promise<void>
     for (const r of recipes) {
       const localId = String(r.id || '').trim();
       if (!localId) continue;
+      const normalizedIngredients = Array.isArray(r.ingredients)
+        ? r.ingredients
+            .map((ingredient: Record<string, unknown>) => {
+              const rawMaterialId = String(
+                ingredient.rawMaterialId || ingredient.materialId || '',
+              ).trim();
+              if (!rawMaterialId) return null;
+              return {
+                ...ingredient,
+                rawMaterialId,
+              };
+            })
+            .filter(Boolean)
+        : [];
       const docRef = db.collection('recipes').doc(`pos-${authResult.auth.storeId}-${localId}`);
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
@@ -1053,7 +1507,7 @@ export async function syncPosRecipes(req: Request, res: Response): Promise<void>
         preparationTime: Number(r.preparationTime) || 0,
         instructions: String(r.instructions || '').trim(),
         costPerServing: Number(r.costPerServing) || 0,
-        ingredients: Array.isArray(r.ingredients) ? r.ingredients : [],
+        ingredients: normalizedIngredients,
         isActive: r.isActive !== false && r.isActive !== 0,
         source: 'pos',
         posDeviceId: authResult.auth.deviceId,
@@ -1077,32 +1531,109 @@ export async function syncPosRefunds(req: Request, res: Response): Promise<void>
     if (!Array.isArray(refunds) || refunds.length === 0) { res.status(400).json({ error: 'refunds array required' }); return; }
 
     const batch = db.batch();
+    const stagedRefunds: Array<{
+      ref: FirebaseFirestore.DocumentReference;
+      docId: string;
+      saleId: string;
+      refundAmount: number;
+      refundType: string;
+      refundItems: Array<Record<string, unknown>>;
+      paymentMethod: string;
+      timestamp: string;
+    }> = [];
     let count = 0;
     for (const r of refunds) {
       const localId = String(r.id || '').trim();
       if (!localId) continue;
-      const docRef = db.collection('salesReturns').doc(`pos-${authResult.auth.storeId}-${localId}`);
+      const docId = `pos-${authResult.auth.storeId}-${localId}`;
+      const docRef = db.collection('salesReturns').doc(docId);
+      const saleId = String(r.saleId || '').trim();
+      const refundAmount = Number(r.refundAmount) || 0;
+      const refundType = String(r.refundType || 'full').trim();
+      const refundItems = Array.isArray(r.refundItems) ? r.refundItems : [];
+      const paymentMethod = String(r.paymentMethod || 'cash').trim();
+      const timestamp = normalizeIsoTimestamp(r.timestamp);
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
-        saleId: String(r.saleId || '').trim(),
-        refundAmount: Number(r.refundAmount) || 0,
-        refundType: String(r.refundType || 'full').trim(),
-        refundItems: Array.isArray(r.refundItems) ? r.refundItems : [],
+        saleId,
+        refundAmount,
+        refundType,
+        refundItems,
         reason: String(r.reason || '').trim(),
         approvedBy: String(r.approvedBy || '').trim(),
         processedBy: String(r.processedBy || '').trim(),
-        timestamp: String(r.timestamp || '').trim(),
-        paymentMethod: String(r.paymentMethod || 'cash').trim(),
+        timestamp,
+        paymentMethod,
         status: 'completed',
         source: 'pos',
         posDeviceId: authResult.auth.deviceId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
+      stagedRefunds.push({
+        ref: docRef,
+        docId,
+        saleId,
+        refundAmount,
+        refundType,
+        refundItems,
+        paymentMethod,
+        timestamp,
+      });
       count++;
     }
     await batch.commit();
+
+    for (const refund of stagedRefunds) {
+      try {
+        const order = await findPosOrderBySaleId(authResult.auth.storeId, refund.saleId);
+        if (!order) {
+          throw new Error(`Refund references unknown POS saleId: ${refund.saleId}`);
+        }
+
+        const orderItems = Array.isArray(order.data.items) ? order.data.items : [];
+        const orderTotal = Number(order.data.total || 0);
+        let cogsLines =
+          refund.refundItems.length > 0
+            ? await resolveOrderCogsLines(authResult.auth.storeId, refund.refundItems)
+            : await resolveOrderCogsLines(authResult.auth.storeId, orderItems);
+
+        if (
+          refund.refundType.toLowerCase() !== 'full' &&
+          refund.refundItems.length === 0 &&
+          refund.refundAmount > 0 &&
+          orderTotal > 0
+        ) {
+          const factor = Math.max(0, Math.min(1, refund.refundAmount / orderTotal));
+          cogsLines = cogsLines.map((line) => ({
+            ...line,
+            quantity: line.quantity * factor,
+          }));
+        }
+
+        await glPostOrderSaleReversal(
+          authResult.auth.storeId,
+          {
+            id: order.id,
+            storeId: authResult.auth.storeId,
+            date: refund.timestamp,
+            total: refund.refundAmount > 0 ? refund.refundAmount : orderTotal,
+            paymentMethod:
+              String(order.data.paymentMethod || refund.paymentMethod || 'cash').trim(),
+            invoiceNumber: String(order.data.invoiceNumber || order.id).trim(),
+            cogsLines,
+            isCashSale: true,
+          },
+          refund.docId,
+        );
+        await markGlPostingPosted(refund.ref);
+      } catch (error) {
+        await markGlPostingFailed(refund.ref, error);
+        throw error;
+      }
+    }
+
     res.status(200).json({ success: true, synced: count });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Refunds sync failed' });

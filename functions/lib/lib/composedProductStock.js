@@ -1,8 +1,12 @@
 "use strict";
 /** Mirror of src/lib/composedProductStock.ts — keep stock math in sync. */
 Object.defineProperty(exports, "__esModule", { value: true });
+exports.normalizeIngredientId = normalizeIngredientId;
 exports.recipeIngredients = recipeIngredients;
 exports.calculateAvailableStock = calculateAvailableStock;
+function normalizeIngredientId(ingredient) {
+    return String(ingredient.rawMaterialId || ingredient.materialId || '').trim();
+}
 function recipeIngredients(recipe) {
     if (!recipe)
         return [];
@@ -25,7 +29,7 @@ function calculateAvailableStock(recipe, rawMaterials) {
     });
     let minUnits = Infinity;
     for (const ingredient of ingredients) {
-        const rawMaterial = rawMaterialsMap.get(ingredient.rawMaterialId);
+        const rawMaterial = rawMaterialsMap.get(normalizeIngredientId(ingredient));
         if (!rawMaterial)
             return 0;
         const availableStock = Number(rawMaterial.currentStock || 0);

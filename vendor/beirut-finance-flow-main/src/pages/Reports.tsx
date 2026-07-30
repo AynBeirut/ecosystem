@@ -340,13 +340,13 @@ const Reports = () => {
     <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <div>
+          <div className="finance-page-header">
             <h1 className="text-2xl font-bold tracking-tight">Financial Reports</h1>
-            <p className="text-muted-foreground">Comprehensive business analytics</p>
+            <p className="text-sm text-muted-foreground mt-1">Comprehensive business analytics</p>
           </div>
-          
-          <Select value={period} onValueChange={(value: any) => setPeriod(value)}>
-            <SelectTrigger className="w-[180px]">
+
+          <Select value={period} onValueChange={(value: "month" | "quarter" | "year") => setPeriod(value)}>
+            <SelectTrigger className="finance-embed-select w-[180px]">
               <SelectValue placeholder="Select period" />
             </SelectTrigger>
             <SelectContent>

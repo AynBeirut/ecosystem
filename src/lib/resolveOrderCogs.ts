@@ -45,6 +45,7 @@ export function orderGlInputFromOrder(
     id: string;
     storeId: string;
     total?: number;
+    taxAmount?: number;
     paymentMethod?: string;
     paymentStatus?: string;
     amountPaid?: number;
@@ -65,6 +66,7 @@ export function orderGlInputFromOrder(
     storeId: order.storeId,
     date,
     total: round2(Number(order.total) || 0),
+    taxAmount: round2(Number(order.taxAmount) || 0),
     paymentMethod: order.paymentMethod || 'cash',
     invoiceNumber: order.invoiceNumber || order.id,
     cogsLines,

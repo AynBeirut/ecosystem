@@ -24,10 +24,14 @@ import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Sha
 import { getActualStoreId } from '@/lib/storeUtils';
 import { logAction } from '@/lib/auditLog';
 import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
+import { formatMoney } from '@/lib/money/format';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { adminOutlineButtonClass } from '@/lib/adminStyles';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useSystemGuide } from '@/hooks/useSystemGuide';
+import SystemGuideInfo from '@/components/system-guide/SystemGuideInfo';
 
 const devLog = (...args: unknown[]) => {
   if (import.meta.env.DEV) devLog(...args);
@@ -142,6 +146,7 @@ const AdminOrders: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { enabled: systemGuideEnabled } = useSystemGuide();
   
   const [orders, setOrders] = useState<(Order & { id: string })[]>([]);
   const [products, setProducts] = useState<ProductForOrder[]>([]);
@@ -289,8 +294,10 @@ const AdminOrders: React.FC = () => {
 
   const isOrderEligibleForShippingWorkflow = (order: Order & { id: string }) => {
     const status = String(order.status || '').toLowerCase();
-    return ['confirmed', 'processing', 'ready'].includes(status);
+    return ['pending', 'confirmed', 'processing', 'ready'].includes(status);
   };
+
+  const resolveStoreId = () => getActualStoreId(user) || user?.storeId || '';
 
   const getNormalizedPaymentStatus = (order: Order & { id: string }) => {
     const rawStatus = String(order.paymentStatus || '').toLowerCase();
@@ -916,7 +923,7 @@ const AdminOrders: React.FC = () => {
         setProducts(productsData);
         setCustomers(customersData as Customer[]);
         
-        // Combine staff members with role 'sales_person' and sub-accounts with role 'sales'
+        // Sales attribution: sales sub-accounts only (cashiers excluded — Q3 Option A)
         const staffSalesPeople = (staffData as StaffMember[]).filter(s => s.role === 'sales_person' && s.status === 'active');
         const subAccountSalesPeople = (subAccountsData as SubAccountSales[])
           .filter(s => s.role === 'sales' && s.status === 'active')
@@ -1029,19 +1036,34 @@ const AdminOrders: React.FC = () => {
     return result.invoiceNumber;
   };
 
+  // Base currency + large-number style come from the store profile (multi-currency).
+  const baseCurrency = storeProfile?.mainCurrency || 'USD';
+  const numberStyle: 'full' | 'compact' = storeProfile?.numberFormat === 'compact' ? 'compact' : 'full';
+  const secondaryCurrency = storeProfile?.secondaryCurrency && storeProfile.secondaryCurrency !== baseCurrency
+    ? storeProfile.secondaryCurrency
+    : undefined;
+  const secondaryRate = typeof storeProfile?.customExchangeRate === 'number' && storeProfile.customExchangeRate > 0
+    ? storeProfile.customExchangeRate
+    : undefined;
+
+  /** Plain-text money in the store's base currency (for JSX + toasts). */
+  const money = (amount: number): string =>
+    formatMoney(Number(amount) || 0, { currency: baseCurrency, style: numberStyle });
+
+  /**
+   * Dual-currency HTML (base primary + secondary line) for receipts/print.
+   * Secondary is display-only, computed live — never persisted.
+   */
   const formatCurrency = (amount: number, showDual: boolean = true): string => {
-    const usd = `$${amount.toFixed(2)}`;
-    
-    devLog('formatCurrency called:', { amount, showDual, hasProfile: !!storeProfile, rate: storeProfile?.customExchangeRate });
-    
-    if (showDual && storeProfile?.customExchangeRate && storeProfile.customExchangeRate > 0) {
-      const lbp = (amount * storeProfile.customExchangeRate).toFixed(0);
-      devLog('Showing dual currency:', { usd, lbp });
-      return `${usd}<br/><span style="font-size: 12px; color: #666;">${Number(lbp).toLocaleString()} LBP</span>`;
+    const primary = money(amount);
+    if (showDual && secondaryCurrency && secondaryRate) {
+      const secondary = formatMoney((Number(amount) || 0) * secondaryRate, {
+        currency: secondaryCurrency,
+        style: numberStyle,
+      });
+      return `${primary}<br/><span style="font-size: 12px; color: #666;">${secondary}</span>`;
     }
-    
-    devLog('Showing USD only');
-    return usd;
+    return primary;
   };
 
   const handleCreateInlineCustomer = async () => {
@@ -2083,7 +2105,7 @@ const AdminOrders: React.FC = () => {
       if (sanitizedRefundAmount > currentPaid + 0.0001) {
         toast({
           title: 'Amount Exceeds Paid Balance',
-          description: `Maximum refundable is $${currentPaid.toFixed(2)} for this order.`,
+          description: `Maximum refundable is ${money(currentPaid)} for this order.`,
           variant: 'destructive',
         });
         return;
@@ -2270,25 +2292,25 @@ const AdminOrders: React.FC = () => {
           <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px;">
             <div>
               <p style="margin: 0; color: #666; font-size: 12px;">Invoice Total</p>
-              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${(order.total || 0).toFixed(2)}</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">${money(order.total || 0)}</p>
             </div>
             <div style="text-align: right;">
               <p style="margin: 0; color: #666; font-size: 12px;">Previous Payments</p>
-              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">$${previousNetPaid.toFixed(2)}</p>
+              <p style="margin: 5px 0; font-size: 18px; font-weight: 600;">${money(previousNetPaid)}</p>
             </div>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; text-align: center;">
             <p style="margin: 0; color: #666; font-size: 14px;">${amountLabel}</p>
-            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: ${amountColor};">$${paymentAmount.toFixed(2)}</p>
+            <p style="margin: 10px 0; font-size: 32px; font-weight: bold; color: ${amountColor};">${money(paymentAmount)}</p>
           </div>
           <div style="border-top: 2px dashed #e5e7eb; padding-top: 15px; margin-top: 15px;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
               <span style="font-size: 16px; font-weight: 600;">Total Paid:</span>
-              <span style="font-size: 18px; font-weight: bold;">$${(order.amountPaid || 0).toFixed(2)}</span>
+              <span style="font-size: 18px; font-weight: bold;">${money(order.amountPaid || 0)}</span>
             </div>
             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px;">
               <span style="font-size: 16px; font-weight: 600;">Balance Due:</span>
-              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">$${((order.total || 0) - (order.amountPaid || 0)).toFixed(2)}</span>
+              <span style="font-size: 18px; font-weight: bold; color: #ef4444;">${money((order.total || 0) - (order.amountPaid || 0))}</span>
             </div>
           </div>
         </div>
@@ -2355,7 +2377,7 @@ const AdminOrders: React.FC = () => {
       try {
         await navigator.share({
           title: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} Receipt ${payment.id}`,
-          text: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} of $${Math.abs(payment.amount).toFixed(2)} for Invoice ${order.invoiceNumber || order.orderNumber}`,
+          text: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} of ${money(Math.abs(payment.amount))} for Invoice ${order.invoiceNumber || order.orderNumber}`,
         });
       } catch (error) {
         console.error('Error sharing:', error);
@@ -2998,7 +3020,13 @@ const AdminOrders: React.FC = () => {
   };
 
   const markOrdersLabeled = async (orderIds: string[], shippingBatchId: string, manifestId?: string) => {
-    if (!user?.storeId || orderIds.length === 0) return;
+    const storeId = resolveStoreId();
+    if (!storeId || orderIds.length === 0) {
+      if (!storeId) {
+        toast({ title: 'Store not found', description: 'Could not resolve store for label updates.', variant: 'destructive' });
+      }
+      return;
+    }
     const db = getFirestore();
     const now = new Date().toISOString();
 
@@ -3028,7 +3056,7 @@ const AdminOrders: React.FC = () => {
 
   const handleGenerateOrderLabel = async (order: Order & { id: string }) => {
     if (!isOrderEligibleForShippingWorkflow(order)) {
-      toast({ title: 'Not Eligible', description: 'Order must be confirmed, processing, or ready.', variant: 'destructive' });
+      toast({ title: 'Not Eligible', description: 'Order must be pending, confirmed, processing, or ready.', variant: 'destructive' });
       return;
     }
 
@@ -3051,7 +3079,7 @@ const AdminOrders: React.FC = () => {
   const handleGenerateBulkLabels = async () => {
     const selected = getSelectedShippingOrders();
     if (selected.length === 0) {
-      toast({ title: 'No Eligible Orders', description: 'Select at least one confirmed/processing/ready order.', variant: 'destructive' });
+      toast({ title: 'No Eligible Orders', description: 'Select at least one pending/confirmed/processing/ready order.', variant: 'destructive' });
       return;
     }
 
@@ -3071,7 +3099,7 @@ const AdminOrders: React.FC = () => {
   const handleGenerateManifest = async () => {
     const selected = getSelectedShippingOrders();
     if (selected.length === 0) {
-      toast({ title: 'No Eligible Orders', description: 'Select at least one confirmed/processing/ready order.', variant: 'destructive' });
+      toast({ title: 'No Eligible Orders', description: 'Select at least one pending/confirmed/processing/ready order.', variant: 'destructive' });
       return;
     }
 
@@ -3125,10 +3153,14 @@ const AdminOrders: React.FC = () => {
   };
 
   const handleSchedulePickup = async () => {
-    if (!user?.storeId) return;
+    const storeId = resolveStoreId();
+    if (!storeId) {
+      toast({ title: 'Store not found', description: 'Could not resolve store for pickup scheduling.', variant: 'destructive' });
+      return;
+    }
     const selected = getSelectedShippingOrders();
     if (selected.length === 0) {
-      toast({ title: 'No Eligible Orders', description: 'Select at least one confirmed/processing/ready order.', variant: 'destructive' });
+      toast({ title: 'No Eligible Orders', description: 'Select at least one pending/confirmed/processing/ready order.', variant: 'destructive' });
       return;
     }
 
@@ -3258,7 +3290,21 @@ const AdminOrders: React.FC = () => {
 
   return (
     <AdminPageShell
-      title="Sales Orders"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          Sales Orders
+          <SystemGuideInfo
+            enabled={systemGuideEnabled}
+            label="What Sales Orders does"
+            title="Sales Orders"
+            content={[
+              'Sales Orders are your day-to-day sale records for customers.',
+              'Use this screen to create orders, collect payment, print or share invoices, and track what is still unpaid or still in progress.',
+            ]}
+            className="border-white/25 text-white/80 hover:text-white"
+          />
+        </span>
+      )}
       description="Create and manage customer sales orders"
       eyebrow="Daily Operations"
       actions={
@@ -3498,7 +3544,7 @@ const AdminOrders: React.FC = () => {
                                 <SelectContent>
                                   {products.map(p => (
                                     <SelectItem key={p.id} value={p.id}>
-                                      {p.name} - ${(p.sellingPrice || p.price || 0).toFixed(2)}
+                                      {p.name} - {money(p.sellingPrice || p.price || 0)}
                                     </SelectItem>
                                   ))}
                                 </SelectContent>
@@ -3521,7 +3567,7 @@ const AdminOrders: React.FC = () => {
                               />
                             </div>
                             <div className="w-28 text-right font-medium">
-                              ${itemTotal.toFixed(2)}
+                              {money(itemTotal)}
                             </div>
                             <Button
                               type="button"
@@ -3563,7 +3609,7 @@ const AdminOrders: React.FC = () => {
                               />
                             </div>
                             {itemDiscount > 0 && (
-                              <span className="text-xs text-green-600 font-medium">-${itemDiscount.toFixed(2)}</span>
+                              <span className="text-xs text-green-600 font-medium">-{money(itemDiscount)}</span>
                             )}
                           </div>
 
@@ -3628,7 +3674,7 @@ const AdminOrders: React.FC = () => {
                       <SelectContent>
                         {deliveryOptions.map((option) => (
                           <SelectItem key={option.value} value={option.value}>
-                            {option.label} {option.fee > 0 ? `($${option.fee.toFixed(2)})` : '(Free)'}
+                            {option.label} {option.fee > 0 ? `(${money(option.fee)})` : '(Free)'}
                           </SelectItem>
                         ))}
                       </SelectContent>
@@ -3724,33 +3770,33 @@ const AdminOrders: React.FC = () => {
                 <div className="bg-blue-50 p-4 rounded">
                   <div className="grid grid-cols-2 gap-2 text-sm">
                     <div>Subtotal:</div>
-                    <div className="text-right font-medium">${totals.subtotal.toFixed(2)}</div>
+                    <div className="text-right font-medium">{money(totals.subtotal)}</div>
                     {totals.itemDiscounts > 0 && (
                       <>
                         <div className="text-xs text-gray-600">Item Discounts:</div>
-                        <div className="text-right text-xs font-medium text-green-600">-${totals.itemDiscounts.toFixed(2)}</div>
+                        <div className="text-right text-xs font-medium text-green-600">-{money(totals.itemDiscounts)}</div>
                       </>
                     )}
                     {totals.orderDiscount > 0 && (
                       <>
                         <div className="text-xs text-gray-600">Order Discount:</div>
-                        <div className="text-right text-xs font-medium text-green-600">-${totals.orderDiscount.toFixed(2)}</div>
+                        <div className="text-right text-xs font-medium text-green-600">-{money(totals.orderDiscount)}</div>
                       </>
                     )}
                     {totals.taxAmount > 0 && (
                       <>
                         <div>Tax ({newOrder.taxRate}%):</div>
-                        <div className="text-right font-medium">${totals.taxAmount.toFixed(2)}</div>
+                        <div className="text-right font-medium">{money(totals.taxAmount)}</div>
                       </>
                     )}
                     {totals.deliveryFee > 0 && (
                       <>
                         <div>Delivery Fee:</div>
-                        <div className="text-right font-medium">${totals.deliveryFee.toFixed(2)}</div>
+                        <div className="text-right font-medium">{money(totals.deliveryFee)}</div>
                       </>
                     )}
                     <div className="text-lg font-bold">Total:</div>
-                    <div className="text-right text-lg font-bold text-blue-600">${totals.total.toFixed(2)}</div>
+                    <div className="text-right text-lg font-bold text-blue-600">{money(totals.total)}</div>
                   </div>
                 </div>
               </div>
@@ -3770,7 +3816,7 @@ const AdminOrders: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <AdminStatCard title="Total Orders" value={orders.length} icon={ShoppingCart} gradient="from-orange-400 to-orange-600" subtitle="All sales orders" />
           <AdminStatCard title="Active" value={activeOrdersCount} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Pending through ready" />
-          <AdminStatCard title="Sales Revenue" value={`$${countedRevenue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Counted sale statuses" />
+          <AdminStatCard title="Sales Revenue" value={money(countedRevenue)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Counted sale statuses" />
           <AdminStatCard title="Unpaid / Partial" value={unpaidOrdersCount} icon={AlertCircle} gradient="from-red-500 to-rose-700" subtitle="Needs payment follow-up" valueClassName={unpaidOrdersCount > 0 ? 'text-red-600' : undefined} />
         </div>
 
@@ -3859,16 +3905,32 @@ const AdminOrders: React.FC = () => {
           </div>
         </div>
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleGenerateBulkLabels} disabled={selectedEligibleCount === 0}>
+        <div className="admin-batch-toolbar mb-4 flex flex-wrap items-center gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            className={adminOutlineButtonClass}
+            onClick={handleGenerateBulkLabels}
+            disabled={selectedEligibleCount === 0}
+          >
             Bulk Labels ({selectedEligibleCount})
           </Button>
-          <Button variant="outline" size="sm" onClick={handleGenerateManifest} disabled={selectedEligibleCount === 0}>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            className={adminOutlineButtonClass}
+            onClick={handleGenerateManifest}
+            disabled={selectedEligibleCount === 0}
+          >
             Generate Manifest
           </Button>
           <Button
             variant="outline"
             size="sm"
+            type="button"
+            className={adminOutlineButtonClass}
             onClick={() => {
               const settings = getEffectiveDeliverySettings();
               const carriers = getPickupCarrierOptions();
@@ -3892,16 +3954,37 @@ const AdminOrders: React.FC = () => {
             Schedule Pickup
           </Button>
           <Button
-            variant="ghost"
+            variant="outline"
             size="sm"
+            type="button"
+            className={adminOutlineButtonClass}
             onClick={() => {
-              const eligibleIds = filteredOrders.filter((order) => isOrderEligibleForShippingWorkflow(order)).map((order) => order.id);
+              const eligibleIds = filteredOrders
+                .filter((order) => isOrderEligibleForShippingWorkflow(order))
+                .map((order) => order.id);
               setSelectedOrderIds(eligibleIds);
+              if (eligibleIds.length === 0) {
+                toast({
+                  title: 'No eligible orders',
+                  description: 'No pending, confirmed, processing, or ready orders in the current list.',
+                });
+              } else {
+                toast({ title: 'Orders selected', description: `${eligibleIds.length} order(s) ready for shipping batch.` });
+              }
             }}
           >
             Select Eligible
           </Button>
-          <Button variant="ghost" size="sm" onClick={() => setSelectedOrderIds([])}>
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            className={adminOutlineButtonClass}
+            onClick={() => {
+              setSelectedOrderIds([]);
+              toast({ title: 'Selection cleared' });
+            }}
+          >
             Clear Selection
           </Button>
         </div>
@@ -3943,7 +4026,7 @@ const AdminOrders: React.FC = () => {
                         {new Date(order.createdAt || '').toLocaleDateString()} | {order.customerName}
                         {order.assignedSalesPersonName && ` | Sales: ${order.assignedSalesPersonName}`}
                         {order.deliveryMethod && ` | Delivery: ${order.deliveryMethod.replace('_', ' ')}`}
-                        {typeof order.deliveryFee === 'number' && ` ($${order.deliveryFee.toFixed(2)})`}
+                        {typeof order.deliveryFee === 'number' && ` (${money(order.deliveryFee)})`}
                       </CardDescription>
                     </div>
                     <div className="flex items-center gap-2">
@@ -4093,19 +4176,19 @@ const AdminOrders: React.FC = () => {
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Total Amount</p>
-                        <p className="font-bold text-lg">${(order.total || 0).toFixed(2)}</p>
+                        <p className="font-bold text-lg">{money(order.total || 0)}</p>
                       </div>
                       {order.status !== 'cancelled' && (
                         <>
                           <div>
                             <p className="text-sm text-gray-500">Amount Paid</p>
-                            <p className="font-bold text-lg text-green-600">${(order.amountPaid || 0).toFixed(2)}</p>
+                            <p className="font-bold text-lg text-green-600">{money(order.amountPaid || 0)}</p>
                           </div>
                           {order.paymentStatus !== 'paid' && (
                             <div>
                               <p className="text-sm text-gray-500">Amount Due</p>
                               <p className="font-bold text-lg text-red-600">
-                                ${(Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100).toFixed(2)}
+                                {money((order.total || 0) - (order.amountPaid || 0))}
                               </p>
                             </div>
                           )}
@@ -4137,15 +4220,15 @@ const AdminOrders: React.FC = () => {
                       )}
                       <div>
                         <p className="text-sm text-gray-500">Subtotal</p>
-                        <p className="font-medium">${(order.subtotal || 0).toFixed(2)}</p>
+                        <p className="font-medium">{money(order.subtotal || 0)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Tax</p>
-                        <p className="font-medium">${(order.taxAmount || 0).toFixed(2)}</p>
+                        <p className="font-medium">{money(order.taxAmount || 0)}</p>
                       </div>
                       <div>
                         <p className="text-sm text-gray-500">Total</p>
-                        <p className="font-bold text-green-600">${(order.total || 0).toFixed(2)}</p>
+                        <p className="font-bold text-green-600">{money(order.total || 0)}</p>
                       </div>
                     </div>
                     
@@ -4194,7 +4277,7 @@ const AdminOrders: React.FC = () => {
                           <div key={idx} className={`flex items-center justify-between p-2 rounded border ${payment.entryType === 'refund' || payment.amount < 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                             <div className="flex-1">
                               <p className="text-sm font-medium">
-                                {payment.entryType === 'refund' || payment.amount < 0 ? '-$' : '$'}{Math.abs(payment.amount).toFixed(2)} - {payment.method}
+                                {payment.entryType === 'refund' || payment.amount < 0 ? '-' : ''}{money(Math.abs(payment.amount))} - {payment.method}
                               </p>
                               <p className="text-xs text-gray-600">
                                 {new Date(payment.date).toLocaleDateString()} by {payment.recordedBy} ({payment.entryType === 'refund' || payment.amount < 0 ? 'Refund' : 'Payment'})
@@ -4290,7 +4373,7 @@ const AdminOrders: React.FC = () => {
                           <div className="flex justify-between">
                             <span>{item.productName || product?.name || 'Product'}</span>
                             <span className="font-medium">
-                              {item.quantity} × ${itemPrice.toFixed(2)} = ${(itemPrice * item.quantity).toFixed(2)}
+                              {item.quantity} × {money(itemPrice)} = {money(itemPrice * item.quantity)}
                             </span>
                           </div>
                           {(item.description || product?.description) && (
@@ -4306,23 +4389,23 @@ const AdminOrders: React.FC = () => {
                   <div className="space-y-2">
                     <div className="flex justify-between">
                       <span>Subtotal:</span>
-                      <span className="font-medium">${(viewingOrder.subtotal || 0).toFixed(2)}</span>
+                      <span className="font-medium">{money(viewingOrder.subtotal || 0)}</span>
                     </div>
                     {viewingOrder.discountAmount ? (
                       <div className="flex justify-between text-red-600">
                         <span>Discount:</span>
-                        <span className="font-medium">-${viewingOrder.discountAmount.toFixed(2)}</span>
+                        <span className="font-medium">-{money(viewingOrder.discountAmount)}</span>
                       </div>
                     ) : null}
                     {viewingOrder.taxAmount ? (
                       <div className="flex justify-between">
                         <span>Tax ({viewingOrder.taxRate}%):</span>
-                        <span className="font-medium">${viewingOrder.taxAmount.toFixed(2)}</span>
+                        <span className="font-medium">{money(viewingOrder.taxAmount)}</span>
                       </div>
                     ) : null}
                     <div className="flex justify-between text-lg font-bold pt-2 border-t">
                       <span>Total:</span>
-                      <span className="text-blue-600">${(viewingOrder.total || 0).toFixed(2)}</span>
+                      <span className="text-blue-600">{money(viewingOrder.total || 0)}</span>
                     </div>
                   </div>
                 </div>
@@ -4365,7 +4448,7 @@ const AdminOrders: React.FC = () => {
                     <div key={`${item.productId}-${index}`} className="grid grid-cols-12 gap-3 items-center border rounded p-3">
                       <div className="col-span-7">
                         <p className="font-medium">{product?.name || 'Product'}</p>
-                        <p className="text-xs text-gray-500">Current qty: {maxQty} | Unit: ${unitPrice.toFixed(2)}</p>
+                        <p className="text-xs text-gray-500">Current qty: {maxQty} | Unit: {money(unitPrice)}</p>
                       </div>
                       <div className="col-span-5">
                         <Label className="text-xs">Quantity to move</Label>
@@ -4510,15 +4593,15 @@ const AdminOrders: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4 p-3 bg-gray-50 rounded">
                   <div>
                     <p className="text-sm text-gray-500">Total Amount</p>
-                    <p className="font-bold">${(refundingOrder.total || 0).toFixed(2)}</p>
+                    <p className="font-bold">{money(refundingOrder.total || 0)}</p>
                   </div>
                   <div>
                     <p className="text-sm text-gray-500">Currently Paid</p>
-                    <p className="font-bold text-green-600">${(refundingOrder.amountPaid || 0).toFixed(2)}</p>
+                    <p className="font-bold text-green-600">{money(refundingOrder.amountPaid || 0)}</p>
                   </div>
                   <div className="col-span-2">
                     <p className="text-sm text-gray-500">Max Refundable</p>
-                    <p className="font-bold text-red-600">${refundingOrderMaxAmount.toFixed(2)}</p>
+                    <p className="font-bold text-red-600">{money(refundingOrderMaxAmount)}</p>
                   </div>
                 </div>
 
@@ -4566,7 +4649,7 @@ const AdminOrders: React.FC = () => {
                     </Button>
                   </div>
                   <p className="mt-2 text-xs text-gray-500">
-                    After this refund: paid ${projectedRefundedPaidAmount.toFixed(2)}
+                    After this refund: paid {money(projectedRefundedPaidAmount)}
                   </p>
                 </div>
 
@@ -4635,7 +4718,7 @@ const AdminOrders: React.FC = () => {
                     This will remove all payment records from this order:
                   </p>
                   <ul className="mt-2 space-y-1 text-sm text-red-800">
-                    <li>• Total Paid: <strong>${(voidingPayment.amountPaid || 0).toFixed(2)}</strong></li>
+                    <li>• Total Paid: <strong>{money(voidingPayment.amountPaid || 0)}</strong></li>
                     <li>• Payment History: <strong>{voidingPayment.paymentHistory?.length || 0} record(s)</strong></li>
                     <li>• New Status: <strong>Unpaid</strong></li>
                   </ul>

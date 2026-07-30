@@ -24,6 +24,12 @@ import type {
 import { pipelineStageFromActivityResult } from '@/lib/crm';
 
 export type CrmClient = Customer & {
+  customerCode?: string | null;
+  customerType?: string | null;
+  district?: string | null;
+  area?: string | null;
+  location?: CrmGeoLocation | null;
+  lastVisitDate?: string | null;
   pipelineStage?: CrmPipelineStage;
   assignedRepId?: string | null;
   crmEnabled?: boolean;
@@ -72,30 +78,43 @@ export async function createCrmClient(
   storeId: string,
   data: {
     name: string;
+    customerCode?: string;
+    customerType?: string;
     email?: string;
     phone?: string;
     address?: string;
     city?: string;
+    country?: string;
+    district?: string;
+    area?: string;
+    location?: CrmGeoLocation | null;
     assignedRepId?: string;
     dealValue?: number;
     notes?: string;
+    status?: 'active' | 'inactive';
   },
 ): Promise<string> {
   const now = new Date().toISOString();
   const ref = await addDoc(collection(db(), 'customers'), {
     storeId,
     name: data.name.trim(),
+    customerCode: data.customerCode?.trim() || null,
+    customerType: data.customerType || null,
     email: data.email?.trim() || null,
     phone: data.phone?.trim() || null,
     address: data.address?.trim() || null,
     city: data.city?.trim() || null,
+    country: data.country?.trim() || null,
+    district: data.district?.trim() || null,
+    area: data.area?.trim() || null,
+    location: data.location || null,
     notes: data.notes?.trim() || null,
     crmEnabled: true,
     pipelineStage: 'new_lead',
     assignedRepId: data.assignedRepId || null,
     dealValue: data.dealValue ?? null,
     dealCurrency: 'USD',
-    status: 'active',
+    status: data.status ?? 'active',
     createdAt: now,
     updatedAt: now,
   });
@@ -147,6 +166,16 @@ export async function fetchActivities(
   return list.slice(0, max);
 }
 
+export async function updateCrmRep(
+  repId: string,
+  fields: Partial<Pick<CrmRep, 'assignedTerritory' | 'dailyVisitTarget' | 'phone' | 'name'>>,
+): Promise<void> {
+  await updateDoc(doc(db(), 'crmReps', repId), {
+    ...fields,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
 export async function logCrmActivity(input: {
   storeId: string;
   customerId: string;
@@ -158,11 +187,16 @@ export async function logCrmActivity(input: {
   notes?: string;
   followUpAt?: string | null;
   location?: CrmGeoLocation | null;
+  timeIn?: string | null;
+  timeOut?: string | null;
+  visitCompleted?: boolean;
+  orderTaken?: boolean;
   source: CrmActivitySource;
   createdBy: string;
   advancePipeline?: boolean;
 }): Promise<string> {
   const stageAfter = pipelineStageFromActivityResult(input.result);
+  const timeIn = input.timeIn || input.loggedAt;
   const activityPayload = {
     storeId: input.storeId,
     customerId: input.customerId,
@@ -170,10 +204,14 @@ export async function logCrmActivity(input: {
     repName: input.repName,
     type: input.type,
     loggedAt: input.loggedAt,
+    timeIn,
+    timeOut: input.timeOut || null,
     result: input.result,
     notes: input.notes?.trim() || '',
     followUpAt: input.followUpAt || null,
     location: input.location || null,
+    visitCompleted: input.visitCompleted ?? (input.type === 'visit'),
+    orderTaken: input.orderTaken ?? false,
     pipelineStageAfter: stageAfter,
     createdBy: input.createdBy,
     source: input.source,
@@ -191,6 +229,10 @@ export async function logCrmActivity(input: {
   if (input.followUpAt) customerUpdate.nextFollowUpAt = input.followUpAt;
   if (input.advancePipeline !== false && stageAfter) {
     customerUpdate.pipelineStage = stageAfter;
+  }
+  const visitDone = activityPayload.visitCompleted === true;
+  if (input.type === 'visit' && visitDone) {
+    customerUpdate.lastVisitDate = input.loggedAt;
   }
 
   await updateDoc(doc(db(), 'customers', input.customerId), customerUpdate);

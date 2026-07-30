@@ -21,6 +21,20 @@ import AdminPanel from '@/components/admin/AdminPanel';
 import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting, AiModelPricingSetting } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
+import { SUPPORTED_CURRENCIES, normalizeCurrencyCode } from '@/lib/money/currencies';
+import { formatMoney } from '@/lib/money/format';
+import { writeSystemGuidePreference } from '@/lib/systemGuide';
+import {
+  type AccountingMode,
+  accountingModeLabel,
+  DEFAULT_ACCOUNTING_MODE,
+  internationalModeProfilePatch,
+  lebaneseModeProfilePatch,
+  normalizeAccountingLanguage,
+  normalizeAccountingMode,
+  supportsArabicEntry,
+} from '@/lib/accountingMode';
+import { resolveAccountingModeLocked } from '@/lib/accountingModeLock';
 
 type DomainDnsRecord = {
   type: string;
@@ -61,6 +75,7 @@ const getStatusBadgeClass = (status: 'active' | 'pending' | 'error') => {
 
 type ProfileSectionId =
   | 'growth-seo'
+  | 'system-preferences'
   | 'invoice'
   | 'product-settings'
   | 'ai-api'
@@ -70,6 +85,26 @@ type ProfileSectionId =
   | 'marketplace';
 
 /** Fields saved from Profile — invoice, legal identity, and account ops only (not storefront builder). */
+/**
+ * Firestore rejects `undefined` field values. Recursively drop any undefined
+ * keys (arrays preserved) so setDoc/updateDoc never throws on optional fields
+ * like customDomainStatus, seoSettings, etc.
+ */
+function stripUndefinedDeep<T>(value: T): T {
+  if (Array.isArray(value)) {
+    return value.map((v) => stripUndefinedDeep(v)) as unknown as T;
+  }
+  if (value && typeof value === 'object' && !(value instanceof Date)) {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (v === undefined) continue;
+      out[k] = stripUndefinedDeep(v);
+    }
+    return out as T;
+  }
+  return value;
+}
+
 function buildProfileSavePayload(
   data: StoreProfile,
   storeId: string,
@@ -93,10 +128,27 @@ function buildProfileSavePayload(
     invoiceNumberPrefix: data.invoiceNumberPrefix,
     lastInvoiceNumber: data.lastInvoiceNumber,
     invoiceTemplate: data.invoiceTemplate,
+    mainCurrency: normalizeCurrencyCode(data.mainCurrency),
+    numberFormat: data.numberFormat === 'compact' ? 'compact' : 'full',
+    accountingMode: normalizeAccountingMode(data.accountingMode),
+    accountingLanguage: normalizeAccountingLanguage(data.accountingLanguage, normalizeAccountingMode(data.accountingMode)),
+    // '' / 0 sentinels mean "no secondary" and are written (undefined would be stripped, never clearing an old value).
+    secondaryCurrency: data.secondaryCurrency && data.secondaryCurrency !== normalizeCurrencyCode(data.mainCurrency)
+      ? normalizeCurrencyCode(data.secondaryCurrency)
+      : '',
+    customExchangeRate: typeof data.customExchangeRate === 'number' && data.customExchangeRate > 0
+      ? data.customExchangeRate
+      : 0,
     financeDocumentSettings: {
       invoiceTemplate: mapGrabioInvoiceTemplateToFinance(data.invoiceTemplate),
-      primaryColor: data.templateColors?.primary,
-      secondaryColor: data.templateColors?.secondary ?? data.templateColors?.highlight,
+      ...(data.templateColors?.primary != null
+        ? { primaryColor: data.templateColors.primary }
+        : {}),
+      ...(data.templateColors?.secondary != null
+        ? { secondaryColor: data.templateColors.secondary }
+        : data.templateColors?.highlight != null
+          ? { secondaryColor: data.templateColors.highlight }
+          : {}),
     },
     taxNumber: data.taxNumber,
     productCategories: data.productCategories,
@@ -111,6 +163,7 @@ function buildProfileSavePayload(
     customDomain: data.customDomain,
     customDomainStatus: data.customDomainStatus,
     sslAutoProvisioningEnabled: data.sslAutoProvisioningEnabled,
+    systemGuideEnabled: data.systemGuideEnabled ?? false,
     aiIntegrationSettings: data.aiIntegrationSettings,
     adminIpWhitelistEnabled: data.adminIpWhitelistEnabled,
     adminIpAllowlist: data.adminIpAllowlist,
@@ -239,6 +292,10 @@ const defaultProfile: StoreProfile = {
   adminIpWhitelistEnabled: false,
   adminIpAllowlist: [],
   logoPosition: 'left',
+  mainCurrency: 'USD',
+  numberFormat: 'full',
+  accountingMode: DEFAULT_ACCOUNTING_MODE,
+  accountingLanguage: 'en',
   subscriptionBillingSettings: {
     autoRenewEnabled: true,
     retryFailedPayments: true,
@@ -248,6 +305,7 @@ const defaultProfile: StoreProfile = {
     preferredRenewalGateway: 'whish',
   },
   sslAutoProvisioningEnabled: true,
+  systemGuideEnabled: false,
   aiIntegrationSettings: {
     enabled: false,
     assistantAccessMode: 'owner-account',
@@ -266,8 +324,10 @@ const AdminProfile: React.FC = () => {
   const [formData, setFormData] = useState<StoreProfile>(defaultProfile);
   const [isSaving, setIsSaving] = useState(false);
   const [profileStoreId, setProfileStoreId] = useState<string | null>(null);
+  const [accountingModeLocked, setAccountingModeLocked] = useState(false);
 
   const applyProfileToForm = (data: StoreProfile) => {
+    writeSystemGuidePreference(data.systemGuideEnabled === true);
     setFormData({
       ...defaultProfile,
       ...data,
@@ -302,6 +362,11 @@ const AdminProfile: React.FC = () => {
         ...defaultProfile.aiIntegrationSettings,
         ...(data.aiIntegrationSettings || {}),
       },
+      accountingMode: normalizeAccountingMode(data.accountingMode),
+      accountingLanguage: normalizeAccountingLanguage(
+        data.accountingLanguage,
+        normalizeAccountingMode(data.accountingMode),
+      ),
     });
     setLogoPreview(data.logo || '');
   };
@@ -314,10 +379,15 @@ const AdminProfile: React.FC = () => {
       ? await getDocFromServer(profileRef)
       : await getDoc(profileRef);
     if (profileSnap.exists()) {
-      applyProfileToForm(profileSnap.data() as StoreProfile);
+      const data = profileSnap.data() as StoreProfile;
+      applyProfileToForm(data);
+      const locked = await resolveAccountingModeLocked(db, actualStoreId, data);
+      setAccountingModeLocked(locked);
     } else {
+      writeSystemGuidePreference(false);
       setFormData(defaultProfile);
       setLogoPreview('');
+      setAccountingModeLocked(false);
     }
     return actualStoreId;
   };
@@ -1207,13 +1277,20 @@ const AdminProfile: React.FC = () => {
         const existingProfile = existingSnap.exists()
           ? (existingSnap.data() as StoreProfile)
           : null;
+        const nextAccountingMode = normalizeAccountingMode(formData.accountingMode);
+        const prevAccountingMode = normalizeAccountingMode(existingProfile?.accountingMode);
+        if (nextAccountingMode !== prevAccountingMode && accountingModeLocked) {
+          throw new Error(
+            'Accounting mode cannot be changed after the first posted journal entry. Contact support for migration.',
+          );
+        }
         const existingFinance = (existingProfile as StoreProfile & { financeDocumentSettings?: Record<string, unknown> })?.financeDocumentSettings ?? {};
         const ecosystemPatch = consumePackageDraftForStore(existingProfile);
         const displayName = String(formData.name || '').trim();
-        const mergedFinance = {
+        const mergedFinance = stripUndefinedDeep({
           ...existingFinance,
           ...(payload.financeDocumentSettings as Record<string, unknown>),
-        };
+        });
 
         // 1) Small identity write first (reliable for invoices/PDFs)
         const identityPatch: Record<string, unknown> = {
@@ -1226,23 +1303,27 @@ const AdminProfile: React.FC = () => {
           website: formData.website || '',
           proEmail: formData.proEmail || '',
           taxNumber: formData.taxNumber || '',
+          mainCurrency: normalizeCurrencyCode(formData.mainCurrency),
+          numberFormat: formData.numberFormat === 'compact' ? 'compact' : 'full',
+          accountingMode: nextAccountingMode,
+          accountingLanguage: normalizeAccountingLanguage(formData.accountingLanguage, nextAccountingMode),
           invoiceNumberPrefix: formData.invoiceNumberPrefix || '',
           lastInvoiceNumber: formData.lastInvoiceNumber ?? 0,
           invoiceTemplate: formData.invoiceTemplate || 'modern',
           financeDocumentSettings: mergedFinance,
-          updatedAt: serverTimestamp(),
         };
         if (logoFile && formData.logo) {
           identityPatch.logo = formData.logo;
         }
-        await updateDoc(profileRef, identityPatch);
+        // Strip undefined BEFORE adding the serverTimestamp sentinel (stripper must not recurse into FieldValue).
+        await updateDoc(profileRef, { ...stripUndefinedDeep(identityPatch), updatedAt: serverTimestamp() });
 
         // 2) Full profile merge (skip logo unless newly uploaded)
-        const fullPayload = { ...payload, ...ecosystemPatch, financeDocumentSettings: mergedFinance, updatedAt: serverTimestamp() };
+        const fullPayload = { ...payload, ...ecosystemPatch, financeDocumentSettings: mergedFinance };
         if (!logoFile) {
           delete fullPayload.logo;
         }
-        await setDoc(profileRef, fullPayload, { merge: true });
+        await setDoc(profileRef, { ...stripUndefinedDeep(fullPayload), updatedAt: serverTimestamp() }, { merge: true });
         // Persist storeId in sellers collection and localStorage
         const sellerRef = doc(db, 'sellers', user.id);
         await setDoc(sellerRef, { storeId: actualStoreId }, { merge: true });
@@ -1251,6 +1332,7 @@ const AdminProfile: React.FC = () => {
   const sellerInfo = savedSellerInfo ? JSON.parse(savedSellerInfo) : {};
   sellerInfo.storeId = actualStoreId;
   localStorage.setItem('sellerInfo', JSON.stringify(sellerInfo));
+        writeSystemGuidePreference(formData.systemGuideEnabled === true);
         // Update user context with storeId
         if (setUser) setUser((prev) => prev ? { ...prev, storeId: actualStoreId } : prev);
         window.dispatchEvent(new CustomEvent('grabio:store-profile-updated', { detail: { storeId: actualStoreId } }));
@@ -2197,6 +2279,37 @@ const AdminProfile: React.FC = () => {
             </CardContent>
           </ProfileCollapsibleSection>
 
+          <ProfileCollapsibleSection
+            id="system-preferences"
+            title="System Preferences"
+            description="Shared in-app guidance and operator-facing helpers"
+            open={isProfileSectionOpen('system-preferences')}
+            onOpenChange={(open) => setProfileSectionOpen('system-preferences', open)}
+          >
+            <CardContent className="space-y-4 pt-0">
+              <div className="rounded-lg border p-4">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="space-y-1">
+                    <p className="text-sm font-medium">System Guide</p>
+                    <p className="text-sm text-muted-foreground">
+                      Show small help icons beside accounting tools and sections. Each icon explains what the current screen does in plain language for non-technical users.
+                    </p>
+                  </div>
+                  <Switch
+                    checked={formData.systemGuideEnabled === true}
+                    onCheckedChange={(checked) => {
+                      setFormData((prev) => ({ ...prev, systemGuideEnabled: checked }));
+                      writeSystemGuidePreference(checked);
+                    }}
+                  />
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  Turns on immediately in this browser. Click <strong>Save Changes</strong> so the setting stays on for all devices and users on this store.
+                </p>
+              </div>
+            </CardContent>
+          </ProfileCollapsibleSection>
+
           {/* Invoice Configuration */}
           <ProfileCollapsibleSection
             id="invoice"
@@ -2234,6 +2347,145 @@ const AdminProfile: React.FC = () => {
                     Next invoice: {(formData.invoiceNumberPrefix || 'INV')}-{String((formData.lastInvoiceNumber || 0) + 1).padStart(3, '0')}
                   </p>
                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
+                <div>
+                  <Label htmlFor="accountingMode">Accounting mode</Label>
+                  <select
+                    id="accountingMode"
+                    value={normalizeAccountingMode(formData.accountingMode)}
+                    disabled={accountingModeLocked}
+                    onChange={(e) => {
+                      const mode = e.target.value as AccountingMode;
+                      setFormData((prev) => {
+                        if (mode === 'lebanese') {
+                          return {
+                            ...prev,
+                            ...lebaneseModeProfilePatch({
+                              secondaryCurrency: prev.secondaryCurrency,
+                              accountingLanguage: prev.accountingLanguage,
+                            }),
+                          };
+                        }
+                        return { ...prev, ...internationalModeProfilePatch() };
+                      });
+                    }}
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    <option value="international">{accountingModeLabel('international')}</option>
+                    <option value="lebanese">{accountingModeLabel('lebanese')}</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {accountingModeLocked
+                      ? 'Locked after your first posted journal entry.'
+                      : 'Choose before first GL activity. Lebanese mode seeds bilingual COA labels and defaults LBP display currency.'}
+                  </p>
+                </div>
+                {supportsArabicEntry(normalizeAccountingLanguage(formData.accountingLanguage, normalizeAccountingMode(formData.accountingMode))) && (
+                  <div>
+                    <Label htmlFor="accountingLanguage">Accounting entry language</Label>
+                    <select
+                      id="accountingLanguage"
+                      value={normalizeAccountingLanguage(formData.accountingLanguage, normalizeAccountingMode(formData.accountingMode))}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          accountingLanguage: e.target.value as StoreProfile['accountingLanguage'],
+                        }))
+                      }
+                      className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                    >
+                      <option value="bilingual">English + Arabic</option>
+                      <option value="ar">Arabic preferred</option>
+                      <option value="en">English only</option>
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Controls bilingual labels in Chart of Accounts and voucher pickers.
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="mainCurrency">Base Currency</Label>
+                  <select
+                    id="mainCurrency"
+                    value={normalizeCurrencyCode(formData.mainCurrency)}
+                    onChange={(e) => setFormData(prev => ({ ...prev, mainCurrency: e.target.value }))}
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    {SUPPORTED_CURRENCIES.map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} — {c.name} ({c.symbol})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    All prices, totals, and accounting are calculated in this currency.
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="numberFormat">Large Number Display</Label>
+                  <select
+                    id="numberFormat"
+                    value={formData.numberFormat === 'compact' ? 'compact' : 'full'}
+                    onChange={(e) => setFormData(prev => ({ ...prev, numberFormat: e.target.value as 'full' | 'compact' }))}
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="full">Full — {formatMoney(89500000, { currency: normalizeCurrencyCode(formData.mainCurrency), style: 'full' })}</option>
+                    <option value="compact">Compact — {formatMoney(89500000, { currency: normalizeCurrencyCode(formData.mainCurrency), style: 'compact' })}</option>
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    How large amounts are shown across the app, invoices, and reports.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="secondaryCurrency">Display Currency (optional)</Label>
+                  <select
+                    id="secondaryCurrency"
+                    value={formData.secondaryCurrency && formData.secondaryCurrency !== formData.mainCurrency ? normalizeCurrencyCode(formData.secondaryCurrency) : ''}
+                    onChange={(e) => setFormData(prev => ({ ...prev, secondaryCurrency: e.target.value || undefined }))}
+                    className="mt-1 flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2"
+                  >
+                    <option value="">None (base currency only)</option>
+                    {SUPPORTED_CURRENCIES.filter((c) => c.code !== normalizeCurrencyCode(formData.mainCurrency)).map((c) => (
+                      <option key={c.code} value={c.code}>
+                        {c.code} — {c.name} ({c.symbol})
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Shown to customers alongside the base price. Display only — never changes totals or accounting.
+                  </p>
+                </div>
+
+                {formData.secondaryCurrency && formData.secondaryCurrency !== normalizeCurrencyCode(formData.mainCurrency) && (
+                  <div>
+                    <Label htmlFor="customExchangeRate">
+                      Exchange Rate (1 {normalizeCurrencyCode(formData.mainCurrency)} = ? {normalizeCurrencyCode(formData.secondaryCurrency)})
+                    </Label>
+                    <Input
+                      id="customExchangeRate"
+                      type="number"
+                      min="0"
+                      step="any"
+                      value={formData.customExchangeRate && formData.customExchangeRate > 0 ? formData.customExchangeRate : ''}
+                      onChange={(e) => setFormData(prev => ({ ...prev, customExchangeRate: e.target.value === '' ? undefined : (parseFloat(e.target.value) || undefined) }))}
+                      placeholder="e.g. 89500"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      {formData.customExchangeRate && formData.customExchangeRate > 0
+                        ? `${formatMoney(100, { currency: normalizeCurrencyCode(formData.mainCurrency) })} ≈ ${formatMoney(100 * formData.customExchangeRate, { currency: normalizeCurrencyCode(formData.secondaryCurrency) })}`
+                        : 'Enter the rate to show the display currency. Without a rate, only the base price shows.'}
+                    </p>
+                  </div>
+                )}
               </div>
 
               <div>

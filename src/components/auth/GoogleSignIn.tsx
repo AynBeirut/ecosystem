@@ -3,32 +3,24 @@ import { Button } from "@/components/ui/button";
 import { auth } from '@/lib/firebase';
 import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { toast } from 'sonner';
-import { acquire, release } from '@/lib/popupLock';
+import { markGoogleAuthPending, clearGoogleAuthPending } from '@/lib/googleAuth';
 
 export function GoogleSignIn() {
   const [loading, setLoading] = useState(false);
 
   async function signInWithGoogle() {
-    if (!acquire()) {
-      toast.error('Sign-in already in progress. Please complete the open sign-in window.');
-      return;
-    }
     setLoading(true);
     try {
       const provider = new GoogleAuthProvider();
+      markGoogleAuthPending();
       await signInWithPopup(auth, provider);
-      toast.success('Signed in successfully!');
+      clearGoogleAuthPending();
     } catch (error: unknown) {
-      const err = error as { code?: string };
       console.error('Google sign-in error:', error);
-      if (err.code === 'auth/popup-closed-by-user') {
-        toast.error('Sign-in cancelled');
-      } else if (err.code !== 'auth/cancelled-popup-request') {
-        toast.error('Failed to sign in with Google');
-      }
+      clearGoogleAuthPending();
+      toast.error('Failed to sign in with Google');
     } finally {
       setLoading(false);
-      release();
     }
   }
 

@@ -1,4 +1,6 @@
 /** Platform GL bridge — re-exports finance ledger hooks (throws on posting failure). */
+import '@/embed/wireFinanceOnLoad';
+
 export {
   glPostOrderSaleRecognized,
   glPostOrderSaleReversal,
@@ -9,6 +11,7 @@ export {
   glPostPayrollPayment,
   glPostCashCollectionDeposit,
   glPostDeliveryWalletSettlement,
+  glPostPurchaseReceived,
   type PlatformOrderInput,
   type ProductionReversalInput,
 } from '../../vendor/beirut-finance-flow-main/src/lib/ledger/glBridge';

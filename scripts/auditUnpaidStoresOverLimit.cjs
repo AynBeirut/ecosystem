@@ -19,6 +19,17 @@ try {
 
 const db = admin.firestore();
 const ACTIVE = new Set(['active', 'trial', 'grace', 'grace_period']);
+const CATALOG_PRODUCT_COUNT_VERSION = 2;
+
+function isCatalogCountableProductData(data) {
+  if (!data) return false;
+  const rawType = String(data.productType ?? data.type ?? '').trim().toLowerCase();
+  const itemType = String(data.itemType ?? '').trim().toLowerCase();
+  if (data.isSellable === false) return false;
+  if (data.excludeFromCatalogCount === true) return false;
+  if (itemType === 'raw_material' || itemType === 'ingredient') return false;
+  return !['raw_material', 'raw-material', 'ingredient', 'material', 'component', 'recipe_ingredient'].includes(rawType);
+}
 
 function effectiveLimit(profile) {
   if (typeof profile.productLimit === 'number') return profile.productLimit;
@@ -44,9 +55,16 @@ async function main() {
     const profile = storeDoc.data();
     if (profile.isDemo === true) continue;
 
-    const count = typeof profile.catalogProductCount === 'number'
-      ? profile.catalogProductCount
-      : (await db.collection('products').where('storeId', '==', storeDoc.id).get()).size;
+    let count;
+    if (
+      typeof profile.catalogProductCount === 'number' &&
+      profile.catalogProductCountVersion === CATALOG_PRODUCT_COUNT_VERSION
+    ) {
+      count = profile.catalogProductCount;
+    } else {
+      const productsSnap = await db.collection('products').where('storeId', '==', storeDoc.id).get();
+      count = productsSnap.docs.filter((doc) => isCatalogCountableProductData(doc.data() || {})).length;
+    }
 
     const limit = effectiveLimit(profile);
     const paid = isPaidOrLegacy(profile);

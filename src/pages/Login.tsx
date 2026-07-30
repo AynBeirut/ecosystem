@@ -10,6 +10,7 @@ import { toast } from '@/components/ui/sonner';
 import { useAuth } from '@/context/useAuth';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, signInWithCustomToken, updateProfile } from 'firebase/auth';
+import { getSubAccountHomePath } from '@/lib/subAccountAccess';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 const Login: React.FC = () => {
@@ -25,6 +26,7 @@ const Login: React.FC = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'signin';
+  const [activeTab, setActiveTab] = useState(defaultTab);
 
   // DEV-only: `?customToken=…` for local E2E (custom token from Admin SDK)
   useEffect(() => {
@@ -51,6 +53,8 @@ const Login: React.FC = () => {
       if (redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('/login')) {
         localStorage.removeItem('redirectAfterLogin');
         navigate(redirectPath, { replace: true });
+      } else if (user.role === 'freelancer') {
+        navigate('/freelancer', { replace: true });
       } else if (user.role === 'crm_rep') {
         navigate('/team/crm', { replace: true });
       } else if (user.role === 'admin') {
@@ -63,7 +67,7 @@ const Login: React.FC = () => {
           navigate('/admin', { replace: true });
         }
       } else if (user.role === 'sub_account') {
-        navigate('/team/dashboard', { replace: true });
+        navigate(getSubAccountHomePath(user), { replace: true });
       } else {
         navigate('/search', { replace: true });
       }
@@ -100,8 +104,14 @@ const Login: React.FC = () => {
       }
       toast.success('Account created successfully!');
     } catch (error) {
-      const err = error as { message?: string };
-      toast.error(err?.message || 'An error occurred during signup');
+      const err = error as { code?: string; message?: string };
+      if (err.code === 'auth/email-already-in-use') {
+        setEmail(signupEmail);
+        setActiveTab('signin');
+        toast.error('This email already has an account. Use Sign In with your password.');
+      } else {
+        toast.error(err?.message || 'An error occurred during signup');
+      }
       console.error('Signup error:', error);
     } finally {
       setIsSubmitting(false);
@@ -147,7 +157,7 @@ const Login: React.FC = () => {
             </CardDescription>
           </CardHeader>
 
-          <Tabs defaultValue={defaultTab}>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
             <TabsList className="grid w-full grid-cols-2">
               <TabsTrigger value="signin">Sign In</TabsTrigger>
               <TabsTrigger value="signup">Sign Up</TabsTrigger>

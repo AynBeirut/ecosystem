@@ -1,9 +1,31 @@
 import { Recipe, RawMaterial } from '@/types/inventory';
 
+type StockIngredient = {
+  rawMaterialId?: string;
+  materialId?: string;
+  quantity?: number;
+};
+
 export interface StockStatus {
   available: number;
   status: 'in-stock' | 'low-stock' | 'out-of-stock';
   canMake: number;
+}
+
+function normalizeIngredientId(ingredient: StockIngredient): string {
+  return String(ingredient.rawMaterialId || ingredient.materialId || '').trim();
+}
+
+function recipeIngredients(recipe: Recipe | undefined): StockIngredient[] {
+  if (!recipe) return [];
+  if (Array.isArray(recipe.ingredients) && recipe.ingredients.length > 0) {
+    return recipe.ingredients as StockIngredient[];
+  }
+  const materials = (recipe as Recipe & { materials?: StockIngredient[] }).materials;
+  if (Array.isArray(materials) && materials.length > 0) {
+    return materials;
+  }
+  return [];
 }
 
 /**
@@ -13,7 +35,8 @@ export function calculateAvailableStock(
   recipe: Recipe | undefined,
   rawMaterials: RawMaterial[]
 ): number {
-  if (!recipe || !recipe.ingredients || recipe.ingredients.length === 0) {
+  const ingredients = recipeIngredients(recipe);
+  if (ingredients.length === 0) {
     return 0;
   }
 
@@ -28,8 +51,9 @@ export function calculateAvailableStock(
   // Calculate minimum units that can be made based on each ingredient
   let minUnits = Infinity;
 
-  for (const ingredient of recipe.ingredients) {
-    const rawMaterial = rawMaterialsMap.get(ingredient.rawMaterialId);
+  for (const ingredient of ingredients) {
+    const rawMaterialId = normalizeIngredientId(ingredient);
+    const rawMaterial = rawMaterialsMap.get(rawMaterialId);
     
     if (!rawMaterial) {
       return 0; // Material not found

@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
+import { Switch } from '@/components/ui/switch';
 import {
   Select,
   SelectContent,
@@ -38,6 +39,10 @@ export type LogActivitySubmit = {
   notes: string;
   followUpAt: string | null;
   location: CrmGeoLocation | null;
+  timeIn: string;
+  timeOut: string | null;
+  visitCompleted: boolean;
+  orderTaken: boolean;
 };
 
 type LogActivityDialogProps = {
@@ -58,10 +63,14 @@ export default function LogActivityDialog({
   const { capture, loading: gpsLoading, error: gpsError } = useGeolocation();
   const [type, setType] = useState<CrmActivityType>('visit');
   const [loggedAt, setLoggedAt] = useState('');
+  const [timeIn, setTimeIn] = useState('');
+  const [timeOut, setTimeOut] = useState('');
   const [result, setResult] = useState<CrmActivityResult>('follow_up');
   const [notes, setNotes] = useState('');
   const [followUpAt, setFollowUpAt] = useState('');
   const [location, setLocation] = useState<CrmGeoLocation | null>(null);
+  const [visitCompleted, setVisitCompleted] = useState(true);
+  const [orderTaken, setOrderTaken] = useState(false);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -71,11 +80,15 @@ export default function LogActivityDialog({
         .toISOString()
         .slice(0, 16);
       setLoggedAt(local);
+      setTimeIn(local);
+      setTimeOut('');
       setType('visit');
       setResult('follow_up');
       setNotes('');
       setFollowUpAt('');
       setLocation(null);
+      setVisitCompleted(true);
+      setOrderTaken(false);
     }
   }, [open]);
 
@@ -91,6 +104,8 @@ export default function LogActivityDialog({
     setSaving(true);
     try {
       const isoLogged = new Date(loggedAt).toISOString();
+      const isoTimeIn = new Date(timeIn || loggedAt).toISOString();
+      const isoTimeOut = timeOut ? new Date(timeOut).toISOString() : null;
       const isoFollow = followUpAt ? new Date(followUpAt).toISOString() : null;
       await onSubmit({
         type,
@@ -99,6 +114,10 @@ export default function LogActivityDialog({
         notes,
         followUpAt: isoFollow,
         location,
+        timeIn: isoTimeIn,
+        timeOut: isoTimeOut,
+        visitCompleted: type === 'visit' ? visitCompleted : false,
+        orderTaken: type === 'visit' ? orderTaken : false,
       });
       onOpenChange(false);
     } finally {
@@ -106,11 +125,13 @@ export default function LogActivityDialog({
     }
   };
 
+  const isVisit = type === 'visit';
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Log activity — {clientName}</DialogTitle>
+          <DialogTitle>Log visit — {clientName}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-4 py-2">
           <div>
@@ -125,9 +146,31 @@ export default function LogActivityDialog({
             </Select>
           </div>
           <div>
-            <Label>Date & time</Label>
+            <Label>Date</Label>
             <Input type="datetime-local" value={loggedAt} onChange={(e) => setLoggedAt(e.target.value)} />
           </div>
+          {isVisit && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <Label>Time in</Label>
+                  <Input type="datetime-local" value={timeIn} onChange={(e) => setTimeIn(e.target.value)} />
+                </div>
+                <div>
+                  <Label>Time out</Label>
+                  <Input type="datetime-local" value={timeOut} onChange={(e) => setTimeOut(e.target.value)} />
+                </div>
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="visit-completed">Visit completed</Label>
+                <Switch id="visit-completed" checked={visitCompleted} onCheckedChange={setVisitCompleted} />
+              </div>
+              <div className="flex items-center justify-between rounded-md border p-3">
+                <Label htmlFor="order-taken">Order taken</Label>
+                <Switch id="order-taken" checked={orderTaken} onCheckedChange={setOrderTaken} />
+              </div>
+            </>
+          )}
           <div>
             <Label>Result</Label>
             <Select value={result} onValueChange={(v) => setResult(v as CrmActivityResult)}>
@@ -171,10 +214,9 @@ export default function LogActivityDialog({
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
           <Button onClick={handleSave} disabled={saving || (result === 'follow_up' && !followUpAt)}>
-            {saving ? 'Saving…' : 'Save log'}
+            {saving ? 'Saving…' : 'Save visit'}
           </Button>
         </DialogFooter>
-
       </DialogContent>
     </Dialog>
   );

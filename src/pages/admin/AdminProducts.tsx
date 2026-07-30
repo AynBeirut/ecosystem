@@ -46,6 +46,7 @@ import { getFirestore, collection, query, where, getDocs, doc, updateDoc, delete
 import { uploadProductImage } from '@/lib/productImageUpload';
 import { generateUniqueSlug } from '@/lib/slugify';
 import { assertCanCreateProduct, assertCanUploadBytes, assertCanUploadCatalogImage, trackStorageUsageAfterUpload, getSubscriptionSnapshot } from '@/lib/subscriptionEnforcement';
+import { CATALOG_PRODUCT_COUNT_VERSION, isCatalogCountableProductData } from '@/lib/catalogProductCount';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
 
@@ -93,6 +94,9 @@ const AdminProducts: React.FC = () => {
   const [limitDialogMessage, setLimitDialogMessage] = useState('');
   const storeId = getActualStoreId(user);
   const catalogImagesAllowed = planLimits?.allowsCatalogImages !== false;
+  const countableProductsCount = products.filter((product) =>
+    isCatalogCountableProductData(product as unknown as Record<string, unknown>),
+  ).length;
 
   useEffect(() => {
     if (!user?.id) {
@@ -568,6 +572,7 @@ const AdminProducts: React.FC = () => {
         tx.set(productRef, cleanProductData);
         tx.update(doc(db, 'storeProfiles', storeId), {
           catalogProductCount: increment(1),
+          catalogProductCountVersion: CATALOG_PRODUCT_COUNT_VERSION,
           updatedAt: new Date().toISOString(),
         });
       });
@@ -636,6 +641,7 @@ const AdminProducts: React.FC = () => {
         tx.delete(doc(db, 'products', productId));
         tx.update(doc(db, 'storeProfiles', storeId), {
           catalogProductCount: increment(-1),
+          catalogProductCountVersion: CATALOG_PRODUCT_COUNT_VERSION,
           updatedAt: new Date().toISOString(),
         });
       });
@@ -939,11 +945,11 @@ const AdminProducts: React.FC = () => {
         ) : undefined
       }
     >
-        {planLimits?.productLimit != null && products.length >= planLimits.productLimit && (
+        {planLimits?.productLimit != null && countableProductsCount >= planLimits.productLimit && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
-              You have {products.length} products but your plan allows {planLimits.productLimit}.
+              You have {countableProductsCount} sellable products but your plan allows {planLimits.productLimit}.
               {' '}
               Add modules or upgrade (+10 products per $10/mo above $27 Shop).
               {' '}
@@ -1300,12 +1306,40 @@ const AdminProducts: React.FC = () => {
                   )}
 
                   {newProduct.productType === 'composed' && (
-                    <Alert>
-                      <AlertCircle className="h-4 w-4" />
-                      <AlertDescription>
-                        For composed products, create the product here first, then go to Composed Products page to set up the recipe.
-                      </AlertDescription>
-                    </Alert>
+                    <div>
+                      <Label htmlFor="recipeId">Recipe</Label>
+                      {recipes.length > 0 ? (
+                        <Select
+                          value={newProduct.recipeId || ''}
+                          onValueChange={(value) => {
+                            const recipe = recipes.find(r => r.id === value);
+                            setNewProduct(prev => ({
+                              ...prev,
+                              recipeId: value,
+                              price: recipe?.costPerUnit ? (recipe.costPerUnit * 2.5).toFixed(2) : prev.price
+                            }));
+                          }}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select recipe" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {recipes.map(recipe => (
+                              <SelectItem key={recipe.id} value={recipe.id}>
+                                {recipe.name} (Cost: ${recipe.costPerUnit?.toFixed(2) || '0.00'})
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Alert>
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription>
+                            No recipes yet. Create a recipe on the Recipes page first, then select it here to link raw materials to this product.
+                          </AlertDescription>
+                        </Alert>
+                      )}
+                    </div>
                   )}
 
                   {newProduct.productType !== 'service' && (

@@ -36,6 +36,18 @@ export type GrabioStoreProfile = {
   isDemo?: boolean;
   taxId?: string;
   commercialRegistry?: string;
+  /** Base currency for calculations (synced from Grabio Admin Profile). */
+  mainCurrency?: string;
+  /** USD/LBP rate from Admin Profile (1 USD = X LBP). */
+  customExchangeRate?: number;
+  /** Large-number display style: 'full' (89,500,000) or 'compact' (89.5M). */
+  numberFormat?: 'full' | 'compact';
+  secondaryCurrency?: string;
+  accountingMode?: 'international' | 'lebanese';
+  accountingLanguage?: 'en' | 'ar' | 'bilingual';
+  accountingModeLocked?: boolean;
+  /** In-app help icons (Store Profile → System Preferences). */
+  systemGuideEnabled?: boolean;
 };
 
 export type GrabioStoreContext = {

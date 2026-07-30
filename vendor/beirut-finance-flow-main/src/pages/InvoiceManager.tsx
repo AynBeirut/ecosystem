@@ -22,6 +22,9 @@ import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ShareSheet from "@/components/ShareSheet";
+import { useSystemGuide } from "@/hooks/useSystemGuide";
+import SystemGuideInfo from "@/components/SystemGuideInfo";
+import SystemGuideBanner from "@/components/SystemGuideBanner";
 
 const invoiceSchema = z.object({
   customer: z.string().optional(),
@@ -48,6 +51,7 @@ const InvoiceManager = () => {
   const { user, clients, products, createInvoice, previewInvoice, sendInvoice, exportInvoiceAsPdf, logout, checkLimit } = useAppContext();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { enabled: systemGuideEnabled } = useSystemGuide();
   const [activeTab, setActiveTab] = useState<string>("list");
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
   const [lineItems, setLineItems] = useState<Array<{ id: string, description: string, quantity: number, unitPrice: number, subtotal: number }>>([]);
@@ -435,9 +439,21 @@ const InvoiceManager = () => {
   return (
     <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
+        <SystemGuideBanner enabled={systemGuideEnabled} />
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Invoice Manager</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-2xl font-bold tracking-tight">Invoice Manager</h1>
+              <SystemGuideInfo
+                enabled={systemGuideEnabled}
+                label="What Invoices does"
+                title="Invoices"
+                content={[
+                  "Invoices are the documents you send or save for billed products and services.",
+                  "Use this screen to create a new invoice, review older ones, and keep the payment status in line with what the customer actually paid.",
+                ]}
+              />
+            </div>
             <p className="text-gray-500 dark:text-gray-400">Create and manage your invoices</p>
           </div>
           <Button 

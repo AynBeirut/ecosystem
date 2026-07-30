@@ -1,5 +1,6 @@
 import { onDocumentWritten } from 'firebase-functions/v2/firestore';
 import * as admin from 'firebase-admin';
+import { CATALOG_PRODUCT_COUNT_VERSION, isCatalogCountableProductData } from '../lib/catalogProductCount';
 
 const db = admin.firestore();
 
@@ -8,9 +9,13 @@ async function recountStoreCatalogProducts(storeId: string): Promise<void> {
   if (!normalized) return;
 
   const snap = await db.collection('products').where('storeId', '==', normalized).get();
+  const count = snap.docs.filter((doc: FirebaseFirestore.QueryDocumentSnapshot) =>
+    isCatalogCountableProductData(doc.data() as Record<string, unknown>),
+  ).length;
   await db.collection('storeProfiles').doc(normalized).set(
     {
-      catalogProductCount: snap.size,
+      catalogProductCount: count,
+      catalogProductCountVersion: CATALOG_PRODUCT_COUNT_VERSION,
       catalogProductCountSyncedAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },

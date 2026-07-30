@@ -107,6 +107,12 @@ export interface Customer {
   lastOrderDate?: string
   // Sales CRM add-on
   storeId?: string
+  customerCode?: string | null
+  customerType?: string | null
+  district?: string | null
+  area?: string | null
+  location?: { lat: number; lng: number; accuracy?: number } | null
+  lastVisitDate?: string | null
   pipelineStage?: string
   assignedRepId?: string | null
   nextFollowUpAt?: string | null

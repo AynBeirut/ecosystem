@@ -167,7 +167,7 @@ function routeModel(input: {
 async function getTenantFinanceContext(db: FirebaseFirestore.Firestore, storeId: string): Promise<Record<string, unknown>> {
   const [ordersSnap, expensesSnap] = await Promise.all([
     db.collection('orders').where('storeId', '==', storeId).orderBy('createdAt', 'desc').limit(25).get(),
-    db.collection('expenses').where('storeId', '==', storeId).orderBy('createdAt', 'desc').limit(25).get(),
+    db.collection('stores').doc(storeId).collection('financeExpenses').limit(25).get(),
   ]);
 
   let grossRevenue = 0;

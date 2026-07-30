@@ -35,6 +35,10 @@ import type { CrmActivity, CrmPipelineStage } from '@/types/crm';
 import { CRM_PIPELINE_STAGES } from '@/types/crm';
 import { CRM_PIPELINE_LABELS, CRM_ACTIVITY_TYPE_LABELS, CRM_ACTIVITY_RESULT_LABELS } from '@/lib/crm';
 import LogActivityDialog, { type LogActivitySubmit } from '@/components/crm/LogActivityDialog';
+import CrmLocationSelects from '@/components/crm/CrmLocationSelects';
+import CrmGpsInput from '@/components/crm/CrmGpsInput';
+import { crmNormalizeLocation, type CrmLocationSelection } from '@/lib/crmLebanonLocations';
+import type { CrmGeoLocation } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
 import { collection, getDocs, query, where, getFirestore } from 'firebase/firestore';
 import type { Order } from '@/types/order';
@@ -63,6 +67,12 @@ const CrmClientProfile: React.FC = () => {
   const [pipelineStage, setPipelineStage] = useState<CrmPipelineStage>('new_lead');
   const [dealValue, setDealValue] = useState<string>('');
   const [nextFollowUp, setNextFollowUp] = useState<string>('');
+  const [locationSelection, setLocationSelection] = useState<CrmLocationSelection>({
+    country: 'Lebanon',
+    district: '',
+    area: '',
+  });
+  const [gpsLocation, setGpsLocation] = useState<CrmGeoLocation | null>(null);
 
   const load = useCallback(async () => {
     if (!storeId || !clientId) {
@@ -99,6 +109,14 @@ const CrmClientProfile: React.FC = () => {
       } else {
         setNextFollowUp('');
       }
+      setLocationSelection(
+        crmNormalizeLocation({
+          country: c.country,
+          district: c.district,
+          area: c.area,
+        }),
+      );
+      setGpsLocation(c.location ?? null);
 
       const db = getFirestore();
       const orderSnap = await getDocs(query(collection(db, 'orders'), where('storeId', '==', storeId)));
@@ -143,6 +161,10 @@ const CrmClientProfile: React.FC = () => {
         pipelineStage,
         dealValue: dv != null && !Number.isNaN(dv) ? dv : null,
         nextFollowUpAt: nextIso,
+        country: locationSelection.country || null,
+        district: locationSelection.district || null,
+        area: locationSelection.area || null,
+        location: gpsLocation,
         crmEnabled: true,
         // if admin explicitly assigns a rep, unlock auto-assign; if clearing rep, lock it
         crmAdminUnassigned: repValue === null,
@@ -205,6 +227,10 @@ const CrmClientProfile: React.FC = () => {
       notes: data.notes,
       followUpAt: data.followUpAt,
       location: data.location,
+      timeIn: data.timeIn,
+      timeOut: data.timeOut,
+      visitCompleted: data.visitCompleted,
+      orderTaken: data.orderTaken,
       source: 'web',
       createdBy: user.id,
       advancePipeline: true,
@@ -269,7 +295,14 @@ const CrmClientProfile: React.FC = () => {
           <CardContent className="space-y-3 text-sm">
             <p><span className="text-muted-foreground">Email:</span> {client.email || '—'}</p>
             <p><span className="text-muted-foreground">Phone:</span> {client.phone || '—'}</p>
-            <p><span className="text-muted-foreground">City:</span> {client.city || '—'}</p>
+
+            <CrmLocationSelects
+              className="pt-1"
+              value={locationSelection}
+              onChange={setLocationSelection}
+            />
+
+            <CrmGpsInput value={gpsLocation} onChange={setGpsLocation} />
 
             <div>
               <Label>Assigned rep</Label>

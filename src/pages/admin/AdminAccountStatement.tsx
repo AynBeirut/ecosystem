@@ -12,7 +12,17 @@ import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { initArabicPDF, writeText, cleanTextForPDF } from '@/lib/arabicPDF';
 import { isCountedSaleStatus, isDateInRange, normalizeDateString, resolveOrderItemProductKey } from '@/lib/salesRules';
-import { fetchFinanceExpenses } from '@/lib/financeData';
+import { fetchPlatformExpenses } from '@/lib/financeData';
+import { useStoreCurrency } from '@/hooks/useStoreCurrency';
+import { formatMoney } from '@/lib/money/format';
+import { useSystemGuide } from '@/hooks/useSystemGuide';
+import SystemGuideInfo from '@/components/system-guide/SystemGuideInfo';
+import { cn } from '@/lib/utils';
+import {
+  adminHeadingClass,
+  adminSectionLabelClass,
+  adminStatLabelClass,
+} from '@/lib/adminStyles';
 
 interface StatementLineItem {
   productId?: string;
@@ -55,6 +65,7 @@ interface SupplierBalance {
 
 interface ProductSummary {
   id: string;
+  localId?: string;
   name: string;
   category: string;
   totalSold: number;
@@ -150,9 +161,18 @@ interface DetailedStatement {
 }
 
 const AdminAccountStatement: React.FC = () => {
+  const { enabled: systemGuideEnabled } = useSystemGuide();
   const { user } = useAuth();
   const navigate = useNavigate();
   const isMobile = useIsMobile();
+  // Multi-currency: base currency + large-number style from store profile.
+  const { money, currency: baseCurrency, numberFormat: numberStyle } = useStoreCurrency();
+  // Plain (symbol-less) number for numeric CSV/Excel export columns — keeps decimals
+  // correct per currency (LBP=0, USD=2) WITHOUT thousands separators that would break CSV.
+  const numExport = (n: number) => formatMoney(Number(n) || 0, { currency: baseCurrency, style: 'full', withSymbol: false }).replace(/,/g, '');
+  // Symbol-less, separator-kept number for fixed-column PDF statements (currency shown in header).
+  // Honors the store's number style: 'compact' keeps large LBP figures short in tight columns.
+  const numDoc = (n: number) => formatMoney(Number(n) || 0, { currency: baseCurrency, style: numberStyle, withSymbol: false });
   const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales' | 'cashCollections' | 'payments'>('customers');
   const [loading, setLoading] = useState(true);
   
@@ -596,18 +616,26 @@ const AdminAccountStatement: React.FC = () => {
       const ordersSnapshot = await getDocs(ordersQuery);
       
       const productMap = new Map<string, ProductSummary>();
+      const canonicalProductIdByAnyKey = new Map<string, string>();
       
       // Initialize all products
       productsSnapshot.forEach(doc => {
         const product = doc.data();
+        const localId = String(product.localId || '').trim();
         productMap.set(doc.id, {
           id: doc.id,
+          localId,
           name: product.name || 'Unknown Product',
           category: product.category || 'Uncategorized',
           totalSold: 0,
           totalRevenue: 0,
           totalDiscount: 0
         });
+        canonicalProductIdByAnyKey.set(doc.id, doc.id);
+        if (localId) {
+          canonicalProductIdByAnyKey.set(localId, doc.id);
+          canonicalProductIdByAnyKey.set(`pos-${user?.storeId}-${localId}`, doc.id);
+        }
       });
       
       // Add orders data (delivered only)
@@ -621,7 +649,8 @@ const AdminAccountStatement: React.FC = () => {
         const orderDiscount = order.discountAmount || 0;
         
         items.forEach((item: StatementLineItem) => {
-          const productId = resolveOrderItemProductKey(item);
+          const rawProductId = resolveOrderItemProductKey(item);
+          const productId = canonicalProductIdByAnyKey.get(rawProductId) || rawProductId;
           if (productId && productMap.has(productId)) {
             const product = productMap.get(productId)!;
             const quantity = item.quantity || 0;
@@ -684,18 +713,22 @@ const AdminAccountStatement: React.FC = () => {
         
         const supplierName = suppliersData.get(purchase.supplierId) || purchase.supplierName || 'Unknown';
         
+        const purchaseAmount = toFiniteNumber(
+          purchase.totalCost ?? purchase.totalAmount ?? purchase.total,
+          0,
+        );
         purchasesList.push({
           id: doc.id,
           supplierId: purchase.supplierId || undefined,
           date: dateStr || '',
           supplier: supplierName,
-          amount: purchase.totalCost || purchase.total || 0,
+          amount: purchaseAmount,
           amountPaid: purchase.amountPaid || purchase.paid || 0,
           status: purchase.status || 'Completed',
           items: purchase.items || purchase.materials || [],
           invoiceNumber: purchase.invoiceNumber || purchase.purchaseNumber
         });
-        total += purchase.totalCost || purchase.total || 0;
+        total += purchaseAmount;
       });
       
       setPurchases(purchasesList);
@@ -709,12 +742,12 @@ const AdminAccountStatement: React.FC = () => {
     try {
       const db = getFirestore();
       if (!user?.storeId) return;
-      const financeExpenses = await fetchFinanceExpenses(db, user.storeId);
+      const platformExpenses = await fetchPlatformExpenses(db, user.storeId);
 
       const expensesList: ExpenseRecord[] = [];
       let total = 0;
 
-      financeExpenses.forEach((expense) => {
+      platformExpenses.forEach((expense) => {
         let dateStr = 'N/A';
         if (expense.date) {
           dateStr = expense.date;
@@ -865,6 +898,7 @@ const AdminAccountStatement: React.FC = () => {
     });
 
     const filteredProductMap = new Map<string, ProductSummary>();
+    const canonicalProductIdByAnyKey = new Map<string, string>();
 
     products.forEach(product => {
       filteredProductMap.set(product.id, {
@@ -875,6 +909,12 @@ const AdminAccountStatement: React.FC = () => {
         totalRevenue: 0,
         totalDiscount: 0
       });
+      canonicalProductIdByAnyKey.set(product.id, product.id);
+      const localId = String((product as ProductSummary & { localId?: string }).localId || '').trim();
+      if (localId) {
+        canonicalProductIdByAnyKey.set(localId, product.id);
+        canonicalProductIdByAnyKey.set(`pos-${user?.storeId}-${localId}`, product.id);
+      }
     });
 
     let quarantinedCount = 0;
@@ -904,13 +944,14 @@ const AdminAccountStatement: React.FC = () => {
       let allocatedSoFar = 0;
 
       items.forEach((item: StatementLineItem, index: number) => {
-        const productId = resolveOrderItemProductKey(item);
+        const rawProductId = resolveOrderItemProductKey(item);
+        const productId = canonicalProductIdByAnyKey.get(rawProductId) || rawProductId;
         if (!productId) return;
 
         if (!filteredProductMap.has(productId)) {
           filteredProductMap.set(productId, {
             id: productId,
-            name: item.productName || 'Unknown Product',
+            name: item.productName || item.name || 'Unknown Product',
             category: item.category || 'Other',
             totalSold: 0,
             totalRevenue: 0,
@@ -1163,7 +1204,7 @@ const AdminAccountStatement: React.FC = () => {
     const localDuplicate = findRecentDuplicatePayment(fingerprint, duplicateCutoffMs);
     if (localDuplicate) {
       alert(
-        `This payment was already recorded (${localDuplicate.date}, $${toFiniteNumber(localDuplicate.amount, 0).toFixed(2)}). `
+        `This payment was already recorded (${localDuplicate.date}, ${money(toFiniteNumber(localDuplicate.amount, 0))}). `
         + 'Do not submit again — refresh the page if you do not see it.',
       );
       paymentSaveInFlightRef.current = false;
@@ -1341,7 +1382,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFontSize(11);
     doc.setFont(undefined, 'bold');
     doc.text(isIncoming ? 'Amount Received:' : 'Amount Paid:', col1, y);
-    doc.text(`$${payment.amount.toFixed(2)}`, 74, y, { align: 'right' });
+    doc.text(money(payment.amount), 74, y, { align: 'right' });
     y += 5;
     doc.line(5, y, 75, y);
     y += 8;
@@ -1776,7 +1817,7 @@ const AdminAccountStatement: React.FC = () => {
       doc.text(firstDate, 20, y);
       doc.text('JVO00000001', 40, y);
       doc.text('Brought forward year', 65, y);
-      doc.text(Math.abs(detailedStatement.openingBalance).toFixed(2), 170, y, { align: 'right' });
+      doc.text(numDoc(Math.abs(detailedStatement.openingBalance)), 170, y, { align: 'right' });
       y += 5;
     }
     
@@ -1793,11 +1834,11 @@ const AdminAccountStatement: React.FC = () => {
       doc.text(txn.date, 20, y);
       doc.text(txn.ref.substring(0, 12), 40, y);
       writeText(doc, txn.description.substring(0, 20), 65, y);
-      if (txn.debit > 0) doc.text(txn.debit.toFixed(2), 105, y, { align: 'right' });
-      if (txn.netVat > 0) doc.text(txn.netVat.toFixed(2), 120, y, { align: 'right' });
-      if (txn.credit > 0) doc.text(txn.credit.toFixed(2), 150, y, { align: 'right' });
-      doc.text(txn.balance.toFixed(2), 170, y, { align: 'right' });
-      if (txn.vatLL > 0) doc.text(txn.vatLL.toFixed(2), 190, y, { align: 'right' });
+      if (txn.debit > 0) doc.text(numDoc(txn.debit), 105, y, { align: 'right' });
+      if (txn.netVat > 0) doc.text(numDoc(txn.netVat), 120, y, { align: 'right' });
+      if (txn.credit > 0) doc.text(numDoc(txn.credit), 150, y, { align: 'right' });
+      doc.text(numDoc(txn.balance), 170, y, { align: 'right' });
+      if (txn.vatLL > 0) doc.text(numDoc(txn.vatLL), 190, y, { align: 'right' });
       y += 5;
     });
     
@@ -1809,9 +1850,9 @@ const AdminAccountStatement: React.FC = () => {
     doc.text('Total', 65, y);
     const totalDebit = detailedStatement.transactions.reduce((sum, t) => sum + t.debit, 0);
     const totalCredit = detailedStatement.transactions.reduce((sum, t) => sum + t.credit, 0);
-    if (totalDebit > 0) doc.text(totalDebit.toFixed(2), 105, y, { align: 'right' });
-    if (totalCredit > 0) doc.text(totalCredit.toFixed(2), 150, y, { align: 'right' });
-    doc.text(Math.abs(detailedStatement.closingBalance).toFixed(2), 170, y, { align: 'right' });
+    if (totalDebit > 0) doc.text(numDoc(totalDebit), 105, y, { align: 'right' });
+    if (totalCredit > 0) doc.text(numDoc(totalCredit), 150, y, { align: 'right' });
+    doc.text(numDoc(Math.abs(detailedStatement.closingBalance)), 170, y, { align: 'right' });
     
     // Balance favour
     y += 7;
@@ -2463,13 +2504,13 @@ const AdminAccountStatement: React.FC = () => {
       doc.text(row.date, col.date, y);
       writeText(doc, row.ref.substring(0, 12), col.ref, y);
       writeText(doc, row.description.substring(0, 32), col.desc, y);
-      doc.text(row.subtotal.toFixed(2), col.subtotal, y, { align: 'right' });
-      doc.text(row.discount > 0 ? `-${row.discount.toFixed(2)}` : '0.00', col.discount, y, { align: 'right' });
-      doc.text(row.debit.toFixed(2), col.debit, y, { align: 'right' });
-      doc.text(row.net.toFixed(2), col.net, y, { align: 'right' });
-      doc.text(row.vat.toFixed(2), col.vat, y, { align: 'right' });
-      doc.text(row.credit.toFixed(2), col.credit, y, { align: 'right' });
-      doc.text(row.balance.toFixed(2), col.balance, y, { align: 'right' });
+      doc.text(numDoc(row.subtotal), col.subtotal, y, { align: 'right' });
+      doc.text(row.discount > 0 ? `-${numDoc(row.discount)}` : numDoc(0), col.discount, y, { align: 'right' });
+      doc.text(numDoc(row.debit), col.debit, y, { align: 'right' });
+      doc.text(numDoc(row.net), col.net, y, { align: 'right' });
+      doc.text(numDoc(row.vat), col.vat, y, { align: 'right' });
+      doc.text(numDoc(row.credit), col.credit, y, { align: 'right' });
+      doc.text(numDoc(row.balance), col.balance, y, { align: 'right' });
       doc.text(row.status.substring(0, 10), col.status, y, { align: 'right' });
       y += 4.5;
     });
@@ -2486,13 +2527,13 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFont(undefined, 'bold');
     doc.setFontSize(8);
     doc.text('TOTAL', col.date, y);
-    doc.text(totals.subtotal.toFixed(2), col.subtotal, y, { align: 'right' });
-    doc.text(totals.discount.toFixed(2), col.discount, y, { align: 'right' });
-    doc.text(totals.debit.toFixed(2), col.debit, y, { align: 'right' });
-    doc.text(totals.net.toFixed(2), col.net, y, { align: 'right' });
-    doc.text(totals.vat.toFixed(2), col.vat, y, { align: 'right' });
-    doc.text(totals.credit.toFixed(2), col.credit, y, { align: 'right' });
-    doc.text(totals.balance.toFixed(2), col.balance, y, { align: 'right' });
+    doc.text(numDoc(totals.subtotal), col.subtotal, y, { align: 'right' });
+    doc.text(numDoc(totals.discount), col.discount, y, { align: 'right' });
+    doc.text(numDoc(totals.debit), col.debit, y, { align: 'right' });
+    doc.text(numDoc(totals.net), col.net, y, { align: 'right' });
+    doc.text(numDoc(totals.vat), col.vat, y, { align: 'right' });
+    doc.text(numDoc(totals.credit), col.credit, y, { align: 'right' });
+    doc.text(numDoc(totals.balance), col.balance, y, { align: 'right' });
 
     if (quarantinedExportRows > 0) {
       y += 6;
@@ -2553,9 +2594,9 @@ const AdminAccountStatement: React.FC = () => {
         y = 20;
       }
       writeText(doc, supplier.name.substring(0, 30), 20, y);
-      doc.text(`$${supplier.totalPurchases.toFixed(2)}`, 90, y);
-      doc.text(`$${supplier.totalPayments.toFixed(2)}`, 130, y);
-      doc.text(`$${supplier.balance.toFixed(2)}`, 170, y);
+      doc.text(money(supplier.totalPurchases), 90, y);
+      doc.text(money(supplier.totalPayments), 130, y);
+      doc.text(money(supplier.balance), 170, y);
       y += 7;
     });
     
@@ -2569,9 +2610,9 @@ const AdminAccountStatement: React.FC = () => {
     const totalPurchases = validSuppliers.reduce((sum, s) => sum + s.totalPurchases, 0);
     const totalPayments = validSuppliers.reduce((sum, s) => sum + s.totalPayments, 0);
     const totalBalance = validSuppliers.reduce((sum, s) => sum + s.balance, 0);
-    doc.text(`$${totalPurchases.toFixed(2)}`, 90, y);
-    doc.text(`$${totalPayments.toFixed(2)}`, 130, y);
-    doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
+    doc.text(money(totalPurchases), 90, y);
+    doc.text(money(totalPayments), 130, y);
+    doc.text(money(totalBalance), 170, y);
 
     if (quarantinedExportRows > 0) {
       y += 7;
@@ -2650,7 +2691,7 @@ const AdminAccountStatement: React.FC = () => {
         writeText(doc, product.name.substring(0, 30), 20, y);
         writeText(doc, product.category.substring(0, 15), 90, y);
         doc.text(product.totalSold.toString(), 130, y, { align: 'right' });
-        doc.text(`$${product.totalRevenue.toFixed(2)}`, 170, y, { align: 'right' });
+        doc.text(money(product.totalRevenue), 170, y, { align: 'right' });
         y += 6;
         
         categoryTotalSold += product.totalSold;
@@ -2665,7 +2706,7 @@ const AdminAccountStatement: React.FC = () => {
       doc.setFont(undefined, 'bold');
       writeText(doc, `SUBTOTAL - ${category}`, 20, y);
       doc.text(categoryTotalSold.toString(), 130, y, { align: 'right' });
-      doc.text(`$${categoryTotalRevenue.toFixed(2)}`, 170, y, { align: 'right' });
+      doc.text(money(categoryTotalRevenue), 170, y, { align: 'right' });
       y += 8;
       
       grandTotalSold += categoryTotalSold;
@@ -2685,7 +2726,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFont(undefined, 'bold');
     doc.text('GRAND TOTAL', 20, y);
     doc.text(grandTotalSold.toString(), 130, y, { align: 'right' });
-    doc.text(`$${grandTotalRevenue.toFixed(2)}`, 170, y, { align: 'right' });
+    doc.text(money(grandTotalRevenue), 170, y, { align: 'right' });
     
     doc.save('products_summary.pdf');
   };
@@ -2720,22 +2761,22 @@ const AdminAccountStatement: React.FC = () => {
         row.dateLabel,
         row.ref,
         row.description,
-        row.debit.toFixed(2),
-        row.net.toFixed(2),
-        row.vat.toFixed(2),
-        row.credit.toFixed(2),
-        row.balance.toFixed(2),
+        money(row.debit),
+        money(row.net),
+        money(row.vat),
+        money(row.credit),
+        money(row.balance),
         row.status,
       ]),
       foot: [[
         'TOTAL',
         '',
         '',
-        totalDebit.toFixed(2),
-        totalNet.toFixed(2),
-        totalVat.toFixed(2),
-        totalCredit.toFixed(2),
-        closingBalance.toFixed(2),
+        money(totalDebit),
+        money(totalNet),
+        money(totalVat),
+        money(totalCredit),
+        money(closingBalance),
         '',
       ]],
       theme: 'striped',
@@ -2839,7 +2880,7 @@ const AdminAccountStatement: React.FC = () => {
         doc.text(expense.date, 20, y);
         writeText(doc, expense.category.substring(0, 12), 50, y);
         writeText(doc, expense.description.substring(0, 28), 90, y);
-        doc.text(`$${expense.amount.toFixed(2)}`, 170, y, { align: 'right' });
+        doc.text(money(expense.amount), 170, y, { align: 'right' });
         y += 5;
         
         categoryTotal += expense.amount;
@@ -2852,7 +2893,7 @@ const AdminAccountStatement: React.FC = () => {
       doc.setFontSize(9);
       doc.setFont(undefined, 'bold');
       writeText(doc, `SUBTOTAL - ${category}`, 90, y);
-      doc.text(`$${categoryTotal.toFixed(2)}`, 170, y, { align: 'right' });
+      doc.text(money(categoryTotal), 170, y, { align: 'right' });
       y += 7;
       
       grandTotal += categoryTotal;
@@ -2870,7 +2911,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFontSize(10);
     doc.setFont(undefined, 'bold');
     doc.text('GRAND TOTAL', 90, y);
-    doc.text(`$${grandTotal.toFixed(2)}`, 170, y, { align: 'right' });
+    doc.text(money(grandTotal), 170, y, { align: 'right' });
 
     if (quarantinedExportRows > 0) {
       y += 7;
@@ -3049,33 +3090,33 @@ const AdminAccountStatement: React.FC = () => {
     }).filter(Boolean) as Array<{ date: string; bankAccount: string; reference: string; ordersCount: number; amount: number }>;
 
     const data: CsvRow[] = [
-      { Section: 'Summary', Item: 'Total Expenses', Value: `$${totalExpenses.toFixed(2)}` },
-      { Section: 'Summary', Item: 'Total Purchases', Value: `$${totalPurchases.toFixed(2)}` },
-      { Section: 'Summary', Item: 'Customer Balances', Value: `$${customerBalances.toFixed(2)}` },
-      { Section: 'Summary', Item: 'Supplier Balances', Value: `$${suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}` },
-      { Section: 'Summary', Item: 'Cash Deposited', Value: `$${totalCashDeposited.toFixed(2)}` },
-      { Section: 'Summary', Item: 'Net Balance', Value: `$${netBalance.toFixed(2)}` },
+      { Section: 'Summary', Item: 'Total Expenses', Value: money(totalExpenses) },
+      { Section: 'Summary', Item: 'Total Purchases', Value: money(totalPurchases) },
+      { Section: 'Summary', Item: 'Customer Balances', Value: money(customerBalances) },
+      { Section: 'Summary', Item: 'Supplier Balances', Value: money(suppliers.reduce((sum, s) => sum + s.balance, 0)) },
+      { Section: 'Summary', Item: 'Cash Deposited', Value: money(totalCashDeposited) },
+      { Section: 'Summary', Item: 'Net Balance', Value: money(netBalance) },
       { Section: '', Item: '', Value: '' },
       { Section: 'Customers', Item: 'Name', Value: 'Balance' },
-      ...customers.map(c => ({ Section: 'Customers', Item: c.name, Value: `$${c.balance.toFixed(2)}` })),
+      ...customers.map(c => ({ Section: 'Customers', Item: c.name, Value: money(c.balance) })),
       { Section: '', Item: '', Value: '' },
       { Section: 'Suppliers', Item: 'Name', Value: 'Balance Due' },
-      ...suppliers.map(s => ({ Section: 'Suppliers', Item: s.name, Value: `$${s.balance.toFixed(2)}` })),
+      ...suppliers.map(s => ({ Section: 'Suppliers', Item: s.name, Value: money(s.balance) })),
       { Section: '', Item: '', Value: '' },
       { Section: 'Products', Item: 'Name', Value: 'Revenue' },
-      ...products.map(p => ({ Section: 'Products', Item: p.name, Value: `$${p.totalRevenue.toFixed(2)}` })),
+      ...products.map(p => ({ Section: 'Products', Item: p.name, Value: money(p.totalRevenue) })),
       { Section: '', Item: '', Value: '' },
       { Section: 'Purchases', Item: 'Supplier', Value: 'Amount' },
-      ...purchases.map(p => ({ Section: 'Purchases', Item: p.supplier, Value: `$${p.amount.toFixed(2)}` })),
+      ...purchases.map(p => ({ Section: 'Purchases', Item: p.supplier, Value: money(p.amount) })),
       { Section: '', Item: '', Value: '' },
       { Section: 'Expenses', Item: 'Category', Value: 'Amount' },
-      ...expenses.map(e => ({ Section: 'Expenses', Item: e.category, Value: `$${e.amount.toFixed(2)}` })),
+      ...expenses.map(e => ({ Section: 'Expenses', Item: e.category, Value: money(e.amount) })),
       { Section: '', Item: '', Value: '' },
       { Section: 'Cash Collections', Item: 'Bank / Ref', Value: 'Amount' },
       ...validCashCollections.map(c => ({
         Section: 'Cash Collections',
         Item: `${c.date} • ${c.bankAccount} • ${c.reference} (${c.ordersCount} orders)`,
-        Value: `$${c.amount.toFixed(2)}`,
+        Value: money(c.amount),
       })),
     ];
 
@@ -3120,17 +3161,17 @@ const AdminAccountStatement: React.FC = () => {
     
     doc.setFontSize(11);
     let y = 55;
-    doc.text(`Total Expenses: $${totalExpenses.toFixed(2)}`, 20, y);
+    doc.text(`Total Expenses: ${money(totalExpenses)}`, 20, y);
     y += 8;
-    doc.text(`Total Purchases: $${totalPurchases.toFixed(2)}`, 20, y);
+    doc.text(`Total Purchases: ${money(totalPurchases)}`, 20, y);
     y += 8;
-    doc.text(`Customer Balances: $${customerBalances.toFixed(2)}`, 20, y);
+    doc.text(`Customer Balances: ${money(customerBalances)}`, 20, y);
     y += 8;
-    doc.text(`Supplier Balances: $${suppliers.reduce((sum, s) => sum + s.balance, 0).toFixed(2)}`, 20, y);
+    doc.text(`Supplier Balances: ${money(suppliers.reduce((sum, s) => sum + s.balance, 0))}`, 20, y);
     y += 8;
-    doc.text(`Cash Deposited: $${totalCashDeposited.toFixed(2)}`, 20, y);
+    doc.text(`Cash Deposited: ${money(totalCashDeposited)}`, 20, y);
     y += 8;
-    doc.text(`Net Balance: $${netBalance.toFixed(2)}`, 20, y);
+    doc.text(`Net Balance: ${money(netBalance)}`, 20, y);
     
     y += 15;
     doc.setFontSize(14);
@@ -3139,7 +3180,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFontSize(10);
     customers.slice(0, 5).forEach(customer => {
       const cleanName = cleanTextForPDF(customer.name);
-      doc.text(`${cleanName}: $${customer.balance.toFixed(2)}`, 25, y);
+      doc.text(`${cleanName}: ${money(customer.balance)}`, 25, y);
       y += 6;
     });
     
@@ -3150,7 +3191,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFontSize(10);
     suppliers.slice(0, 5).forEach(supplier => {
       const cleanName = cleanTextForPDF(supplier.name);
-      doc.text(`${cleanName}: $${supplier.balance.toFixed(2)}`, 25, y);
+      doc.text(`${cleanName}: ${money(supplier.balance)}`, 25, y);
       y += 6;
     });
     
@@ -3165,7 +3206,7 @@ const AdminAccountStatement: React.FC = () => {
     doc.setFontSize(10);
     products.slice(0, 5).forEach(product => {
       const cleanName = cleanTextForPDF(product.name);
-      doc.text(`${cleanName}: $${product.totalRevenue.toFixed(2)}`, 25, y);
+      doc.text(`${cleanName}: ${money(product.totalRevenue)}`, 25, y);
       y += 6;
     });
 
@@ -3183,7 +3224,7 @@ const AdminAccountStatement: React.FC = () => {
         doc.addPage();
         y = 20;
       }
-      const line = `${entry.date} • ${cleanTextForPDF(entry.bankAccount)} • ${cleanTextForPDF(entry.reference)} (${entry.ordersCount} orders): $${entry.amount.toFixed(2)}`;
+      const line = `${entry.date} • ${cleanTextForPDF(entry.bankAccount)} • ${cleanTextForPDF(entry.reference)} (${entry.ordersCount} orders): ${money(entry.amount)}`;
       doc.text(line, 25, y);
       y += 6;
     });
@@ -3202,7 +3243,7 @@ const AdminAccountStatement: React.FC = () => {
       <div className="space-y-6">
         <div className="container mx-auto p-4">
           <div className="flex justify-center items-center h-64">
-            <div className="text-lg">Loading account statement...</div>
+            <div className="text-lg text-zinc-100">Loading account statement...</div>
           </div>
         </div>
       </div>
@@ -3471,9 +3512,9 @@ const AdminAccountStatement: React.FC = () => {
         y = 20;
       }
       writeText(doc, customer.name.substring(0, 30), 20, y);
-      doc.text(`$${customer.totalPurchases.toFixed(2)}`, 90, y);
-      doc.text(`$${customer.totalPayments.toFixed(2)}`, 130, y);
-      doc.text(`$${customer.balance.toFixed(2)}`, 170, y);
+      doc.text(money(customer.totalPurchases), 90, y);
+      doc.text(money(customer.totalPayments), 130, y);
+      doc.text(money(customer.balance), 170, y);
       y += 7;
     });
 
@@ -3486,9 +3527,9 @@ const AdminAccountStatement: React.FC = () => {
     const totalInvoiced = validCustomers.reduce((sum, c) => sum + c.totalPurchases, 0);
     const totalPaid = validCustomers.reduce((sum, c) => sum + c.totalPayments, 0);
     const totalBalance = validCustomers.reduce((sum, c) => sum + c.balance, 0);
-    doc.text(`$${totalInvoiced.toFixed(2)}`, 90, y);
-    doc.text(`$${totalPaid.toFixed(2)}`, 130, y);
-    doc.text(`$${totalBalance.toFixed(2)}`, 170, y);
+    doc.text(money(totalInvoiced), 90, y);
+    doc.text(money(totalPaid), 130, y);
+    doc.text(money(totalBalance), 170, y);
 
     if (quarantinedExportRows > 0) {
       y += 7;
@@ -3502,11 +3543,25 @@ const AdminAccountStatement: React.FC = () => {
 
   return (
     <AdminPageShell
-      title="Account Statement"
+      title={(
+        <span className="inline-flex items-center gap-2">
+          Account Statement
+          <SystemGuideInfo
+            enabled={systemGuideEnabled}
+            label="What Account Statement does"
+            title="Account Statement"
+            content={[
+              'This page brings together customer balances, supplier balances, product sales, purchases, expenses, payments, and cash collections in one place.',
+              'Use the Section picker to move between views, then filter dates or export the current section when you need a printable statement.',
+            ]}
+            className="border-white/25 text-white/80 hover:text-white"
+          />
+        </span>
+      )}
       description="Detailed overview of financial transactions and balances"
       eyebrow="Business Tools"
-      backTo="/admin/finance"
-      backLabel="Finance Suite"
+      backTo="/admin/finance/invoices"
+      backLabel="Invoice Manager"
       actions={(
         <div className="flex flex-wrap gap-2">
           <button
@@ -3529,50 +3584,50 @@ const AdminAccountStatement: React.FC = () => {
       )}
     >
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4 mb-6">
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-600">Total Sales</div>
-          <div className="text-2xl font-bold text-blue-600">${totalSales.toFixed(2)}</div>
-          {quarantinedSalesCount > 0 && (
-            <div className="text-xs text-orange-600 mt-1">
-              Quarantined invalid sales: {quarantinedSalesCount}
+      <AdminPanel className="overflow-hidden p-0">
+        <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 border-b border-slate-100 p-4 sm:p-6">
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 sm:p-4">
+            <div className={adminStatLabelClass}>Total Sales</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold tabular-nums text-blue-600">{money(totalSales)}</div>
+            {quarantinedSalesCount > 0 && (
+              <div className="text-xs text-orange-600 mt-1">
+                Quarantined invalid sales: {quarantinedSalesCount}
+              </div>
+            )}
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 sm:p-4">
+            <div className={adminStatLabelClass}>Total Purchases</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold tabular-nums text-orange-600">{money(totalPurchases)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 sm:p-4">
+            <div className={adminStatLabelClass}>Total Expenses</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold tabular-nums text-red-600">{money(totalExpenses)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 sm:p-4">
+            <div className={adminStatLabelClass}>Customer Balances</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold tabular-nums text-emerald-600">{money(customerBalances)}</div>
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 sm:p-4">
+            <div className={adminStatLabelClass}>Net Balance</div>
+            <div className={cn('mt-1 text-xl sm:text-2xl font-bold tabular-nums', netBalance >= 0 ? 'text-emerald-600' : 'text-red-600')}>
+              {money(netBalance)}
             </div>
-          )}
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-600">Total Purchases</div>
-          <div className="text-2xl font-bold text-orange-600">${totalPurchases.toFixed(2)}</div>
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-600">Total Expenses</div>
-          <div className="text-2xl font-bold text-red-600">${totalExpenses.toFixed(2)}</div>
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-600">Customer Balances</div>
-          <div className="text-2xl font-bold text-green-600">${customerBalances.toFixed(2)}</div>
-        </div>
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-600">Net Balance</div>
-          <div className={`text-2xl font-bold ${netBalance >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-            ${netBalance.toFixed(2)}
+          </div>
+          <div className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 sm:p-4">
+            <div className={adminStatLabelClass}>Cash Deposited</div>
+            <div className="mt-1 text-xl sm:text-2xl font-bold tabular-nums text-emerald-600">{money(totalCashDeposited)}</div>
           </div>
         </div>
-        <div className="bg-white p-4 rounded shadow">
-          <div className="text-sm text-gray-600">Cash Deposited</div>
-          <div className="text-2xl font-bold text-emerald-600">${totalCashDeposited.toFixed(2)}</div>
-        </div>
-      </div>
 
-      <div className="bg-white rounded shadow">
-        <div className="border-b px-4 py-3 sm:px-6">
-          <label htmlFor="account-statement-section" className="block text-sm font-medium text-gray-600 mb-2">
+        <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-3 sm:px-6">
+          <label htmlFor="account-statement-section" className={cn(adminSectionLabelClass, 'mb-2 block')}>
             Section
           </label>
           <select
             id="account-statement-section"
             value={activeTab}
             onChange={(e) => setActiveTab(e.target.value as typeof activeTab)}
-            className="w-full max-w-md border border-gray-300 rounded-md px-3 py-2 text-sm font-medium text-gray-900 bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            className="w-full max-w-md rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500/40 focus:border-teal-500"
           >
             {accountStatementTabs.map((tab) => (
               <option key={tab.id} value={tab.id}>
@@ -3582,11 +3637,22 @@ const AdminAccountStatement: React.FC = () => {
           </select>
         </div>
 
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {activeTab === 'customers' && (
             <div>
               <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Customer Balances</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className={adminHeadingClass}>Customer Balances</h2>
+                  <SystemGuideInfo
+                    enabled={systemGuideEnabled}
+                    label="What Customer Balances means"
+                    title="Customer Balances"
+                    content={[
+                      'This section shows what each customer has been invoiced, what they already paid, and what is still due.',
+                      'Use Ledger for the detailed statement and Payment when you need to record money received against that customer account.',
+                    ]}
+                  />
+                </div>
                 <div className="flex gap-2 flex-wrap items-center">
                   <div className="flex gap-2 items-center">
                     <label className="text-sm text-gray-600">From:</label>
@@ -3685,10 +3751,10 @@ const AdminAccountStatement: React.FC = () => {
                           <tr className={`border-b hover:bg-gray-50 ${isExpanded ? 'bg-blue-50' : ''}`}>
                             <td className="border px-3 py-2 font-medium">{customer.name}</td>
                             <td className="border px-3 py-2 text-right">{metrics.invoicesCount}</td>
-                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{metrics.totalInvoiced.toFixed(2)}</td>
-                            <td className="border px-3 py-2 text-right text-green-600">{metrics.totalPaid.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{money(metrics.totalInvoiced)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{money(metrics.totalPaid)}</td>
                             <td className={`border px-3 py-2 text-right font-bold ${displayBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                              {displayBalance.toFixed(2)}
+                              {money(displayBalance)}
                               {displayBalance > 0 && <span className="ml-1 text-xs font-normal">(due)</span>}
                             </td>
                             <td className="border px-3 py-2 text-center">
@@ -3716,9 +3782,9 @@ const AdminAccountStatement: React.FC = () => {
                     <tr>
                       <td className="border px-3 py-3">TOTAL</td>
                       <td className="border px-3 py-3 text-right">{filteredCustomers.length}</td>
-                      <td className="border px-3 py-3 text-right text-blue-600">{filteredCustomerTotals.invoiced.toFixed(2)}</td>
-                      <td className="border px-3 py-3 text-right text-green-600">{filteredCustomerTotals.paid.toFixed(2)}</td>
-                      <td className="border px-3 py-3 text-right text-blue-600">{filteredCustomerTotals.balance.toFixed(2)}</td>
+                      <td className="border px-3 py-3 text-right text-blue-600">{money(filteredCustomerTotals.invoiced)}</td>
+                      <td className="border px-3 py-3 text-right text-green-600">{money(filteredCustomerTotals.paid)}</td>
+                      <td className="border px-3 py-3 text-right text-blue-600">{money(filteredCustomerTotals.balance)}</td>
                       <td className="border px-3 py-3"></td>
                     </tr>
                   </tfoot>
@@ -3754,7 +3820,18 @@ const AdminAccountStatement: React.FC = () => {
               <div>
                 {/* Filters */}
                 <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                  <h2 className="text-xl font-semibold">Supplier Balances</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className={adminHeadingClass}>Supplier Balances</h2>
+                    <SystemGuideInfo
+                      enabled={systemGuideEnabled}
+                      label="What Supplier Balances means"
+                      title="Supplier Balances"
+                      content={[
+                        'This section shows how much you bought from each supplier, how much you already paid, and what is still owed.',
+                        'Use it to follow unpaid supplier balances and export a clean supplier statement when needed.',
+                      ]}
+                    />
+                  </div>
                   <div className="flex gap-2 flex-wrap items-center">
                     <div className="flex gap-2 items-center">
                       <label className="text-sm text-gray-600">From:</label>
@@ -3814,15 +3891,15 @@ const AdminAccountStatement: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-orange-50 border border-orange-200 rounded p-4">
                     <div className="text-sm text-orange-600 font-medium">Total Purchased (Dr)</div>
-                    <div className="text-2xl font-bold text-orange-700">${filteredSupplierTotals.purchased.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-orange-700">{money(filteredSupplierTotals.purchased)}</div>
                   </div>
                   <div className="bg-green-50 border border-green-200 rounded p-4">
                     <div className="text-sm text-green-600 font-medium">Total Paid (Cr)</div>
-                    <div className="text-2xl font-bold text-green-700">${filteredSupplierTotals.paid.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-green-700">{money(filteredSupplierTotals.paid)}</div>
                   </div>
                   <div className={`border rounded p-4 ${filteredSupplierTotals.balance > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                     <div className={`text-sm font-medium ${filteredSupplierTotals.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>Outstanding (Owed to Suppliers)</div>
-                    <div className={`text-2xl font-bold ${filteredSupplierTotals.balance > 0 ? 'text-red-700' : 'text-green-700'}`}>${filteredSupplierTotals.balance.toFixed(2)}</div>
+                    <div className={`text-2xl font-bold ${filteredSupplierTotals.balance > 0 ? 'text-red-700' : 'text-green-700'}`}>{money(filteredSupplierTotals.balance)}</div>
                   </div>
                 </div>
 
@@ -3846,10 +3923,10 @@ const AdminAccountStatement: React.FC = () => {
                           <tr key={supplier.id} className="border-b hover:bg-gray-50">
                             <td className="border px-3 py-2 font-medium">{supplier.name}</td>
                             <td className="border px-3 py-2 text-right">{metrics.invoicesCount}</td>
-                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{metrics.totalPurchases.toFixed(2)}</td>
-                            <td className="border px-3 py-2 text-right text-green-600">{metrics.totalPayments.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{money(metrics.totalPurchases)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{money(metrics.totalPayments)}</td>
                             <td className={`border px-3 py-2 text-right font-bold ${metrics.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {metrics.balance.toFixed(2)}
+                              {money(metrics.balance)}
                               {metrics.balance > 0 && <span className="ml-1 text-xs font-normal">(owed)</span>}
                               {metrics.balance < -BALANCE_EPSILON && (
                                 <span className="ml-1 text-xs font-normal">(in your favour)</span>
@@ -3879,9 +3956,9 @@ const AdminAccountStatement: React.FC = () => {
                       <tr>
                         <td className="border px-3 py-3">TOTAL</td>
                         <td className="border px-3 py-3 text-right">{sortedFilteredSuppliers.reduce((sum, s) => sum + purchases.filter(p => p.supplier === s.name).length, 0)}</td>
-                        <td className="border px-3 py-3 text-right text-orange-700">{filteredSupplierTotals.purchased.toFixed(2)}</td>
-                        <td className="border px-3 py-3 text-right text-green-600">{filteredSupplierTotals.paid.toFixed(2)}</td>
-                        <td className={`border px-3 py-3 text-right ${filteredSupplierTotals.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{filteredSupplierTotals.balance.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-orange-700">{money(filteredSupplierTotals.purchased)}</td>
+                        <td className="border px-3 py-3 text-right text-green-600">{money(filteredSupplierTotals.paid)}</td>
+                        <td className={`border px-3 py-3 text-right ${filteredSupplierTotals.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>{money(filteredSupplierTotals.balance)}</td>
                         <td className="border px-3 py-3"></td>
                       </tr>
                     </tfoot>
@@ -3915,7 +3992,18 @@ const AdminAccountStatement: React.FC = () => {
               <div>
                 {/* Filters */}
                 <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                  <h2 className="text-xl font-semibold">Product Summary</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className={adminHeadingClass}>Product Summary</h2>
+                    <SystemGuideInfo
+                      enabled={systemGuideEnabled}
+                      label="What Product Summary means"
+                      title="Product Summary"
+                      content={[
+                        'This section summarizes quantities sold and revenue by product using the sales currently loaded in the statement.',
+                        'Use it to spot top sellers, compare product performance, and export a simple sales-by-product view.',
+                      ]}
+                    />
+                  </div>
                   {quarantinedProductSalesCount > 0 && (
                     <div className="text-sm text-orange-600 font-medium">
                       Quarantined rows: {quarantinedProductSalesCount}
@@ -3984,15 +4072,15 @@ const AdminAccountStatement: React.FC = () => {
                   </div>
                   <div className="bg-blue-50 border border-blue-200 rounded p-4">
                     <div className="text-sm text-blue-600 font-medium">Subtotal</div>
-                    <div className="text-2xl font-bold text-blue-700">${productTotals.subtotal.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-blue-700">{money(productTotals.subtotal)}</div>
                   </div>
                   <div className="bg-red-50 border border-red-200 rounded p-4">
                     <div className="text-sm text-red-600 font-medium">Discount</div>
-                    <div className="text-2xl font-bold text-red-700">${productTotals.discount.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-red-700">{money(productTotals.discount)}</div>
                   </div>
                   <div className="bg-green-50 border border-green-200 rounded p-4">
                     <div className="text-sm text-green-600 font-medium">Total Revenue</div>
-                    <div className="text-2xl font-bold text-green-700">${productTotals.revenue.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-green-700">{money(productTotals.revenue)}</div>
                   </div>
                 </div>
 
@@ -4018,9 +4106,9 @@ const AdminAccountStatement: React.FC = () => {
                             <td className="border px-3 py-2 font-medium">{product.name}</td>
                             <td className="border px-3 py-2">{product.category}</td>
                             <td className="border px-3 py-2 text-right">{product.totalSold}</td>
-                            <td className="border px-3 py-2 text-right">${subtotal.toFixed(2)}</td>
-                            <td className="border px-3 py-2 text-right text-red-600">{discount > 0 ? `-$${discount.toFixed(2)}` : '$0.00'}</td>
-                            <td className="border px-3 py-2 text-right font-semibold text-green-700">${product.totalRevenue.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right">{money(subtotal)}</td>
+                            <td className="border px-3 py-2 text-right text-red-600">{discount > 0 ? `-${money(discount)}` : money(0)}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-green-700">{money(product.totalRevenue)}</td>
                           </tr>
                         );
                       })}
@@ -4029,9 +4117,9 @@ const AdminAccountStatement: React.FC = () => {
                       <tr>
                         <td className="border px-3 py-3" colSpan={2}>TOTAL</td>
                         <td className="border px-3 py-3 text-right">{productTotals.quantity}</td>
-                        <td className="border px-3 py-3 text-right">${productTotals.subtotal.toFixed(2)}</td>
-                        <td className="border px-3 py-3 text-right text-red-600">-${productTotals.discount.toFixed(2)}</td>
-                        <td className="border px-3 py-3 text-right text-green-700">${productTotals.revenue.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right">{money(productTotals.subtotal)}</td>
+                        <td className="border px-3 py-3 text-right text-red-600">-{money(productTotals.discount)}</td>
+                        <td className="border px-3 py-3 text-right text-green-700">{money(productTotals.revenue)}</td>
                       </tr>
                     </tfoot>
                   </table>
@@ -4117,7 +4205,18 @@ const AdminAccountStatement: React.FC = () => {
               <div>
                 {/* Filters */}
                 <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                  <h2 className="text-xl font-semibold">Purchase Accounts</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className={adminHeadingClass}>Purchase Accounts</h2>
+                    <SystemGuideInfo
+                      enabled={systemGuideEnabled}
+                      label="What Purchase Accounts means"
+                      title="Purchase Accounts"
+                      content={[
+                        'This section lists purchase documents and amounts so you can review stock costs by supplier and date.',
+                        'Use it to confirm imported purchase totals, audit purchase history, and export the visible range.',
+                      ]}
+                    />
+                  </div>
                   <div className="flex gap-2 flex-wrap items-center">
                     <div className="flex gap-2 items-center">
                       <label className="text-sm text-gray-600">From:</label>
@@ -4177,16 +4276,16 @@ const AdminAccountStatement: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-orange-50 border border-orange-200 rounded p-4">
                     <div className="text-sm text-orange-600 font-medium">Total Purchased (Dr)</div>
-                    <div className="text-2xl font-bold text-orange-700">${totalDebit.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-orange-700">{money(totalDebit)}</div>
                     <div className="text-xs text-gray-500 mt-1">{filteredPurchases.length} invoice(s)</div>
                   </div>
                   <div className="bg-green-50 border border-green-200 rounded p-4">
                     <div className="text-sm text-green-600 font-medium">Total Paid (Cr)</div>
-                    <div className="text-2xl font-bold text-green-700">${totalCredit.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-green-700">{money(totalCredit)}</div>
                   </div>
                   <div className={`border rounded p-4 ${totalBalance > 0 ? 'bg-red-50 border-red-200' : 'bg-green-50 border-green-200'}`}>
                     <div className={`text-sm font-medium ${totalBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>Outstanding (Owed to Suppliers)</div>
-                    <div className={`text-2xl font-bold ${totalBalance > 0 ? 'text-red-700' : 'text-green-700'}`}>${totalBalance.toFixed(2)}</div>
+                    <div className={`text-2xl font-bold ${totalBalance > 0 ? 'text-red-700' : 'text-green-700'}`}>{money(totalBalance)}</div>
                   </div>
                 </div>
 
@@ -4211,10 +4310,10 @@ const AdminAccountStatement: React.FC = () => {
                         <tr key={supplier.name} className="border-b hover:bg-gray-50">
                             <td className="border px-3 py-2 font-medium">{supplier.name}</td>
                             <td className="border px-3 py-2 text-right">{supplier.invoices.length}</td>
-                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{supplier.totalDebit.toFixed(2)}</td>
-                            <td className="border px-3 py-2 text-right text-green-600">{supplier.totalCredit.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-orange-700">{money(supplier.totalDebit)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{money(supplier.totalCredit)}</td>
                             <td className={`border px-3 py-2 text-right font-bold ${supplier.balance > 0 ? 'text-red-600' : 'text-green-600'}`}>
-                              {supplier.balance.toFixed(2)}
+                              {money(supplier.balance)}
                               {supplier.balance > 0 && <span className="ml-1 text-xs font-normal">(owed)</span>}
                             </td>
                             <td className="border px-3 py-2 text-center">
@@ -4237,9 +4336,9 @@ const AdminAccountStatement: React.FC = () => {
                       <tr>
                         <td className="border px-3 py-3">TOTAL</td>
                         <td className="border px-3 py-3 text-right">{filteredSupplierAccounts.length}</td>
-                        <td className="border px-3 py-3 text-right text-orange-700">{totalDebit.toFixed(2)}</td>
-                        <td className="border px-3 py-3 text-right text-green-600">{totalCredit.toFixed(2)}</td>
-                        <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>{totalBalance.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-orange-700">{money(totalDebit)}</td>
+                        <td className="border px-3 py-3 text-right text-green-600">{money(totalCredit)}</td>
+                        <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-red-600' : 'text-green-600'}`}>{money(totalBalance)}</td>
                         <td className="border px-3 py-3"></td>
                       </tr>
                     </tfoot>
@@ -4275,7 +4374,18 @@ const AdminAccountStatement: React.FC = () => {
               <div>
                 {/* Filters */}
                 <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                  <h2 className="text-xl font-semibold">Expense History</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className={adminHeadingClass}>Expense History</h2>
+                    <SystemGuideInfo
+                      enabled={systemGuideEnabled}
+                      label="What Expense History means"
+                      title="Expense History"
+                      content={[
+                        'This section shows operating expenses by date, category, and payment method.',
+                        'Use it to review where money is going, check totals for a period, and export the current expense list.',
+                      ]}
+                    />
+                  </div>
                   <div className="flex gap-2 flex-wrap items-center">
                     <div className="flex gap-2 items-center">
                       <label className="text-sm text-gray-600">From:</label>
@@ -4330,16 +4440,16 @@ const AdminAccountStatement: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-red-50 border border-red-200 rounded p-4">
                     <div className="text-sm text-red-600 font-medium">Total Expenses</div>
-                    <div className="text-2xl font-bold text-red-700">${expenseTotals.total.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-red-700">{money(expenseTotals.total)}</div>
                     <div className="text-xs text-gray-500 mt-1">{filteredExpenses.length} record(s)</div>
                   </div>
                   <div className="bg-yellow-50 border border-yellow-200 rounded p-4">
                     <div className="text-sm text-yellow-600 font-medium">Net</div>
-                    <div className="text-2xl font-bold text-yellow-700">${(expenseTotals.total - expenseTotals.vat).toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-yellow-700">{money(expenseTotals.total - expenseTotals.vat)}</div>
                   </div>
                   <div className="bg-purple-50 border border-purple-200 rounded p-4">
                     <div className="text-sm text-purple-600 font-medium">VAT</div>
-                    <div className="text-2xl font-bold text-purple-700">${expenseTotals.vat.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-purple-700">{money(expenseTotals.vat)}</div>
                   </div>
                 </div>
 
@@ -4369,9 +4479,9 @@ const AdminAccountStatement: React.FC = () => {
                               <td className="border px-3 py-2">{toDateLabel(expense.date)}</td>
                               <td className="border px-3 py-2">{expense.category}</td>
                               <td className="border px-3 py-2">{expense.description}</td>
-                              <td className="border px-3 py-2 text-right font-semibold text-red-600">${expense.amount.toFixed(2)}</td>
-                              <td className="border px-3 py-2 text-right">${net.toFixed(2)}</td>
-                              <td className="border px-3 py-2 text-right">${vat.toFixed(2)}</td>
+                              <td className="border px-3 py-2 text-right font-semibold text-red-600">{money(expense.amount)}</td>
+                              <td className="border px-3 py-2 text-right">{money(net)}</td>
+                              <td className="border px-3 py-2 text-right">{money(vat)}</td>
                               <td className="border px-3 py-2 text-xs">{expense.paymentMethod || '-'}</td>
                             </tr>
                           );
@@ -4381,9 +4491,9 @@ const AdminAccountStatement: React.FC = () => {
                     <tfoot className="bg-gray-100 font-bold">
                       <tr>
                         <td className="border px-3 py-3" colSpan={3}>TOTAL</td>
-                        <td className="border px-3 py-3 text-right text-red-700">${expenseTotals.total.toFixed(2)}</td>
-                        <td className="border px-3 py-3 text-right">${(expenseTotals.total - expenseTotals.vat).toFixed(2)}</td>
-                        <td className="border px-3 py-3 text-right">${expenseTotals.vat.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-red-700">{money(expenseTotals.total)}</td>
+                        <td className="border px-3 py-3 text-right">{money(expenseTotals.total - expenseTotals.vat)}</td>
+                        <td className="border px-3 py-3 text-right">{money(expenseTotals.vat)}</td>
                         <td className="border px-3 py-3"></td>
                       </tr>
                     </tfoot>
@@ -4446,7 +4556,18 @@ const AdminAccountStatement: React.FC = () => {
               <div>
                 {/* Filters */}
                 <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                  <h2 className="text-xl font-semibold">Sales Accounts</h2>
+                  <div className="flex items-center gap-2">
+                    <h2 className={adminHeadingClass}>Sales Accounts</h2>
+                    <SystemGuideInfo
+                      enabled={systemGuideEnabled}
+                      label="What Sales Accounts means"
+                      title="Sales Accounts"
+                      content={[
+                        'This section groups sales by customer so you can compare invoiced amounts, payments received, and remaining balances.',
+                        'Use it when following up unpaid sales or checking how much each customer bought in the selected period.',
+                      ]}
+                    />
+                  </div>
                   <div className="flex gap-2 items-center flex-wrap">
                     <div className="flex gap-2 items-center">
                       <label className="text-sm text-gray-600">From:</label>
@@ -4524,16 +4645,16 @@ const AdminAccountStatement: React.FC = () => {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                   <div className="bg-blue-50 border border-blue-200 rounded p-4">
                     <div className="text-sm text-blue-600 font-medium">Total Invoiced (Dr)</div>
-                    <div className="text-2xl font-bold text-blue-700">${totalDebit.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-blue-700">{money(totalDebit)}</div>
                     <div className="text-xs text-gray-500 mt-1">{filteredSales.length} invoice(s) across {customerAccounts.length} customer(s)</div>
                   </div>
                   <div className="bg-green-50 border border-green-200 rounded p-4">
                     <div className="text-sm text-green-600 font-medium">Total Paid (Cr)</div>
-                    <div className="text-2xl font-bold text-green-700">${totalCredit.toFixed(2)}</div>
+                    <div className="text-2xl font-bold text-green-700">{money(totalCredit)}</div>
                   </div>
                   <div className={`border rounded p-4 ${totalBalance > 0 ? 'bg-orange-50 border-orange-200' : 'bg-green-50 border-green-200'}`}>
                     <div className={`text-sm font-medium ${totalBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>Outstanding (Receivable)</div>
-                    <div className={`text-2xl font-bold ${totalBalance > 0 ? 'text-orange-700' : 'text-green-700'}`}>${totalBalance.toFixed(2)}</div>
+                    <div className={`text-2xl font-bold ${totalBalance > 0 ? 'text-orange-700' : 'text-green-700'}`}>{money(totalBalance)}</div>
                   </div>
                 </div>
 
@@ -4558,10 +4679,10 @@ const AdminAccountStatement: React.FC = () => {
                           <tr key={customer.name} className="border-b hover:bg-gray-50">
                             <td className="border px-3 py-2 font-medium">{customer.name}</td>
                             <td className="border px-3 py-2 text-right">{customer.invoices.length}</td>
-                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{customer.totalDebit.toFixed(2)}</td>
-                            <td className="border px-3 py-2 text-right text-green-600">{customer.totalCredit.toFixed(2)}</td>
+                            <td className="border px-3 py-2 text-right font-semibold text-blue-700">{money(customer.totalDebit)}</td>
+                            <td className="border px-3 py-2 text-right text-green-600">{money(customer.totalCredit)}</td>
                             <td className={`border px-3 py-2 text-right font-bold ${customer.balance > 0 ? 'text-orange-600' : 'text-green-600'}`}>
-                              {customer.balance.toFixed(2)}
+                              {money(customer.balance)}
                               {customer.balance > 0 && <span className="ml-1 text-xs font-normal">(due)</span>}
                             </td>
                             <td className="border px-3 py-2 text-center">
@@ -4583,9 +4704,9 @@ const AdminAccountStatement: React.FC = () => {
                       <tr>
                         <td className="border px-3 py-3">TOTAL</td>
                         <td className="border px-3 py-3 text-right">{filteredCustomerAccounts.length}</td>
-                        <td className="border px-3 py-3 text-right text-blue-700">{totalDebit.toFixed(2)}</td>
-                        <td className="border px-3 py-3 text-right text-green-600">{totalCredit.toFixed(2)}</td>
-                        <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{totalBalance.toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-blue-700">{money(totalDebit)}</td>
+                        <td className="border px-3 py-3 text-right text-green-600">{money(totalCredit)}</td>
+                        <td className={`border px-3 py-3 text-right ${totalBalance > 0 ? 'text-orange-600' : 'text-green-600'}`}>{money(totalBalance)}</td>
                         <td className="border px-3 py-3"></td>
                       </tr>
                     </tfoot>
@@ -4599,7 +4720,18 @@ const AdminAccountStatement: React.FC = () => {
           {activeTab === 'cashCollections' && (
             <div>
               <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Cash Collection History</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className={adminHeadingClass}>Cash Collection History</h2>
+                  <SystemGuideInfo
+                    enabled={systemGuideEnabled}
+                    label="What Cash Collection History means"
+                    title="Cash Collection History"
+                    content={[
+                      'This section shows recorded cash collection or deposit entries with their dates and notes.',
+                      'Use it to confirm what cash was moved into the books and compare collection history over time.',
+                    ]}
+                  />
+                </div>
                 <div className="flex gap-2 flex-wrap items-center">
                   <div className="flex gap-2 items-center">
                     <label className="text-sm text-gray-600">From:</label>
@@ -4679,7 +4811,7 @@ const AdminAccountStatement: React.FC = () => {
                         <td className="border px-4 py-2">{entry.bankAccount}</td>
                         <td className="border px-4 py-2">{entry.depositReference}</td>
                         <td className="border px-4 py-2 text-right">{entry.ordersCount}</td>
-                        <td className="border px-4 py-2 text-right font-semibold text-emerald-600">{entry.totalAmount.toFixed(2)}</td>
+                        <td className="border px-4 py-2 text-right font-semibold text-emerald-600">{money(entry.totalAmount)}</td>
                         <td className="border px-4 py-2">{entry.notes || '-'}</td>
                       </tr>
                     ))}
@@ -4700,7 +4832,7 @@ const AdminAccountStatement: React.FC = () => {
                         {filteredCashCollections.reduce((sum, e) => sum + e.ordersCount, 0)}
                       </td>
                       <td className="border px-4 py-3 text-right text-emerald-600">
-                        {filteredCashCollections.reduce((sum, e) => sum + e.totalAmount, 0).toFixed(2)}
+                        {money(filteredCashCollections.reduce((sum, e) => sum + e.totalAmount, 0))}
                       </td>
                       <td className="border px-4 py-3"></td>
                     </tr>
@@ -4713,7 +4845,18 @@ const AdminAccountStatement: React.FC = () => {
           {activeTab === 'payments' && (
             <div>
               <div className="flex justify-between items-center mb-4 gap-2 flex-wrap">
-                <h2 className="text-xl font-semibold">Account Payments</h2>
+                <div className="flex items-center gap-2">
+                  <h2 className={adminHeadingClass}>Account Payments</h2>
+                  <SystemGuideInfo
+                    enabled={systemGuideEnabled}
+                    label="What Account Payments means"
+                    title="Account Payments"
+                    content={[
+                      'This section shows manual payments posted against customer or supplier accounts.',
+                      'Use it to verify who paid you, who you paid, and which balance each payment changed.',
+                    ]}
+                  />
+                </div>
                 <div className="flex gap-2 flex-wrap items-center">
                   <div className="flex gap-2 items-center">
                     <label className="text-sm text-gray-600">From:</label>
@@ -4824,7 +4967,7 @@ const AdminAccountStatement: React.FC = () => {
                             </span>
                           </td>
                           <td className="border px-3 py-2 text-sm capitalize">{p.method}</td>
-                          <td className="border px-3 py-2 text-right font-bold text-green-700">{p.amount.toFixed(2)}</td>
+                          <td className="border px-3 py-2 text-right font-bold text-green-700">{money(p.amount)}</td>
                           <td className="border px-3 py-2 text-sm text-gray-500">{p.notes || '-'}</td>
                           <td className="border px-3 py-2 text-center">
                             <button
@@ -4849,7 +4992,7 @@ const AdminAccountStatement: React.FC = () => {
                     <tfoot className="bg-gray-100 font-bold">
                       <tr>
                         <td colSpan={5} className="border px-3 py-3">TOTAL</td>
-                        <td className="border px-3 py-3 text-right text-green-700">{filteredPayments.reduce((s, p) => s + p.amount, 0).toFixed(2)}</td>
+                        <td className="border px-3 py-3 text-right text-green-700">{money(filteredPayments.reduce((s, p) => s + p.amount, 0))}</td>
                         <td className="border px-3 py-3"></td>
                         <td className="border px-3 py-3"></td>
                       </tr>
@@ -4861,7 +5004,7 @@ const AdminAccountStatement: React.FC = () => {
           )}
 
         </div>
-      </div>
+      </AdminPanel>
 
       {/* Payment Entry Modal */}
       {paymentModal && (
@@ -5051,7 +5194,7 @@ const AdminAccountStatement: React.FC = () => {
                         <td className="px-2 py-1 text-right"></td>
                         <td className="px-2 py-1 text-right"></td>
                         <td className="px-2 py-1 text-right"></td>
-                        <td className="px-2 py-1 text-right font-semibold">{Math.abs(detailedStatement.openingBalance).toFixed(2)}</td>
+                        <td className="px-2 py-1 text-right font-semibold">{numDoc(Math.abs(detailedStatement.openingBalance))}</td>
                         <td className="px-2 py-1 text-right"></td>
                       </tr>
                     )}
@@ -5060,12 +5203,12 @@ const AdminAccountStatement: React.FC = () => {
                         <td className="px-2 py-1 whitespace-nowrap">{txn.date}</td>
                         <td className="px-2 py-1">{txn.ref}</td>
                         <td className="px-2 py-1">{txn.description}</td>
-                        <td className="px-2 py-1 text-right">{txn.debit > 0 ? txn.debit.toFixed(2) : ''}</td>
-                        <td className="px-2 py-1 text-right">{txn.netVat > 0 ? txn.netVat.toFixed(2) : ''}</td>
+                        <td className="px-2 py-1 text-right">{txn.debit > 0 ? numDoc(txn.debit) : ''}</td>
+                        <td className="px-2 py-1 text-right">{txn.netVat > 0 ? numDoc(txn.netVat) : ''}</td>
                         <td className="px-2 py-1 text-right"></td>
-                        <td className="px-2 py-1 text-right">{txn.credit > 0 ? txn.credit.toFixed(2) : ''}</td>
-                        <td className="px-2 py-1 text-right font-semibold">{txn.balance.toFixed(2)}</td>
-                        <td className="px-2 py-1 text-right">{txn.vatLL > 0 ? txn.vatLL.toFixed(2) : ''}</td>
+                        <td className="px-2 py-1 text-right">{txn.credit > 0 ? numDoc(txn.credit) : ''}</td>
+                        <td className="px-2 py-1 text-right font-semibold">{numDoc(txn.balance)}</td>
+                        <td className="px-2 py-1 text-right">{txn.vatLL > 0 ? numDoc(txn.vatLL) : ''}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -5073,18 +5216,18 @@ const AdminAccountStatement: React.FC = () => {
                     <tr className="border-t-2 border-black font-bold">
                       <td colSpan={3} className="px-2 py-2">Total</td>
                       <td className="px-2 py-2 text-right">
-                        {detailedStatement.transactions.reduce((sum, t) => sum + t.debit, 0).toFixed(2)}
+                        {numDoc(detailedStatement.transactions.reduce((sum, t) => sum + t.debit, 0))}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {detailedStatement.transactions.reduce((sum, t) => sum + t.netVat, 0).toFixed(2)}
+                        {numDoc(detailedStatement.transactions.reduce((sum, t) => sum + t.netVat, 0))}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {detailedStatement.transactions.reduce((sum, t) => sum + t.vatLL, 0).toFixed(2)}
+                        {numDoc(detailedStatement.transactions.reduce((sum, t) => sum + t.vatLL, 0))}
                       </td>
                       <td className="px-2 py-2 text-right">
-                        {detailedStatement.transactions.reduce((sum, t) => sum + t.credit, 0).toFixed(2)}
+                        {numDoc(detailedStatement.transactions.reduce((sum, t) => sum + t.credit, 0))}
                       </td>
-                      <td className="px-2 py-2 text-right">{Math.abs(detailedStatement.closingBalance).toFixed(2)}</td>
+                      <td className="px-2 py-2 text-right">{numDoc(Math.abs(detailedStatement.closingBalance))}</td>
                       <td className="px-2 py-2 text-right"></td>
                     </tr>
                   </tfoot>
@@ -5100,7 +5243,7 @@ const AdminAccountStatement: React.FC = () => {
                   }
                 </p>
                 <p className="text-xs uppercase">
-                  ONLY {Math.abs(detailedStatement.closingBalance).toFixed(2)} US DOLLAR .
+                  ONLY {numDoc(Math.abs(detailedStatement.closingBalance))} {baseCurrency} .
                 </p>
                 <div className="mt-6 pt-4">
                   <p className="text-xs">Accounts dept. _________________</p>

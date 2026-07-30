@@ -1,0 +1,135 @@
+export type AccountingMode = 'international' | 'lebanese';
+
+export function normalizeAccountingMode(value: unknown): AccountingMode {
+  const raw = String(value || '').toLowerCase();
+  if (raw === 'lebanese' || raw === 'lb') return 'lebanese';
+  return 'international';
+}
+
+export type CoaSeedRow = {
+  code: string;
+  name: string;
+  nameAr?: string;
+  type: 'asset' | 'liability' | 'equity' | 'revenue' | 'expense';
+  normalBalance: 'debit' | 'credit';
+  defaultActive: boolean;
+  parentCode?: string;
+  /** PCG row kind from Excel chart (G/D/C/NA/CD). */
+  pcgKind?: string;
+  currency?: 'LL' | 'USD';
+  /** Grabio 3-digit code that auto-posts into this PCG account. */
+  grabioOperationalCode?: string;
+  /** True for rows imported from the full Lebanese PCG Excel chart. */
+  isPcgChart?: boolean;
+};
+
+/** International 66-account chart (unchanged). */
+export const INTERNATIONAL_CHART_OF_ACCOUNTS: CoaSeedRow[] = [
+  { code: '101', name: 'Petty Cash', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '102', name: 'POS Cash Drawer', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '103', name: 'Delivery Wallet', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '105', name: 'Bank Account - LBP', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '106', name: 'Bank Account - USD', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '108', name: 'Card Payment / Gateway Clearing', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '110', name: 'Accounts Receivable', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '112', name: 'Allowance for Bad Debts', type: 'asset', normalBalance: 'credit', defaultActive: false },
+  { code: '120', name: 'Raw Materials Inventory', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '121', name: 'Finished Goods Inventory', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '122', name: 'Trading Goods Inventory', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '123', name: 'WIP Inventory', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '125', name: 'Consumables & Packaging Inventory', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '130', name: 'Prepaid Rent & Expenses', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '135', name: 'Security Deposits Paid', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '140', name: 'Input VAT / Recoverable Tax (11%)', type: 'asset', normalBalance: 'debit', defaultActive: true },
+  { code: '142', name: 'Employee Advances', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '150', name: 'Land & Buildings', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '151', name: 'Accum. Depr. - Buildings', type: 'asset', normalBalance: 'credit', defaultActive: false },
+  { code: '155', name: 'Machinery & Kitchen Equipment', type: 'asset', normalBalance: 'debit', defaultActive: false },
+  { code: '156', name: 'Accum. Depr. - Machinery & Equipment', type: 'asset', normalBalance: 'credit', defaultActive: false },
+  { code: '201', name: 'Accounts Payable', type: 'liability', normalBalance: 'credit', defaultActive: true },
+  { code: '202', name: 'Accrued Expenses Payable', type: 'liability', normalBalance: 'credit', defaultActive: false },
+  { code: '210', name: 'Salaries Payable', type: 'liability', normalBalance: 'credit', defaultActive: false },
+  { code: '212', name: 'NSSF / Social Security Payable', type: 'liability', normalBalance: 'credit', defaultActive: false },
+  { code: '213', name: 'Payroll Tax Payable (R10)', type: 'liability', normalBalance: 'credit', defaultActive: false },
+  { code: '220', name: 'Output VAT / Collected Tax (11%)', type: 'liability', normalBalance: 'credit', defaultActive: true },
+  { code: '222', name: 'VAT Settlement Account', type: 'liability', normalBalance: 'credit', defaultActive: false },
+  { code: '250', name: 'End-of-Service Indemnity Provision', type: 'liability', normalBalance: 'credit', defaultActive: false },
+  { code: '252', name: 'Long-Term Loans', type: 'liability', normalBalance: 'credit', defaultActive: false },
+  { code: '301', name: 'Paid-In Capital', type: 'equity', normalBalance: 'credit', defaultActive: true },
+  { code: '302', name: 'Owner / Partner Drawings', type: 'equity', normalBalance: 'debit', defaultActive: false },
+  { code: '303', name: 'Opening Balance Equity', type: 'equity', normalBalance: 'credit', defaultActive: true },
+  { code: '304', name: 'Retained Earnings', type: 'equity', normalBalance: 'credit', defaultActive: false },
+  { code: '305', name: 'Current Year Net Profit / Loss', type: 'equity', normalBalance: 'credit', defaultActive: false },
+  { code: '401', name: 'Retail / POS Sales', type: 'revenue', normalBalance: 'credit', defaultActive: true },
+  { code: '402', name: 'B2B / Wholesale Sales', type: 'revenue', normalBalance: 'credit', defaultActive: false },
+  { code: '403', name: 'Food & Beverage Sales', type: 'revenue', normalBalance: 'credit', defaultActive: false },
+  { code: '405', name: 'Delivery Fee Revenue', type: 'revenue', normalBalance: 'credit', defaultActive: false },
+  { code: '410', name: 'Sales Discounts & Returns', type: 'revenue', normalBalance: 'debit', defaultActive: false },
+  { code: '450', name: 'Foreign Exchange Realized Gains', type: 'revenue', normalBalance: 'credit', defaultActive: false },
+  { code: '455', name: 'Miscellaneous Income', type: 'revenue', normalBalance: 'credit', defaultActive: false },
+  { code: '501', name: 'COGS - Raw Materials', type: 'expense', normalBalance: 'debit', defaultActive: true },
+  { code: '502', name: 'COGS - Trading Merchandise', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '503', name: 'Direct Labor', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '505', name: 'Packaging & Consumables Expense', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '506', name: 'Freight-In & Customs Duties', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '601', name: 'Salaries & Wages', type: 'expense', normalBalance: 'debit', defaultActive: true },
+  { code: '602', name: 'Employer NSSF Contribution', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '604', name: 'End-of-Service Expense', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '610', name: 'Office & Shop Rent', type: 'expense', normalBalance: 'debit', defaultActive: true },
+  { code: '612', name: 'Electricity & Water', type: 'expense', normalBalance: 'debit', defaultActive: true },
+  { code: '613', name: 'Generator & Diesel Expense', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '615', name: 'Office Supplies & Expenses', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '616', name: 'Repairs & Maintenance', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '620', name: 'Internet & Telecom', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '622', name: 'Software & SaaS Subscriptions', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '630', name: 'Legal & Accounting Fees', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '650', name: 'Advertising & Marketing', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '653', name: 'Delivery & Courier Expenses', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '655', name: 'Vehicle Fuel & Maintenance', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '701', name: 'Bank & Payment Gateway Fees', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '704', name: 'Foreign Exchange Realized Losses', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '710', name: 'Depreciation Expense', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '713', name: 'Bad Debt Expense', type: 'expense', normalBalance: 'debit', defaultActive: false },
+  { code: '799', name: 'Miscellaneous Expense', type: 'expense', normalBalance: 'debit', defaultActive: true },
+];
+
+/** Lebanese operational posting accounts + Arabic labels. */
+const LB_AR: Record<string, string> = {
+  '101': 'صندوق المصروفات النثرية',
+  '102': 'صندوق نقاط البيع',
+  '103': 'محفظة التوصيل',
+  '105': 'حساب بنكي - ل.ل',
+  '106': 'حساب بنكي - دولار',
+  '110': 'ذمم مدينة',
+  '120': 'مخزون مواد أولية',
+  '121': 'مخزون منتجات تامة',
+  '123': 'مخزون تحت التشغيل',
+  '140': 'ضريبة القيمة المضافة على المشتريات',
+  '201': 'ذمم دائنة / موردون',
+  '220': 'ضريبة القيمة المضافة على المبيعات',
+  '301': 'رأس المال',
+  '303': 'حقوق افتتاحية',
+  '401': 'مبيعات',
+  '501': 'تكلفة البضاعة المباعة',
+  '506': 'مصاريف الشحن والجمرك',
+  '601': 'رواتب وأجور',
+  '610': 'إيجار',
+  '612': 'كهرباء وماء',
+  '799': 'مصاريف متنوعة',
+};
+
+export const LEBANESE_OPERATIONAL_CHART: CoaSeedRow[] = INTERNATIONAL_CHART_OF_ACCOUNTS.map((row) => ({
+  ...row,
+  nameAr: LB_AR[row.code],
+}));
+
+/** @deprecated Use LEBANESE_OPERATIONAL_CHART */
+export const LEBANESE_CHART_OF_ACCOUNTS = LEBANESE_OPERATIONAL_CHART;
+
+export function resolveChartOfAccounts(mode: AccountingMode): CoaSeedRow[] {
+  return mode === 'lebanese' ? LEBANESE_OPERATIONAL_CHART : INTERNATIONAL_CHART_OF_ACCOUNTS;
+}
+
+export function coaModeVersion(mode: AccountingMode): string {
+  return mode === 'lebanese' ? 'lebanese-pcg-full-v2' : 'international-3digit-66';
+}

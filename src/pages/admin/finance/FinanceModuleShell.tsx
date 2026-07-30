@@ -1,22 +1,42 @@
-import React from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
-import { cn } from '@/lib/utils';
+import React, { useEffect } from 'react';
+import { Link, useLocation } from 'react-router-dom';
+import '@/embed/wireFinanceOnLoad';
+import FinanceAppBridge from '@/embed/FinanceAppBridge';
+import { wireFinanceFirebaseFromGrabio } from '@/embed/financeFirebaseBridge';
+import { adminSubnavLink } from '@/lib/adminStyles';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import FinanceInvoiceModuleGate from '@/components/finance/FinanceInvoiceModuleGate';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import FinanceTabHost from '@/pages/admin/finance/FinanceTabHost';
+import {
+  FINANCE_PAGE_LOADERS,
+  loadAccounting,
+  loadEstimateManager,
+  loadExpenseManager,
+  loadFinanceReports,
+  loadInvoiceManager,
+  loadReceiptManager,
+  preloadFinancePages,
+} from '@/pages/admin/finance/financeEmbeddedLoaders';
 
 const FINANCE_IM_NAV = [
-  { to: '/admin/finance/invoices', label: 'Invoices' },
-  { to: '/admin/finance/estimates', label: 'Estimates' },
-  { to: '/admin/finance/receipts', label: 'Receipts' },
-  { to: '/admin/finance/expenses', label: 'Expenses' },
-  { to: '/admin/finance/reports', label: 'Reports' },
+  { to: '/admin/finance/invoices', label: 'Invoices', preload: loadInvoiceManager },
+  { to: '/admin/finance/estimates', label: 'Estimates', preload: loadEstimateManager },
+  { to: '/admin/finance/receipts', label: 'Receipts', preload: loadReceiptManager },
+  { to: '/admin/finance/expenses', label: 'Expenses', preload: loadExpenseManager },
+  { to: '/admin/finance/reports', label: 'Reports', preload: loadFinanceReports },
+  { to: '/admin/finance/accounting', label: 'Accounting', preload: loadAccounting },
 ] as const;
 
 const FinanceModuleShell: React.FC = () => {
   const location = useLocation();
   const { profile } = useStoreEntitlements();
   const accent = profile?.templateColors?.primary ?? '#38B2AC';
+
+  useEffect(() => {
+    wireFinanceFirebaseFromGrabio();
+    preloadFinancePages(FINANCE_PAGE_LOADERS);
+  }, []);
 
   return (
     <FinanceInvoiceModuleGate>
@@ -27,6 +47,24 @@ const FinanceModuleShell: React.FC = () => {
         backTo="/admin/dashboard"
         backLabel="Dashboard"
       >
+        <nav className="flex flex-wrap gap-2 mb-2">
+          {FINANCE_IM_NAV.map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              preventScrollReset
+              onMouseEnter={() => preloadFinancePages([item.preload])}
+              className={adminSubnavLink(location.pathname.startsWith(item.to))}
+              style={
+                location.pathname.startsWith(item.to)
+                  ? { backgroundColor: accent, borderColor: accent }
+                  : undefined
+              }
+            >
+              {item.label}
+            </Link>
+          ))}
+        </nav>
         <div
           className="finance-embed-theme"
           style={
@@ -35,28 +73,9 @@ const FinanceModuleShell: React.FC = () => {
             } as React.CSSProperties
           }
         >
-          <nav className="flex flex-wrap gap-2 mb-6">
-            {FINANCE_IM_NAV.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className={cn(
-                  'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border',
-                  location.pathname.startsWith(item.to)
-                    ? 'text-white border-transparent'
-                    : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
-                )}
-                style={
-                  location.pathname.startsWith(item.to)
-                    ? { backgroundColor: accent, borderColor: accent }
-                    : undefined
-                }
-              >
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-          <Outlet />
+          <FinanceAppBridge>
+            <FinanceTabHost />
+          </FinanceAppBridge>
         </div>
       </AdminPageShell>
     </FinanceInvoiceModuleGate>

@@ -1,25 +1,35 @@
 import React, { Suspense, useEffect, useState } from 'react';
-import '@/embed/wireFinanceOnLoad';
 import { wireFinanceFirebaseFromGrabio } from '@/embed/financeFirebaseBridge';
-import FinanceAppBridge from '@/embed/FinanceAppBridge';
-import AdminPageFallback from '@/components/admin/AdminPageFallback';
+import FinanceEmbedFallback from '@/pages/admin/finance/FinanceEmbedFallback';
+import {
+  getCachedFinancePage,
+  loadFinancePage,
+  type FinancePageLoader,
+} from '@/pages/admin/finance/financeEmbeddedLoaders';
 
 type FinanceEmbeddedPageProps = {
-  loader: () => Promise<{ default: React.ComponentType }>;
+  loader: FinancePageLoader;
 };
 
 export default function FinanceEmbeddedPage({ loader }: FinanceEmbeddedPageProps) {
-  const [Page, setPage] = useState<React.ComponentType | null>(null);
+  const [Page, setPage] = useState<React.ComponentType | null>(() => getCachedFinancePage(loader) ?? null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    const cached = getCachedFinancePage(loader);
+    if (cached) {
+      setPage(() => cached);
+      setError(null);
+      return;
+    }
+
     let cancelled = false;
     void (async () => {
       try {
-        wireFinanceFirebaseFromGrabio();
-        const mod = await loader();
+        const component = await loadFinancePage(loader);
         if (!cancelled) {
-          setPage(() => mod.default);
+          setPage(() => component);
+          setError(null);
         }
       } catch (err) {
         console.error('[FinanceEmbeddedPage]', err);
@@ -28,6 +38,7 @@ export default function FinanceEmbeddedPage({ loader }: FinanceEmbeddedPageProps
         }
       }
     })();
+
     return () => {
       cancelled = true;
     };
@@ -42,14 +53,12 @@ export default function FinanceEmbeddedPage({ loader }: FinanceEmbeddedPageProps
   }
 
   if (!Page) {
-    return <AdminPageFallback />;
+    return <FinanceEmbedFallback />;
   }
 
   return (
-    <FinanceAppBridge>
-      <Suspense fallback={<AdminPageFallback />}>
-        <Page />
-      </Suspense>
-    </FinanceAppBridge>
+    <Suspense fallback={<FinanceEmbedFallback />}>
+      <Page />
+    </Suspense>
   );
 }

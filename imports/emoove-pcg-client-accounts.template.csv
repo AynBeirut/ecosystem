@@ -1,0 +1,19 @@
+ClientCode,Name,ArabicName,Currency,GrabioCode,ParentPcgCode
+53001000002,POS Cash Drawer,صندوق نقاط البيع,LL,102,5300
+,Delivery Wallet,محفظة التوصيل,LL,103,5110
+,Bank Account - LBP,حساب بنكي - ل.ل,LL,105,5121
+,Bank Account - USD,حساب بنكي - دولار,USD,106,5121
+,Accounts Receivable,ذمم مدينة,LL,110,4111
+,Raw Materials Inventory,مخزون مواد أولية,LL,120,3110
+,Finished Goods Inventory,مخزون منتجات تامة,LL,121,3550
+,WIP Inventory,مخزون تحت التشغيل,LL,123,3310
+,Accounts Payable,ذمم دائنة / موردون,LL,201,4011
+,Output VAT / Collected Tax (11%),ضريبة القيمة المضافة على المبيعات,LL,220,4427
+,Paid-In Capital,رأس المال,LL,301,1013
+,Opening Balance Equity,حقوق افتتاحية,LL,303,1250
+,Retail / POS Sales,مبيعات,LL,401,7010
+,COGS - Raw Materials,تكلفة البضاعة المباعة,LL,501,6111
+,Salaries & Wages,رواتب وأجور,LL,601,6311
+,Office & Shop Rent,إيجار,LL,610,6263.1
+,Electricity & Water,كهرباء وماء,LL,612,6263.4
+,Miscellaneous Expense,مصاريف متنوعة,LL,799,6269.9

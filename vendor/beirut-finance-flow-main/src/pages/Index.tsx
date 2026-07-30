@@ -5,7 +5,6 @@ import {
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
   GoogleAuthProvider,
-  signInWithPopup,
   signInWithRedirect,
 } from "firebase/auth";
 import { Card } from "@/components/ui/card";
@@ -17,7 +16,6 @@ import { useAppContext } from "@/context/AppContext";
 import { getFinanceAuth } from "@/integrations/firebase/client";
 import {
   markGoogleAuthPending,
-  shouldUseGoogleRedirect,
 } from "@/lib/grabio/googleAuth";
 
 const Index = () => {
@@ -58,26 +56,11 @@ const Index = () => {
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: "select_account" });
     try {
-      if (shouldUseGoogleRedirect()) {
-        markGoogleAuthPending();
-        await signInWithRedirect(getFinanceAuth(), provider);
-        return;
-      }
-      await signInWithPopup(getFinanceAuth(), provider);
-      toast({ title: "Welcome", description: "Signed in with Google" });
+      markGoogleAuthPending();
+      await signInWithRedirect(getFinanceAuth(), provider);
     } catch (err: unknown) {
-      const e = err as { code?: string; message?: string };
-      if (
-        e.code === 'auth/popup-blocked' ||
-        e.code === 'auth/operation-not-supported-in-this-environment'
-      ) {
-        markGoogleAuthPending();
-        await signInWithRedirect(getFinanceAuth(), provider);
-        return;
-      }
       const message = err instanceof Error ? err.message : "Try again.";
       toast({ title: "Google sign-in failed", description: message, variant: "destructive" });
-    } finally {
       setLoading(false);
     }
   };

@@ -9,6 +9,8 @@ import type {
   Staff,
   StaffPayment,
 } from '@/types/accounting';
+import { collection, getDocs, query, where } from 'firebase/firestore';
+import { getFinanceDb } from '@/integrations/firebase/client';
 import {
   listStoreCollection,
   loadCashBalance,
@@ -35,6 +37,37 @@ const DEFAULT_CASH_BALANCE: CashBalance = {
   outstandingClientBalances: 0,
   lastUpdated: new Date().toISOString(),
 };
+
+function parsePaymentPeriod(raw: unknown): { periodStart: string; periodEnd: string } {
+  const text = String(raw || '').trim();
+  const match = text.match(/^(\d{4}-\d{2}-\d{2})\s+to\s+(\d{4}-\d{2}-\d{2})$/i);
+  if (match) {
+    return {
+      periodStart: new Date(`${match[1]}T00:00:00.000Z`).toISOString(),
+      periodEnd: new Date(`${match[2]}T00:00:00.000Z`).toISOString(),
+    };
+  }
+  const now = new Date().toISOString();
+  return { periodStart: now, periodEnd: now };
+}
+
+function mapTopLevelSalaryToStaffPayment(id: string, data: Record<string, unknown>): StaffPayment {
+  const { periodStart, periodEnd } = parsePaymentPeriod(data.paymentPeriod);
+  const statusRaw = String(data.status || 'paid').toLowerCase();
+  return {
+    id,
+    staffId: String(data.staffId || ''),
+    staffName: String(data.staffName || 'Staff'),
+    amount: Number(data.amount ?? data.netAmount ?? 0),
+    periodStart,
+    periodEnd,
+    status: statusRaw === 'paid' ? 'paid' : 'unpaid',
+    paidDate: data.paymentDate ? String(data.paymentDate) : undefined,
+    paymentMethod: String(data.paymentMethod || 'cash') as StaffPayment['paymentMethod'],
+    notes: data.paymentPeriod ? `Period: ${String(data.paymentPeriod)}` : undefined,
+    createdAt: String(data.createdAt ?? data.paymentDate ?? new Date().toISOString()),
+  };
+}
 
 export async function loadAccountingFromFirestore(storeId: string): Promise<AccountingFirestoreData> {
   const [
@@ -65,12 +98,27 @@ export async function loadAccountingFromFirestore(storeId: string): Promise<Acco
   for (const exp of operationalLegacy) byId.set(exp.id, exp);
   for (const exp of expensesRaw) byId.set(exp.id, exp);
   const expenses = [...byId.values()];
+  let normalizedStaffPayments = staffPayments;
+  if (normalizedStaffPayments.length === 0) {
+    try {
+      const topLevelSalaryPayments = await getDocs(
+        query(collection(getFinanceDb(), 'salaryPayments'), where('storeId', '==', storeId)),
+      );
+      normalizedStaffPayments = topLevelSalaryPayments.docs
+        .map((d) => ({ id: d.id, ...(d.data() as Record<string, unknown>) }))
+        .filter((row) => !row.duplicateCleanupReason)
+        .map((row) => mapTopLevelSalaryToStaffPayment(row.id, row));
+    } catch {
+      // Legacy top-level collection may be blocked by rules; GL subledger still loads.
+      normalizedStaffPayments = [];
+    }
+  }
 
   return {
     expenses,
     expenseEntries,
     staff,
-    staffPayments,
+    staffPayments: normalizedStaffPayments,
     deliveryPersons,
     deliveryOrders,
     cashCollections,

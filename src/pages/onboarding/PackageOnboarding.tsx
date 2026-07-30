@@ -25,6 +25,14 @@ import {
 import { presetToEnabledModules, CORE_MODULE_IDS, type StartingPackageKey } from '@/lib/moduleManifest';
 import { loadPackageDraft, savePackageDraft } from '@/lib/packageDraft';
 import type { StoreProfile } from '@/types/storeProfile';
+import {
+  type AccountingMode,
+  accountingModeLabel,
+  DEFAULT_ACCOUNTING_MODE,
+  internationalModeProfilePatch,
+  lebaneseModeProfilePatch,
+  normalizeAccountingMode,
+} from '@/lib/accountingMode';
 import { toast } from 'sonner';
 import AdminPageHero from '@/components/admin/AdminPageHero';
 import AdminModuleIcon from '@/components/admin/AdminModuleIcon';
@@ -58,6 +66,7 @@ const PackageOnboarding: React.FC = () => {
   const [answers, setAnswers] = useState<SuggestionAnswer>({});
   const [saving, setSaving] = useState(false);
   const [step, setStep] = useState<'choose' | 'configure' | 'suggest'>('choose');
+  const [accountingMode, setAccountingMode] = useState<AccountingMode>(DEFAULT_ACCOUNTING_MODE);
 
   const workflow = useMemo(() => inferWorkflowFromModules(modules), [modules]);
   const issues = useMemo(() => validateModuleSelection(modules, workflow), [modules, workflow]);
@@ -86,9 +95,13 @@ const PackageOnboarding: React.FC = () => {
     }
     const storeId = getActualStoreId(user);
     const normalized = enforceWorkflowExclusivity(modules, workflow);
+    const modePatch =
+      accountingMode === 'lebanese'
+        ? lebaneseModeProfilePatch()
+        : internationalModeProfilePatch();
     const patch: Partial<StoreProfile> =
       path === 'preset'
-        ? buildProfileFromPreset(selectedPreset)
+        ? { ...buildProfileFromPreset(selectedPreset), ...modePatch }
         : {
             pricingVersion: 'modular-v2',
             businessWorkflow: workflow,
@@ -96,6 +109,7 @@ const PackageOnboarding: React.FC = () => {
             seatCount: 1,
             posLocationCount: normalized.pos ? 1 : 0,
             composedProductSource: 'platform',
+            ...modePatch,
           };
 
     setSaving(true);
@@ -248,6 +262,30 @@ const PackageOnboarding: React.FC = () => {
           ))}
         </div>
       )}
+
+      <Card className="mb-6 rounded-xl shadow-sm">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-lg">Accounting mode</CardTitle>
+          <CardDescription>
+            Choose your chart-of-accounts template before first ledger activity. Locked after the first posted entry.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <select
+            value={accountingMode}
+            onChange={(e) => setAccountingMode(normalizeAccountingMode(e.target.value))}
+            className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm"
+          >
+            <option value="international">{accountingModeLabel('international')}</option>
+            <option value="lebanese">{accountingModeLabel('lebanese')}</option>
+          </select>
+          {accountingMode === 'lebanese' && (
+            <p className="text-xs text-muted-foreground mt-2">
+              Enables bilingual COA labels and defaults LBP as display currency when none is set.
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {issues.length > 0 && (
         <div className="mb-6 rounded-lg border border-amber-200 bg-amber-50 p-4 text-sm">

@@ -46,6 +46,9 @@ const AdminSubAccounts: React.FC = () => {
     manager: 1,
     sales: 4,
     delivery: 5,
+    cashier: 5,
+    web_maintenance: 3,
+    accounting: 3,
   };
   const MAX_SUB_ACCOUNTS = 10;
 
@@ -127,7 +130,7 @@ const AdminSubAccounts: React.FC = () => {
 
       const docRef = await addDoc(collection(db, 'subAccounts'), subAccountData);
       
-      // Also create user profile with Auth UID as document ID
+      // Link this Firebase Auth user to the sub-account profile so the login flow can resolve it reliably.
       await setDoc(doc(db, 'users', userCredential.user.uid), {
         email: newAccount.email,
         name: newAccount.name,
@@ -135,7 +138,8 @@ const AdminSubAccounts: React.FC = () => {
         storeId: user.storeId,
         subAccountId: docRef.id,
         createdAt: new Date().toISOString(),
-      });
+        updatedAt: new Date().toISOString(),
+      }, { merge: true });
 
       setSubAccounts([...subAccounts, { id: docRef.id, ...subAccountData }]);
 
@@ -262,6 +266,7 @@ const AdminSubAccounts: React.FC = () => {
       case 'manager': return 'bg-purple-100 text-purple-800';
       case 'sales': return 'bg-blue-100 text-blue-800';
       case 'delivery': return 'bg-green-100 text-green-800';
+      case 'cashier': return 'bg-amber-100 text-amber-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -398,8 +403,11 @@ const AdminSubAccounts: React.FC = () => {
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="sales">Sales Person - Can create orders, manage customers (Max: 4)</SelectItem>
+                      <SelectItem value="cashier">Cashier - POS/front desk: orders, payments, customer lookup (Max: 5)</SelectItem>
                       <SelectItem value="delivery">Delivery Person - Can view orders and manage deliveries (Max: 5)</SelectItem>
                       <SelectItem value="manager">Manager - Full access to all features (Max: 1)</SelectItem>
+                      <SelectItem value="web_maintenance">Web Builder - Storefront, templates, posting (Max: 3)</SelectItem>
+                      <SelectItem value="accounting">Accounting Freelancer - Finance & reporting (Max: 3)</SelectItem>
                     </SelectContent>
                   </Select>
                   <div className="mt-2 p-3 bg-gray-50 rounded text-xs">
@@ -858,8 +866,11 @@ const AdminSubAccounts: React.FC = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="sales">Sales Person</SelectItem>
+                    <SelectItem value="cashier">Cashier</SelectItem>
                     <SelectItem value="delivery">Delivery Person</SelectItem>
                     <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="web_maintenance">Web Builder</SelectItem>
+                    <SelectItem value="accounting">Accounting Freelancer</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

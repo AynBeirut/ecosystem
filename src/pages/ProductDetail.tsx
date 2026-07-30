@@ -7,6 +7,7 @@ import { pixelAddToCart, pixelViewContent, trackMetaConversionEvent } from '@/li
 import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
+import { formatMoney } from '@/lib/money/format';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { fetchPublicProductStock } from '@/lib/publicProductStockService';
 import Header from '@/components/Header';
@@ -568,7 +569,13 @@ const ProductDetail: React.FC = () => {
                 
                 <div className="flex items-center mb-4">
                   <span className="text-2xl font-semibold text-market-primary">
-                    ${product.price.toFixed(2)}
+                    {formatMoney(Number(product.price || 0), {
+                      currency: store?.mainCurrency || 'USD',
+                      style: 'full',
+                      secondary: store?.secondaryCurrency && store?.customExchangeRate && store.customExchangeRate > 0
+                        ? { currency: store.secondaryCurrency, rate: store.customExchangeRate }
+                        : undefined,
+                    })}
                   </span>
                   
                   {product.productType === 'composed' && product.stock !== undefined && (

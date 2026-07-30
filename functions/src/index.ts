@@ -32,6 +32,7 @@ if (process.env.NODE_ENV !== 'production') {
 import { startTrial, subscribe, subscribeStripe, cancelSubscription, getSubscriptionInfo, subscribeModular, scheduleRenewalMigration } from './api/subscription';
 import { handleWhishWebhook } from './api/webhooks';
 import { processCheckout, handleCheckoutCallback } from './api/checkout';
+import { normalizeCurrencyCode } from './lib/money/currencies';
 import { runWhishOpsChecklist } from './api/whishOps';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
 import { createSquareCheckoutSession, confirmSquareCheckoutSession } from './api/squareCheckout';
@@ -638,7 +639,10 @@ app.post('/checkout', async (req: Request, res: Response) => {
             || (orderData.storeProfile as Record<string, unknown>)?.businessName
             || (orderData.storeProfile as Record<string, unknown>)?.name
             || '',
-          currency: (orderData.orderItems[0] as Record<string, unknown>)?.currency || 'USD',
+          currency: normalizeCurrencyCode(
+            (orderData.orderItems[0] as Record<string, unknown>)?.currency
+              || (orderData.storeProfile as Record<string, unknown>)?.mainCurrency,
+          ),
           customerId: userId,
           customerName,
           customerPhone: deliveryInfo?.phone || customerPhone || '',
@@ -784,9 +788,14 @@ export { checkSubscriptions } from './scheduled/checkSubscriptions';
 export { checkExpiringStock } from './scheduled/checkExpiringStock';
 // Export the scheduled low stock FCM alert
 export { checkLowStockAlert } from './scheduled/checkLowStock';
+export { fetchExchangeRates } from './scheduled/fetchExchangeRates';
 // Export Firestore triggers: new order + order status / payment status change notifications
 export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
 export { onOrderCreatedCrmSync } from './triggers/crmOrderSync';
 // Export Firestore trigger: store announcements ΓåÆ notify customers who favorited the store
 export { onStoreAnnouncement } from './triggers/storeAnnouncements';
 export { onCatalogProductWritten } from './triggers/syncCatalogProductCount';
+export {
+  onRecipeWrittenSyncCost,
+  onRawMaterialWrittenSyncRecipes,
+} from './triggers/recipeCostSync';

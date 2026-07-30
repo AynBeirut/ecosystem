@@ -70,14 +70,13 @@ export async function getUsdToLbpRate(): Promise<RateCache> {
     }
     return next;
   } catch (err) {
-    // On failure, return cached value if present, otherwise fallback to 1
     try {
       const raw = localStorage.getItem(CACHE_KEY);
       if (raw) return JSON.parse(raw) as RateCache;
     } catch (e) {
       // ignore
     }
-    return { rate: 1, fetchedAt: Date.now() };
+    throw err instanceof Error ? err : new Error('Failed to fetch USD/LBP rate');
   }
 }
 

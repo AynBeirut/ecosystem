@@ -20,6 +20,10 @@ interface Expense {
   storeId: string;
 }
 
+type TimestampLike = {
+  toDate?: () => Date;
+};
+
 export default function ExpensesScreen() {
   const { user } = useAuth();
   const [expenses, setExpenses] = useState<Expense[]>([]);
@@ -31,6 +35,10 @@ export default function ExpensesScreen() {
     setRefreshing(true);
     setTimeout(() => setRefreshing(false), 1200);
   }, []);
+
+  const financeExpensesRef = user?.storeId
+    ? firestore().collection('stores').doc(user.storeId).collection('financeExpenses')
+    : null;
 
   // Form state
   const [showForm, setShowForm] = useState(false);
@@ -48,15 +56,18 @@ export default function ExpensesScreen() {
     // Parse timestamp — handles Firestore Timestamp, ISO string, or number
     const getTs = (val: unknown): number => {
       if (!val) return 0;
-      if (typeof (val as any).toDate === 'function') return (val as any).toDate().getTime();
+      if (typeof val === 'object' && val !== null && typeof (val as TimestampLike).toDate === 'function') {
+        return (val as TimestampLike).toDate!().getTime();
+      }
       if (typeof val === 'string') return new Date(val).getTime();
       if (typeof val === 'number') return val;
       return 0;
     };
 
     const unsub = firestore()
-      .collection('expenses')
-      .where('storeId', '==', user.storeId)
+      .collection('stores')
+      .doc(user.storeId)
+      .collection('financeExpenses')
       .onSnapshot((snap) => {
         if (!snap) { setLoading(false); return; }
         let data: Expense[] = snap.docs.map(d => ({ id: d.id, ...d.data() } as Expense));
@@ -64,10 +75,18 @@ export default function ExpensesScreen() {
         if (!showAll) {
           const startOfToday = new Date();
           startOfToday.setHours(0, 0, 0, 0);
-          data = data.filter(e => getTs(e.createdAt) >= startOfToday.getTime());
+          data = data.filter(e => Math.max(
+            getTs(e.createdAt),
+            getTs(e.date),
+            getTs((e as Expense & { expenseDate?: unknown }).expenseDate),
+          ) >= startOfToday.getTime());
         }
         // showAll = no date restriction — show full history
-        data.sort((a, b) => getTs(b.createdAt) - getTs(a.createdAt));
+        data.sort((a, b) => {
+          const aTs = Math.max(getTs(a.createdAt), getTs(a.date), getTs((a as Expense & { expenseDate?: unknown }).expenseDate));
+          const bTs = Math.max(getTs(b.createdAt), getTs(b.date), getTs((b as Expense & { expenseDate?: unknown }).expenseDate));
+          return bTs - aTs;
+        });
         setExpenses(data);
         setLoading(false);
       }, () => setLoading(false));
@@ -90,14 +109,21 @@ export default function ExpensesScreen() {
     }
     setSaving(true);
     try {
-      await firestore().collection('expenses').add({
+      const createdAt = new Date().toISOString();
+      await financeExpensesRef!.add({
         storeId: user!.storeId,
+        name: description.trim() || category,
         category,
         description: description.trim() || null,
         amount: amountNum,
         currency: currency.trim() || 'USD',
-        date: firestore.FieldValue.serverTimestamp(),
-        createdAt: firestore.FieldValue.serverTimestamp(),
+        paymentMethod: 'cash',
+        status: 'paid',
+        expenseDate: createdAt,
+        startDate: createdAt,
+        date: createdAt,
+        createdAt,
+        updatedAt: createdAt,
       });
       setCategory('Other'); setDescription(''); setAmount(''); setCurrency('USD');
       setShowForm(false);
@@ -115,9 +141,24 @@ export default function ExpensesScreen() {
       {
         text: 'Delete',
         style: 'destructive',
-        onPress: () => firestore().collection('expenses').doc(expense.id).delete(),
+        onPress: () => financeExpensesRef?.doc(expense.id).delete(),
       },
     ]);
+  };
+
+  const resolveDate = (expense: Expense): Date | null => {
+    const values = [expense.createdAt, expense.date, (expense as Expense & { expenseDate?: unknown }).expenseDate];
+    for (const value of values) {
+      if (!value) continue;
+      if (typeof value === 'object' && value !== null && typeof (value as TimestampLike).toDate === 'function') {
+        return (value as TimestampLike).toDate!();
+      }
+      if (typeof value === 'string' || typeof value === 'number') {
+        const parsed = new Date(value);
+        if (!Number.isNaN(parsed.getTime())) return parsed;
+      }
+    }
+    return null;
   };
 
   const CATEGORY_COLORS: Record<string, string> = {
@@ -215,7 +256,7 @@ export default function ExpensesScreen() {
           <Text style={styles.empty}>{showAll ? 'No expenses in last 30 days' : 'No expenses today'}</Text>
         ) : (
           expenses.map((expense) => {
-            const date = expense.createdAt?.toDate?.() || expense.date?.toDate?.();
+            const date = resolveDate(expense);
             return (
               <View key={expense.id} style={[styles.expenseCard, { borderLeftColor: CATEGORY_COLORS[expense.category] || '#e5e7eb', borderLeftWidth: 4 }]}>
                 <View style={styles.expenseRow}>

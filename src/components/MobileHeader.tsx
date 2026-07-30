@@ -18,12 +18,14 @@ interface MobileHeaderProps {
   title?: string;
   showBackButton?: boolean;
   showHomeButton?: boolean;
+  variant?: 'brand' | 'light';
 }
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({
   title = 'Market Space',
   showBackButton = true,
   showHomeButton = false,
+  variant = 'brand',
 }) => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
@@ -38,7 +40,13 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   };
 
   return (
-    <header className="sticky top-0 z-50 w-full bg-white border-b border-gray-100 md:hidden">
+    <header
+      className={
+        variant === 'light'
+          ? 'sticky top-0 z-50 w-full border-b border-black/[0.06] bg-white/85 backdrop-blur-xl md:hidden'
+          : 'sticky top-0 z-50 w-full bg-white border-b border-gray-100 md:hidden'
+      }
+    >
       <div className="container flex items-center justify-between h-14 px-4">
         <div className="flex items-center gap-3">
           {showBackButton && (

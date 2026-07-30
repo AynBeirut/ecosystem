@@ -2,6 +2,7 @@ import { onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/fire
 import * as admin from 'firebase-admin';
 import { trackOrderPurchaseConversion } from '../services/metaConversion';
 import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
+import { syncOrderSaleGl } from '../services/orderGlSync';
 import { getFcmTokensForStoreOwner, getFcmTokensForUser, sendFcmMulticast } from '../services/fcmTokens';
 
 const db = admin.firestore;
@@ -88,6 +89,28 @@ export const onOrderCreated = onDocumentCreated(
     } catch (err) {
       console.warn('FCM new order notification failed:', err);
     }
+
+    // Orders created already-paid (e.g. admin/POS) never hit the update trigger,
+    // so run live-kitchen deduction here too. Idempotency key prevents doubles.
+    if (data.paymentStatus === 'paid') {
+      try {
+        const items = (data.items ?? data.lineItems ?? []) as Array<{
+          productId?: string;
+          quantity?: number;
+        }>;
+        if (storeId && items.length > 0) {
+          await deductComposedIngredientsOnSale(storeId, orderId, items);
+        }
+      } catch (err) {
+        console.warn('Kitchen sale deduction (on create) failed:', err);
+      }
+    }
+
+    try {
+      await syncOrderSaleGl(orderId, data as Record<string, unknown>);
+    } catch (err) {
+      console.warn('Order GL sync (on create) failed:', err);
+    }
   },
 );
 
@@ -161,6 +184,12 @@ export const onOrderStatusChanged = onDocumentUpdated(
           console.warn('Kitchen sale deduction failed:', err);
         }
       }
+    }
+
+    try {
+      await syncOrderSaleGl(orderId, after as Record<string, unknown>);
+    } catch (err) {
+      console.warn('Order GL sync (on update) failed:', err);
     }
   },
 );

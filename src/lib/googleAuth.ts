@@ -1,9 +1,12 @@
-/** Redirect only on mobile / dev. Desktop grabio.space uses popup (COOP warnings are benign). */
-export function shouldUseGoogleRedirect(): boolean {
+/** Firebase Hosting preview channels (e.g. `--staging-xxx.web.app`). */
+export function isFirebasePreviewHost(): boolean {
   if (typeof window === 'undefined') return false;
-  if (import.meta.env.DEV) return true;
-  const ua = navigator.userAgent || '';
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  return /^market-flow-7b074--[a-z0-9-]+\.web\.app$/i.test(window.location.hostname);
+}
+
+/** Popup sign-in on all hosts — redirect is unreliable on Firebase preview channels. */
+export function shouldUseGoogleRedirect(): boolean {
+  return false;
 }
 
 export const GOOGLE_AUTH_PENDING_KEY = 'grabio_google_auth_pending';

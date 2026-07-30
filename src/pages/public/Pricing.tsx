@@ -2,10 +2,9 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { ArrowRight, CheckCircle, X } from 'lucide-react';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
-import SEOHead from '@/components/SEOHead';
+import PublicPageShell from '@/components/public/PublicPageShell';
+import { cn } from '@/lib/utils';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
-import PublicNav from '@/components/public/PublicNav';
-import PublicFooter from '@/components/public/PublicFooter';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/context/useAuth';
 import { StoreProfile } from '@/types/storeProfile';
@@ -234,63 +233,51 @@ const Pricing: React.FC = () => {
   const manageHref = user ? '/admin/subscription' : '/login?tab=signup';
 
   return (
-    <>
-      <SEOHead
-        title="Grabio Pricing — Build Your Modular Package"
-        description="Choose a base plan and toggle platform modules and add-ons. Core features included; extras billed separately. Same pricing logic as checkout."
-        url="/pricing"
-        keywords={[
-          'Grabio pricing',
-          'modular business software pricing',
-          'Sales CRM add-on',
-          'small business platform cost',
-        ]}
-      />
-
-      <div className="flex flex-col min-h-screen bg-white">
-        <PublicNav />
-
-        <main>
-          <section className="bg-gray-50 border-b border-gray-100 py-14 text-center">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6">
-              <h1 className="text-4xl md:text-5xl font-extrabold text-gray-900 mb-3">
-                Build Your Package
-              </h1>
-              <p className="text-lg text-gray-500 mb-2">
-                One sign-in — all your data in one place. Pick a base plan, then toggle what you need.
-              </p>
-              <p className="text-sm text-gray-400 mb-8">
-                Core platform features are included. Anything not on your plan is an extra charge at checkout.
-              </p>
-              <div className="inline-flex items-center gap-3 bg-white border border-gray-200 rounded-xl p-1.5">
-                <button
-                  type="button"
-                  onClick={() => setBilling('monthly')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                    billing === 'monthly' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  Monthly
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBilling('yearly')}
-                  className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2 ${
-                    billing === 'yearly' ? 'bg-teal-600 text-white shadow-sm' : 'text-gray-500 hover:text-gray-900'
-                  }`}
-                >
-                  Yearly
-                  <span
-                    className={`text-xs px-1.5 py-0.5 rounded-full font-semibold ${
-                      billing === 'yearly' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-700'
-                    }`}
-                  >
-                    Save ~$20–60
-                  </span>
-                </button>
-              </div>
-            </div>
-          </section>
+    <PublicPageShell
+      title="Grabio Pricing — Build Your Modular Package"
+      description="Choose a base plan and toggle platform modules and add-ons. Core features included; extras billed separately. Same pricing logic as checkout."
+      url="/pricing"
+      keywords={[
+        'Grabio pricing',
+        'modular business software pricing',
+        'Sales CRM add-on',
+        'small business platform cost',
+      ]}
+      eyebrow="Pricing"
+      heroTitle="Build your package"
+      heroDescription="Pick a base plan, then toggle what you need. Core platform features are included; extras are charged at checkout."
+      heroActions={
+        <div className="public-segment">
+          <button
+            type="button"
+            onClick={() => setBilling('monthly')}
+            className={cn('public-segment-btn', billing === 'monthly' && 'public-segment-btn-active')}
+          >
+            Monthly
+          </button>
+          <button
+            type="button"
+            onClick={() => setBilling('yearly')}
+            className={cn('public-segment-btn flex items-center gap-2', billing === 'yearly' && 'public-segment-btn-active')}
+          >
+            Yearly
+            <span
+              className={cn(
+                'text-xs px-1.5 py-0.5 rounded-full font-semibold',
+                billing === 'yearly' ? 'bg-white/20 text-white' : 'bg-teal-100 text-teal-700',
+              )}
+            >
+              Save ~$20–60
+            </span>
+          </button>
+        </div>
+      }
+      subnav={[
+        { label: 'Use Cases', href: '/use-cases' },
+        { label: 'Features', href: '/features' },
+        { label: 'Contact', href: '/contact' },
+      ]}
+    >
 
           {ECOSYSTEM_FLAGS.modularEntitlements && (
             <section className="py-10 border-b border-gray-100 bg-white">
@@ -630,9 +617,8 @@ const Pricing: React.FC = () => {
             </div>
           </section>
 
-          <section className="bg-gray-50 py-16 border-t border-gray-100">
-            <div className="max-w-3xl mx-auto px-4 sm:px-6">
-              <h2 className="text-2xl font-bold text-gray-900 mb-8 text-center">Frequently Asked Questions</h2>
+          <section className="public-panel">
+            <h2 className="text-2xl font-bold text-slate-900 mb-6 text-center">Frequently asked questions</h2>
               <dl className="space-y-6">
                 {[
                   {
@@ -657,25 +643,20 @@ const Pricing: React.FC = () => {
                     <dd className="text-gray-500 leading-relaxed">{a}</dd>
                   </div>
                 ))}
-              </dl>
-            </div>
+            </dl>
           </section>
 
-          <section className="py-14 text-center max-w-2xl mx-auto px-4 sm:px-6">
-            <h2 className="text-2xl font-bold text-gray-900 mb-3">Still have questions?</h2>
-            <p className="text-gray-500 mb-6">Our team will help you choose the right plan and modules.</p>
+          <section className="public-panel text-center">
+            <h2 className="text-2xl font-bold text-slate-900 mb-3">Still have questions?</h2>
+            <p className="text-slate-600 mb-6">Our team will help you choose the right plan and modules.</p>
             <Link
               to="/contact"
-              className="px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors"
+              className="inline-flex px-6 py-3 bg-teal-600 text-white font-semibold rounded-xl hover:bg-teal-700 transition-colors"
             >
               Talk to Us
             </Link>
           </section>
-        </main>
-
-        <PublicFooter />
-      </div>
-    </>
+    </PublicPageShell>
   );
 };
 

@@ -113,8 +113,11 @@ function legacyModulesForTier(tier: SubscriptionTier, profile: StoreProfile): Re
     modules.restaurant = true;
   }
 
-  // Legacy CRM is add-on gated only — ignore tier grant from modulesFromSelection().
-  modules.crm = addOns.salesCrm;
+  // Legacy CRM: salesCrm add-on, enabledModules.crm, or addOnsMeta (matches Firestore storeHasSalesCrm).
+  modules.crm =
+    addOns.salesCrm ||
+    profile.enabledModules?.crm === true ||
+    Boolean((profile.addOnsMeta as Record<string, unknown> | undefined)?.salesCrm);
 
   return modules;
 }
@@ -141,7 +144,16 @@ function modularModulesFromProfile(profile: StoreProfile): Record<string, boolea
     if (tierGranted[mod.id]) modules[mod.id] = true;
   }
 
+  // Paid Sales CRM add-on overrides enabledModules.crm === false (modular checkout drift).
+  if (tierGranted.crm || addOnsFromProfile(profile).salesCrm) {
+    modules.crm = true;
+  }
+
   return modules;
+}
+
+function addOnsFromProfile(profile: StoreProfile) {
+  return normalizeAddOnsFromProfile(profile.addOns ?? profile.addOnsMeta);
 }
 
 function effectiveSubscriptionTier(profile: StoreProfile): SubscriptionTier {

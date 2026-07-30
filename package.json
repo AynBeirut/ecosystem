@@ -8,7 +8,7 @@
     "build": "npm run prebuild:invoice && vite build && npm run build:invoice:dist",
     "build:main": "vite build",
     "prebuild:invoice": "npm install --prefix vendor/beirut-finance-flow-main --no-audit --no-fund",
-    "build:invoice:dist": "npm run build --prefix vendor/beirut-finance-flow-main && node scripts/copy-invoice-dist.cjs",
+    "build:invoice:dist": "node scripts/sync-currency-lib.cjs && npm run build --prefix vendor/beirut-finance-flow-main && node scripts/copy-invoice-dist.cjs",
     "build:invoice": "npm run prebuild:invoice && npm run build:invoice:dist",
     "build:dev": "vite build --mode development",
     "lint": "eslint .",

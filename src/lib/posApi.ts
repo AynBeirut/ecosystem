@@ -5,7 +5,6 @@ const API_BASE =
   'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
 export const POS_INSTALLER_URL =
-  (import.meta.env.VITE_POS_INSTALLER_URL as string | undefined) ||
   'https://firebasestorage.googleapis.com/v0/b/market-flow-7b074.firebasestorage.app/o/pos%2FGrabio-POS-Setup.exe?alt=media';
 
 async function getAuthHeaders(): Promise<Record<string, string>> {

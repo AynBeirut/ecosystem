@@ -2,9 +2,11 @@ import { canUseModule } from '@/lib/entitlements';
 import type { StoreProfile } from '@/types/storeProfile';
 import {
   CRM_PIPELINE_STAGES,
+  CRM_CUSTOMER_TYPES,
   type CrmPipelineStage,
   type CrmActivityType,
   type CrmActivityResult,
+  type CrmCustomerType,
 } from '@/types/crm';
 
 export const CRM_PIPELINE_LABELS: Record<CrmPipelineStage, string> = {
@@ -32,6 +34,22 @@ export const CRM_ACTIVITY_RESULT_LABELS: Record<CrmActivityResult, string> = {
   closed: 'Closed',
   no_answer: 'No answer',
 };
+
+export const CRM_CUSTOMER_TYPE_LABELS: Record<CrmCustomerType, string> = {
+  mini_market: 'Mini Market',
+  supermarket: 'Supermarket',
+  wholesaler: 'Wholesaler',
+  restaurant: 'Restaurant',
+  pharmacy: 'Pharmacy',
+  hotel: 'Hotel',
+  other: 'Other',
+};
+
+export const CRM_VISIT_STATUS_COLORS = {
+  visited_today: '#22c55e',
+  visited_this_week: '#eab308',
+  not_visited: '#ef4444',
+} as const;
 
 export const DEFAULT_CRM_SETTINGS = {
   noContactAlertDays: 7,

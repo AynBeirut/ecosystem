@@ -36,12 +36,17 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
+const params_1 = require("firebase-functions/params");
 const cors_1 = __importDefault(require("cors"));
 const dotenv_1 = __importDefault(require("dotenv"));
+// R2 credentials live in Secret Manager (never committed). Non-secret R2 config
+// (account id, bucket, public URL) comes from functions/.env.
+const R2_ACCESS_KEY_ID = (0, params_1.defineSecret)('R2_ACCESS_KEY_ID');
+const R2_SECRET_ACCESS_KEY = (0, params_1.defineSecret)('R2_SECRET_ACCESS_KEY');
 // Initialize Firebase Admin first
 console.log('TOP-LEVEL LOG: Cloud Function module loaded');
 console.error('TOP-LEVEL ERROR: Cloud Function module loaded');
@@ -65,6 +70,7 @@ if (process.env.NODE_ENV !== 'production') {
 const subscription_1 = require("./api/subscription");
 const webhooks_1 = require("./api/webhooks");
 const checkout_1 = require("./api/checkout");
+const currencies_1 = require("./lib/money/currencies");
 const whishOps_1 = require("./api/whishOps");
 const stripeCheckout_1 = require("./api/stripeCheckout");
 const squareCheckout_1 = require("./api/squareCheckout");
@@ -86,6 +92,7 @@ const dropship_1 = require("./api/dropship");
 const financeSso_1 = require("./api/financeSso");
 const posSync_1 = require("./api/posSync");
 const publicProductStock_1 = require("./api/publicProductStock");
+const r2_1 = require("./api/r2");
 const moduleGate_1 = require("./middleware/moduleGate");
 const db = admin.firestore();
 const app = (0, express_1.default)();
@@ -270,6 +277,7 @@ app.post('/pos/raw-materials', posSync_1.syncPosRawMaterials);
 app.post('/pos/recipes', posSync_1.syncPosRecipes);
 app.post('/pos/refunds', posSync_1.syncPosRefunds);
 app.post('/public/product-stock', publicProductStock_1.getPublicProductStock);
+app.post('/r2/presign', r2_1.presignR2Upload);
 app.get('/marketing/campaigns', marketing_1.listCampaigns);
 app.post('/notifications/order/retry', async (req, res) => {
     try {
@@ -534,7 +542,8 @@ app.post('/checkout', async (req, res) => {
                         || orderData.storeProfile?.businessName
                         || orderData.storeProfile?.name
                         || '',
-                    currency: orderData.orderItems[0]?.currency || 'USD',
+                    currency: (0, currencies_1.normalizeCurrencyCode)(orderData.orderItems[0]?.currency
+                        || orderData.storeProfile?.mainCurrency),
                     customerId: userId,
                     customerName,
                     customerPhone: deliveryInfo?.phone || customerPhone || '',
@@ -660,6 +669,7 @@ app.post('/checkout', async (req, res) => {
 exports.api = functions.https.onRequest({
     cors: true,
     region: 'us-central1',
+    secrets: [R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY],
 }, app);
 // Export the scheduled subscription checker
 var checkSubscriptions_1 = require("./scheduled/checkSubscriptions");
@@ -670,6 +680,8 @@ Object.defineProperty(exports, "checkExpiringStock", { enumerable: true, get: fu
 // Export the scheduled low stock FCM alert
 var checkLowStock_1 = require("./scheduled/checkLowStock");
 Object.defineProperty(exports, "checkLowStockAlert", { enumerable: true, get: function () { return checkLowStock_1.checkLowStockAlert; } });
+var fetchExchangeRates_1 = require("./scheduled/fetchExchangeRates");
+Object.defineProperty(exports, "fetchExchangeRates", { enumerable: true, get: function () { return fetchExchangeRates_1.fetchExchangeRates; } });
 // Export Firestore triggers: new order + order status / payment status change notifications
 var orderNotifications_2 = require("./triggers/orderNotifications");
 Object.defineProperty(exports, "onOrderCreated", { enumerable: true, get: function () { return orderNotifications_2.onOrderCreated; } });
@@ -681,3 +693,6 @@ var storeAnnouncements_1 = require("./triggers/storeAnnouncements");
 Object.defineProperty(exports, "onStoreAnnouncement", { enumerable: true, get: function () { return storeAnnouncements_1.onStoreAnnouncement; } });
 var syncCatalogProductCount_1 = require("./triggers/syncCatalogProductCount");
 Object.defineProperty(exports, "onCatalogProductWritten", { enumerable: true, get: function () { return syncCatalogProductCount_1.onCatalogProductWritten; } });
+var recipeCostSync_1 = require("./triggers/recipeCostSync");
+Object.defineProperty(exports, "onRecipeWrittenSyncCost", { enumerable: true, get: function () { return recipeCostSync_1.onRecipeWrittenSyncCost; } });
+Object.defineProperty(exports, "onRawMaterialWrittenSyncRecipes", { enumerable: true, get: function () { return recipeCostSync_1.onRawMaterialWrittenSyncRecipes; } });

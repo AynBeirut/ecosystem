@@ -30,7 +30,6 @@ import { resolveClientId, resolveSupplierId, syncLineItemsToCatalog } from "./he
 import { toast } from "sonner";
 import {
   glPostPurchasePayment,
-  glPostPurchaseReceived,
   glSyncInvoiceGl,
   glSyncPurchasesOnLoad,
 } from "@/lib/ledger/glBridge";
@@ -123,6 +122,17 @@ export interface PurchaseOrder {
   id: string; date: string; supplierId?: string; supplierName: string;
   items: LineItem[]; amount: number; currency: string;
   status: "draft" | "sent" | "approved" | "fulfilled"; notes?: string;
+  /** Platform `purchases` payment state (unpaid / partial / paid). */
+  paymentStatus?: "unpaid" | "partial" | "paid" | string;
+  total?: number;
+  paidAmount?: number;
+  subtotal?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  taxType?: string;
+  totalCost?: number;
+  /** Where the PO row came from for AP aging rules. */
+  source?: "platform" | "finance";
 }
 
 export interface PaymentOrder {
@@ -281,8 +291,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
 
   // Organization state
   const [organizations, setOrganizations] = useState<Organization[]>([]);
-  const [activeOrganizationId, setActiveOrgId] = useState<string | null>(
-    localStorage.getItem('activeOrganizationId')
+  const [activeOrganizationId, setActiveOrgId] = useState<string | null>(() =>
+    embedded ? null : localStorage.getItem('activeOrganizationId'),
   );
   const [currentUserRole, setCurrentUserRole] = useState<'owner' | 'admin' | 'manager' | 'agent' | 'assistant' | 'member' | null>(null);
   const orgIdRef = useRef<string | null>(activeOrganizationId);
@@ -555,6 +565,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
       userEmailRef.current = null;
       orgIdRef.current = null;
       setFinanceStoreId(null);
+      setActiveOrgId(null);
+      localStorage.removeItem('activeOrganizationId');
       setUser(null);
       setIsLoggedIn(false);
       setOrganizations([]);
@@ -1317,12 +1329,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     if (data.notes !== undefined) dbU.notes = data.notes;
     if (Object.keys(dbU).length > 0) dbUpdate('purchase_orders', poId, dbU, 'Context][PO][update');
 
-    if (orgId && prev && data.status && data.status !== prev.status) {
-      const merged = { ...prev, ...data };
-      if (merged.status === 'fulfilled' || merged.status === 'approved') {
-        void glPostPurchaseReceived(orgId, merged);
-      }
-    }
   };
 
   const updatePaymentOrder = (poId: string, data: Partial<PaymentOrder>) => {

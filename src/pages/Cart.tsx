@@ -22,6 +22,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
 import { pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
 import ClampedText from '@/components/ClampedText';
+import { formatMoney } from '@/lib/money/format';
 
 type StorePaymentMethods = {
   creditCard: boolean;
@@ -86,7 +87,7 @@ const Cart: React.FC = () => {
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [hasSavedInfo, setHasSavedInfo] = useState(false);
-  const [exchangeRates, setExchangeRates] = useState<Record<string, number>>({});
+  const [storeCurrencyInfo, setStoreCurrencyInfo] = useState<Record<string, { currency: string; secondaryCurrency?: string; rate?: number }>>({});
   const [whatsappStoreInfo, setWhatsappStoreInfo] = useState<{ number: string; name: string; currency?: string } | null>(null);
   
   // Double-click prevention lock
@@ -118,26 +119,30 @@ const Cart: React.FC = () => {
     const fetchExchangeRates = async () => {
       const storeIds = [...new Set(items.map(item => item.product.storeId))];
       const db = getFirestore();
-      const rates: Record<string, number> = {};
-      
+      const info: Record<string, { currency: string; secondaryCurrency?: string; rate?: number }> = {};
+
       for (const storeId of storeIds) {
         try {
           const storeDoc = await getDoc(doc(db, 'storeProfiles', storeId));
           if (storeDoc.exists()) {
             const storeData = storeDoc.data() as StoreProfile;
-            rates[storeId] = storeData.customExchangeRate || 89000;
-            console.log(`Store ${storeId}: Exchange rate = ${rates[storeId]}`);
+            const rate = Number(storeData.customExchangeRate);
+            const validRate = Number.isFinite(rate) && rate > 0 ? rate : undefined;
+            const base = storeData.mainCurrency || 'USD';
+            const secondary = storeData.secondaryCurrency && storeData.secondaryCurrency !== base
+              ? storeData.secondaryCurrency
+              : undefined;
+            info[storeId] = { currency: base, secondaryCurrency: secondary, rate: validRate };
           } else {
-            rates[storeId] = 89000; // Default fallback
-            console.log(`Store ${storeId}: Not found, using default 89000`);
+            info[storeId] = { currency: 'USD' };
           }
         } catch (error) {
-          console.error('Error fetching exchange rate for store:', storeId, error);
-          rates[storeId] = 89000; // Default fallback
+          console.error('Error fetching store currency for store:', storeId, error);
+          info[storeId] = { currency: 'USD' };
         }
       }
-      
-      setExchangeRates(rates);
+
+      setStoreCurrencyInfo(info);
     };
     
     if (items.length > 0) {
@@ -853,6 +858,14 @@ const Cart: React.FC = () => {
   };
 
   const total = subtotal;
+  // Cart totals display in the store's currency when all items share one store; else fall back to USD.
+  const cartStoreIds = [...new Set(items.map((item) => item.product.storeId))];
+  const cartCurInfo = cartStoreIds.length === 1
+    ? (storeCurrencyInfo[cartStoreIds[0]] || { currency: 'USD' })
+    : { currency: 'USD' as string, secondaryCurrency: undefined as string | undefined, rate: undefined as number | undefined };
+  const cartSecondaryOpt = cartCurInfo.secondaryCurrency && cartCurInfo.rate && cartCurInfo.rate > 0
+    ? { currency: cartCurInfo.secondaryCurrency, rate: cartCurInfo.rate }
+    : undefined;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -872,8 +885,10 @@ const Cart: React.FC = () => {
                   <ul className="divide-y">
                     {items.map((item) => {
                       const store = getStoreById(item.product.storeId);
-                      const usdToLbp = exchangeRates[item.product.storeId] || 89000;
-                      const itemSubtotalLBP = item.product.price * item.quantity * usdToLbp;
+                      const curInfo = storeCurrencyInfo[item.product.storeId] || { currency: 'USD' };
+                      const secondaryOpt = curInfo.secondaryCurrency && curInfo.rate && curInfo.rate > 0
+                        ? { currency: curInfo.secondaryCurrency, rate: curInfo.rate }
+                        : undefined;
                       return (
                         <li key={item.product.id} className="py-4 flex flex-col sm:flex-row">
                           <div className="sm:w-24 sm:h-24 mb-4 sm:mb-0 flex-shrink-0">
@@ -906,13 +921,10 @@ const Cart: React.FC = () => {
                               </div>
                               <div className="mt-2 sm:mt-0 text-right">
                                 <p className="font-medium text-market-primary">
-                                  ${item.product.price.toFixed(2)}
+                                  {formatMoney(item.product.price, { currency: curInfo.currency, style: 'full', secondary: secondaryOpt })}
                                 </p>
                                 <p className="text-sm text-gray-500">
-                                  Subtotal: ${(item.product.price * item.quantity).toFixed(2)}
-                                </p>
-                                <p className="text-xs text-gray-400">
-                                  {itemSubtotalLBP.toLocaleString()} LBP
+                                  Subtotal: {formatMoney(item.product.price * item.quantity, { currency: curInfo.currency, style: 'full', secondary: secondaryOpt })}
                                 </p>
                               </div>
                             </div>
@@ -984,7 +996,7 @@ const Cart: React.FC = () => {
                 <CardContent className="space-y-4">
                   <div className="flex justify-between">
                     <span>Subtotal</span>
-                    <span>${subtotal.toFixed(2)}</span>
+                    <span>{formatMoney(subtotal, { currency: cartCurInfo.currency, style: 'full', secondary: cartSecondaryOpt })}</span>
                   </div>
                   
                   {/* Credits feature removed */}
@@ -993,7 +1005,7 @@ const Cart: React.FC = () => {
                   
                   <div className="flex justify-between font-semibold text-lg">
                     <span>Total</span>
-                    <span>${total.toFixed(2)}</span>
+                    <span>{formatMoney(total, { currency: cartCurInfo.currency, style: 'full', secondary: cartSecondaryOpt })}</span>
                   </div>
                   
                   {/* Payment Method */}

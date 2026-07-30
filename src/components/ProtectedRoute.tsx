@@ -1,5 +1,5 @@
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from '@/context/useAuth';
 import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
@@ -8,6 +8,7 @@ import ModuleGate from '@/components/ModuleGate';
 import { checkSubscriptionAccess } from '@/lib/subscriptionGuard';
 import type { StoreProfile } from '@/types/storeProfile';
 import { getActualStoreId } from '@/lib/storeUtils';
+import AdminEmbedLoader from '@/components/admin/AdminEmbedLoader';
 
 
 const ProtectedRoute: React.FC<{ 
@@ -24,23 +25,23 @@ const ProtectedRoute: React.FC<{
   const [ipCheckMessage, setIpCheckMessage] = useState('');
   const [subscriptionState, setSubscriptionState] = useState<'idle' | 'checking' | 'allowed' | 'blocked'>('idle');
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
+  const subscriptionAllowedRef = useRef(false);
+  const ipAllowedRef = useRef(false);
 
   const loadingTitle = useMemo(() => {
     const path = location.pathname;
     if (path.startsWith('/admin/crm')) return 'Sales CRM';
     if (path.startsWith('/team/crm')) return 'Sales CRM';
+    if (path.startsWith('/admin/finance')) return 'Invoice Manager';
     if (path === '/admin/customers') return 'Customer Management';
-    if (path.startsWith('/admin')) return 'Admin Panel';
+    if (path.startsWith('/admin')) return 'Workspace';
     if (path.startsWith('/team')) return 'Team Dashboard';
     return 'Loading';
   }, [location.pathname]);
 
   const LoadingShell = () => (
-    <div className="min-h-[40vh] flex items-center justify-center bg-[#eef2f7]">
-      <div className="rounded-2xl border border-slate-200/80 bg-white px-6 py-5 shadow-sm">
-        <h1 className="text-lg font-semibold text-slate-900">{loadingTitle}</h1>
-        <div className="mt-3 h-2 w-40 animate-pulse rounded-full bg-slate-200" />
-      </div>
+    <div className="flex min-h-[40vh] items-center justify-center py-12">
+      <AdminEmbedLoader label={`Opening ${loadingTitle}…`} compact />
     </div>
   );
 
@@ -52,6 +53,12 @@ const ProtectedRoute: React.FC<{
     if (!user || !requiresAdminIpCheck) {
       setIpCheckState('idle');
       setIpCheckMessage('');
+      ipAllowedRef.current = false;
+      return;
+    }
+
+    if (ipAllowedRef.current) {
+      setIpCheckState('allowed');
       return;
     }
 
@@ -67,7 +74,10 @@ const ProtectedRoute: React.FC<{
         const profileSnap = await getDoc(doc(db, 'storeProfiles', storeId));
 
         if (!profileSnap.exists()) {
-          if (!cancelled) setIpCheckState('allowed');
+          if (!cancelled) {
+            ipAllowedRef.current = true;
+            setIpCheckState('allowed');
+          }
           return;
         }
 
@@ -77,7 +87,10 @@ const ProtectedRoute: React.FC<{
         };
 
         if (!profile.adminIpWhitelistEnabled) {
-          if (!cancelled) setIpCheckState('allowed');
+          if (!cancelled) {
+            ipAllowedRef.current = true;
+            setIpCheckState('allowed');
+          }
           return;
         }
 
@@ -95,7 +108,10 @@ const ProtectedRoute: React.FC<{
 
         const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
-          if (!cancelled) setIpCheckState('allowed');
+          if (!cancelled) {
+            ipAllowedRef.current = true;
+            setIpCheckState('allowed');
+          }
           return;
         }
 
@@ -132,8 +148,10 @@ const ProtectedRoute: React.FC<{
         const ipAllowed = allowlist.includes(currentIp);
         if (!cancelled) {
           if (ipAllowed) {
+            ipAllowedRef.current = true;
             setIpCheckState('allowed');
           } else {
+            ipAllowedRef.current = false;
             setIpCheckState('blocked');
             setIpCheckMessage(`Current IP ${currentIp} is not in the admin allowlist.`);
           }
@@ -167,6 +185,12 @@ const ProtectedRoute: React.FC<{
     if (!user || !requiresSubscriptionCheck) {
       setSubscriptionState('idle');
       setSubscriptionMessage('');
+      subscriptionAllowedRef.current = false;
+      return;
+    }
+
+    if (subscriptionAllowedRef.current) {
+      setSubscriptionState('allowed');
       return;
     }
 
@@ -195,8 +219,10 @@ const ProtectedRoute: React.FC<{
 
         if (!cancelled) {
           if (access.allowed) {
+            subscriptionAllowedRef.current = true;
             setSubscriptionState('allowed');
           } else {
+            subscriptionAllowedRef.current = false;
             setSubscriptionState('blocked');
             setSubscriptionMessage(access.message || 'No active subscription found.');
             if (access.redirectTo) {
@@ -217,7 +243,7 @@ const ProtectedRoute: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [user, requiresSubscriptionCheck, navigate, location]);
+  }, [user, requiresSubscriptionCheck, navigate, location.pathname]);
 
   // Wait for auth state to finish loading before making redirect decisions
   if (isLoading) {

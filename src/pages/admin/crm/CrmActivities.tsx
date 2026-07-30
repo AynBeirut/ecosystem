@@ -119,6 +119,10 @@ const CrmActivities: React.FC = () => {
         rep: a.repName,
         client: clientNameById.get(a.customerId) || a.customerId,
         type: CRM_ACTIVITY_TYPE_LABELS[a.type],
+        timeIn: a.timeIn ? new Date(a.timeIn).toLocaleTimeString() : '',
+        timeOut: a.timeOut ? new Date(a.timeOut).toLocaleTimeString() : '',
+        completed: a.visitCompleted ? 'Yes' : 'No',
+        orderTaken: a.orderTaken ? 'Yes' : 'No',
         result: CRM_ACTIVITY_RESULT_LABELS[a.result],
         notes: a.notes || '',
         gpsLink:
@@ -152,14 +156,16 @@ const CrmActivities: React.FC = () => {
       cleanTextForPDF(r.date),
       cleanTextForPDF(r.rep),
       cleanTextForPDF(r.client),
-      cleanTextForPDF(r.type),
-      cleanTextForPDF(r.result),
+      cleanTextForPDF(r.timeIn),
+      cleanTextForPDF(r.timeOut),
+      cleanTextForPDF(r.completed),
+      cleanTextForPDF(r.orderTaken),
       cleanTextForPDF(r.notes),
       cleanTextForPDF(r.gpsLink),
     ]);
     autoTable(doc, {
       startY: 24,
-      head: [['Date', 'Rep', 'Client', 'Type', 'Result', 'Notes', 'GPS']],
+      head: [['Date', 'Rep', 'Client', 'Time in', 'Time out', 'Completed', 'Order', 'Notes', 'GPS']],
       body: tableData,
       theme: 'striped',
       styles: { fontSize: 7, cellPadding: 1.5 },
@@ -173,7 +179,7 @@ const CrmActivities: React.FC = () => {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center gap-2">
         <Filter className="h-5 w-5 text-muted-foreground" />
-        <h2 className="text-xl font-semibold">Activity feed</h2>
+        <h2 className="text-xl font-semibold">Visit log</h2>
       </div>
 
       <Card>
@@ -259,9 +265,11 @@ const CrmActivities: React.FC = () => {
                   <TableRow>
                     <TableHead>Date</TableHead>
                     <TableHead>Rep</TableHead>
-                    <TableHead>Client</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Result</TableHead>
+                    <TableHead>Customer</TableHead>
+                    <TableHead>Time in</TableHead>
+                    <TableHead>Time out</TableHead>
+                    <TableHead>Completed</TableHead>
+                    <TableHead>Order</TableHead>
                     <TableHead>Notes</TableHead>
                     <TableHead>GPS</TableHead>
                   </TableRow>
@@ -269,20 +277,26 @@ const CrmActivities: React.FC = () => {
                 <TableBody>
                   {activities.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                        No activities match your filters.
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                        No visits match your filters.
                       </TableCell>
                     </TableRow>
                   ) : (
                     activities.map((a) => (
                       <TableRow key={a.id}>
                         <TableCell className="whitespace-nowrap text-sm">
-                          {new Date(a.loggedAt).toLocaleString()}
+                          {new Date(a.loggedAt).toLocaleDateString()}
                         </TableCell>
                         <TableCell>{a.repName}</TableCell>
                         <TableCell>{clientNameById.get(a.customerId) || a.customerId}</TableCell>
-                        <TableCell>{CRM_ACTIVITY_TYPE_LABELS[a.type]}</TableCell>
-                        <TableCell>{CRM_ACTIVITY_RESULT_LABELS[a.result]}</TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {a.timeIn ? new Date(a.timeIn).toLocaleTimeString() : new Date(a.loggedAt).toLocaleTimeString()}
+                        </TableCell>
+                        <TableCell className="whitespace-nowrap text-sm">
+                          {a.timeOut ? new Date(a.timeOut).toLocaleTimeString() : '—'}
+                        </TableCell>
+                        <TableCell>{a.visitCompleted ? 'Yes' : 'No'}</TableCell>
+                        <TableCell>{a.orderTaken ? 'Yes' : 'No'}</TableCell>
                         <TableCell className="max-w-[200px] truncate" title={a.notes}>
                           {a.notes || '—'}
                         </TableCell>

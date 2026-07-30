@@ -111,7 +111,7 @@ const AdminFinanceSuite: React.FC = () => {
           <AlertDescription className="text-amber-900/90 dark:text-amber-100/90">
             For accounting reports, use{' '}
             <Link
-              to="/invoice/accounting"
+              to="/admin/finance/accounting"
               className="font-medium text-amber-950 underline underline-offset-2 hover:text-amber-800 dark:text-amber-50 dark:hover:text-amber-200"
             >
               Invoice Manager → Accounting

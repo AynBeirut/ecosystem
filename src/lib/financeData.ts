@@ -28,6 +28,11 @@ export function financeExpensesCollection(db: Firestore, storeId: string) {
   return collection(db, 'stores', storeId, 'financeExpenses');
 }
 
+/** Canonical expense feed for accounting views: `stores/{storeId}/financeExpenses`. */
+export async function fetchPlatformExpenses(db: Firestore, storeId: string) {
+  return fetchFinanceExpenses(db, storeId);
+}
+
 /** Platform purchases (canonical PO / receiving). */
 export async function fetchPlatformPurchases(db: Firestore, storeId: string) {
   const snap = await getDocs(

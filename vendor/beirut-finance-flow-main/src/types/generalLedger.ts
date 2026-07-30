@@ -16,13 +16,54 @@ export type JournalSourceType =
   | 'cash_collection'
   | 'order'
   | 'production'
-  | 'payroll';
+  | 'payroll'
+  | 'adjustment'
+  | 'depreciation';
+
+export type VoucherType = 'JV' | 'PV' | 'RV' | 'CV';
+
+export type CheckStatus = 'issued' | 'cleared' | 'void';
+
+export type PaymentVoucherMeta = {
+  payee?: string;
+  paymentRef?: string;
+  paidFromAccountId: string;
+  paidToAccountId: string;
+  supplierId?: string;
+  checkNumber?: string;
+  checkStatus?: CheckStatus;
+  checkAmount?: number;
+  amount?: number;
+};
+
+export type ReceiptVoucherMeta = {
+  payer?: string;
+  receiptRef?: string;
+  receivedIntoAccountId: string;
+  receivedFromAccountId: string;
+};
+
+export type ContraVoucherMeta = {
+  fromAccountId: string;
+  toAccountId: string;
+  transferRef?: string;
+};
+
+export type JournalVoucherMeta = Record<string, never>;
+
+export type VoucherMeta =
+  | PaymentVoucherMeta
+  | ReceiptVoucherMeta
+  | ContraVoucherMeta
+  | JournalVoucherMeta;
 
 export interface LedgerAccount {
   id: string;
   storeId: string;
   code: string;
   name: string;
+  /** Arabic label (Lebanese COA template / manual entry). */
+  nameAr?: string;
   type: LedgerAccountType;
   normalBalance: NormalBalance;
   parentCode?: string;
@@ -30,6 +71,13 @@ export interface LedgerAccount {
   isActive: boolean;
   /** Net opening balance in account's normal-balance direction (Phase 3). */
   openingBalance?: number;
+  /** PCG row kind (G/D/C) when seeded from Excel chart. */
+  pcgKind?: string;
+  currency?: 'LL' | 'USD';
+  /** Grabio 3-digit code that auto-posts into this PCG account. */
+  grabioOperationalCode?: string;
+  /** Full Lebanese PCG chart row (vs Grabio operational posting account). */
+  isPcgChart?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,7 +91,12 @@ export interface JournalEntry {
   sourceType: JournalSourceType;
   sourceId?: string;
   sourceKey: string;
+  /** Semantic posting event (also part of sourceKey). */
+  event: string;
   currency: string;
+  voucherType?: VoucherType;
+  voucherNumber?: string;
+  voucherMeta?: VoucherMeta;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -56,6 +109,7 @@ export interface JournalLine {
   accountId: string;
   accountCode: string;
   accountName: string;
+  currency: string;
   debit: number;
   credit: number;
   description?: string;
@@ -78,6 +132,9 @@ export interface PostJournalInput {
   event: string;
   currency?: string;
   createdBy?: string;
+  voucherType?: VoucherType;
+  voucherNumber?: string;
+  voucherMeta?: VoucherMeta;
   lines: JournalLineInput[];
 }
 
@@ -114,6 +171,236 @@ export interface BalanceSheetReport {
   balanced: boolean;
 }
 
+export interface IncomeStatementRow {
+  accountId: string;
+  code: string;
+  name: string;
+  amount: number;
+}
+
+export interface IncomeStatementSection {
+  title: string;
+  rows: IncomeStatementRow[];
+  subtotal: number;
+}
+
+export interface IncomeStatementReport {
+  startDate: string;
+  endDate: string;
+  revenue: IncomeStatementSection;
+  otherIncome: IncomeStatementSection;
+  cogs: IncomeStatementSection;
+  operatingExpenses: IncomeStatementSection;
+  financialExpenses: IncomeStatementSection;
+  totalRevenue: number;
+  totalExpenses: number;
+  grossProfit: number;
+  operatingIncome: number;
+  netIncome: number;
+}
+
+export interface LedgerCostCenter {
+  id: string;
+  storeId: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type RecurringVoucherFrequency = 'monthly' | 'quarterly' | 'yearly';
+
+export interface RecurringVoucherTemplate {
+  id: string;
+  storeId: string;
+  name: string;
+  voucherType: VoucherType;
+  frequency: RecurringVoucherFrequency;
+  dayOfMonth: number;
+  nextRunDate: string;
+  lastRunDate?: string;
+  memo: string;
+  lines: JournalLineInput[];
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CheckRegisterEntry {
+  entryId: string;
+  voucherNumber?: string;
+  date: string;
+  payee?: string;
+  checkNumber?: string;
+  amount: number;
+  status: CheckStatus;
+  bankAccountCode?: string;
+}
+
+export interface VatFilingSourceRow {
+  sourceType: string;
+  outputNet: number;
+  inputNet: number;
+  entryCount: number;
+}
+
+export interface VatFilingAccountSummary {
+  accountCode: string;
+  accountName: string;
+  closingBalance: number;
+  accountActive: boolean;
+}
+
+export interface VatFilingSummaryReport {
+  startDate: string;
+  endDate: string;
+  currency: string;
+  outputVat: VatFilingAccountSummary & {
+    collected: number;
+    reversed: number;
+    net: number;
+  };
+  inputVat: VatFilingAccountSummary & {
+    recoverable: number;
+    reversed: number;
+    net: number;
+  };
+  settlement?: VatFilingAccountSummary & {
+    credits: number;
+    debits: number;
+    net: number;
+  };
+  netVatDue: number;
+  netVatDueLabel: 'payable' | 'recoverable';
+  entryCount: number;
+  lineCount: number;
+  bySource: VatFilingSourceRow[];
+}
+
+export type AgedReceivablesBucketKey = 'current' | 'days31_60' | 'days61_90' | 'days91_plus';
+
+export interface AgedReceivablesRow {
+  invoiceId: string;
+  clientId?: string;
+  clientName: string;
+  invoiceDate: string;
+  daysPast: number;
+  bucket: AgedReceivablesBucketKey;
+  outstanding: number;
+  currency: string;
+  status: string;
+}
+
+export interface AgedReceivablesReport {
+  asOfDate: string;
+  buckets: Record<AgedReceivablesBucketKey, number>;
+  rows: AgedReceivablesRow[];
+  subledgerTotal: number;
+  glBalance: number;
+  variance: number;
+  matched: boolean;
+  openInvoiceCount: number;
+}
+
+export type AgedPayablesBucketKey = 'current' | 'days31_60' | 'days61_90' | 'days91_plus';
+
+export interface AgedPayablesRow {
+  purchaseOrderId: string;
+  supplierId?: string;
+  supplierName: string;
+  poDate: string;
+  daysPast: number;
+  bucket: AgedPayablesBucketKey;
+  grossAmount: number;
+  paidAmount: number;
+  outstanding: number;
+  currency: string;
+  status: string;
+}
+
+export interface AgedPayablesReport {
+  asOfDate: string;
+  buckets: Record<AgedPayablesBucketKey, number>;
+  rows: AgedPayablesRow[];
+  subledgerTotal: number;
+  glBalance: number;
+  variance: number;
+  matched: boolean;
+  openPoCount: number;
+}
+
+export type CashFlowSection = 'operating' | 'investing' | 'financing' | 'reconciliation';
+
+export interface CashFlowLineItem {
+  label: string;
+  amount: number;
+  section: CashFlowSection;
+  accountCode?: string;
+}
+
+export interface CashFlowStatementReport {
+  startDate: string;
+  endDate: string;
+  currency: string;
+  method: 'indirect';
+  netIncome: number;
+  workingCapitalAdjustments: number;
+  netCashFromOperating: number;
+  netCashFromInvesting: number;
+  netCashFromFinancing: number;
+  netChangeInCash: number;
+  cashAtBeginning: number;
+  cashAtEnd: number;
+  cashDeltaFromAccounts: number;
+  reconciliationVariance: number;
+  reconciled: boolean;
+  operatingLines: CashFlowLineItem[];
+  investingLines: CashFlowLineItem[];
+  financingLines: CashFlowLineItem[];
+  cashBreakdown: CashFlowLineItem[];
+}
+
+export type FixedAssetStatus = 'active' | 'fully_depreciated' | 'retired';
+
+export interface FixedAsset {
+  id: string;
+  storeId: string;
+  name: string;
+  inServiceDate: string;
+  cost: number;
+  salvageValue: number;
+  usefulLifeMonths: number;
+  assetAccountCode: string;
+  accumDeprAccountCode: string;
+  expenseAccountCode: string;
+  accumulatedDepreciation: number;
+  status: FixedAssetStatus;
+  currency: string;
+  notes?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DepreciationLinePreview {
+  assetId: string;
+  assetName: string;
+  amount: number;
+  skippedReason?: string;
+}
+
+export interface DepreciationRunPreview {
+  periodYear: number;
+  periodMonth: number;
+  periodLabel: string;
+  postDate: string;
+  currency: string;
+  lines: DepreciationLinePreview[];
+  totalDepreciation: number;
+  canPost: boolean;
+  blockReason?: string;
+}
+
 export type PeriodLockType = 'month' | 'quarter';
 
 export type PeriodLockAuditEvent = {
@@ -134,6 +421,95 @@ export interface LedgerPeriodClosure {
   label: string;
   isClosed: boolean;
   history: PeriodLockAuditEvent[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+/** GL bank rec — Phase 1 (statement capture + book side). */
+export const BANK_REC_PHASE1_ACCOUNT_CODES = ['105', '106'] as const;
+
+export type BankRecSessionStatus = 'draft' | 'locked';
+
+export interface BankRecSession {
+  id: string;
+  storeId: string;
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  startDate: string;
+  endDate: string;
+  status: BankRecSessionStatus;
+  phase: 1 | 2 | 3;
+  /** Per bank statement — used for closing balance on report. */
+  statementOpeningBalance?: number;
+  lockedAt?: string;
+  lockedBy?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BankStatementLineSource = 'manual' | 'csv';
+
+export interface BankStatementLine {
+  id: string;
+  sessionId: string;
+  storeId: string;
+  lineDate: string;
+  debit: number;
+  credit: number;
+  description: string;
+  reference?: string;
+  source: BankStatementLineSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type BankRecMatchType = 'manual' | 'auto';
+
+export interface BankRecMatch {
+  id: string;
+  sessionId: string;
+  storeId: string;
+  statementLineId: string;
+  bookLineId: string;
+  matchType: BankRecMatchType;
+  matchedAt: string;
+  matchedBy?: string;
+}
+
+export interface AccountBookLine {
+  lineId: string;
+  entryId: string;
+  entryDate: string;
+  memo: string;
+  voucherNumber?: string;
+  sourceType?: string;
+  debit: number;
+  credit: number;
+  description?: string;
+}
+
+export interface BankRecPhase1Summary {
+  bookLineCount: number;
+  statementLineCount: number;
+  bookNetDebit: number;
+  statementNetDebit: number;
+  difference: number;
+}
+
+/** Store-specific PCG client extension (Phase 3 — display on reports; posting unchanged). */
+export interface PcgClientAccount {
+  id: string;
+  storeId: string;
+  /** Full client PCG code (typically 8–11 digits). */
+  clientCode: string;
+  /** Grabio 3-digit operational account this overrides in Lebanese reports. */
+  grabioOperationalCode: string;
+  /** Optional PCG parent for validation / hierarchy (e.g. 5300, 6018). */
+  parentPcgCode?: string;
+  name?: string;
+  nameAr?: string;
+  currency: 'LL' | 'USD';
   createdAt: string;
   updatedAt: string;
 }

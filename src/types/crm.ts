@@ -2,6 +2,18 @@
 
 export const SALES_CRM_ADDON_KEY = 'salesCrm' as const;
 
+export const CRM_CUSTOMER_TYPES = [
+  'mini_market',
+  'supermarket',
+  'wholesaler',
+  'restaurant',
+  'pharmacy',
+  'hotel',
+  'other',
+] as const;
+
+export type CrmCustomerType = (typeof CRM_CUSTOMER_TYPES)[number];
+
 export const CRM_PIPELINE_STAGES = [
   'new_lead',
   'contacted',
@@ -36,6 +48,12 @@ export interface CrmGeoLocation {
 
 /** Fields added to `customers` when managed in Sales CRM */
 export interface CrmCustomerFields {
+  customerCode?: string | null;
+  customerType?: CrmCustomerType | null;
+  district?: string | null;
+  area?: string | null;
+  location?: CrmGeoLocation | null;
+  lastVisitDate?: string | null;
   pipelineStage?: CrmPipelineStage;
   assignedRepId?: string | null;
   nextFollowUpAt?: string | null;
@@ -52,6 +70,9 @@ export interface CrmRep {
   name: string;
   email: string;
   phone?: string;
+  assignedTerritory?: string | null;
+  /** Planned customer visits for the current day (manager-set). */
+  dailyVisitTarget?: number | null;
   status: 'active' | 'suspended' | 'inactive';
   firebaseUid?: string;
   createdAt: string;
@@ -68,7 +89,13 @@ export interface CrmActivity {
   repName: string;
   type: CrmActivityType;
   loggedAt: string;
+  /** Visit check-in (defaults to loggedAt when omitted). */
+  timeIn?: string | null;
+  /** Visit check-out. */
+  timeOut?: string | null;
   location?: CrmGeoLocation | null;
+  visitCompleted?: boolean;
+  orderTaken?: boolean;
   result: CrmActivityResult;
   notes?: string;
   followUpAt?: string | null;

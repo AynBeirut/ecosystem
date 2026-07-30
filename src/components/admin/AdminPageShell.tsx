@@ -3,7 +3,7 @@ import { cn } from '@/lib/utils';
 import AdminPageHero from '@/components/admin/AdminPageHero';
 
 type Props = {
-  title: string;
+  title: React.ReactNode;
   description?: string;
   eyebrow?: string;
   backTo?: string;

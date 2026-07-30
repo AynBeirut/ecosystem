@@ -1,41 +1,61 @@
-import React from 'react';
-import { Link, Outlet, useLocation } from 'react-router-dom';
+import React, { useEffect } from 'react';
+import { Link, Navigate, useLocation } from 'react-router-dom';
 import CrmAddonGate from '@/components/crm/CrmAddonGate';
 import CrmFirestoreIndexNotice from '@/components/crm/CrmFirestoreIndexNotice';
 import AdminPageShell from '@/components/admin/AdminPageShell';
-import { cn } from '@/lib/utils';
+import { adminSubnavLink } from '@/lib/adminStyles';
+import CrmTabHost from '@/pages/admin/crm/CrmTabHost';
+import CrmEmbeddedPage from '@/pages/admin/crm/CrmEmbeddedPage';
+import {
+  CRM_PAGE_LOADERS,
+  loadCrmActivities,
+  loadCrmClientProfile,
+  loadCrmCustomers,
+  loadCrmMap,
+  loadCrmPerformance,
+  loadCrmPipeline,
+  loadCrmReps,
+  preloadCrmPages,
+} from '@/pages/admin/crm/crmEmbeddedLoaders';
 
 const CRM_NAV = [
-  { to: '/admin/crm/pipeline', label: 'Pipeline' },
-  { to: '/admin/crm/activities', label: 'Activities' },
-  { to: '/admin/crm/map', label: 'Map' },
-  { to: '/admin/crm/performance', label: 'Performance' },
-  { to: '/admin/crm/reps', label: 'Reps' },
+  { to: '/admin/crm/dashboard', label: 'Dashboard', preload: loadCrmPerformance },
+  { to: '/admin/crm/customers', label: 'Customers', preload: loadCrmCustomers },
+  { to: '/admin/crm/activities', label: 'Visits', preload: loadCrmActivities },
+  { to: '/admin/crm/map', label: 'Map', preload: loadCrmMap },
+  { to: '/admin/crm/pipeline', label: 'Pipeline', preload: loadCrmPipeline },
+  { to: '/admin/crm/reps', label: 'Reps', preload: loadCrmReps },
 ] as const;
 
 const CrmModuleShell: React.FC = () => {
   const location = useLocation();
+  const isClientProfile = /^\/admin\/crm\/clients\/[^/]+/.test(location.pathname);
+
+  useEffect(() => {
+    preloadCrmPages(CRM_PAGE_LOADERS);
+  }, []);
+
+  if (location.pathname === '/admin/crm/performance') {
+    return <Navigate to="/admin/crm/dashboard" replace />;
+  }
 
   return (
     <CrmAddonGate>
       <AdminPageShell
         title="Sales CRM"
-        description="Pipeline, activities, and rep performance."
+        description="Field sales tracking, visit coverage, and rep performance."
         eyebrow="CRM Module"
         backTo="/admin/dashboard"
         backLabel="Dashboard"
       >
-        <nav className="flex flex-wrap gap-2">
+        <nav className="flex flex-wrap gap-2 mb-4">
           {CRM_NAV.map((item) => (
             <Link
               key={item.to}
               to={item.to}
-              className={cn(
-                'px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border',
-                location.pathname.startsWith(item.to)
-                  ? 'bg-[#0b1220] text-white border-slate-700'
-                  : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
-              )}
+              preventScrollReset
+              onMouseEnter={() => preloadCrmPages([item.preload])}
+              className={adminSubnavLink(location.pathname.startsWith(item.to))}
             >
               {item.label}
             </Link>
@@ -43,7 +63,11 @@ const CrmModuleShell: React.FC = () => {
         </nav>
 
         <CrmFirestoreIndexNotice />
-        <Outlet />
+        {isClientProfile ? (
+          <CrmEmbeddedPage loader={loadCrmClientProfile} />
+        ) : (
+          <CrmTabHost />
+        )}
       </AdminPageShell>
     </CrmAddonGate>
   );

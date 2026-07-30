@@ -4,7 +4,7 @@ import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 type Props = {
-  title: string;
+  title: React.ReactNode;
   description?: string;
   backTo?: string;
   backLabel?: string;
@@ -19,7 +19,7 @@ export default function AdminPageHero({
   eyebrow = 'Grabio Ecosystem',
 }: Props) {
   return (
-    <section className="relative mb-6 rounded-xl bg-[#0b1220] text-white py-4 px-4 md:px-5 overflow-hidden">
+    <section className="admin-page-hero overflow-hidden">
       <div
         className="absolute inset-0 opacity-40"
         style={{

@@ -3,7 +3,9 @@ import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { getFinanceAuth, getFinanceAuthReady } from '@/integrations/firebase/client';
 import { canUseInvoiceModule } from '@/lib/grabio/entitlements';
 import { loadStoreProfile, resolveGrabioStore } from '@/lib/grabio/storeService';
+import { syncSystemGuideFromProfile } from '@/lib/systemGuide';
 import type { GrabioStoreContext, GrabioStoreProfile } from '@/lib/grabio/types';
+import { setDefaultNumberFormat } from '@/lib/money/format';
 
 export function useGrabioStore(): GrabioStoreContext & {
   firebaseUser: FirebaseUser | null;
@@ -24,7 +26,9 @@ export function useGrabioStore(): GrabioStoreContext & {
       const resolved = await resolveGrabioStore(user.uid, user.email || '');
       setStoreId(resolved.storeId);
       setProfile(resolved.profile);
+      syncSystemGuideFromProfile(resolved.profile?.systemGuideEnabled);
       setRole(resolved.role);
+      setDefaultNumberFormat(resolved.profile?.numberFormat);
     } finally {
       setLoading(false);
     }
@@ -35,7 +39,11 @@ export function useGrabioStore(): GrabioStoreContext & {
     setLoading(true);
     try {
       const next = await loadStoreProfile(storeId);
-      if (next) setProfile(next);
+      if (next) {
+        setProfile(next);
+        syncSystemGuideFromProfile(next.systemGuideEnabled);
+        setDefaultNumberFormat(next.numberFormat);
+      }
     } finally {
       setLoading(false);
     }
@@ -70,6 +78,14 @@ export function useGrabioStore(): GrabioStoreContext & {
       unsub?.();
     };
   }, [hydrateStore]);
+
+  useEffect(() => {
+    const onProfileUpdated = () => {
+      void reload();
+    };
+    window.addEventListener('grabio:store-profile-updated', onProfileUpdated);
+    return () => window.removeEventListener('grabio:store-profile-updated', onProfileUpdated);
+  }, [reload]);
 
   return {
     firebaseUser,

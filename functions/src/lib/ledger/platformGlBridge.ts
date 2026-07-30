@@ -3,13 +3,17 @@ import {
   autoPostCashCollectionDeposit,
   autoPostDeliveryWalletCodCollected,
   autoPostDeliveryWalletSettlement,
+  autoPostExpensePaid,
   autoPostOrderSaleRecognized,
   autoPostOrderSaleReversal,
   autoPostPayrollPayment,
+  autoPostPurchaseReceived,
   autoPostProductionComplete,
   autoPostProductionReversal,
   autoPostProductionStart,
   autoPostProductionWipCompleteFlow,
+  type PlatformExpenseInput,
+  type PlatformPurchaseInput,
   type ProductionReversalInput,
   type OrderCogsLine,
   type PlatformOrderInput,
@@ -103,6 +107,26 @@ export async function glPostPayrollPayment(
   await wrapGl('payroll', async () => {
     const accounts = await ensureDefaultChartOfAccounts(storeId);
     await autoPostPayrollPayment(storeId, paymentId, totalAmount, paymentDate, paymentMethod, accounts);
+  });
+}
+
+export async function glPostPurchaseReceived(
+  storeId: string,
+  purchase: PlatformPurchaseInput,
+): Promise<void> {
+  await wrapGl('purchase', async () => {
+    const accounts = await ensureDefaultChartOfAccounts(storeId);
+    await autoPostPurchaseReceived(storeId, purchase, accounts);
+  });
+}
+
+export async function glPostExpensePaid(
+  storeId: string,
+  expense: PlatformExpenseInput,
+): Promise<void> {
+  await wrapGl('expense', async () => {
+    const accounts = await ensureDefaultChartOfAccounts(storeId);
+    await autoPostExpensePaid(storeId, expense, accounts);
   });
 }
 

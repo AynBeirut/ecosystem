@@ -8,6 +8,7 @@ const NAV_LINKS = [
   { label: 'Pricing', href: '/pricing' },
   { label: 'Use Cases', href: '/use-cases' },
   { label: 'Blog', href: '/blog' },
+  { label: 'Careers', href: '/careers' },
   { label: 'About', href: '/about' },
 ];
 
@@ -17,7 +18,9 @@ const PublicNav: React.FC = () => {
   const { user, isLoading } = useAuth();
   const isSignedIn = !!user;
   const dashboardPath =
-    user?.role === 'crm_rep'
+    user?.role === 'freelancer'
+      ? '/freelancer'
+      : user?.role === 'crm_rep'
       ? '/team/crm'
       : user?.role === 'sub_account'
         ? '/team/dashboard'
@@ -31,7 +34,7 @@ const PublicNav: React.FC = () => {
   const closeMobile = () => setMobileOpen(false);
 
   return (
-    <header className="sticky top-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-100 shadow-sm">
+    <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-[#f5f5f7]/90 backdrop-blur-md">
       <nav
         className="max-w-6xl mx-auto px-4 sm:px-6 flex items-center justify-between h-16 gap-3"
         aria-label="Main navigation"
@@ -49,10 +52,10 @@ const PublicNav: React.FC = () => {
             <li key={link.href}>
               <Link
                 to={link.href}
-                className={`px-3 py-2 rounded-md text-sm font-medium transition-colors ${
+                className={`px-3 py-2 rounded-full text-sm font-medium transition-colors ${
                   isActive(link.href)
-                    ? 'text-teal-600 bg-teal-50'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                    ? 'text-teal-800 bg-white border border-teal-200 shadow-sm'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
                 }`}
               >
                 {link.label}

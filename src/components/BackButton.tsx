@@ -1,7 +1,7 @@
 import { useNavigate } from "react-router-dom";
 import { ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/context/useAuth";
+import { getSubAccountHomePath } from "@/lib/subAccountAccess";
 
 interface BackButtonProps {
   to?: string;
@@ -20,7 +20,7 @@ export default function BackButton({ to, label }: BackButtonProps = {}) {
       if (user?.role === 'admin') {
         navigate('/admin/dashboard');
       } else if (user?.role === 'sub_account') {
-        navigate('/team/dashboard');
+        navigate(getSubAccountHomePath(user));
       } else {
         navigate('/');
       }
