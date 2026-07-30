@@ -79,6 +79,7 @@ interface LedgerContextType {
     lines: JournalLineInput[];
     voucherType: VoucherType;
     voucherMeta?: VoucherMeta;
+    draftStatus?: 'draft' | 'pending_approval';
   }) => Promise<{ entryId: string }>;
   postDraftVoucher: (draftEntryId: string) => Promise<PostJournalResult>;
   reverseEntry: (entryId: string) => Promise<PostJournalResult>;
@@ -278,6 +279,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       lines: JournalLineInput[];
       voucherType: VoucherType;
       voucherMeta?: VoucherMeta;
+      draftStatus?: 'draft' | 'pending_approval';
     }) => {
       if (!storeId) throw new Error('No active store');
       let accts = accounts;
@@ -295,6 +297,7 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           voucherType: params.voucherType,
           voucherMeta: params.voucherMeta,
           lines: params.lines,
+          draftStatus: params.draftStatus,
         },
         new Map(accts.map((a) => [a.id, a])),
       );

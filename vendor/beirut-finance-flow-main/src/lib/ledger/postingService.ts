@@ -340,7 +340,11 @@ function buildJournalLinesFromInput(
 
 /** Save balanced manual voucher as draft — excluded from trial balance until posted. */
 export async function saveDraftJournalEntry(
-  input: PostJournalInput & { voucherType?: PostJournalInput['voucherType']; voucherMeta?: PostJournalInput['voucherMeta'] },
+  input: PostJournalInput & {
+    voucherType?: PostJournalInput['voucherType'];
+    voucherMeta?: PostJournalInput['voucherMeta'];
+    draftStatus?: 'draft' | 'pending_approval';
+  },
   accountsById: Map<string, LedgerAccount>,
   draftEntryId?: string,
 ): Promise<{ entryId: string }> {
@@ -359,7 +363,7 @@ export async function saveDraftJournalEntry(
     storeId: input.storeId,
     date: input.date,
     memo: input.memo,
-    status: 'draft' as const,
+    status: (input.draftStatus || 'draft') as JournalEntry['status'],
     sourceType: input.sourceType || 'manual',
     sourceId: input.sourceId || entryId,
     sourceKey: `draft:${entryId}`,
@@ -381,7 +385,10 @@ export async function saveDraftJournalEntry(
   await batch.commit();
 
   const { appendLedgerAuditLog } = await import('@/lib/firestore/ledgerAuditFirestore');
-  await appendLedgerAuditLog(input.storeId, 'draft_saved', { entryId, actorUid: input.createdBy });
+  await appendLedgerAuditLog(input.storeId, input.draftStatus === 'pending_approval' ? 'pending_approval_saved' : 'draft_saved', {
+    entryId,
+    actorUid: input.createdBy,
+  });
 
   return { entryId };
 }

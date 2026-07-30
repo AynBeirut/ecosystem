@@ -91,6 +91,7 @@ export interface PartyStatementReport {
 
 export type LedgerAuditAction =
   | 'draft_saved'
+  | 'pending_approval_saved'
   | 'submitted'
   | 'approved'
   | 'posted'

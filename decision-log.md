@@ -53,9 +53,9 @@
 
 **Verify (Emoove):** `verifyPaymentKnockOffE2E`, `verifyVoucherDraftPostE2E` PASS. Little Hands read-only: `verifyLittleHandsReadOnlyGate.cjs`.
 
-**Git (2026-07-30):** Commit `0e5f62e` on local `main`. Push to `ecosystem` **blocked** — GitHub push protection on old commit `c9d3867` (OAuth client id/secret pasted in `.gitignore`). Unblock via repo secret-scanning URLs or rewrite history before force-push.
+**Git (2026-07-30):** Commit on `main` pushed to `ecosystem/main` after stripping OAuth text from historical `.gitignore` (commit `c9d3867`). No credential rotation required.
 
-**Little Hands gate (2026-07-30):** Fresh backup `backups/emoove-lebanese-pre-8WgfKtgaE8aAXdqFhIfweEo5WFq2-2026-07-30T20-55-25-620Z` (588 accounts, 2056 posted JEs). Read-only verify PASS (TB $35,520.32 balanced). AR aging + cash flow PASS (`--store-id=8WgfKtgaE8aAXdqFhIfweEo5WFq2`). **Blocked:** `ClientCode` column empty in `imports/littlehands-pcg-client-accounts.template.csv` — owner must fill before `seedLittleHandsPcgClientAccounts.cjs --apply`.
+**Little Hands gate (2026-07-30):** Fresh backup `backups/emoove-lebanese-pre-8WgfKtgaE8aAXdqFhIfweEo5WFq2-2026-07-30T20-55-25-620Z` (588 accounts, 2056 posted JEs). Read-only verify PASS (TB $35,520.32 balanced). AR aging + cash flow PASS (`--store-id=8WgfKtgaE8aAXdqFhIfweEo5WFq2`). `verifyTrialBalance6ColE2E` fixed (vitest). **Blocked:** `ClientCode` column empty in `imports/littlehands-pcg-client-accounts.template.csv` — owner must fill before `seedLittleHandsPcgClientAccounts.cjs --apply`.
 
 **E-Moove:** GL backup preserved; Balance Sheet totals must stay identical through Phase 1 UI deploy.
 

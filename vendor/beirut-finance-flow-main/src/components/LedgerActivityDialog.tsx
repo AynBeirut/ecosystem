@@ -32,6 +32,7 @@ type Props = {
   pcgClientAccounts?: PcgClientAccount[];
   accountingLanguage?: AccountingLanguage;
   onOpenVouchersTab?: () => void;
+  onDrillToGl?: (accountId: string) => void;
 };
 
 function entryTitle(entry: JournalEntry) {
@@ -49,6 +50,7 @@ export default function LedgerActivityDialog({
   pcgClientAccounts = [],
   accountingLanguage,
   onOpenVouchersTab,
+  onDrillToGl,
 }: Props) {
   const [selectedEntryId, setSelectedEntryId] = useState('');
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
@@ -105,6 +107,11 @@ export default function LedgerActivityDialog({
               </DialogHeader>
 
               <div className="flex flex-wrap gap-2 mb-2">
+                {focus.kind === 'account' && onDrillToGl ? (
+                  <Button type="button" variant="secondary" size="sm" onClick={() => onDrillToGl(focus.accountId)}>
+                    Open in GL
+                  </Button>
+                ) : null}
                 {onOpenVouchersTab ? (
                   <Button type="button" variant="outline" size="sm" onClick={onOpenVouchersTab}>
                     <FileText className="h-4 w-4 mr-1" /> Full voucher register

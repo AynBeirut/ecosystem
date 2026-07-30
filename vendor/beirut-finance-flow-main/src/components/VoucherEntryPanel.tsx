@@ -77,6 +77,13 @@ type Props = {
     lines: JournalLineInput[];
     voucherMeta?: Record<string, unknown>;
   }) => void;
+  onSubmitForApproval?: (payload: {
+    voucherType: VoucherType;
+    date: string;
+    memo: string;
+    lines: JournalLineInput[];
+    voucherMeta?: Record<string, unknown>;
+  }) => void;
 };
 
 function activeAccounts(accounts: LedgerAccount[], isLebaneseCoa?: boolean) {
@@ -132,6 +139,7 @@ export default function VoucherEntryPanel({
   posting,
   onPost,
   onSaveDraft,
+  onSubmitForApproval,
 }: Props) {
   const { clients = [], suppliers = [] } = useAppContext() as {
     clients?: Array<{ id: string; name: string; email?: string; phone?: string }>;
@@ -296,8 +304,8 @@ export default function VoucherEntryPanel({
     setPendingPost(null);
   };
 
-  const postJv = (asDraft = false) => {
-    if (!jvBalanced && !asDraft) {
+  const postJv = (mode: 'post' | 'draft' | 'pending' = 'post') => {
+    if (!jvBalanced && mode === 'post') {
       toast.error("Entry must be balanced before posting.");
       return;
     }
@@ -307,7 +315,8 @@ export default function VoucherEntryPanel({
       return;
     }
     const payload = { voucherType: "JV" as const, date: entryDate, memo: memo || "Journal voucher", lines, voucherMeta: {} };
-    if (asDraft && onSaveDraft) onSaveDraft(payload);
+    if (mode === 'draft' && onSaveDraft) onSaveDraft(payload);
+    else if (mode === 'pending' && onSubmitForApproval) onSubmitForApproval(payload);
     else finalizePost(payload);
   };
 
@@ -547,11 +556,16 @@ export default function VoucherEntryPanel({
             </p>
             <div className="flex gap-2">
               {onSaveDraft ? (
-                <Button variant="outline" onClick={() => postJv(true)} disabled={posting || !jvBalanced}>
+                <Button variant="outline" onClick={() => postJv('draft')} disabled={posting || !jvBalanced}>
                   Save draft
                 </Button>
               ) : null}
-              <Button onClick={() => postJv(false)} disabled={posting || !jvBalanced}>
+              {onSubmitForApproval ? (
+                <Button variant="secondary" onClick={() => postJv('pending')} disabled={posting || !jvBalanced}>
+                  Submit for approval
+                </Button>
+              ) : null}
+              <Button onClick={() => postJv('post')} disabled={posting || !jvBalanced}>
                 {posting ? "Posting…" : "Post JV"}
               </Button>
             </div>

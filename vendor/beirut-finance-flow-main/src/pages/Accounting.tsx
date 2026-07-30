@@ -92,6 +92,7 @@ import {
   cnssReportToCsv,
 } from "@/lib/ledger/lebaneseTaxReports";
 import { downloadCsvText } from "@/lib/csvExport";
+import { downloadXlsxFromCsv } from "@/lib/xlsxExport";
 import type { SettlementAllocationInput, TrialBalanceViewMode, VoucherLineSettlement } from "@/types/generalLedger";
 import type { LedgerActivityFocus } from "@/lib/ledger/ledgerActivity";
 import { consumeLedgerFocus } from "@/lib/ledger/ledgerActivity";
@@ -203,6 +204,7 @@ const Accounting = () => {
   const [pcgClientAccounts, setPcgClientAccounts] = useState<PcgClientAccount[]>([]);
   const [pcgPrefillAccount, setPcgPrefillAccount] = useState<LebanesePcgAccount | null>(null);
   const [pcgPrefillKey, setPcgPrefillKey] = useState(0);
+  const [glPresetAccountId, setGlPresetAccountId] = useState("");
   const [ledgerFocus, setLedgerFocus] = useState<LedgerActivityFocus | null>(null);
   const [quickVoucherEntryId, setQuickVoucherEntryId] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
@@ -219,6 +221,11 @@ const Accounting = () => {
 
   const openAccountActivity = useCallback((accountId: string, label: string) => {
     setLedgerFocus({ kind: "account", accountId, label });
+  }, []);
+
+  const openAccountDrill = useCallback((accountId: string) => {
+    setGlPresetAccountId(accountId);
+    setActiveTab("general-ledger");
   }, []);
 
   const openClientVouchers = useCallback((clientId: string | undefined, clientName: string) => {
@@ -644,11 +651,40 @@ const Accounting = () => {
         lines: payload.lines,
         voucherType: payload.voucherType,
         voucherMeta: (payload.voucherMeta || {}) as VoucherMeta,
+        draftStatus: "draft",
       });
       toast.success("Draft saved.");
+      await refreshLedger();
       setActiveTab("vouchers");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save draft");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handleSubmitForApproval = async (payload: {
+    voucherType: VoucherType;
+    date: string;
+    memo: string;
+    lines: JournalLineInput[];
+    voucherMeta?: Record<string, unknown>;
+  }) => {
+    setPosting(true);
+    try {
+      await saveDraftVoucher({
+        date: new Date(payload.date).toISOString(),
+        memo: payload.memo,
+        lines: payload.lines,
+        voucherType: payload.voucherType,
+        voucherMeta: (payload.voucherMeta || {}) as VoucherMeta,
+        draftStatus: "pending_approval",
+      });
+      toast.success("Submitted for approval.");
+      await refreshLedger();
+      setActiveTab("vouchers");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to submit for approval");
     } finally {
       setPosting(false);
     }
@@ -1180,6 +1216,7 @@ const Accounting = () => {
                   posting={posting}
                   onPost={(p) => void handlePostVoucher(p)}
                   onSaveDraft={(p) => void handleSaveDraft(p)}
+                  onSubmitForApproval={(p) => void handleSubmitForApproval(p)}
                 />
               </CardContent>
             </Card>
@@ -1905,6 +1942,14 @@ const Accounting = () => {
                       >
                         Export CSV
                       </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadXlsxFromCsv(`trial-balance-${tbViewMode}.xlsx`, "Trial Balance", extendedTrialBalanceToCsv(extendedTrialBalance))}
+                      >
+                        Export XLSX
+                      </Button>
                     </>
                   ) : null}
                   {trialBalance.balanced ? (
@@ -1964,8 +2009,11 @@ const Accounting = () => {
                             <TableCell className="text-right">{r.debit ? formatCurrency(r.debit) : "—"}</TableCell>
                             <TableCell className="text-right">{r.credit ? formatCurrency(r.credit) : "—"}</TableCell>
                             <TableCell>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountDrill(r.accountId)}>
+                                GL
+                              </Button>
                               <Button type="button" variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.accountCode} · ${r.accountName}`)}>
-                                Ledger
+                                Activity
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -1985,8 +2033,11 @@ const Accounting = () => {
                               </>
                             ) : null}
                             <TableCell>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountDrill(r.accountId)}>
+                                GL
+                              </Button>
                               <Button type="button" variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.accountCode} · ${r.accountName}`)}>
-                                Ledger
+                                Activity
                               </Button>
                             </TableCell>
                           </TableRow>
@@ -2168,7 +2219,8 @@ const Accounting = () => {
                               <TableCell>{r.name}</TableCell>
                               <TableCell className="text-right">{formatCurrency(r.amount)}</TableCell>
                               <TableCell className="w-[90px]">
-                                <Button variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.code} · ${r.name}`)}>Ledger</Button>
+                                <Button variant="ghost" size="sm" onClick={() => openAccountDrill(r.accountId)}>GL</Button>
+                                <Button variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.code} · ${r.name}`)}>Activity</Button>
                               </TableCell>
                             </TableRow>
                           ))}
@@ -2240,6 +2292,7 @@ const Accounting = () => {
               isLebaneseCoa={isLebaneseCoa}
               pcgClientAccounts={pcgClientAccounts}
               accountingLanguage={accountingLanguage}
+              presetAccountId={glPresetAccountId}
               onOpenEntry={setQuickVoucherEntryId}
             />
           </TabsContent>
@@ -2255,8 +2308,14 @@ const Accounting = () => {
                   <Button type="button" variant="outline" size="sm" onClick={() => downloadCsvText(`r10-${r10Report.periodLabel}.csv`, r10ReportToCsv(r10Report))}>
                     Export R10 CSV
                   </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => downloadXlsxFromCsv(`r10-${r10Report.periodLabel}.xlsx`, "R10", r10ReportToCsv(r10Report))}>
+                    Export R10 XLSX
+                  </Button>
                   <Button type="button" variant="outline" size="sm" onClick={() => downloadCsvText(`cnss-${cnssReport.periodLabel}.csv`, cnssReportToCsv(cnssReport))}>
                     Export CNSS CSV
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => downloadXlsxFromCsv(`cnss-${cnssReport.periodLabel}.xlsx`, "CNSS", cnssReportToCsv(cnssReport))}>
+                    Export CNSS XLSX
                   </Button>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2 text-sm">
@@ -2446,6 +2505,10 @@ const Accounting = () => {
           onOpenVouchersTab={() => {
             setLedgerFocus(null);
             setActiveTab("vouchers");
+          }}
+          onDrillToGl={(accountId) => {
+            setLedgerFocus(null);
+            openAccountDrill(accountId);
           }}
         />
         <VoucherDetailDialog

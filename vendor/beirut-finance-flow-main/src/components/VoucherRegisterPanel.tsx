@@ -143,7 +143,14 @@ export default function VoucherRegisterPanel({
                   {draftEntries.map((entry) => (
                     <TableRow key={entry.id}>
                       <TableCell>{entry.date.slice(0, 10)}</TableCell>
-                      <TableCell>{entry.voucherType || "JV"}</TableCell>
+                      <TableCell>
+                        {entry.voucherType || "JV"}
+                        {entry.status === "pending_approval" ? (
+                          <Badge variant="secondary" className="ml-2">Pending approval</Badge>
+                        ) : (
+                          <Badge variant="outline" className="ml-2">Draft</Badge>
+                        )}
+                      </TableCell>
                       <TableCell>{entry.memo}</TableCell>
                       <TableCell className="text-right">
                         {onPostDraft ? (

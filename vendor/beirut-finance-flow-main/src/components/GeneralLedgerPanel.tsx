@@ -11,6 +11,7 @@ import type { JournalEntry, JournalLine, LedgerAccount, LedgerCostCenter, PcgCli
 import { formatCurrency } from '@/lib/utils';
 import type { AccountingLanguage } from '@/lib/grabio/accountingMode';
 import { downloadCsvText } from '@/lib/csvExport';
+import { downloadXlsxFromCsv } from '@/lib/xlsxExport';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useEffect } from 'react';
 
@@ -22,6 +23,7 @@ type Props = {
   isLebaneseCoa?: boolean;
   pcgClientAccounts?: PcgClientAccount[];
   accountingLanguage?: AccountingLanguage;
+  presetAccountId?: string;
   onOpenEntry?: (entryId: string) => void;
 };
 
@@ -33,6 +35,7 @@ export default function GeneralLedgerPanel({
   isLebaneseCoa,
   pcgClientAccounts = [],
   accountingLanguage,
+  presetAccountId,
   onOpenEntry,
 }: Props) {
   const [accountId, setAccountId] = useState('');
@@ -45,6 +48,10 @@ export default function GeneralLedgerPanel({
     if (!storeId) return;
     void loadCostCenters(storeId).then(setCostCenters);
   }, [storeId]);
+
+  useEffect(() => {
+    if (presetAccountId) setAccountId(presetAccountId);
+  }, [presetAccountId]);
 
   const selectedAccount = accounts.find((a) => a.id === accountId);
 
@@ -105,6 +112,9 @@ export default function GeneralLedgerPanel({
               <span>Closing: <strong>{formatCurrency(report.closingBalance)}</strong></span>
               <Button type="button" variant="outline" size="sm" onClick={() => downloadCsvText(`gl-${report.accountCode}.csv`, generalLedgerToCsv(report))}>
                 Export CSV
+              </Button>
+              <Button type="button" variant="outline" size="sm" onClick={() => downloadXlsxFromCsv(`gl-${report.accountCode}.xlsx`, 'GL', generalLedgerToCsv(report))}>
+                Export XLSX
               </Button>
             </div>
             <div className="rounded-md border max-h-96 overflow-auto">
