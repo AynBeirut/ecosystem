@@ -161,8 +161,11 @@ export async function deleteJournalEntry(
   const entryRef = doc(getFinanceDb(), 'stores', storeId, 'journalEntries', entryId);
   const snap = await getDoc(entryRef);
   if (!snap.exists()) throw new Error('Journal entry not found.');
-  const entry = snap.data() as { date: string };
+  const entry = snap.data() as { date: string; status?: string };
   await assertPeriodOpenForMutation(storeId, entry.date);
+  if (entry.status === 'posted' || entry.status === 'reversed') {
+    throw new Error('Posted entries cannot be deleted. Use Reverse instead.');
+  }
 
   const linesSnap = await getDocs(collection(getFinanceDb(), 'stores', storeId, 'journalLines'));
   const { writeBatch } = await import('firebase/firestore');

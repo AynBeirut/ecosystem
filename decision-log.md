@@ -39,6 +39,20 @@
 
 **Phase 1 shipped in repo:** Excel import script, `LebanesePcgCoaPanel` (Code | Name | ArabicNa | M | Cur), Accounting COA tab shows PCG tree when `accountingMode=lebanese`.
 
+## 2026-07-30 — Full accounting engine (Phases 1–6)
+
+**Decision:** Ship Omega/Dolphin-class ERP features on Firestore (not SQL), pilot Emoove `EZfuoNQFTJVU4cubNuckpp4K7zw2` first.
+
+**Shipped:**
+- Phase 1: `voucherLineSettlements`, PV/RV knock-off modal, unified Party SOA tab
+- Phase 2: Line FX fields + cost center per JV line; AR/AP FX reval expansion
+- Phase 3: Draft/post workflow, storno reversal, `ledgerAuditLog`, block delete on posted
+- Phase 4: TB 2/4/6-col, GL report tab, R10/CNSS tax exports, CSV pack
+- Phase 5: Year-end wizard checklist, `runRecurringVouchers` scheduler, check clear/void UI
+- Phase 6: Keyboard JV entry, bulk CSV → draft import
+
+**Verify (Emoove):** `verifyPaymentKnockOffE2E`, `verifyVoucherDraftPostE2E` PASS. Little Hands read-only: `verifyLittleHandsReadOnlyGate.cjs`.
+
 **E-Moove:** GL backup preserved; Balance Sheet totals must stay identical through Phase 1 UI deploy.
 
 ## 2026-07-29 — Admin UI: Mercedes polish (CSS-only, zero logic risk)

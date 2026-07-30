@@ -2,7 +2,7 @@ export type LedgerAccountType = 'asset' | 'liability' | 'equity' | 'revenue' | '
 
 export type NormalBalance = 'debit' | 'credit';
 
-export type JournalEntryStatus = 'posted' | 'void';
+export type JournalEntryStatus = 'draft' | 'pending_approval' | 'posted' | 'reversed' | 'void';
 
 export type JournalSourceType =
   | 'manual'
@@ -24,6 +24,13 @@ export type VoucherType = 'JV' | 'PV' | 'RV' | 'CV';
 
 export type CheckStatus = 'issued' | 'cleared' | 'void';
 
+export type SettlementAllocationInput = {
+  documentId: string;
+  documentType: 'invoice' | 'purchase_order';
+  allocatedAmountBase: number;
+  allocatedAmountFx?: number;
+};
+
 export type PaymentVoucherMeta = {
   payee?: string;
   paymentRef?: string;
@@ -34,6 +41,7 @@ export type PaymentVoucherMeta = {
   checkStatus?: CheckStatus;
   checkAmount?: number;
   amount?: number;
+  allocations?: SettlementAllocationInput[];
 };
 
 export type ReceiptVoucherMeta = {
@@ -41,7 +49,108 @@ export type ReceiptVoucherMeta = {
   receiptRef?: string;
   receivedIntoAccountId: string;
   receivedFromAccountId: string;
+  clientId?: string;
+  allocations?: SettlementAllocationInput[];
 };
+
+export interface VoucherLineSettlement {
+  id: string;
+  storeId: string;
+  paymentEntryId: string;
+  paymentLineId?: string;
+  documentId: string;
+  documentType: 'invoice' | 'purchase_order';
+  allocatedAmountBase: number;
+  allocatedAmountFx: number;
+  createdAt: string;
+  createdBy?: string;
+}
+
+export interface PartyStatementRow {
+  date: string;
+  voucherType?: string;
+  refNumber?: string;
+  entryId: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  matchedDocumentId?: string;
+  memo?: string;
+}
+
+export interface PartyStatementReport {
+  partyId?: string;
+  partyName: string;
+  partyType: 'client' | 'supplier';
+  startDate: string;
+  endDate: string;
+  openingBalance: number;
+  closingBalance: number;
+  rows: PartyStatementRow[];
+}
+
+export type LedgerAuditAction =
+  | 'draft_saved'
+  | 'submitted'
+  | 'approved'
+  | 'posted'
+  | 'reversed'
+  | 'period_reopened';
+
+export interface LedgerAuditLogEntry {
+  id: string;
+  storeId: string;
+  action: LedgerAuditAction;
+  entryId?: string;
+  actorUid: string;
+  timestamp: string;
+  memo?: string;
+}
+
+export type TrialBalanceViewMode = '2col' | '4col' | '6col';
+
+export interface TrialBalanceExtendedRow extends TrialBalanceRow {
+  openingDebit: number;
+  openingCredit: number;
+  periodDebit: number;
+  periodCredit: number;
+  closingDebit: number;
+  closingCredit: number;
+}
+
+export interface TrialBalanceExtendedReport {
+  viewMode: TrialBalanceViewMode;
+  rows: TrialBalanceExtendedRow[];
+  totalDebits: number;
+  totalCredits: number;
+  balanced: boolean;
+  asOfDate?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
+export interface GeneralLedgerReportRow {
+  date: string;
+  entryId: string;
+  voucherNumber?: string;
+  voucherType?: string;
+  memo: string;
+  debit: number;
+  credit: number;
+  runningBalance: number;
+  costCenterId?: string;
+}
+
+export interface GeneralLedgerReport {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  startDate: string;
+  endDate: string;
+  openingBalance: number;
+  closingBalance: number;
+  rows: GeneralLedgerReportRow[];
+}
 
 export type ContraVoucherMeta = {
   fromAccountId: string;
@@ -97,6 +206,12 @@ export interface JournalEntry {
   voucherType?: VoucherType;
   voucherNumber?: string;
   voucherMeta?: VoucherMeta;
+  postedAt?: string;
+  postedBy?: string;
+  approvedAt?: string;
+  approvedBy?: string;
+  isSystemGenerated?: boolean;
+  reversalOfEntryId?: string;
   createdAt: string;
   updatedAt: string;
   createdBy?: string;
@@ -114,6 +229,10 @@ export interface JournalLine {
   credit: number;
   description?: string;
   lineOrder: number;
+  transactionCurrency?: string;
+  fxRate?: number;
+  amountFx?: number;
+  costCenterId?: string;
 }
 
 export interface JournalLineInput {
@@ -121,6 +240,10 @@ export interface JournalLineInput {
   debit: number;
   credit: number;
   description?: string;
+  transactionCurrency?: string;
+  fxRate?: number;
+  amountFx?: number;
+  costCenterId?: string;
 }
 
 export interface PostJournalInput {

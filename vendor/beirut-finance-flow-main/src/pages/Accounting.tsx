@@ -80,6 +80,19 @@ import YearEndClosePanel from "@/components/YearEndClosePanel";
 import CostCentersPanel from "@/components/CostCentersPanel";
 import RecurringVouchersPanel from "@/components/RecurringVouchersPanel";
 import CheckRegisterPanel from "@/components/CheckRegisterPanel";
+import PartyStatementPanel from "@/components/PartyStatementPanel";
+import GeneralLedgerPanel from "@/components/GeneralLedgerPanel";
+import BulkVoucherImportPanel from "@/components/BulkVoucherImportPanel";
+import { loadSettlements, saveSettlementsForEntry } from "@/lib/firestore/settlementFirestore";
+import { buildExtendedTrialBalance, extendedTrialBalanceToCsv } from "@/lib/ledger/trialBalanceExtended";
+import {
+  buildR10SalaryWithholdingReport,
+  buildCnssSummaryReport,
+  r10ReportToCsv,
+  cnssReportToCsv,
+} from "@/lib/ledger/lebaneseTaxReports";
+import { downloadCsvText } from "@/lib/csvExport";
+import type { SettlementAllocationInput, TrialBalanceViewMode, VoucherLineSettlement } from "@/types/generalLedger";
 import type { LedgerActivityFocus } from "@/lib/ledger/ledgerActivity";
 import { consumeLedgerFocus } from "@/lib/ledger/ledgerActivity";
 
@@ -119,14 +132,18 @@ const ACCOUNTING_TAB_ROWS: AccountingTabDef[][] = [
   ],
   [
     { value: "fx-revaluation", label: "FX Reval", icon: RefreshCw, tone: "amber" },
+    { value: "party-soa", label: "Party SOA", icon: FileText, tone: "blue" },
+    { value: "general-ledger", label: "GL Report", icon: Layers, tone: "indigo" },
+    { value: "tax-reports", label: "Tax (R10/CNSS)", icon: Receipt, tone: "rose" },
     { value: "recurring", label: "Recurring", icon: Repeat, tone: "violet" },
     { value: "checks", label: "Checks", icon: FileText, tone: "orange" },
     { value: "cost-centers", label: "Cost Centers", icon: Building2, tone: "slate" },
+    { value: "bulk-import", label: "Bulk Import", icon: FileSpreadsheet, tone: "cyan" },
   ],
 ];
 
 const Accounting = () => {
-  const { logout, invoices, purchaseOrders, paymentOrders, activeOrganizationId } = useAppContext();
+  const { logout, invoices, purchaseOrders, paymentOrders, activeOrganizationId, recordInvoicePayment } = useAppContext();
   const { profile, storeId: grabioStoreId } = useGrabioStore();
   const financeStoreId = grabioStoreId || activeOrganizationId || "";
   const accountingLanguage = normalizeAccountingLanguage(
@@ -150,7 +167,11 @@ const Accounting = () => {
     refreshLedger,
     postVoucherEntry,
     postAdjustmentEntry,
+    saveDraftVoucher,
+    postDraftVoucher,
+    reverseEntry,
     setOpeningBalance,
+    accountsById,
     periodClosures,
     asOfPeriod,
     asOfPeriodLocked,
@@ -185,6 +206,11 @@ const Accounting = () => {
   const [ledgerFocus, setLedgerFocus] = useState<LedgerActivityFocus | null>(null);
   const [quickVoucherEntryId, setQuickVoucherEntryId] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [settlements, setSettlements] = useState<VoucherLineSettlement[]>([]);
+  const [tbViewMode, setTbViewMode] = useState<TrialBalanceViewMode>("2col");
+  const [tbStartDate, setTbStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
+  const [postingDraft, setPostingDraft] = useState(false);
+  const [reversing, setReversing] = useState(false);
 
   const accountingPaletteTabs = useMemo(
     () => ACCOUNTING_TAB_ROWS.flat().map(({ value, label, icon }) => ({ value, label, icon })),
@@ -236,6 +262,40 @@ const Accounting = () => {
       cancelled = true;
     };
   }, [isLebaneseCoa, financeStoreId]);
+
+  useEffect(() => {
+    if (!financeStoreId) {
+      setSettlements([]);
+      return;
+    }
+    let cancelled = false;
+    void loadSettlements(financeStoreId).then((rows) => {
+      if (!cancelled) setSettlements(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [financeStoreId, entries.length]);
+
+  const extendedTrialBalance = useMemo(
+    () =>
+      buildExtendedTrialBalance(accounts, entries, lines, {
+        startDate: tbStartDate,
+        endDate: asOfDate,
+        viewMode: tbViewMode,
+      }),
+    [accounts, entries, lines, tbStartDate, asOfDate, tbViewMode],
+  );
+
+  const r10Report = useMemo(
+    () => buildR10SalaryWithholdingReport(accounts, entries, lines, asOfDate),
+    [accounts, entries, lines, asOfDate],
+  );
+
+  const cnssReport = useMemo(
+    () => buildCnssSummaryReport(accounts, entries, lines, asOfDate),
+    [accounts, entries, lines, asOfDate],
+  );
 
   // Lebanese stores default to Workspace on first load only — do not block Trial Balance afterward.
   useEffect(() => {
@@ -542,16 +602,79 @@ const Accounting = () => {
         voucherType: payload.voucherType,
         voucherMeta: (payload.voucherMeta || {}) as VoucherMeta,
       });
+      const meta = payload.voucherMeta || {};
+      const allocations = (meta.allocations as SettlementAllocationInput[] | undefined) || [];
+      if (!result.idempotentReplay && allocations.length > 0 && financeStoreId) {
+        const user = getFinanceAuth().currentUser;
+        await saveSettlementsForEntry(financeStoreId, result.entryId, allocations, user?.uid);
+        for (const alloc of allocations) {
+          if (alloc.documentType === "invoice") {
+            recordInvoicePayment(alloc.documentId, alloc.allocatedAmountBase, "voucher");
+          }
+        }
+        const rows = await loadSettlements(financeStoreId);
+        setSettlements(rows);
+      }
       toast.success(
         result.idempotentReplay
           ? "Entry already posted (idempotent)."
           : `Posted ${result.voucherNumber || result.entryId}`,
       );
+      await refreshLedger();
       setActiveTab("vouchers");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to post entry");
     } finally {
       setPosting(false);
+    }
+  };
+
+  const handleSaveDraft = async (payload: {
+    voucherType: VoucherType;
+    date: string;
+    memo: string;
+    lines: JournalLineInput[];
+    voucherMeta?: Record<string, unknown>;
+  }) => {
+    setPosting(true);
+    try {
+      await saveDraftVoucher({
+        date: new Date(payload.date).toISOString(),
+        memo: payload.memo,
+        lines: payload.lines,
+        voucherType: payload.voucherType,
+        voucherMeta: (payload.voucherMeta || {}) as VoucherMeta,
+      });
+      toast.success("Draft saved.");
+      setActiveTab("vouchers");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to save draft");
+    } finally {
+      setPosting(false);
+    }
+  };
+
+  const handlePostDraft = async (entryId: string) => {
+    setPostingDraft(true);
+    try {
+      const result = await postDraftVoucher(entryId);
+      toast.success(`Posted ${result.voucherNumber || result.entryId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to post draft");
+    } finally {
+      setPostingDraft(false);
+    }
+  };
+
+  const handleReverseEntry = async (entryId: string) => {
+    setReversing(true);
+    try {
+      const result = await reverseEntry(entryId);
+      toast.success(`Reversed · ${result.entryId}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to reverse entry");
+    } finally {
+      setReversing(false);
     }
   };
 
@@ -786,7 +909,7 @@ const Accounting = () => {
             {ACCOUNTING_TAB_ROWS.map((row, rowIndex) => (
               <TabsList
                 key={`accounting-tab-row-${rowIndex}`}
-                className="finance-accounting-tabs-row !inline-flex !h-auto !w-full !flex-wrap !items-stretch !justify-start !gap-1.5 !rounded-2xl !border !bg-transparent !p-1.5 !text-inherit shadow-none"
+                className="finance-accounting-tabs-row"
               >
                 {row.map((tab) => {
                   const Icon = tab.icon;
@@ -794,7 +917,7 @@ const Accounting = () => {
                     <TabsTrigger
                       key={tab.value}
                       value={tab.value}
-                      className={`finance-accounting-tab finance-accounting-tab--${tab.tone} !rounded-xl !border !border-transparent !bg-transparent !px-2.5 !py-2 !shadow-none data-[state=active]:!shadow-none`}
+                      className={`finance-accounting-tab finance-accounting-tab--${tab.tone}`}
                     >
                       <span className={`finance-accounting-tab__icon-wrap finance-accounting-tab__icon-wrap--${tab.tone}`}>
                         <Icon className="finance-accounting-tab__icon" aria-hidden />
@@ -1044,12 +1167,19 @@ const Accounting = () => {
               </CardHeader>
               <CardContent>
                 <VoucherEntryPanel
+                  storeId={financeStoreId}
                   accounts={accounts}
                   accountingLanguage={accountingLanguage}
                   isLebaneseCoa={isLebaneseCoa}
                   pcgClientAccounts={pcgClientAccounts}
+                  invoices={invoices}
+                  purchaseOrders={purchaseOrders}
+                  paymentOrders={paymentOrders}
+                  settlements={settlements}
+                  mainCurrency={profile?.mainCurrency}
                   posting={posting}
                   onPost={(p) => void handlePostVoucher(p)}
+                  onSaveDraft={(p) => void handleSaveDraft(p)}
                 />
               </CardContent>
             </Card>
@@ -1061,6 +1191,10 @@ const Accounting = () => {
                 isLebaneseCoa={isLebaneseCoa}
                 pcgClientAccounts={pcgClientAccounts}
                 systemGuideEnabled={systemGuideEnabled}
+                onPostDraft={(id) => void handlePostDraft(id)}
+                postingDraft={postingDraft}
+                onReverse={(id) => void handleReverseEntry(id)}
+                reversing={reversing}
               />
             </div>
           </TabsContent>
@@ -1750,7 +1884,29 @@ const Accounting = () => {
                     No ledger data loaded. Click <strong>Refresh</strong> or use Initialize / Sync COA on the Chart of Accounts tab.
                   </p>
                 ) : null}
-                <div className="mb-4 flex items-center gap-2">
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <Select value={tbViewMode} onValueChange={(v) => setTbViewMode(v as TrialBalanceViewMode)}>
+                    <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2col">2-column</SelectItem>
+                      <SelectItem value="4col">4-column</SelectItem>
+                      <SelectItem value="6col">6-column</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  {tbViewMode !== "2col" ? (
+                    <>
+                      <Label className="text-sm">Period from</Label>
+                      <Input type="date" className="w-[160px]" value={tbStartDate} onChange={(e) => setTbStartDate(e.target.value)} />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => downloadCsvText(`trial-balance-${tbViewMode}.csv`, extendedTrialBalanceToCsv(extendedTrialBalance))}
+                      >
+                        Export CSV
+                      </Button>
+                    </>
+                  ) : null}
                   {trialBalance.balanced ? (
                     <Badge className="bg-green-600">
                       <CheckCircle2 className="h-3 w-3 mr-1" /> Debits = Credits
@@ -1769,62 +1925,72 @@ const Accounting = () => {
                     <TableRow>
                       <TableHead>{isLebaneseCoa ? "PCG code" : "Code"}</TableHead>
                       <TableHead>Account</TableHead>
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Debit</TableHead>
-                      <TableHead className="text-right">Credit</TableHead>
+                      {tbViewMode === "2col" ? <TableHead>Type</TableHead> : null}
+                      {tbViewMode !== "2col" ? (
+                        <>
+                          <TableHead className="text-right">Open Dr</TableHead>
+                          <TableHead className="text-right">Open Cr</TableHead>
+                          <TableHead className="text-right">Period Dr</TableHead>
+                          <TableHead className="text-right">Period Cr</TableHead>
+                          {tbViewMode === "6col" ? (
+                            <>
+                              <TableHead className="text-right">Close Dr</TableHead>
+                              <TableHead className="text-right">Close Cr</TableHead>
+                            </>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <TableHead className="text-right">Debit</TableHead>
+                          <TableHead className="text-right">Credit</TableHead>
+                        </>
+                      )}
                       <TableHead className="w-[100px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {trialBalance.rows.map((r) => (
-                      <TableRow key={r.accountId}>
-                        <TableCell>
-                          {isLebaneseCoa ? (
-                            <PcgMappedCodeBadge grabioCode={r.accountCode} clientByGrabio={clientByGrabio} />
-                          ) : (
-                            <span className="font-mono">{r.accountCode}</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          {isLebaneseCoa ? (
-                            (() => {
-                              const pcg = resolvePcgDisplay(r.accountCode, r.accountName, clientByGrabio);
-                              if (!pcg) return r.accountName;
-                              return (
-                                <div>
-                                  <div>{pcg.name}</div>
-                                  {arabicEntry && pcg.nameAr ? (
-                                    <div dir="rtl" className="text-xs text-muted-foreground text-right">{pcg.nameAr}</div>
-                                  ) : null}
-                                </div>
-                              );
-                            })()
-                          ) : (
-                            r.accountName
-                          )}
-                        </TableCell>
-                        <TableCell className="capitalize">{r.accountType}</TableCell>
-                        <TableCell className="text-right">{r.debit ? formatCurrency(r.debit) : "—"}</TableCell>
-                        <TableCell className="text-right">{r.credit ? formatCurrency(r.credit) : "—"}</TableCell>
-                        <TableCell>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={() =>
-                              openAccountActivity(
-                                r.accountId,
-                                isLebaneseCoa
-                                  ? `${resolvePcgDisplay(r.accountCode, r.accountName, clientByGrabio)?.pcgCode || r.accountCode} · ${r.accountName}`
-                                  : `${r.accountCode} · ${r.accountName}`,
-                              )
-                            }
-                          >
-                            Ledger
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {tbViewMode === "2col"
+                      ? trialBalance.rows.map((r) => (
+                          <TableRow key={r.accountId}>
+                            <TableCell>
+                              {isLebaneseCoa ? (
+                                <PcgMappedCodeBadge grabioCode={r.accountCode} clientByGrabio={clientByGrabio} />
+                              ) : (
+                                <span className="font-mono">{r.accountCode}</span>
+                              )}
+                            </TableCell>
+                            <TableCell>{r.accountName}</TableCell>
+                            <TableCell className="capitalize">{r.accountType}</TableCell>
+                            <TableCell className="text-right">{r.debit ? formatCurrency(r.debit) : "—"}</TableCell>
+                            <TableCell className="text-right">{r.credit ? formatCurrency(r.credit) : "—"}</TableCell>
+                            <TableCell>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.accountCode} · ${r.accountName}`)}>
+                                Ledger
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))
+                      : extendedTrialBalance.rows.map((r) => (
+                          <TableRow key={r.accountId}>
+                            <TableCell className="font-mono text-xs">{r.accountCode}</TableCell>
+                            <TableCell>{r.accountName}</TableCell>
+                            <TableCell className="text-right">{r.openingDebit ? formatCurrency(r.openingDebit) : "—"}</TableCell>
+                            <TableCell className="text-right">{r.openingCredit ? formatCurrency(r.openingCredit) : "—"}</TableCell>
+                            <TableCell className="text-right">{r.periodDebit ? formatCurrency(r.periodDebit) : "—"}</TableCell>
+                            <TableCell className="text-right">{r.periodCredit ? formatCurrency(r.periodCredit) : "—"}</TableCell>
+                            {tbViewMode === "6col" ? (
+                              <>
+                                <TableCell className="text-right">{r.closingDebit ? formatCurrency(r.closingDebit) : "—"}</TableCell>
+                                <TableCell className="text-right">{r.closingCredit ? formatCurrency(r.closingCredit) : "—"}</TableCell>
+                              </>
+                            ) : null}
+                            <TableCell>
+                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.accountCode} · ${r.accountName}`)}>
+                                Ledger
+                              </Button>
+                            </TableCell>
+                          </TableRow>
+                        ))}
                     <TableRow className="font-semibold border-t-2">
                       <TableCell colSpan={4}>Totals</TableCell>
                       <TableCell className="text-right">{formatCurrency(trialBalance.totalDebits)}</TableCell>
@@ -2030,7 +2196,12 @@ const Accounting = () => {
               lines={lines}
               systemGuideEnabled={systemGuideEnabled}
               posting={posting}
+              periodLocked={asOfPeriodLocked}
               onPost={handleAdjustmentPost}
+              onExportPack={() => {
+                downloadCsvText(`trial-balance-${asOfDate}.csv`, extendedTrialBalanceToCsv(extendedTrialBalance));
+                downloadCsvText(`income-statement-${asOfDate}.csv`, incomeStatementToCsv(incomeStatement));
+              }}
             />
           </TabsContent>
 
@@ -2046,6 +2217,62 @@ const Accounting = () => {
               posting={posting}
               onPost={handleAdjustmentPost}
             />
+          </TabsContent>
+
+          <TabsContent value="party-soa" className="mt-4">
+            <PartyStatementPanel
+              accounts={accounts}
+              entries={entries}
+              lines={lines}
+              settlements={settlements}
+              isLebaneseCoa={isLebaneseCoa}
+              pcgClientAccounts={pcgClientAccounts}
+              accountingLanguage={accountingLanguage}
+            />
+          </TabsContent>
+
+          <TabsContent value="general-ledger" className="mt-4">
+            <GeneralLedgerPanel
+              storeId={financeStoreId}
+              accounts={accounts}
+              entries={entries}
+              lines={lines}
+              isLebaneseCoa={isLebaneseCoa}
+              pcgClientAccounts={pcgClientAccounts}
+              accountingLanguage={accountingLanguage}
+              onOpenEntry={setQuickVoucherEntryId}
+            />
+          </TabsContent>
+
+          <TabsContent value="tax-reports" className="mt-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Lebanese tax reports</CardTitle>
+                <CardDescription>R10 salary withholding · CNSS employer summary · as of {asOfDate}</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-6">
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => downloadCsvText(`r10-${r10Report.periodLabel}.csv`, r10ReportToCsv(r10Report))}>
+                    Export R10 CSV
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" onClick={() => downloadCsvText(`cnss-${cnssReport.periodLabel}.csv`, cnssReportToCsv(cnssReport))}>
+                    Export CNSS CSV
+                  </Button>
+                </div>
+                <div className="grid gap-4 md:grid-cols-2 text-sm">
+                  <div className="rounded-md border p-4">
+                    <h3 className="font-semibold mb-2">R10 — Salary withholding</h3>
+                    <p>Total wages: {formatCurrency(r10Report.totalWages)}</p>
+                    <p>Withholding payable ({r10Report.withholdingAccountCode}): {formatCurrency(r10Report.withholdingPayable)}</p>
+                  </div>
+                  <div className="rounded-md border p-4">
+                    <h3 className="font-semibold mb-2">CNSS summary</h3>
+                    <p>Employer share: {formatCurrency(cnssReport.totalEmployerShare)}</p>
+                    <p>Payable ({cnssReport.payableAccountCode}): {formatCurrency(cnssReport.payableBalance)}</p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </TabsContent>
 
           <TabsContent value="recurring" className="mt-4">
@@ -2071,13 +2298,24 @@ const Accounting = () => {
             <CheckRegisterPanel
               entries={entries}
               lines={lines}
+              storeId={financeStoreId}
               systemGuideEnabled={systemGuideEnabled}
               onOpenEntry={setQuickVoucherEntryId}
+              onStatusUpdated={() => void refreshLedger()}
             />
           </TabsContent>
 
           <TabsContent value="cost-centers" className="mt-4">
             <CostCentersPanel storeId={financeStoreId} systemGuideEnabled={systemGuideEnabled} />
+          </TabsContent>
+
+          <TabsContent value="bulk-import" className="mt-4">
+            <BulkVoucherImportPanel
+              storeId={financeStoreId}
+              accountsById={accountsById ?? new Map()}
+              createdBy={getFinanceAuth().currentUser?.uid}
+              onSaved={() => void refreshLedger()}
+            />
           </TabsContent>
 
           <TabsContent value="opening" className="mt-4">

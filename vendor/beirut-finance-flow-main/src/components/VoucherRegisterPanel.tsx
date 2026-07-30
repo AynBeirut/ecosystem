@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { FileText } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -18,6 +19,10 @@ type Props = {
   accountingLanguage?: import("@/lib/grabio/accountingMode").AccountingLanguage;
   isLebaneseCoa?: boolean;
   systemGuideEnabled?: boolean;
+  onPostDraft?: (entryId: string) => void;
+  postingDraft?: boolean;
+  onReverse?: (entryId: string) => void;
+  reversing?: boolean;
 };
 
 function entryLabel(entry: JournalEntry) {
@@ -46,10 +51,22 @@ export default function VoucherRegisterPanel({
   accountingLanguage,
   isLebaneseCoa,
   systemGuideEnabled = false,
+  onPostDraft,
+  postingDraft,
+  onReverse,
+  reversing,
 }: Props) {
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<RegisterFilter>("all");
   const [selectedEntryId, setSelectedEntryId] = useState("");
+
+  const draftEntries = useMemo(
+    () =>
+      entries
+        .filter((entry) => entry.status === "draft" || entry.status === "pending_approval")
+        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    [entries],
+  );
 
   const postedEntries = useMemo(
     () =>
@@ -110,6 +127,37 @@ export default function VoucherRegisterPanel({
         </div>
 
         <div className="rounded-md border max-h-80 overflow-auto">
+          {draftEntries.length > 0 ? (
+            <div className="p-3 border-b bg-muted/30">
+              <p className="text-sm font-medium mb-2">Drafts ({draftEntries.length})</p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Memo</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {draftEntries.map((entry) => (
+                    <TableRow key={entry.id}>
+                      <TableCell>{entry.date.slice(0, 10)}</TableCell>
+                      <TableCell>{entry.voucherType || "JV"}</TableCell>
+                      <TableCell>{entry.memo}</TableCell>
+                      <TableCell className="text-right">
+                        {onPostDraft ? (
+                          <Button type="button" size="sm" disabled={postingDraft} onClick={() => onPostDraft(entry.id)}>
+                            Post
+                          </Button>
+                        ) : null}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
           <Table>
             <TableHeader className="sticky top-0 bg-background">
               <TableRow>
@@ -161,6 +209,12 @@ export default function VoucherRegisterPanel({
         isLebaneseCoa={isLebaneseCoa}
         pcgClientAccounts={pcgClientAccounts}
         accountingLanguage={accountingLanguage}
+        canReverse={Boolean(onReverse)}
+        reversing={reversing}
+        onReverse={(id) => {
+          onReverse?.(id);
+          setSelectedEntryId("");
+        }}
       />
     </Card>
   );

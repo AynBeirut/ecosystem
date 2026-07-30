@@ -131,54 +131,35 @@
     font-size: 0.75rem;
     line-height: 1rem;
     font-weight: 500;
-    transition-property: all;
+    transition-property: color, background-color, border-color, box-shadow;
     transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     transition-duration: 150ms;
     color: rgb(71 85 105);
-  }
-
-  @media (min-width: 640px) {
-    .finance-embed-theme .finance-accounting-tab {
-      min-width: 8.5rem;
-      flex: none;
-      padding-left: 0.75rem;
-      padding-right: 0.75rem;
-      font-size: 0.875rem;
-      line-height: 1.25rem;
-    }
-  }
-
-  .dark .finance-embed-theme .finance-accounting-tab {
-    color: rgb(148 163 184);
-  }
-
-  .finance-embed-theme .finance-accounting-tab:hover {
-    color: rgb(15 23 42);
-    background-color: rgb(255 255 255 / 0.7);
-  }
-
-  .dark .finance-embed-theme .finance-accounting-tab:hover {
-    color: rgb(241 245 249);
-    background-color: rgb(31 41 55 / 0.55);
+    background-color: transparent;
+    box-shadow: none;
   }
 
   .finance-embed-theme .finance-accounting-tab[data-state="active"] {
-    color: rgb(15 23 42);
-    background-color: #fff;
-    border-color: hsl(174 58% 48% / 0.22);
+    color: rgb(15 23 42) !important;
+    background-color: rgb(255 255 255) !important;
+    border-color: hsl(174 58% 48% / 0.35) !important;
+    font-weight: 600;
     box-shadow:
       0 0 0 1px hsl(174 58% 48% / 0.1),
-      0 8px 20px -10px rgba(15, 23, 42, 0.18);
+      0 8px 20px -10px rgba(15, 23, 42, 0.18) !important;
+  }
+
+  .dark .finance-embed-theme .finance-accounting-tab {
+    color: rgb(203 213 225);
   }
 
   .dark .finance-embed-theme .finance-accounting-tab[data-state="active"] {
-    color: rgb(241 245 249);
-    background-color: rgb(31 41 55);
-    border-color: hsl(174 58% 48% / 0.35);
-    box-shadow:
-      0 0 0 1px hsl(174 58% 48% / 0.15),
-      0 10px 24px -12px rgba(0, 0, 0, 0.45);
+    color: rgb(15 23 42) !important;
+    background-color: rgb(255 255 255) !important;
   }
+
+  .finance-accounting-tab__icon-wrap--green { color: rgb(22 163 74); background-color: rgb(22 163 74 / 0.12); }
+  .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--green { color: #fff; background-color: rgb(22 163 74); }
 
   .finance-accounting-tab__icon-wrap {
     @apply inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border border-transparent transition-colors;

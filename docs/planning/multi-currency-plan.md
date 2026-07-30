@@ -137,3 +137,21 @@ PENDING:
 - Order record (`functions/src/index.ts`) + GL entries + all journal LINES stamp the store's real currency (central resolve in both `postingService`s). Payment-rail/platform billing left USD (Anwar decision).
 - **Runtime proof** (`functions/scripts/proofPhase1CurrencyGl.cjs`, Firestore emulator): LBP→LBP, USD→USD, no-profile→USD, invalid(ZZZ)→USD, explicit override→EUR. ALL PASSED.
 - Env note: Firestore emulator needs Java 21+. Local JRE installed at `~/.local/jdks/jdk-21.0.11+10-jre` (set `JAVA_HOME` to it for future emulator runs).
+
+## GL Phase 5 — Line-level FX (2026-07-30, shipped)
+
+Journal lines now support optional multi-currency entry on manual vouchers (JV/PV/RV/CV):
+
+| Field | Purpose |
+|-------|---------|
+| `transactionCurrency` | Foreign currency code on the line |
+| `amountFx` | Amount in transaction currency |
+| `fxRate` | Rate → store `mainCurrency` |
+| `debit` / `credit` | **Functional/base** amounts posted to GL |
+
+Rules:
+- TB / P&amp;L / BS aggregate **base** `debit`/`credit` only — drafts excluded until posted.
+- FX revaluation wizard expanded to open **AR (411x/110)** and **AP (401x/201)** monetary balances, not just bank.
+- Default rate: `storeProfiles.customExchangeRate` + scheduled `fetchExchangeRates`.
+
+Pilot: Emoove `EZfuoNQFTJVU4cubNuckpp4K7zw2` → Little Hands read-only gate after E2E scripts pass.

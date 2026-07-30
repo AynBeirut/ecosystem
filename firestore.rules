@@ -379,6 +379,18 @@ service cloud.firestore {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
       }
 
+      match /voucherLineSettlements/{settlementId} {
+        allow read: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow create: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow update, delete: if false;
+      }
+
+      match /ledgerAuditLog/{logId} {
+        allow read: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow create: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow update, delete: if false;
+      }
+
       // Platform COD delivery wallet (Admin Orders path — unprefixed subcollections)
       match /deliveryPersons/{personId} {
         allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);

@@ -16,6 +16,8 @@ import {
   Clock
 } from 'lucide-react';
 import { getSubAccountHomePath, isManagerSubAccount } from '@/lib/subAccountAccess';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs } from 'firebase/firestore';
 
 const SubAccountDashboard: React.FC = () => {
   const { user, logout } = useAuth();
@@ -46,7 +48,6 @@ const SubAccountDashboard: React.FC = () => {
     const fetchStats = async () => {
       if (!user?.storeId || user.role !== 'sub_account') return;
 
-      const db = getFirestore();
       const today = new Date().toISOString().split('T')[0];
 
       try {

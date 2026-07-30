@@ -150,6 +150,8 @@ export async function postJournalEntry(
     if (!account || !account.isActive) {
       throw new Error(`Invalid or inactive account: ${line.accountId}`);
     }
+    const fxRate = line.fxRate && line.fxRate > 0 ? line.fxRate : undefined;
+    const amountFx = line.amountFx && line.amountFx > 0 ? round2(line.amountFx) : undefined;
     return sanitizeForFirestore({
       id: `${entryId}-L${index + 1}`,
       storeId: input.storeId,
@@ -161,6 +163,10 @@ export async function postJournalEntry(
       debit: round2(Number(line.debit) || 0),
       credit: round2(Number(line.credit) || 0),
       ...(line.description ? { description: line.description } : {}),
+      ...(line.costCenterId ? { costCenterId: line.costCenterId } : {}),
+      ...(line.transactionCurrency ? { transactionCurrency: line.transactionCurrency } : {}),
+      ...(fxRate ? { fxRate } : {}),
+      ...(amountFx ? { amountFx } : {}),
       lineOrder: index,
     }) as JournalLine;
   });
@@ -190,6 +196,7 @@ export async function postJournalEntry(
         );
       }
 
+      const isSystemGenerated = input.sourceType !== 'manual' && input.sourceType !== 'adjustment';
       const entry = sanitizeForFirestore({
         id: entryId,
         storeId: input.storeId,
@@ -201,9 +208,11 @@ export async function postJournalEntry(
         sourceKey,
         event,
         currency,
+        isSystemGenerated,
+        postedAt: now,
+        ...(input.createdBy ? { createdBy: input.createdBy, postedBy: input.createdBy } : {}),
         createdAt: now,
         updatedAt: now,
-        ...(input.createdBy ? { createdBy: input.createdBy } : {}),
         ...(input.voucherType ? { voucherType: input.voucherType } : {}),
         ...(voucherNumber ? { voucherNumber } : {}),
         ...(input.voucherMeta ? { voucherMeta: input.voucherMeta } : {}),
@@ -224,6 +233,11 @@ export async function postJournalEntry(
     });
     if (!created.idempotentReplay) {
       await lockAccountingModeOnFirstPost(input.storeId);
+      const { appendLedgerAuditLog } = await import('@/lib/firestore/ledgerAuditFirestore');
+      await appendLedgerAuditLog(input.storeId, 'posted', {
+        entryId: created.entryId,
+        actorUid: input.createdBy,
+      });
     }
     return {
       entryId: created.entryId,
@@ -292,4 +306,137 @@ export async function updateAccountOpeningBalance(
     if (!snap.exists()) throw new Error('Account not found');
     tx.update(ref, { openingBalance: round2(openingBalance), updatedAt: new Date().toISOString() });
   });
+}
+
+function buildJournalLinesFromInput(
+  entryId: string,
+  storeId: string,
+  inputLines: JournalLineInput[],
+  accountsById: Map<string, LedgerAccount>,
+  currency: string,
+): JournalLine[] {
+  return inputLines.map((line, index) => {
+    const account = accountsById.get(line.accountId);
+    if (!account || !account.isActive) throw new Error(`Invalid account: ${line.accountId}`);
+    return sanitizeForFirestore({
+      id: `${entryId}-L${index + 1}`,
+      storeId,
+      entryId,
+      accountId: account.id,
+      accountCode: account.code,
+      accountName: account.name,
+      currency,
+      debit: round2(Number(line.debit) || 0),
+      credit: round2(Number(line.credit) || 0),
+      ...(line.description ? { description: line.description } : {}),
+      ...(line.costCenterId ? { costCenterId: line.costCenterId } : {}),
+      ...(line.transactionCurrency ? { transactionCurrency: line.transactionCurrency } : {}),
+      ...(line.fxRate ? { fxRate: line.fxRate } : {}),
+      ...(line.amountFx ? { amountFx: line.amountFx } : {}),
+      lineOrder: index,
+    }) as JournalLine;
+  });
+}
+
+/** Save balanced manual voucher as draft — excluded from trial balance until posted. */
+export async function saveDraftJournalEntry(
+  input: PostJournalInput & { voucherType?: PostJournalInput['voucherType']; voucherMeta?: PostJournalInput['voucherMeta'] },
+  accountsById: Map<string, LedgerAccount>,
+  draftEntryId?: string,
+): Promise<{ entryId: string }> {
+  const validation = validateBalancedLines(input.lines);
+  if (!validation.valid) throw new Error(validation.message || 'Invalid lines');
+
+  const currency = input.currency
+    ? normalizeCurrencyCode(input.currency)
+    : await resolveStoreCurrency(input.storeId);
+  const entryId = draftEntryId || `DRAFT-${Date.now()}`;
+  const now = new Date().toISOString();
+  const lines = buildJournalLinesFromInput(entryId, input.storeId, input.lines, accountsById, currency);
+
+  const entry = sanitizeForFirestore({
+    id: entryId,
+    storeId: input.storeId,
+    date: input.date,
+    memo: input.memo,
+    status: 'draft' as const,
+    sourceType: input.sourceType || 'manual',
+    sourceId: input.sourceId || entryId,
+    sourceKey: `draft:${entryId}`,
+    event: input.event || 'draft',
+    currency,
+    isSystemGenerated: false,
+    createdAt: now,
+    updatedAt: now,
+    ...(input.createdBy ? { createdBy: input.createdBy } : {}),
+    ...(input.voucherType ? { voucherType: input.voucherType } : {}),
+    ...(input.voucherMeta ? { voucherMeta: input.voucherMeta } : {}),
+  }) as JournalEntry;
+
+  const batch = writeBatch(getFinanceDb());
+  batch.set(doc(getFinanceDb(), 'stores', input.storeId, 'journalEntries', entryId), entry);
+  for (const line of lines) {
+    batch.set(doc(getFinanceDb(), 'stores', input.storeId, 'journalLines', line.id), line);
+  }
+  await batch.commit();
+
+  const { appendLedgerAuditLog } = await import('@/lib/firestore/ledgerAuditFirestore');
+  await appendLedgerAuditLog(input.storeId, 'draft_saved', { entryId, actorUid: input.createdBy });
+
+  return { entryId };
+}
+
+/** Promote draft to posted with voucher serial and idempotent source key. */
+export async function postDraftJournalEntry(
+  storeId: string,
+  draftEntryId: string,
+  accountsById: Map<string, LedgerAccount>,
+  createdBy?: string,
+): Promise<PostJournalResult> {
+  const entryRef = doc(getFinanceDb(), 'stores', storeId, 'journalEntries', draftEntryId);
+  const snap = await getDoc(entryRef);
+  if (!snap.exists()) throw new Error('Draft not found.');
+  const draft = { id: snap.id, ...(snap.data() as Omit<JournalEntry, 'id'>) };
+  if (draft.status !== 'draft' && draft.status !== 'pending_approval') {
+    throw new Error('Entry is not a draft.');
+  }
+
+  const { getDocs, collection, query, where, deleteDoc } = await import('firebase/firestore');
+  const linesSnap = await getDocs(
+    query(collection(getFinanceDb(), 'stores', storeId, 'journalLines'), where('entryId', '==', draftEntryId)),
+  );
+  const lineInputs: JournalLineInput[] = linesSnap.docs.map((d) => {
+    const l = d.data() as JournalLine;
+    return {
+      accountId: l.accountId,
+      debit: l.debit,
+      credit: l.credit,
+      description: l.description,
+      costCenterId: l.costCenterId,
+      transactionCurrency: l.transactionCurrency,
+      fxRate: l.fxRate,
+      amountFx: l.amountFx,
+    };
+  });
+
+  for (const lineDoc of linesSnap.docs) {
+    await deleteDoc(lineDoc.ref);
+  }
+  await deleteDoc(entryRef);
+
+  return postJournalEntry(
+    {
+      storeId,
+      date: draft.date,
+      memo: draft.memo,
+      sourceType: 'manual',
+      sourceId: draftEntryId,
+      event: draft.event || 'posted-from-draft',
+      createdBy,
+      voucherType: draft.voucherType,
+      voucherMeta: draft.voucherMeta,
+      lines: lineInputs,
+    },
+    accountsById,
+  );
 }

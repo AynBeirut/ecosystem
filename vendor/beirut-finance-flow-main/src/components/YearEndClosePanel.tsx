@@ -14,7 +14,9 @@ type Props = {
   lines: JournalLine[];
   systemGuideEnabled?: boolean;
   posting?: boolean;
+  periodLocked?: boolean;
   onPost: (payload: { date: string; memo: string; lines: JournalLineInput[]; sourceId: string; event: string }) => void;
+  onExportPack?: () => void;
 };
 
 export default function YearEndClosePanel({
@@ -23,7 +25,9 @@ export default function YearEndClosePanel({
   lines,
   systemGuideEnabled = false,
   posting = false,
+  periodLocked = false,
   onPost,
+  onExportPack,
 }: Props) {
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
 
@@ -61,6 +65,21 @@ export default function YearEndClosePanel({
         <CardDescription>Transfer P&L to retained earnings · idempotent per fiscal year</CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
+        <ol className="list-decimal list-inside text-sm space-y-1 text-muted-foreground border rounded-md p-3">
+          <li className={periodLocked ? 'text-amber-700' : 'text-green-700'}>
+            Period lock check {periodLocked ? '— close period first or pick open date' : '— OK'}
+          </li>
+          <li>Run FX revaluation (FX Reval tab) for monetary AR/AP/bank balances</li>
+          <li>Post year-end close JV below (P&amp;L → retained earnings)</li>
+          <li>
+            Export reporting pack (TB, P&amp;L, VAT){' '}
+            {onExportPack ? (
+              <Button type="button" variant="link" className="h-auto p-0" onClick={onExportPack}>
+                Export CSV pack
+              </Button>
+            ) : null}
+          </li>
+        </ol>
         <div className="max-w-xs">
           <Label>Close as of</Label>
           <Input type="date" value={endDate} onChange={(e) => setEndDate(e.target.value)} />

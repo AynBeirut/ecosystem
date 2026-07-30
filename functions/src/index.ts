@@ -789,6 +789,7 @@ export { checkExpiringStock } from './scheduled/checkExpiringStock';
 // Export the scheduled low stock FCM alert
 export { checkLowStockAlert } from './scheduled/checkLowStock';
 export { fetchExchangeRates } from './scheduled/fetchExchangeRates';
+export { runRecurringVouchers } from './scheduled/runRecurringVouchers';
 // Export Firestore triggers: new order + order status / payment status change notifications
 export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
 export { onOrderCreatedCrmSync } from './triggers/crmOrderSync';

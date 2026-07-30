@@ -5,14 +5,18 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import SystemGuideInfo from '@/components/SystemGuideInfo';
 import { buildCheckRegister } from '@/lib/ledger/checkRegister';
+import { updateCheckStatus } from '@/lib/ledger/checkStatusUpdate';
 import type { CheckStatus, JournalEntry, JournalLine } from '@/types/generalLedger';
 import { formatCurrency } from '@/lib/utils';
+import { toast } from 'sonner';
 
 type Props = {
   entries: JournalEntry[];
   lines?: JournalLine[];
+  storeId?: string;
   systemGuideEnabled?: boolean;
   onOpenEntry?: (entryId: string) => void;
+  onStatusUpdated?: () => void;
 };
 
 const statusTone: Record<CheckStatus, string> = {
@@ -21,8 +25,22 @@ const statusTone: Record<CheckStatus, string> = {
   void: 'bg-slate-100 text-slate-600',
 };
 
-export default function CheckRegisterPanel({ entries, lines, systemGuideEnabled = false, onOpenEntry }: Props) {
+export default function CheckRegisterPanel({ entries, lines, storeId, systemGuideEnabled = false, onOpenEntry, onStatusUpdated }: Props) {
   const rows = useMemo(() => buildCheckRegister(entries, lines), [entries, lines]);
+
+  const setStatus = async (entryId: string, status: CheckStatus) => {
+    if (!storeId) {
+      toast.error('Store not loaded.');
+      return;
+    }
+    try {
+      await updateCheckStatus(storeId, entryId, status);
+      toast.success(`Check marked ${status}.`);
+      onStatusUpdated?.();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to update check status');
+    }
+  };
 
   return (
     <Card>
@@ -73,11 +91,23 @@ export default function CheckRegisterPanel({ entries, lines, systemGuideEnabled 
                     <Badge className={statusTone[row.status]}>{row.status}</Badge>
                   </TableCell>
                   <TableCell>
-                    {onOpenEntry ? (
-                      <Button type="button" variant="ghost" size="sm" onClick={() => onOpenEntry(row.entryId)}>
-                        View
-                      </Button>
-                    ) : null}
+                    <div className="flex gap-1">
+                      {onOpenEntry ? (
+                        <Button type="button" variant="ghost" size="sm" onClick={() => onOpenEntry(row.entryId)}>
+                          View
+                        </Button>
+                      ) : null}
+                      {row.status === 'issued' && storeId ? (
+                        <>
+                          <Button type="button" variant="outline" size="sm" onClick={() => void setStatus(row.entryId, 'cleared')}>
+                            Clear
+                          </Button>
+                          <Button type="button" variant="ghost" size="sm" onClick={() => void setStatus(row.entryId, 'void')}>
+                            Void
+                          </Button>
+                        </>
+                      ) : null}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))

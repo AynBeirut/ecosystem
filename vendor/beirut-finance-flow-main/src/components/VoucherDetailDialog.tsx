@@ -37,6 +37,9 @@ type Props = {
   isLebaneseCoa?: boolean;
   pcgClientAccounts?: PcgClientAccount[];
   accountingLanguage?: AccountingLanguage;
+  canReverse?: boolean;
+  reversing?: boolean;
+  onReverse?: (entryId: string) => void;
 };
 
 export default function VoucherDetailDialog({
@@ -47,6 +50,9 @@ export default function VoucherDetailDialog({
   isLebaneseCoa,
   pcgClientAccounts = [],
   accountingLanguage,
+  canReverse,
+  reversing,
+  onReverse,
 }: Props) {
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
   const arabicEntry = supportsArabicEntry(accountingLanguage);
@@ -89,7 +95,19 @@ export default function VoucherDetailDialog({
             <div className="space-y-4">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge variant="outline">{entryKind(entry)}</Badge>
+                {entry.status ? <Badge variant="secondary">{entry.status}</Badge> : null}
                 {entry.voucherNumber ? <Badge>{entry.voucherNumber}</Badge> : null}
+                {canReverse && entry.status === 'posted' && onReverse ? (
+                  <Button
+                    type="button"
+                    variant="destructive"
+                    size="sm"
+                    disabled={reversing}
+                    onClick={() => onReverse(entry.id)}
+                  >
+                    {reversing ? 'Reversing…' : 'Reverse'}
+                  </Button>
+                ) : null}
                 <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={() => window.print()}>
                   <Printer className="h-4 w-4 mr-1" /> Print
                 </Button>

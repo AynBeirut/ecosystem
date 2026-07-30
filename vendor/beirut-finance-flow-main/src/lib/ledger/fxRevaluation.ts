@@ -66,7 +66,13 @@ export function buildFxRevaluationPreview(
     (a) =>
       a.isActive &&
       (a.type === 'asset' || a.type === 'liability') &&
-      (a.currency === foreignCurrency || a.code.startsWith('102') || a.code.startsWith('103')),
+      (a.currency === foreignCurrency ||
+        a.code.startsWith('102') ||
+        a.code.startsWith('103') ||
+        a.code.startsWith('411') ||
+        a.code.startsWith('401') ||
+        a.code === '110' ||
+        a.code === '201'),
   );
 
   const gainAcct = findAccount(accounts, FX_GAIN_CODES);

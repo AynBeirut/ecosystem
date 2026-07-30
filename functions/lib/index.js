@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -682,6 +682,8 @@ var checkLowStock_1 = require("./scheduled/checkLowStock");
 Object.defineProperty(exports, "checkLowStockAlert", { enumerable: true, get: function () { return checkLowStock_1.checkLowStockAlert; } });
 var fetchExchangeRates_1 = require("./scheduled/fetchExchangeRates");
 Object.defineProperty(exports, "fetchExchangeRates", { enumerable: true, get: function () { return fetchExchangeRates_1.fetchExchangeRates; } });
+var runRecurringVouchers_1 = require("./scheduled/runRecurringVouchers");
+Object.defineProperty(exports, "runRecurringVouchers", { enumerable: true, get: function () { return runRecurringVouchers_1.runRecurringVouchers; } });
 // Export Firestore triggers: new order + order status / payment status change notifications
 var orderNotifications_2 = require("./triggers/orderNotifications");
 Object.defineProperty(exports, "onOrderCreated", { enumerable: true, get: function () { return orderNotifications_2.onOrderCreated; } });
