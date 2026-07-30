@@ -17,7 +17,21 @@ export interface ReconciliationReport {
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-function tbBalanceForCodes(tb: TrialBalanceReport, codes: string[]): number {
+export const INTERNATIONAL_GL_CODES = {
+  cash: ['102'],
+  bank: ['106', '105'],
+  ar: ['110'],
+  ap: ['201'],
+} as const;
+
+export const LEBANESE_PCG_GL_CODES = {
+  cash: ['5300'],
+  bank: ['5121', '5122', '5110'],
+  ar: ['4111', '4110'],
+  ap: ['4011'],
+} as const;
+
+export function tbBalanceForCodes(tb: TrialBalanceReport, codes: string[]): number {
   const codeSet = new Set(codes);
   return round2(
     tb.rows
@@ -38,13 +52,15 @@ export function buildReconciliationReport(
     accountsReceivable: number;
     accountsPayable: number;
   },
+  options?: { lebaneseCoa?: boolean },
 ): ReconciliationReport {
   const tb = buildTrialBalance(accounts, entries, lines, { endDate: asOfDate });
+  const codes = options?.lebaneseCoa ? LEBANESE_PCG_GL_CODES : INTERNATIONAL_GL_CODES;
 
-  const glCash = tbBalanceForCodes(tb, ['102']);
-  const glBank = tbBalanceForCodes(tb, ['106', '105']);
-  const glAr = tbBalanceForCodes(tb, ['110']);
-  const glAp = -tbBalanceForCodes(tb, ['201']);
+  const glCash = tbBalanceForCodes(tb, [...codes.cash]);
+  const glBank = tbBalanceForCodes(tb, [...codes.bank]);
+  const glAr = tbBalanceForCodes(tb, [...codes.ar]);
+  const glAp = -tbBalanceForCodes(tb, [...codes.ap]);
 
   const rows: ReconciliationRow[] = [
     {
