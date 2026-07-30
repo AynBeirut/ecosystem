@@ -24,12 +24,26 @@ export const INTERNATIONAL_GL_CODES = {
   ap: ['201'],
 } as const;
 
+/** PCG display / report labels — not used for TB row lookup (accounts keep Grabio codes). */
 export const LEBANESE_PCG_GL_CODES = {
   cash: ['5300'],
   bank: ['5121', '5122', '5110'],
   ar: ['4111', '4110'],
   ap: ['4011'],
 } as const;
+
+/** Operational Grabio codes on ledgerAccounts — use for TB balance lookup in Lebanese mode. */
+export const LEBANESE_GRABIO_GL_CODES = {
+  cash: ['102', '103'],
+  bank: ['105', '106'],
+  ar: ['110'],
+  ap: ['201'],
+} as const;
+
+export function lebaneseGlLookupCodes(kind: keyof typeof LEBANESE_GRABIO_GL_CODES, lebaneseCoa?: boolean): string[] {
+  const src = lebaneseCoa ? LEBANESE_GRABIO_GL_CODES : INTERNATIONAL_GL_CODES;
+  return [...src[kind]];
+}
 
 export function tbBalanceForCodes(tb: TrialBalanceReport, codes: string[]): number {
   const codeSet = new Set(codes);
@@ -55,12 +69,15 @@ export function buildReconciliationReport(
   options?: { lebaneseCoa?: boolean },
 ): ReconciliationReport {
   const tb = buildTrialBalance(accounts, entries, lines, { endDate: asOfDate });
-  const codes = options?.lebaneseCoa ? LEBANESE_PCG_GL_CODES : INTERNATIONAL_GL_CODES;
+  const cashCodes = lebaneseGlLookupCodes('cash', options?.lebaneseCoa);
+  const bankCodes = lebaneseGlLookupCodes('bank', options?.lebaneseCoa);
+  const arCodes = lebaneseGlLookupCodes('ar', options?.lebaneseCoa);
+  const apCodes = lebaneseGlLookupCodes('ap', options?.lebaneseCoa);
 
-  const glCash = tbBalanceForCodes(tb, [...codes.cash]);
-  const glBank = tbBalanceForCodes(tb, [...codes.bank]);
-  const glAr = tbBalanceForCodes(tb, [...codes.ar]);
-  const glAp = -tbBalanceForCodes(tb, [...codes.ap]);
+  const glCash = tbBalanceForCodes(tb, cashCodes);
+  const glBank = tbBalanceForCodes(tb, bankCodes);
+  const glAr = tbBalanceForCodes(tb, arCodes);
+  const glAp = -tbBalanceForCodes(tb, apCodes);
 
   const rows: ReconciliationRow[] = [
     {
