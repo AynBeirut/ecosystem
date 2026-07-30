@@ -15,7 +15,7 @@ import { BookOpen, Scale, Plus, RefreshCw, CheckCircle2, AlertTriangle, Lock, Un
 import { toast } from "sonner";
 import { formatCurrency } from "@/lib/utils";
 import type { JournalLineInput, PeriodLockType, VoucherMeta, VoucherType } from "@/types/generalLedger";
-import { buildReconciliationReport, LEBANESE_GRABIO_GL_CODES, tbBalanceForCodes } from "@/lib/ledger/reconciliation";
+import { buildReconciliationReport, lebaneseGlLookupCodes, tbBalanceForCodes } from "@/lib/ledger/reconciliation";
 import { buildVatFilingSummary, vatFilingSummaryToCsv } from "@/lib/ledger/vatFilingSummary";
 import { vatFilingMofWorksheet } from "@/lib/ledger/vatFilingMofExport";
 import { buildIncomeStatement, incomeStatementToCsv } from "@/lib/ledger/incomeStatement";
@@ -507,8 +507,8 @@ const Accounting = () => {
   const subledgerTotals = useMemo(() => {
     if (isLebaneseCoa) {
       return {
-        cashOnHand: tbBalanceForCodes(trialBalance, [...LEBANESE_GRABIO_GL_CODES.cash]),
-        bankBalance: tbBalanceForCodes(trialBalance, [...LEBANESE_GRABIO_GL_CODES.bank]),
+        cashOnHand: tbBalanceForCodes(trialBalance, lebaneseGlLookupCodes("cash", true)),
+        bankBalance: tbBalanceForCodes(trialBalance, lebaneseGlLookupCodes("bank", true)),
         accountsReceivable: arAging.subledgerTotal,
         accountsPayable: apAging.subledgerTotal,
       };
