@@ -1,0 +1,6 @@
+Client Name,Email Address,Joined Date
+Valid Client,valid@example.com,2026-01-15
+,missing@example.com,2026-01-16
+Bad Email,not-an-email,2026-01-17
+Dup Client,dup@example.com,not-a-date
+Dup Client,dup2@example.com,2026-01-18

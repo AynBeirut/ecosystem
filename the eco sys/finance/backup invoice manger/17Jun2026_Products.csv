@@ -1,0 +1,342 @@
+"Product Name","Product Code","Buy Rate","Sale Rate","Measurement Units","Description","Current Stock","Minimum Stock","Opening Stock","Opening Stock Rate","Opening Date","Tax Rate","Tax List","Supplier Name","Suggested Reorder QTY : <font color=#2096F3><b>%1$s</b></font> %2$s"
+"Jinko 540W Panels","N/A","105.0","110.0","Pcs","Warranty 25 Years","0.0","0.0","0.0","0.0","08 March 2023","0.0%","N/A"
+"Inverter Voltronic (V2) 3.5 kw","N/A","450.0","500.0","Pcs","Warranty 1 year","-1.0","0.0","0.0","0.0","08 March 2023","0.0%","N/A"
+"Battery 200 Ah","N/A","175.0","180.0","Pcs","Warranty 1 year","-2.0","0.0","0.0","0.0","08 March 2023","0.0%","N/A"
+"Galvanized Metal Structure","N/A","60.0","70.0","N/A","Warranty 10 years","-22.0","0.0","0.0","0.0","08 March 2023","0.0%","N/A"
+"Installation","N/A","100.0","200.0","Worker","N/A","0.0","0.0","0.0","0.0","08 March 2023","0.0%","N/A"
+"Electrical panel","N/A","250.0","300.0","F. Box","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Isolation tube flexible 32","N/A","0.8","1.25","Mettre","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"DC Cable","N/A","4.5","6.0","Mettre","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Battery Inter Conaction","N/A","5.0","10.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Stand For Battery","N/A","75.0","85.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Deye Hybrid Inverteur 6 KW","N/A","0.0","1000.0","Pcs","Warranty 1 Year","-2.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Deye Hybrid Inverteur 8 KW","N/A","1600.0","1650.0","Pcs","Warranty 1 Year","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Electrical Panel Control","N/A","500.0","750.0","F. Box","With surge protection AC/DC","-2.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Disegn & Installation","N/A","500.0","750.0","Worker","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"ATS Single fase Automated","N/A","150.0","250.0","Box","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Lithium Battery GSL 5 Kwh","N/A","1650.0","1750.0","Pcs","Warranty 3 Years","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Change over 63 A","N/A","16.0","25.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"AC Breaker 20 A","N/A","10.0","15.0","Pcs","2 pool","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"AC Breaker 32A","N/A","10.0","15.0","Pcs","2 pool","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"AC Breaker 3 phase","N/A","20.0","30.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"A/V Reader","N/A","10.0","12.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"DC Breaker 120 A","N/A","23.0","30.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"A/V Reader 3 phase","N/A","30.0","40.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"ATS Single fase 30 A","N/A","0.0","300.0","Box","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"ATS 3 phase Automated","N/A","300.0","500.0","Box","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"AC Cable 4x10","N/A","13.0","15.0","Mettre","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Drive Fuji 11 KW","N/A","1500.0","1600.0","Pcs","Warranty 2","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Automated Control Assenseur","N/A","0.0","150.0","Pcs","Warranty 2 Years","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Lithium CATL Battery 8,24 KWH","N/A","1850.0","2000.0","Pcs","Warranty 3 Years","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Battery 240 AH","N/A","210.0","230.0","Pcs","Warranty 1 Year","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Deye Inverteur 12 KW 3 phase","N/A","2250.0","2300.0","Pcs","Warranty 1 Year","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Wire 2,5 Ml","N/A","0.5","30.0","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Wire 1,5 ML","N/A","0.3","20.0","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Inverser 20 A","N/A","5.0","10.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Lamp 18 W","N/A","1.5","3.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"AC Breaker 3 A One Pol","N/A","2.0","5.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Box 6 MODULE","N/A","6.0","8.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Cable 2x25","N/A","2.5","3.0","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Fiche","N/A","1.0","2.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Col Scotch Electrical","N/A","1.0","1.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Main  d'heurve","N/A","500.0","500.0","Pcs ","10 Panels","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Ouvrier","N/A","20.0","30.0","Day ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Car use","N/A","15.0","20.0","Day","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Qualité contrôle","N/A","100.0","120.0","Day","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Coper rods 20 mm x1, 5 m","N/A","15.0","20.0","Pcs ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Cable 2x6mm","N/A","3.5","4.0","Mettre","Ac","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Cable 70mm earth","N/A","10.0","15.0","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Cable 6mm earth","N/A","1.0","1.5","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Clamp for earth cable","N/A","10.0","13.0","Pcs ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Box out door 20x20","N/A","4.0","7.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Tube 16mm","N/A","0.2","0.5","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Copper bar3x5mm","N/A","18.5","25.0","Pcs ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Copper screws 27","N/A","40.0","50.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Reamer for the copper bar","N/A","30.0","35.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Bentonite Clay","N/A","25.0","30.0","Kg","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Copper clamp 70mm with copper bolts","N/A","15.0","20.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Pvc 25mm","N/A","0.8","1.0","Pcs ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Box out 10x10","N/A","2.0","3.0","Pcs ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Cach cable 4x4","N/A","1.5","2.0","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Wire 2x1,5","N/A","0.6","0.75","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Box 12 module","N/A","12.0","13.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"AC breaker 5A","N/A","2.0","3.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Weire 2x2","N/A","0.7","1.0","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Jonction 6mm","N/A","1.0","1.5","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Cose 8_10","N/A","0.2","0.45","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Cose 16/8","N/A","0.25","0.5","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Earth tapis système","N/A","900.0","1230.0","N/A","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Earth Rods système","N/A","410.0","750.0","N/A","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"A/V protection T","N/A","13.5","20.0","Pcs","Turkey","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Box électrique S 40x30","N/A","32.0","45.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"SPD AC","2 pool","15.0","20.0"," Pcs","Solar Surge Protection","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"SPD /DC","2 pool","15.0","20.0","Pcs","Solar Surge Protection","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"AC Breaker 15","N/A","3.0","7.0","Psc","2 pool","0.0","0.0","0.0","0.0","21 March 2023","0.0%","N/A"
+"Transport","N/A","50.0","100.0","N/A","N/A","-1.0","0.0","0.0","0.0","21 March 2023","0.0%","N/A"
+"Inverter Voltronic (V2) 5.6 KW","N/A","0.0","900.0","N/A","Warranty 1 Year","0.0","0.0","0.0","0.0","22 March 2023","0.0%","N/A"
+"AC Breaker 10","N/A","3.0","7.0","Pcs","2 pool","0.0","0.0","0.0","0.0","03 April 2023","0.0%","N/A"
+"Fuse DC 20 A","N/A","0.75","1.0","N/A","N/A","0.0","0.0","0.0","0.0","03 April 2023","0.0%","N/A"
+"Cache Cable 4x4","N/A","0.0","3.0","N/A","N/A","0.0","0.0","0.0","0.0","05 April 2023","0.0%","N/A"
+"Mc4 Conecter","N/A","0.0","3.0","Pcs","N/A","0.0","0.0","0.0","0.0","05 April 2023","0.0%","N/A"
+"Transport & Installation","N/A","400.0","250.0","Worker","N/A","-1.0","0.0","0.0","0.0","05 April 2023","0.0%","N/A"
+"Inverter Growatt 5 Kw","N/A","300.0","350.0","N/A","N/A","0.0","0.0","0.0","0.0","05 April 2023","0.0%","N/A"
+"DC Breaker 100 A","N/A","0.0","20.0","Pcs","N/A","0.0","0.0","0.0","0.0","07 April 2023","0.0%","N/A"
+"5 Kw Growwath","N/A","300.0","350.0","N/A","N/A","0.0","0.0","0.0","0.0","19 April 2023","0.0%","N/A"
+"Sungrow On Grid","N/A","0.0","4000.0","N/A","N/A","0.0","0.0","0.0","0.0","28 April 2023","0.0%","N/A"
+"Dief Agc 150","N/A","0.0","1300.0","N/A","N/A","0.0","0.0","0.0","0.0","28 April 2023","0.0%","N/A"
+"Energy MANAGEMENT PANEL","N/A","0.0","750.0","N/A","N/A","0.0","0.0","0.0","0.0","28 April 2023","0.0%","N/A"
+"Cable 4 X 35","N/A","0.0","30.0","N/A","N/A","0.0","0.0","0.0","0.0","28 April 2023","0.0%","N/A"
+"Cable Trail","N/A","0.0","7.0","N/A","N/A","0.0","0.0","0.0","0.0","28 April 2023","0.0%","N/A"
+"Control Cable","N/A","4.5","5.0","N/A","N/A","0.0","0.0","0.0","0.0","28 April 2023","0.0%","N/A"
+"Installation Panels Acseories And Wiring","N/A","200.0","250.0","N/A","N/A","0.0","0.0","0.0","0.0","05 May 2023","0.0%","N/A"
+"Wood Panel","N/A","10.0","15.0","F. Box","N/A","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Trina","N/A","29.5","0.0","N/A","570/575 w","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Eastman 200 Ah","N/A","2600.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Eastman 24 V 200 Ah","N/A","1380.0","1450.0","N/A","N/A","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Eastman 250 Ah","N/A","2175.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Felicity 250 Ah","N/A","2075.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Deye Hybrid Inverteur 5 Kw","N/A","970.0","1070.0","N/A","N/A","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Deye Battery 5 Kwh","N/A","1150.0","1200.0","N/A","N/A","0.0","0.0","0.0","0.0","23 May 2023","0.0%","N/A"
+"Sonoff Mini R2","N/A","15.0","10.0","N/A","N/A","0.0","0.0","0.0","0.0","10 June 2023","0.0%","N/A"
+"Sonoff THR 316","N/A","25.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","10 June 2023","0.0%","N/A"
+"Contacter 63 À","N/A","40.0","45.0","N/A","N/A","0.0","0.0","0.0","0.0","10 June 2023","0.0%","N/A"
+"Jinko 550W","N/A","105.0","115.0","N/A","N/A","-4.0","0.0","0.0","0.0","21 June 2023","0.0%","N/A"
+"Lithium Battery Eitai 6 Kwh","N/A","1500.0","1700.0","N/A","N/A","0.0","0.0","0.0","0.0","21 June 2023","0.0%","N/A"
+"AC Breaker 16","N/A","3.0","7.0","Psc","2 pool","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"AC Cable 4x4","N/A","3.5","4.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Cach Cable 5x10","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Relay With Stand","N/A","0.0","14.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Timer","N/A","0.0","10.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Switch Legrand","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Cover Legrand","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"AC Breaker 63 Schneider","N/A","0.0","15.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Serene","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Lithium Battery Growatt 5 Kwh","N/A","0.0","1550.0","N/A","N/A","0.0","0.0","0.0","0.0","23 June 2023","0.0%","N/A"
+"Box 36 Module","N/A","13.0","15.0","Pcs","N/A","0.0","0.0","0.0","0.0","23 June 2023","0.0%","N/A"
+"Pike Earth 18 ML","N/A","0.0","20.0","N/A","N/A","0.0","0.0","0.0","0.0","23 June 2023","0.0%","N/A"
+"Cable Inter Conaction 70 ML","N/A","0.0","15.0","N/A","N/A","0.0","0.0","0.0","0.0","23 June 2023","0.0%","N/A"
+"Charbon","N/A","0.0","80.0","Klg ","N/A","0.0","0.0","0.0","0.0","28 June 2023","0.0%","N/A"
+"Generateur 14 KVA","Perkins","7000.0","7500.0","Pcs","N/A","0.0","0.0","0.0","0.0","29 June 2023","0.0%","N/A"
+"Online energy C/R","Sonoff","125.0","175.0","Pcs","N/A","0.0","0.0","0.0","0.0","29 June 2023","0.0%","N/A"
+"Cable 4x1.5","N/A","0.0","1.0","Mettre","N/A","0.0","0.0","0.0","0.0","29 June 2023","0.0%","N/A"
+"Online control","N/A","18.0","25.0","Pcs","N/A","0.0","0.0","0.0","0.0","03 July 2023","0.0%","N/A"
+"On-grid","N/A","0.0","400.0","Pcs","N/A","0.0","0.0","0.0","0.0","11 July 2023","0.0%","N/A"
+"3.5 Kw Voltronic","N/A","0.0","350.0","N/A","N/A","0.0","0.0","0.0","0.0","26 July 2023","0.0%","N/A"
+"Generator inverter","Semi Silent","1025.0","1150.0","Pcs","N/A","0.0","0.0","0.0","0.0","10 August 2023","0.0%","N/A"
+"Appartement standard","N/A","0.0","2000.0","N/A","N/A","0.0","0.0","0.0","0.0","01 September 2023","0.0%","N/A"
+"Penthouse","N/A","3300.0","3500.0","N/A","N/A","0.0","0.0","0.0","0.0","02 September 2023","0.0%","N/A"
+"Bassment","N/A","0.0","4000.0","N/A","N/A","0.0","0.0","0.0","0.0","02 September 2023","0.0%","N/A"
+"Entrance","N/A","0.0","1500.0","N/A","N/A","0.0","0.0","0.0","0.0","02 September 2023","0.0%","N/A"
+"MDP","N/A","0.0","3000.0","N/A","N/A","0.0","0.0","0.0","0.0","02 September 2023","0.0%","N/A"
+"SDP","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","02 September 2023","0.0%","N/A"
+"Facade Lighting","N/A","0.0","2000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Lightning work","N/A","0.0","2000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"EARTHING and Grounding","N/A","0.0","2000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Work in Riser","N/A","9000.0","12000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"SMDB","N/A","0.0","1000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"SMDB2 /3Elevators","N/A","0.0","2500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Garbage chute C. P.","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Fire Pump CP","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"SDP Parking","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"DB water pump","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Photocell Panel","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Upper Pent House","N/A","0.0","3200.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Vip Pent house","N/A","13000.0","17000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"GF to 18TH Floors","N/A","12000.0","15000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Bassment Floor","N/A","0.0","2750.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Roof H. Lighting","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Service Floor","N/A","0.0","2000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Multiples switch","N/A","0.0","400.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Fiber optic cable in the chaft","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"PEO Switch intercom","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"FACP","N/A","0.0","1000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"NVR","N/A","0.0","1000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Central intercom system rack","N/A","0.0","2000.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"PEO Switch Camera","N/A","0.0","100.0","N/A","N/A","0.0","0.0","0.0","0.0","03 September 2023","0.0%","N/A"
+"Basement +Upper Pent House","N/A","0.0","15000.0","N/A","N/A","0.0","0.0","0.0","0.0","04 September 2023","0.0%","N/A"
+"Intirieur Drawing","N/A","750.0","1000.0","N/A","N/A","0.0","0.0","0.0","0.0","14 September 2023","0.0%","N/A"
+"3 D Drawing","N/A","1000.0","1250.0","N/A","N/A","0.0","0.0","0.0","0.0","14 September 2023","0.0%","N/A"
+"Electrical Drawing","N/A","500.0","1000.0","N/A","N/A","0.0","0.0","0.0","0.0","14 September 2023","0.0%","N/A"
+"Mechanical Drawing","N/A","500.0","1000.0","N/A","N/A","0.0","0.0","0.0","0.0","14 September 2023","0.0%","N/A"
+"Star mix planetary mixer 10L 
+(670×420×620mm)
+0.5kw
+Electronic radiator","Tools: bar paddle, fine wire whisk, hook, spiral round bar","0.0","2880.0","Pcs ","Made in Italy","0.0","0.0","0.0","0.0","19 October 2023","0.0%","N/A"
+"Electronic Repair","Router","10.0","15.0","Pcs","N/A","-2.0","0.0","0.0","0.0","03 November 2023","0.0%","N/A"
+"J A 550W","N/A","0.0","100.0","Pcs","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Inverter VDF 200 kw","N/A","0.0","3500.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Inverter VDF 150KW","N/A","0.0","2750.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Com Box","N/A","0.0","3500.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Earth","N/A","0.0","1100.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Cabling","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Cable 25mm","N/A","4.5","6.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Cable Traiy","N/A","0.0","7.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"AC Cable 4x150","N/A","0.0","15.0","Mettre","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Accessories","N/A","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","16 January 2024","0.0%","N/A"
+"Box 24 Modules","N/A","12.0","14.0","Pcs ","N/A","0.0","0.0","0.0","0.0","21 March 2024","0.0%","N/A"
+"Cose 25/10","N/A","0.5","1.0","Pcs","N/A","0.0","0.0","0.0","0.0","21 March 2024","0.0%","N/A"
+"Lithium Battery Deye 5 kwh","N/A","1150.0","1200.0","N/A","N/A","0.0","0.0","0.0","0.0","07 May 2024","0.0%","N/A"
+"InfiniSolar Voltronic Inverteur 6 KW","N/A","900.0","1000.0","Pcs","Warranty 1 Year","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"DC Breaker 125 A","N/A","28.0","35.0","Pcs","N/A","0.0","0.0","0.0","0.0","05 April 2023","0.0%","N/A"
+"AC Cable 4x6","N/A","4.7","6.0","Mettre","N/A","-30.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"A/V Protection F.","N/A","30.0","45.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Solar Dc Cable","N/A","1.0","1.15","Mettre","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Jinko N Type 570 Watt","N/A","0.0","115.0","N/A","N/A","0.0","0.0","0.0","0.0","23 May 2023","0.0%","N/A"
+"Solar Panel N Type","N/A","140.0","95.0","N/A","N/A","0.0","0.0","0.0","0.0","06 May 2023","0.0%","N/A"
+"Box 8 module","Viko","8.0","10.0","Pcs ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Panels Parallel Kit","N/A","5.0","4.0","Pcs","N/A","0.0","0.0","0.0","0.0","09 March 2023","0.0%","N/A"
+"Isolation tube flexible 20","N/A","0.8","1.15","Mettre","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Fuse DC 30 A","N/A","0.75","1.0","Pcs ","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Port fuse DC 30 A","N/A","0.75","1.0","Pcs","N/A","0.0","0.0","0.0","0.0","19 March 2023","0.0%","N/A"
+"Box 4 Module","N/A","4.0","7.0","Pcs","N/A","0.0","0.0","0.0","0.0","21 March 2023","0.0%","N/A"
+"Mc4","N/A","0.0","3.0","Pcs","N/A","0.0","0.0","0.0","0.0","03 April 2023","0.0%","N/A"
+"Jinko 585 kw","N/A","0.0","115.0","N/A","N/A","0.0","0.0","0.0","0.0","02 September 2024","0.0%","N/A"
+"-3d views (2 views or 3 views)
+-survey and measurment
+-existing plan
+-construction plan
+-demolition plan
+-conceptual layout
+-furniture layout
+-ceiling plan
+-flooring plan
+-annotation and dimension plan","N/A","0.0","1750.0","N/A","N/A","0.0","0.0","0.0","0.0","12 September 2024","0.0%","N/A"
+"PVC Box","N/A","0.0","2.0","Pcs","N/A","0.0","0.0","0.0","0.0","21 October 2024","0.0%","N/A"
+"Spot led","18w","5.5","6.5","Pcs","N/A","0.0","0.0","0.0","0.0","24 October 2024","0.0%","N/A"
+"Contacter","40A","10.0","15.0","Pcs","N/A","0.0","0.0","0.0","0.0","26 October 2024","0.0%","N/A"
+"Thermique","N/A","10.0","15.0","Pcs","N/A","0.0","0.0","0.0","0.0","26 October 2024","0.0%","N/A"
+"AC DNP","N/A","10.0","13.0","Pcs","N/A","0.0","0.0","0.0","0.0","26 October 2024","0.0%","N/A"
+"Switch","N/A","4.0","7.0","Pcs","N/A","0.0","0.0","0.0","0.0","26 October 2024","0.0%","N/A"
+"60x40","N/A","40.0","45.0","Pcs","N/A","0.0","0.0","0.0","0.0","26 October 2024","0.0%","N/A"
+"Cache cable","N/A","5.0","8.0","Pcs ","N/A","0.0","0.0","0.0","0.0","26 October 2024","0.0%","N/A"
+"AC Breaker 3 phase 16 A","N/A","0.0","30.0","Pcs","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"AC Breaker 3 phase 10 A","N/A","0.0","30.0","Pcs","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"AC Breaker 3 Phase 20 A","N/A","0.0","35.0","N/A","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"Temperature Sensor","N/A","0.0","20.0","N/A","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"AC Breaker 3 phase 125 A","N/A","0.0","40.0","N/A","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"Contacter 3 Phase 32 A","N/A","0.0","40.0","N/A","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"Contacter  SINGLE PHASE 32 A","40A","0.0","15.0","Pcs","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"Metal box","100x60","0.0","55.0","Pcs","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"Bar neutral","N/A","0.0","3.0","Pcs","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"Bar earth","N/A","0.0","3.0","Pcs ","N/A","0.0","0.0","0.0","0.0","18 November 2024","0.0%","N/A"
+"Cable AC 4x2.5","N/A","0.0","2.3","Pcs","N/A","0.0","0.0","0.0","0.0","20 November 2024","0.0%","N/A"
+"Cash cable","5x5","0.0","5.0","Pcs","N/A","0.0","0.0","0.0","0.0","13 December 2024","0.0%","N/A"
+"1,5 X2 Wire","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","22 June 2023","0.0%","N/A"
+"Online Ups","2 KW","0.0","210.0","N/A","N/A","0.0","0.0","0.0","0.0","12 January 2025","0.0%","N/A"
+"Perspective","N/A","500.0","750.0","N/A","N/A","0.0","0.0","0.0","0.0","22 January 2025","0.0%","N/A"
+"Layout","Parking with dry cliner","0.0","500.0","N/A","N/A","0.0","0.0","0.0","0.0","22 January 2025","0.0%","N/A"
+"Drawing","N/A","0.0","3500.0","N/A","2 perspective
+ 4 layout:
+ tipcal floors, 
+Lobby, 
+Parking, 
+Parking with dry cliner","0.0","0.0","0.0","0.0","22 January 2025","0.0%","N/A"
+"Drawings","N/A","0.0","3500.0","N/A","2 Perspectives
+4 Layouts:
+Typical Floor Plan
+Lobby
+Parking
+Parking with Dry Cleaner","0.0","0.0","0.0","0.0","23 January 2025","0.0%","N/A"
+"Solar inverter Hybrid 50 KW","5 years warranty","0.0","4850.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Deye lithium HV Battery Set Box - A-729. 6V 145 KWH","10 Years Warranty","24500.0","26000.0","Psc","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Jinko 590W N T","N/A","0.0","82.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Deye inverter Hybrid 20KW","5 years warranty","0.0","2300.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Mitsubishi Contacteur 150A  C","N/A","0.0","245.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Mitsubishi Breaker 125 A","N/A","0.0","70.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"ATS /MTS/MCCB Box","With CUIVRE BAR","0.0","1700.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Electrical Box 100 x 60","N/A","0.0","150.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"MTS","N/A","0.0","200.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"PANELS BUILDING","N/A","0.0","300.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Schneider Contacteur 200A 4P","N/A","0.0","460.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Schneider MCCB 4P","N/A","0.0","195.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Cable inside the panels","N/A","0.0","250.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Electrical Box ATS/MTS","With Cable inside","0.0","900.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"DC Box / SPD","N/A","0.0","200.0","N/A","N/A","0.0","0.0","0.0","0.0","11 February 2025","0.0%","N/A"
+"Monthly payment","N/A","0.0","809.0","N/A","N/A","0.0","0.0","0.0","0.0","26 March 2025","0.0%","N/A"
+"Unpaid","N/A","0.0","809.0","N/A","N/A","0.0","0.0","0.0","0.0","26 March 2025","0.0%","N/A"
+"Piad","N/A","0.0","809.0","N/A","N/A","0.0","0.0","0.0","0.0","26 March 2025","0.0%","N/A"
+"Paid","N/A","0.0","400.0","N/A","N/A","0.0","0.0","0.0","0.0","26 March 2025","0.0%","N/A"
+"Unpaid incomplet month","N/A","0.0","409.0","N/A","N/A","0.0","0.0","0.0","0.0","26 March 2025","0.0%","N/A"
+"Monthly fee","N/A","0.0","50.0","N/A","N/A","0.0","0.0","0.0","0.0","26 March 2025","0.0%","N/A"
+"List of deliverables","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","30 April 2025","0.0%","N/A"
+"Project Description","N/A","0.0","0.0","N/A","N/A","0.0","0.0","0.0","0.0","30 April 2025","0.0%","N/A"
+"Lithium battery 14,33 Kwh","N/A","2050.0","2300.0","Pcs","N/A","0.0","0.0","0.0","0.0","02 October 2024","0.0%","N/A"
+"Logistique service","N/A","0.0","2275.0","N/A","Accommodation 
+Digital Security 
+Logistique service","-3.0","0.0","0.0","0.0","19 June 2025","0.0%","N/A"
+"ARDUINO","WH1602 IIC/I2C
+WATER PUMP
+L298N
+TDS SENSOR
+SENSOR SOIL W/MOD
+TURBIDITY SENSOR
+LOAD CELL 
+HX711
+DHT11
+JWMM
+JWMF
+JWFF","100.0","150.0","Pcs","N/A","0.0","0.0","0.0","0.0","18 July 2025","0.0%","N/A"
+"Prototype full system","ARDUINO 
+WH1602 IIC/I2C
+WATER PUMP
+L298N
+TDS SENSOR
+SENSOR SOIL W/MOD
+TURBIDITY SENSOR
+LOAD CELL 
+HX711
+DHT11
+JWMM
+JWMF
+JWFF","100.0","150.0","N/A","N/A","-20.0","0.0","0.0","0.0","18 July 2025","0.0%","N/A"
+"Electrical technician","N/A","0.0","45.0","N/A","N/A","0.0","0.0","0.0","0.0","21 July 2025","0.0%","N/A"
+"Electrical worker","N/A","0.0","25.0","N/A","N/A","0.0","0.0","0.0","0.0","21 July 2025","0.0%","N/A"
+"Battery lead acid 260 amp","N/A","190.0","230.0","N/A","1 Year warranty","0.0","0.0","0.0","0.0","29 July 2025","0.0%","N/A"
+"Box 16 module","N/A","11.2","14.0","N/A","N/A","0.0","0.0","0.0","0.0","29 July 2025","0.0%","N/A"
+"‎Server Security","N/A","0.0","350.0","N/A","‎Includes strict access control, SSH keys & strong passwords, disabling unnecessary services, firewall configuration, regular OS/software updates, log aggregation, and disk data encryption","-1.0","0.0","0.0","0.0","19 August 2025","0.0%","N/A"
+"Virtual Private Network (VPN)","N/A","0.0","15.0","N/A","‎Setup of secure VPN with encrypted internet traffic, hidden IP addresses, and strict no-logs policy to ensure privacy and safe team access","-1.0","0.0","0.0","0.0","19 August 2025","0.0%","N/A"
+"Secure Cloud Backup","N/A","0.0","200.0","N/A","Implementation of encrypted cloud storage, data encrypted before leaving devices, zero-knowledge provider setup, and reliable backup testing.","-1.0","0.0","0.0","0.0","19 August 2025","0.0%","N/A"
+"Website","N/A","225.0","450.0","N/A","3 email outlook","-1.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"Website Custom Code Basse","N/A","0.0","3500.0","N/A","Maximum Security, Speed ,and customization Focus)","0.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"AI Triage Algorithm","N/A","0.0","2500.0","N/A","Costum ML model development for automated report analysis and priority scoring","0.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"AI Agent Implementation","N/A","0.0","1000.0","N/A","Fully trained custom chatboot","0.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"Branding & Copywriting","N/A","0.0","800.0","N/A","Design, Copywriting, Brand Guide","0.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"Hosting, Domain, Maintenance","N/A","0.0","50.0","Month","High-security servers, SSL, daily backups, system updates","0.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"Website WordPress CMS & Custom Theme","N/A","0.0","2000.0","N/A","Robust, scalable platform for core feature","0.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"Standard Incident Reporting Module","N/A","0.0","800.0","N/A","Advance from with file upload, optimized for manual human triage","0.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"Hosting, Domain,","N/A","0.0","0.0","Month ","N/A","-6.0","0.0","0.0","0.0","20 October 2025","0.0%","N/A"
+"Renew Main control panel","N/A","90.0","180.0","N/A","N/A","-1.0","0.0","0.0","0.0","03 December 2025","0.0%","N/A"
+"Contactor X3 Phase 80 A","N/A","50.0","130.0","N/A","N/A","-1.0","0.0","0.0","0.0","03 December 2025","0.0%","N/A"
+"Really de phase protection","N/A","35.0","75.0","Pcs ","N/A","-2.0","0.0","0.0","0.0","03 December 2025","0.0%","N/A"
+"EDL FIX","N/A","35.0","5.0","N/A","Phase lost","-1.0","0.0","0.0","0.0","03 December 2025","0.0%","N/A"
+"Platform building","AI website Builder","0.0","3000.0","N/A","N/A","N/A","N/A","N/A","N/A","N/A","0.0%","N/A"
+"Migration Services","Data Migration","0.0","350.0","N/A","N/A","N/A","N/A","N/A","N/A","N/A","0.0%","N/A"
+"Hosting Service","Server Rent","0.0","660.0","N/A","N/A","-1.0","0.0","0.0","0.0","30 December 2025","0.0%","N/A"
+"Deye 12 KW","N/A","1600.0","1700.0","Pcs","1 year warranty","0.0","0.0","0.0","0.0","16 January 2026","0.0%","N/A"
+"Deye Battery 12 KW","N/A","0.0","1500.0","Pcs","10 year warranty","-1.0","0.0","0.0","0.0","16 January 2026","0.0%","N/A"
+"longi himo x10 640w","N/A","0.0","95.0","Pcs","25 waranty","-10.0","0.0","0.0","0.0","30 January 2026","0.0%","N/A"
+"Solar panels replacement","N/A","0.0","300.0","N/A","Structure adjustment","0.0","0.0","0.0","0.0","30 January 2026","0.0%","N/A"
+"| Product Code | Product Name | Qty | Unit | Unit Price ($) | Amount ($) |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| LG-575040 | ARTEOR PLAQUE 6M 2+2 | 4.00 | Pcs | 4.40 | 17.60 |
+| LG-576012 | 6 GANG SUPPORT | 4.00 | Pcs | 3.10 | 12.40 |
+| HD-BOX-6M | Surface Box 6M | 4.00 | Pcs | 3.50 | 14.00 |
+| LG-572104 | ARTEOR EUROAMERICAN SOCKET OUTLET | 9.00 | Pcs | 3.65 | 32.85 |
+| LG-572118 | GERMAN STANDARD SOCKET OUTLET | 4.00 | Pcs | 4.60 | 18.40 |
+| LG-572341 | ARTEOR BLANKING MODULE 1 GANG | 10.00 | Pcs | 0.80 | 8.00 |
+| LC-047 | NYMHY 2*4 WHITE ROUND CABLE | 11.00 | M | 2.80 | 30.80 |
+| LC-046 | NYMHY 2*2.5 WHITE ROUND CABLE | 30.00 | M | 1.85 | 55.50 |
+| AS-TRK-25X25-ADH | PVC CABLE TRUNKING 25X25 2MTS | 6.00 | M | 0.80 | 4.80 |
+| GP-CT-3.6X200B | CABLE TIES 20CM X 3.60 BLACK | 1.00 | BAG | 1.30 | 1.30 |
+| HK-3MTAPE-BL | PVC TAPE 3M BLACK | 2.00 | Pcs | 0.80 | 1.60 |
+| LG-576040 | 3 GANG SUPPORT | 2.00 | Pcs | 1.10 | 2.20 |
+| LG-575010 | ARTEOR PLAQUE 3M | 2.00 | Pcs | 2.40 | 4.80 |
+| LG-572004 | ARTEOR ONE-WAY SWITCH | 5.00 | Pcs | 2.70 | 13.50 |
+| GP-425B | Schuko Male Plug 16A 250V 4.8mm | 2.00 | Pcs | 1.20 | 2.40 |
+| GP-GN2011 | Plug 16A 250V 4.8mm Pins Black | 2.00 | Pcs | 1.50 | 3.00 |
+| LC-076 | NYMHY N2*2.5 BLACK CABLE | 3.00 | M | 2.10 | 6.30 |
+| AS-TRK-20X10-ADH | PVC CABLE TRUNKING 20X10 2MTS | 4.00 | M | 0.45 | 1.80 |
+| **LABOR** | **Professional Installation (5 Days)** | **1.00** | **LS** | **300.00** | **300.00** |
+| | | | | **GRAND TOTAL** | **$531.25** |","N/A","0.0","519.0","N/A","N/A","0.0","0.0","0.0","0.0","07 March 2026","0.0%","N/A"
+"Deye Lithium 16 KWH","5 Years Warranty","1850.0","1900.0","Pcs","N/A","-1.0","0.0","0.0","0.0","23 March 2026","0.0%","N/A"
+"Deye Inverter Hybrid 60 kW","3 phase","5700.0","6000.0","N/A","5 Years Warranty","0.0","0.0","0.0","0.0","18 April 2026","0.0%","N/A"

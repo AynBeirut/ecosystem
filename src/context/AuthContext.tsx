@@ -542,6 +542,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const provider = new GoogleAuthProvider();
     provider.setCustomParameters({ prompt: 'select_account' });
 
+    if (shouldUseGoogleRedirect()) {
+      markGoogleAuthPending();
+      release();
+      await signInWithRedirect(auth, provider);
+      return;
+    }
+
     try {
       if (shouldUseGoogleRedirect()) {
         markGoogleAuthPending();
