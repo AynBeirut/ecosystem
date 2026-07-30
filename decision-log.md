@@ -53,6 +53,10 @@
 
 **Verify (Emoove):** `verifyPaymentKnockOffE2E`, `verifyVoucherDraftPostE2E` PASS. Little Hands read-only: `verifyLittleHandsReadOnlyGate.cjs`.
 
+**Git (2026-07-30):** Commit `0e5f62e` on local `main`. Push to `ecosystem` **blocked** — GitHub push protection on old commit `c9d3867` (OAuth client id/secret pasted in `.gitignore`). Unblock via repo secret-scanning URLs or rewrite history before force-push.
+
+**Little Hands gate (2026-07-30):** Fresh backup `backups/emoove-lebanese-pre-8WgfKtgaE8aAXdqFhIfweEo5WFq2-2026-07-30T20-55-25-620Z` (588 accounts, 2056 posted JEs). Read-only verify PASS (TB $35,520.32 balanced). AR aging + cash flow PASS (`--store-id=8WgfKtgaE8aAXdqFhIfweEo5WFq2`). **Blocked:** `ClientCode` column empty in `imports/littlehands-pcg-client-accounts.template.csv` — owner must fill before `seedLittleHandsPcgClientAccounts.cjs --apply`.
+
 **E-Moove:** GL backup preserved; Balance Sheet totals must stay identical through Phase 1 UI deploy.
 
 ## 2026-07-29 — Admin UI: Mercedes polish (CSS-only, zero logic risk)
