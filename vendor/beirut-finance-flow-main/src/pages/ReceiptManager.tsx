@@ -289,8 +289,8 @@ const ReceiptManager = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Receipts & Payment Orders</h1>
-            <p className="text-gray-500 dark:text-gray-400">Create and manage your receipts and payment orders</p>
+            <h1 className="text-2xl font-bold tracking-tight">Reçu — Money Received</h1>
+            <p className="text-gray-500 dark:text-gray-400">All registered receipts and incoming payments on the system</p>
           </div>
         </div>
 

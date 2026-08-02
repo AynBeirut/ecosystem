@@ -43,6 +43,17 @@ export default function LebanesePcgCoaPanel({
     () => new Set(pcgClientAccounts.map((a) => a.parentPcgCode || a.clientCode)),
     [pcgClientAccounts],
   );
+  const clientByParentPcg = useMemo(() => {
+    const out = new Map<string, typeof pcgClientAccounts>();
+    for (const row of pcgClientAccounts) {
+      const parent = row.parentPcgCode || "";
+      if (!parent) continue;
+      const list = out.get(parent) || [];
+      list.push(row);
+      out.set(parent, list);
+    }
+    return out;
+  }, [pcgClientAccounts]);
   const grabioByPcg = useMemo(() => {
     const out = new Map<string, string[]>();
     for (const account of activeLedgerAccounts) {
@@ -109,7 +120,8 @@ export default function LebanesePcgCoaPanel({
         <Table>
           <TableHeader className="sticky top-0 bg-background z-10">
             <TableRow>
-              <TableHead className="w-[120px]">Code</TableHead>
+              <TableHead className="w-[140px]">Account number</TableHead>
+              <TableHead className="w-[88px]">Grabio</TableHead>
               <TableHead>Name</TableHead>
               <TableHead className="min-w-[180px]">ArabicNa</TableHead>
               <TableHead className="w-[56px] text-center">M</TableHead>
@@ -123,8 +135,15 @@ export default function LebanesePcgCoaPanel({
               const isHeader = row.kind === "G";
               const isMapped = mappedCodes.has(row.code);
               const grabioLinks = grabioByPcg.get(row.code);
+              const clientRows = clientByParentPcg.get(row.code);
+              const accountNumber = clientRows?.length
+                ? clientRows.map((c) => c.clientCode).join(", ")
+                : row.code;
+              const grabioDisplay = clientRows?.length
+                ? [...new Set(clientRows.map((c) => c.grabioOperationalCode).filter(Boolean))].join(", ")
+                : grabioLinks?.join(", ") || "—";
               const inLedger = ledgerByCode.has(row.code);
-              const hasClient = pcgClientAccounts.some((c) => c.parentPcgCode === row.code);
+              const hasClient = Boolean(clientRows?.length);
               return (
                 <ContextMenu key={row.code}>
                   <ContextMenuTrigger asChild disabled={isHeader || !onAddClientAccount}>
@@ -137,16 +156,14 @@ export default function LebanesePcgCoaPanel({
                             : undefined
                       }
                     >
-                      <TableCell className="font-mono text-xs" style={{ paddingLeft: 8 + row.depth * 14 }}>
-                        {row.code}
-                        {grabioLinks?.length ? (
-                          <div className="text-[10px] text-teal-700 dark:text-teal-300 font-sans">
-                            → Grabio {grabioLinks.join(", ")}
-                          </div>
+                      <TableCell className="font-mono text-xs tabular-nums" style={{ paddingLeft: 8 + row.depth * 14 }}>
+                        {accountNumber}
+                        {hasClient && accountNumber !== row.code ? (
+                          <div className="text-[10px] text-muted-foreground font-sans">PCG {row.code}</div>
                         ) : null}
-                        {hasClient ? (
-                          <div className="text-[10px] text-violet-700 dark:text-violet-300 font-sans">Client sub-account</div>
-                        ) : null}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
+                        {isHeader ? "—" : grabioDisplay}
                       </TableCell>
                       <TableCell className={isHeader ? "text-red-700 dark:text-red-400" : undefined}>{row.name}</TableCell>
                       <TableCell dir="rtl" className="text-right text-sm">

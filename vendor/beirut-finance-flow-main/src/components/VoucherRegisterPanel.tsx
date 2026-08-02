@@ -10,7 +10,17 @@ import VoucherDetailDialog from "@/components/VoucherDetailDialog";
 import type { JournalEntry, JournalLine, PcgClientAccount } from "@/types/generalLedger";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
 
-type RegisterFilter = "all" | "sales" | "manual" | "system";
+type RegisterFilter =
+  | "all"
+  | "jv"
+  | "pv"
+  | "rv"
+  | "cv"
+  | "sales"
+  | "purchase"
+  | "returns"
+  | "manual"
+  | "system";
 
 type Props = {
   entries: JournalEntry[];
@@ -39,7 +49,17 @@ function entryKind(entry: JournalEntry) {
 
 function matchesFilter(entry: JournalEntry, filter: RegisterFilter) {
   if (filter === "all") return true;
-  if (filter === "sales") return entry.sourceType === "order" && entry.event === "sale-recognized";
+  if (filter === "jv") return entry.voucherType === "JV";
+  if (filter === "pv") return entry.voucherType === "PV";
+  if (filter === "rv") return entry.voucherType === "RV";
+  if (filter === "cv") return entry.voucherType === "CV";
+  if (filter === "sales") {
+    return entry.sourceType === "order" && (entry.event === "sale-recognized" || entry.event === "paid");
+  }
+  if (filter === "purchase") return entry.sourceType === "purchase";
+  if (filter === "returns") {
+    return entry.event === "reversal" || String(entry.memo || "").toLowerCase().includes("return");
+  }
   if (filter === "manual") return Boolean(entry.voucherType);
   return !entry.voucherType && !(entry.sourceType === "order" && entry.event === "sale-recognized");
 }
@@ -114,8 +134,14 @@ export default function VoucherRegisterPanel({
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All entries</SelectItem>
-              <SelectItem value="sales">Sales vouchers</SelectItem>
-              <SelectItem value="manual">Manual vouchers</SelectItem>
+              <SelectItem value="jv">JV — Journal</SelectItem>
+              <SelectItem value="pv">PV — Payment</SelectItem>
+              <SelectItem value="rv">RV — Receipt</SelectItem>
+              <SelectItem value="cv">CV — Contra</SelectItem>
+              <SelectItem value="sales">Sales invoices</SelectItem>
+              <SelectItem value="purchase">Purchases</SelectItem>
+              <SelectItem value="returns">Returns (sales / purchase)</SelectItem>
+              <SelectItem value="manual">All manual vouchers</SelectItem>
               <SelectItem value="system">System entries</SelectItem>
             </SelectContent>
           </Select>

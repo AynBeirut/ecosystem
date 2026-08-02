@@ -1,0 +1,67 @@
+ClientCode,Name,ArabicName,Currency,GrabioCode,ParentPcgCode
+53001000002,Petty Cash,صندوق المصروفات النثرية,LL,101,5300
+53001000001,POS Cash Drawer,صندوق نقاط البيع,LL,102,5300
+51101000001,Delivery Wallet,محفظة التوصيل,LL,103,5110
+51211000001,Bank Account - LBP,حساب بنكي - ل.ل,LL,105,5121
+51211000002,Bank Account - USD,حساب بنكي - دولار,USD,106,5121
+51221000001,Card Payment / Gateway Clearing,,LL,108,5122
+41111000001,Accounts Receivable,ذمم مدينة,LL,110,4111
+49101000001,Allowance for Bad Debts,,LL,112,4910
+31101000001,Raw Materials Inventory,مخزون مواد أولية,LL,120,3110
+35501000001,Finished Goods Inventory,مخزون منتجات تامة,LL,121,3550
+37001000001,Trading Goods Inventory,,LL,122,3700
+33101000001,WIP Inventory,مخزون تحت التشغيل,LL,123,3310
+31501000001,Consumables & Packaging Inventory,,LL,125,3150
+47201000001,Prepaid Rent & Expenses,,LL,130,4720
+48101000001,Security Deposits Paid,,LL,135,4810
+4426.600001,Input VAT / Recoverable Tax (11%),ضريبة القيمة المضافة على المشتريات,LL,140,4426.6000000000004
+42811000001,Employee Advances,,LL,142,4281
+22101000001,Land & Buildings,,LL,150,2210
+28101000001,Accum. Depr. - Buildings,,LL,151,2810
+22401000001,Machinery & Kitchen Equipment,,LL,155,2240
+28401000001,Accum. Depr. - Machinery & Equipment,,LL,156,2840
+40111000001,Accounts Payable,ذمم دائنة / موردون,LL,201,4011
+42101000001,Accrued Expenses Payable,,LL,202,4210
+42111000001,Salaries Payable,,LL,210,4211
+43111000001,NSSF / Social Security Payable,,LL,212,4311
+44101000001,Payroll Tax Payable (R10),,LL,213,4410
+44271000001,Output VAT / Collected Tax (11%),ضريبة القيمة المضافة على المبيعات,LL,220,4427
+44251000001,VAT Settlement Account,,LL,222,4425
+1552.100001,End-of-Service Indemnity Provision,,LL,250,1552.1
+16101000001,Long-Term Loans,,LL,252,1610
+10131000001,Paid-In Capital,رأس المال,LL,301,1013
+10301000001,Owner / Partner Drawings,,LL,302,1030
+12501000001,Opening Balance Equity,حقوق افتتاحية,LL,303,1250
+12101000001,Retained Earnings,,LL,304,1210
+13801000001,Current Year Net Profit / Loss,,LL,305,1380
+70101000001,Retail / POS Sales,مبيعات,LL,401,7010
+70101000002,B2B / Wholesale Sales,,LL,402,7010
+71301000001,Food & Beverage Sales,,LL,403,7130
+71711000001,Delivery Fee Revenue,,LL,405,7171
+70901000001,Sales Discounts & Returns,,LL,410,7090
+77511000001,Foreign Exchange Realized Gains,,LL,450,7751
+77891000001,Miscellaneous Income,,LL,455,7789
+61111000001,COGS - Raw Materials,تكلفة البضاعة المباعة,LL,501,6111
+60111000001,COGS - Trading Merchandise,,LL,502,6011
+62111000001,Direct Labor,,LL,503,6211
+61131000001,Packaging & Consumables Expense,,LL,505,6113
+60181000001,Freight-In & Customs Duties,مصاريف الشحن والجمرك,LL,506,6018
+63111000001,Salaries & Wages,رواتب وأجور,LL,601,6311
+63511000001,Employer NSSF Contribution,,LL,602,6351
+63551000001,End-of-Service Expense,,LL,604,6355
+6263.100001,Office & Shop Rent,إيجار,LL,610,6263.1
+6263.400001,Electricity & Water,كهرباء وماء,LL,612,6263.4
+6263.500001,Generator & Diesel Expense,,LL,613,6263.5
+6269.400001,Office Supplies & Expenses,,LL,615,6269.4
+6262.200001,Repairs & Maintenance,,LL,616,6262.2
+6261.500001,Internet & Telecom,,LL,620,6261.5
+6269.900002,Software & SaaS Subscriptions,,LL,622,6269.9
+6269.900003,Legal & Accounting Fees,,LL,630,6269.9
+6265.100001,Advertising & Marketing,,LL,650,6265.1
+6264.100001,Delivery & Courier Expenses,,LL,653,6264.1
+6266.100001,Vehicle Fuel & Maintenance,,LL,655,6266.1
+67391000001,Bank & Payment Gateway Fees,,LL,701,6739
+67511000001,Foreign Exchange Realized Losses,,LL,704,6751
+68111000001,Depreciation Expense,,LL,710,6811
+66121000001,Bad Debt Expense,,LL,713,6612
+6269.900001,Miscellaneous Expense,مصاريف متنوعة,LL,799,6269.9

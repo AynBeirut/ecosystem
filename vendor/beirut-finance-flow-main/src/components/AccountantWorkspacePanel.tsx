@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { formatCurrency } from "@/lib/utils";
 import { LEBANESE_PCG_CHART, type LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
 import { filterPcgChart, flattenPcgChart, kindLabel } from "@/lib/ledger/lebanesePcgTree";
-import { buildClientByGrabioMap, mapGrabioCodeToPcg, resolvePcgDisplay } from "@/lib/ledger/grabioToPcgMap";
+import { buildClientByGrabioMap, buildClientByParentPcgMap, mapGrabioCodeToPcg, resolvePcgDisplay, displayPcgCodeForLedgerRow, displayGrabioCodeForLedgerRow } from "@/lib/ledger/grabioToPcgMap";
 import { supportsArabicEntry, type AccountingLanguage } from "@/lib/grabio/accountingMode";
 import type { JournalEntry, JournalLine, LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
@@ -49,9 +49,19 @@ export default function AccountantWorkspacePanel({
   const [query, setQuery] = useState("");
   const [selectedPcgCode, setSelectedPcgCode] = useState("");
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
+  const clientByParentPcg = useMemo(() => buildClientByParentPcgMap(pcgClientAccounts), [pcgClientAccounts]);
   const arabicEntry = supportsArabicEntry(accountingLanguage);
 
-  const pcgRows = useMemo(() => flattenPcgChart(filterPcgChart(LEBANESE_PCG_CHART, query)).slice(0, 150), [query]);
+  const pcgRows = useMemo(() => {
+    const flat = flattenPcgChart(filterPcgChart(LEBANESE_PCG_CHART, query));
+    return flat.slice(0, 150).map((row) => {
+      const clientRows = clientByParentPcg.get(row.code);
+      return {
+        ...row,
+        displayCode: clientRows?.length ? clientRows.map((c) => c.clientCode).join(", ") : row.code,
+      };
+    });
+  }, [query, clientByParentPcg]);
   const selectedPcg = useMemo(
     () => LEBANESE_PCG_CHART.find((account) => account.code === selectedPcgCode) || pcgRows[0] || null,
     [pcgRows, selectedPcgCode],
@@ -62,9 +72,10 @@ export default function AccountantWorkspacePanel({
   const linkedOperationalAccounts = useMemo(() => {
     if (!selectedPcg) return [];
     return accounts.filter((account) => {
+      if (account.isPcgChart) return account.code === selectedPcg.code;
       const mapped = mapGrabioCodeToPcg(account.code);
       const client = clientByGrabio.get(account.code);
-      return mapped === selectedPcg.code || client?.parentPcgCode === selectedPcg.code || client?.clientCode === selectedPcg.code;
+      return mapped === selectedPcg.code || client?.parentPcgCode === selectedPcg.code;
     });
   }, [accounts, clientByGrabio, selectedPcg]);
 
@@ -92,10 +103,13 @@ export default function AccountantWorkspacePanel({
   );
 
   const displayForAccount = (account: LedgerAccount) => {
-    if (!isLebaneseCoa) return { code: account.code, name: account.name, nameAr: account.nameAr };
-    const display = resolvePcgDisplay(account.code, account.name, clientByGrabio);
-    if (!display) return { code: account.code, name: account.name, nameAr: account.nameAr };
-    return { code: display.pcgCode, name: display.name, nameAr: display.nameAr };
+    if (!isLebaneseCoa) return { code: account.code, name: account.name, nameAr: account.nameAr, grabio: account.code };
+    return {
+      code: displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg),
+      name: resolvePcgDisplay(account.code, account.name, clientByGrabio)?.name || account.name,
+      nameAr: resolvePcgDisplay(account.code, account.name, clientByGrabio)?.nameAr || account.nameAr,
+      grabio: displayGrabioCodeForLedgerRow(account, clientByParentPcg),
+    };
   };
 
   if (!isLebaneseCoa) {
@@ -137,7 +151,8 @@ export default function AccountantWorkspacePanel({
             <Table>
               <TableHeader className="sticky top-0 bg-background">
                 <TableRow>
-                  <TableHead>Code</TableHead>
+                  <TableHead>Account number</TableHead>
+                  <TableHead className="w-[72px]">Grabio</TableHead>
                   <TableHead>Name</TableHead>
                   <TableHead className="w-[60px]">M</TableHead>
                 </TableRow>
@@ -149,8 +164,11 @@ export default function AccountantWorkspacePanel({
                     className={row.code === selectedPcg?.code ? "bg-teal-50/80 dark:bg-teal-950/20" : "cursor-pointer"}
                     onClick={() => setSelectedPcgCode(row.code)}
                   >
-                    <TableCell className="font-mono text-xs" style={{ paddingLeft: 8 + row.depth * 12 }}>
-                      {row.code}
+                    <TableCell className="font-mono text-xs tabular-nums" style={{ paddingLeft: 8 + row.depth * 12 }}>
+                      {row.displayCode}
+                    </TableCell>
+                    <TableCell className="font-mono text-xs text-muted-foreground">
+                      {row.kind === "G" ? "—" : mapGrabioCodeToPcg(row.code) ? displayGrabioCodeForLedgerRow({ code: row.code, isPcgChart: true }, clientByParentPcg) : "—"}
                     </TableCell>
                     <TableCell>
                       <div className={row.kind === "G" ? "font-medium text-red-700 dark:text-red-400" : undefined}>
@@ -217,9 +235,9 @@ export default function AccountantWorkspacePanel({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Account code</TableHead>
+                      <TableHead>Account number</TableHead>
+                      <TableHead className="w-[72px]">Grabio</TableHead>
                       <TableHead>Account</TableHead>
-                      {!isLebaneseCoa ? <TableHead>Posting code</TableHead> : null}
                       <TableHead className="text-right">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -228,7 +246,8 @@ export default function AccountantWorkspacePanel({
                       const display = displayForAccount(account);
                       return (
                         <TableRow key={account.id}>
-                          <TableCell className="font-mono text-xs">{display.code}</TableCell>
+                          <TableCell className="font-mono text-xs tabular-nums">{display.code}</TableCell>
+                          <TableCell className="font-mono text-xs text-muted-foreground">{display.grabio}</TableCell>
                           <TableCell>
                             <div>{display.name}</div>
                             {arabicEntry && display.nameAr ? (
@@ -237,9 +256,6 @@ export default function AccountantWorkspacePanel({
                               </div>
                             ) : null}
                           </TableCell>
-                          {!isLebaneseCoa ? (
-                            <TableCell className="font-mono text-xs">{account.code}</TableCell>
-                          ) : null}
                           <TableCell className="text-right">
                             {onViewAccount ? (
                               <Button

@@ -3,6 +3,21 @@
 > **Canonical decision log:** `~/Documents/grabio-platform-docs/Decision-Log/`  
 > Mirror significant decisions there when closing a sprint.
 
+## 2026-08-01 — Grabio SEO pivot: software pillars + AEO + social tracking
+
+**Decision:** Continue Grabio SEO (not GJ Properties) with **software-first** positioning — inventory, accounting/GL, POS, mobile apps, CRM/PSA, restaurant, manufacturing, AI. Storefront/template builder is secondary (`/solutions/platform` only).
+
+**Shipped in repo:**
+- `/solutions` index + 9 pillar pages with FAQPage + Organization + SoftwareApplication JSON-LD
+- `public/llms.txt` for AI research crawlers; `robots.txt` allows GPTBot, ClaudeBot, PerplexityBot, etc.
+- GTM helper (`VITE_GTM_ID`) + marketing dataLayer events on solution CTAs
+- Sitemap updated; nav adds **Solutions**
+- Env placeholders: `VITE_META_PIXEL_ID`, `VITE_GA4_ID`, `VITE_GTM_ID`
+
+**Blocked on owner:** Create Meta Pixel + GA4 + GTM in Business Manager / Google Analytics; paste IDs into production `.env` and deploy. Submit sitemap in GSC after deploy.
+
+**Next:** Blog clusters per pillar; keyword engine admin (plan-seo Phase 1); Google Business Profile + Ads account registration.
+
 ## 2026-07-29 — CRM Phase 1: Sales Team Tracking
 
 **Decision:** Extend Sales CRM from pipeline-only to **field visit tracking** per `the eco sys/Phase 1 Sales Team Tracking System.pdf`.
@@ -56,6 +71,8 @@
 **Git (2026-07-30):** Commit on `main` pushed to `ecosystem/main` after stripping OAuth text from historical `.gitignore` (commit `c9d3867`). No credential rotation required.
 
 **Little Hands gate (2026-07-30):** Fresh backup `backups/emoove-lebanese-pre-8WgfKtgaE8aAXdqFhIfweEo5WFq2-2026-07-30T20-55-25-620Z` (588 accounts, 2056 posted JEs). Read-only verify PASS (TB $35,520.32 balanced). AR aging + cash flow PASS (`--store-id=8WgfKtgaE8aAXdqFhIfweEo5WFq2`). `verifyTrialBalance6ColE2E` fixed (vitest). **Blocked:** `ClientCode` column empty in `imports/littlehands-pcg-client-accounts.template.csv` — owner must fill before `seedLittleHandsPcgClientAccounts.cjs --apply`.
+
+**Little Hands complete (2026-07-31):** PCG client codes seeded (18 rows, pattern `53001000001`… until owner replaces with legacy ERP codes). `verifyLittleHandsAccountingSuite.cjs` PASS. Deployed hosting + rules. Polish: GL drill-down (P&L/TB → GL → voucher), XLSX exports, `pending_approval` JV workflow.
 
 **E-Moove:** GL backup preserved; Balance Sheet totals must stay identical through Phase 1 UI deploy.
 

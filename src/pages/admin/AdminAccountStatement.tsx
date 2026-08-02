@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { exportToCSV } from '@/lib/exportUtils';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
@@ -146,6 +146,8 @@ interface DetailedTransaction {
   credit: number;
   balance: number;
   vatLL: number;
+  sourceType?: 'order' | 'payment' | 'purchase' | 'return';
+  sourceId?: string;
 }
 
 interface DetailedStatement {
@@ -164,6 +166,7 @@ const AdminAccountStatement: React.FC = () => {
   const { enabled: systemGuideEnabled } = useSystemGuide();
   const { user } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const isMobile = useIsMobile();
   // Multi-currency: base currency + large-number style from store profile.
   const { money, currency: baseCurrency, numberFormat: numberStyle } = useStoreCurrency();
@@ -174,6 +177,14 @@ const AdminAccountStatement: React.FC = () => {
   // Honors the store's number style: 'compact' keeps large LBP figures short in tight columns.
   const numDoc = (n: number) => formatMoney(Number(n) || 0, { currency: baseCurrency, style: numberStyle, withSymbol: false });
   const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales' | 'cashCollections' | 'payments'>('customers');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    const allowed = ['customers', 'suppliers', 'products', 'purchases', 'expenses', 'sales', 'cashCollections', 'payments'] as const;
+    if (tab && (allowed as readonly string[]).includes(tab)) {
+      setActiveTab(tab as typeof activeTab);
+    }
+  }, [searchParams]);
   const [loading, setLoading] = useState(true);
   
   const [customers, setCustomers] = useState<CustomerBalance[]>([]);
@@ -1570,7 +1581,11 @@ const AdminAccountStatement: React.FC = () => {
             netVat: txn.net || 0,
             credit: txn.credit,
             balance: runningBalance,
-            vatLL: txn.vat || 0
+            vatLL: txn.vat || 0,
+            sourceType: txn.type === 'order' ? 'order' : txn.type === 'payment' ? 'payment' : undefined,
+            sourceId: typeof txn.data === 'object' && txn.data && 'id' in txn.data
+              ? String((txn.data as { id?: string }).id || '')
+              : undefined,
           });
         });
       } else if (type === 'customer') {
@@ -1623,7 +1638,7 @@ const AdminAccountStatement: React.FC = () => {
             net: net,
             vat: vat,
             credit: order.paymentStatus === 'paid' ? Math.max(total, toFiniteNumber(order.amountPaid, 0)) : toFiniteNumber(order.amountPaid, 0),
-            data: order
+            data: { ...order, id: doc.id }
           });
         });
         
@@ -1650,7 +1665,7 @@ const AdminAccountStatement: React.FC = () => {
             net: 0,
             vat: 0,
             credit: amount,
-            data: payment
+            data: { ...payment, id: doc.id }
           });
         });
         
@@ -1668,7 +1683,11 @@ const AdminAccountStatement: React.FC = () => {
             netVat: txn.net || 0,
             credit: txn.credit,
             balance: runningBalance,
-            vatLL: txn.vat || 0
+            vatLL: txn.vat || 0,
+            sourceType: txn.type === 'order' ? 'order' : txn.type === 'payment' ? 'payment' : undefined,
+            sourceId: typeof txn.data === 'object' && txn.data && 'id' in txn.data
+              ? String((txn.data as { id?: string }).id || '')
+              : undefined,
           });
         });
       }
@@ -1702,6 +1721,25 @@ const AdminAccountStatement: React.FC = () => {
     }
     // Ensure positive and pad to 10 digits
     return Math.abs(hash).toString().padStart(10, '0');
+  };
+
+  const openPartyLedger = (type: 'supplier' | 'customer', name: string) => {
+    const params = new URLSearchParams({
+      tab: 'general-ledger',
+      partyName: name,
+      partyType: type === 'customer' ? 'client' : 'supplier',
+    });
+    navigate(`/admin/finance/accounting?${params.toString()}`);
+  };
+
+  const openStatementLine = (txn: DetailedTransaction) => {
+    if (txn.sourceType === 'order' && txn.sourceId) {
+      navigate(`/admin/orders?orderId=${encodeURIComponent(txn.sourceId)}`);
+      return;
+    }
+    if (txn.ref) {
+      navigate(`/admin/orders?invoice=${encodeURIComponent(txn.ref)}`);
+    }
   };
 
   const numberToWords = (num: number): string => {
@@ -3560,8 +3598,8 @@ const AdminAccountStatement: React.FC = () => {
       )}
       description="Detailed overview of financial transactions and balances"
       eyebrow="Business Tools"
-      backTo="/admin/finance/invoices"
-      backLabel="Invoice Manager"
+      backTo="/admin/finance/quotations"
+      backLabel="Business Finance"
       actions={(
         <div className="flex flex-wrap gap-2">
           <button
@@ -3649,7 +3687,7 @@ const AdminAccountStatement: React.FC = () => {
                     title="Customer Balances"
                     content={[
                       'This section shows what each customer has been invoiced, what they already paid, and what is still due.',
-                      'Use Ledger for the detailed statement and Payment when you need to record money received against that customer account.',
+                      'Use Ledger to open the full account ledger in Business Finance. Use Statement for a printable copy. Payment records money received.',
                     ]}
                   />
                 </div>
@@ -3760,10 +3798,16 @@ const AdminAccountStatement: React.FC = () => {
                             <td className="border px-3 py-2 text-center">
                               <div className="flex gap-1 justify-center flex-wrap">
                                 <button
+                                  onClick={() => openPartyLedger('customer', customer.name)}
+                                  className="px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded font-medium"
+                                >
+                                  Ledger
+                                </button>
+                                <button
                                   onClick={() => generateDetailedStatement('customer', customer.id, customer.name)}
                                   className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
                                 >
-                                  Ledger
+                                  Statement
                                 </button>
                                 <button
                                   onClick={() => openPaymentModal(customer.id, customer.name, 'customer')}
@@ -3933,12 +3977,18 @@ const AdminAccountStatement: React.FC = () => {
                               )}
                             </td>
                             <td className="border px-3 py-2 text-center">
-                              <div className="flex gap-1 justify-center">
+                              <div className="flex gap-1 justify-center flex-wrap">
                                 <button
-                                  onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
-                                  className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded"
+                                  onClick={() => openPartyLedger('supplier', supplier.name)}
+                                  className="px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded font-medium"
                                 >
                                   Ledger
+                                </button>
+                                <button
+                                  onClick={() => generateDetailedStatement('supplier', supplier.id, supplier.name)}
+                                  className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
+                                >
+                                  Statement
                                 </button>
                                 <button
                                   onClick={() => openPaymentModal(supplier.id, supplier.name, 'supplier')}
@@ -4317,17 +4367,25 @@ const AdminAccountStatement: React.FC = () => {
                               {supplier.balance > 0 && <span className="ml-1 text-xs font-normal">(owed)</span>}
                             </td>
                             <td className="border px-3 py-2 text-center">
-                              <button
-                                onClick={() => {
-                                  const found = supplier.invoices.find((p) => p.supplierId);
-                                  const supplierId = found?.supplierId || suppliers.find(s => s.name === supplier.name)?.id;
-                                  if (!supplierId) return;
-                                  generateDetailedStatement('supplier', supplierId, supplier.name);
-                                }}
-                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
-                              >
-                                Ledger
-                              </button>
+                              <div className="flex gap-1 justify-center flex-wrap">
+                                <button
+                                  onClick={() => openPartyLedger('supplier', supplier.name)}
+                                  className="px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded font-medium"
+                                >
+                                  Ledger
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const found = supplier.invoices.find((p) => p.supplierId);
+                                    const supplierId = found?.supplierId || suppliers.find(s => s.name === supplier.name)?.id;
+                                    if (!supplierId) return;
+                                    generateDetailedStatement('supplier', supplierId, supplier.name);
+                                  }}
+                                  className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
+                                >
+                                  Statement
+                                </button>
+                              </div>
                             </td>
                           </tr>
                       ))}
@@ -4686,16 +4744,24 @@ const AdminAccountStatement: React.FC = () => {
                               {customer.balance > 0 && <span className="ml-1 text-xs font-normal">(due)</span>}
                             </td>
                             <td className="border px-3 py-2 text-center">
-                              <button
-                                onClick={() => {
-                                  const customerId = customer.customerId || customers.find(c => c.name === customer.name)?.id;
-                                  if (!customerId) return;
-                                  generateDetailedStatement('customer', customerId, customer.name);
-                                }}
-                                className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
-                              >
-                                Ledger
-                              </button>
+                              <div className="flex gap-1 justify-center flex-wrap">
+                                <button
+                                  onClick={() => openPartyLedger('customer', customer.name)}
+                                  className="px-2 py-1 text-xs bg-indigo-100 hover:bg-indigo-200 text-indigo-800 rounded font-medium"
+                                >
+                                  Ledger
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    const customerId = customer.customerId || customers.find(c => c.name === customer.name)?.id;
+                                    if (!customerId) return;
+                                    generateDetailedStatement('customer', customerId, customer.name);
+                                  }}
+                                  className="px-2 py-1 text-xs bg-blue-100 hover:bg-blue-200 text-blue-700 rounded font-medium"
+                                >
+                                  Statement
+                                </button>
+                              </div>
                             </td>
                           </tr>
                       ))}
@@ -5199,7 +5265,14 @@ const AdminAccountStatement: React.FC = () => {
                       </tr>
                     )}
                     {detailedStatement.transactions.map((txn, idx) => (
-                      <tr key={idx}>
+                      <tr
+                        key={idx}
+                        className={txn.sourceType === 'order' || txn.ref ? 'cursor-pointer hover:bg-blue-50' : undefined}
+                        onClick={() => {
+                          if (txn.sourceType === 'order' || txn.ref) openStatementLine(txn);
+                        }}
+                        title={txn.sourceType === 'order' ? 'Open invoice / order' : undefined}
+                      >
                         <td className="px-2 py-1 whitespace-nowrap">{txn.date}</td>
                         <td className="px-2 py-1">{txn.ref}</td>
                         <td className="px-2 py-1">{txn.description}</td>

@@ -5,6 +5,7 @@ import type {
   TrialBalanceReport,
   TrialBalanceRow,
 } from '@/types/generalLedger';
+import { sortLedgerAccountsByCode } from '@/lib/ledger/accountCodeSort';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -59,7 +60,7 @@ export function buildTrialBalance(
   }
 
   const rows: TrialBalanceRow[] = [];
-  for (const account of accounts.filter((a) => a.isActive).sort((a, b) => a.code.localeCompare(b.code))) {
+  for (const account of sortLedgerAccountsByCode(accounts.filter((a) => a.isActive))) {
     const sum = sums.get(account.id) || { debit: 0, credit: 0 };
     const tb = trialBalanceForAccount(account, sum.debit, sum.credit);
     if (tb.debit === 0 && tb.credit === 0) continue;

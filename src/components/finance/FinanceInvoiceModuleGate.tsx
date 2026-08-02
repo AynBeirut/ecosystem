@@ -28,7 +28,7 @@ const FinanceInvoiceModuleGate: React.FC<FinanceInvoiceModuleGateProps> = ({ chi
     <div className="container mx-auto px-4 py-8 max-w-lg">
       <Card>
         <CardHeader>
-          <CardTitle>Invoice Manager</CardTitle>
+          <CardTitle>Business Finance</CardTitle>
           <CardDescription>
             Enable Invoicing &amp; Billing or Invoice Manager on your subscription to use this module.
           </CardDescription>

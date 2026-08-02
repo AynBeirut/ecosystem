@@ -375,15 +375,15 @@ const EstimateManager = () => {
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Estimate Manager</h1>
-            <p className="text-gray-500 dark:text-gray-400">Create and manage your estimates</p>
+            <h1 className="text-2xl font-bold tracking-tight">Quotation</h1>
+            <p className="text-gray-500 dark:text-gray-400">Create and manage customer quotations</p>
           </div>
           <Button 
             className="mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700"
             onClick={() => setActiveTab("create")}
           >
             <Plus className="mr-2 h-4 w-4" />
-            New Estimate
+            New Quotation
           </Button>
         </div>
 
@@ -391,8 +391,8 @@ const EstimateManager = () => {
           <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
               <TabsList>
-                <TabsTrigger value="list">Estimate List</TabsTrigger>
-                <TabsTrigger value="create">{editingEstimateId ? "Edit Estimate" : "Create Estimate"}</TabsTrigger>
+                <TabsTrigger value="list">Quotation List</TabsTrigger>
+                <TabsTrigger value="create">{editingEstimateId ? "Edit Quotation" : "Create Quotation"}</TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent>

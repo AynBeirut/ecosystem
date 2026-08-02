@@ -21,6 +21,7 @@ type Props = {
   isLebaneseCoa?: boolean;
   pcgClientAccounts?: PcgClientAccount[];
   accountingLanguage?: AccountingLanguage;
+  initialPartyName?: string;
 };
 
 export default function PartyStatementPanel({
@@ -31,13 +32,14 @@ export default function PartyStatementPanel({
   isLebaneseCoa,
   pcgClientAccounts = [],
   accountingLanguage,
+  initialPartyName = '',
 }: Props) {
   const partyAccounts = useMemo(
     () => accounts.filter((a) => a.isActive && (isAccountsReceivableCode(a.code) || isAccountsPayableCode(a.code))),
     [accounts],
   );
   const [accountId, setAccountId] = useState('');
-  const [partyName, setPartyName] = useState('');
+  const [partyName, setPartyName] = useState(initialPartyName);
   const [startDate, setStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
 

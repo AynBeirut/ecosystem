@@ -83,8 +83,7 @@ const PAGE_TITLES: Record<string, string> = {
 function resolvePageTitle(pathname: string, fallback: string) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/admin/crm')) return 'Sales CRM';
-  if (pathname.startsWith('/admin/finance/invoices') || pathname.startsWith('/admin/finance/estimates') || pathname.startsWith('/admin/finance/receipts') || pathname.startsWith('/admin/finance/clients') || pathname.startsWith('/admin/finance/products') || (pathname.startsWith('/admin/finance/reports') && pathname !== '/admin/reports')) return 'Invoice Manager';
-  if (pathname.startsWith('/admin/finance')) return 'Finance';
+  if (pathname.startsWith('/admin/finance')) return 'Business Finance';
   if (pathname.startsWith('/admin/ai')) return 'AI Tools';
   const segment = pathname.split('/').filter(Boolean).pop();
   if (!segment) return fallback;
@@ -102,9 +101,11 @@ function renderSidebarNavItem(
     isRouteActive(item.to) ? activeClass : inactiveClass
   }`;
 
+  const itemKey = `${item.to}::${item.label}`;
+
   if (item.external) {
     return (
-      <a key={item.to} href={item.to} className={className}>
+      <a key={itemKey} href={item.to} className={className}>
         <Icon className="mr-2.5 h-4 w-4 shrink-0 opacity-80" />
         <span>{item.label}</span>
       </a>
@@ -113,7 +114,7 @@ function renderSidebarNavItem(
 
   return (
     <Link
-      key={item.to}
+      key={itemKey}
       to={item.to}
       onMouseEnter={() => preloadAdminRoute(item.to)}
       className={className}

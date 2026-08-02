@@ -1,5 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { GRABIO_TO_PCG_CODE, mapGrabioCodeToPcg, resolvePcgDisplay, displayPcgCode, formatPcgAccountLabel } from '@/lib/ledger/grabioToPcgMap';
+import {
+  GRABIO_TO_PCG_CODE,
+  mapGrabioCodeToPcg,
+  buildClientByParentPcgMap,
+  mapPcgCodeToGrabioCodes,
+  resolvePcgDisplay,
+  displayPcgCode,
+  displayPcgCodeForLedgerRow,
+  displayGrabioCodeForLedgerRow,
+  formatPcgAccountLabel,
+} from '@/lib/ledger/grabioToPcgMap';
 import type { PcgClientAccount } from '@/types/generalLedger';
 
 describe('grabioToPcgMap', () => {
@@ -52,6 +62,37 @@ describe('grabioToPcgMap', () => {
 
   it('formatPcgAccountLabel uses PCG code in dropdown labels', () => {
     expect(formatPcgAccountLabel({ code: '102', name: 'POS Cash Drawer' })).toBe('5300 — Cash On Hand');
+  });
+
+  it('maps PCG template codes back to Grabio operational codes', () => {
+    expect(mapPcgCodeToGrabioCodes('5300')).toEqual(['101', '102']);
+    expect(mapPcgCodeToGrabioCodes('5121')).toEqual(['105', '106']);
+  });
+
+  it('COA row shows client number left and Grabio middle', () => {
+    const clientByGrabio = new Map<string, PcgClientAccount>([
+      [
+        '102',
+        {
+          id: 'x',
+          clientCode: '53001000001',
+          grabioOperationalCode: '102',
+          parentPcgCode: '5300',
+          name: 'POS Cash Drawer',
+          nameAr: 'صندوق',
+          currency: 'LL',
+        },
+      ],
+    ]);
+    const clientByParentPcg = buildClientByParentPcgMap([...clientByGrabio.values()]);
+    expect(displayPcgCodeForLedgerRow({ code: '102', isPcgChart: false }, clientByGrabio, clientByParentPcg)).toBe(
+      '53001000001',
+    );
+    expect(displayGrabioCodeForLedgerRow({ code: '102', isPcgChart: false }, clientByParentPcg)).toBe('102');
+    expect(displayPcgCodeForLedgerRow({ code: '5300', isPcgChart: true }, clientByGrabio, clientByParentPcg)).toBe(
+      '53001000001',
+    );
+    expect(displayGrabioCodeForLedgerRow({ code: '5300', isPcgChart: true }, clientByParentPcg)).toBe('102');
   });
 
   it('covers every Grabio SMB seed code', () => {

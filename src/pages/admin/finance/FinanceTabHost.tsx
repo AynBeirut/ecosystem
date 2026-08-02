@@ -6,22 +6,22 @@ import {
   getCachedFinancePage,
   loadAccounting,
   loadEstimateManager,
-  loadExpenseManager,
   loadFinanceReports,
+  loadFinanceSettings,
   loadFinancePage,
-  loadInvoiceManager,
   loadReceiptManager,
   preloadFinancePages,
   type FinancePageLoader,
 } from '@/pages/admin/finance/financeEmbeddedLoaders';
 
 const FINANCE_TABS: { key: string; prefix: string; loader: FinancePageLoader }[] = [
-  { key: 'invoices', prefix: '/admin/finance/invoices', loader: loadInvoiceManager },
+  { key: 'quotations', prefix: '/admin/finance/quotations', loader: loadEstimateManager },
   { key: 'estimates', prefix: '/admin/finance/estimates', loader: loadEstimateManager },
-  { key: 'receipts', prefix: '/admin/finance/receipts', loader: loadReceiptManager },
-  { key: 'expenses', prefix: '/admin/finance/expenses', loader: loadExpenseManager },
-  { key: 'reports', prefix: '/admin/finance/reports', loader: loadFinanceReports },
   { key: 'accounting', prefix: '/admin/finance/accounting', loader: loadAccounting },
+  { key: 'recu', prefix: '/admin/finance/recu', loader: loadReceiptManager },
+  { key: 'receipts', prefix: '/admin/finance/receipts', loader: loadReceiptManager },
+  { key: 'reports', prefix: '/admin/finance/reports', loader: loadFinanceReports },
+  { key: 'settings', prefix: '/admin/finance/settings', loader: loadFinanceSettings },
 ];
 
 function buildInitialPages(): Record<string, React.ComponentType> {

@@ -7,6 +7,7 @@ import type {
   TrialBalanceViewMode,
 } from '@/types/generalLedger';
 import { buildTrialBalance } from '@/lib/ledger/trialBalance';
+import { sortLedgerAccountsByCode } from '@/lib/ledger/accountCodeSort';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -68,7 +69,7 @@ export function buildExtendedTrialBalance(
   const closingMap = sumsForRange(accounts, entries, lines, undefined, endDate);
 
   const rows: TrialBalanceExtendedRow[] = [];
-  for (const account of accounts.filter((a) => a.isActive).sort((a, b) => a.code.localeCompare(b.code))) {
+  for (const account of sortLedgerAccountsByCode(accounts.filter((a) => a.isActive))) {
     const opening = openingMap.get(account.id) || { debit: 0, credit: 0 };
     const period = periodMap.get(account.id) || { debit: 0, credit: 0 };
     const closing = closingMap.get(account.id) || { debit: 0, credit: 0 };

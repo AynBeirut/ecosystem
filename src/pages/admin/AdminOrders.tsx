@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useRef } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import jsPDF from 'jspdf';
@@ -145,6 +146,7 @@ const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
 const AdminOrders: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const [searchParams, setSearchParams] = useSearchParams();
   const isMobile = useIsMobile();
   const { enabled: systemGuideEnabled } = useSystemGuide();
   
@@ -949,6 +951,27 @@ const AdminOrders: React.FC = () => {
     };
     fetchData();
   }, [user, toast]);
+
+  useEffect(() => {
+    if (loading || orders.length === 0) return;
+    const orderId = searchParams.get('orderId');
+    const invoice = searchParams.get('invoice');
+    let match: (Order & { id: string }) | undefined;
+    if (orderId) {
+      match = orders.find((o) => o.id === orderId);
+    } else if (invoice) {
+      const term = invoice.trim().toLowerCase();
+      match = orders.find(
+        (o) =>
+          String(o.invoiceNumber || '').toLowerCase() === term ||
+          String(o.orderNumber || '').toLowerCase() === term,
+      );
+    }
+    if (match) {
+      setViewingOrder(match);
+      setSearchParams({}, { replace: true });
+    }
+  }, [loading, orders, searchParams, setSearchParams]);
 
   const calculateOrderTotals = (items: OrderItem[], taxType: string, taxRate: number, discountType: string, discountValue: number, deliveryMethod: DeliveryMethod) => {
     // Calculate raw subtotal (before any discounts)

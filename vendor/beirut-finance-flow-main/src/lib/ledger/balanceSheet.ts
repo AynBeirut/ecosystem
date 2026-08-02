@@ -5,6 +5,7 @@ import type {
   LedgerAccount,
 } from '@/types/generalLedger';
 import { buildTrialBalance } from '@/lib/ledger/trialBalance';
+import { compareLedgerAccountCode } from '@/lib/ledger/accountCodeSort';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -24,7 +25,7 @@ function sectionFromAccounts(
   const tbMap = new Map(tbRows.map((r) => [r.accountId, r]));
   const rows = typeAccounts
     .filter((a) => a.isActive)
-    .sort((a, b) => a.code.localeCompare(b.code))
+    .sort((a, b) => compareLedgerAccountCode(a.code, b.code))
     .map((a) => {
       const tb = tbMap.get(a.id);
       if (!tb) return null;

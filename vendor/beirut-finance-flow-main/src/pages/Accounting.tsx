@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "react-router-dom";
 import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { useAccounting } from "@/context/AccountingContext";
@@ -64,7 +65,7 @@ import { updateLedgerAccountNames } from "@/lib/firestore/ledgerFirestore";
 import LebanesePcgCoaPanel from "@/components/LebanesePcgCoaPanel";
 import PcgClientAccountsPanel from "@/components/PcgClientAccountsPanel";
 import { PcgMappedCodeBadge } from "@/components/PcgMappedAccountCell";
-import { buildClientByGrabioMap, resolvePcgDisplay, formatPcgAccountLabel, formatGlAccountReference, remapCashFlowLineLabel, displayPcgCode } from "@/lib/ledger/grabioToPcgMap";
+import { buildClientByGrabioMap, buildClientByParentPcgMap, resolvePcgDisplay, formatPcgAccountLabel, formatGlAccountReference, remapCashFlowLineLabel, displayPcgCode, displayPcgCodeForLedgerRow, displayGrabioCodeForLedgerRow } from "@/lib/ledger/grabioToPcgMap";
 import { loadPcgClientAccounts } from "@/lib/firestore/pcgClientAccountsFirestore";
 import type { PcgClientAccount } from "@/types/generalLedger";
 import type { LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
@@ -114,27 +115,27 @@ type AccountingTabDef = {
 
 const ACCOUNTING_TAB_ROWS: AccountingTabDef[][] = [
   [
+    { value: "vouchers", label: "Vouchers (JV/PV/RV/CV)", shortLabel: "Vouchers", icon: FileText, tone: "violet" },
     { value: "workspace", label: "Workspace", icon: BookOpen, tone: "emerald" },
     { value: "coa", label: "Chart of Accounts", shortLabel: "COA", icon: Layers, tone: "blue" },
-    { value: "vouchers", label: "Vouchers", icon: FileText, tone: "violet" },
+    { value: "party-soa", label: "Party SOA", icon: FileText, tone: "blue" },
+    { value: "general-ledger", label: "GL Report", icon: Layers, tone: "indigo" },
+    { value: "trial-balance", label: "Trial Balance", icon: Scale, tone: "indigo" },
+    { value: "balance-sheet", label: "Balance Sheet", icon: FileSpreadsheet, tone: "teal" },
+  ],
+  [
+    { value: "profit-loss", label: "P&L", icon: PieChart, tone: "green" },
     { value: "vat-filing", label: "VAT Filing", icon: Receipt, tone: "amber" },
     { value: "ar-aging", label: "AR Aging", icon: TrendingUp, tone: "emerald" },
     { value: "ap-aging", label: "AP Aging", icon: TrendingDown, tone: "orange" },
     { value: "cash-flow", label: "Cash Flow", icon: Wallet, tone: "cyan" },
-  ],
-  [
     { value: "depreciation", label: "Depreciation", icon: Calculator, tone: "rose" },
-    { value: "trial-balance", label: "Trial Balance", icon: Scale, tone: "indigo" },
-    { value: "balance-sheet", label: "Balance Sheet", icon: FileSpreadsheet, tone: "teal" },
-    { value: "profit-loss", label: "P&L", icon: PieChart, tone: "green" },
-    { value: "opening", label: "Opening Balances", shortLabel: "Opening", icon: CalendarRange, tone: "sky" },
     { value: "reconciliation", label: "Reconciliation", icon: GitCompare, tone: "purple" },
-    { value: "bank-rec", label: "Bank Rec", icon: Landmark, tone: "slate" },
   ],
   [
+    { value: "bank-rec", label: "Bank Rec", icon: Landmark, tone: "slate" },
+    { value: "opening", label: "Opening Balances", shortLabel: "Opening", icon: CalendarRange, tone: "sky" },
     { value: "fx-revaluation", label: "FX Reval", icon: RefreshCw, tone: "amber" },
-    { value: "party-soa", label: "Party SOA", icon: FileText, tone: "blue" },
-    { value: "general-ledger", label: "GL Report", icon: Layers, tone: "indigo" },
     { value: "tax-reports", label: "Tax (R10/CNSS)", icon: Receipt, tone: "rose" },
     { value: "recurring", label: "Recurring", icon: Repeat, tone: "violet" },
     { value: "checks", label: "Checks", icon: FileText, tone: "orange" },
@@ -192,7 +193,8 @@ const Accounting = () => {
   const [reopenTargetId, setReopenTargetId] = useState("");
   const [periodActionLoading, setPeriodActionLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState("trial-balance");
+  const [activeTab, setActiveTab] = useState("vouchers");
+  const [searchParams] = useSearchParams();
   const [posting, setPosting] = useState(false);
   const [openingAccountId, setOpeningAccountId] = useState("");
   const [openingAmount, setOpeningAmount] = useState("");
@@ -255,6 +257,10 @@ const Accounting = () => {
     () => buildClientByGrabioMap(pcgClientAccounts),
     [pcgClientAccounts],
   );
+  const clientByParentPcg = useMemo(
+    () => buildClientByParentPcgMap(pcgClientAccounts),
+    [pcgClientAccounts],
+  );
 
   useEffect(() => {
     if (!isLebaneseCoa || !financeStoreId) {
@@ -304,12 +310,20 @@ const Accounting = () => {
     [accounts, entries, lines, asOfDate],
   );
 
-  // Lebanese stores default to Workspace on first load only — do not block Trial Balance afterward.
+  // Lebanese stores: prefer workspace when no deep-link tab (legacy); URL ?tab= wins.
   useEffect(() => {
+    if (searchParams.get("tab")) return;
     if (isLebaneseCoa) {
-      setActiveTab((current) => (current === "trial-balance" ? "workspace" : current));
+      setActiveTab((current) => (current === "vouchers" ? "workspace" : current));
     }
-  }, [isLebaneseCoa]);
+  }, [isLebaneseCoa, searchParams]);
+
+  useEffect(() => {
+    const tab = searchParams.get("tab");
+    if (!tab) return;
+    const allowed = ACCOUNTING_TAB_ROWS.flat().map((t) => t.value);
+    if (allowed.includes(tab)) setActiveTab(tab);
+  }, [searchParams]);
 
   useEffect(() => {
     const parsed = consumeLedgerFocus();
@@ -1079,9 +1093,9 @@ const Accounting = () => {
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Code</TableHead>
+                      <TableHead>{isLebaneseCoa ? "Account number" : "Code"}</TableHead>
+                      {isLebaneseCoa ? <TableHead className="w-[88px]">Grabio</TableHead> : null}
                       <TableHead>Name</TableHead>
-                      {isLebaneseCoa ? <TableHead>PCG code</TableHead> : null}
                       {arabicEntry ? <TableHead>Arabic name</TableHead> : null}
                       <TableHead>Type</TableHead>
                       <TableHead className="text-right">Opening</TableHead>
@@ -1092,13 +1106,17 @@ const Accounting = () => {
                   <TableBody>
                     {accounts.map((a) => (
                       <TableRow key={a.id}>
-                        <TableCell className="font-mono">{a.code}</TableCell>
-                        <TableCell>{a.name}</TableCell>
+                        <TableCell className="font-mono text-xs tabular-nums">
+                          {isLebaneseCoa
+                            ? displayPcgCodeForLedgerRow(a, clientByGrabio, clientByParentPcg)
+                            : a.code}
+                        </TableCell>
                         {isLebaneseCoa ? (
-                          <TableCell className="font-mono text-xs">
-                            <PcgMappedCodeBadge grabioCode={a.code} clientByGrabio={clientByGrabio} showGrabioHint />
+                          <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
+                            {displayGrabioCodeForLedgerRow(a, clientByParentPcg)}
                           </TableCell>
                         ) : null}
+                        <TableCell>{a.name}</TableCell>
                         {arabicEntry ? (
                           <TableCell dir="rtl" className="text-right">
                             {a.nameAr || "—"}
@@ -1998,9 +2016,16 @@ const Accounting = () => {
                       ? trialBalance.rows.map((r) => (
                           <TableRow key={r.accountId}>
                             <TableCell>
-                              {isLebaneseCoa ? (
-                                <PcgMappedCodeBadge grabioCode={r.accountCode} clientByGrabio={clientByGrabio} />
-                              ) : (
+                              {isLebaneseCoa ? (() => {
+                                const account = accounts.find((a) => a.id === r.accountId);
+                                return (
+                                  <span className="font-mono text-xs tabular-nums">
+                                    {account
+                                      ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg)
+                                      : displayPcgCode(r.accountCode, clientByGrabio)}
+                                  </span>
+                                );
+                              })() : (
                                 <span className="font-mono">{r.accountCode}</span>
                               )}
                             </TableCell>
@@ -2018,9 +2043,15 @@ const Accounting = () => {
                             </TableCell>
                           </TableRow>
                         ))
-                      : extendedTrialBalance.rows.map((r) => (
+                      : extendedTrialBalance.rows.map((r) => {
+                          const account = accounts.find((a) => a.id === r.accountId);
+                          const pcgCode =
+                            account && isLebaneseCoa
+                              ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg)
+                              : r.accountCode;
+                          return (
                           <TableRow key={r.accountId}>
-                            <TableCell className="font-mono text-xs">{r.accountCode}</TableCell>
+                            <TableCell className="font-mono text-xs tabular-nums">{pcgCode}</TableCell>
                             <TableCell>{r.accountName}</TableCell>
                             <TableCell className="text-right">{r.openingDebit ? formatCurrency(r.openingDebit) : "—"}</TableCell>
                             <TableCell className="text-right">{r.openingCredit ? formatCurrency(r.openingCredit) : "—"}</TableCell>
@@ -2041,7 +2072,8 @@ const Accounting = () => {
                               </Button>
                             </TableCell>
                           </TableRow>
-                        ))}
+                          );
+                        })}
                     <TableRow className="font-semibold border-t-2">
                       <TableCell colSpan={4}>Totals</TableCell>
                       <TableCell className="text-right">{formatCurrency(trialBalance.totalDebits)}</TableCell>
@@ -2280,6 +2312,7 @@ const Accounting = () => {
               isLebaneseCoa={isLebaneseCoa}
               pcgClientAccounts={pcgClientAccounts}
               accountingLanguage={accountingLanguage}
+              initialPartyName={searchParams.get("partyName") || ""}
             />
           </TabsContent>
 

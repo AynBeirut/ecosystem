@@ -5,19 +5,21 @@ export const loadEstimateManager = () => import('../../../../vendor/beirut-finan
 export const loadReceiptManager = () => import('../../../../vendor/beirut-finance-flow-main/src/pages/ReceiptManager.tsx');
 export const loadClientsManager = () => import('../../../../vendor/beirut-finance-flow-main/src/pages/ClientsManager.tsx');
 export const loadProductsManager = () => import('../../../../vendor/beirut-finance-flow-main/src/pages/ProductsManager.tsx');
-export const loadFinanceReports = () => import('../../../../vendor/beirut-finance-flow-main/src/pages/Reports.tsx');
+export const loadFinanceReports = () => import('@/pages/admin/finance/BusinessFinanceReports');
+export const loadFinanceSettings = () => import('@/pages/admin/finance/BusinessFinanceSettings');
 export const loadExpenseManager = () => import('../../../../vendor/beirut-finance-flow-main/src/pages/ExpenseManager.tsx');
 export const loadAccounting = () => import('../../../../vendor/beirut-finance-flow-main/src/pages/Accounting.tsx');
 
 export type FinancePageLoader = () => Promise<{ default: ComponentType }>;
 
 export const FINANCE_PAGE_LOADERS: FinancePageLoader[] = [
-  loadInvoiceManager,
   loadEstimateManager,
   loadReceiptManager,
   loadFinanceReports,
-  loadExpenseManager,
+  loadFinanceSettings,
   loadAccounting,
+  loadInvoiceManager,
+  loadExpenseManager,
 ];
 
 const pageCache = new Map<FinancePageLoader, ComponentType>();

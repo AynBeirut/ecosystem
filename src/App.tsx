@@ -2,16 +2,20 @@ import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, useLocation, Navigate } from "react-router-dom";
 import { HelmetProvider } from 'react-helmet-async';
 import { initGA, trackPageView } from './lib/analytics';
-import { initMetaPixel } from './lib/metaPixel';
+import { initMetaPixel, pixelPageView } from './lib/metaPixel';
+import { initGTM } from './lib/gtm';
 
 // Initialize analytics on load (no-ops if env vars not set)
 initGA();
 initMetaPixel();
+initGTM();
 
 function RouteTracker() {
   const location = useLocation();
   useEffect(() => {
-    trackPageView(location.pathname + location.search);
+    const path = location.pathname + location.search;
+    trackPageView(path);
+    pixelPageView();
   }, [location]);
   return null;
 }
@@ -93,6 +97,8 @@ const AdminSEOAnalytics = lazy(() => import("./pages/admin/AdminSEOAnalytics"));
 const AdminSEOAudit = lazy(() => import("./pages/admin/AdminSEOAudit"));
 const GscCallback = lazy(() => import("./pages/auth/GscCallback"));
 const UseCases = lazy(() => import("./pages/public/UseCases"));
+const SolutionsIndex = lazy(() => import("./pages/public/SolutionsIndex"));
+const SolutionDetail = lazy(() => import("./pages/public/SolutionDetail"));
 const About = lazy(() => import("./pages/public/About"));
 const Blog = lazy(() => import("./pages/public/Blog"));
 const BlogPost = lazy(() => import("./pages/public/BlogPost"));
@@ -275,11 +281,14 @@ function AppFooter() {
                         <Route path="/admin/salaries" element={<ProtectedRoute allowedRoles={['admin']}><AdminSalaries /></ProtectedRoute>} />
                         <Route path="/admin/sub-accounts" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="team"><AdminSubAccounts /></ProtectedRoute>} />
                         {/* Financial */}
-                        <Route path="/admin/expenses" element={<Navigate to="/admin/finance/expenses" replace />} />
+                        <Route path="/admin/expenses" element={<Navigate to="/admin/finance/accounting?tab=vouchers" replace />} />
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminReports /></ProtectedRoute>} />
                         <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminFinanceSuite /></ProtectedRoute>} />
                         <Route path="/admin/finance/clients" element={<Navigate to="/admin/customers" replace />} />
                         <Route path="/admin/finance/products" element={<Navigate to="/admin/products" replace />} />
+                        <Route path="/admin/finance/invoices" element={<Navigate to="/admin/finance/accounting" replace />} />
+                        <Route path="/admin/finance/estimates" element={<Navigate to="/admin/finance/quotations" replace />} />
+                        <Route path="/admin/finance/receipts" element={<Navigate to="/admin/finance/recu" replace />} />
                         <Route path="/admin/finance/*" element={<ProtectedRoute allowedRoles={['admin']}><FinanceModuleShell /></ProtectedRoute>} />
                         <Route path="/admin/pos" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="pos"><PosPairing /></ProtectedRoute>} />
                         <Route path="/admin/ai-builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="ai_builder"><AiBuilder /></ProtectedRoute>} />
@@ -315,6 +324,8 @@ function AppFooter() {
                         <Route path="/invoice/*" element={<InvoiceSpaRedirect />} />
                         {/* Public marketing pages — must be BEFORE /:slug */}
                         <Route path="/features" element={<Features />} />
+                        <Route path="/solutions" element={<SolutionsIndex />} />
+                        <Route path="/solutions/:slug" element={<SolutionDetail />} />
                         <Route path="/pricing" element={<Pricing />} />
                         <Route path="/use-cases" element={<UseCases />} />
                         <Route path="/about" element={<About />} />

@@ -32,7 +32,7 @@ const ProtectedRoute: React.FC<{
     const path = location.pathname;
     if (path.startsWith('/admin/crm')) return 'Sales CRM';
     if (path.startsWith('/team/crm')) return 'Sales CRM';
-    if (path.startsWith('/admin/finance')) return 'Invoice Manager';
+    if (path.startsWith('/admin/finance')) return 'Business Finance';
     if (path === '/admin/customers') return 'Customer Management';
     if (path.startsWith('/admin')) return 'Workspace';
     if (path.startsWith('/team')) return 'Team Dashboard';

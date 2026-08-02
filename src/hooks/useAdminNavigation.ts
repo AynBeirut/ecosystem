@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import {
   BarChart,
@@ -10,6 +10,7 @@ import {
   Globe,
   LayoutGrid,
   LayoutTemplate,
+  Landmark,
   Mail,
   Megaphone,
   Monitor,
@@ -55,11 +56,82 @@ const DEFAULT_OPEN_GROUPS: Record<string, boolean> = {
   setup_system: false,
 };
 
+const PROFILE_SETUP_ROUTES = [
+  '/admin/profile',
+  '/admin/payments',
+  '/admin/delivery',
+  '/admin/announcements',
+  '/admin/marketing',
+  '/admin/seo-analytics',
+  '/admin/seo-audit',
+];
+
+const TEMPLATE_ROUTES = ['/admin/templates', '/admin/theme-editor', '/admin/builder'];
+
+const BUSINESS_TOOLS_ROUTES = [
+  '/admin/finance',
+  '/admin/account-statement',
+  '/admin/cash-collection',
+  '/admin/delivery-wallet',
+  '/admin/staff',
+  '/admin/sub-accounts',
+  '/admin/marketplace',
+  '/admin/audit-logs',
+  '/admin/ai-agent',
+];
+
+function groupOpenForPath(pathname: string, groupId: string): boolean | undefined {
+  if (groupId === 'daily_stock') {
+    return (
+      pathname.startsWith('/admin/inventory') ||
+      pathname.startsWith('/admin/products') ||
+      pathname.startsWith('/admin/purchases') ||
+      pathname.startsWith('/admin/delivery')
+    );
+  }
+  if (groupId === 'daily_sales') {
+    return (
+      pathname.startsWith('/admin/orders') ||
+      pathname.startsWith('/admin/pos') ||
+      pathname.startsWith('/admin/customers') ||
+      pathname.startsWith('/admin/crm') ||
+      pathname.startsWith('/admin/payments') ||
+      pathname.startsWith('/admin/analytics')
+    );
+  }
+  if (groupId === 'setup_profile') {
+    return PROFILE_SETUP_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  }
+  if (groupId === 'setup_template') {
+    return TEMPLATE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  }
+  if (groupId === 'setup_system') {
+    return (
+      BUSINESS_TOOLS_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`)) ||
+      pathname.startsWith('/admin/finance/')
+    );
+  }
+  return undefined;
+}
+
 export function useAdminNavigation() {
   const { user } = useAuth();
   const location = useLocation();
   const { canUse: canUseModule, profile } = useStoreEntitlements();
   const [openMenuGroups, setOpenMenuGroups] = useState<Record<string, boolean>>(DEFAULT_OPEN_GROUPS);
+  const isAdmin = user?.role === 'admin';
+
+  useEffect(() => {
+    const pathname = location.pathname;
+    setOpenMenuGroups((prev) => {
+      const next = { ...prev };
+      for (const groupId of Object.keys(DEFAULT_OPEN_GROUPS)) {
+        const shouldOpen = groupOpenForPath(pathname, groupId);
+        if (shouldOpen === true) next[groupId] = true;
+      }
+      return next;
+    });
+  }, [location.pathname]);
 
   const canViewInventory = user?.role === 'admin' || user?.permissions?.includes('view_inventory');
   const canManageInventory = user?.role === 'admin' || user?.permissions?.includes('manage_inventory');
@@ -101,13 +173,23 @@ export function useAdminNavigation() {
         title: 'Stock & Catalog',
         items: [
           {
-            to: user?.role === 'admin' ? '/admin/inventory' : '/admin/products',
-            label: user?.role === 'admin' ? 'Inventory Overview' : 'Products',
+            to: '/admin/inventory',
+            label: 'Inventory Overview',
+            icon: Package,
+            visible: Boolean(isAdmin && canViewInventory),
+          },
+          {
+            to: '/admin/products',
+            label: 'Products',
             icon: Package,
             visible: Boolean(canViewInventory),
           },
-          { to: '/admin/products', label: 'Products', icon: Package, visible: Boolean(canViewInventory) },
-          { to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: Boolean(canManageInventory) },
+          {
+            to: '/admin/purchases',
+            label: 'Purchases',
+            icon: ShoppingCart,
+            visible: Boolean(isAdmin && canManageInventory),
+          },
           { to: '/admin/delivery', label: 'Delivery', icon: Clock, visible: Boolean(canManageDeliveries) },
         ],
       },
@@ -135,17 +217,22 @@ export function useAdminNavigation() {
         id: 'setup_profile',
         title: 'Profile & Store Setup',
         items: [
-          { to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
+          { to: '/admin/profile', label: 'Store Profile', icon: User, visible: isAdmin },
           {
             to: '/admin/payments',
             label: 'Payment Settings',
             icon: CreditCard,
-            visible: user?.role === 'admin' && Boolean(canProcessPayments),
+            visible: isAdmin && Boolean(canProcessPayments),
           },
-          { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: user?.role === 'admin' },
-          { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: user?.role === 'admin' && Boolean(canViewReports) },
-          { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
-          { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
+          {
+            to: '/admin/announcements',
+            label: 'Announcements',
+            icon: Megaphone,
+            visible: isAdmin || user?.role === 'sub_account',
+          },
+          { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: isAdmin && Boolean(canViewReports) },
+          { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: isAdmin },
+          { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: isAdmin },
         ],
       },
       {
@@ -164,8 +251,8 @@ export function useAdminNavigation() {
           { to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
           {
             to: INVOICE_MANAGER_EMBED_URL,
-            label: 'Invoice Manager',
-            icon: Receipt,
+            label: 'Business Finance',
+            icon: Landmark,
             visible: invoiceManagerEnabled,
           },
           { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: canUseBusinessTools },
@@ -209,6 +296,7 @@ export function useAdminNavigation() {
     invoiceManagerEnabled,
     financeSuiteVisible,
     builderVisible,
+    isAdmin,
     user?.role,
     user?.subAccountRole,
     canUseBusinessTools,

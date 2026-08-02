@@ -30,6 +30,7 @@ import {
   replacePcgClientAccounts,
   savePcgClientAccount,
 } from "@/lib/firestore/pcgClientAccountsFirestore";
+import { sortLedgerAccountsByCode } from "@/lib/ledger/accountCodeSort";
 import {
   parsePcgClientAccountsCsv,
   pcgClientAccountsToCsv,
@@ -80,10 +81,7 @@ export default function PcgClientAccountsPanel({
   const [saveError, setSaveError] = useState("");
 
   const grabioOptions = useMemo(
-    () =>
-      [...activeLedgerAccounts]
-        .filter((a) => a.isActive)
-        .sort((a, b) => a.code.localeCompare(b.code)),
+    () => sortLedgerAccountsByCode(activeLedgerAccounts.filter((a) => a.isActive)),
     [activeLedgerAccounts],
   );
 
@@ -279,6 +277,7 @@ export default function PcgClientAccountsPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Account number</TableHead>
+                <TableHead className="w-[72px]">Grabio</TableHead>
                 <TableHead>Parent PCG</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Cur</TableHead>
@@ -288,7 +287,8 @@ export default function PcgClientAccountsPanel({
             <TableBody>
               {rows.map((row) => (
                 <TableRow key={row.id}>
-                  <TableCell className="font-mono text-xs">{row.clientCode}</TableCell>
+                  <TableCell className="font-mono text-xs tabular-nums">{row.clientCode}</TableCell>
+                  <TableCell className="font-mono text-xs text-muted-foreground">{row.grabioOperationalCode}</TableCell>
                   <TableCell className="font-mono text-xs">{row.parentPcgCode || "—"}</TableCell>
                   <TableCell>
                     <div>{row.name || "—"}</div>

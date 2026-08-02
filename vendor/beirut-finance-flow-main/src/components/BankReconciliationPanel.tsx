@@ -42,7 +42,7 @@ import {
 import SystemGuideInfo from "@/components/SystemGuideInfo";
 import { getFinanceAuth } from "@/integrations/firebase/client";
 import { buildClientByGrabioMap, displayPcgCode, formatPcgAccountLabel } from "@/lib/ledger/grabioToPcgMap";
-import type { AccountingLanguage } from "@/lib/grabio/accountingMode";
+import { compareLedgerAccountCode } from "@/lib/ledger/accountCodeSort";
 
 type Props = {
   storeId: string;
@@ -76,7 +76,7 @@ export default function BankReconciliationPanel({
     () =>
       accounts
         .filter((a) => a.isActive && BANK_REC_PHASE1_ACCOUNT_CODES.includes(a.code as (typeof BANK_REC_PHASE1_ACCOUNT_CODES)[number]))
-        .sort((a, b) => a.code.localeCompare(b.code)),
+        .sort((a, b) => compareLedgerAccountCode(a.code, b.code)),
     [accounts],
   );
 

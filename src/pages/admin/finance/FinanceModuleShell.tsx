@@ -12,20 +12,19 @@ import {
   FINANCE_PAGE_LOADERS,
   loadAccounting,
   loadEstimateManager,
-  loadExpenseManager,
   loadFinanceReports,
-  loadInvoiceManager,
+  loadFinanceSettings,
   loadReceiptManager,
   preloadFinancePages,
 } from '@/pages/admin/finance/financeEmbeddedLoaders';
 
-const FINANCE_IM_NAV = [
-  { to: '/admin/finance/invoices', label: 'Invoices', preload: loadInvoiceManager },
-  { to: '/admin/finance/estimates', label: 'Estimates', preload: loadEstimateManager },
-  { to: '/admin/finance/receipts', label: 'Receipts', preload: loadReceiptManager },
-  { to: '/admin/finance/expenses', label: 'Expenses', preload: loadExpenseManager },
-  { to: '/admin/finance/reports', label: 'Reports', preload: loadFinanceReports },
+/** Top-level Business Finance navigation (owner-friendly labels). */
+const BUSINESS_FINANCE_NAV = [
+  { to: '/admin/finance/quotations', label: 'Quotation', preload: loadEstimateManager },
   { to: '/admin/finance/accounting', label: 'Accounting', preload: loadAccounting },
+  { to: '/admin/finance/recu', label: 'Reçu', preload: loadReceiptManager },
+  { to: '/admin/finance/reports', label: 'Reports', preload: loadFinanceReports },
+  { to: '/admin/finance/settings', label: 'Settings', preload: loadFinanceSettings },
 ] as const;
 
 const FinanceModuleShell: React.FC = () => {
@@ -41,14 +40,14 @@ const FinanceModuleShell: React.FC = () => {
   return (
     <FinanceInvoiceModuleGate>
       <AdminPageShell
-        title="Invoice Manager"
-        description="Invoices, estimates, receipts, expenses, and reports. Customers and catalog live under Sales & Stock."
+        title="Business Finance"
+        description="Quotations, receipts, accounting vouchers, reports, and document settings."
         eyebrow="Business Tools"
         backTo="/admin/dashboard"
         backLabel="Dashboard"
       >
         <nav className="flex flex-wrap gap-2 mb-2">
-          {FINANCE_IM_NAV.map((item) => (
+          {BUSINESS_FINANCE_NAV.map((item) => (
             <Link
               key={item.to}
               to={item.to}

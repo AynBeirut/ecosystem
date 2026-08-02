@@ -101,6 +101,30 @@ export function buildClientByGrabioMap(
   return map;
 }
 
+export function buildClientByParentPcgMap(
+  accounts: PcgClientAccount[],
+): Map<string, PcgClientAccount[]> {
+  const map = new Map<string, PcgClientAccount[]>();
+  for (const row of accounts) {
+    const parent = String(row.parentPcgCode || '').trim();
+    if (!parent) continue;
+    const list = map.get(parent) || [];
+    list.push(row);
+    map.set(parent, list);
+  }
+  return map;
+}
+
+/** Reverse lookup: PCG template detail code → Grabio operational posting code(s). */
+export function mapPcgCodeToGrabioCodes(pcgCode: string): string[] {
+  const code = String(pcgCode || '').trim();
+  if (!code) return [];
+  return Object.entries(GRABIO_TO_PCG_CODE)
+    .filter(([, pcg]) => pcg === code)
+    .map(([grabio]) => grabio)
+    .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
+}
+
 export function resolvePcgDisplay(
   grabioCode: string,
   fallbackName?: string,
@@ -132,6 +156,41 @@ export function displayPcgCode(
   clientByGrabio?: ReadonlyMap<string, PcgClientAccount>,
 ): string {
   return resolvePcgDisplay(grabioCode, undefined, clientByGrabio)?.pcgCode ?? String(grabioCode || '').trim();
+}
+
+/** Left COA column: client working number when seeded, else template PCG or mapped client code. */
+export function displayPcgCodeForLedgerRow(
+  account: { code: string; isPcgChart?: boolean },
+  clientByGrabio?: ReadonlyMap<string, PcgClientAccount>,
+  clientByParentPcg?: ReadonlyMap<string, PcgClientAccount[]>,
+): string {
+  if (!account.isPcgChart) {
+    return displayPcgCode(account.code, clientByGrabio);
+  }
+  const clients = clientByParentPcg?.get(account.code);
+  if (clients?.length) {
+    return clients.map((c) => c.clientCode).join(', ');
+  }
+  return account.code;
+}
+
+/** Middle COA column: Grabio operational posting code(s) for a ledger row. */
+export function displayGrabioCodeForLedgerRow(
+  account: { code: string; isPcgChart?: boolean },
+  clientByParentPcg?: ReadonlyMap<string, PcgClientAccount[]>,
+): string {
+  if (!account.isPcgChart) {
+    return account.code;
+  }
+  const fromClient = clientByParentPcg
+    ?.get(account.code)
+    ?.map((c) => c.grabioOperationalCode)
+    .filter(Boolean);
+  if (fromClient?.length) {
+    return [...new Set(fromClient)].join(', ');
+  }
+  const mapped = mapPcgCodeToGrabioCodes(account.code);
+  return mapped.length ? mapped.join(', ') : '—';
 }
 
 /** Dropdown / select label using PCG code + Excel chart name in Lebanese mode. */
