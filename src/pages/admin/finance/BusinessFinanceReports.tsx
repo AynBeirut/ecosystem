@@ -1,6 +1,5 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { adminSubnavLink } from '@/lib/adminStyles';
+import BusinessFinanceHubLayout, { BusinessFinanceHubSection, type BusinessFinanceHubItem } from '@/pages/admin/finance/BusinessFinanceHubLayout';
 import {
   Scale,
   FileSpreadsheet,
@@ -11,76 +10,44 @@ import {
   ShoppingCart,
   Package,
   TrendingUp,
-  List,
+  TrendingDown,
+  Wallet,
+  Receipt,
+  Landmark,
+  FileText,
 } from 'lucide-react';
 
-type ReportLink = {
-  to: string;
-  label: string;
-  description: string;
-  icon: React.ComponentType<{ className?: string }>;
-  external?: boolean;
-};
-
-const ACCOUNTING_REPORTS: ReportLink[] = [
+const ACCOUNTING_REPORTS: BusinessFinanceHubItem[] = [
   { to: '/admin/finance/accounting?tab=trial-balance', label: 'Trial Balance', description: 'All accounts — debits must equal credits.', icon: Scale },
   { to: '/admin/finance/accounting?tab=balance-sheet', label: 'Balance Sheet', description: 'Assets, liabilities, and equity.', icon: FileSpreadsheet },
   { to: '/admin/finance/accounting?tab=profit-loss', label: 'Profit & Loss', description: 'Revenue, costs, and net result.', icon: PieChart },
+  { to: '/admin/finance/accounting?tab=cash-flow', label: 'Cash Flow', description: 'Cash in and out for the period.', icon: Wallet },
   { to: '/admin/finance/accounting?tab=depreciation', label: 'Depreciation', description: 'Fixed assets and monthly runs.', icon: Calculator },
   { to: '/admin/finance/accounting?tab=reconciliation', label: 'Reconciliation', description: 'GL vs cash, bank, AR, and AP.', icon: GitCompare },
   { to: '/admin/finance/accounting?tab=general-ledger', label: 'General Ledger', description: 'Full ledger for any account.', icon: Layers },
+  { to: '/admin/finance/accounting?tab=party-soa', label: 'Party Statement', description: 'Customer or supplier GL statement.', icon: FileText },
+  { to: '/admin/finance/accounting?tab=vat-filing', label: 'VAT Filing', description: 'Output, input VAT, and MoF export.', icon: Receipt },
+  { to: '/admin/finance/accounting?tab=ar-aging', label: 'AR Aging', description: 'Who owes you — by age bucket.', icon: TrendingUp },
+  { to: '/admin/finance/accounting?tab=ap-aging', label: 'AP Aging', description: 'Who you owe — by age bucket.', icon: TrendingDown },
+  { to: '/admin/finance/accounting?tab=bank-rec', label: 'Bank Reconciliation', description: 'Match bank statement to books.', icon: Landmark },
+  { to: '/admin/finance/accounting?tab=tax-reports', label: 'Tax (R10 / CNSS)', description: 'Salary withholding and employer summary.', icon: Receipt },
 ];
 
-const STOCK_REPORTS: ReportLink[] = [
-  { to: '/admin/account-statement?tab=sales', label: 'List of Sales', description: 'Sales lines by customer and invoice.', icon: TrendingUp, external: true },
-  { to: '/admin/account-statement?tab=purchases', label: 'List of Purchases', description: 'Supplier purchases and payments.', icon: ShoppingCart, external: true },
-  { to: '/admin/inventory', label: 'Inventory & Stock Movement', description: 'Stock levels and movement overview.', icon: Package, external: true },
-  { to: '/admin/products', label: 'Items & Price List', description: 'Catalog, quantities, and prices.', icon: List, external: true },
+const STOCK_REPORTS: BusinessFinanceHubItem[] = [
+  { to: '/admin/account-statement?tab=sales', label: 'List of Sales', description: 'Sales lines by customer and invoice.', icon: TrendingUp },
+  { to: '/admin/account-statement?tab=purchases', label: 'List of Purchases', description: 'Supplier purchases and payments.', icon: ShoppingCart },
+  { to: '/admin/inventory', label: 'Inventory & Stock Movement', description: 'Stock levels and movement overview.', icon: Package },
+  { to: '/admin/products', label: 'Items & Price List', description: 'Catalog, quantities, and prices.', icon: Layers },
 ];
-
-function ReportSection({ title, items }: { title: string; items: ReportLink[] }) {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-lg font-semibold text-gray-900">{title}</h2>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {items.map((item) => {
-          const Icon = item.icon;
-          const className = `${adminSubnavLink(false)} flex flex-col items-start gap-1 h-auto py-3 text-left`;
-          const body = (
-            <>
-              <span className="flex items-center gap-2 font-medium">
-                <Icon className="h-4 w-4 shrink-0" />
-                {item.label}
-              </span>
-              <span className="text-xs font-normal text-gray-600">{item.description}</span>
-            </>
-          );
-          return item.external ? (
-            <Link key={item.to} to={item.to} className={className}>
-              {body}
-            </Link>
-          ) : (
-            <Link key={item.to} to={item.to} className={className}>
-              {body}
-            </Link>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
 
 const BusinessFinanceReports: React.FC = () => (
-  <div className="space-y-8 rounded-lg border bg-white p-4 md:p-6">
-    <div>
-      <h1 className="text-xl font-bold text-gray-900">Reports</h1>
-      <p className="text-sm text-gray-600 mt-1">
-        Financial statements from the ledger and operational stock lists — pick a report to open.
-      </p>
-    </div>
-    <ReportSection title="Accounting reports" items={ACCOUNTING_REPORTS} />
-    <ReportSection title="Stock & operations" items={STOCK_REPORTS} />
-  </div>
+  <BusinessFinanceHubLayout
+    title="Reports"
+    description="Financial statements and stock lists — pick one to open."
+  >
+    <BusinessFinanceHubSection title="Accounting reports" items={ACCOUNTING_REPORTS} />
+    <BusinessFinanceHubSection title="Stock & operations" items={STOCK_REPORTS} />
+  </BusinessFinanceHubLayout>
 );
 
 export default BusinessFinanceReports;

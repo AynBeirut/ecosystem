@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import AdminEmbedLoader from '@/components/admin/AdminEmbedLoader';
+import { BusinessFinancePageFrame } from '@/pages/admin/finance/BusinessFinanceHubLayout';
 import {
   FINANCE_PAGE_LOADERS,
   getCachedFinancePage,
@@ -14,11 +15,29 @@ import {
   type FinancePageLoader,
 } from '@/pages/admin/finance/financeEmbeddedLoaders';
 
-const FINANCE_TABS: { key: string; prefix: string; loader: FinancePageLoader }[] = [
-  { key: 'quotations', prefix: '/admin/finance/quotations', loader: loadEstimateManager },
+const FINANCE_TABS: {
+  key: string;
+  prefix: string;
+  loader: FinancePageLoader;
+  frameTitle?: string;
+  frameDescription?: string;
+}[] = [
+  {
+    key: 'quotations',
+    prefix: '/admin/finance/quotations',
+    loader: loadEstimateManager,
+    frameTitle: 'Quotation',
+    frameDescription: 'Create and send customer quotes before invoicing.',
+  },
   { key: 'estimates', prefix: '/admin/finance/estimates', loader: loadEstimateManager },
   { key: 'accounting', prefix: '/admin/finance/accounting', loader: loadAccounting },
-  { key: 'recu', prefix: '/admin/finance/recu', loader: loadReceiptManager },
+  {
+    key: 'recu',
+    prefix: '/admin/finance/recu',
+    loader: loadReceiptManager,
+    frameTitle: 'Reçu',
+    frameDescription: 'Record and review money received on the system.',
+  },
   { key: 'receipts', prefix: '/admin/finance/receipts', loader: loadReceiptManager },
   { key: 'reports', prefix: '/admin/finance/reports', loader: loadFinanceReports },
   { key: 'settings', prefix: '/admin/finance/settings', loader: loadFinanceSettings },
@@ -66,6 +85,8 @@ export default function FinanceTabHost() {
   if (!activeTab) return null;
 
   const ActivePage = pages[activeTab.key];
+  const useFrame = Boolean(activeTab.frameTitle);
+  const isHubPage = activeTab.key === 'reports' || activeTab.key === 'settings' || activeTab.key === 'accounting';
 
   return (
     <div className="finance-tab-host relative min-h-[120px]">
@@ -73,9 +94,18 @@ export default function FinanceTabHost() {
         const Comp = pages[tab.key];
         if (!Comp) return null;
         const visible = tab.key === activeTab.key;
+        const content = <Comp />;
         return (
           <div key={tab.key} className={visible ? 'block' : 'hidden'} aria-hidden={!visible}>
-            <Comp />
+            {useFrame && tab.frameTitle ? (
+              <BusinessFinancePageFrame title={tab.frameTitle} description={tab.frameDescription}>
+                {content}
+              </BusinessFinancePageFrame>
+            ) : isHubPage && visible ? (
+              content
+            ) : (
+              <div className="rounded-lg border bg-white p-4 md:p-6">{content}</div>
+            )}
           </div>
         );
       })}

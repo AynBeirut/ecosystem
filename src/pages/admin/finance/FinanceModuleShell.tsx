@@ -17,15 +17,58 @@ import {
   loadReceiptManager,
   preloadFinancePages,
 } from '@/pages/admin/finance/financeEmbeddedLoaders';
+import {
+  FileText,
+  Landmark,
+  Receipt,
+  Settings2,
+  BarChart3,
+} from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 
-/** Top-level Business Finance navigation (owner-friendly labels). */
-const BUSINESS_FINANCE_NAV = [
-  { to: '/admin/finance/quotations', label: 'Quotation', preload: loadEstimateManager },
-  { to: '/admin/finance/accounting', label: 'Accounting', preload: loadAccounting },
-  { to: '/admin/finance/recu', label: 'Reçu', preload: loadReceiptManager },
-  { to: '/admin/finance/reports', label: 'Reports', preload: loadFinanceReports },
-  { to: '/admin/finance/settings', label: 'Settings', preload: loadFinanceSettings },
-] as const;
+const BUSINESS_FINANCE_NAV: {
+  to: string;
+  label: string;
+  description: string;
+  icon: LucideIcon;
+  preload: (typeof FINANCE_PAGE_LOADERS)[number];
+}[] = [
+  {
+    to: '/admin/finance/quotations',
+    label: 'Quotation',
+    description: 'Customer quotes before sale',
+    icon: FileText,
+    preload: loadEstimateManager,
+  },
+  {
+    to: '/admin/finance/accounting',
+    label: 'Accounting',
+    description: 'Vouchers and ledger work',
+    icon: Landmark,
+    preload: loadAccounting,
+  },
+  {
+    to: '/admin/finance/recu',
+    label: 'Reçu',
+    description: 'Money received',
+    icon: Receipt,
+    preload: loadReceiptManager,
+  },
+  {
+    to: '/admin/finance/reports',
+    label: 'Reports',
+    description: 'TB, P&L, stock lists',
+    icon: BarChart3,
+    preload: loadFinanceReports,
+  },
+  {
+    to: '/admin/finance/settings',
+    label: 'Settings',
+    description: 'COA, FX, branding',
+    icon: Settings2,
+    preload: loadFinanceSettings,
+  },
+];
 
 const FinanceModuleShell: React.FC = () => {
   const location = useLocation();
@@ -41,36 +84,38 @@ const FinanceModuleShell: React.FC = () => {
     <FinanceInvoiceModuleGate>
       <AdminPageShell
         title="Business Finance"
-        description="Quotations, receipts, accounting vouchers, reports, and document settings."
+        description="Pick a module below — each area has its own clear menu."
         eyebrow="Business Tools"
         backTo="/admin/dashboard"
         backLabel="Dashboard"
       >
-        <nav className="flex flex-wrap gap-2 mb-2">
-          {BUSINESS_FINANCE_NAV.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              preventScrollReset
-              onMouseEnter={() => preloadFinancePages([item.preload])}
-              className={adminSubnavLink(location.pathname.startsWith(item.to))}
-              style={
-                location.pathname.startsWith(item.to)
-                  ? { backgroundColor: accent, borderColor: accent }
-                  : undefined
-              }
-            >
-              {item.label}
-            </Link>
-          ))}
+        <nav className="grid gap-2 sm:grid-cols-2 lg:grid-cols-5 mb-4">
+          {BUSINESS_FINANCE_NAV.map((item) => {
+            const Icon = item.icon;
+            const active = location.pathname.startsWith(item.to);
+            return (
+              <Link
+                key={item.to}
+                to={item.to}
+                preventScrollReset
+                onMouseEnter={() => preloadFinancePages([item.preload])}
+                className={`${adminSubnavLink(active)} flex flex-col items-start gap-0.5 h-auto py-3 text-left`}
+                style={active ? { backgroundColor: accent, borderColor: accent, color: '#fff' } : undefined}
+              >
+                <span className="flex items-center gap-2 font-medium">
+                  <Icon className="h-4 w-4 shrink-0" />
+                  {item.label}
+                </span>
+                <span className={`text-xs font-normal ${active ? 'text-white/90' : 'text-gray-600'}`}>
+                  {item.description}
+                </span>
+              </Link>
+            );
+          })}
         </nav>
         <div
           className="finance-embed-theme"
-          style={
-            {
-              '--finance-accent': accent,
-            } as React.CSSProperties
-          }
+          style={{ '--finance-accent': accent } as React.CSSProperties}
         >
           <FinanceAppBridge>
             <FinanceTabHost />

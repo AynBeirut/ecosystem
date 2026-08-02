@@ -1,5 +1,5 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { useAccounting } from "@/context/AccountingContext";
@@ -96,7 +96,8 @@ import { downloadCsvText } from "@/lib/csvExport";
 import { downloadXlsxFromCsv } from "@/lib/xlsxExport";
 import type { SettlementAllocationInput, TrialBalanceViewMode, VoucherLineSettlement } from "@/types/generalLedger";
 import type { LedgerActivityFocus } from "@/lib/ledger/ledgerActivity";
-import { consumeLedgerFocus } from "@/lib/ledger/ledgerActivity";
+import AccountingHubPanel from "@/components/AccountingHubPanel";
+import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
 
 function monthBounds(year: number, month: number): { start: string; end: string } {
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -113,6 +114,44 @@ type AccountingTabDef = {
   tone: string;
 };
 
+const ACCOUNTING_PRIMARY_TABS = new Set(["vouchers", "workspace", "party-soa"]);
+
+const ACCOUNTING_REPORT_TABS = new Set([
+  "trial-balance",
+  "balance-sheet",
+  "profit-loss",
+  "depreciation",
+  "reconciliation",
+  "general-ledger",
+  "vat-filing",
+  "ar-aging",
+  "ap-aging",
+  "cash-flow",
+  "bank-rec",
+  "tax-reports",
+]);
+
+const ACCOUNTING_SETTINGS_TABS = new Set([
+  "coa",
+  "opening",
+  "fx-revaluation",
+  "cost-centers",
+  "bulk-import",
+  "recurring",
+  "checks",
+]);
+
+function tabBackLink(tab: string): { to: string; label: string } {
+  if (ACCOUNTING_REPORT_TABS.has(tab)) {
+    return { to: "/admin/finance/reports", label: "Back to Reports" };
+  }
+  if (ACCOUNTING_SETTINGS_TABS.has(tab)) {
+    return { to: "/admin/finance/settings", label: "Back to Settings" };
+  }
+  return { to: "/admin/finance/accounting", label: "Back to Accounting" };
+}
+
+/** All tabs (for command palette labels only — not shown as tab bar). */
 const ACCOUNTING_TAB_ROWS: AccountingTabDef[][] = [
   [
     { value: "vouchers", label: "Vouchers (JV/PV/RV/CV)", shortLabel: "Vouchers", icon: FileText, tone: "violet" },
@@ -145,7 +184,9 @@ const ACCOUNTING_TAB_ROWS: AccountingTabDef[][] = [
 ];
 
 const Accounting = () => {
+  const navigate = useNavigate();
   const { logout, invoices, purchaseOrders, paymentOrders, activeOrganizationId, recordInvoicePayment } = useAppContext();
+  const { embedded } = useFinanceEmbed();
   const { profile, storeId: grabioStoreId } = useGrabioStore();
   const financeStoreId = grabioStoreId || activeOrganizationId || "";
   const accountingLanguage = normalizeAccountingLanguage(
@@ -193,8 +234,35 @@ const Accounting = () => {
   const [reopenTargetId, setReopenTargetId] = useState("");
   const [periodActionLoading, setPeriodActionLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState("vouchers");
+  const [activeTab, setActiveTab] = useState("hub");
   const [searchParams] = useSearchParams();
+
+  const goToTab = useCallback(
+    (tab: string) => {
+      if (tab === "hub") {
+        navigate("/admin/finance/accounting");
+        setActiveTab("hub");
+        return;
+      }
+      navigate(`/admin/finance/accounting?tab=${encodeURIComponent(tab)}`);
+      setActiveTab(tab);
+    },
+    [navigate],
+  );
+
+  const navigateFromQuickBar = useCallback(
+    (tab: string) => {
+      const reportOrSettings =
+        ACCOUNTING_REPORT_TABS.has(tab) || ACCOUNTING_SETTINGS_TABS.has(tab);
+      if (reportOrSettings) {
+        navigate(`/admin/finance/accounting?tab=${encodeURIComponent(tab)}`);
+        setActiveTab(tab);
+        return;
+      }
+      goToTab(tab);
+    },
+    [goToTab, navigate],
+  );
   const [posting, setPosting] = useState(false);
   const [openingAccountId, setOpeningAccountId] = useState("");
   const [openingAmount, setOpeningAmount] = useState("");
@@ -225,10 +293,13 @@ const Accounting = () => {
     setLedgerFocus({ kind: "account", accountId, label });
   }, []);
 
-  const openAccountDrill = useCallback((accountId: string) => {
-    setGlPresetAccountId(accountId);
-    setActiveTab("general-ledger");
-  }, []);
+  const openAccountDrill = useCallback(
+    (accountId: string) => {
+      setGlPresetAccountId(accountId);
+      navigateFromQuickBar("general-ledger");
+    },
+    [navigateFromQuickBar],
+  );
 
   const openClientVouchers = useCallback((clientId: string | undefined, clientName: string) => {
     setLedgerFocus({
@@ -310,19 +381,13 @@ const Accounting = () => {
     [accounts, entries, lines, asOfDate],
   );
 
-  // Lebanese stores: prefer workspace when no deep-link tab (legacy); URL ?tab= wins.
-  useEffect(() => {
-    if (searchParams.get("tab")) return;
-    if (isLebaneseCoa) {
-      setActiveTab((current) => (current === "vouchers" ? "workspace" : current));
-    }
-  }, [isLebaneseCoa, searchParams]);
-
   useEffect(() => {
     const tab = searchParams.get("tab");
-    if (!tab) return;
-    const allowed = ACCOUNTING_TAB_ROWS.flat().map((t) => t.value);
-    if (allowed.includes(tab)) setActiveTab(tab);
+    if (!tab) {
+      setActiveTab("hub");
+      return;
+    }
+    setActiveTab(tab);
   }, [searchParams]);
 
   useEffect(() => {
@@ -341,11 +406,14 @@ const Accounting = () => {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  const openClientAccountFromPcg = useCallback((account: LebanesePcgAccount) => {
-    setPcgPrefillAccount(account);
-    setPcgPrefillKey((key) => key + 1);
-    setActiveTab("coa");
-  }, []);
+  const openClientAccountFromPcg = useCallback(
+    (account: LebanesePcgAccount) => {
+      setPcgPrefillAccount(account);
+      setPcgPrefillKey((key) => key + 1);
+      navigateFromQuickBar("coa");
+    },
+    [navigateFromQuickBar],
+  );
 
   const [vatMonth, setVatMonth] = useState(() => new Date().getMonth() + 1);
   const [vatYear, setVatYear] = useState(() => new Date().getFullYear());
@@ -642,7 +710,7 @@ const Accounting = () => {
           : `Posted ${result.voucherNumber || result.entryId}`,
       );
       await refreshLedger();
-      setActiveTab("vouchers");
+      goToTab("vouchers");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to post entry");
     } finally {
@@ -669,7 +737,7 @@ const Accounting = () => {
       });
       toast.success("Draft saved.");
       await refreshLedger();
-      setActiveTab("vouchers");
+      goToTab("vouchers");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save draft");
     } finally {
@@ -696,7 +764,7 @@ const Accounting = () => {
       });
       toast.success("Submitted for approval.");
       await refreshLedger();
-      setActiveTab("vouchers");
+      goToTab("vouchers");
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to submit for approval");
     } finally {
@@ -788,9 +856,14 @@ const Accounting = () => {
     </Badge>
   ) : null;
 
+  const isHubView = activeTab === "hub";
+  const showQuickBar = isHubView || ACCOUNTING_PRIMARY_TABS.has(activeTab);
+  const backLink = !isHubView ? tabBackLink(activeTab) : null;
+
   return (
     <FinancePageShell onLogout={logout}>
       <div className="space-y-6">
+        {!embedded && (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="finance-page-header">
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -801,13 +874,13 @@ const Accounting = () => {
                 label="What Accounting does"
                 title="Accounting"
                 content={[
-                  "This page is the general ledger area of the system.",
-                  "Use it for journal entries, Trial Balance, Balance Sheet, and other book-level checks after sales, purchases, and expenses have been recorded.",
+                  "Vouchers and daily ledger work live here.",
+                  "Trial balance, P&L, aging, and COA setup are under Reports and Settings.",
                 ]}
               />
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              General ledger, manual journals, trial balance, and balance sheet.
+              Vouchers, workspace, and party statements — reports and setup are on other tabs.
             </p>
           </div>
           <div className="finance-as-of-toolbar flex items-center gap-2">
@@ -835,6 +908,19 @@ const Accounting = () => {
             )}
           </div>
         </div>
+        )}
+
+        {embedded && !isHubView && backLink && (
+          <div className="rounded-lg border bg-white px-4 py-3 flex flex-wrap items-center gap-2">
+            <Link to={backLink.to} className="text-sm font-medium text-teal-700 hover:text-teal-900">
+              ← {backLink.label}
+            </Link>
+            <span className="text-xs text-muted-foreground ml-auto">As of {asOfDate}</span>
+            <Button variant="outline" size="sm" onClick={() => void refreshLedger()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
+        )}
 
         <SystemGuideBanner enabled={systemGuideEnabled} />
 
@@ -849,15 +935,23 @@ const Accounting = () => {
           </div>
         )}
 
+        {showQuickBar && (
         <AccountingQuickBar
           totals={subledgerTotals}
           balanced={trialBalance.balanced}
           asOfDate={asOfDate}
           loading={loading}
           systemGuideEnabled={systemGuideEnabled}
-          onNavigate={setActiveTab}
+          onNavigate={navigateFromQuickBar}
           onOpenSearch={() => setCommandPaletteOpen(true)}
         />
+        )}
+
+        {isHubView && (
+          <div className="rounded-lg border bg-white p-4 md:p-6">
+            <AccountingHubPanel />
+          </div>
+        )}
 
         <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
           <DialogContent>
@@ -954,31 +1048,9 @@ const Accounting = () => {
           </DialogContent>
         </Dialog>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <div className="finance-accounting-tabs-shell">
-            {ACCOUNTING_TAB_ROWS.map((row, rowIndex) => (
-              <TabsList
-                key={`accounting-tab-row-${rowIndex}`}
-                className="finance-accounting-tabs-row"
-              >
-                {row.map((tab) => {
-                  const Icon = tab.icon;
-                  return (
-                    <TabsTrigger
-                      key={tab.value}
-                      value={tab.value}
-                      className={`finance-accounting-tab finance-accounting-tab--${tab.tone}`}
-                    >
-                      <span className={`finance-accounting-tab__icon-wrap finance-accounting-tab__icon-wrap--${tab.tone}`}>
-                        <Icon className="finance-accounting-tab__icon" aria-hidden />
-                      </span>
-                      <span className="finance-accounting-tab__label">{tab.label}</span>
-                    </TabsTrigger>
-                  );
-                })}
-              </TabsList>
-            ))}
-          </div>
+        {!isHubView && (
+        <Tabs value={activeTab} onValueChange={goToTab}>
+          <div className="finance-accounting-tabs-shell hidden" aria-hidden />
 
           <TabsContent value="workspace" className="mt-4">
             <AccountantWorkspacePanel
@@ -989,7 +1061,7 @@ const Accounting = () => {
               accountingLanguage={accountingLanguage}
               isLebaneseCoa={isLebaneseCoa}
               onAddClientAccount={openClientAccountFromPcg}
-              onOpenVouchers={() => setActiveTab("vouchers")}
+              onOpenVouchers={() => goToTab("vouchers")}
               onViewAccount={openAccountActivity}
               onViewEntry={setQuickVoucherEntryId}
               systemGuideEnabled={systemGuideEnabled}
@@ -2525,6 +2597,8 @@ const Accounting = () => {
             )}
           </TabsContent>
         </Tabs>
+        )}
+
         <LedgerActivityDialog
           focus={ledgerFocus}
           onClose={() => setLedgerFocus(null)}
@@ -2537,7 +2611,7 @@ const Accounting = () => {
           accountingLanguage={accountingLanguage}
           onOpenVouchersTab={() => {
             setLedgerFocus(null);
-            setActiveTab("vouchers");
+            goToTab("vouchers");
           }}
           onDrillToGl={(accountId) => {
             setLedgerFocus(null);
@@ -2561,7 +2635,7 @@ const Accounting = () => {
           entries={entries}
           isLebaneseCoa={isLebaneseCoa}
           pcgClientAccounts={pcgClientAccounts}
-          onSelectTab={setActiveTab}
+          onSelectTab={goToTab}
           onSelectAccount={openAccountActivity}
           onSelectEntry={setQuickVoucherEntryId}
         />

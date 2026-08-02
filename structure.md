@@ -11,8 +11,8 @@
 
 **UI:** Admin → Business Tools → **Business Finance** (`Landmark` icon)  
 **Home route:** `/admin/finance/quotations`  
-**Top tabs:** Quotation · Accounting · Reçu · Reports · Settings  
-**Accounting-only route:** `/admin/finance/accounting` (PCG, vouchers, GL — not for cashiers)  
+**Top tabs:** Quotation · Accounting (hub: vouchers only) · Reçu · Reports · Settings  
+**Accounting default:** Card hub — Vouchers, Workspace, Party statement. Reports/COA/FX live on **Reports** and **Settings** tabs (not duplicated on Accounting).  
 **Engine:** `vendor/beirut-finance-flow-main/src/pages/Accounting.tsx`  
 **Audience:** Owner-accountant, external accountant, finance admin — **not** cashier / waiter / field sales.  
 **Language:** Trial Balance, Balance Sheet, P&L, Party SOA, AR/AP Aging, VAT Filing, PCG client codes, vouchers, reconciliation.

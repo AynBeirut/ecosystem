@@ -5,6 +5,7 @@ import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FinancePageShell from "@/components/FinancePageShell";
+import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
 import { Plus, Trash, Share2, FileDown, Phone, Eye, X, User } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -32,6 +33,7 @@ const estimateSchema = z.object({
 });
 
 const EstimateManager = () => {
+  const { embedded } = useFinanceEmbed();
   const { user, clients, products, estimates, createEstimate, updateEstimate, previewEstimate, sendEstimate, exportEstimateAsPdf, logout, checkLimit, refreshDocumentCompany } = useAppContext();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -373,6 +375,7 @@ const EstimateManager = () => {
   return (
     <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
+        {!embedded && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Quotation</h1>
@@ -386,6 +389,15 @@ const EstimateManager = () => {
             New Quotation
           </Button>
         </div>
+        )}
+        {embedded && (
+          <div className="flex justify-end">
+            <Button className="bg-indigo-600 hover:bg-indigo-700" onClick={() => setActiveTab("create")}>
+              <Plus className="mr-2 h-4 w-4" />
+              New Quotation
+            </Button>
+          </div>
+        )}
 
         <Card>
           <Tabs defaultValue={activeTab} value={activeTab} onValueChange={setActiveTab}>

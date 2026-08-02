@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import FinancePageShell from "@/components/FinancePageShell";
+import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
 import { Plus, Eye, FileDown, Share2, Mail, Phone } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -40,6 +41,7 @@ const paymentOrderSchema = z.object({
 });
 
 const ReceiptManager = () => {
+  const { embedded } = useFinanceEmbed();
   const { 
     user, clients, suppliers, receipts, paymentOrders, purchaseOrders,
     createReceipt, createPaymentOrder, markPaymentOrderPaid,
@@ -287,12 +289,14 @@ const ReceiptManager = () => {
   return (
     <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
+        {!embedded && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Reçu — Money Received</h1>
             <p className="text-gray-500 dark:text-gray-400">All registered receipts and incoming payments on the system</p>
           </div>
         </div>
+        )}
 
         <Card>
           <Tabs defaultValue="receipts-list" value={activeTab} onValueChange={setActiveTab}>

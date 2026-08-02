@@ -1,14 +1,28 @@
 import React from 'react';
-import { Link } from 'react-router-dom';
-import { adminSubnavLink } from '@/lib/adminStyles';
-import { Building2, Receipt, RefreshCw, Upload, Layers } from 'lucide-react';
+import BusinessFinanceHubLayout, { BusinessFinanceHubSection, type BusinessFinanceHubItem } from '@/pages/admin/finance/BusinessFinanceHubLayout';
+import { Building2, Receipt, RefreshCw, Upload, Layers, CalendarRange, Repeat, FileText } from 'lucide-react';
 
-const SETTINGS_LINKS = [
+const DOCUMENT_SETTINGS: BusinessFinanceHubItem[] = [
   {
     to: '/admin/profile',
     label: 'Company on documents',
     description: 'Logo, business name, address, and tax ID on invoices.',
     icon: Building2,
+  },
+];
+
+const LEDGER_SETTINGS: BusinessFinanceHubItem[] = [
+  {
+    to: '/admin/finance/accounting?tab=coa',
+    label: 'Chart of accounts',
+    description: 'Account list and PCG client codes.',
+    icon: Receipt,
+  },
+  {
+    to: '/admin/finance/accounting?tab=opening',
+    label: 'Opening balances',
+    description: 'Starting balances when you go live.',
+    icon: CalendarRange,
   },
   {
     to: '/admin/finance/accounting?tab=fx-revaluation',
@@ -19,7 +33,7 @@ const SETTINGS_LINKS = [
   {
     to: '/admin/finance/accounting?tab=cost-centers',
     label: 'Cost centers',
-    description: 'Track departments or branches on postings.',
+    description: 'Departments or branches on postings.',
     icon: Layers,
   },
   {
@@ -29,40 +43,27 @@ const SETTINGS_LINKS = [
     icon: Upload,
   },
   {
-    to: '/admin/finance/accounting?tab=coa',
-    label: 'Chart of accounts',
-    description: 'Account list and PCG client codes (accountants).',
-    icon: Receipt,
+    to: '/admin/finance/accounting?tab=recurring',
+    label: 'Recurring vouchers',
+    description: 'Templates that post on a schedule.',
+    icon: Repeat,
   },
-] as const;
+  {
+    to: '/admin/finance/accounting?tab=checks',
+    label: 'Check register',
+    description: 'Issued and cleared checks.',
+    icon: FileText,
+  },
+];
 
 const BusinessFinanceSettings: React.FC = () => (
-  <div className="space-y-6 rounded-lg border bg-white p-4 md:p-6">
-    <div>
-      <h1 className="text-xl font-bold text-gray-900">Settings</h1>
-      <p className="text-sm text-gray-600 mt-1">
-        Document branding, tax ID, FX, cost centers, and import tools.
-      </p>
-    </div>
-    <div className="grid gap-3 sm:grid-cols-2">
-      {SETTINGS_LINKS.map((item) => {
-        const Icon = item.icon;
-        return (
-          <Link
-            key={item.to}
-            to={item.to}
-            className={`${adminSubnavLink(false)} flex flex-col items-start gap-1 h-auto py-3 text-left`}
-          >
-            <span className="flex items-center gap-2 font-medium">
-              <Icon className="h-4 w-4 shrink-0" />
-              {item.label}
-            </span>
-            <span className="text-xs font-normal text-gray-600">{item.description}</span>
-          </Link>
-        );
-      })}
-    </div>
-  </div>
+  <BusinessFinanceHubLayout
+    title="Settings"
+    description="Document branding, chart of accounts, and ledger setup tools."
+  >
+    <BusinessFinanceHubSection title="Documents" items={DOCUMENT_SETTINGS} />
+    <BusinessFinanceHubSection title="Ledger setup" items={LEDGER_SETTINGS} />
+  </BusinessFinanceHubLayout>
 );
 
 export default BusinessFinanceSettings;
