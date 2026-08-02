@@ -96,6 +96,7 @@ import { downloadCsvText } from "@/lib/csvExport";
 import { downloadXlsxFromCsv } from "@/lib/xlsxExport";
 import type { SettlementAllocationInput, TrialBalanceViewMode, VoucherLineSettlement } from "@/types/generalLedger";
 import type { LedgerActivityFocus } from "@/lib/ledger/ledgerActivity";
+import { consumeLedgerFocus } from "@/lib/ledger/ledgerActivity";
 import AccountingHubPanel from "@/components/AccountingHubPanel";
 import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
 
