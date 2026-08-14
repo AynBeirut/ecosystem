@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onOrderStatusChanged = exports.onOrderCreated = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onWordPressProvisioningRequestCreated = exports.onAccountPaymentCreated = exports.onOrderStatusChanged = exports.onOrderCreated = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -90,6 +90,7 @@ const supplierReturns_1 = require("./api/supplierReturns");
 const crmReps_1 = require("./api/crmReps");
 const dropship_1 = require("./api/dropship");
 const financeSso_1 = require("./api/financeSso");
+const wordpressAccess_1 = require("./api/wordpressAccess");
 const posSync_1 = require("./api/posSync");
 const publicProductStock_1 = require("./api/publicProductStock");
 const r2_1 = require("./api/r2");
@@ -259,6 +260,8 @@ app.post('/marketing/send-campaign', marketing_1.sendCampaign);
 app.post('/crm/reps/create', (0, moduleGate_1.requireModule)('crm'), crmReps_1.createCrmRep);
 app.post('/dropship/sync-product', (0, moduleGate_1.requireModule)('dropship'), dropship_1.syncDropshipProduct);
 app.post('/finance/sso-token', financeSso_1.createFinanceSsoToken);
+app.post('/wordpress/access/redeem', wordpressAccess_1.redeemWordPressAccess);
+app.get('/wordpress/access/redeem', wordpressAccess_1.redeemWordPressAccess);
 app.post('/pos/pairing-code', posSync_1.createPosPairingCode);
 app.post('/pos/pair', posSync_1.pairPosDevice);
 app.post('/pos/generate-install-token', posSync_1.generatePosInstallToken);
@@ -363,6 +366,7 @@ app.post('/checkout', async (req, res) => {
         console.log('--- /checkout called ---');
         const body = req.body;
         const { items, deliveryInfo } = body || {};
+        const checkoutChannel = body?.checkoutChannel === 'whatsapp' ? 'whatsapp' : 'web';
         // Auth token is OPTIONAL (supports guest checkout)
         const rawAuth = req.get('authorization');
         const authHeader = String(rawAuth || '');
@@ -428,6 +432,7 @@ app.post('/checkout', async (req, res) => {
         console.log('Items by store:', itemsByStore);
         let ordersCreated = 0;
         const orderIds = [];
+        const invoiceNumbers = [];
         await db.runTransaction(async (tx) => {
             const transaction = tx;
             // PHASE 1: ALL READS FIRST (Firestore requirement)
@@ -535,6 +540,17 @@ app.post('/checkout', async (req, res) => {
                     lastInvoiceNumber: newNumber,
                     ...(orderData.trialOperationUpdate || {}),
                 }, { merge: true });
+                const fulfillmentMethod = deliveryInfo?.fulfillmentMethod || 'delivery';
+                const orderDeliveryMethod = fulfillmentMethod === 'pickup'
+                    ? 'pickup'
+                    : fulfillmentMethod === 'dine_in'
+                        ? 'dine_in'
+                        : 'standard';
+                const resolvedDeliveryAddress = fulfillmentMethod === 'pickup'
+                    ? (deliveryInfo?.address || 'Store Pickup')
+                    : fulfillmentMethod === 'dine_in'
+                        ? (deliveryInfo?.address || 'Dine In')
+                        : (deliveryInfo?.address || '');
                 const orderRef = db.collection('orders').doc();
                 transaction.set(orderRef, {
                     storeId: orderData.storeId,
@@ -561,13 +577,19 @@ app.post('/checkout', async (req, res) => {
                     discount: orderData.discountAmount,
                     total: orderData.total,
                     status: 'pending',
-                    deliveryAddress: deliveryInfo?.address || '',
-                    deliveryCity: deliveryInfo?.city || '',
-                    deliveryNotes: deliveryInfo?.notes || '',
-                    deliveryCoordinates: deliveryInfo?.coordinates || null,
+                    deliveryMethod: orderDeliveryMethod,
+                    deliveryAddress: resolvedDeliveryAddress,
+                    deliveryCity: fulfillmentMethod === 'delivery' ? (deliveryInfo?.city || '') : '',
+                    deliveryNotes: deliveryInfo?.notes || (checkoutChannel === 'whatsapp' ? 'Placed via WhatsApp' : ''),
+                    deliveryCoordinates: fulfillmentMethod === 'delivery' ? (deliveryInfo?.coordinates || null) : null,
+                    paymentStatus: 'unpaid',
+                    amountPaid: 0,
+                    paymentMethod: checkoutChannel === 'whatsapp' ? 'whatsapp' : '',
+                    orderChannel: checkoutChannel,
                     createdAt: getServerTimestamp(),
                 });
                 orderIds.push(orderRef.id);
+                invoiceNumbers.push(invoiceNumber);
                 ordersCreated++;
                 console.log('Order created:', {
                     orderId: orderRef.id,
@@ -659,7 +681,7 @@ app.post('/checkout', async (req, res) => {
         (0, orderNotifications_1.dispatchOrderNotifications)(orderIds).catch((notifyErr) => {
             console.warn('Order notification dispatch failed:', notifyErr);
         });
-        return res.json({ ok: true, ordersCreated, orderIds });
+        return res.json({ ok: true, ordersCreated, orderIds, invoiceNumbers });
     }
     catch (err) {
         console.error('Checkout failed', err);
@@ -688,6 +710,10 @@ Object.defineProperty(exports, "runRecurringVouchers", { enumerable: true, get: 
 var orderNotifications_2 = require("./triggers/orderNotifications");
 Object.defineProperty(exports, "onOrderCreated", { enumerable: true, get: function () { return orderNotifications_2.onOrderCreated; } });
 Object.defineProperty(exports, "onOrderStatusChanged", { enumerable: true, get: function () { return orderNotifications_2.onOrderStatusChanged; } });
+var accountPaymentSync_1 = require("./triggers/accountPaymentSync");
+Object.defineProperty(exports, "onAccountPaymentCreated", { enumerable: true, get: function () { return accountPaymentSync_1.onAccountPaymentCreated; } });
+var wordpressProvisioning_1 = require("./triggers/wordpressProvisioning");
+Object.defineProperty(exports, "onWordPressProvisioningRequestCreated", { enumerable: true, get: function () { return wordpressProvisioning_1.onWordPressProvisioningRequestCreated; } });
 var crmOrderSync_1 = require("./triggers/crmOrderSync");
 Object.defineProperty(exports, "onOrderCreatedCrmSync", { enumerable: true, get: function () { return crmOrderSync_1.onOrderCreatedCrmSync; } });
 // Export Firestore trigger: store announcements ΓåÆ notify customers who favorited the store

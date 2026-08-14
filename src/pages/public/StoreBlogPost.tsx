@@ -4,6 +4,7 @@ import { getFirestore, collection, query, where, getDocs, doc, getDoc } from 'fi
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft } from 'lucide-react';
+import { buildStoreRelativePath, isExternalUrl, storeSlugFromHostname } from '@/lib/storeUrls';
 
 interface BlogPost {
   id: string;
@@ -17,7 +18,8 @@ interface BlogPost {
 }
 
 const StoreBlogPost: React.FC = () => {
-  const { slug, postId } = useParams<{ slug: string; postId: string }>();
+  const { slug: paramSlug, postId } = useParams<{ slug?: string; postId: string }>();
+  const slug = paramSlug || (typeof window !== 'undefined' ? storeSlugFromHostname(window.location.hostname) : '') || '';
   const db = getFirestore();
   const navigate = useNavigate();
   const [post, setPost] = useState<BlogPost | null>(null);
@@ -27,23 +29,22 @@ const StoreBlogPost: React.FC = () => {
   useEffect(() => {
     if (!slug || !postId) return;
     const load = async () => {
-      // Resolve slug → storeId
       const slugSnap = await getDocs(
         query(collection(db, 'storeProfiles'), where('slug', '==', slug))
       );
-      if (slugSnap.empty) { navigate(`/store/${slug}/blog`); return; }
+      if (slugSnap.empty) { navigate(buildStoreRelativePath(slug, '/blog')); return; }
       const storeDoc = slugSnap.docs[0];
       const storeId = storeDoc.id;
       setStoreName(storeDoc.data().name ?? slug);
 
       const postSnap = await getDoc(doc(db, 'stores', storeId, 'blogPosts', postId));
       if (!postSnap.exists()) {
-        navigate(`/store/${slug}/blog`);
+        navigate(buildStoreRelativePath(slug, '/blog'));
         return;
       }
       const d = postSnap.data();
       if (d?.status !== 'published' || d?.visibility !== 'public') {
-        navigate(`/store/${slug}/blog`);
+        navigate(buildStoreRelativePath(slug, '/blog'));
         return;
       }
       setPost({
@@ -61,16 +62,26 @@ const StoreBlogPost: React.FC = () => {
     void load();
   }, [slug, postId, db, navigate]);
 
+  const blogHref = buildStoreRelativePath(slug, '/blog');
+
   if (loading) return <div className="flex items-center justify-center min-h-screen"><p className="text-muted-foreground">Loading…</p></div>;
   if (!post) return null;
 
   return (
     <div className="container mx-auto px-4 py-10 max-w-2xl">
-      <Link to={`/store/${slug}/blog`}>
-        <Button variant="ghost" size="sm" className="mb-6 gap-1">
-          <ArrowLeft className="h-4 w-4" /> Back to {storeName} Blog
-        </Button>
-      </Link>
+      {isExternalUrl(blogHref) ? (
+        <a href={blogHref}>
+          <Button variant="ghost" size="sm" className="mb-6 gap-1" asChild={false}>
+            <span className="inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to {storeName} Blog</span>
+          </Button>
+        </a>
+      ) : (
+        <Link to={blogHref}>
+          <Button variant="ghost" size="sm" className="mb-6 gap-1">
+            <ArrowLeft className="h-4 w-4" /> Back to {storeName} Blog
+          </Button>
+        </Link>
+      )}
 
       <article className="space-y-6">
         {post.subject && <Badge variant="secondary">{post.subject}</Badge>}

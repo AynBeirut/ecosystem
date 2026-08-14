@@ -10,6 +10,9 @@ import { Badge } from '@/components/ui/badge';
 import { toast } from '@/components/ui/sonner';
 import { Package, Mail, Phone, MapPin } from 'lucide-react';
 import BackButton from '@/components/BackButton';
+import ProductVisual from '@/components/ProductVisual';
+import { resolveStoreShopLabel, resolveStoreShopUrl } from '@/lib/storeNavigation';
+import { getFulfillmentLabel } from '@/lib/fulfillmentOptions';
 
 type Order = {
   id: string;
@@ -19,6 +22,7 @@ type Order = {
   customerPhone: string;
   deliveryAddress: string;
   deliveryCity: string;
+  deliveryMethod?: string;
   status: string;
   total: number;
   items: Array<{ productId: string; quantity: number; price: number }>;
@@ -29,6 +33,7 @@ type Order = {
 type ProductInfo = {
   name: string;
   image?: string;
+  icon?: string;
 };
 
 const GuestOrderTracking: React.FC = () => {
@@ -38,6 +43,7 @@ const GuestOrderTracking: React.FC = () => {
   const [email, setEmail] = useState('');
   const [order, setOrder] = useState<Order | null>(null);
   const [storeName, setStoreName] = useState('');
+  const [storeSlug, setStoreSlug] = useState('');
   const [products, setProducts] = useState<Record<string, ProductInfo>>({});
   const [loading, setLoading] = useState(false);
   const [searched, setSearched] = useState(false);
@@ -87,7 +93,9 @@ const GuestOrderTracking: React.FC = () => {
         const storeRef = doc(db, 'storeProfiles', orderData.storeId);
         const storeSnap = await getDoc(storeRef);
         if (storeSnap.exists()) {
-          setStoreName(storeSnap.data().storeName || 'Store');
+          const storeData = storeSnap.data();
+          setStoreName(storeData.storeName || 'Store');
+          setStoreSlug(storeData.slug || orderData.storeId);
         }
       }
 
@@ -102,6 +110,7 @@ const GuestOrderTracking: React.FC = () => {
             productMap[item.productId] = {
               name: productData.name || 'Product',
               image: productData.image,
+              icon: productData.icon,
             };
           }
         }
@@ -144,13 +153,16 @@ const GuestOrderTracking: React.FC = () => {
     return labels[status] ?? (status.charAt(0).toUpperCase() + status.slice(1));
   };
 
+  const backUrl = resolveStoreShopUrl({ storeSlug, storeId: order?.storeId });
+  const backLabel = resolveStoreShopLabel(backUrl);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-2xl mx-auto">
           <div className="mb-4">
-            <BackButton to="/" label="Back" />
+            <BackButton to={backUrl} label={backLabel} />
           </div>
           <h1 className="text-2xl font-bold mb-6">Track Your Order</h1>
           
@@ -238,13 +250,12 @@ const GuestOrderTracking: React.FC = () => {
                         return (
                           <div key={idx} className="flex justify-between items-center border-b pb-2">
                             <div className="flex items-center gap-3">
-                              {product?.image && (
-                                <img 
-                                  src={product.image} 
-                                  alt={product.name} 
+                              {product ? (
+                                <ProductVisual
+                                  product={{ name: product.name, image: product.image, icon: product.icon }}
                                   className="w-12 h-12 object-cover rounded"
                                 />
-                              )}
+                              ) : null}
                               <div>
                                 <p className="font-medium">
                                   {product?.name || item.productId}
@@ -261,8 +272,18 @@ const GuestOrderTracking: React.FC = () => {
 
                   {/* Delivery Information */}
                   <div>
-                    <h3 className="font-semibold mb-3">Delivery Information</h3>
+                    <h3 className="font-semibold mb-3">
+                      {order.deliveryMethod === 'pickup' || order.deliveryMethod === 'dine_in'
+                        ? 'Order Details'
+                        : 'Delivery Information'}
+                    </h3>
                     <div className="space-y-2 text-sm">
+                      {order.deliveryMethod && (
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-gray-500" />
+                          <span>{getFulfillmentLabel(order.deliveryMethod)}</span>
+                        </div>
+                      )}
                       <div className="flex items-center gap-2">
                         <Package className="w-4 h-4 text-gray-500" />
                         <span>{order.customerName}</span>
@@ -277,7 +298,10 @@ const GuestOrderTracking: React.FC = () => {
                       </div>
                       <div className="flex items-center gap-2">
                         <MapPin className="w-4 h-4 text-gray-500" />
-                        <span>{order.deliveryAddress}, {order.deliveryCity}</span>
+                        <span>
+                          {order.deliveryAddress}
+                          {order.deliveryCity ? `, ${order.deliveryCity}` : ''}
+                        </span>
                       </div>
                     </div>
                   </div>

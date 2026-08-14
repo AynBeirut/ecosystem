@@ -15,6 +15,7 @@ import { ReturnReason, ItemCondition, ExchangeItem } from '@/types/returns';
 import type { ProductReview } from '@/types/product';
 import { toast } from '@/components/ui/sonner';
 import BackButton from '@/components/BackButton';
+import { getFulfillmentLabel } from '@/lib/fulfillmentOptions';
 
 type StoreProfile = Record<string, unknown>;
 type ProductInfo = { id: string; name: string; price: number };
@@ -508,8 +509,17 @@ const OrderTracking: React.FC = () => {
                     {/* Delivery Information */}
                     {(order.customerPhone || order.deliveryAddress) && (
                       <div className="bg-blue-50 border border-blue-200 p-3 rounded-lg">
-                        <div className="font-medium text-sm text-blue-900 mb-2">📦 Your Delivery Details</div>
+                        <div className="font-medium text-sm text-blue-900 mb-2">
+                          {order.deliveryMethod === 'pickup' || order.deliveryMethod === 'dine_in'
+                            ? '📦 Your Order Details'
+                            : '📦 Your Delivery Details'}
+                        </div>
                         <div className="space-y-1 text-sm">
+                          {order.deliveryMethod && (
+                            <div className="text-blue-900">
+                              <strong>Method:</strong> {getFulfillmentLabel(order.deliveryMethod)}
+                            </div>
+                          )}
                           {order.customerPhone && (
                             <div className="text-blue-900">
                               <strong>📞 Phone:</strong> {order.customerPhone}

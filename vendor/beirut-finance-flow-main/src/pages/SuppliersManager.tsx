@@ -1,5 +1,5 @@
 import { useState } from "react";
-import AppLayout from "@/components/AppLayout";
+import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { useAccounting } from "@/context/AccountingContext";
 import { Button } from "@/components/ui/button";
@@ -98,115 +98,61 @@ const SuppliersManager = () => {
   const selectedStatement = selectedSupplier ? getSupplierStatement(selectedSupplier) : null;
 
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Suppliers</h1>
-            <p className="text-muted-foreground">Manage suppliers and view account statements</p>
+            <h1 className="text-2xl font-bold tracking-tight">Suppliers Manager</h1>
+            <p className="text-muted-foreground">Add and manage your suppliers</p>
           </div>
-          
-          <Button onClick={() => setActiveTab("add")}>
-            <Plus className="mr-2 h-4 w-4" /> Add Supplier
+          <Button className="mt-4 sm:mt-0" onClick={() => setActiveTab("add")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Supplier
           </Button>
         </div>
 
-        {/* Summary Cards */}
-        <div className="grid gap-4 md:grid-cols-3">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Suppliers</CardTitle>
+        <Card>
+          <Tabs value={activeTab} onValueChange={setActiveTab}>
+            <CardHeader>
+              <TabsList>
+                <TabsTrigger value="list">Supplier List</TabsTrigger>
+                <TabsTrigger value="add">Add Supplier</TabsTrigger>
+                {selectedSupplier ? <TabsTrigger value="statement">Account Statement</TabsTrigger> : null}
+              </TabsList>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{suppliers.length}</p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Total Purchases</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold">
-                {formatCurrency(purchaseOrders.reduce((sum, po) => sum + po.amount, 0), "USD")}
-              </p>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">Outstanding Balance</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-2xl font-bold text-amber-600">
-                {formatCurrency(
-                  purchaseOrders
-                    .filter(po => po.status !== "fulfilled")
-                    .reduce((sum, po) => sum + po.amount, 0), 
-                  "USD"
-                )}
-              </p>
-            </CardContent>
-          </Card>
-        </div>
-
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="list">Supplier List</TabsTrigger>
-            <TabsTrigger value="add">Add Supplier</TabsTrigger>
-            {selectedSupplier && <TabsTrigger value="statement">Account Statement</TabsTrigger>}
-          </TabsList>
-
-          {/* Supplier List */}
           <TabsContent value="list">
-            <Card>
-              <CardHeader>
-                <CardTitle>All Suppliers</CardTitle>
-                <CardDescription>Click on a supplier to view their account statement</CardDescription>
-              </CardHeader>
-              <CardContent>
                 {suppliers.length === 0 ? (
-                  <div className="text-center py-12 text-muted-foreground">
-                    <Building2 className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                    <p>No suppliers yet</p>
-                    <Button 
-                      variant="link" 
-                      onClick={() => setActiveTab("add")}
-                      className="mt-2"
-                    >
-                      Add your first supplier
-                    </Button>
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                    <p>No suppliers added yet. Add your first supplier!</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {suppliers.map(supplier => {
+                    {suppliers.map((supplier) => {
                       const statement = getSupplierStatement(supplier.id);
                       return (
-                        <div 
+                        <div
                           key={supplier.id}
-                          className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
+                          className="flex cursor-pointer items-center justify-between gap-4 rounded-lg border p-4 transition-colors hover:bg-muted/50"
                           onClick={() => {
                             setSelectedSupplier(supplier.id);
                             setActiveTab("statement");
                           }}
                         >
                           <div className="flex items-center gap-4">
-                            <div className="p-2 rounded-full bg-indigo-100 dark:bg-indigo-900/30">
-                              <Building2 className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                            <div className="rounded-full bg-secondary p-2">
+                              <Building2 className="h-5 w-5 text-secondary-foreground" />
                             </div>
                             <div>
                               <h3 className="font-medium">{supplier.name}</h3>
-                              <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                  <Phone className="h-3 w-3" /> {supplier.phone}
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <Mail className="h-3 w-3" /> {supplier.email}
-                                </span>
+                              <div className="text-sm text-muted-foreground">
+                                {[supplier.email, supplier.phone].filter(Boolean).join(" • ")}
                               </div>
                             </div>
                           </div>
-                          
-                          <div className="flex items-center gap-4">
+
+                          <div className="flex items-center gap-2">
                             <Button
                               type="button"
                               variant="outline"
@@ -225,32 +171,21 @@ const SuppliersManager = () => {
                               Vouchers
                             </Button>
                             <div className="text-right">
-                              <p className="text-sm text-muted-foreground">Total Purchases</p>
-                              <p className="font-bold">{formatCurrency(statement?.totalPurchases || 0, "USD")}</p>
+                              <p className="text-sm text-muted-foreground">Outstanding</p>
+                              <p className="font-bold">{formatCurrency(statement?.balance || 0, "USD")}</p>
                             </div>
-                            {statement && statement.balance > 0 && (
-                              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300">
-                                Owes {formatCurrency(statement.balance, "USD")}
-                              </Badge>
-                            )}
+                            {statement && statement.balance > 0 ? (
+                              <Badge variant="destructive">Owes {formatCurrency(statement.balance, "USD")}</Badge>
+                            ) : null}
                           </div>
                         </div>
                       );
                     })}
                   </div>
                 )}
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          {/* Add Supplier Form */}
           <TabsContent value="add">
-            <Card>
-              <CardHeader>
-                <CardTitle>Add New Supplier</CardTitle>
-                <CardDescription>Enter supplier details</CardDescription>
-              </CardHeader>
-              <CardContent>
                 <Form {...form}>
                   <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -316,11 +251,8 @@ const SuppliersManager = () => {
                     </div>
                   </form>
                 </Form>
-              </CardContent>
-            </Card>
           </TabsContent>
 
-          {/* Account Statement */}
           <TabsContent value="statement">
             {selectedStatement && (
               <div className="space-y-4">
@@ -452,9 +384,11 @@ const SuppliersManager = () => {
               </div>
             )}
           </TabsContent>
-        </Tabs>
+            </CardContent>
+          </Tabs>
+        </Card>
       </div>
-    </AppLayout>
+    </FinancePageShell>
   );
 };
 

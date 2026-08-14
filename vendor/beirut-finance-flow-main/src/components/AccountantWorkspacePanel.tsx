@@ -2,13 +2,18 @@ import { useMemo, useState } from "react";
 import { FileText, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { LEBANESE_PCG_CHART, type LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
 import { filterPcgChart, flattenPcgChart, kindLabel } from "@/lib/ledger/lebanesePcgTree";
-import { buildClientByGrabioMap, buildClientByParentPcgMap, mapGrabioCodeToPcg, resolvePcgDisplay, displayPcgCodeForLedgerRow, displayGrabioCodeForLedgerRow } from "@/lib/ledger/grabioToPcgMap";
+import {
+  buildClientByGrabioMap,
+  buildClientByParentPcgMap,
+  mapGrabioCodeToPcg,
+  resolvePcgDisplay,
+  displayPcgCodeForLedgerRow,
+  displayGrabioCodeForLedgerRow,
+} from "@/lib/ledger/grabioToPcgMap";
 import { supportsArabicEntry, type AccountingLanguage } from "@/lib/grabio/accountingMode";
 import type { JournalEntry, JournalLine, LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
@@ -68,6 +73,7 @@ export default function AccountantWorkspacePanel({
   );
 
   const postedEntries = useMemo(() => new Map(entries.filter(isPostedInRange).map((entry) => [entry.id, entry])), [entries]);
+  const accountById = useMemo(() => new Map(accounts.map((account) => [account.id, account])), [accounts]);
 
   const linkedOperationalAccounts = useMemo(() => {
     if (!selectedPcg) return [];
@@ -88,11 +94,11 @@ export default function AccountantWorkspacePanel({
     if (!linkedAccountIds.size) return [];
     return lines
       .filter((line) => linkedAccountIds.has(line.accountId))
-      .map((line) => ({ line, entry: postedEntries.get(line.entryId) }))
-      .filter((row): row is { line: JournalLine; entry: JournalEntry } => Boolean(row.entry))
+      .map((line) => ({ line, entry: postedEntries.get(line.entryId), account: accountById.get(line.accountId) }))
+      .filter((row): row is { line: JournalLine; entry: JournalEntry; account?: LedgerAccount } => Boolean(row.entry))
       .sort((a, b) => b.entry.date.localeCompare(a.entry.date) || b.entry.id.localeCompare(a.entry.id))
       .slice(0, 80);
-  }, [lines, linkedAccountIds, postedEntries]);
+  }, [lines, linkedAccountIds, postedEntries, accountById]);
 
   const movement = useMemo(
     () => ({
@@ -114,225 +120,216 @@ export default function AccountantWorkspacePanel({
 
   if (!isLebaneseCoa) {
     return (
-      <Card>
-        <CardHeader>
-          <CardTitle>Accountant workspace</CardTitle>
-          <CardDescription>Switch the store to Lebanese accounting to use the PCG-first workspace.</CardDescription>
-        </CardHeader>
-      </Card>
+      <div className="legacy-erp-shell p-4 text-sm">
+        Switch the store to Lebanese accounting to use the PCG-first workspace.
+      </div>
     );
   }
 
   return (
-    <div className="grid gap-4 xl:grid-cols-[minmax(360px,0.9fr)_minmax(0,1.4fr)]">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            PCG chart workspace
-            <SystemGuideInfo
-              enabled={systemGuideEnabled}
-              label="What the workspace does"
-              title="Accountant workspace"
-              content={[
-                "Search the Lebanese PCG chart, pick an account, then review linked posting accounts and recent voucher activity without leaving this page.",
-                "Use Add working number to create a client sub-account under the selected PCG code.",
-              ]}
-            />
-          </CardTitle>
-          <CardDescription>
-            Search the Excel chart, select an account, then add a working number or review activity without changing
-            pages.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <Input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search code, name, Arabic…" />
-          <div className="rounded-md border max-h-[520px] overflow-auto">
-            <Table>
-              <TableHeader className="sticky top-0 bg-background">
-                <TableRow>
-                  <TableHead>Account number</TableHead>
-                  <TableHead className="w-[72px]">Grabio</TableHead>
-                  <TableHead>Name</TableHead>
-                  <TableHead className="w-[60px]">M</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
+    <div className="legacy-erp-shell overflow-hidden">
+      <div className="legacy-erp-toolbar">
+        <Search className="h-4 w-4" />
+        Accountant workspace
+        <SystemGuideInfo
+          enabled={systemGuideEnabled}
+          label="What the workspace does"
+          title="Accountant workspace"
+          content={[
+            "Search the Lebanese PCG chart, pick an account, then review linked posting accounts and recent voucher activity without leaving this page.",
+            "Use Add working number to create a client sub-account under the selected PCG code.",
+          ]}
+        />
+        <Input
+          value={query}
+          onChange={(event) => setQuery(event.target.value)}
+          placeholder="Search code, name, Arabic…"
+          className="legacy-erp-input ml-auto h-8 max-w-sm"
+        />
+      </div>
+
+      <div className="legacy-erp-body legacy-erp-split">
+        <section className="space-y-2">
+          <div className="flex items-center justify-between gap-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-600">
+            <span>Account list</span>
+            <span>{pcgRows.length} / {LEBANESE_PCG_CHART.length}</span>
+          </div>
+          <div className="max-h-[520px] overflow-auto rounded-sm border border-slate-400 bg-white">
+            <table className="legacy-erp-grid">
+              <thead>
+                <tr>
+                  <th>Account</th>
+                  <th>Account Name</th>
+                  <th className="w-12">M</th>
+                </tr>
+              </thead>
+              <tbody>
                 {pcgRows.map((row) => (
-                  <TableRow
+                  <tr
                     key={row.code}
-                    className={row.code === selectedPcg?.code ? "bg-teal-50/80 dark:bg-teal-950/20" : "cursor-pointer"}
+                    className={cn("cursor-pointer", row.code === selectedPcg?.code && "is-selected")}
                     onClick={() => setSelectedPcgCode(row.code)}
                   >
-                    <TableCell className="font-mono text-xs tabular-nums" style={{ paddingLeft: 8 + row.depth * 12 }}>
+                    <td className="font-mono" style={{ paddingLeft: 8 + row.depth * 12 }}>
                       {row.displayCode}
-                    </TableCell>
-                    <TableCell className="font-mono text-xs text-muted-foreground">
-                      {row.kind === "G" ? "—" : mapGrabioCodeToPcg(row.code) ? displayGrabioCodeForLedgerRow({ code: row.code, isPcgChart: true }, clientByParentPcg) : "—"}
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td>
                       <div className={row.kind === "G" ? "font-medium text-red-700 dark:text-red-400" : undefined}>
                         {row.name}
                       </div>
                       {arabicEntry && row.nameAr ? (
-                        <div dir="rtl" className="text-xs text-muted-foreground text-right">
+                        <div dir="rtl" className="text-[10px] text-muted-foreground">
                           {row.nameAr}
                         </div>
                       ) : null}
-                    </TableCell>
-                    <TableCell>
+                    </td>
+                    <td>
                       <Badge variant={row.kind === "G" ? "secondary" : "outline"}>{kindLabel(row.kind)}</Badge>
-                    </TableCell>
-                  </TableRow>
+                    </td>
+                  </tr>
                 ))}
-              </TableBody>
-            </Table>
+              </tbody>
+            </table>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Showing {pcgRows.length} of {LEBANESE_PCG_CHART.length} PCG rows from the Excel chart.
-          </p>
-        </CardContent>
-      </Card>
+        </section>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>{selectedPcg ? `${selectedPcg.code} · ${selectedPcg.name}` : "Select a PCG account"}</CardTitle>
-          <CardDescription>
-            {selectedPcg?.nameAr ? <span dir="rtl">{selectedPcg.nameAr}</span> : "Select an account from the PCG chart."}
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-5">
+        <section className="space-y-3">
+          <div className="rounded-sm border border-slate-400 bg-[#f5f4ea] px-3 py-2">
+            <p className="text-sm font-semibold">
+              {selectedPcg ? `${selectedPcg.code} · ${selectedPcg.name}` : "Select a PCG account"}
+            </p>
+            {selectedPcg?.nameAr ? (
+              <p dir="rtl" className="text-xs text-muted-foreground">
+                {selectedPcg.nameAr}
+              </p>
+            ) : null}
+          </div>
+
           <div className="flex flex-wrap gap-2">
             {selectedPcg ? (
-              <Button type="button" onClick={() => onAddClientAccount(selectedPcg)}>
-                <Plus className="h-4 w-4 mr-1" /> Add working account here
+              <Button type="button" size="sm" onClick={() => onAddClientAccount(selectedPcg)}>
+                <Plus className="mr-1 h-4 w-4" /> Add working account
               </Button>
             ) : null}
-            <Button type="button" variant="outline" onClick={onOpenVouchers}>
-              <FileText className="h-4 w-4 mr-1" /> Open voucher register
+            <Button type="button" size="sm" variant="outline" onClick={onOpenVouchers}>
+              <FileText className="mr-1 h-4 w-4" /> Open vouchers
             </Button>
           </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Linked posting accounts</p>
-              <p className="text-2xl font-semibold">{linkedOperationalAccounts.length}</p>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <div className="rounded-sm border border-slate-400 bg-white px-3 py-2 text-xs">
+              <p className="text-muted-foreground">Linked accounts</p>
+              <p className="text-xl font-semibold tabular-nums">{linkedOperationalAccounts.length}</p>
             </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Debit movement</p>
-              <p className="text-lg font-semibold">{formatCurrency(movement.debit)}</p>
+            <div className="rounded-sm border border-slate-400 bg-white px-3 py-2 text-xs">
+              <p className="text-muted-foreground">Total debit</p>
+              <p className="text-lg font-semibold tabular-nums">{formatCurrency(movement.debit)}</p>
             </div>
-            <div className="rounded-md border p-3">
-              <p className="text-xs text-muted-foreground">Credit movement</p>
-              <p className="text-lg font-semibold">{formatCurrency(movement.credit)}</p>
+            <div className="rounded-sm border border-slate-400 bg-white px-3 py-2 text-xs">
+              <p className="text-muted-foreground">Total credit</p>
+              <p className="text-lg font-semibold tabular-nums">{formatCurrency(movement.credit)}</p>
             </div>
           </div>
 
-          <div>
-            <h3 className="font-medium mb-2">Linked accounts</h3>
-            {linkedOperationalAccounts.length ? (
-              <div className="rounded-md border overflow-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Account number</TableHead>
-                      <TableHead className="w-[72px]">Grabio</TableHead>
-                      <TableHead>Account</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {linkedOperationalAccounts.map((account) => {
-                      const display = displayForAccount(account);
-                      return (
-                        <TableRow key={account.id}>
-                          <TableCell className="font-mono text-xs tabular-nums">{display.code}</TableCell>
-                          <TableCell className="font-mono text-xs text-muted-foreground">{display.grabio}</TableCell>
-                          <TableCell>
-                            <div>{display.name}</div>
-                            {arabicEntry && display.nameAr ? (
-                              <div dir="rtl" className="text-xs text-muted-foreground text-right">
-                                {display.nameAr}
-                              </div>
-                            ) : null}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {onViewAccount ? (
-                              <Button
-                                type="button"
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => onViewAccount(account.id, `${display.code} · ${display.name}`)}
-                              >
-                                Ledger
-                              </Button>
-                            ) : null}
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </div>
-            ) : (
-              <p className="rounded-md border border-dashed p-4 text-sm text-muted-foreground">
-                No activity is linked yet. Add a working account here, or choose a PCG account that is mapped to a
-                posting account.
-              </p>
-            )}
-          </div>
+          {linkedOperationalAccounts.length ? (
+            <div className="overflow-auto rounded-sm border border-slate-400 bg-white">
+              <table className="legacy-erp-grid">
+                <thead>
+                  <tr>
+                    <th>Account</th>
+                    <th>Account Name</th>
+                    <th />
+                  </tr>
+                </thead>
+                <tbody>
+                  {linkedOperationalAccounts.map((account) => {
+                    const display = displayForAccount(account);
+                    return (
+                      <tr key={account.id}>
+                        <td className="font-mono">{display.code}</td>
+                        <td>
+                          <div>{display.name}</div>
+                          {arabicEntry && display.nameAr ? (
+                            <div dir="rtl" className="text-[10px] text-muted-foreground">
+                              {display.nameAr}
+                            </div>
+                          ) : null}
+                        </td>
+                        <td className="text-right">
+                          {onViewAccount ? (
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => onViewAccount(account.id, `${display.code} · ${display.name}`)}
+                            >
+                              Ledger
+                            </Button>
+                          ) : null}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="rounded-sm border border-dashed border-slate-400 bg-white p-4 text-sm text-muted-foreground">
+              No linked posting accounts yet. Add a working account or pick another PCG row.
+            </p>
+          )}
 
           <div>
-            <h3 className="font-medium mb-2">Recent activity</h3>
-            <div className="rounded-md border max-h-80 overflow-auto">
-              <Table>
-                <TableHeader className="sticky top-0 bg-background">
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Voucher / Memo</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                    <TableHead />
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {activityRows.map(({ entry, line }) => (
-                    <TableRow
-                      key={line.id}
-                      className={onViewEntry ? "cursor-pointer hover:bg-muted/40" : undefined}
-                      onClick={() => onViewEntry?.(entry.id)}
-                    >
-                      <TableCell>{entry.date.slice(0, 10)}</TableCell>
-                      <TableCell>
-                        <div>{entry.voucherNumber || entry.memo}</div>
-                        <div className="text-xs text-muted-foreground">{entry.sourceType}</div>
-                      </TableCell>
-                      <TableCell>{line.description || "—"}</TableCell>
-                      <TableCell className="text-right">{line.debit ? formatCurrency(line.debit) : "—"}</TableCell>
-                      <TableCell className="text-right">{line.credit ? formatCurrency(line.credit) : "—"}</TableCell>
-                      <TableCell>
-                        {onViewEntry ? (
-                          <Button type="button" variant="ghost" size="sm" onClick={(event) => { event.stopPropagation(); onViewEntry(entry.id); }}>
-                            Open
-                          </Button>
-                        ) : null}
-                      </TableCell>
-                    </TableRow>
-                  ))}
+            <p className="mb-2 px-1 text-xs font-semibold uppercase tracking-wide text-slate-600">Journal activity</p>
+            <div className="max-h-80 overflow-auto rounded-sm border border-slate-400 bg-white">
+              <table className="legacy-erp-grid">
+                <thead>
+                  <tr>
+                    <th>Date</th>
+                    <th>Account</th>
+                    <th>Account Name</th>
+                    <th>Cur</th>
+                    <th>Dept</th>
+                    <th className="text-center">D/C</th>
+                    <th className="text-right">Amount</th>
+                    <th>Voucher</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activityRows.map(({ entry, line, account }) => {
+                    const display = account ? displayForAccount(account) : null;
+                    const dc = Number(line.debit) > 0 ? "D" : "C";
+                    const amount = Number(line.debit) > 0 ? line.debit : line.credit;
+                    return (
+                      <tr
+                        key={line.id}
+                        className={onViewEntry ? "cursor-pointer" : undefined}
+                        onClick={() => onViewEntry?.(entry.id)}
+                      >
+                        <td>{entry.date.slice(0, 10)}</td>
+                        <td className="font-mono">{display?.code || "—"}</td>
+                        <td>{display?.name || line.description || "—"}</td>
+                        <td>{line.transactionCurrency || "—"}</td>
+                        <td>Default</td>
+                        <td className="text-center font-semibold">{dc}</td>
+                        <td className="text-right">{amount ? formatCurrency(amount) : "—"}</td>
+                        <td>{entry.voucherNumber || entry.memo}</td>
+                      </tr>
+                    );
+                  })}
                   {!activityRows.length ? (
-                    <TableRow>
-                      <TableCell colSpan={5} className="py-8 text-center text-sm text-muted-foreground">
+                    <tr>
+                      <td colSpan={8} className="py-8 text-center text-sm text-muted-foreground">
                         No posted activity for this PCG account yet.
-                      </TableCell>
-                    </TableRow>
+                      </td>
+                    </tr>
                   ) : null}
-                </TableBody>
-              </Table>
+                </tbody>
+              </table>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </section>
+      </div>
     </div>
   );
 }

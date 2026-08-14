@@ -2,6 +2,7 @@
 // Uses exportDocumentAsPdf (direct PDF download) and mailto: for email handoff.
 
 import { exportDocumentAsPdf, buildDocumentPdfFile, type ExportableType } from "@/lib/pdfExport";
+import { normalizeExportPayload } from "@/lib/financeDocumentNormalization";
 import type {
   Invoice, Estimate, Receipt, PurchaseOrder, PaymentOrder,
   Client, Supplier, Organization,
@@ -56,7 +57,12 @@ const resolveDocument = (
         email: ctx.organization.email || ctx.companyFallback?.email || "",
         website: ctx.organization.website || ctx.companyFallback?.website || "",
         logo: ctx.organization.logoUrl || ctx.companyFallback?.logo || "",
-        taxId: ctx.organization.taxId || ctx.companyFallback?.taxId || "",
+        taxId:
+          ctx.organization.taxId ||
+          ctx.companyFallback?.taxId ||
+          ctx.companyFallback?.documentTaxId ||
+          ctx.companyFallback?.taxNumber ||
+          "",
         primaryColor: ctx.companyFallback?.primaryColor,
         secondaryColor: ctx.companyFallback?.secondaryColor,
         signature: ctx.companyFallback?.signature,
@@ -113,7 +119,8 @@ export const generatePDF = async (
       return false;
     }
     const exportableType = TYPE_TO_EXPORTABLE[documentType];
-    const ok = await exportDocumentAsPdf(exportableType, resolved.doc, resolved.company);
+    const normalized = normalizeExportPayload(exportableType, resolved.doc, resolved.company);
+    const ok = await exportDocumentAsPdf(exportableType, normalized.doc, normalized.company);
     if (!ok) console.error(`[${LOG}][generatePDF] Renderer failed for ${documentType} ${documentId}`);
     return ok;
   } catch (e) {
@@ -138,7 +145,8 @@ export const generatePdfFile = async (
       return null;
     }
     const exportableType = TYPE_TO_EXPORTABLE[documentType];
-    return await buildDocumentPdfFile(exportableType, resolved.doc, resolved.company);
+    const normalized = normalizeExportPayload(exportableType, resolved.doc, resolved.company);
+    return await buildDocumentPdfFile(exportableType, normalized.doc, normalized.company);
   } catch (e) {
     console.error(`[${LOG}][generatePdfFile]`, e);
     return null;

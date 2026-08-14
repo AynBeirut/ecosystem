@@ -10,6 +10,13 @@ import type {
   Payment,
   Expense,
 } from '@/context/AppContext';
+import {
+  firstCleanText,
+  normalizeHumanText,
+  normalizeLineItems,
+  resolveInvoiceNumber,
+  resolveTaxId,
+} from '@/lib/financeDocumentNormalization';
 
 const nowIso = () => new Date().toISOString();
 
@@ -105,21 +112,7 @@ export function mapFsPlatformPurchase(id: string, data: Record<string, unknown>)
 }
 
 function mapPlatformOrderItems(items: unknown): Invoice['items'] {
-  if (!Array.isArray(items)) return [];
-  return items.map((raw, idx) => {
-    const item = raw as Record<string, unknown>;
-    const quantity = Number(item.quantity) || 0;
-    const unitPrice = Number(item.unitPrice ?? item.price ?? 0) || 0;
-    const subtotal = Number(item.total ?? item.subtotal ?? quantity * unitPrice) || 0;
-    return {
-      id: String(item.id || item.productId || `item-${idx}`),
-      description: String(item.name || item.description || 'Item'),
-      quantity,
-      unitPrice,
-      subtotal,
-      rawPrice: unitPrice,
-    };
-  });
+  return normalizeLineItems(items);
 }
 
 function mapPlatformOrderInvoiceStatus(data: Record<string, unknown>): Invoice['status'] {
@@ -134,21 +127,50 @@ function mapPlatformOrderInvoiceStatus(data: Record<string, unknown>): Invoice['
 }
 
 /** Top-level `orders` doc -> finance Invoice view. */
-export function mapFsPlatformOrder(id: string, data: Record<string, unknown>): Invoice {
+export function mapFsPlatformOrder(id: string, data: Record<string, unknown>, client?: Client): Invoice {
   const items = mapPlatformOrderItems(data.items);
   const total = Number(data.total ?? data.amountPaid ?? items.reduce((s, i) => s + i.subtotal, 0)) || 0;
   const amountPaid = Number(data.amountPaid ?? data.paidAmount ?? (String(data.paymentStatus || '').toLowerCase() === 'paid' ? total : 0)) || 0;
+  const taxRate = Number(data.taxRate ?? data.tax ?? 0) || 0;
+  const discountAmount = Number(data.discountAmount ?? data.discount ?? 0) || 0;
+  const invoiceNumber = resolveInvoiceNumber({ ...data, id });
+  const clientTaxId = resolveTaxId(
+    data.customerTaxId,
+    data.clientTaxId,
+    data.taxId,
+    data.tax_id,
+    data.taxNumber,
+    data.customerTaxNumber,
+    data.vatNumber,
+    client?.taxId,
+  );
+  const clientName = firstCleanText(data.customerName, client?.name, 'Walk-in Customer');
+  const clientAddress = firstCleanText(
+    data.customerAddress,
+    data.clientAddress,
+    data.deliveryAddress,
+    data.shippingAddress,
+    data.address,
+    client?.address,
+  );
   return {
     id,
+    invoiceNumber,
+    clientTaxId: clientTaxId || undefined,
+    customerTaxId: clientTaxId || undefined,
     date: String(data.posSaleTimestamp ?? data.date ?? data.createdAt ?? nowIso()),
     clientId: data.customerId != null ? String(data.customerId) : undefined,
-    clientName: String(data.customerName ?? 'Walk-in Customer'),
+    clientName,
+    clientAddress: clientAddress || undefined,
+    customerAddress: clientAddress || undefined,
     items,
     amount: total,
     currency: String(data.currency ?? 'USD'),
     status: mapPlatformOrderInvoiceStatus(data),
+    tax: taxRate,
+    discount: discountAmount,
     total,
-    notes: data.invoiceNumber ? `Source invoice: ${String(data.invoiceNumber)}` : undefined,
+    notes: invoiceNumber ? `Source invoice: ${invoiceNumber}` : undefined,
     paymentMethod: data.paymentMethod ? String(data.paymentMethod) : undefined,
     paidAmount: amountPaid,
     paidAt: amountPaid > 0 ? String(data.updatedAt ?? data.posSaleTimestamp ?? data.createdAt ?? nowIso()) : undefined,
@@ -180,11 +202,11 @@ function financeLineItemsToPurchaseItems(items: unknown): Record<string, unknown
 export function mapFsClient(id: string, data: Record<string, unknown>): Client {
   return {
     id,
-    name: String(data.name || ''),
-    address: String(data.address || ''),
-    phone: String(data.phone || ''),
-    email: String(data.email || ''),
-    taxId: String(data.taxId || data.tax_id || ''),
+    name: firstCleanText(data.name),
+    address: normalizeHumanText(data.address),
+    phone: normalizeHumanText(data.phone),
+    email: normalizeHumanText(data.email),
+    taxId: resolveTaxId(data.taxId, data.tax_id, data.taxNumber, data.vatNumber, data.businessId),
   };
 }
 
@@ -217,12 +239,33 @@ export function mapFsProduct(id: string, data: Record<string, unknown>): Product
 }
 
 export function mapFsInvoice(id: string, data: Record<string, unknown>): Invoice {
-  const items = (data.lineItems ?? data.items ?? []) as Invoice['items'];
+  const items = normalizeLineItems(data.lineItems ?? data.items ?? []);
+  const clientTaxId = resolveTaxId(
+    data.customerTaxId,
+    data.clientTaxId,
+    data.taxId,
+    data.tax_id,
+    data.taxNumber,
+    data.customerTaxNumber,
+    data.vatNumber,
+  );
   return {
     id,
+    invoiceNumber: resolveInvoiceNumber({ ...data, id }),
+    clientTaxId: clientTaxId || undefined,
+    customerTaxId: clientTaxId || undefined,
     date: String(data.date ?? data.createdAt ?? nowIso()),
     clientId: data.clientId != null ? String(data.clientId) : data.client_id != null ? String(data.client_id) : undefined,
-    clientName: String(data.clientName ?? data.client_name ?? ''),
+    clientName: firstCleanText(data.clientName, data.client_name),
+    clientAddress: firstCleanText(
+      data.clientAddress,
+      data.customerAddress,
+      data.client_address,
+      data.customer_address,
+      data.billingAddress,
+      data.billing_address,
+      data.address,
+    ) || undefined,
     items,
     amount: Number(data.amount ?? 0),
     currency: String(data.currency ?? 'USD'),

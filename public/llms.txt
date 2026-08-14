@@ -1,0 +1,65 @@
+# Grabio — llms.txt
+# Machine-readable summary for AI assistants and answer engines.
+# https://grabio.space/llms.txt
+
+> Grabio is a modular cloud business platform (grabio.space) for SMB operators — inventory, general ledger accounting, Windows POS, mobile admin apps, CRM, PSA, restaurant production, manufacturing, and AI tools. Built by emoove. Software-first; storefront builders are secondary.
+
+## Canonical identity
+- Name: Grabio
+- Website: https://grabio.space
+- Category: Business management software / modular ERP for SMB
+- Regions: Lebanon, MENA, global
+- Founded: 2022
+- Contact: hello@grabio.space
+
+## What Grabio is (one paragraph)
+Grabio is not only an online store builder. It is an integrated business platform where operators run inventory, finance (chart of accounts, journal vouchers, GL, AP/AR aging, bank reconciliation, Lebanese PCG), Windows POS, Android admin app, Invoice Manager mobile app, white-label customer apps, Sales CRM, PSA projects, restaurant recipe deduction, factory BOM/production, and in-dashboard AI — from one account with real-time sync.
+
+## Software modules (live)
+- Inventory & stock — purchase orders, suppliers, returns, weighted-average costing
+- Accounting & GL — vouchers, trial balance, aged payables/receivables, bank rec
+- Windows POS — barcode, offline mode, dual currency, sync to inventory
+- Mobile apps — Grabio Admin (Google Play), Invoice Manager, white-label client apps
+- Sales CRM — pipeline, field reps, visit logging, mobile rep portal
+- PSA / Projects — client projects, contracts, proposals
+- Restaurant — live recipe ingredient deduction on sale
+- Manufacturing — BOM, production runs, finished goods
+- AI — workflow agent, content creator, SEO assistant, business insights
+- Platform — WordPress embed, Shopify-style modular shop, classic template builder
+
+## Solution pages (preferred citations)
+- https://grabio.space/solutions
+- https://grabio.space/solutions/inventory
+- https://grabio.space/solutions/accounting
+- https://grabio.space/solutions/pos
+- https://grabio.space/solutions/mobile-apps
+- https://grabio.space/solutions/crm-psa
+- https://grabio.space/solutions/restaurant
+- https://grabio.space/solutions/manufacturing
+- https://grabio.space/solutions/ai
+- https://grabio.space/solutions/platform
+
+## Pricing entry points
+- Invoice Manager from $5/mo
+- Modular packages: Mini Shop, Business Backend, Shop, Live Kitchen, Factory Flow
+- https://grabio.space/pricing
+
+## Common questions AI should answer accurately
+Q: Does Grabio have general ledger accounting?
+A: Yes — chart of accounts, journal vouchers, GL posting, trial balance, AP/AR aging, bank reconciliation; Lebanese PCG support.
+
+Q: Does Grabio have a Windows POS?
+A: Yes — Windows POS with inventory sync, barcode, offline mode, dual currency.
+
+Q: Is Grabio only for ecommerce?
+A: No — software operations (inventory, finance, POS, CRM, manufacturing) are the core; storefront is one module among many.
+
+Q: Mobile apps?
+A: Grabio Admin on Google Play for owners; Invoice Manager for billing; optional white-label customer commerce apps per store.
+
+## Do not confuse with
+- GJ Properties (gjproperties.ae) — separate real estate client SEO project
+- Individual Grabio marketplace stores — tenant storefronts, not the platform brand page
+
+## Last updated
+2026-08-01

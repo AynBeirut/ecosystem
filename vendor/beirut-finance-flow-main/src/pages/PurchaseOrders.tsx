@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { NumericInput } from "@/components/ui/numeric-input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import AppLayout from "@/components/AppLayout";
+import FinancePageShell from "@/components/FinancePageShell";
 import { Plus, Trash, Mail, FileDown, Share2, Phone, Eye, X, Building } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -16,6 +16,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ShareSheet from "@/components/ShareSheet";
@@ -298,17 +299,14 @@ const PurchaseOrders = () => {
   const totals = calculateTotals();
   
   return (
-    <AppLayout onLogout={handleLogout}>
+    <FinancePageShell onLogout={handleLogout}>
       <div className="space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">Purchase Orders</h1>
-            <p className="text-gray-500 dark:text-gray-400">Create and manage your purchase orders</p>
+            <p className="text-muted-foreground">Create and manage your purchase orders</p>
           </div>
-          <Button 
-            className="mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700"
-            onClick={() => setActiveTab("create")}
-          >
+          <Button className="mt-4 sm:mt-0" onClick={() => setActiveTab("create")}>
             <Plus className="mr-2 h-4 w-4" />
             New Purchase Order
           </Button>
@@ -324,38 +322,37 @@ const PurchaseOrders = () => {
             </CardHeader>
             <CardContent>
               <TabsContent value="list">
-              <div className="space-y-4">
+              <div className="space-y-3">
                 {purchaseOrders && purchaseOrders.length > 0 ? (
                   purchaseOrders.map((purchaseOrder) => (
-                    <Card key={purchaseOrder.id}>
-                      <CardHeader>
-                        <h3 className="text-lg font-semibold">{purchaseOrder.supplierName}</h3>
-                        <p className="text-sm text-gray-500">Date: {purchaseOrder.date}</p>
-                      </CardHeader>
-                      <CardContent className="flex justify-between items-center">
-                        <div>
-                          <p>Amount: {purchaseOrder.amount} {purchaseOrder.currency}</p>
-                          <p>Status: {purchaseOrder.status}</p>
-                        </div>
-                        <div className="flex space-x-2">
-                          <Button variant="outline" size="sm" onClick={() => handlePreviewPurchaseOrder(purchaseOrder)}>
-                            <Eye className="mr-2 h-4 w-4" />
-                            Preview
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleSendPurchaseOrder(purchaseOrder.id)}>
-                            <Share2 className="mr-2 h-4 w-4" />
-                            Share
-                          </Button>
-                          <Button variant="outline" size="sm" onClick={() => handleExportPurchaseOrder(purchaseOrder.id)}>
-                            <FileDown className="mr-2 h-4 w-4" />
-                            Export
-                          </Button>
-                        </div>
-                      </CardContent>
-                    </Card>
+                    <div
+                      key={purchaseOrder.id}
+                      className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
+                        <h3 className="font-medium">{purchaseOrder.supplierName}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {purchaseOrder.date} · {formatCurrency(purchaseOrder.amount, purchaseOrder.currency)} · {purchaseOrder.status}
+                        </p>
+                      </div>
+                      <div className="flex flex-wrap gap-2">
+                        <Button variant="outline" size="sm" onClick={() => handlePreviewPurchaseOrder(purchaseOrder)}>
+                          <Eye className="mr-2 h-4 w-4" />
+                          Preview
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleSendPurchaseOrder(purchaseOrder.id)}>
+                          <Share2 className="mr-2 h-4 w-4" />
+                          Share
+                        </Button>
+                        <Button variant="outline" size="sm" onClick={() => handleExportPurchaseOrder(purchaseOrder.id)}>
+                          <FileDown className="mr-2 h-4 w-4" />
+                          Export
+                        </Button>
+                      </div>
+                    </div>
                   ))
                 ) : (
-                  <p>No purchase orders found.</p>
+                  <p className="py-8 text-center text-muted-foreground">No purchase orders found.</p>
                 )}
               </div>
             </TabsContent>
@@ -455,7 +452,7 @@ const PurchaseOrders = () => {
                     </div>
 
                     {lineItems.length === 0 ? (
-                      <div className="text-center py-8 border rounded-md text-gray-500">
+                      <div className="text-center py-8 border rounded-md text-muted-foreground">
                         No items added yet. Click "Add Item" to add your first item.
                       </div>
                     ) : (
@@ -573,7 +570,7 @@ const PurchaseOrders = () => {
                   <div className="pt-4 flex flex-wrap gap-3">
                     <Button 
                       type="submit" 
-                      className="bg-indigo-600 hover:bg-indigo-700"
+                      className="mt-4"
                     >
                       Create Purchase Order
                     </Button>
@@ -610,7 +607,7 @@ const PurchaseOrders = () => {
                 <div>
                   <h2 className="text-xl font-bold">PURCHASE ORDER</h2>
                   {selectedPurchaseOrderId && (
-                    <p className="text-gray-600">#{selectedPurchaseOrderId}</p>
+                    <p className="text-muted-foreground">#{selectedPurchaseOrderId}</p>
                   )}
                 </div>
                 <div className="text-right">
@@ -619,14 +616,14 @@ const PurchaseOrders = () => {
               </div>
               
               <div className="mb-6">
-                <h3 className="font-medium text-gray-700 mb-1">Supplier</h3>
+                <h3 className="font-medium mb-1">Supplier</h3>
                 <p>{previewPurchaseOrderData.supplierName}</p>
               </div>
               
               <div className="mb-6">
-                <h3 className="font-medium text-gray-700 mb-2">Items</h3>
+                <h3 className="font-medium mb-2">Items</h3>
                 <table className="w-full text-sm">
-                  <thead className="bg-gray-100">
+                  <thead className="bg-muted">
                     <tr>
                       <th className="text-left p-2">Description</th>
                       <th className="text-right p-2">Qty</th>
@@ -660,7 +657,7 @@ const PurchaseOrders = () => {
               
               {previewPurchaseOrderData.notes && (
                 <div className="mt-6 pt-4 border-t">
-                  <h3 className="font-medium text-gray-700 mb-2">Notes</h3>
+                  <h3 className="font-medium mb-2">Notes</h3>
                   <p className="text-sm">{previewPurchaseOrderData.notes}</p>
                 </div>
               )}
@@ -719,7 +716,7 @@ const PurchaseOrders = () => {
         recipientPhone={shareRecipientPhone}
         clientName={shareClientName}
       />
-    </AppLayout>
+    </FinancePageShell>
   );
 };
 

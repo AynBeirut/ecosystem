@@ -16,6 +16,7 @@ type PublicPageShellProps = {
   description: string;
   url?: string;
   keywords?: string[];
+  structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
   eyebrow?: string;
   heroTitle: string;
   heroDescription?: string;
@@ -30,6 +31,7 @@ const PublicPageShell: React.FC<PublicPageShellProps> = ({
   description,
   url,
   keywords,
+  structuredData,
   eyebrow,
   heroTitle,
   heroDescription,
@@ -39,7 +41,7 @@ const PublicPageShell: React.FC<PublicPageShellProps> = ({
   className,
 }) => (
   <>
-    <SEOHead title={title} description={description} url={url} keywords={keywords} />
+    <SEOHead title={title} description={description} url={url} keywords={keywords} structuredData={structuredData} />
     <div className={cn('public-page-shell', className)}>
       <PublicNav />
       <main className="flex-1">

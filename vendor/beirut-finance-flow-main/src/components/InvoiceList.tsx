@@ -1,9 +1,11 @@
 
+import { useMemo, useState } from "react";
 import { useAppContext } from "@/context/AppContext";
 import { formatCurrency } from "@/lib/utils";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Eye, Share2, CheckCircle2, Undo2, Pencil } from "lucide-react";
 import { toast } from "sonner";
 
@@ -17,8 +19,44 @@ interface InvoiceListProps {
 
 const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceListProps) => {
   const { invoices, updateInvoice, recordInvoicePayment } = useAppContext();
+  const [searchTerm, setSearchTerm] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
 
-  const displayedInvoices = limit ? invoices.slice(0, limit) : invoices;
+  const statusOptions = useMemo(() => {
+    const statuses = Array.from(
+      new Set(
+        invoices
+          .map((invoice) => String(invoice.status || "").trim().toLowerCase())
+          .filter(Boolean),
+      ),
+    );
+    return ["all", ...statuses];
+  }, [invoices]);
+
+  const filteredInvoices = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    return invoices.filter((invoice) => {
+      const status = String(invoice.status || "").toLowerCase();
+      const statusMatches = statusFilter === "all" || status === statusFilter;
+
+      if (!statusMatches) return false;
+      if (!query) return true;
+
+      const haystack = [
+        invoice.id,
+        invoice.invoiceNumber,
+        invoice.clientName,
+        invoice.clientId,
+        invoice.notes,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+
+      return haystack.includes(query);
+    });
+  }, [invoices, searchTerm, statusFilter]);
+
+  const displayedInvoices = limit ? filteredInvoices.slice(0, limit) : filteredInvoices;
 
   const invoiceTotal = (invoice: { amount?: number; total?: number }) =>
     Number(invoice.total ?? invoice.amount ?? 0);
@@ -83,14 +121,61 @@ const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceList
 
   if (displayedInvoices.length === 0) {
     return (
-      <div className="text-center py-8 text-gray-500">
-        No invoices created yet.
+      <div className="space-y-4">
+        {!limit && (
+          <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+            <Input
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              placeholder="Search by invoice, client, or notes"
+              className="md:col-span-2"
+            />
+            <select
+              value={statusFilter}
+              onChange={(event) => setStatusFilter(event.target.value)}
+              className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+            >
+              {statusOptions.map((status) => (
+                <option key={status} value={status}>
+                  {status === "all" ? "All statuses" : status}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+        <div className="text-center py-8 text-gray-500">
+          {searchTerm.trim() || statusFilter !== "all"
+            ? "No invoices match your search/filter."
+            : "No invoices created yet."}
+        </div>
       </div>
     );
   }
 
   return (
     <>
+      {!limit && (
+        <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-3">
+          <Input
+            value={searchTerm}
+            onChange={(event) => setSearchTerm(event.target.value)}
+            placeholder="Search by invoice, client, or notes"
+            className="md:col-span-2"
+          />
+          <select
+            value={statusFilter}
+            onChange={(event) => setStatusFilter(event.target.value)}
+            className="h-10 rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background"
+          >
+            {statusOptions.map((status) => (
+              <option key={status} value={status}>
+                {status === "all" ? "All statuses" : status}
+              </option>
+            ))}
+          </select>
+        </div>
+      )}
+
       {/* Mobile: card list */}
       <div className="space-y-3 md:hidden">
         {displayedInvoices.map((invoice) => (
@@ -98,7 +183,7 @@ const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceList
             <CardHeader className="pb-2">
               <div className="flex justify-between items-start gap-2">
                 <div className="min-w-0">
-                  <p className="font-semibold truncate">{invoice.id}</p>
+                  <p className="font-semibold truncate">{invoice.invoiceNumber || invoice.id}</p>
                   <p className="text-sm text-muted-foreground truncate">
                     {invoice.clientName || invoice.clientId || "-"}
                   </p>
@@ -147,7 +232,7 @@ const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceList
           <tbody className="divide-y">
             {displayedInvoices.map((invoice) => (
               <tr key={invoice.id}>
-                <td className="py-3 px-4">{invoice.id}</td>
+                <td className="py-3 px-4">{invoice.invoiceNumber || invoice.id}</td>
                 <td className="py-3 px-4">{invoice.clientName || invoice.clientId || "-"}</td>
                 <td className="py-3 px-4">{new Date(invoice.date).toLocaleDateString()}</td>
                 <td className="py-3 px-4 text-right">

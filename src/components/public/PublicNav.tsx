@@ -4,6 +4,7 @@ import { Menu, X } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
 
 const NAV_LINKS = [
+  { label: 'Solutions', href: '/solutions' },
   { label: 'Features', href: '/features' },
   { label: 'Pricing', href: '/pricing' },
   { label: 'Use Cases', href: '/use-cases' },

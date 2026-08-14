@@ -13,13 +13,22 @@ initGTM();
 function RouteTracker() {
   const location = useLocation();
   useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+  }, []);
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     const path = location.pathname + location.search;
     trackPageView(path);
     pixelPageView();
-  }, [location]);
+  }, [location.pathname, location.search]);
   return null;
 }
 import { isPlatformHostname } from '@/lib/platformHosts';
+import { storeSlugFromHostname } from '@/lib/storeUrls';
+import StoreSlugRedirect from './components/StoreSlugRedirect';
 import { Toaster as SonnerToaster } from "sonner";
 import { Toaster as ShadcnToaster } from "@/components/ui/toaster";
 import { ThemeProvider } from "./components/theme-provider";
@@ -56,7 +65,7 @@ import CookieConsent from "./components/CookieConsent";
 import PublicPageFallback from "./components/public/PublicPageFallback";
 import AdminLayout from "./components/admin/AdminLayout";
 import EditorPreviewRoot, { isEditorEmbedFrame } from "./embed/EditorPreviewRoot";
-import BuilderMethodGuard from "./components/builder/BuilderMethodGuard";
+import BuilderSetupGate from "./components/builder/BuilderSetupGate";
 
 const ModularHome = lazy(() => import("./pages/public/ModularHome"));
 const Features = lazy(() => import("./pages/public/Features"));
@@ -89,6 +98,7 @@ const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminInventory = lazy(() => import("./pages/admin/AdminInventory"));
 const AdminProduction = lazy(() => import("./pages/admin/AdminProduction"));
 const AdminAccountStatement = lazy(() => import("./pages/admin/AdminAccountStatement"));
+const PartyAccountStatementPage = lazy(() => import("./pages/admin/PartyAccountStatementPage"));
 const AdminBankReconciliation = lazy(() => import("./pages/admin/AdminBankReconciliation"));
 const AdminDeliveryWallet = lazy(() => import("./pages/admin/AdminDeliveryWallet"));
 const AdminFinanceSuite = lazy(() => import("./pages/admin/AdminFinanceSuite"));
@@ -99,6 +109,7 @@ const GscCallback = lazy(() => import("./pages/auth/GscCallback"));
 const UseCases = lazy(() => import("./pages/public/UseCases"));
 const SolutionsIndex = lazy(() => import("./pages/public/SolutionsIndex"));
 const SolutionDetail = lazy(() => import("./pages/public/SolutionDetail"));
+const WordPressAccess = lazy(() => import("./pages/public/WordPressAccess"));
 const About = lazy(() => import("./pages/public/About"));
 const Blog = lazy(() => import("./pages/public/Blog"));
 const BlogPost = lazy(() => import("./pages/public/BlogPost"));
@@ -121,6 +132,7 @@ const BuilderDashboard = lazy(() => import("./pages/builder/BuilderDashboard"));
 const BuilderDemoEdit = lazy(() => import("./pages/builder/BuilderDemoEdit"));
 const BuilderDemoPreview = lazy(() => import("./pages/builder/BuilderDemoPreview"));
 const FinanceModuleShell = lazy(() => import("./pages/admin/finance/FinanceModuleShell"));
+const InvoiceManagerModuleShell = lazy(() => import("./pages/admin/invoice-manager/InvoiceManagerModuleShell"));
 const PosPairing = lazy(() => import("./pages/admin/PosPairing"));
 const AiBuilder = lazy(() => import("./pages/admin/AiBuilder"));
 const BlogPublisher = lazy(() => import("./pages/admin/BlogPublisher"));
@@ -140,11 +152,19 @@ const AdminAiAgent = lazy(() => import("./pages/admin/AdminAiAgent"));
 import InvoiceSpaRedirect from "./components/InvoiceSpaRedirect";
 
 const _hostname = typeof window !== 'undefined' ? window.location.hostname : '';
-const isCustomDomain = _hostname !== '' && !isPlatformHostname(_hostname);
+const _storeSubdomainSlug = _hostname ? storeSlugFromHostname(_hostname) : '';
+const isGrabioSubdomain = !!_storeSubdomainSlug;
+const isExternalCustomDomain = _hostname !== '' && !isPlatformHostname(_hostname) && !isGrabioSubdomain;
+const isCustomDomain = isExternalCustomDomain;
+
+import { isPlatformHostname } from '@/lib/platformHosts';
+import { isStoreBrandedHost } from '@/lib/storeUrls';
 
 function AppFooter() {
   const location = useLocation();
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
   if (location.pathname === '/admin/theme-editor') return null;
+  if (isStoreBrandedHost(hostname)) return null;
   return <Footer />;
 }
 
@@ -169,17 +189,41 @@ function AppFooter() {
                       <RouteTracker />
                       <Suspense fallback={<PublicPageFallback />}>
                       <Routes>
-                        {/* ── Custom domain: serve the matched store, then only public/cart routes ── */}
+                        {/* ── Grabio store subdomain: jinans-kitchen.grabio.space ── */}
+                        {isGrabioSubdomain && (
+                          <>
+                            <Route element={<StoreDetail />}>
+                              <Route index />
+                              <Route path="category/:categorySlug" />
+                            </Route>
+                            <Route path="/product/:productSlug" element={<ProductDetail />} />
+                            <Route path="/product/id/:id" element={<ProductDetail />} />
+                            <Route path="/blog" element={<StoreBlog />} />
+                            <Route path="/blog/:postId" element={<StoreBlogPost />} />
+                            <Route path="/cart" element={<Cart />} />
+                            <Route path="/favorites" element={<Favorites />} />
+                            <Route path="/track-order" element={<GuestOrderTracking />} />
+                            <Route path="/contact" element={<ContactUs />} />
+                            <Route path="/orders" element={<ProtectedRoute><OrderTracking /></ProtectedRoute>} />
+                            <Route path="/orders/confirmation" element={<ProtectedRoute><OrderConfirmation /></ProtectedRoute>} />
+                            <Route path="*" element={<NotFound />} />
+                          </>
+                        )}
+                        {/* ── External custom domain ── */}
                         {isCustomDomain && (
                           <>
                             <Route path="/" element={<CustomDomainStore hostname={_hostname} />} />
-                            <Route path="/store/:slug" element={<StoreDetail />} />
-                            <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
+                            <Route path="/store/:slug" element={<StoreDetail />}>
+                              <Route index />
+                              <Route path="category/:categorySlug" />
+                            </Route>
+                            <Route path="/store/id/:id" element={<StoreDetail />}>
+                              <Route index />
+                              <Route path="category/:categorySlug" />
+                            </Route>
                             <Route path="/store/:slug/blog" element={<StoreBlog />} />
                             <Route path="/store/:slug/blog/:postId" element={<StoreBlogPost />} />
                             <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
-                            <Route path="/store/id/:id" element={<StoreDetail />} />
-                            <Route path="/store/id/:id/category/:categorySlug" element={<StoreDetail />} />
                             <Route path="/product/id/:id" element={<ProductDetail />} />
                             <Route path="/cart" element={<Cart />} />
                             <Route path="/favorites" element={<Favorites />} />
@@ -191,7 +235,7 @@ function AppFooter() {
                           </>
                         )}
                         {/* ── Normal platform routes ── */}
-                        {!isCustomDomain && (
+                        {!isCustomDomain && !isGrabioSubdomain && (
                           <>
                         <Route path="/login" element={<Login />} />
                         <Route path="/signup" element={<Navigate to="/login?tab=signup" replace />} />
@@ -202,14 +246,18 @@ function AppFooter() {
                         <Route path="/home" element={<ModularHome />} />
                         <Route path="/search" element={<Marketplace />} />
                         <Route path="/marketplace" element={<Navigate to="/search" replace />} />
-                        <Route path="/store/:slug" element={<StoreDetail />} />
-                        <Route path="/store/:slug/category/:categorySlug" element={<StoreDetail />} />
+                        <Route path="/store/:slug" element={<StoreDetail />}>
+                          <Route index />
+                          <Route path="category/:categorySlug" />
+                        </Route>
                         <Route path="/store/:slug/blog" element={<StoreBlog />} />
                         <Route path="/store/:slug/blog/:postId" element={<StoreBlogPost />} />
                         <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
                         {/* Backward compatibility routes */}
-                        <Route path="/store/id/:id" element={<StoreDetail />} />
-                        <Route path="/store/id/:id/category/:categorySlug" element={<StoreDetail />} />
+                        <Route path="/store/id/:id" element={<StoreDetail />}>
+                          <Route index />
+                          <Route path="category/:categorySlug" />
+                        </Route>
                         <Route path="/product/id/:id" element={<ProductDetail />} />
                         {/* Public routes (use localStorage, work for guests) */}
                         <Route path="/cart" element={<Cart />} />
@@ -232,17 +280,6 @@ function AppFooter() {
                         <Route path="/payment/success" element={<ProtectedRoute><PaymentSuccess /></ProtectedRoute>} />
                         <Route path="/payment/failed" element={<ProtectedRoute><PaymentFailed /></ProtectedRoute>} />
                         <Route path="/blocked" element={<ProtectedRoute><Blocked /></ProtectedRoute>} />
-                        {/* Full-screen theme editor — outside AdminLayout (no admin sidebar) */}
-                        <Route
-                          path="/admin/theme-editor"
-                          element={
-                            <ProtectedRoute allowedRoles={['admin']} requiredModule="builder">
-                              <BuilderMethodGuard targetMethod="theme_editor">
-                                <ThemeEditor />
-                              </BuilderMethodGuard>
-                            </ProtectedRoute>
-                          }
-                        />
                         {/* Admin shell + routes */}
                         <Route element={<AdminLayout />}>
                         <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
@@ -255,7 +292,17 @@ function AppFooter() {
                         <Route path="/admin/delivery" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="manage_deliveries" requiredModule="delivery"><AdminDelivery /></ProtectedRoute>} />
                         <Route path="/admin/builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><UnifiedBuilderWizard /></ProtectedRoute>} />
                         <Route path="/admin/wordpress-queue" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><AdminWordPressQueue /></ProtectedRoute>} />
-                        <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><BuilderMethodGuard targetMethod="classic"><AdminTemplates /></BuilderMethodGuard></ProtectedRoute>} />
+                        <Route path="/admin/templates" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="builder"><BuilderSetupGate targetMethod="classic"><AdminTemplates /></BuilderSetupGate></ProtectedRoute>} />
+                        <Route
+                          path="/admin/theme-editor"
+                          element={
+                            <ProtectedRoute allowedRoles={['admin']} requiredModule="builder">
+                              <BuilderSetupGate targetMethod="theme_editor">
+                                <ThemeEditor />
+                              </BuilderSetupGate>
+                            </ProtectedRoute>
+                          }
+                        />
                         <Route path="/admin/announcements" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredModule="marketplace"><AdminAnnouncements /></ProtectedRoute>} />
                         <Route path="/admin/analytics" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports" requiredModule="analytics"><AdminAnalytics /></ProtectedRoute>} />
                         <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports" requiredModule="analytics"><AdminRevenue /></ProtectedRoute>} />
@@ -264,6 +311,7 @@ function AppFooter() {
                         {/* Inventory Management */}
                         <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminInventory /></ProtectedRoute>} />
                         <Route path="/admin/suppliers" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminSuppliers /></ProtectedRoute>} />
+                        <Route path="/admin/suppliers/:partyId/statement" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><PartyAccountStatementPage /></ProtectedRoute>} />
                         <Route path="/admin/supplier-statements" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminSupplierStatements /></ProtectedRoute>} />
                         <Route path="/admin/raw-materials" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="factory"><AdminRawMaterials /></ProtectedRoute>} />
                         <Route path="/admin/recipes" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="restaurant"><AdminRecipes /></ProtectedRoute>} />
@@ -281,15 +329,19 @@ function AppFooter() {
                         <Route path="/admin/salaries" element={<ProtectedRoute allowedRoles={['admin']}><AdminSalaries /></ProtectedRoute>} />
                         <Route path="/admin/sub-accounts" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="team"><AdminSubAccounts /></ProtectedRoute>} />
                         {/* Financial */}
-                        <Route path="/admin/expenses" element={<Navigate to="/admin/finance/accounting?tab=vouchers" replace />} />
+                        <Route path="/admin/expenses" element={<Navigate to="/admin/invoice-manager/expenses" replace />} />
                         <Route path="/admin/reports" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminReports /></ProtectedRoute>} />
-                        <Route path="/admin/finance" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminFinanceSuite /></ProtectedRoute>} />
-                        <Route path="/admin/finance/clients" element={<Navigate to="/admin/customers" replace />} />
-                        <Route path="/admin/finance/products" element={<Navigate to="/admin/products" replace />} />
-                        <Route path="/admin/finance/invoices" element={<Navigate to="/admin/finance/accounting" replace />} />
-                        <Route path="/admin/finance/estimates" element={<Navigate to="/admin/finance/quotations" replace />} />
-                        <Route path="/admin/finance/receipts" element={<Navigate to="/admin/finance/recu" replace />} />
+                        <Route path="/admin/finance" element={<Navigate to="/admin/finance/accounting" replace />} />
+                        <Route path="/admin/finance/clients" element={<Navigate to="/admin/invoice-manager/clients" replace />} />
+                        <Route path="/admin/finance/products" element={<Navigate to="/admin/invoice-manager/products" replace />} />
+                        <Route path="/admin/finance/invoices" element={<Navigate to="/admin/invoice-manager/invoices" replace />} />
+                        <Route path="/admin/finance/quotations" element={<Navigate to="/admin/invoice-manager/quotations" replace />} />
+                        <Route path="/admin/finance/estimates" element={<Navigate to="/admin/invoice-manager/quotations" replace />} />
+                        <Route path="/admin/finance/receipts" element={<Navigate to="/admin/invoice-manager/receipts" replace />} />
+                        <Route path="/admin/finance/recu" element={<Navigate to="/admin/invoice-manager/receipts" replace />} />
+                        <Route path="/admin/finance/settings" element={<Navigate to="/admin/finance/tools" replace />} />
                         <Route path="/admin/finance/*" element={<ProtectedRoute allowedRoles={['admin']}><FinanceModuleShell /></ProtectedRoute>} />
+                        <Route path="/admin/invoice-manager/*" element={<ProtectedRoute allowedRoles={['admin']}><InvoiceManagerModuleShell /></ProtectedRoute>} />
                         <Route path="/admin/pos" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="pos"><PosPairing /></ProtectedRoute>} />
                         <Route path="/admin/ai-builder" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="ai_builder"><AiBuilder /></ProtectedRoute>} />
                         <Route path="/admin/blog" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="blog_publisher"><BlogPublisher /></ProtectedRoute>} />
@@ -305,7 +357,7 @@ function AppFooter() {
                         <Route path="/admin/marketplace" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="dropship"><AdminMarketplaceSync /></ProtectedRoute>} />
                         <Route path="/admin/product-reviews" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="marketplace"><AdminProductReviews /></ProtectedRoute>} />
                         <Route path="/admin/order-notifications" element={<ProtectedRoute allowedRoles={['admin']}><AdminOrderNotifications /></ProtectedRoute>} />
-                        <Route path="/admin/account-statement" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="analytics"><AdminAccountStatement /></ProtectedRoute>} />
+                        <Route path="/admin/account-statement" element={<Navigate to="/admin/finance/account-statement" replace />} />
                         <Route path="/admin/cash-collection" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminBankReconciliation /></ProtectedRoute>} />
                         <Route path="/admin/delivery-wallet" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminDeliveryWallet /></ProtectedRoute>} />
                         <Route path="/admin/bank-reconciliation" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="payments"><AdminBankReconciliation /></ProtectedRoute>} />
@@ -315,6 +367,7 @@ function AppFooter() {
                         <Route path="/admin/seo-audit" element={<ProtectedRoute allowedRoles={['admin']}><AdminSEOAudit /></ProtectedRoute>} />
                         {/* Customer directory (orders/billing) */}
                         <Route path="/admin/customers" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><AdminCustomers /></ProtectedRoute>} />
+                        <Route path="/admin/customers/:partyId/statement" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_customers"><PartyAccountStatementPage /></ProtectedRoute>} />
                         {/* Sales CRM add-on */}
                         <Route path="/admin/crm" element={<Navigate to="/admin/crm/dashboard" replace />} />
                         <Route path="/admin/crm/*" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="crm"><CrmModuleShell /></ProtectedRoute>} />
@@ -326,6 +379,7 @@ function AppFooter() {
                         <Route path="/features" element={<Features />} />
                         <Route path="/solutions" element={<SolutionsIndex />} />
                         <Route path="/solutions/:slug" element={<SolutionDetail />} />
+                        <Route path="/wordpress/access" element={<WordPressAccess />} />
                         <Route path="/pricing" element={<Pricing />} />
                         <Route path="/use-cases" element={<UseCases />} />
                         <Route path="/about" element={<About />} />
@@ -333,10 +387,13 @@ function AppFooter() {
                         <Route path="/careers/apply/:track" element={<CareersApply />} />
                         <Route path="/blog" element={<Blog />} />
                         <Route path="/blog/:slug" element={<BlogPost />} />
-                        {/* Short store URLs: /:slug and /:slug/product/:productSlug */}
-                        <Route path="/:slug" element={<StoreDetail />} />
-                        <Route path="/:slug/category/:categorySlug" element={<StoreDetail />} />
-                        <Route path="/:storeSlug/product/:productSlug" element={<ProductDetail />} />
+                        {/* Legacy store paths → {slug}.grabio.space */}
+                        <Route path="/store/:slug" element={<StoreSlugRedirect />} />
+                        <Route path="/store/:slug/category/:categorySlug" element={<StoreSlugRedirect />} />
+                        <Route path="/store/:storeSlug/product/:productSlug" element={<StoreSlugRedirect />} />
+                        <Route path="/:slug" element={<StoreSlugRedirect />} />
+                        <Route path="/:slug/category/:categorySlug" element={<StoreSlugRedirect />} />
+                        <Route path="/:storeSlug/product/:productSlug" element={<StoreSlugRedirect />} />
                         <Route path="/privacy" element={<PrivacyPolicy />} />
                         {/* 404 catch-all route */}
                         <Route path="*" element={<NotFound />} />

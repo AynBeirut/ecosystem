@@ -23,7 +23,7 @@ export interface Order {
   deliveryCity?: string
   deliveryNotes?: string
   invoiceNotes?: string
-  deliveryMethod?: 'standard' | 'express' | 'same_day' | 'pickup'
+  deliveryMethod?: 'standard' | 'express' | 'same_day' | 'pickup' | 'dine_in'
   deliveryFee?: number
   estimatedDeliveryTime?: string
   deliveryWorkingHours?: string
@@ -55,6 +55,7 @@ export interface Order {
   amountPaid?: number
   paymentDate?: string
   paymentMethod?: string
+  orderChannel?: 'web' | 'whatsapp'
   paymentNotes?: string
   paymentHistory?: PaymentRecord[]
   createdBy?: string

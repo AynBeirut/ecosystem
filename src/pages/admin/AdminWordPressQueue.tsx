@@ -29,6 +29,7 @@ const STATUS_LABELS: Record<WordPressProvisioningStatus, string> = {
   pending: 'Pending',
   in_progress: 'In progress',
   completed: 'Completed',
+  failed: 'Failed',
   cancelled: 'Cancelled',
 };
 
@@ -84,7 +85,7 @@ const AdminWordPressQueue: React.FC = () => {
       title={isOps ? 'WordPress provisioning queue' : 'Your WordPress requests'}
       description={
         isOps
-          ? 'Manual provisioning queue — update status as you set up hosting and hand off credentials.'
+          ? 'Automatic Webuzo provisioning runs when a request is submitted. Use this queue to monitor status or override manually.'
           : 'Track WordPress setup requests submitted from the Store Builder.'
       }
       eyebrow="WordPress"
@@ -130,6 +131,31 @@ const AdminWordPressQueue: React.FC = () => {
                   </span>
                 </div>
                 {req.notes && <p className="text-sm">{req.notes}</p>}
+                {(req.webuzoUsername || req.hostingDomain || req.ftpUsername) && (
+                  <div className="text-sm space-y-1 rounded-lg bg-muted/40 p-3">
+                    {req.hostingDomain && <p>Hosting domain: {req.hostingDomain}</p>}
+                    {req.webuzoUsername && <p>Webuzo user: {req.webuzoUsername}</p>}
+                    {req.ftpUsername && <p>FTP user: {req.ftpUsername}</p>}
+                    {req.panelUrl && (
+                      <p>
+                        Panel:{' '}
+                        <a href={req.panelUrl} className="text-primary underline" target="_blank" rel="noreferrer">
+                          {req.panelUrl}
+                        </a>
+                      </p>
+                    )}
+                    {req.accessEmailSentAt && (
+                      <p className="text-xs text-muted-foreground">
+                        Access email sent {new Date(req.accessEmailSentAt).toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+                {req.provisionError && (
+                  <p className="text-sm text-destructive border-l-2 border-destructive pl-3">
+                    {req.provisionError}
+                  </p>
+                )}
                 <p className="text-xs text-muted-foreground">
                   Submitted {new Date(req.createdAt).toLocaleString()}
                 </p>

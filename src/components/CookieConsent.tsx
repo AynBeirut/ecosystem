@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { initGA, trackPageView } from '@/lib/analytics';
 import { initMetaPixel, pixelPageView } from '@/lib/metaPixel';
+import { initGTM } from '@/lib/gtm';
 
 const CONSENT_KEY = 'grabio_cookie_consent';
 
@@ -37,6 +38,7 @@ export default function CookieConsent() {
     setVisible(false);
     initGA();
     initMetaPixel();
+    initGTM();
     trackPageView(window.location.pathname + window.location.search);
     pixelPageView();
   };

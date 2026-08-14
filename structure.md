@@ -11,7 +11,7 @@
 
 **UI:** Admin → Business Tools → **Business Finance** (`Landmark` icon)  
 **Home route:** `/admin/finance/quotations`  
-**Top tabs:** Quotation · Accounting (hub: vouchers only) · Reçu · Reports · Settings  
+**Top tabs:** Quotation · Accounting (hub: vouchers only) · Receipts · Reports · Settings  
 **Accounting default:** Card hub — Vouchers, Workspace, Party statement. Reports/COA/FX live on **Reports** and **Settings** tabs (not duplicated on Accounting).  
 **Engine:** `vendor/beirut-finance-flow-main/src/pages/Accounting.tsx`  
 **Audience:** Owner-accountant, external accountant, finance admin — **not** cashier / waiter / field sales.  
@@ -140,7 +140,7 @@ Accountants who need debits, PCG, and TB use **Invoice Manager → Accounting** 
 
 1. **Account Statement Ledger modal** — print-only; no click-through to order (fix in Phase A).  
 2. **Two paradigms** — admin account statement vs GL Party SOA; owner screen should stay simple; accountant uses Accounting tab for GL-accurate SOA.  
-3. **Payment double-count risk** — account-level payments + order cash on same customer (review allocations before trusting closing balance).
+3. **Payment double-count risk** — account-level payments + order cash on same customer (review allocations before trusting closing balance). **Phase 2 (2026-08-02):** `onAccountPaymentCreated` CF auto-posts RV/PV + `financeReceipts` doc; invoice/payment-order GL now tagged RV/PV; feed dedupes auto receipts vs raw sources.
 
 ---
 

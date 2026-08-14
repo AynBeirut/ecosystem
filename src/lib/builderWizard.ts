@@ -1,5 +1,6 @@
 import { buildProfileFromPreset, type StartingPackageKey } from '@/lib/packagePresets';
 import type { BuildMethod } from '@/lib/buildMethod';
+import { isGrabioEditorMethod } from '@/lib/buildMethod';
 import type { StoreProfile } from '@/types/storeProfile';
 
 export type SiteIntent = 'display' | 'blog' | 'ecommerce';
@@ -16,8 +17,10 @@ export const BUILDER_WIZARD_STEPS: { id: BuilderWizardStepId; label: string }[] 
   { id: 'site-type', label: 'Site type' },
   { id: 'business-type', label: 'Business' },
   { id: 'method', label: 'Method' },
-  { id: 'wordpress-request', label: 'WordPress' },
+  { id: 'wordpress-request', label: 'Domain' },
 ];
+
+export const EDITOR_SETUP_VERSION = 2;
 
 export type BuilderWizardState = {
   step: BuilderWizardStepId;
@@ -25,8 +28,34 @@ export type BuilderWizardState = {
   businessIntent?: BusinessIntent;
   buildMethod?: BuildMethod;
   wordpressRequestId?: string;
+  editorSetupVersion?: number;
+  setupCompletedMethods?: Partial<Record<'classic' | 'theme_editor', number>>;
   updatedAt?: string;
 };
+
+/** Firestore rejects `undefined` — omit those keys before setDoc/updateDoc. */
+export function stripUndefinedForFirestore<T>(value: T): T {
+  if (value === undefined) return value;
+  if (value === null || typeof value !== 'object') return value;
+  if (Array.isArray(value)) {
+    return value.map((item) => stripUndefinedForFirestore(item)) as T;
+  }
+  const out: Record<string, unknown> = {};
+  for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
+    if (nested === undefined) continue;
+    out[key] = stripUndefinedForFirestore(nested);
+  }
+  return out as T;
+}
+
+export function buildBuilderWizardPatch(
+  patch: Partial<BuilderWizardState> & Pick<BuilderWizardState, 'step'>,
+): BuilderWizardState {
+  return stripUndefinedForFirestore({
+    ...patch,
+    updatedAt: patch.updatedAt || new Date().toISOString(),
+  }) as BuilderWizardState;
+}
 
 const BUSINESS_TO_PRESET: Record<BusinessIntent, StartingPackageKey> = {
   store: 'pkg_shop',
@@ -36,9 +65,80 @@ const BUSINESS_TO_PRESET: Record<BusinessIntent, StartingPackageKey> = {
 
 export function stepsForSiteIntent(siteIntent?: SiteIntent): BuilderWizardStepId[] {
   if (siteIntent === 'ecommerce') {
-    return ['site-type', 'business-type', 'method'];
+    return ['site-type', 'business-type'];
   }
-  return ['site-type', 'method'];
+  return ['site-type'];
+}
+
+/** Setup steps shown before opening an editor or WordPress domain form. */
+export function setupStepsForBuildMethod(
+  targetMethod: BuildMethod,
+  siteIntent?: SiteIntent,
+): BuilderWizardStepId[] {
+  if (isGrabioEditorMethod(targetMethod)) {
+    return ['site-type', 'business-type'];
+  }
+  const base = stepsForSiteIntent(siteIntent);
+  if (targetMethod === 'wordpress') {
+    return [...base, 'wordpress-request'];
+  }
+  return base;
+}
+
+export function isEditorSetupCompleteForMethod(
+  wiz: BuilderWizardState | undefined,
+  targetMethod: 'classic' | 'theme_editor',
+): boolean {
+  if (!wiz?.siteIntent || !wiz?.businessIntent) return false;
+  if (wiz.setupCompletedMethods?.[targetMethod] === EDITOR_SETUP_VERSION) return true;
+  if (wiz.editorSetupVersion === EDITOR_SETUP_VERSION && wiz.buildMethod === targetMethod) return true;
+  // Legacy shared completion (before per-method tracking) — classic only.
+  if (
+    wiz.editorSetupVersion === EDITOR_SETUP_VERSION &&
+    !wiz.setupCompletedMethods &&
+    targetMethod === 'classic'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+export function isBuilderSetupComplete(
+  profile: Pick<StoreProfile, 'builderWizard'> | null | undefined,
+  targetMethod: BuildMethod,
+): boolean {
+  const wiz = profile?.builderWizard;
+  if (!wiz?.siteIntent) return false;
+  if (targetMethod === 'classic' || targetMethod === 'theme_editor') {
+    return isEditorSetupCompleteForMethod(wiz, targetMethod);
+  }
+  if (wiz.siteIntent === 'ecommerce' && !wiz.businessIntent) return false;
+  if (targetMethod === 'wordpress') {
+    return Boolean(wiz.wordpressRequestId);
+  }
+  return false;
+}
+
+export function resolveSetupStep(
+  profile: Pick<StoreProfile, 'builderWizard'> | null | undefined,
+  targetMethod: BuildMethod,
+): BuilderWizardStepId {
+  const wiz = profile?.builderWizard;
+  const siteIntent = wiz?.siteIntent;
+  if (!siteIntent) return 'site-type';
+  if (targetMethod === 'classic' || targetMethod === 'theme_editor') {
+    if (!isEditorSetupCompleteForMethod(wiz, targetMethod)) {
+      if (!siteIntent) return 'site-type';
+      if (!wiz?.businessIntent) return 'business-type';
+      if (wiz.step === 'business-type' && wiz.buildMethod === targetMethod) return 'business-type';
+      return 'site-type';
+    }
+  }
+  if (isGrabioEditorMethod(targetMethod) && !wiz?.businessIntent) return 'business-type';
+  if (siteIntent === 'ecommerce' && !wiz?.businessIntent) return 'business-type';
+  if (targetMethod === 'wordpress' && !wiz?.wordpressRequestId) return 'wordpress-request';
+  if (targetMethod === 'wordpress') return 'wordpress-request';
+  return isGrabioEditorMethod(targetMethod) ? 'business-type' : 'site-type';
 }
 
 const LEGACY_WIZARD_STEPS = new Set([
@@ -57,7 +157,16 @@ export function normalizeWizardStep(
   buildMethod?: BuildMethod,
 ): BuilderWizardStepId {
   if (raw === 'wordpress-request') return 'wordpress-request';
-  if (raw && LEGACY_WIZARD_STEPS.has(raw)) return 'method';
+  if (raw === 'method') {
+    if (buildMethod === 'wordpress') return 'wordpress-request';
+    if (siteIntent === 'ecommerce') return 'business-type';
+    return 'site-type';
+  }
+  if (raw && LEGACY_WIZARD_STEPS.has(raw)) {
+    if (buildMethod === 'wordpress') return 'wordpress-request';
+    if (siteIntent === 'ecommerce') return 'business-type';
+    return 'site-type';
+  }
   const allowed = stepsForSiteIntent(siteIntent);
   if (raw && allowed.includes(raw as BuilderWizardStepId)) {
     return raw as BuilderWizardStepId;
@@ -95,7 +204,7 @@ export function profilePatchForSiteIntent(
   businessIntent?: BusinessIntent,
 ): Partial<StoreProfile> {
   const timestamp = new Date().toISOString();
-  const wizardBase = { step: 'method' as const, siteIntent, updatedAt: timestamp };
+  const wizardBase = { step: 'site-type' as const, siteIntent, updatedAt: timestamp };
 
   if (siteIntent === 'display') {
     return {

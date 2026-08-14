@@ -21,20 +21,23 @@ const resolveCatalogDescription = (product?: { description?: string; productDesc
   return '';
 };
 
+import { resolveA4DocumentBranding } from '@/lib/financeDocumentSettings';
+
 export const generateInvoiceHTML = (
   order: Order & { id: string },
   products: any[],
   storeProfile: StoreProfile | null,
   formatCurrency: (amount: number, showDual?: boolean) => string
 ): string => {
-  const template = storeProfile?.invoiceTemplate || 'modern';
-  const storeName = storeProfile?.name || 'Your Store';
-  const storeLogo = storeProfile?.logo || '';
-  const storeSlogan = storeProfile?.slogan || '';
-  const storeWebsite = storeProfile?.website || '';
-  const storePhone = storeProfile?.phone || '';
-  const storeEmail = storeProfile?.email || '';
-  const storeTaxNumber = storeProfile?.taxNumber || '';
+  const branding = resolveA4DocumentBranding(storeProfile);
+  const template = branding.template;
+  const storeName = branding.companyName;
+  const storeLogo = branding.logo;
+  const storeSlogan = branding.slogan;
+  const storeWebsite = branding.website;
+  const storePhone = branding.phone;
+  const storeEmail = branding.email;
+  const storeTaxNumber = branding.taxNumber;
   
   // Generate invoice number with store prefix
   let invoiceNum = order.invoiceNumber;

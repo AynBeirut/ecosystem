@@ -1147,22 +1147,6 @@ const AdminTemplates: React.FC<AdminTemplatesProps> = ({ demoId }) => {
         </div>
       }
     >
-        {!demoMode && (
-          <AdminPanel className="mb-6 border border-violet-200 bg-violet-50/50">
-            <CardContent className="py-4 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-              <div>
-                <p className="font-medium text-sm">Live preview, themes &amp; store content</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  Use Theme Editor for Shopify-style preview, themes, colors, and copy.
-                </p>
-              </div>
-              <Button asChild variant="default" size="sm">
-                <Link to="/admin/theme-editor">Open Theme Editor</Link>
-              </Button>
-            </CardContent>
-          </AdminPanel>
-        )}
-
         {/* Tab bar */}
         <div className="flex gap-1 p-1 bg-muted rounded-xl mb-8 overflow-x-auto">
           {tabs.map(tab => (

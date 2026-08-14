@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { Store } from '@/types/product';
+import { buildStorePublicUrl, buildStorePublicUrlFromStore } from '@/lib/storeUrls';
 import { MapPin, Star, Heart } from 'lucide-react';
+import StoreVisual from '@/components/StoreVisual';
 import { getFirestore, collection, query, where, getCountFromServer } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { pushDebugLog } from '@/lib/debugLogger';
@@ -27,17 +28,18 @@ const StoreCard: React.FC<StoreCardProps> = ({ store }) => {
     void fetchCount();
   }, [store.id]);
 
+  const storeHref = buildStorePublicUrlFromStore({ id: store.id, slug: store.slug });
+
   return (
-    <Link to={`/${store.slug || store.id}`} className="group block h-full">
+    <a href={storeHref} className="group block h-full">
       <article className="marketplace-store-card flex h-full flex-col overflow-hidden rounded-3xl border border-black/[0.06] bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)] transition-all duration-300 hover:-translate-y-0.5 hover:shadow-[0_12px_40px_-12px_rgba(0,0,0,0.15)]">
-        <div className="flex items-center justify-center bg-gradient-to-b from-neutral-50 to-white px-6 pb-2 pt-8">
-          <div className="relative">
-            <img
-              src={store.logo}
-              alt={store.name}
-              className="h-[72px] w-[72px] rounded-2xl object-cover ring-1 ring-black/[0.06] transition-transform duration-300 group-hover:scale-[1.02]"
-            />
-          </div>
+        <div className="flex items-center justify-center bg-gradient-to-b from-neutral-50/80 to-white px-6 pb-2 pt-8">
+          <StoreVisual
+            name={store.name}
+            logo={store.logo}
+            variant="card"
+            className="h-[72px] w-[72px] rounded-2xl object-cover shadow-sm transition-transform duration-300 group-hover:scale-[1.02]"
+          />
         </div>
 
         <div className="flex flex-1 flex-col px-5 pb-5 pt-3 text-center">
@@ -105,7 +107,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ store }) => {
           </div>
         </div>
       </article>
-    </Link>
+    </a>
   );
 };
 

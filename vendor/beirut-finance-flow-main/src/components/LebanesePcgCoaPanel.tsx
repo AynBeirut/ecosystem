@@ -1,6 +1,7 @@
-import { useMemo, useState, useCallback } from "react";
-import { Input } from "@/components/ui/input";
+import { useCallback, useMemo, useState } from "react";
+import { Minus, Plus, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   ContextMenu,
@@ -8,216 +9,292 @@ import {
   ContextMenuItem,
   ContextMenuTrigger,
 } from "@/components/ui/context-menu";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { LEBANESE_PCG_CHART, type LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
-import { filterPcgChart, flattenPcgChart, kindLabel } from "@/lib/ledger/lebanesePcgTree";
-import { mappedPcgCodes, mapGrabioCodeToPcg } from "@/lib/ledger/grabioToPcgMap";
-import type { LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
-
-type PcgFilter = "all" | "mapped" | "client" | "unused";
+import {
+  buildPcgTree,
+  collectPcgTreeNodeIds,
+  filterPcgTree,
+  pcgAddTargetFromNode,
+  pcgClassSuffix,
+  type PcgTreeNode,
+} from "@/lib/ledger/lebanesePcgTree";
+import { supportsArabicEntry, type AccountingLanguage } from "@/lib/grabio/accountingMode";
+import type { JournalEntry, JournalLine, LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
+import PcgAccountMovementsSheet from "@/components/PcgAccountMovementsSheet";
+import { cn } from "@/lib/utils";
 
 type Props = {
   activeLedgerAccounts?: LedgerAccount[];
   pcgClientAccounts?: PcgClientAccount[];
+  entries?: JournalEntry[];
+  lines?: JournalLine[];
+  asOfDate?: string;
+  accountingLanguage?: AccountingLanguage;
   onAddClientAccount?: (account: LebanesePcgAccount) => void;
+  previewMode?: boolean;
 };
 
-function kindVariant(kind: string): "default" | "secondary" | "outline" | "destructive" {
-  if (kind === "G") return "secondary";
-  if (kind === "D") return "default";
-  if (kind === "C") return "outline";
-  return "outline";
+function PcgTreeNodeRow({
+  node,
+  depth,
+  expanded,
+  onToggle,
+  onDrill,
+  onAddClientAccount,
+  showArabic,
+}: {
+  node: PcgTreeNode;
+  depth: number;
+  expanded: boolean;
+  onToggle: () => void;
+  onDrill: () => void;
+  onAddClientAccount?: (account: LebanesePcgAccount) => void;
+  showArabic: boolean;
+}) {
+  const hasChildren = node.children.length > 0;
+  const suffix = pcgClassSuffix(node.code);
+  const addTarget = pcgAddTargetFromNode(node);
+  const canAdd = Boolean(onAddClientAccount && addTarget);
+
+  const handleAdd = (event: React.MouseEvent) => {
+    event.stopPropagation();
+    if (addTarget) onAddClientAccount?.(addTarget);
+  };
+
+  const row = (
+    <div
+      className={cn(
+        "group flex min-h-[30px] items-start gap-1 rounded-sm px-1 py-0.5 hover:bg-muted/60",
+        "border-l border-dotted border-border/70",
+      )}
+      style={{ marginLeft: depth * 18, paddingLeft: 8 }}
+    >
+      <button
+        type="button"
+        className={cn(
+          "mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm border bg-background text-muted-foreground",
+          !hasChildren && "invisible",
+        )}
+        aria-label={expanded ? "Collapse" : "Expand"}
+        onClick={(event) => {
+          event.stopPropagation();
+          onToggle();
+        }}
+      >
+        {expanded ? <Minus className="h-3 w-3" /> : <Plus className="h-3 w-3" />}
+      </button>
+
+      <span className="mt-1 inline-block h-2 w-2 shrink-0 rounded-full bg-sky-500/70 dark:bg-sky-400/70" />
+
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
+          <button
+            type="button"
+            className="font-mono text-sm font-semibold tabular-nums text-primary underline-offset-2 hover:underline"
+            onClick={onDrill}
+          >
+            {node.code}
+          </button>
+          <span className={cn("text-sm", node.pcgKind === "G" ? "font-semibold text-foreground" : "text-foreground/90")}>
+            {node.name}
+          </span>
+          {suffix ? <span className="text-xs text-muted-foreground">{suffix}</span> : null}
+          {node.kind === "client" ? (
+            <Badge variant="outline" className="text-[10px] px-1.5">
+              Client
+            </Badge>
+          ) : null}
+        </div>
+        {showArabic && node.nameAr ? (
+          <div className="text-right text-xs text-muted-foreground" dir="rtl">
+            {node.nameAr}
+          </div>
+        ) : null}
+      </div>
+      {canAdd ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-7 shrink-0 px-2 text-xs opacity-70 group-hover:opacity-100"
+          onClick={handleAdd}
+        >
+          Add
+        </Button>
+      ) : null}
+    </div>
+  );
+
+  if (!canAdd) return row;
+
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{row}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <ContextMenuItem onClick={() => addTarget && onAddClientAccount?.(addTarget)}>
+          Add account here
+        </ContextMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+function PcgTreeBranch({
+  nodes,
+  depth,
+  expandedIds,
+  onToggle,
+  onDrill,
+  onAddClientAccount,
+  showArabic,
+}: {
+  nodes: PcgTreeNode[];
+  depth: number;
+  expandedIds: Set<string>;
+  onToggle: (id: string) => void;
+  onDrill: (node: PcgTreeNode) => void;
+  onAddClientAccount?: (account: LebanesePcgAccount) => void;
+  showArabic: boolean;
+}) {
+  return (
+    <>
+      {nodes.map((node) => {
+        const expanded = expandedIds.has(node.id);
+        return (
+          <div key={node.id}>
+            <PcgTreeNodeRow
+              node={node}
+              depth={depth}
+              expanded={expanded}
+              onToggle={() => onToggle(node.id)}
+              onDrill={() => onDrill(node)}
+              onAddClientAccount={onAddClientAccount}
+              showArabic={showArabic}
+            />
+            {expanded && node.children.length ? (
+              <PcgTreeBranch
+                nodes={node.children}
+                depth={depth + 1}
+                expandedIds={expandedIds}
+                onToggle={onToggle}
+                onDrill={onDrill}
+                onAddClientAccount={onAddClientAccount}
+                showArabic={showArabic}
+              />
+            ) : null}
+          </div>
+        );
+      })}
+    </>
+  );
 }
 
 export default function LebanesePcgCoaPanel({
   activeLedgerAccounts = [],
   pcgClientAccounts = [],
+  entries = [],
+  lines = [],
+  asOfDate = new Date().toISOString().slice(0, 10),
+  accountingLanguage,
   onAddClientAccount,
+  previewMode = true,
 }: Props) {
   const [query, setQuery] = useState("");
-  const [filter, setFilter] = useState<PcgFilter>("all");
-  const activeCodes = useMemo(() => new Set(activeLedgerAccounts.map((a) => a.code)), [activeLedgerAccounts]);
-  const mappedCodes = useMemo(() => mappedPcgCodes(), []);
-  const clientPcgCodes = useMemo(
-    () => new Set(pcgClientAccounts.map((a) => a.parentPcgCode || a.clientCode)),
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(() => new Set());
+  const [drillNode, setDrillNode] = useState<PcgTreeNode | null>(null);
+  const showArabic = supportsArabicEntry(accountingLanguage);
+
+  const fullTree = useMemo(
+    () => buildPcgTree(LEBANESE_PCG_CHART, pcgClientAccounts),
     [pcgClientAccounts],
   );
-  const clientByParentPcg = useMemo(() => {
-    const out = new Map<string, typeof pcgClientAccounts>();
-    for (const row of pcgClientAccounts) {
-      const parent = row.parentPcgCode || "";
-      if (!parent) continue;
-      const list = out.get(parent) || [];
-      list.push(row);
-      out.set(parent, list);
-    }
-    return out;
-  }, [pcgClientAccounts]);
-  const grabioByPcg = useMemo(() => {
-    const out = new Map<string, string[]>();
-    for (const account of activeLedgerAccounts) {
-      const pcg = mapGrabioCodeToPcg(account.code);
-      if (!pcg) continue;
-      const list = out.get(pcg) || [];
-      list.push(account.code);
-      out.set(pcg, list);
-    }
-    return out;
-  }, [activeLedgerAccounts]);
 
-  const ledgerByCode = useMemo(
-    () => new Map(activeLedgerAccounts.filter((a) => a.isPcgChart).map((a) => [a.code, a])),
-    [activeLedgerAccounts],
-  );
+  const visibleTree = useMemo(() => filterPcgTree(fullTree, query), [fullTree, query]);
 
-  const matchesFilter = useCallback(
-    (row: LebanesePcgAccount) => {
-      const isHeader = row.kind === "G";
-      const isMapped = mappedCodes.has(row.code);
-      const hasClient = clientPcgCodes.has(row.code) || pcgClientAccounts.some((c) => c.parentPcgCode === row.code);
-      const hasLedger = ledgerByCode.has(row.code);
-      const hasGrabio = Boolean(grabioByPcg.get(row.code)?.length);
-      if (filter === "mapped") return isMapped || hasGrabio;
-      if (filter === "client") return hasClient;
-      if (filter === "unused") return !isHeader && !isMapped && !hasClient && !hasGrabio;
-      return true;
-    },
-    [filter, mappedCodes, clientPcgCodes, pcgClientAccounts, grabioByPcg, ledgerByCode],
-  );
+  const searchExpandedIds = useMemo(() => {
+    if (!query.trim()) return null;
+    return collectPcgTreeNodeIds(visibleTree);
+  }, [visibleTree, query]);
 
-  const rows = useMemo(() => {
-    const filtered = filterPcgChart(LEBANESE_PCG_CHART, query).filter(matchesFilter);
-    return flattenPcgChart(filtered);
-  }, [query, matchesFilter]);
+  const effectiveExpanded = searchExpandedIds ?? expandedIds;
+
+  const toggleExpanded = useCallback((id: string) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const clientCount = pcgClientAccounts.length;
 
   return (
     <div className="space-y-3">
+      {previewMode ? (
+        <Alert>
+          <AlertTitle>Preview — accountant tree layout</AlertTitle>
+          <AlertDescription>
+            Classic PCG navigation: expand classes, click an account number to open voucher movements. Balances appear
+            only in the drawer. Feedback welcome before we retire the old table view.
+          </AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-3">
-        <Input
-          placeholder="Search code, English, or Arabic…"
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          className="max-w-md"
-        />
-        <Select value={filter} onValueChange={(v) => setFilter(v as PcgFilter)}>
-          <SelectTrigger className="w-[160px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All accounts</SelectItem>
-            <SelectItem value="mapped">Mapped / posting</SelectItem>
-            <SelectItem value="client">Client codes</SelectItem>
-            <SelectItem value="unused">Unused detail</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="relative max-w-md flex-1">
+          <Search className="pointer-events-none absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search code, English, or Arabic…"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
         <span className="text-xs text-muted-foreground">
-          {rows.length} / {LEBANESE_PCG_CHART.length} PCG · {ledgerByCode.size} in ledger
+          {LEBANESE_PCG_CHART.length} PCG · {clientCount} client · click number to drill
         </span>
       </div>
 
-      <div className="rounded-md border max-h-[min(70vh,640px)] overflow-auto">
-        <Table>
-          <TableHeader className="sticky top-0 bg-background z-10">
-            <TableRow>
-              <TableHead className="w-[140px]">Account number</TableHead>
-              <TableHead className="w-[88px]">Grabio</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead className="min-w-[180px]">ArabicNa</TableHead>
-              <TableHead className="w-[56px] text-center">M</TableHead>
-              <TableHead className="w-[56px]">Cur</TableHead>
-              <TableHead className="w-[80px]">Ledger</TableHead>
-              {onAddClientAccount ? <TableHead className="w-[150px] text-right">Action</TableHead> : null}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {rows.map((row) => {
-              const isHeader = row.kind === "G";
-              const isMapped = mappedCodes.has(row.code);
-              const grabioLinks = grabioByPcg.get(row.code);
-              const clientRows = clientByParentPcg.get(row.code);
-              const accountNumber = clientRows?.length
-                ? clientRows.map((c) => c.clientCode).join(", ")
-                : row.code;
-              const grabioDisplay = clientRows?.length
-                ? [...new Set(clientRows.map((c) => c.grabioOperationalCode).filter(Boolean))].join(", ")
-                : grabioLinks?.join(", ") || "—";
-              const inLedger = ledgerByCode.has(row.code);
-              const hasClient = Boolean(clientRows?.length);
-              return (
-                <ContextMenu key={row.code}>
-                  <ContextMenuTrigger asChild disabled={isHeader || !onAddClientAccount}>
-                    <TableRow
-                      className={
-                        isMapped
-                          ? "bg-teal-50/70 dark:bg-teal-950/20"
-                          : isHeader
-                            ? "bg-slate-50/90 font-medium"
-                            : undefined
-                      }
-                    >
-                      <TableCell className="font-mono text-xs tabular-nums" style={{ paddingLeft: 8 + row.depth * 14 }}>
-                        {accountNumber}
-                        {hasClient && accountNumber !== row.code ? (
-                          <div className="text-[10px] text-muted-foreground font-sans">PCG {row.code}</div>
-                        ) : null}
-                      </TableCell>
-                      <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
-                        {isHeader ? "—" : grabioDisplay}
-                      </TableCell>
-                      <TableCell className={isHeader ? "text-red-700 dark:text-red-400" : undefined}>{row.name}</TableCell>
-                      <TableCell dir="rtl" className="text-right text-sm">
-                        {row.nameAr || "—"}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge variant={kindVariant(row.kind)} className="text-[10px] px-1.5">
-                          {kindLabel(row.kind)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{row.currency}</TableCell>
-                      <TableCell>
-                        {inLedger ? (
-                          <Badge variant="outline" className="text-[10px]">
-                            Yes
-                          </Badge>
-                        ) : (
-                          <span className="text-xs text-muted-foreground">—</span>
-                        )}
-                      </TableCell>
-                      {onAddClientAccount ? (
-                        <TableCell className="text-right">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={isHeader}
-                            onClick={() => onAddClientAccount(row)}
-                          >
-                            Add here
-                          </Button>
-                        </TableCell>
-                      ) : null}
-                    </TableRow>
-                  </ContextMenuTrigger>
-                  {!isHeader && onAddClientAccount ? (
-                    <ContextMenuContent>
-                      <ContextMenuItem onClick={() => onAddClientAccount(row)}>Add working account here</ContextMenuItem>
-                    </ContextMenuContent>
-                  ) : null}
-                </ContextMenu>
-              );
-            })}
-          </TableBody>
-        </Table>
+      <div className="rounded-md border bg-card">
+        <div className="border-b bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+          Chart of Accounts — expand a class, then click the account number for vouchers
+        </div>
+        <div className="max-h-[min(72vh,680px)] overflow-auto p-2 font-sans">
+          {visibleTree.length ? (
+            <PcgTreeBranch
+              nodes={visibleTree}
+              depth={0}
+              expandedIds={effectiveExpanded}
+              onToggle={toggleExpanded}
+              onDrill={setDrillNode}
+              onAddClientAccount={onAddClientAccount}
+              showArabic={showArabic}
+            />
+          ) : (
+            <p className="px-3 py-8 text-center text-sm text-muted-foreground">No accounts match your search.</p>
+          )}
+        </div>
       </div>
 
-      {activeLedgerAccounts.length > 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Right-click a detail row or use Add here for client working numbers. Auto-posting prefers PCG ledger accounts
-          when seeded ({[...activeCodes].slice(0, 6).join(", ")}
-          {activeCodes.size > 6 ? ", …" : ""} operational fallback).
-        </p>
-      ) : null}
+      <p className="text-xs text-muted-foreground">
+        Right-click a detail row to add a client working account under that PCG parent. Posting still uses linked Grabio
+        operational accounts ({activeLedgerAccounts.filter((a) => a.isActive).length} active).
+      </p>
+
+      <PcgAccountMovementsSheet
+        node={drillNode}
+        open={Boolean(drillNode)}
+        onOpenChange={(open) => !open && setDrillNode(null)}
+        accounts={activeLedgerAccounts}
+        entries={entries}
+        lines={lines}
+        asOfDate={asOfDate}
+        pcgClientAccounts={pcgClientAccounts}
+        accountingLanguage={accountingLanguage}
+        isLebaneseCoa
+      />
     </div>
   );
 }

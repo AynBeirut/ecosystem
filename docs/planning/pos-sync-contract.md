@@ -31,8 +31,8 @@
 | POST | `/pos/pairing-code` | **Live** | Owner generates code (`{ storeId, uid }` body) |
 | POST | `/pos/pair` | **Live** | Exchange code → `{ storeId, deviceId, deviceToken, composedProductSource }` |
 | POST | `/pos/heartbeat` | **Live** | `{ storeId, deviceId, deviceToken }` → updates `lastSyncAt` |
-| GET | `/pos/catalog` | **Planned** | Pull products + composed recipes (if source=platform) |
-| POST | `/pos/orders` | **Planned** | Push completed sale → stock deduction |
+| GET | `/pos/catalog` | **Live** | Pull products + composed recipes (if source=platform); each product includes `icon` |
+| POST | `/pos/products` | **Live** | Push POS catalog → platform; preserves `icon` / `emoji` per SKU |
 
 ### `POST /pos/pair` body
 
@@ -53,6 +53,17 @@
   "deviceToken": "..."
 }
 ```
+
+### Product icon sync
+
+Both directions use the same emoji rules as the Grabio storefront (`src/lib/visualFallbacks.ts`):
+
+| Field | Direction | Notes |
+|-------|-----------|-------|
+| `icon` | POS ↔ Platform | Primary emoji (e.g. `🥐`). POS may send `icon`, `emoji`, or `productIcon`. |
+| `image` | Platform → POS | Optional photo URL when the store has a real product image. |
+
+If `icon` is missing, category/name fallback applies so POS tiles match the web store.
 
 ## Live kitchen deduction
 

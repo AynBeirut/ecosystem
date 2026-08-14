@@ -91,13 +91,13 @@ export function storeProfileToCompany(profile: GrabioStoreProfile): StoreCompany
     '#C7D2FE';
 
   return {
-    name: profile.name || profile.storeName || 'My Company',
-    address: profile.location || '',
+    name: docSettings.documentCompanyName?.trim() || profile.name || profile.storeName || 'My Company',
+    address: docSettings.documentAddress?.trim() || profile.location || '',
     phone: profile.phone || profile.contactInfo?.phone || '',
     email: profile.email || profile.contactInfo?.email || '',
-    logo: profile.logo || '',
+    logo: docSettings.documentLogo || profile.logo || '',
     website: profile.website,
-    taxId: profile.taxId,
+    taxId: docSettings.documentTaxId?.trim() || profile.taxId || profile.taxNumber,
     commercialRegistry: profile.commercialRegistry,
     description: profile.description,
     primaryColor,

@@ -1053,6 +1053,14 @@ service cloud.firestore {
         && request.resource.data.createdAt == resource.data.createdAt;
     }
 
+    match /wordpressProvisioningSecrets/{requestId} {
+      allow read, write: if false;
+    }
+
+    match /wordpressAccessTokens/{tokenId} {
+      allow read, write: if false;
+    }
+
     match /builders/{builderUid} {
       allow read, write: if request.auth != null && request.auth.uid == builderUid;
 

@@ -58,6 +58,7 @@ import {
 import { createCrmRep } from './api/crmReps';
 import { syncDropshipProduct } from './api/dropship';
 import { createFinanceSsoToken } from './api/financeSso';
+import { redeemWordPressAccess } from './api/wordpressAccess';
 import {
   createPosPairingCode,
   pairPosDevice,
@@ -259,6 +260,8 @@ app.post('/marketing/send-campaign', sendCampaign);
 app.post('/crm/reps/create', requireModule('crm'), createCrmRep);
 app.post('/dropship/sync-product', requireModule('dropship'), syncDropshipProduct);
 app.post('/finance/sso-token', createFinanceSsoToken);
+app.post('/wordpress/access/redeem', redeemWordPressAccess);
+app.get('/wordpress/access/redeem', redeemWordPressAccess);
 app.post('/pos/pairing-code', createPosPairingCode);
 app.post('/pos/pair', pairPosDevice);
 app.post('/pos/generate-install-token', generatePosInstallToken);
@@ -376,6 +379,7 @@ interface DeliveryInfo {
   city?: string;
   notes?: string;
   coordinates?: unknown;
+  fulfillmentMethod?: 'delivery' | 'pickup' | 'dine_in';
 }
 
 interface StoreProfile {
@@ -405,8 +409,9 @@ app.post('/checkout', async (req: Request, res: Response) => {
     console.log('Request headers:', req.headers);
     console.log('--- /checkout called ---');
     
-    const body = req.body as { items?: unknown[]; deliveryInfo?: DeliveryInfo } | undefined;
+    const body = req.body as { items?: unknown[]; deliveryInfo?: DeliveryInfo; checkoutChannel?: 'web' | 'whatsapp' } | undefined;
     const { items, deliveryInfo } = body || {};
+    const checkoutChannel = body?.checkoutChannel === 'whatsapp' ? 'whatsapp' : 'web';
     
     // Auth token is OPTIONAL (supports guest checkout)
     const rawAuth = req.get('authorization');
@@ -476,6 +481,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
 
     let ordersCreated = 0;
     const orderIds: string[] = [];
+    const invoiceNumbers: string[] = [];
 
     await db.runTransaction(async (tx: unknown) => {
       const transaction = tx as {
@@ -632,6 +638,20 @@ app.post('/checkout', async (req: Request, res: Response) => {
           { merge: true }
         );
         
+        const fulfillmentMethod = deliveryInfo?.fulfillmentMethod || 'delivery';
+        const orderDeliveryMethod =
+          fulfillmentMethod === 'pickup'
+            ? 'pickup'
+            : fulfillmentMethod === 'dine_in'
+              ? 'dine_in'
+              : 'standard';
+        const resolvedDeliveryAddress =
+          fulfillmentMethod === 'pickup'
+            ? (deliveryInfo?.address || 'Store Pickup')
+            : fulfillmentMethod === 'dine_in'
+              ? (deliveryInfo?.address || 'Dine In')
+              : (deliveryInfo?.address || '');
+
         const orderRef = db.collection('orders').doc();
         transaction.set(orderRef, {
           storeId: orderData.storeId,
@@ -660,13 +680,19 @@ app.post('/checkout', async (req: Request, res: Response) => {
           discount: orderData.discountAmount,
           total: orderData.total,
           status: 'pending',
-          deliveryAddress: deliveryInfo?.address || '',
-          deliveryCity: deliveryInfo?.city || '',
-          deliveryNotes: deliveryInfo?.notes || '',
-          deliveryCoordinates: deliveryInfo?.coordinates || null,
+          deliveryMethod: orderDeliveryMethod,
+          deliveryAddress: resolvedDeliveryAddress,
+          deliveryCity: fulfillmentMethod === 'delivery' ? (deliveryInfo?.city || '') : '',
+          deliveryNotes: deliveryInfo?.notes || (checkoutChannel === 'whatsapp' ? 'Placed via WhatsApp' : ''),
+          deliveryCoordinates: fulfillmentMethod === 'delivery' ? (deliveryInfo?.coordinates || null) : null,
+          paymentStatus: 'unpaid',
+          amountPaid: 0,
+          paymentMethod: checkoutChannel === 'whatsapp' ? 'whatsapp' : '',
+          orderChannel: checkoutChannel,
           createdAt: getServerTimestamp(),
         });
         orderIds.push(orderRef.id);
+        invoiceNumbers.push(invoiceNumber);
         ordersCreated++;
         console.log('Order created:', {
           orderId: orderRef.id,
@@ -766,7 +792,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
       console.warn('Order notification dispatch failed:', notifyErr);
     });
 
-    return res.json({ ok: true, ordersCreated, orderIds });
+    return res.json({ ok: true, ordersCreated, orderIds, invoiceNumbers });
   } catch (err) {
     console.error('Checkout failed', err);
     return res.status(500).json({ error: err instanceof Error ? err.message : 'Checkout failed' });
@@ -792,6 +818,8 @@ export { fetchExchangeRates } from './scheduled/fetchExchangeRates';
 export { runRecurringVouchers } from './scheduled/runRecurringVouchers';
 // Export Firestore triggers: new order + order status / payment status change notifications
 export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
+export { onAccountPaymentCreated } from './triggers/accountPaymentSync';
+export { onWordPressProvisioningRequestCreated } from './triggers/wordpressProvisioning';
 export { onOrderCreatedCrmSync } from './triggers/crmOrderSync';
 // Export Firestore trigger: store announcements ΓåÆ notify customers who favorited the store
 export { onStoreAnnouncement } from './triggers/storeAnnouncements';

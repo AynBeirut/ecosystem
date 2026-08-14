@@ -89,7 +89,7 @@ export async function getMetaCatalogFeed(req: Request, res: Response): Promise<v
         availability: inStock ? 'in stock' : 'out of stock',
         condition: 'new',
         price: `${Number.isFinite(price) ? price.toFixed(2) : '0.00'} ${currency}`,
-        link: `https://grabio.space/${storeSlug}/product/${productSlug}`,
+        link: `https://${storeSlug}.grabio.space/product/${productSlug}`,
         image_link: String(data.image || '').trim(),
         brand: storeName,
         google_product_category: String(data.category || '').trim(),

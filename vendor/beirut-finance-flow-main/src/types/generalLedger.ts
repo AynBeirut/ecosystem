@@ -153,6 +153,24 @@ export interface GeneralLedgerReport {
   rows: GeneralLedgerReportRow[];
 }
 
+export interface AccountRangeStatementSection {
+  accountId: string;
+  accountCode: string;
+  accountName: string;
+  openingBalance: number;
+  closingBalance: number;
+  rows: GeneralLedgerReportRow[];
+}
+
+export interface AccountRangeStatementReport {
+  fromCode: string;
+  toCode: string;
+  startDate: string;
+  endDate: string;
+  accountCount: number;
+  sections: AccountRangeStatementSection[];
+}
+
 export type ContraVoucherMeta = {
   fromAccountId: string;
   toAccountId: string;

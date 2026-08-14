@@ -43,7 +43,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
   
   // Save cart to localStorage whenever it changes
   useEffect(() => {
-    localStorage.setItem('market-flow-cart', JSON.stringify(items));
+    try {
+      localStorage.setItem('market-flow-cart', JSON.stringify(items));
+    } catch (err) {
+      console.warn('Could not persist cart', err);
+    }
   }, [items]);
   
   // Save applied credits to localStorage

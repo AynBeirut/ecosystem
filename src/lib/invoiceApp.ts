@@ -1,13 +1,13 @@
 /** Invoice Manager standalone SPA (TWA / Play Store). */
 export const INVOICE_MANAGER_STANDALONE_URL = '/invoice/invoices';
 
-/** Business Finance home in Grabio admin (same session, AdminLayout). */
-export const BUSINESS_FINANCE_EMBED_URL = '/admin/finance/quotations';
+/** Business Finance — full accounting suite in Grabio admin. */
+export const BUSINESS_FINANCE_EMBED_URL = '/admin/finance/accounting';
 
-/** @deprecated Use BUSINESS_FINANCE_EMBED_URL */
-export const INVOICE_MANAGER_EMBED_URL = BUSINESS_FINANCE_EMBED_URL;
+/** Invoice Manager — sales documents & purchasing. */
+export const INVOICE_MANAGER_EMBED_URL = '/admin/invoice-manager/invoices';
 
-/** @deprecated Use INVOICE_MANAGER_EMBED_URL in admin nav */
+/** @deprecated Use INVOICE_MANAGER_EMBED_URL */
 export const INVOICE_MANAGER_URL = INVOICE_MANAGER_EMBED_URL;
 
 export function openInvoiceManager(): void {

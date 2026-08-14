@@ -123,6 +123,7 @@ export type PostJournalResult = {
   entryId: string;
   sourceKey: string;
   idempotentReplay: boolean;
+  voucherNumber?: string;
 };
 
 export async function postJournalEntry(
@@ -237,12 +238,17 @@ export async function postJournalEntry(
       lineDocs.forEach((lineDoc) => {
         tx.set(getDb().collection('stores').doc(input.storeId).collection('journalLines').doc(lineDoc.id), lineDoc);
       });
-      return { entryId, idempotentReplay: false };
+      return { entryId, idempotentReplay: false, voucherNumber };
     });
     if (!created.idempotentReplay) {
       await lockAccountingModeOnFirstPost(input.storeId);
     }
-    return { entryId: created.entryId, sourceKey, idempotentReplay: created.idempotentReplay };
+    return {
+      entryId: created.entryId,
+      sourceKey,
+      idempotentReplay: created.idempotentReplay,
+      ...(created.voucherNumber ? { voucherNumber: created.voucherNumber } : {}),
+    };
   } catch (error) {
     const replay = await findEntryByKey(input.storeId, sourceKey);
     if (replay) {

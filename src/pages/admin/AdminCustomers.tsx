@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Users, Plus, Edit2, Trash2, Star, DollarSign, TrendingUp, Award, FileText } from 'lucide-react';
+import { Users, Plus, Edit2, Trash2, Star, DollarSign, TrendingUp, Award, FileText, ScrollText } from 'lucide-react';
 import { openAccountingWithFocus } from '../../../vendor/beirut-finance-flow-main/src/lib/ledger/ledgerActivity';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
@@ -241,6 +242,7 @@ const CustomerForm: React.FC<{
 const AdminCustomers: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesPersons, setSalesPersons] = useState<{ id: string; name: string }[]>([]);
   const [customersError, setCustomersError] = useState('');
@@ -580,8 +582,19 @@ const AdminCustomers: React.FC = () => {
                   <CardHeader>
                     <div className="flex items-start justify-between">
                       <div className="flex-1">
-                        <CardTitle className="flex items-center gap-2">
-                          {customer.name}
+                        <CardTitle className="flex flex-wrap items-center gap-2">
+                          <button
+                            type="button"
+                            className="text-left font-semibold text-[#1e4080] hover:underline"
+                            title="Generate account statement"
+                            onClick={() =>
+                              navigate(
+                                `/admin/customers/${customer.id}/statement?type=customer&name=${encodeURIComponent(customer.name)}`,
+                              )
+                            }
+                          >
+                            {customer.name}
+                          </button>
                           <Badge className={tier.color}>
                             <Star className="h-3 w-3 mr-1" />
                             {tier.label}
@@ -595,6 +608,18 @@ const AdminCustomers: React.FC = () => {
                         </CardDescription>
                       </div>
                       <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() =>
+                            navigate(
+                              `/admin/customers/${customer.id}/statement?type=customer&name=${encodeURIComponent(customer.name)}`,
+                            )
+                          }
+                        >
+                          <ScrollText className="h-4 w-4 mr-1" />
+                          Statement
+                        </Button>
                         <Button
                           variant="outline"
                           size="sm"

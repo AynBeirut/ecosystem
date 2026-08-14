@@ -4,8 +4,13 @@ import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CheckCircle } from 'lucide-react';
+import { useCart } from '@/context/CartContext';
+import { resolveStoreShopLabel, resolveStoreShopUrl } from '@/lib/storeNavigation';
 
 const OrderConfirmation: React.FC = () => {
+  const { items } = useCart();
+  const shopUrl = resolveStoreShopUrl({ items });
+  const shopLabel = resolveStoreShopLabel(shopUrl);
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -30,7 +35,7 @@ const OrderConfirmation: React.FC = () => {
                   <Link to="/orders">Track Your Orders</Link>
                 </Button>
                 <Button variant="outline" asChild>
-                  <Link to="/">Continue Shopping</Link>
+                  <Link to={shopUrl}>{shopLabel}</Link>
                 </Button>
               </div>
             </CardContent>

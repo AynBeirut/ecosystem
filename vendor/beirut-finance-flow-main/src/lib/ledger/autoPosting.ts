@@ -177,6 +177,7 @@ export async function autoPostInvoicePayment(
       sourceType: 'invoice_payment',
       sourceId: invoice.id,
       event: `payment-${payment.id}`,
+      voucherType: 'RV',
       createdBy,
       lines: [
         { accountId: cashAcct.id, debit: amount, credit: 0, description: 'Customer payment' },
@@ -433,6 +434,7 @@ export async function autoPostPurchasePaid(
       sourceType: 'purchase_payment',
       sourceId: po.id,
       event,
+      voucherType: 'PV',
       createdBy,
       lines: [
         { accountId: ap.id, debit: amount, credit: 0 },

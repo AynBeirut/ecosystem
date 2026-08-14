@@ -10,7 +10,10 @@ import { calculateAvailableStock } from '@/lib/composedProductStock';
 import { formatMoney } from '@/lib/money/format';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { fetchPublicProductStock } from '@/lib/publicProductStockService';
+import { canReadStoreInventory } from '@/lib/storeInventoryAccess';
 import Header from '@/components/Header';
+import StoreBrandedFooter from '@/components/StoreBrandedFooter';
+import StoreCategoryFilters, { categoriesFromProducts } from '@/components/StoreCategoryFilters';
 import WhatsAppChatWidget from '@/components/WhatsAppChatWidget';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
@@ -24,11 +27,17 @@ import { useAuth } from '@/context/useAuth';
 import { toast } from '@/components/ui/sonner';
 import { generateSlug } from '@/lib/slugify';
 import ClampedText from '@/components/ClampedText';
+import ProductVisual from '@/components/ProductVisual';
+import { resolveStoreShopUrl } from '@/lib/storeNavigation';
+import { buildStorePublicUrl, buildStoreRelativePath, isExternalUrl, isStoreBrandedHost, redirectToStoreSubdomain, storeSlugFromHostname } from '@/lib/storeUrls';
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
+  const hostnameStoreSlug = typeof window !== 'undefined' ? storeSlugFromHostname(window.location.hostname) : undefined;
+  const effectiveStoreSlug = storeSlug || hostnameStoreSlug;
   const navigate = useNavigate();
   const [product, setProduct] = useState<Product | null>(null);
+  const [storeCategories, setStoreCategories] = useState<string[]>([]);
   const [store, setStore] = useState<Store | null>(null);
   const [quantity, setQuantity] = useState(1);
   const [isLoading, setIsLoading] = useState(true);
@@ -47,6 +56,10 @@ const ProductDetail: React.FC = () => {
   const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
 
   useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+  }, [productSlug, id, effectiveStoreSlug]);
+
+  useEffect(() => {
     const identifier = productSlug || id;
     
     if (!identifier) {
@@ -61,10 +74,12 @@ const ProductDetail: React.FC = () => {
         const db = getFirestore();
         let productData: Record<string, unknown> | null = null;
         let productId: string = identifier;
+        let resolvedStoreId: string | undefined;
+        let resolvedStoreOwnerId: string | undefined;
 
-        if (storeSlug) {
+        if (effectiveStoreSlug) {
           const storesRef = collection(db, 'storeProfiles');
-          const storeQuery = query(storesRef, where('slug', '==', storeSlug));
+          const storeQuery = query(storesRef, where('slug', '==', effectiveStoreSlug));
           const storeSnap = await getDocs(storeQuery);
 
           if (storeSnap.empty) {
@@ -73,8 +88,10 @@ const ProductDetail: React.FC = () => {
             return;
           }
 
-          const resolvedStoreId = storeSnap.docs[0].id;
+          resolvedStoreId = storeSnap.docs[0].id;
           const storeData = { id: resolvedStoreId, ...storeSnap.docs[0].data() };
+          resolvedStoreOwnerId =
+            typeof storeData.ownerId === 'string' ? storeData.ownerId : undefined;
           setStore(storeData as Store);
 
           const productsRef = collection(db, 'products');
@@ -108,11 +125,14 @@ const ProductDetail: React.FC = () => {
             const storeRef = doc(db, 'storeProfiles', productData.storeId as string);
             const storeSnap = await getDoc(storeRef);
             if (storeSnap.exists()) {
-              const storeData = { id: productData.storeId, ...storeSnap.data() };
+              resolvedStoreId = productData.storeId as string;
+              const storeData = { id: resolvedStoreId, ...storeSnap.data() };
+              resolvedStoreOwnerId =
+                typeof storeData.ownerId === 'string' ? storeData.ownerId : undefined;
               setStore(storeData as Store);
 
-              if (productData.slug && storeData.slug && !storeSlug) {
-                navigate(`/${storeData.slug}/product/${productData.slug}`, { replace: true });
+              if (productData.slug && storeData.slug && !hostnameStoreSlug) {
+                redirectToStoreSubdomain(storeData.slug as string, `/product/${productData.slug}`);
                 return;
               }
             }
@@ -137,23 +157,38 @@ const ProductDetail: React.FC = () => {
                 finalProduct.inStock = stock.inStock;
               }
             } catch (stockErr) {
-              console.error('ProductDetail: public stock API failed', stockErr);
+              if (import.meta.env.DEV) {
+                console.warn('ProductDetail: public stock API failed', stockErr);
+              }
             }
-          } else {
-            const recipesRef = collection(db, 'recipes');
-            const recipeQuery = query(recipesRef, where('storeId', '==', productData.storeId));
-            const recipesSnap = await getDocs(recipeQuery);
-            const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
+          } else if (
+            productData.storeId &&
+            canReadStoreInventory(
+              user?.uid,
+              resolvedStoreId || (productData.storeId as string),
+              resolvedStoreOwnerId,
+            )
+          ) {
+            try {
+              const recipesRef = collection(db, 'recipes');
+              const recipeQuery = query(recipesRef, where('storeId', '==', productData.storeId));
+              const recipesSnap = await getDocs(recipeQuery);
+              const recipesList: Recipe[] = recipesSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as Recipe));
 
-            const rawMaterialsRef = collection(db, 'rawMaterials');
-            const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', productData.storeId));
-            const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
-            const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawMaterial));
+              const rawMaterialsRef = collection(db, 'rawMaterials');
+              const rawMaterialsQuery = query(rawMaterialsRef, where('storeId', '==', productData.storeId));
+              const rawMaterialsSnap = await getDocs(rawMaterialsQuery);
+              const rawMaterialsList: RawMaterial[] = rawMaterialsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as RawMaterial));
 
-            const recipe = recipesList.find(r => r.id === finalProduct.recipeId);
-            const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
-            finalProduct.stock = availableStock;
-            finalProduct.inStock = availableStock > 0;
+              const recipe = recipesList.find(r => r.id === finalProduct.recipeId);
+              const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
+              finalProduct.stock = availableStock;
+              finalProduct.inStock = availableStock > 0;
+            } catch (stockErr) {
+              if (import.meta.env.DEV) {
+                console.warn('ProductDetail: stock enrichment skipped', stockErr);
+              }
+            }
           }
         }
         
@@ -167,7 +202,7 @@ const ProductDetail: React.FC = () => {
     };
 
     loadProduct();
-  }, [id, productSlug, storeSlug, navigate]);
+  }, [id, productSlug, storeSlug, navigate, user?.uid]);
 
   useEffect(() => {
     const pixelEnabled = store?.metaIntegrationSettings?.pixelEnabled;
@@ -230,7 +265,9 @@ const ProductDetail: React.FC = () => {
         });
         setReviews(rows);
       } catch (err) {
-        console.error('Failed to load product reviews', err);
+        if (import.meta.env.DEV) {
+          console.warn('Failed to load product reviews', err);
+        }
       } finally {
         setReviewsLoading(false);
       }
@@ -238,6 +275,25 @@ const ProductDetail: React.FC = () => {
 
     loadReviews();
   }, [product?.id]);
+
+  useEffect(() => {
+    const loadStoreCategories = async () => {
+      if (!store?.id) {
+        setStoreCategories([]);
+        return;
+      }
+      try {
+        const db = getFirestore();
+        const productsQuery = query(collection(db, 'products'), where('storeId', '==', store.id));
+        const snap = await getDocs(productsQuery);
+        const list = snap.docs.map((docSnap) => docSnap.data() as { category?: string });
+        setStoreCategories(categoriesFromProducts(list));
+      } catch {
+        setStoreCategories([]);
+      }
+    };
+    void loadStoreCategories();
+  }, [store?.id]);
 
   useEffect(() => {
     const loadCustomerReviewState = async () => {
@@ -271,7 +327,11 @@ const ProductDetail: React.FC = () => {
           setExistingUserReview(null);
         }
       } catch (err) {
-        console.error('Failed to load review eligibility', err);
+        if (import.meta.env.DEV) {
+          console.warn('Failed to load review eligibility', err);
+        }
+        setHasPurchasedProduct(false);
+        setExistingUserReview(null);
       }
     };
 
@@ -415,7 +475,7 @@ const ProductDetail: React.FC = () => {
           offers: {
             '@type': 'Offer',
             url: store?.slug
-              ? `https://grabio.space/${store.slug}/product/${product.slug || product.id}`
+              ? buildStorePublicUrl(store.slug, `/product/${product.slug || product.id}`)
               : `https://grabio.space/product/id/${product.id}`,
             priceCurrency: store?.mainCurrency || 'USD',
             price: Number(product.price || 0).toFixed(2),
@@ -428,14 +488,14 @@ const ProductDetail: React.FC = () => {
           itemListElement: [
             { '@type': 'ListItem', position: 1, name: 'Marketplace', item: 'https://grabio.space/' },
             ...(store?.slug
-              ? [{ '@type': 'ListItem', position: 2, name: store.name || 'Store', item: `https://grabio.space/${store.slug}` }]
+              ? [{ '@type': 'ListItem', position: 2, name: store.name || 'Store', item: buildStorePublicUrl(store.slug) }]
               : []),
             {
               '@type': 'ListItem',
               position: store?.slug ? 3 : 2,
               name: product.name,
               item: store?.slug
-                ? `https://grabio.space/${store.slug}/product/${product.slug || product.id}`
+                ? buildStorePublicUrl(store.slug, `/product/${product.slug || product.id}`)
                 : `https://grabio.space/product/id/${product.id}`,
             },
           ],
@@ -476,6 +536,10 @@ const ProductDetail: React.FC = () => {
   }
 
   if (error || !product) {
+    const backUrl = resolveStoreShopUrl({
+      storeSlug: store?.slug,
+      storeId: store?.id,
+    });
     return (
       <div className="min-h-screen bg-gray-50">
         <Header
@@ -493,7 +557,11 @@ const ProductDetail: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-800 mb-4">{error || 'Product not found'}</h2>
             <p className="text-gray-600 mb-6">The product you're looking for doesn't exist or couldn't be loaded.</p>
             <Button asChild>
-              <Link to="/">Return to Marketplace</Link>
+              {isExternalUrl(backUrl) ? (
+                <a href={backUrl}>{backUrl === '/search' ? 'Go to Marketplace' : 'Back to Store'}</a>
+              ) : (
+                <Link to={backUrl}>{backUrl === '/search' ? 'Go to Marketplace' : 'Back to Store'}</Link>
+              )}
             </Button>
           </div>
         </div>
@@ -502,6 +570,7 @@ const ProductDetail: React.FC = () => {
   }
 
   const showCommerceActions = store?.storefrontMode !== 'display';
+  const showPublicPrices = store?.catalogPricingReady === true;
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -510,7 +579,7 @@ const ProductDetail: React.FC = () => {
         description={store?.seoSettings?.metaDescription || product.description || `Buy ${product.name} from ${store?.name || 'a local store'} on Grabio`}
         image={store?.seoSettings?.ogImage || product.image}
         url={store?.seoSettings?.canonicalBaseUrl || (store?.slug
-          ? `https://grabio.space/${store.slug}/product/${product.slug || product.id}`
+          ? buildStorePublicUrl(store.slug, `/product/${product.slug || product.id}`)
           : `https://grabio.space/product/id/${product.id}`
         )}
         type="product"
@@ -535,14 +604,24 @@ const ProductDetail: React.FC = () => {
       />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
+          {store?.slug && storeCategories.length > 0 && (
+            <StoreCategoryFilters
+              storeSlug={store.slug}
+              categories={storeCategories}
+              selectedCategory={product.category || null}
+              onNavigate={(path) => navigate(path)}
+              primaryColor={store.templateColors?.primary}
+              className="mb-6"
+            />
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
             {/* Product Image */}
             <div>
-              <div className="bg-white rounded-lg overflow-hidden shadow-sm">
-                <img 
-                  src={product.image} 
-                  alt={product.imageAlt || product.name} 
-                  className="w-full h-auto object-cover"
+              <div className="bg-white rounded-lg overflow-hidden shadow-sm aspect-square">
+                <ProductVisual
+                  product={product}
+                  variant="hero"
+                  className="w-full h-full object-cover min-h-[280px]"
                 />
               </div>
             </div>
@@ -551,11 +630,14 @@ const ProductDetail: React.FC = () => {
             <div>
               <div className="bg-white rounded-lg p-6 shadow-sm">
                 <div className="mb-2">
-                  {store?.slug ? (
-                    <Link to={`/${store.slug}/category/${generateSlug(product.category || 'general')}`} className="text-sm text-gray-500 hover:underline">
-                      {product.category}
-                    </Link>
-                  ) : (
+                  {store?.slug ? (() => {
+                    const categoryHref = buildStoreRelativePath(store.slug, `/category/${generateSlug(product.category || 'general')}`);
+                    return isExternalUrl(categoryHref) ? (
+                      <a href={categoryHref} className="text-sm text-gray-500 hover:underline">{product.category}</a>
+                    ) : (
+                      <Link to={categoryHref} className="text-sm text-gray-500 hover:underline">{product.category}</Link>
+                    );
+                  })() : (
                     <span className="text-sm text-gray-500">{product.category}</span>
                   )}
                 </div>
@@ -568,15 +650,17 @@ const ProductDetail: React.FC = () => {
                 />
                 
                 <div className="flex items-center mb-4">
-                  <span className="text-2xl font-semibold text-market-primary">
-                    {formatMoney(Number(product.price || 0), {
-                      currency: store?.mainCurrency || 'USD',
-                      style: 'full',
-                      secondary: store?.secondaryCurrency && store?.customExchangeRate && store.customExchangeRate > 0
-                        ? { currency: store.secondaryCurrency, rate: store.customExchangeRate }
-                        : undefined,
-                    })}
-                  </span>
+                  {showPublicPrices && Number(product.price) > 0 ? (
+                    <span className="text-2xl font-semibold text-market-primary">
+                      {formatMoney(Number(product.price || 0), {
+                        currency: store?.mainCurrency || 'USD',
+                        style: 'full',
+                        secondary: store?.secondaryCurrency && store?.customExchangeRate && store.customExchangeRate > 0
+                          ? { currency: store.secondaryCurrency, rate: store.customExchangeRate }
+                          : undefined,
+                      })}
+                    </span>
+                  ) : null}
                   
                   {product.productType === 'composed' && product.stock !== undefined && (
                     <Badge variant={product.stock > 5 ? "default" : product.stock > 0 ? "outline" : "destructive"} className={`ml-3 ${product.stock <= 5 && product.stock > 0 ? "border-orange-500 text-orange-700" : ""}`}>
@@ -607,19 +691,37 @@ const ProductDetail: React.FC = () => {
                   Delivery: {product.deliveryTime}
                 </div>
                 
-                {store && (
-                  <Link to={`/${store.slug || store.id}`} className="flex items-center text-market-secondary hover:underline mb-6">
-                    <StoreIcon size={18} className="mr-2" />
-                    Sold by: {store.name}
-                  </Link>
-                )}
+                {store && (() => {
+                  const storeHref = buildStoreRelativePath(store.slug || store.id, '/');
+                  const storeLinkClass = 'flex items-center text-market-secondary hover:underline mb-6';
+                  return isExternalUrl(storeHref) ? (
+                    <a href={storeHref} className={storeLinkClass}>
+                      <StoreIcon size={18} className="mr-2" />
+                      Sold by: {store.name}
+                    </a>
+                  ) : (
+                    <Link to={storeHref} className={storeLinkClass}>
+                      <StoreIcon size={18} className="mr-2" />
+                      Sold by: {store.name}
+                    </Link>
+                  );
+                })()}
                 
-                {store && (
-                  <Link to={`/${store.slug || store.id}`} className="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6">
-                    <ArrowLeft size={18} className="mr-2" />
-                    Back to Store
-                  </Link>
-                )}
+                {store && (() => {
+                  const storeHref = buildStoreRelativePath(store.slug || store.id, '/');
+                  const backClass = 'inline-flex items-center text-gray-600 hover:text-gray-900 mb-6';
+                  return isExternalUrl(storeHref) ? (
+                    <a href={storeHref} className={backClass}>
+                      <ArrowLeft size={18} className="mr-2" />
+                      Back to Store
+                    </a>
+                  ) : (
+                    <Link to={storeHref} className={backClass}>
+                      <ArrowLeft size={18} className="mr-2" />
+                      Back to Store
+                    </Link>
+                  );
+                })()}
                 
                 {/* Quantity + cart — hidden on display-only storefronts */}
                 {showCommerceActions && (
@@ -771,6 +873,15 @@ const ProductDetail: React.FC = () => {
           </div>
         </div>
       </main>
+      {typeof window !== 'undefined' && isStoreBrandedHost(window.location.hostname) && store && (
+        <StoreBrandedFooter
+          storeName={store.name}
+          logo={store.logo}
+          contactEmail={store.contactInfo?.email}
+          contactPhone={store.contactInfo?.phone}
+          primaryColor={store.templateColors?.primary}
+        />
+      )}
       <WhatsAppChatWidget
         phone={store?.subscriptionTier !== 'trial' ? store?.whatsappBusiness : undefined}
         storeName={store?.name}

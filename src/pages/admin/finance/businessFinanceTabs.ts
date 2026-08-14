@@ -9,6 +9,7 @@ export const ACCOUNTING_REPORT_TABS = [
   'depreciation',
   'reconciliation',
   'general-ledger',
+  'party-soa',
   'vat-filing',
   'ar-aging',
   'ap-aging',
@@ -28,6 +29,10 @@ export const ACCOUNTING_SETTINGS_TABS = [
   'checks',
 ] as const;
 
+/** Opened from Settings → Documents (A4 print branding, not POS receipts). */
+export const FINANCE_DOCUMENT_TABS = ['invoice-template'] as const;
+
+export type FinanceDocumentTab = (typeof FINANCE_DOCUMENT_TABS)[number];
 export type AccountingPrimaryTab = (typeof ACCOUNTING_PRIMARY_TABS)[number];
 export type AccountingReportTab = (typeof ACCOUNTING_REPORT_TABS)[number];
 export type AccountingSettingsTab = (typeof ACCOUNTING_SETTINGS_TABS)[number];
@@ -40,16 +45,49 @@ export function isAccountingSettingsTab(tab: string): tab is AccountingSettingsT
   return (ACCOUNTING_SETTINGS_TABS as readonly string[]).includes(tab);
 }
 
+export function isFinanceDocumentTab(tab: string): tab is FinanceDocumentTab {
+  return (FINANCE_DOCUMENT_TABS as readonly string[]).includes(tab);
+}
+
 export function isAccountingPrimaryTab(tab: string): tab is AccountingPrimaryTab {
   return (ACCOUNTING_PRIMARY_TABS as readonly string[]).includes(tab);
 }
 
+/** Opened from Reports hub — stock & operations lists. */
+export const STOCK_REPORT_TABS = ['sales', 'purchases', 'inventory', 'products'] as const;
+
+export type StockReportTab = (typeof STOCK_REPORT_TABS)[number];
+
+export function isStockReportTab(tab: string): tab is StockReportTab {
+  return (STOCK_REPORT_TABS as readonly string[]).includes(tab);
+}
+
+export function isReportsHubTab(tab: string): boolean {
+  return isAccountingReportTab(tab) || isStockReportTab(tab);
+}
+
 export function accountingTabBackLink(tab: string): { to: string; label: string } {
+  if (isStockReportTab(tab)) {
+    return { to: `/admin/finance/stock?report=${encodeURIComponent(tab)}`, label: 'Back' };
+  }
   if (isAccountingReportTab(tab)) {
-    return { to: '/admin/finance/reports', label: 'Back to Reports' };
+    const module =
+      tab === 'ap-aging'
+        ? 'payables'
+        : tab === 'ar-aging'
+          ? 'receivables'
+          : tab === 'bank-rec' || tab === 'cash-flow'
+            ? 'bank'
+            : tab === 'depreciation'
+              ? 'assets'
+              : 'reports';
+    return { to: `/admin/finance/${module}?report=${encodeURIComponent(tab)}`, label: 'Back' };
   }
   if (isAccountingSettingsTab(tab)) {
-    return { to: '/admin/finance/settings', label: 'Back to Settings' };
+    if (tab === 'coa') {
+      return { to: '/admin/finance/coa?setting=coa', label: 'Back' };
+    }
+    return { to: `/admin/finance/tools?setting=${encodeURIComponent(tab)}`, label: 'Back' };
   }
   return { to: '/admin/finance/accounting', label: 'Back to Accounting' };
 }

@@ -19,6 +19,8 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import ShareSheet from "@/components/ShareSheet";
+import UnifiedPaymentFeedTable from "@/components/UnifiedPaymentFeedTable";
+import { useUnifiedPaymentFeed } from "@/hooks/useUnifiedPaymentFeed";
 
 const receiptSchema = z.object({
   clientName: z.string().min(1, "Client name is required"),
@@ -51,6 +53,7 @@ const ReceiptManager = () => {
     logout
   } = useAppContext();
   const { toast } = useToast();
+  const { moneyIn, moneyOut, loading: feedLoading, error: feedError, reload: reloadFeed } = useUnifiedPaymentFeed();
   
   const [activeTab, setActiveTab] = useState("receipts-list");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
@@ -292,8 +295,10 @@ const ReceiptManager = () => {
         {!embedded && (
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center">
           <div>
-            <h1 className="text-2xl font-bold tracking-tight">Reçu — Money Received</h1>
-            <p className="text-gray-500 dark:text-gray-400">All registered receipts and incoming payments on the system</p>
+            <h1 className="text-2xl font-bold tracking-tight">Receipts — Money In &amp; Out</h1>
+            <p className="text-gray-500 dark:text-gray-400">
+              All payments collected or paid across POS, orders, account statement, invoices, and supplier payments.
+            </p>
           </div>
         </div>
         )}
@@ -302,91 +307,35 @@ const ReceiptManager = () => {
           <Tabs defaultValue="receipts-list" value={activeTab} onValueChange={setActiveTab}>
             <CardHeader>
               <TabsList className="grid grid-cols-2 md:grid-cols-4">
-                <TabsTrigger value="receipts-list">Receipts List</TabsTrigger>
-                <TabsTrigger value="create-receipt">New Receipt</TabsTrigger>
-                <TabsTrigger value="payments-list">Payment Orders List</TabsTrigger>
-                <TabsTrigger value="create-payment">New Payment Order</TabsTrigger>
+                <TabsTrigger value="receipts-list">Money received</TabsTrigger>
+                <TabsTrigger value="payments-list">Money paid</TabsTrigger>
+                <TabsTrigger value="create-receipt">New receipt</TabsTrigger>
+                <TabsTrigger value="create-payment">New payment</TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent>
               <TabsContent value="receipts-list">
               <div className="space-y-4">
-                <div className="flex justify-end">
-                  <Button 
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    Auto-listed from POS, orders, account statement, finance receipts, and invoice payments. GL posts in Accounting.
+                  </p>
+                  <Button
                     onClick={() => setActiveTab("create-receipt")}
                     className="bg-indigo-600 hover:bg-indigo-700"
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    New Receipt
+                    Manual receipt
                   </Button>
                 </div>
-                
-                {receipts.length === 0 ? (
-                  <div className="text-center py-8 border rounded-md text-gray-500">
-                    No receipts yet. Click "New Receipt" to create your first receipt.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-md border">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-gray-100 dark:bg-gray-800">
-                              <th className="py-3 px-4 text-left font-medium">Receipt #</th>
-                              <th className="py-3 px-4 text-left font-medium">Date</th>
-                              <th className="py-3 px-4 text-left font-medium">Client</th>
-                              <th className="py-3 px-4 text-right font-medium">Amount</th>
-                              <th className="py-3 px-4 text-left font-medium">Payment Method</th>
-                              <th className="py-3 px-4 text-right font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {receipts
-                              .map(receipt => {
-                                const client = receipt.clientId ? clients.find(c => c.id === receipt.clientId) : undefined;
-                                return (
-                                <tr key={receipt.id} className="border-t">
-                                  <td className="py-3 px-4">{receipt.id}</td>
-                                  <td className="py-3 px-4">{receipt.paymentDate || receipt.date}</td>
-                                  <td className="py-3 px-4">{receipt.clientName || client?.name}</td>
-                                  <td className="py-3 px-4 text-right">
-                                    {receipt.currency} {receipt.amount.toFixed(2)}
-                                  </td>
-                                  <td className="py-3 px-4">{receipt.paymentMethod || "Cash"}</td>
-                                  <td className="py-3 px-4 text-right">
-                                    <div className="flex justify-end items-center space-x-2">
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handlePreviewReceipt(receipt)}
-                                      >
-                                        <Eye className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleSendItem(receipt.id, "receipt")}
-                                      >
-                                        <Share2 className="h-4 w-4" />
-                                      </Button>
-                                      <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => handleExportItem(receipt.id, "receipt")}
-                                      >
-                                        <FileDown className="h-4 w-4" />
-                                      </Button>
-                                    </div>
-                                  </td>
-                                </tr>
-                                );
-                              })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
+
+                <UnifiedPaymentFeedTable
+                  rows={moneyIn}
+                  loading={feedLoading}
+                  error={feedError}
+                  onReload={() => void reloadFeed()}
+                  emptyMessage="No money received yet. POS sales, account statement, and invoice payments appear here as receipts."
+                />
               </div>
             </TabsContent>
 
@@ -559,106 +508,26 @@ const ReceiptManager = () => {
 
             <TabsContent value="payments-list">
               <div className="space-y-4">
-                <div className="flex justify-end">
-                  <Button 
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <p className="text-sm text-muted-foreground">
+                    Auto-listed from account statement, supplier payments, and purchase flows. GL posts in Accounting.
+                  </p>
+                  <Button
                     onClick={() => setActiveTab("create-payment")}
                     className="bg-indigo-600 hover:bg-indigo-700"
                   >
                     <Plus className="mr-2 h-4 w-4" />
-                    New Payment Order
+                    Manual payment
                   </Button>
                 </div>
-                
-                {paymentOrders.length === 0 ? (
-                  <div className="text-center py-8 border rounded-md text-gray-500">
-                    No payment orders yet. Click "New Payment Order" to create your first payment order.
-                  </div>
-                ) : (
-                  <div className="space-y-4">
-                    <div className="rounded-md border">
-                      <div className="overflow-x-auto">
-                        <table className="w-full text-sm">
-                          <thead>
-                            <tr className="bg-gray-100 dark:bg-gray-800">
-                              <th className="py-3 px-4 text-left font-medium">Payment Order #</th>
-                              <th className="py-3 px-4 text-left font-medium">Date</th>
-                              <th className="py-3 px-4 text-left font-medium">Supplier</th>
-                              <th className="py-3 px-4 text-right font-medium">Amount</th>
-                              <th className="py-3 px-4 text-left font-medium">Payment Method</th>
-                              <th className="py-3 px-4 text-left font-medium">Status</th>
-                              <th className="py-3 px-4 text-right font-medium">Actions</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {paymentOrders.map(payment => {
-                              const supplier = payment.supplierId ? suppliers.find(s => s.id === payment.supplierId) : undefined;
-                              return (
-                              <tr key={payment.id} className="border-t">
-                                <td className="py-3 px-4">{payment.id}</td>
-                                <td className="py-3 px-4">{payment.date}</td>
-                                <td className="py-3 px-4">{payment.supplierName || supplier?.name}</td>
-                                <td className="py-3 px-4 text-right">
-                                  {payment.currency} {payment.amount.toFixed(2)}
-                                </td>
-                                <td className="py-3 px-4">{payment.paymentMethod || "Cash"}</td>
-                                <td className="py-3 px-4">
-                                  <span className={`px-2 py-1 rounded-full text-xs ${
-                                    payment.status === 'paid'
-                                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                                      : 'bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300'
-                                  }`}>
-                                    {payment.status}
-                                  </span>
-                                </td>
-                                <td className="py-3 px-4 text-right">
-                                  <div className="flex justify-end items-center space-x-2">
-                                    {payment.status !== 'paid' && (
-                                      <Button
-                                        variant="default"
-                                        size="sm"
-                                        onClick={() => {
-                                          markPaymentOrderPaid(payment.id, payment.paymentMethod || 'bank');
-                                          toast({
-                                            title: "Payment recorded",
-                                            description: `Payment order ${payment.id} marked as paid`,
-                                          });
-                                        }}
-                                      >
-                                        Mark Paid
-                                      </Button>
-                                    )}
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handlePreviewPaymentOrder(payment)}
-                                    >
-                                      <Eye className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleSendItem(payment.id, "payment")}
-                                    >
-                                      <Share2 className="h-4 w-4" />
-                                    </Button>
-                                    <Button
-                                      variant="outline"
-                                      size="sm"
-                                      onClick={() => handleExportItem(payment.id, "payment")}
-                                    >
-                                      <FileDown className="h-4 w-4" />
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                              );
-                            })}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
+
+                <UnifiedPaymentFeedTable
+                  rows={moneyOut}
+                  loading={feedLoading}
+                  error={feedError}
+                  onReload={() => void reloadFeed()}
+                  emptyMessage="No money paid yet. Outgoing account statement and supplier payments will appear here automatically."
+                />
               </div>
             </TabsContent>
 

@@ -95,33 +95,97 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const followingIds = snaps.docs.map(d => d.id);
       setUser(prev => prev ? { ...prev, following: followingIds } : prev);
     } catch (err) {
-      console.error('Failed to load follows', err);
+      if (import.meta.env.DEV) {
+        console.warn('Failed to load follows', err);
+      }
     }
   }, [db]);
 
-    // Restore seller/admin info from localStorage on mount
+    // Restore seller/admin session from localStorage immediately so builder routes
+    // don't flash /login while Firebase persistence + Firestore hydration finish.
     useEffect(() => {
       const savedSellerInfo = localStorage.getItem('sellerInfo');
-        if (savedSellerInfo) {
-          try {
-            const sellerData = JSON.parse(savedSellerInfo);
-            // Ensure storeId is set, use user id as fallback for admin/seller accounts
-            const storeId = sellerData.storeId || (auth.currentUser ? auth.currentUser.uid : undefined);
-            setUser((prev) => prev ? {
-              ...prev,
+      if (savedSellerInfo) {
+        try {
+          const sellerData = JSON.parse(savedSellerInfo) as Record<string, unknown>;
+          const storeId =
+            (typeof sellerData.storeId === 'string' && sellerData.storeId.trim()) ||
+            auth.currentUser?.uid ||
+            undefined;
+          const uid =
+            (typeof sellerData.userId === 'string' && sellerData.userId.trim()) ||
+            auth.currentUser?.uid ||
+            storeId ||
+            '';
+          setUser((prev) => {
+            if (prev?.role === 'admin' && prev.id) return prev;
+            const base: User =
+              prev ??
+              ({
+                id: uid,
+                name:
+                  (typeof sellerData.name === 'string' && sellerData.name.trim()) ||
+                  'Store admin',
+                email: '',
+                role: 'admin',
+                avatar:
+                  'https://ui-avatars.com/api/?name=Admin&background=38B2AC&color=fff',
+                dailyAdsWatched: 0,
+                lastAdWatchDate: new Date().toISOString().split('T')[0],
+              } satisfies User);
+            return {
+              ...base,
               ...sellerData,
-              id: prev.id,
-              role: sellerData.role || prev.role,
-              storeId,
-            } : prev);
-            // Update localStorage with storeId if it was missing
-            if (!sellerData.storeId && storeId) {
-              localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId }));
-            }
-          } catch (e) {
-            console.error('Failed to parse sellerInfo from localStorage', e);
+              id: uid || base.id,
+              role: (sellerData.role as UserRole) || 'admin',
+              storeId: storeId || base.storeId,
+              isSeller: true,
+            };
+          });
+          if (!sellerData.storeId && storeId) {
+            localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId }));
           }
+        } catch (e) {
+          console.error('Failed to parse sellerInfo from localStorage', e);
         }
+        return;
+      }
+
+      const savedSubAccountInfo = localStorage.getItem('subAccountInfo');
+      if (!savedSubAccountInfo) return;
+      try {
+        const subAccountData = JSON.parse(savedSubAccountInfo) as Record<string, unknown>;
+        const uid = auth.currentUser?.uid || '';
+        setUser((prev) => {
+          if (prev?.role === 'sub_account' && prev.id) return prev;
+          const base: User =
+            prev ??
+            ({
+              id: uid,
+              name: 'Team member',
+              email: '',
+              role: 'sub_account',
+              avatar:
+                'https://ui-avatars.com/api/?name=Team&background=38B2AC&color=fff',
+              dailyAdsWatched: 0,
+              lastAdWatchDate: new Date().toISOString().split('T')[0],
+            } satisfies User);
+          return {
+            ...base,
+            ...subAccountData,
+            id: uid || base.id,
+            role: 'sub_account',
+            storeId:
+              (typeof subAccountData.storeId === 'string' && subAccountData.storeId) ||
+              base.storeId,
+            permissions: Array.isArray(subAccountData.permissions)
+              ? (subAccountData.permissions as string[])
+              : base.permissions,
+          };
+        });
+      } catch (e) {
+        console.error('Failed to parse subAccountInfo from localStorage', e);
+      }
     }, []);
 
 

@@ -17,7 +17,11 @@ import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { fetchPublicProductStock } from '@/lib/publicProductStockService';
+import { canReadStoreInventory } from '@/lib/storeInventoryAccess';
 import Header from '@/components/Header';
+import StoreBrandedFooter from '@/components/StoreBrandedFooter';
+import StoreCategoryFilters, { categoryFromSlug } from '@/components/StoreCategoryFilters';
+import StoreVisual from '@/components/StoreVisual';
 import ProductCard from '@/components/ProductCard';
 import WhatsAppChatWidget from '@/components/WhatsAppChatWidget';
 import { MapPin, Globe, Facebook, Instagram, Twitter, Phone, Mail } from 'lucide-react';
@@ -27,11 +31,22 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { generateSlug } from '@/lib/slugify';
+import {
+  buildStorePublicUrl,
+  buildStoreRelativePath,
+  buildStoreCategoryPath,
+  isStoreBrandedHost,
+  redirectToStoreSubdomain,
+  storeSlugFromHostname,
+  isLikelyFirebaseUid,
+  isFriendlyStoreSlug,
+  navigateToStorePath,
+} from '@/lib/storeUrls';
 import ClampedText from '@/components/ClampedText';
 import type { StoreSectionId, StoreSectionOrder, SectionWidth } from '@/types/storeProfile';
 import EditorRegionShell from '@/components/builder/EditorRegionShell';
 import type { EditorPreviewStatePayload, EditorSelectableId } from '@/lib/editorPreviewBridge';
-import { EDITOR_PREVIEW_READY, EDITOR_PREVIEW_STATE } from '@/lib/editorPreviewBridge';
+import { EDITOR_PREVIEW_READY, EDITOR_PREVIEW_STATE, isEditorPreviewActive } from '@/lib/editorPreviewBridge';
 import { mergeSectionOrderFromProfile } from '@/lib/storeSectionDefaults';
 import { mergeTemplateColors } from '@/lib/storeContentDraft';
 
@@ -325,6 +340,7 @@ async function enrichStoreProductsWithStock(
 
 const StoreDetail: React.FC = () => {
   const { id, slug, categorySlug } = useParams<{ id?: string; slug?: string; categorySlug?: string }>();
+  const hostnameStoreSlug = typeof window !== 'undefined' ? storeSlugFromHostname(window.location.hostname) : undefined;
   const navigate = useNavigate();
   const [storeId, setStoreId] = useState<string | null>(null);
   const [store, setStore] = useState<Store | null>(null);
@@ -349,7 +365,7 @@ const StoreDetail: React.FC = () => {
   // Read More modal state
   const [readMoreContent, setReadMoreContent] = useState<{ title: string; text: string } | null>(null);
   const [searchParams] = useSearchParams();
-  const editorPreview = searchParams.get('editorPreview') === '1';
+  const editorPreview = isEditorPreviewActive(searchParams);
   const [editorHighlightSection, setEditorHighlightSection] = useState<EditorSelectableId | null>(null);
   const [liveEditorState, setLiveEditorState] = useState<EditorPreviewStatePayload | null>(null);
   // Page navigation state
@@ -391,14 +407,25 @@ const StoreDetail: React.FC = () => {
     [products]
   );
   const selectedCategory = useMemo(
-    () => productCategories.find((category) => generateSlug(category) === normalizedCategorySlug) || null,
+    () => categoryFromSlug(productCategories, normalizedCategorySlug),
     [productCategories, normalizedCategorySlug]
   );
   const filteredProducts = useMemo(
     () => (selectedCategory ? products.filter((product) => product.category === selectedCategory) : products),
     [products, selectedCategory]
   );
-  const storeBasePath = store?.slug ? `/${store.slug}` : storeId ? `/store/id/${storeId}` : '';
+
+  const handleCategoryNavigate = useCallback((path: string) => {
+    setActivePage('products');
+    window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+    navigate(path);
+  }, [navigate]);
+
+  useEffect(() => {
+    if (normalizedCategorySlug) {
+      setActivePage('products');
+    }
+  }, [normalizedCategorySlug]);
 
   // Derive banner images safely (store may be null before load)
   const bannerImagesCount = React.useMemo(() => {
@@ -470,13 +497,17 @@ const StoreDetail: React.FC = () => {
         setAvgRating(null);
       }
     } catch (e) {
-      console.error('Failed to fetch reviews', e);
+      if (import.meta.env.DEV) {
+        console.warn('Failed to fetch reviews', e);
+      }
     }
   }, [storeId]);
 
+  const loadedStoreKeyRef = useRef<string | null>(null);
+
   useEffect(() => {
     // Determine if we have a slug or ID
-    const identifier = slug || id;
+    const identifier = slug || id || hostnameStoreSlug;
     
     if (!identifier) {
       setError('Store identifier is missing');
@@ -485,7 +516,15 @@ const StoreDetail: React.FC = () => {
     }
 
     const loadStore = async () => {
-      setIsLoading(true);
+      const cacheKey = String(identifier);
+      if (loadedStoreKeyRef.current === cacheKey && store && storeId) {
+        setIsLoading(false);
+        return;
+      }
+
+      if (loadedStoreKeyRef.current !== cacheKey) {
+        setIsLoading(true);
+      }
       try {
         const db = getFirestore();
         let storeData: Record<string, unknown> | null = null;
@@ -502,31 +541,79 @@ const StoreDetail: React.FC = () => {
           setStoreId(docId);
         } else {
           // Fall back to direct document ID lookup (backward compat with old ID-based links)
-          const storeRef = doc(db, 'storeProfiles', identifier);
-          const storeSnap = await getDoc(storeRef);
-          
+          let storeRef = doc(db, 'storeProfiles', identifier);
+          let storeSnap = await getDoc(storeRef);
+
+          // Hostnames lower-case Firebase ids — match case-insensitively when on store subdomain
+          if (!storeSnap.exists() && hostnameStoreSlug && isLikelyFirebaseUid(identifier)) {
+            const allStoresSnap = await getDocs(query(storesRef, where('status', '==', 'online')));
+            const match = allStoresSnap.docs.find((d) => d.id.toLowerCase() === identifier.toLowerCase());
+            if (match) {
+              storeSnap = match;
+            }
+          }
+
           if (!storeSnap.exists()) {
             setError('Store not found');
             setIsLoading(false);
             return;
           }
-          
+
           storeData = storeSnap.data();
-          docId = identifier;
+          docId = storeSnap.id;
           setStoreId(docId);
-          
+
+          const resolvedSlug =
+            (typeof storeData?.slug === 'string' && storeData.slug.trim()) ||
+            (typeof storeData?.storeSlug === 'string' && storeData.storeSlug.trim()) ||
+            '';
+
+          // UID subdomain → friendly slug subdomain
+          if (
+            resolvedSlug &&
+            isFriendlyStoreSlug(resolvedSlug) &&
+            hostnameStoreSlug &&
+            isLikelyFirebaseUid(hostnameStoreSlug) &&
+            !editorPreview
+          ) {
+            redirectToStoreSubdomain(resolvedSlug);
+            return;
+          }
+
           // Redirect to short slug URL if store has a slug (not in theme-editor preview)
-          if (storeData.slug && !editorPreview) {
-            navigate(`/${storeData.slug}`, { replace: true });
+          if (resolvedSlug && isFriendlyStoreSlug(resolvedSlug) && !editorPreview && !hostnameStoreSlug) {
+            redirectToStoreSubdomain(resolvedSlug);
             return;
           }
         }
-        
-        setStore({ id: docId, ...storeData } as Store);
+
+        const resolvedStoreName =
+          (typeof storeData?.name === 'string' && storeData.name.trim()) ||
+          (typeof storeData?.storeName === 'string' && storeData.storeName.trim()) ||
+          'Unknown Store';
+        const resolvedStoreSlug =
+          (typeof storeData?.slug === 'string' && storeData.slug.trim()) ||
+          (typeof storeData?.storeSlug === 'string' && storeData.storeSlug.trim()) ||
+          undefined;
+
+        setStore({
+          id: docId,
+          ...storeData,
+          name: resolvedStoreName,
+          slug: resolvedStoreSlug,
+          description:
+            (typeof storeData?.description === 'string' && storeData.description) ||
+            (typeof storeData?.slogan === 'string' && storeData.slogan) ||
+            '',
+        } as Store);
 
         let recipesList: Recipe[] = [];
         let rawMaterialsList: RawMaterial[] = [];
-        if (!ECOSYSTEM_FLAGS.publicProductStockApi) {
+        const storeOwnerId =
+          typeof storeData?.ownerId === 'string' ? storeData.ownerId : undefined;
+        const inventoryReader = canReadStoreInventory(user?.uid, docId, storeOwnerId);
+
+        if (!ECOSYSTEM_FLAGS.publicProductStockApi && inventoryReader) {
           try {
             const recipesRef = collection(db, 'recipes');
             const recipesQuery = query(recipesRef, where('storeId', '==', docId));
@@ -544,7 +631,6 @@ const StoreDetail: React.FC = () => {
               ...doc.data(),
             } as RawMaterial));
           } catch (stockErr) {
-            // Guests cannot read recipes/rawMaterials — still show the storefront catalog.
             if (import.meta.env.DEV) {
               console.warn('Stock enrichment skipped (permissions or offline)', stockErr);
             }
@@ -558,8 +644,8 @@ const StoreDetail: React.FC = () => {
 
         const storeInfo = {
           id: docId,
-          name: typeof storeData?.name === 'string' ? storeData.name : 'Unknown Store',
-          slug: typeof storeData?.slug === 'string' ? storeData.slug : undefined,
+          name: resolvedStoreName,
+          slug: resolvedStoreSlug,
         };
         const productsList = productsSnap.docs.map((doc) => {
           const productData = doc.data();
@@ -570,12 +656,19 @@ const StoreDetail: React.FC = () => {
           } as Product;
         });
 
-        const enrichedProducts = await enrichStoreProductsWithStock(
-          docId,
-          productsList,
-          recipesList,
-          rawMaterialsList,
-        );
+        let enrichedProducts = productsList;
+        try {
+          enrichedProducts = await enrichStoreProductsWithStock(
+            docId,
+            productsList,
+            recipesList,
+            rawMaterialsList,
+          );
+        } catch (stockErr) {
+          if (import.meta.env.DEV) {
+            console.warn('Stock enrichment skipped', stockErr);
+          }
+        }
         setProducts(enrichedProducts);
 
         // Fetch announcements for this store (optional, if you have this collection)
@@ -586,19 +679,29 @@ const StoreDetail: React.FC = () => {
           const announcementsSnap = await getDocs(announcementsQuery);
           announcementsList = announcementsSnap.docs.map(doc => ({ id: doc.id, ...doc.data() } as StoreAnnouncement));
         } catch (e) {
-          console.error('Failed to load announcements', e);
+          if (import.meta.env.DEV) {
+            console.warn('Failed to load announcements', e);
+          }
         }
         setAnnouncements(announcementsList);
       } catch (err) {
-        setError('Failed to load store data');
-        console.error(err);
+        const code = (err as { code?: string })?.code;
+        if (code === 'permission-denied') {
+          if (import.meta.env.DEV) {
+            console.warn('Store load permission skipped', err);
+          }
+        } else {
+          setError('Failed to load store data');
+          console.error(err);
+        }
       } finally {
         setIsLoading(false);
+        loadedStoreKeyRef.current = cacheKey;
       }
     };
 
     loadStore();
-  }, [id, slug, navigate, editorPreview]);
+  }, [id, slug, hostnameStoreSlug, navigate, editorPreview, user?.uid]);
   
   // Load reviews when storeId is set
   useEffect(() => {
@@ -914,6 +1017,7 @@ const StoreDetail: React.FC = () => {
   } as React.CSSProperties : colorStyle;
 
   const showCommerceActions = store.storefrontMode !== 'display';
+  const showPublicPrices = store.catalogPricingReady === true;
 
   const storeStructuredData: Array<Record<string, unknown>> = [
     {
@@ -922,7 +1026,7 @@ const StoreDetail: React.FC = () => {
       name: store.name,
       description: store.seoSettings?.metaDescription || store.description || store.slogan || '',
       image: store.seoSettings?.ogImage || store.logo,
-      url: store.seoSettings?.canonicalBaseUrl || `https://grabio.space/${store.slug || storeId}`,
+      url: store.seoSettings?.canonicalBaseUrl || buildStorePublicUrl(store.slug || storeId || ''),
       telephone: store.contactInfo?.phone || undefined,
       email: store.contactInfo?.email || undefined,
       address: store.location || undefined,
@@ -947,7 +1051,7 @@ const StoreDetail: React.FC = () => {
       itemListElement: filteredProducts.slice(0, 50).map((product, index) => ({
         '@type': 'ListItem',
         position: index + 1,
-        url: `https://grabio.space/${store.slug || store.id}/product/${product.slug || product.id}`,
+        url: buildStorePublicUrl(store.slug || store.id, `/product/${product.slug || product.id}`),
         item: {
           '@type': 'Product',
           name: product.name,
@@ -999,12 +1103,12 @@ const StoreDetail: React.FC = () => {
 
   const productGridClass =
     productDisplayType === 'grid-large'
-      ? 'grid grid-cols-1 sm:grid-cols-2 gap-6 min-w-0'
+      ? 'grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 min-w-0'
       : productDisplayType === 'list'
         ? 'grid grid-cols-1 gap-4 min-w-0'
         : productDisplayType === 'masonry'
           ? 'columns-1 sm:columns-2 lg:columns-3 gap-4 space-y-4 min-w-0'
-          : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6 min-w-0';
+          : 'grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 min-w-0';
 
   // Helper to check if section is enabled
   const isSectionEnabled = (sectionId: StoreSectionId): boolean => {
@@ -1183,8 +1287,8 @@ const StoreDetail: React.FC = () => {
     const container = effective.container || 'contained';
     
     if (container === 'full-width') {
-      // Break out of parent container when page layout is contained
-      if (pageLayout === 'contained') {
+      // Break out of parent container on contained + hybrid layouts
+      if (pageLayout === 'contained' || pageLayout === 'hybrid') {
         return 'w-screen relative left-1/2 -translate-x-1/2';
       }
       return 'w-full';
@@ -1208,39 +1312,17 @@ const StoreDetail: React.FC = () => {
     ].join('-');
 
   const renderCategoryFilters = () => {
-    if (!storeBasePath || productCategories.length === 0) return null;
+    if (!store?.slug || productCategories.length === 0) return null;
 
     return (
-      <div className="mb-4 flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => navigate(storeBasePath)}
-          className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-            !selectedCategory
-              ? 'bg-gray-900 text-white border-gray-900'
-              : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-          }`}
-        >
-          All
-        </button>
-        {productCategories.map((category) => {
-          const isActive = selectedCategory === category;
-          return (
-            <button
-              type="button"
-              key={category}
-              onClick={() => navigate(`${storeBasePath}/category/${generateSlug(category)}`)}
-              className={`px-3 py-1 rounded-full text-xs border transition-colors ${
-                isActive
-                  ? 'bg-gray-900 text-white border-gray-900'
-                  : 'bg-white text-gray-700 border-gray-300 hover:border-gray-500'
-              }`}
-            >
-              {category}
-            </button>
-          );
-        })}
-      </div>
+      <StoreCategoryFilters
+        storeSlug={store.slug}
+        categories={productCategories}
+        selectedCategory={selectedCategory}
+        onNavigate={handleCategoryNavigate}
+        primaryColor={store.templateColors?.primary}
+        className="mb-4"
+      />
     );
   };
 
@@ -1269,7 +1351,7 @@ const StoreDetail: React.FC = () => {
                   { title: 'Mission', text: mission },
                   { title: 'Vision', text: vision },
                 ].filter(c => c.text).map(c => (
-                  <Card key={c.title} className={`${aboutBorderless ? stripBorderClasses(currentTheme.cardSoft) : currentTheme.cardSoft} flex flex-col ${aboutBorderless ? 'border-0 shadow-none' : ''} ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`}>
+                  <Card key={c.title} className={`${aboutBorderless ? 'bg-white/60 border-0 shadow-none backdrop-blur-[2px]' : currentTheme.cardSoft} flex flex-col ${aboutBorderless ? '' : ''} ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' : ''}`}>
                     <CardContent className="p-4 flex flex-col flex-1">
                       <h3 className={`font-semibold mb-2 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.title}</h3>
                       <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} line-clamp-6 flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.text}</p>
@@ -1330,7 +1412,7 @@ const StoreDetail: React.FC = () => {
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
                   <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} />
+                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} showPrice={showPublicPrices} />
                   </div>
                 ))}
               </div>
@@ -1543,23 +1625,27 @@ const StoreDetail: React.FC = () => {
             </div>
           );
         } else if (bannerImages.length > 0) {
-          // Fullscreen with image carousel
+          const singleBrandBanner = bannerImages.length === 1;
           return (
-            <div className="relative overflow-hidden h-64 md:h-96">
+            <div
+              className={`relative overflow-hidden ${singleBrandBanner ? 'h-52 md:h-72' : 'h-64 md:h-96'}`}
+              style={singleBrandBanner && tColors?.primary ? { backgroundColor: tColors.primary } : undefined}
+            >
               {bannerImages.map((url, idx) => (
                 <img
                   key={url}
                   src={url}
                   alt={`Banner ${idx + 1}`}
-                  className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-700 ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
+                  className={`absolute inset-0 w-full h-full transition-opacity duration-700 ${singleBrandBanner ? 'object-contain object-center p-3 md:p-5' : 'object-cover'} ${idx === bannerIndex ? 'opacity-100' : 'opacity-0'}`}
                 />
               ))}
-              {/* Slogan overlay */}
+              {!singleBrandBanner && (
               <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent flex items-end">
                 <div className="p-6 text-white">
                   {displaySlogan && <p className="text-base md:text-xl font-semibold drop-shadow">{displaySlogan}</p>}
                 </div>
               </div>
+              )}
               {/* Carousel controls */}
               {bannerImages.length > 1 && (
                 <>
@@ -1599,6 +1685,11 @@ const StoreDetail: React.FC = () => {
     }
   };
 
+  const showStoreBrandedFooter =
+    !editorPreview &&
+    typeof window !== 'undefined' &&
+    isStoreBrandedHost(window.location.hostname);
+
   return (
     <div className="min-h-screen" style={pageBackgroundStyle}>
       <style>{`
@@ -1626,8 +1717,8 @@ const StoreDetail: React.FC = () => {
           description={store.seoSettings?.metaDescription || store.description || store.slogan || `Shop at ${store.name} on Grabio`}
           image={store.seoSettings?.ogImage || store.logo}
           url={store.seoSettings?.canonicalBaseUrl || (selectedCategory
-            ? `https://grabio.space/${store.slug || storeId}/category/${generateSlug(selectedCategory)}`
-            : `https://grabio.space/${store.slug || storeId}`)}
+            ? buildStorePublicUrl(store.slug || storeId || '', `/category/${generateSlug(selectedCategory)}`)
+            : buildStorePublicUrl(store.slug || storeId || ''))}
           keywords={store.seoSettings?.keywords}
           robotsIndex={store.seoSettings?.robotsIndex ?? true}
           robotsFollow={store.seoSettings?.robotsFollow ?? true}
@@ -1696,14 +1787,19 @@ const StoreDetail: React.FC = () => {
         >
           <div className={isEdgeToEdgePage ? 'container mx-auto px-4' : ''}>
             <div className={`flex ${storeCardLayout === 'split' ? 'grid md:grid-cols-2 gap-8' : 'flex-col md:flex-row'} items-center md:items-start gap-6`}>
-              <img 
-                src={displayLogo} 
-                alt={store.name} 
-                className="h-24 w-24 object-cover rounded-full border-4 border-white shadow-sm"
+              <StoreVisual
+                name={store.name}
+                logo={displayLogo}
+                variant="card"
+                className="shrink-0 h-24 w-24 md:h-28 md:w-28 rounded-full ring-4 ring-black/5 shadow-md object-cover"
               />
               <div className="flex-1 text-center md:text-left">
-              <div className="flex items-center justify-center md:justify-start gap-3 mb-3">
-                {avgRating !== null ? (
+              <h1 className="text-2xl md:text-3xl font-bold mb-1">{store.name}</h1>
+              {displaySlogan && (
+                <p className={`text-sm md:text-base mb-3 ${currentTheme.mutedText}`}>{displaySlogan}</p>
+              )}
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-3 mb-3">
+                {avgRating !== null && (
                   <div className="flex items-center text-yellow-500">
                     {ratingDisplayType === 'pill' ? (
                       <>
@@ -1728,9 +1824,8 @@ const StoreDetail: React.FC = () => {
                       </>
                     )}
                   </div>
-                ) : (
-                  <div className={`text-sm ${currentTheme.mutedText}`}>No ratings yet</div>
                 )}
+                {!editorPreview && (
                 <Button size="sm" variant={isFollowing ? 'ghost' : 'outline'} className={currentTheme.actionButton} onClick={async () => {
                   if (!user) { toast('Please sign in to follow stores'); return; }
                   try {
@@ -1747,14 +1842,18 @@ const StoreDetail: React.FC = () => {
                 }}>
                   {isFollowing ? 'Following' : 'Follow'}
                 </Button>
+                )}
               </div>
               <p className="mb-4 text-sm" style={{ color: storeCardStyle.color }}>{displayDescription}</p>
               
+              {(store.location || store.website || store.contactInfo?.phone || store.contactInfo?.email) && (
               <div className="flex flex-wrap justify-center md:justify-start gap-4" style={{ color: storeCardStyle.color }}>
+                {store.location && (
                 <div className="flex items-center">
                   <MapPin size={18} className="mr-2" />
                   {store.location}
                 </div>
+                )}
                 
                 {store.website && (
                   <a href={store.website} target="_blank" rel="noopener noreferrer" className={`flex items-center hover:underline ${currentTheme.link}`}>
@@ -1777,6 +1876,7 @@ const StoreDetail: React.FC = () => {
                   </div>
                 )}
               </div>
+              )}
               
               <div className="flex mt-4 justify-center md:justify-start gap-3">
                 {store.socialLinks?.facebook && (
@@ -1838,6 +1938,13 @@ const StoreDetail: React.FC = () => {
                       );
                       return;
                     }
+                    if (p.id === 'products' && store.slug) {
+                      handleCategoryNavigate(buildStoreCategoryPath(store.slug));
+                      return;
+                    }
+                    if (p.id === 'home' && store.slug && selectedCategory) {
+                      navigate(buildStoreCategoryPath(store.slug));
+                    }
                     setActivePage(p.id);
                   }}
                   className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${
@@ -1852,7 +1959,7 @@ const StoreDetail: React.FC = () => {
               {store.enabledModules?.blog_publisher && store.slug && !editorPreview && (
                 <button
                   type="button"
-                  onClick={() => navigate(`/store/${store.slug}/blog`)}
+                  onClick={() => navigateToStorePath(store.slug, '/blog', navigate)}
                   className={`px-4 py-2 rounded-md text-sm font-medium whitespace-nowrap transition-colors ${menuStyle === 'bold' ? 'text-[var(--store-text)] hover:bg-white/50' : `${currentTheme.mutedText} hover:bg-white/60`}`}
                 >
                   Blog
@@ -1884,6 +1991,9 @@ const StoreDetail: React.FC = () => {
                     {row.map((section) => {
                       const content = renderSection(section.id);
                       if (!content) return null;
+                      const effective = resolveEffectiveSection(section);
+                      const useInnerContainer =
+                        effective.container === 'full-width' && section.id !== 'hero';
                       return (
                         <EditorRegionShell
                           key={sectionPreviewKey(section)}
@@ -1893,7 +2003,9 @@ const StoreDetail: React.FC = () => {
                           className={`${getSectionWrapperClasses(section)}`}
                           style={getSectionWrapperStyle(section)}
                         >
-                          {content}
+                          <div className={useInnerContainer ? 'container mx-auto px-4 md:px-8 max-w-7xl' : ''}>
+                            {content}
+                          </div>
                         </EditorRegionShell>
                       );
                     })}
@@ -1934,7 +2046,7 @@ const StoreDetail: React.FC = () => {
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
                   <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} />
+                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} showPrice={showPublicPrices} />
                   </div>
                 ))}
               </div>
@@ -2070,6 +2182,15 @@ const StoreDetail: React.FC = () => {
 
         </div>{/* End content wrapper for full-width layout */}
       </main>
+      {showStoreBrandedFooter && (
+        <StoreBrandedFooter
+          storeName={store.name}
+          logo={displayLogo}
+          contactEmail={store.contactInfo?.email}
+          contactPhone={store.contactInfo?.phone}
+          primaryColor={store.templateColors?.primary}
+        />
+      )}
       {!editorPreview && (
       <WhatsAppChatWidget
         phone={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined}

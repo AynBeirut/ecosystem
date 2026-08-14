@@ -2,6 +2,7 @@ import type { LucideIcon } from "lucide-react";
 import {
   AlertTriangle,
   CheckCircle2,
+  FileSpreadsheet,
   FileText,
   Scale,
   Search,
@@ -31,6 +32,7 @@ type Props = {
   systemGuideEnabled?: boolean;
   onNavigate: (tab: string) => void;
   onOpenSearch: () => void;
+  onOpenQuickStatement?: () => void;
 };
 
 type StatCardProps = {
@@ -72,6 +74,7 @@ export default function AccountingQuickBar({
   systemGuideEnabled = false,
   onNavigate,
   onOpenSearch,
+  onOpenQuickStatement,
 }: Props) {
   return (
     <Card className="border-dashed">
@@ -111,6 +114,12 @@ export default function AccountingQuickBar({
                 Ctrl K
               </kbd>
             </Button>
+            {onOpenQuickStatement ? (
+              <Button size="sm" variant="secondary" onClick={onOpenQuickStatement}>
+                <FileSpreadsheet className="h-4 w-4 mr-1" />
+                Quick statement
+              </Button>
+            ) : null}
             <Button size="sm" onClick={() => onNavigate("vouchers")}>
               <FileText className="h-4 w-4 mr-1" />
               New voucher

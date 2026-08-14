@@ -8,6 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Badge } from '@/components/ui/badge';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { auditLogSearchText, presentAuditLog } from '@/lib/auditLogPresentation';
 
 type AuditLogEntry = {
   id: string;
@@ -50,12 +51,20 @@ const formatDateTime = (value: unknown): string => {
   return new Date(millis).toLocaleString();
 };
 
-const tryStringify = (value: unknown): string => {
-  if (value === undefined) return '';
-  try {
-    return JSON.stringify(value, null, 2);
-  } catch {
-    return String(value);
+const actionBadgeClass = (action: string): string => {
+  switch (action) {
+    case 'create':
+      return 'bg-emerald-100 text-emerald-800 border-emerald-200';
+    case 'update':
+      return 'bg-blue-100 text-blue-800 border-blue-200';
+    case 'delete':
+      return 'bg-red-100 text-red-800 border-red-200';
+    case 'approve':
+      return 'bg-teal-100 text-teal-800 border-teal-200';
+    case 'reject':
+      return 'bg-amber-100 text-amber-800 border-amber-200';
+    default:
+      return '';
   }
 };
 
@@ -137,8 +146,7 @@ const AdminAuditLogs: React.FC = () => {
         log.userName,
         log.userRole,
         log.id,
-        tryStringify(log.oldValue),
-        tryStringify(log.newValue),
+        auditLogSearchText(log),
       ]
         .map((value) => String(value || '').toLowerCase())
         .join(' ');
@@ -149,15 +157,15 @@ const AdminAuditLogs: React.FC = () => {
 
   return (
     <AdminPageShell
-      title="System Logs"
-      description="Track movement and changes across your store (read-only)"
+      title="Store Logs"
+      description="See who changed what in your store — plain language, no raw data dumps"
       backTo="/admin/dashboard"
       backLabel="Dashboard"
     >
         <AdminPanel className="mb-6">
           <CardHeader>
             <CardTitle>Filters</CardTitle>
-            <CardDescription>Search by action, entity, user, date, or value changes</CardDescription>
+            <CardDescription>Search by user, action, entity, or date</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
@@ -210,37 +218,36 @@ const AdminAuditLogs: React.FC = () => {
           {filteredLogs.map((log) => {
             const action = String(log.action || 'unknown');
             const entityType = String(log.entityType || 'system');
-            const entityId = String(log.entityId || '—');
             const userName = String(log.userName || 'System');
+            const userRole = String(log.userRole || '').trim();
             const eventTime = log.createdAt || log.timestamp;
+            const summary = presentAuditLog(log);
 
             return (
               <AdminPanel key={log.id}>
                 <CardContent className="pt-4">
-                  <div className="flex flex-wrap items-center gap-2 mb-2">
-                    <Badge variant="secondary">{action}</Badge>
-                    <Badge variant="outline">{entityType}</Badge>
+                  <div className="flex flex-wrap items-center gap-2 mb-3">
+                    <Badge variant="outline" className={actionBadgeClass(action)}>
+                      {action}
+                    </Badge>
+                    <Badge variant="outline">{entityType.replace(/_/g, ' ')}</Badge>
                     <span className="text-xs text-gray-500">{formatDateTime(eventTime)}</span>
                   </div>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-sm">
-                    <div><span className="text-gray-500">User:</span> {userName}</div>
-                    <div><span className="text-gray-500">Entity ID:</span> {entityId}</div>
-                  </div>
-                  {(log.oldValue !== undefined || log.newValue !== undefined) ? (
-                    <details className="mt-3">
-                      <summary className="cursor-pointer text-sm text-market-primary">View changes</summary>
-                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mt-2">
-                        <div className="bg-gray-50 border rounded p-2">
-                          <div className="text-xs text-gray-500 mb-1">Old Value</div>
-                          <pre className="text-xs whitespace-pre-wrap break-words">{tryStringify(log.oldValue) || '—'}</pre>
-                        </div>
-                        <div className="bg-gray-50 border rounded p-2">
-                          <div className="text-xs text-gray-500 mb-1">New Value</div>
-                          <pre className="text-xs whitespace-pre-wrap break-words">{tryStringify(log.newValue) || '—'}</pre>
-                        </div>
-                      </div>
-                    </details>
+
+                  <p className="text-sm font-medium text-gray-900">{summary.headline}</p>
+
+                  {summary.details.length > 0 ? (
+                    <ul className="mt-2 space-y-1 text-sm text-gray-600 list-disc pl-5">
+                      {summary.details.map((detail) => (
+                        <li key={detail}>{detail}</li>
+                      ))}
+                    </ul>
                   ) : null}
+
+                  <div className="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
+                    <span><span className="font-medium text-gray-600">Account:</span> {userName}</span>
+                    {userRole ? <span><span className="font-medium text-gray-600">Role:</span> {userRole}</span> : null}
+                  </div>
                 </CardContent>
               </AdminPanel>
             );

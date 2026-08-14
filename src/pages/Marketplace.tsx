@@ -93,7 +93,7 @@ const Marketplace: React.FC = () => {
       const matchesSearch =
         searchQuery === '' ||
         product.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        product.description.toLowerCase().includes(searchQuery.toLowerCase());
+        (product.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesPrice = product.price >= priceRange[0] && product.price <= priceRange[1];
       const matchesLocation =
         !location_ ||
@@ -120,7 +120,7 @@ const Marketplace: React.FC = () => {
       const matchesSearch =
         searchQuery === '' ||
         store.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        store.description.toLowerCase().includes(searchQuery.toLowerCase());
+        (store.description || '').toLowerCase().includes(searchQuery.toLowerCase());
       const matchesLocation =
         !location_ || store.location.toLowerCase().includes(location_.toLowerCase());
       return matchesSearch && matchesLocation;

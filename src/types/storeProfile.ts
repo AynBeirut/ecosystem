@@ -6,6 +6,17 @@ export interface StorePage {
   content?: string;
 }
 
+export type FinanceDocumentSettings = {
+  documentLogo?: string;
+  documentCompanyName?: string;
+  documentAddress?: string;
+  documentTaxId?: string;
+  invoiceTemplate?: 'basic' | 'modern' | 'professional';
+  primaryColor?: string;
+  secondaryColor?: string;
+  signature?: string;
+};
+
 export interface StoreTemplateColors {
   primary: string;
   secondary: string;
@@ -75,6 +86,7 @@ export interface StoreDeliverySettings {
   expressDelivery: boolean;
   sameDay: boolean;
   pickup: boolean;
+  dineIn?: boolean;
   standardTime: string;
   expressTime: string;
   sameDayTime: string;
@@ -241,6 +253,8 @@ export interface StoreProfile {
   instagram: string;
   twitter: string;
   logo: string;
+  /** A4 invoice / PDF branding — edited in Business Finance → Settings → Documents. */
+  financeDocumentSettings?: FinanceDocumentSettings;
   status: 'online' | 'offline'; // Store visibility status
   // Subscription & Add-ons
   subscriptionTier?: 'trial' | 'starter' | 'pro' | 'business' | 'premium'; // premium kept for backward compatibility
@@ -255,7 +269,7 @@ export interface StoreProfile {
   crmSettings?: {
     noContactAlertDays?: number;
   };
-  subscriptionStatus?: 'trial' | 'active' | 'grace' | 'expired' | 'blocked'; // Subscription status
+  subscriptionStatus?: 'trial' | 'active' | 'grace' | 'grace_period' | 'expired' | 'blocked'; // Subscription status
   subscriptionPlan?: 'monthly' | 'yearly'; // Billing cycle
   subscriptionEndsAt?: string; // ISO 8601 date when subscription expires
   hasUsedTrial?: boolean; // Whether user has used trial before
@@ -279,6 +293,8 @@ export interface StoreProfile {
   isLegacyUser?: boolean; // Legacy users get 1 year free
   legacyExpiresAt?: string; // When legacy access expires (Feb 28, 2027)
   gracePeriodStartedAt?: string; // When grace period started (7 days)
+  graceStartedAt?: string; // When grace period started by the scheduled job
+  graceEndsAt?: string; // When the grace period ends
   blockedAt?: string; // When account was blocked
   billingHistory?: Array<{
     paymentId: string;
@@ -394,6 +410,8 @@ export interface StoreProfile {
   packageDraftAppliedAt?: string;
   /** display = showcase only (no cart); commerce = full store checkout */
   storefrontMode?: 'display' | 'commerce';
+  /** When true, public catalog shows system/live prices. Until then owner list prices stay internal only. */
+  catalogPricingReady?: boolean;
   /** Per-store GL template: international (default) or Lebanese PCG-style COA. */
   accountingMode?: 'international' | 'lebanese';
   /** Entry/display language for accounting screens (Lebanese defaults to bilingual). */
@@ -408,6 +426,8 @@ export interface StoreProfile {
     businessIntent?: 'store' | 'restaurant' | 'manufacturer';
     buildMethod?: 'classic' | 'theme_editor' | 'wordpress' | 'import';
     wordpressRequestId?: string;
+    editorSetupVersion?: number;
+    setupCompletedMethods?: Partial<Record<'classic' | 'theme_editor', number>>;
     updatedAt?: string;
   };
   // Migration tracking

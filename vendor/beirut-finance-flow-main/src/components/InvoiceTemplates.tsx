@@ -80,12 +80,13 @@ export const amountToWords = (amount: number, currency: string): string => {
 
 export const BasicTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, company }) => {
   const totalAmount = invoice.total || invoice.amount;
+  const invoiceNumber = invoice.invoiceNumber || invoice.id;
 
   return (
     <div className="bg-white p-6 rounded-lg shadow-md text-gray-800">
       <div className="border-b pb-4 mb-4">
         <h1 className="text-2xl font-bold">INVOICE</h1>
-        <p className="text-gray-500">#{invoice.id}</p>
+        <p className="text-gray-500">#{invoiceNumber}</p>
       </div>
       
       <div className="grid grid-cols-2 gap-4 mb-6">
@@ -176,6 +177,7 @@ export const ModernTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compan
   // Modern, clean template with better typography and visual hierarchy
   const accentColor = company?.primaryColor || "#4F46E5";
   const totalAmount = invoice.total || invoice.amount;
+  const invoiceNumber = invoice.invoiceNumber || invoice.id;
   
   return (
     <div className="bg-white p-8 rounded-lg shadow-lg text-gray-800 max-w-4xl mx-auto">
@@ -197,7 +199,7 @@ export const ModernTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, compan
         
         <div className="text-right">
           <h1 className="text-3xl font-bold mb-1" style={{ color: accentColor }}>INVOICE</h1>
-          <p className="text-xl text-gray-700">#{invoice.id}</p>
+          <p className="text-xl text-gray-700">#{invoiceNumber}</p>
         </div>
       </div>
       
@@ -318,6 +320,7 @@ export const ProfessionalTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, 
   const accentColor = company?.primaryColor || "#4F46E5";
   const secondaryColor = company?.secondaryColor || "#C7D2FE";
   const totalAmount = invoice.total || invoice.amount;
+  const invoiceNumber = invoice.invoiceNumber || invoice.id;
   
   return (
     <div className="bg-white p-8 rounded-lg shadow-lg text-gray-800 max-w-4xl mx-auto">
@@ -345,7 +348,7 @@ export const ProfessionalTemplate: React.FC<InvoiceTemplateProps> = ({ invoice, 
             <div className="grid grid-cols-2 gap-4 text-sm">
               <div>
                 <p className="text-gray-600">Invoice Number:</p>
-                <p className="font-semibold">{invoice.id}</p>
+                <p className="font-semibold">{invoiceNumber}</p>
               </div>
               <div>
                 <p className="text-gray-600">Date:</p>

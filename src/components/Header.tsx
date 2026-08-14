@@ -20,6 +20,8 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getSubAccountHomePath, isManagerSubAccount } from '@/lib/subAccountAccess';
+import { isGrabioStoreSubdomain } from '@/lib/storeUrls';
+import StoreVisual from '@/components/StoreVisual';
 
 // Helper function to determine if a color is light or dark
 const isColorLight = (color: string): boolean => {
@@ -78,9 +80,13 @@ const Header: React.FC<HeaderProps> = ({
     setIsMenuOpen(!isMenuOpen);
   };
 
-  // White-label conditions: Pro/Business/Enterprise OR Custom Domain OR Imported Design
+  const hostname = typeof window !== 'undefined' ? window.location.hostname : '';
+  const onStoreSubdomain = isGrabioStoreSubdomain(hostname);
+
+  // White-label: paid tier, custom domain, imported design, or {slug}.grabio.space
   const isPaidTier = ['pro', 'business', 'premium'].includes(subscriptionTier || '');
-  const useWhiteLabel = isPaidTier || hasCustomDomain || hasImportedDesign;
+  const useWhiteLabel = isPaidTier || hasCustomDomain || hasImportedDesign || onStoreSubdomain;
+  const storeHomePath = onStoreSubdomain ? '/' : (storeSlug ? `/${storeSlug}` : '/');
   const isLightVariant = variant === 'light';
   
   // Use store color or default Grabio green
@@ -113,13 +119,19 @@ const Header: React.FC<HeaderProps> = ({
       <div className="container mx-auto px-4 py-3">
         <div className="flex items-center justify-between">
           {/* Logo */}
-          <Link to={useWhiteLabel && storeSlug ? `/${storeSlug}` : '/'} className={`flex items-center gap-2 ${logoContainerClass}`}>
-            {useWhiteLabel && storeLogo && (
-              <img src={storeLogo} alt={storeName} className="h-8 w-8 object-cover rounded" />
+          <Link to={useWhiteLabel ? storeHomePath : '/'} className={`flex items-center gap-2 ${logoContainerClass}`}>
+            {useWhiteLabel && storeName ? (
+              <StoreVisual
+                name={storeName}
+                logo={storeLogo}
+                variant="header"
+                className="inline-flex h-11 w-11 md:h-12 md:w-12 shrink-0 overflow-hidden rounded-full ring-2 ring-white/35 object-cover"
+              />
+            ) : (
+              <span className={`text-xl font-bold ${isLightVariant && !useWhiteLabel ? 'text-teal-600' : textColor}`}>
+                {isLightVariant ? 'Grabio' : 'Home'}
+              </span>
             )}
-            <span className={`text-xl font-bold ${isLightVariant && !useWhiteLabel ? 'text-teal-600' : textColor}`}>
-              {useWhiteLabel && storeName ? storeName : isLightVariant ? 'Grabio' : 'Home'}
-            </span>
           </Link>
 
           {/* Desktop Navigation */}
@@ -275,7 +287,7 @@ const Header: React.FC<HeaderProps> = ({
           <div className={`md:hidden mt-3 py-3 border-t ${isLightBg ? 'border-gray-300' : 'border-white/20'}`}>
             <nav className="flex flex-col space-y-3">
               <Link
-                to={useWhiteLabel && storeSlug ? `/${storeSlug}` : '/'}
+                to={useWhiteLabel ? storeHomePath : '/'}
                 className={`px-2 py-1 ${textColor} ${hoverColor}`}
                 onClick={toggleMenu}
               >

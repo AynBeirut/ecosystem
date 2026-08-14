@@ -1,10 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getFirestore, collection, query, where, orderBy, getDocs, doc, getDoc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, orderBy, getDocs } from 'firebase/firestore';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, Globe } from 'lucide-react';
+import { buildStoreRelativePath, isExternalUrl, storeSlugFromHostname } from '@/lib/storeUrls';
 
 interface BlogPost {
   id: string;
@@ -22,7 +23,8 @@ interface StoreInfo {
 }
 
 const StoreBlog: React.FC = () => {
-  const { slug } = useParams<{ slug: string }>();
+  const { slug: paramSlug } = useParams<{ slug: string }>();
+  const slug = paramSlug || (typeof window !== 'undefined' ? storeSlugFromHostname(window.location.hostname) : '') || '';
   const db = getFirestore();
   const [posts, setPosts] = useState<BlogPost[]>([]);
   const [store, setStore] = useState<StoreInfo | null>(null);
@@ -31,7 +33,6 @@ const StoreBlog: React.FC = () => {
   useEffect(() => {
     if (!slug) return;
     const load = async () => {
-      // Resolve slug → storeId
       const slugSnap = await getDocs(
         query(collection(db, 'storeProfiles'), where('slug', '==', slug))
       );
@@ -41,7 +42,6 @@ const StoreBlog: React.FC = () => {
       const storeName = storeDoc.data().name ?? slug;
       setStore({ name: storeName, storeId });
 
-      // Fetch published public posts
       const postsSnap = await getDocs(
         query(
           collection(db, 'stores', storeId, 'blogPosts'),
@@ -66,6 +66,8 @@ const StoreBlog: React.FC = () => {
     void load();
   }, [slug, db]);
 
+  const storeHomeHref = buildStoreRelativePath(slug, '/');
+
   if (loading) return <div className="flex items-center justify-center min-h-screen"><p className="text-muted-foreground">Loading…</p></div>;
 
   if (!store) return (
@@ -76,11 +78,19 @@ const StoreBlog: React.FC = () => {
 
   return (
     <div className="container mx-auto px-4 py-10 max-w-3xl">
-      <Link to={`/store/${slug}`}>
-        <Button variant="ghost" size="sm" className="mb-6 gap-1">
-          <ArrowLeft className="h-4 w-4" /> Back to store
-        </Button>
-      </Link>
+      {isExternalUrl(storeHomeHref) ? (
+        <a href={storeHomeHref}>
+          <Button variant="ghost" size="sm" className="mb-6 gap-1" asChild={false}>
+            <span className="inline-flex items-center gap-1"><ArrowLeft className="h-4 w-4" /> Back to store</span>
+          </Button>
+        </a>
+      ) : (
+        <Link to={storeHomeHref}>
+          <Button variant="ghost" size="sm" className="mb-6 gap-1">
+            <ArrowLeft className="h-4 w-4" /> Back to store
+          </Button>
+        </Link>
+      )}
 
       <div className="mb-8">
         <h1 className="text-3xl font-bold">{store.name} — Blog</h1>
@@ -88,36 +98,42 @@ const StoreBlog: React.FC = () => {
       </div>
 
       {posts.length === 0 ? (
-        <Card>
-          <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">No posts published yet.</p>
-          </CardContent>
-        </Card>
+        <p className="text-muted-foreground">No published posts yet.</p>
       ) : (
-        <div className="space-y-5">
-          {posts.map((post) => (
-            <Link key={post.id} to={`/store/${slug}/blog/${post.id}`} className="block group">
-              <Card className="hover:border-primary/40 transition-colors">
-                {post.mediaUrl && (
-                  <div className="overflow-hidden rounded-t-lg max-h-48">
-                    <img src={post.mediaUrl} alt={post.title} className="w-full object-cover group-hover:scale-[1.02] transition-transform duration-300" />
+        <div className="space-y-4">
+          {posts.map((post) => {
+            const postHref = buildStoreRelativePath(slug, `/blog/${post.id}`);
+            const card = (
+              <Card className="group hover:shadow-md transition-shadow">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <CardTitle className="group-hover:text-primary transition-colors">{post.title}</CardTitle>
+                      {post.subject && <CardDescription className="mt-1">{post.subject}</CardDescription>}
+                    </div>
+                    <Badge variant="outline"><Globe className="h-3 w-3 mr-1" /> Public</Badge>
                   </div>
-                )}
-                <CardHeader className="pb-2">
-                  {post.subject && <Badge variant="secondary" className="mb-2 w-fit">{post.subject}</Badge>}
-                  <CardTitle className="text-lg group-hover:text-primary transition-colors">{post.title}</CardTitle>
-                  {post.excerpt && <CardDescription className="line-clamp-2">{post.excerpt}</CardDescription>}
                 </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="flex items-center gap-3 text-xs text-muted-foreground">
-                    <span className="flex items-center gap-1"><Globe className="h-3 w-3" /> Public</span>
-                    {post.publishedAt && <span>{post.publishedAt.toLocaleDateString()}</span>}
-                    <span className="ml-auto text-primary font-medium group-hover:underline">Read more →</span>
-                  </div>
+                <CardContent>
+                  {post.mediaUrl && (
+                    <img src={post.mediaUrl} alt={post.title} className="w-full h-48 object-cover rounded-lg mb-4" />
+                  )}
+                  <p className="text-sm text-muted-foreground line-clamp-3">{post.excerpt}</p>
+                  {post.publishedAt && (
+                    <p className="text-xs text-muted-foreground mt-3">
+                      {post.publishedAt.toLocaleDateString()}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
-            </Link>
-          ))}
+            );
+
+            return isExternalUrl(postHref) ? (
+              <a key={post.id} href={postHref} className="block">{card}</a>
+            ) : (
+              <Link key={post.id} to={postHref} className="block">{card}</Link>
+            );
+          })}
         </div>
       )}
     </div>

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
@@ -9,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
-import { Trash2, Plus, Edit3, Phone, Mail } from 'lucide-react';
+import { Trash2, Plus, Edit3, Phone, Mail, ScrollText } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Supplier } from '@/types/inventory';
 import { logAction } from '@/lib/auditLog';
@@ -19,6 +20,7 @@ import AdminPanel from '@/components/admin/AdminPanel';
 const AdminSuppliers: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isAddingSupplier, setIsAddingSupplier] = useState(false);
   const [editingSupplier, setEditingSupplier] = useState<Supplier | null>(null);
@@ -307,8 +309,19 @@ const AdminSuppliers: React.FC = () => {
               <CardHeader>
                 <div className="flex items-start justify-between">
                   <div>
-                    <CardTitle className="flex items-center gap-2">
-                      {supplier.name}
+                    <CardTitle className="flex flex-wrap items-center gap-2">
+                      <button
+                        type="button"
+                        className="text-left font-semibold text-[#1e4080] hover:underline"
+                        title="Generate account statement"
+                        onClick={() =>
+                          navigate(
+                            `/admin/suppliers/${supplier.id}/statement?type=supplier&name=${encodeURIComponent(supplier.name)}`,
+                          )
+                        }
+                      >
+                        {supplier.name}
+                      </button>
                       <Badge variant={supplier.status === 'active' ? 'default' : 'secondary'}>
                         {supplier.status}
                       </Badge>
@@ -316,6 +329,18 @@ const AdminSuppliers: React.FC = () => {
                     <CardDescription>{supplier.supplierCode}</CardDescription>
                   </div>
                   <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        navigate(
+                          `/admin/suppliers/${supplier.id}/statement?type=supplier&name=${encodeURIComponent(supplier.name)}`,
+                        )
+                      }
+                    >
+                      <ScrollText className="h-4 w-4 mr-1" />
+                      Statement
+                    </Button>
                     <Button
                       variant="outline"
                       size="sm"

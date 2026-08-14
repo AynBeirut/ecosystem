@@ -2,7 +2,8 @@ import { onDocumentUpdated, onDocumentCreated } from 'firebase-functions/v2/fire
 import * as admin from 'firebase-admin';
 import { trackOrderPurchaseConversion } from '../services/metaConversion';
 import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
-import { syncOrderSaleGl } from '../services/orderGlSync';
+import { syncOrderSaleGl, orderNeedsSaleGl } from '../services/orderGlSync';
+import { syncOrderSaleReceiptDoc } from '../services/paymentReceiptSync';
 import { getFcmTokensForStoreOwner, getFcmTokensForUser, sendFcmMulticast } from '../services/fcmTokens';
 
 const db = admin.firestore;
@@ -108,6 +109,9 @@ export const onOrderCreated = onDocumentCreated(
 
     try {
       await syncOrderSaleGl(orderId, data as Record<string, unknown>);
+      if (orderNeedsSaleGl(data as Record<string, unknown>)) {
+        await syncOrderSaleReceiptDoc(orderId, data as Record<string, unknown>);
+      }
     } catch (err) {
       console.warn('Order GL sync (on create) failed:', err);
     }
@@ -188,6 +192,9 @@ export const onOrderStatusChanged = onDocumentUpdated(
 
     try {
       await syncOrderSaleGl(orderId, after as Record<string, unknown>);
+      if (orderNeedsSaleGl(after as Record<string, unknown>)) {
+        await syncOrderSaleReceiptDoc(orderId, after as Record<string, unknown>);
+      }
     } catch (err) {
       console.warn('Order GL sync (on update) failed:', err);
     }

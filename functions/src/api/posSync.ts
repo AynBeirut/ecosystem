@@ -18,6 +18,7 @@ import {
 import { resolveOrderCogsLines } from '../lib/ledger/resolveOrderCogs';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
+import { resolveProductIconFromPayload, resolveStoredProductIcon } from '../lib/productIcon';
 
 const db = admin.firestore();
 
@@ -641,7 +642,13 @@ export async function getPosCatalog(req: Request, res: Response): Promise<void> 
         stock,
         description: String(data.description || '').trim(),
         type,
+        icon: resolveStoredProductIcon(data),
       };
+
+      const image = String(data.image || data.imageUrl || '').trim();
+      if (image) {
+        product.image = image;
+      }
 
       if (type === 'composed' && composedProductSource === 'platform' && recipe) {
         product.recipe = mapRecipeIngredients(recipe, rawMaterialsById);
@@ -1005,12 +1012,16 @@ export async function syncPosProducts(req: Request, res: Response): Promise<void
     for (const p of products) {
       const localId = String(p.id || p.productId || '').trim();
       if (!localId) continue;
+      const name = String(p.name || '').trim();
+      const category = String(p.category || '').trim();
+      const icon = resolveProductIconFromPayload({ ...p, name, category });
       const docRef = db.collection('products').doc(`pos-${authResult.auth.storeId}-${localId}`);
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
-        name: String(p.name || '').trim(),
-        category: String(p.category || '').trim(),
+        name,
+        category,
+        icon,
         price: Number(p.price) || 0,
         costPrice: Number(p.costPrice || p.cost_price || p.cost) || 0,
         barcode: String(p.barcode || '').trim(),

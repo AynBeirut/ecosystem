@@ -304,7 +304,7 @@ const AdminDashboard: React.FC = () => {
     { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
     { id: 'classic-template', to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
     { id: 'theme-editor', to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: builderVisible },
-    { id: 'wordpress-builder', to: '/admin/builder', label: 'WordPress Builder', icon: Globe, visible: builderVisible },
+    { id: 'wordpress-builder', to: '/admin/builder', label: 'WordPress', icon: Globe, visible: builderVisible },
     { id: 'marketing', to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
     { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
     { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
@@ -561,7 +561,7 @@ const AdminDashboard: React.FC = () => {
         items: [
           { to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
           { to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: builderVisible },
-          { to: '/admin/builder', label: 'WordPress Builder', icon: Globe, visible: builderVisible },
+          { to: '/admin/builder', label: 'WordPress', icon: Globe, visible: builderVisible },
         ],
       },
       {

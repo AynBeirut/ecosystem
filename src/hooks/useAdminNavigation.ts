@@ -29,7 +29,6 @@ import {
 import { useAuth } from '@/context/useAuth';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { canUseInvoiceManagerApp } from '@/lib/entitlements';
-import { INVOICE_MANAGER_EMBED_URL } from '@/lib/invoiceApp';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 import { canAccessBusinessTools, isManagerSubAccount } from '@/lib/subAccountAccess';
 
@@ -70,7 +69,7 @@ const TEMPLATE_ROUTES = ['/admin/templates', '/admin/theme-editor', '/admin/buil
 
 const BUSINESS_TOOLS_ROUTES = [
   '/admin/finance',
-  '/admin/account-statement',
+  '/admin/invoice-manager',
   '/admin/cash-collection',
   '/admin/delivery-wallet',
   '/admin/staff',
@@ -146,7 +145,7 @@ export function useAdminNavigation() {
   /** Phase 1 field sales — always show for store owners; ModuleGate handles entitlement on routes. */
   const crmEnabled = user?.role === 'admin';
   const invoiceManagerEnabled = canUseBusinessTools && canUseInvoiceManagerApp(profile);
-  /** Legacy Finance Suite hub — hide when Invoice Manager covers the same workflows. */
+  /** Legacy Finance Suite hub — hide when Invoice Manager + Business Finance are available. */
   const financeSuiteVisible = canUseBusinessTools && !invoiceManagerEnabled;
   const builderVisible = user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('builder'));
 
@@ -241,21 +240,21 @@ export function useAdminNavigation() {
         items: [
           { to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
           { to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: builderVisible },
-          { to: '/admin/builder', label: 'WordPress Builder', icon: Globe, visible: builderVisible },
+          { to: '/admin/builder', label: 'WordPress', icon: Globe, visible: builderVisible },
         ],
       },
       {
         id: 'setup_system',
         title: 'Business Tools',
         items: [
-          { to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
+          { to: '/admin/finance/accounting', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
+          { to: '/admin/finance/accounting', label: 'Business Finance', icon: Landmark, visible: invoiceManagerEnabled },
           {
-            to: INVOICE_MANAGER_EMBED_URL,
-            label: 'Business Finance',
-            icon: Landmark,
+            to: '/admin/invoice-manager/invoices',
+            label: 'Invoice Manager',
+            icon: Receipt,
             visible: invoiceManagerEnabled,
           },
-          { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: canUseBusinessTools },
           { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: canUseBusinessTools },
           { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
           { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },

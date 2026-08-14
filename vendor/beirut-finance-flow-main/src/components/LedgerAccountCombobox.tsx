@@ -17,6 +17,9 @@ type Props = {
   pcgClientAccounts?: PcgClientAccount[];
   filterAccounts?: (account: LedgerAccount) => boolean;
   disabled?: boolean;
+  className?: string;
+  /** Show account code only in the closed picker (full label stays in dropdown). */
+  compactSelectedLabel?: boolean;
 };
 
 export function LedgerAccountCombobox({
@@ -29,6 +32,8 @@ export function LedgerAccountCombobox({
   pcgClientAccounts = [],
   filterAccounts,
   disabled,
+  className,
+  compactSelectedLabel,
 }: Props) {
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
 
@@ -43,6 +48,10 @@ export function LedgerAccountCombobox({
     }));
   }, [accounts, accountingLanguage, clientByGrabio, filterAccounts, isLebaneseCoa]);
 
+  const selectedAccount = accounts.find((account) => account.id === value);
+  const displayLabel =
+    compactSelectedLabel && selectedAccount ? selectedAccount.code : undefined;
+
   return (
     <SearchableCombobox
       options={options}
@@ -52,6 +61,8 @@ export function LedgerAccountCombobox({
       searchPlaceholder="Type code or name…"
       emptyText="No accounts found."
       disabled={disabled}
+      className={className}
+      displayLabel={displayLabel}
     />
   );
 }

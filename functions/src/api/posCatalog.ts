@@ -3,6 +3,7 @@ import * as admin from 'firebase-admin';
 import { canUseModule } from '../lib/entitlements';
 import { verifyPosDevice } from '../services/posDeviceAuth';
 import { assertRealStoreForCommerce } from '../services/storeCommerceGuard';
+import { resolveStoredProductIcon } from '../lib/productIcon';
 
 const db = admin.firestore();
 
@@ -44,6 +45,8 @@ export async function getPosCatalog(req: Request, res: Response): Promise<void> 
         recipeId: data.recipeId,
         category: data.category,
         costPrice: data.costPrice,
+        icon: resolveStoredProductIcon(data),
+        image: data.image || data.imageUrl || undefined,
       };
     });
 

@@ -11,6 +11,8 @@ export type Product = {
   name: string;
   slug?: string; // URL-friendly product identifier (e.g., 'iphone-15-pro')
   description: string;
+  /** Batch yield, cook time, recipe math — kitchen/admin only, not on storefront */
+  productionNotes?: string;
   price: number;
   image: string;
   imageAlt?: string;
@@ -27,6 +29,8 @@ export type Product = {
   sku?: string; // Stock Keeping Unit
   barcode?: string; // Barcode for scanning
   costPrice?: number; // Cost to produce/purchase
+  /** Owner's handwritten/list price — kept for reference, not shown publicly until catalog pricing is live */
+  ownerReferencePrice?: number;
   margin?: number; // Profit margin percentage
   taxIncluded?: boolean; // Whether price includes tax
   // Service-specific fields
@@ -37,6 +41,8 @@ export type Product = {
   serviceProviderId?: string; // Staff member providing service
   // Composed product fields
   recipeId?: string; // Link to recipe for composed products
+  /** Emoji or short visual for menu-style catalogs (kitchen / food stores) */
+  icon?: string;
   // Expiry tracking
   expiryTracking?: boolean;
   expiryDate?: string;

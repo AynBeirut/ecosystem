@@ -3,6 +3,7 @@ import { cn } from '@/lib/utils';
 type AdminEmbedLoaderProps = {
   label?: string;
   compact?: boolean;
+  inline?: boolean;
   className?: string;
 };
 
@@ -10,6 +11,7 @@ type AdminEmbedLoaderProps = {
 export default function AdminEmbedLoader({
   label = 'Loading…',
   compact = false,
+  inline = false,
   className,
 }: AdminEmbedLoaderProps) {
   return (
@@ -17,6 +19,7 @@ export default function AdminEmbedLoader({
       className={cn(
         'admin-embed-loader',
         compact && 'admin-embed-loader--compact',
+        inline && 'admin-embed-loader--inline',
         className,
       )}
       aria-busy="true"

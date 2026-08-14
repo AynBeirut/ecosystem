@@ -103,6 +103,11 @@ export interface Receipt {
 
 export interface Invoice {
   id: string; date: string; clientId?: string; clientName: string;
+  invoiceNumber?: string;
+  clientAddress?: string;
+  customerAddress?: string;
+  clientTaxId?: string;
+  customerTaxId?: string;
   items: LineItem[]; amount: number; currency: string;
   status: "draft" | "sent" | "partial" | "paid" | "pending_manual_payment";
   tax?: number; discount?: number;
@@ -288,6 +293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
   const [authReady, setAuthReady] = useState(false);
   const userIdRef = useRef<string | null>(null);
   const userEmailRef = useRef<string | null>(null);
+  const documentCompanyRef = useRef<StoreCompanyView | null>(null);
 
   // Organization state
   const [organizations, setOrganizations] = useState<Organization[]>([]);
@@ -445,6 +451,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     try {
       const { storeId, profile, role } = await resolveGrabioStore(uid, email);
       const company = storeProfileToCompany(profile);
+      documentCompanyRef.current = company;
       const plan = resolveInvoiceAppPlan(profile, email);
       const mapped: Organization[] = [{
         id: storeId,
@@ -454,7 +461,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
         phone: company.phone,
         email: company.email || email,
         website: company.website,
-        taxId: profile.taxId,
+        taxId: company.taxId,
         currency: 'USD',
         plan,
       }];
@@ -563,6 +570,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     const clearSession = () => {
       userIdRef.current = null;
       userEmailRef.current = null;
+      documentCompanyRef.current = null;
       orgIdRef.current = null;
       setFinanceStoreId(null);
       setActiveOrgId(null);
@@ -636,6 +644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     try {
       const { storeId, profile, role } = await resolveGrabioStore(uid, email);
       const company = storeProfileToCompany(profile);
+      documentCompanyRef.current = company;
       const plan = resolveInvoiceAppPlan(profile, email);
       const mapped: Organization[] = [{
         id: storeId,
@@ -645,7 +654,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
         phone: company.phone,
         email: company.email || email,
         website: company.website,
-        taxId: profile.taxId,
+        taxId: company.taxId,
         currency: 'USD',
         plan,
       }];
@@ -1652,7 +1661,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     invoices, estimates, receipts, purchaseOrders, paymentOrders,
     clients, suppliers,
     organization: organizations.find(o => o.id === activeOrganizationId) || null,
-    companyFallback: user?.company,
+    companyFallback: documentCompanyRef.current || user?.company,
   });
 
   const runDocumentAction = async (

@@ -76,6 +76,41 @@ export type EditorPreviewStatePayload = {
 export const EDITOR_PREVIEW_READY = 'grabio:preview-ready';
 export const EDITOR_PREVIEW_STATE = 'grabio:editor-state';
 
+/** Isolated preview entry — never mounts the full admin AuthProvider tree. */
+export const EDITOR_EMBED_PREVIEW_BASE = '/embed/store-preview';
+
+export function isEditorEmbedFrame(): boolean {
+  if (typeof window === 'undefined') return false;
+  if (isEditorEmbedPreviewPath(window.location.pathname)) return true;
+  // Parent iframe sets name="grabio-theme-preview" — fallback for legacy preview URLs.
+  if (window.name === 'grabio-theme-preview') return true;
+  const params = new URLSearchParams(window.location.search);
+  if (params.get('editorEmbed') === '1') return true;
+  if (params.get('editorPreview') !== '1') return false;
+  try {
+    return window.self !== window.top;
+  } catch {
+    return true;
+  }
+}
+
+/** True for theme-editor iframe preview (query param or embed frame). */
+export function isEditorPreviewActive(searchParams: URLSearchParams): boolean {
+  return searchParams.get('editorPreview') === '1' || isEditorEmbedFrame();
+}
+
+export function buildEditorPreviewSrc(storeId: string, slug?: string | null, previewVersion = 0): string {
+  const slugValue = String(slug || '').trim();
+  const path = slugValue
+    ? `${EDITOR_EMBED_PREVIEW_BASE}/store/${encodeURIComponent(slugValue)}`
+    : `${EDITOR_EMBED_PREVIEW_BASE}/store/id/${encodeURIComponent(storeId)}`;
+  return `${path}?editorPreview=1&v=${previewVersion}`;
+}
+
+export function isEditorEmbedPreviewPath(pathname: string): boolean {
+  return pathname === EDITOR_EMBED_PREVIEW_BASE || pathname.startsWith(`${EDITOR_EMBED_PREVIEW_BASE}/`);
+}
+
 export function postEditorPreviewState(
   target: Window | null | undefined,
   payload: EditorPreviewStatePayload,

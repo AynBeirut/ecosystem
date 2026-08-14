@@ -199,3 +199,5 @@
   .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--purple { color: #fff; background-color: rgb(147 51 234); }
   .finance-embed-theme .finance-accounting-tab[data-state="active"] .finance-accounting-tab__icon-wrap--slate { color: #fff; background-color: rgb(71 85 105); }
 }
+
+@import './legacy-erp.css';

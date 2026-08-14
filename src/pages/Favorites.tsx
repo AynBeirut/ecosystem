@@ -5,11 +5,14 @@ import { Heart, Trash2 } from 'lucide-react';
 import Header from '@/components/Header';
 import ProductCard from '@/components/ProductCard';
 import { useFavorites } from '@/context/FavoritesContext';
+import { resolveStoreShopLabel, resolveStoreShopUrl } from '@/lib/storeNavigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 
 const Favorites: React.FC = () => {
   const { favorites, removeFromFavorites } = useFavorites();
+  const shopUrl = resolveStoreShopUrl({ products: favorites });
+  const shopLabel = resolveStoreShopLabel(shopUrl);
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -42,7 +45,7 @@ const Favorites: React.FC = () => {
               <h2 className="text-2xl font-semibold mb-2">No favorites yet</h2>
               <p className="text-gray-600 mb-6">Start adding some products to your favorites.</p>
               <Button asChild>
-                <Link to="/">Explore Products</Link>
+                <Link to={shopUrl}>{shopLabel}</Link>
               </Button>
             </div>
           </Card>

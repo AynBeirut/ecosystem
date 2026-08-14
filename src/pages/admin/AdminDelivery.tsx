@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Clock, Truck, MapPin, Package, Calendar } from 'lucide-react';
+import { Clock, Truck, MapPin, Package, Calendar, UtensilsCrossed } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
@@ -19,6 +19,7 @@ const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
   expressDelivery: false,
   sameDay: false,
   pickup: true,
+  dineIn: false,
   standardTime: '3-5 days',
   expressTime: '1-2 days',
   sameDayTime: '4-6 hours',
@@ -300,6 +301,20 @@ const AdminDelivery: React.FC = () => {
                       onCheckedChange={(checked) => handleSettingChange('pickup', checked)}
                     />
                   </div>
+
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <UtensilsCrossed className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">Dine In</div>
+                        <div className="text-sm text-muted-foreground">Customers can order for in-store dining</div>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={Boolean(deliverySettings.dineIn)}
+                      onCheckedChange={(checked) => handleSettingChange('dineIn', checked)}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </AdminPanel>
@@ -552,7 +567,7 @@ const AdminDelivery: React.FC = () => {
                 <div className="grid grid-cols-2 gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-primary">
-                      {[deliverySettings.standardDelivery, deliverySettings.expressDelivery, deliverySettings.pickup].filter(Boolean).length}
+                      {[deliverySettings.standardDelivery, deliverySettings.expressDelivery, deliverySettings.pickup, deliverySettings.dineIn].filter(Boolean).length}
                     </div>
                     <div className="text-sm text-muted-foreground">Active Options</div>
                   </div>

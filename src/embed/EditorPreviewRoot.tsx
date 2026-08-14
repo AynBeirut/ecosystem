@@ -11,9 +11,25 @@ import type { AuthContextType } from '@/context/AuthContext';
 import { CartProvider } from '@/context/CartContext';
 import { FavoritesProvider } from '@/context/FavoritesContext';
 import StoreDetail from '@/pages/StoreDetail';
+import { EDITOR_EMBED_PREVIEW_BASE } from '@/lib/editorPreviewBridge';
+
+import type { User } from '@/types/product';
+
+const previewUser: User = {
+  id: 'editor-preview',
+  name: 'Preview',
+  email: '',
+  role: 'admin',
+  avatar:
+    'https://ui-avatars.com/api/?name=Preview&background=38B2AC&color=fff',
+  dailyAdsWatched: 0,
+  lastAdWatchDate: new Date().toISOString().split('T')[0],
+  storeId: 'editor-preview',
+  isSeller: true,
+};
 
 const passiveAuth: AuthContextType = {
-  user: null,
+  user: previewUser,
   setUser: () => undefined,
   isLoading: false,
   login: async () => undefined,
@@ -24,20 +40,6 @@ const passiveAuth: AuthContextType = {
   unfollowStore: async () => undefined,
 };
 
-export function isEditorEmbedFrame(): boolean {
-  if (typeof window === 'undefined') return false;
-  // Parent iframe sets name="grabio-theme-preview" — most reliable signal.
-  if (window.name === 'grabio-theme-preview') return true;
-  const params = new URLSearchParams(window.location.search);
-  if (params.get('editorEmbed') === '1') return true;
-  if (params.get('editorPreview') !== '1') return false;
-  try {
-    return window.self !== window.top;
-  } catch {
-    return true;
-  }
-}
-
 const EditorPreviewRoot: React.FC = () => (
   <HelmetProvider>
     <ThemeProvider>
@@ -45,6 +47,7 @@ const EditorPreviewRoot: React.FC = () => (
         <CartProvider>
           <FavoritesProvider>
             <BrowserRouter
+              basename={EDITOR_EMBED_PREVIEW_BASE}
               future={{
                 v7_startTransition: true,
                 v7_relativeSplatPath: true,
@@ -68,3 +71,4 @@ const EditorPreviewRoot: React.FC = () => (
 );
 
 export default EditorPreviewRoot;
+export { isEditorEmbedFrame } from '@/lib/editorPreviewBridge';

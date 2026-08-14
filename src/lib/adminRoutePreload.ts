@@ -15,7 +15,10 @@ const ROUTE_PRELOADERS: Record<string, Preloader> = {
   '/admin/inventory': () => import('@/pages/admin/AdminInventory'),
   '/admin/customers': () => import('@/pages/admin/AdminCustomers'),
   '/admin/purchases': () => import('@/pages/admin/AdminPurchases'),
-  '/admin/finance': () => import('@/pages/admin/AdminFinanceSuite'),
+  '/admin/finance': () => import('@/pages/admin/finance/FinanceModuleShell'),
+  '/admin/finance/accounting': () => import('@/pages/admin/finance/FinanceModuleShell'),
+  '/admin/invoice-manager': () => import('@/pages/admin/invoice-manager/InvoiceManagerModuleShell'),
+  '/admin/invoice-manager/invoices': () => import('@/pages/admin/invoice-manager/InvoiceManagerModuleShell'),
   '/admin/staff': () => import('@/pages/admin/AdminStaff'),
   '/admin/sub-accounts': () => import('@/pages/admin/AdminSubAccounts'),
   '/admin/account-statement': () => import('@/pages/admin/AdminAccountStatement'),
@@ -32,7 +35,13 @@ export function preloadAdminRoute(path: string): void {
   const normalized = path.split('?')[0].replace(/\/$/, '') || '/admin/dashboard';
   const loader =
     ROUTE_PRELOADERS[normalized] ??
-    (normalized.startsWith('/admin/crm') ? ROUTE_PRELOADERS['/admin/crm/pipeline'] : undefined);
+    (normalized.startsWith('/admin/finance')
+      ? ROUTE_PRELOADERS['/admin/finance']
+      : normalized.startsWith('/admin/invoice-manager')
+        ? ROUTE_PRELOADERS['/admin/invoice-manager']
+        : normalized.startsWith('/admin/crm')
+          ? ROUTE_PRELOADERS['/admin/crm/pipeline']
+          : undefined);
 
   if (!loader || preloaded.has(normalized)) return;
   preloaded.add(normalized);

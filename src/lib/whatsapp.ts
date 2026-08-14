@@ -9,6 +9,8 @@ export interface WhatsAppStoreInfo {
   storeName: string;
   whatsappNumber: string;
   currency?: string; // e.g. "USD", "LBP". Defaults to "USD"
+  orderReference?: string;
+  orderId?: string;
 }
 
 /**
@@ -20,7 +22,7 @@ export function buildWhatsAppOrderURL(
   cartItems: WhatsAppCartItem[],
   storeInfo: WhatsAppStoreInfo
 ): string | null {
-  const { storeName, whatsappNumber, currency = 'USD' } = storeInfo;
+  const { storeName, whatsappNumber, currency = 'USD', orderReference, orderId } = storeInfo;
 
   if (!whatsappNumber || cartItems.length === 0) return null;
 
@@ -45,13 +47,22 @@ export function buildWhatsAppOrderURL(
 
   const total = cartItems.reduce((sum, item) => sum + item.price * item.qty, 0);
 
-  const message = [
+  const messageParts = [
     `Hi, I'd like to place an order from ${storeName}:`,
     '',
     itemLines,
     '',
     `Total: ${formatPrice(total)} ${currency}`,
-  ].join('\n');
+  ];
+
+  if (orderReference) {
+    messageParts.push('', `Order reference: ${orderReference}`);
+  }
+  if (orderId) {
+    messageParts.push(`Track: https://grabio.space/track-order?orderId=${orderId}`);
+  }
+
+  const message = messageParts.join('\n');
 
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }

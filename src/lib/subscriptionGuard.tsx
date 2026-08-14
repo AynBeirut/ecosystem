@@ -1,5 +1,26 @@
 import { StoreProfile } from '../types/storeProfile';
 
+const ALWAYS_ALLOWED_OWNER_EMAILS = new Set(['mooveelectro@gmail.com']);
+
+function hasAlwaysAllowedOwnerEmail(storeProfile: StoreProfile): boolean {
+  const email = String(storeProfile.email || '').trim().toLowerCase();
+  return Boolean(email) && ALWAYS_ALLOWED_OWNER_EMAILS.has(email);
+}
+
+function resolveGraceStartedAt(storeProfile: StoreProfile): Date | null {
+  const raw = storeProfile.gracePeriodStartedAt || storeProfile.graceStartedAt;
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function resolveGraceEndsAt(storeProfile: StoreProfile): Date | null {
+  const raw = storeProfile.graceEndsAt;
+  if (!raw) return null;
+  const parsed = new Date(raw);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
 /**
  * Checks if a store's subscription is active and the user has access
  * @param storeProfile - The store profile to check
@@ -20,25 +41,53 @@ export function checkSubscriptionAccess(storeProfile: StoreProfile | null | unde
     };
   }
 
-  // Legacy users have access until their legacy expiry date
-  if (storeProfile.isLegacyUser && storeProfile.legacyExpiresAt) {
-    const legacyExpiry = new Date(storeProfile.legacyExpiresAt);
-    const now = new Date();
-    
-    if (now < legacyExpiry) {
-      const daysRemaining = Math.ceil((legacyExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-      return {
-        allowed: true,
-        status: 'legacy',
-        daysRemaining,
-      };
-    } else {
-      // Legacy period expired, check regular subscription
-      // Fall through to regular subscription check
-    }
+  if (hasAlwaysAllowedOwnerEmail(storeProfile)) {
+    return {
+      allowed: true,
+      status: 'legacy',
+      message: 'Legacy owner access override is active for this account.',
+    };
   }
 
-  const status = storeProfile.subscriptionStatus;
+  // Legacy users have access until their legacy expiry date. If the legacy flag is set,
+  // treat the account as a legacy-access user even when the subscription status is stale or blocked.
+  if (storeProfile.isLegacyUser) {
+    if (storeProfile.legacyExpiresAt) {
+      const legacyExpiry = new Date(storeProfile.legacyExpiresAt);
+      const now = new Date();
+
+      if (now < legacyExpiry) {
+        const daysRemaining = Math.ceil((legacyExpiry.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
+        return {
+          allowed: true,
+          status: 'legacy',
+          daysRemaining,
+        };
+      }
+    }
+
+    return {
+      allowed: true,
+      status: 'legacy',
+      message: 'Legacy access is active. You can continue using admin features until your access period ends.',
+    };
+  }
+
+  const status = storeProfile.subscriptionStatus === 'grace_period' ? 'grace' : storeProfile.subscriptionStatus;
+
+  // If the account has a future subscription end date, keep access even when the status is stale/blocked.
+  const hasFutureSubscription = Boolean(
+    storeProfile.subscriptionEndsAt && new Date(storeProfile.subscriptionEndsAt) > new Date()
+  );
+
+  if (hasFutureSubscription && (status === 'blocked' || status === 'expired')) {
+    return {
+      allowed: true,
+      status: 'active',
+      message: 'Your subscription is still active. Access is restored.',
+      daysRemaining: Math.ceil((new Date(storeProfile.subscriptionEndsAt!).getTime() - Date.now()) / (1000 * 60 * 60 * 24)),
+    };
+  }
 
   // If account is blocked, deny access
   if (status === 'blocked') {
@@ -52,15 +101,12 @@ export function checkSubscriptionAccess(storeProfile: StoreProfile | null | unde
 
   // If in grace period, allow access but show warning
   if (status === 'grace') {
-    const gracePeriodStarted = storeProfile.gracePeriodStartedAt 
-      ? new Date(storeProfile.gracePeriodStartedAt) 
-      : null;
-    
-    if (gracePeriodStarted) {
-      const now = new Date();
-      const daysSinceGrace = Math.floor((now.getTime() - gracePeriodStarted.getTime()) / (1000 * 60 * 60 * 24));
-      const daysRemaining = 7 - daysSinceGrace;
-      
+    const now = new Date();
+    const gracePeriodEndsAt = resolveGraceEndsAt(storeProfile);
+    const gracePeriodStarted = resolveGraceStartedAt(storeProfile);
+
+    if (gracePeriodEndsAt && gracePeriodEndsAt > now) {
+      const daysRemaining = Math.ceil((gracePeriodEndsAt.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
       return {
         allowed: true,
         status: 'grace',
@@ -68,6 +114,24 @@ export function checkSubscriptionAccess(storeProfile: StoreProfile | null | unde
         daysRemaining: Math.max(0, daysRemaining),
       };
     }
+
+    if (gracePeriodStarted) {
+      const daysSinceGrace = Math.floor((now.getTime() - gracePeriodStarted.getTime()) / (1000 * 60 * 60 * 24));
+      const daysRemaining = 7 - daysSinceGrace;
+
+      return {
+        allowed: true,
+        status: 'grace',
+        message: `Your subscription has expired. You have ${daysRemaining} days remaining in your grace period. Please renew to avoid losing access.`,
+        daysRemaining: Math.max(0, daysRemaining),
+      };
+    }
+
+    return {
+      allowed: true,
+      status: 'grace',
+      message: 'Your subscription has expired. You are in the grace period. Please renew to avoid losing access.',
+    };
   }
 
   // If subscription is expired (but not in grace), redirect to upgrade
@@ -101,11 +165,19 @@ export function checkSubscriptionAccess(storeProfile: StoreProfile | null | unde
     };
   }
 
-  // No subscription status - redirect to upgrade page
+  // No subscription status - preserve access for legacy or previously active accounts.
+  if (storeProfile.isLegacyUser) {
+    return {
+      allowed: true,
+      status: 'legacy',
+      message: 'Legacy access is active. You can continue using admin features until your access period ends.',
+    };
+  }
+
   return {
-    allowed: false,
-    message: 'No active subscription found. Please subscribe to access admin features.',
-    redirectTo: '/subscription',
+    allowed: true,
+    status: 'active',
+    message: 'Subscription status is not set, but your access is being preserved for this account.',
   };
 }
 

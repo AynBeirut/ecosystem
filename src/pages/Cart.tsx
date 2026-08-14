@@ -4,7 +4,7 @@ import { Link, useNavigate, useLocation } from 'react-router-dom';
 import Header from '@/components/Header';
 import { Button } from '@/components/ui/button';
 import { useCart } from '@/context/CartContext';
-import { Minus, Plus, Trash2, MapPin } from 'lucide-react';
+import { Minus, Plus, Trash2, MapPin, Truck, UtensilsCrossed } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
@@ -22,7 +22,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
 import { pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
 import ClampedText from '@/components/ClampedText';
+import ProductVisual from '@/components/ProductVisual';
 import { formatMoney } from '@/lib/money/format';
+import { resolveStoreShopLabel, resolveStoreShopUrl } from '@/lib/storeNavigation';
+import { buildProductRelativePath, buildStoreRelativePath, isExternalUrl } from '@/lib/storeUrls';
+import {
+  CustomerFulfillmentMethod,
+  getFulfillmentLabel,
+  getStoreFulfillmentOptions,
+  intersectFulfillmentOptions,
+  fulfillmentRequiresAddress,
+} from '@/lib/fulfillmentOptions';
 
 type StorePaymentMethods = {
   creditCard: boolean;
@@ -41,6 +51,7 @@ type StorePaymentMethods = {
 type CheckoutApiResponse = {
   error?: string;
   orderIds?: string[];
+  invoiceNumbers?: string[];
 };
 
 type PaymentInitResponse = {
@@ -84,8 +95,11 @@ const Cart: React.FC = () => {
     coordinates: { lat: 0, lng: 0 }
   });
   const [availableDeliveryPartners, setAvailableDeliveryPartners] = useState<DeliveryPartnerOption[]>([]);
+  const [availableFulfillmentOptions, setAvailableFulfillmentOptions] = useState<CustomerFulfillmentMethod[]>(['delivery']);
+  const [fulfillmentMethod, setFulfillmentMethod] = useState<CustomerFulfillmentMethod>('delivery');
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
+  const [isWhatsAppOrdering, setIsWhatsAppOrdering] = useState(false);
   const [hasSavedInfo, setHasSavedInfo] = useState(false);
   const [storeCurrencyInfo, setStoreCurrencyInfo] = useState<Record<string, { currency: string; secondaryCurrency?: string; rate?: number }>>({});
   const [whatsappStoreInfo, setWhatsappStoreInfo] = useState<{ number: string; name: string; currency?: string } | null>(null);
@@ -189,6 +203,7 @@ const Cart: React.FC = () => {
 
       const db = getFirestore();
       const storePartnerOptions: DeliveryPartnerOption[][] = [];
+      const storeFulfillmentOptions: CustomerFulfillmentMethod[][] = [];
 
       const buildStorePartnerOptions = (storeData: StoreProfile): DeliveryPartnerOption[] => {
         const settings = storeData.deliverySettings || {};
@@ -209,15 +224,25 @@ const Cart: React.FC = () => {
         try {
           const storeDoc = await getDoc(doc(db, 'storeProfiles', storeId));
           if (storeDoc.exists()) {
-            storePartnerOptions.push(buildStorePartnerOptions(storeDoc.data() as StoreProfile));
+            const storeData = storeDoc.data() as StoreProfile;
+            storePartnerOptions.push(buildStorePartnerOptions(storeData));
+            storeFulfillmentOptions.push(getStoreFulfillmentOptions(storeData.deliverySettings));
           } else {
             storePartnerOptions.push([{ id: 'in_house', name: 'In-house Delivery', type: 'own' }]);
+            storeFulfillmentOptions.push(['delivery']);
           }
         } catch (error) {
           console.error('Error fetching delivery partners for store:', storeId, error);
           storePartnerOptions.push([{ id: 'in_house', name: 'In-house Delivery', type: 'own' }]);
+          storeFulfillmentOptions.push(['delivery']);
         }
       }
+
+      const commonFulfillmentOptions = intersectFulfillmentOptions(storeFulfillmentOptions);
+      setAvailableFulfillmentOptions(commonFulfillmentOptions);
+      setFulfillmentMethod((prev) => (
+        commonFulfillmentOptions.includes(prev) ? prev : commonFulfillmentOptions[0]
+      ));
 
       const firstStorePartners = storePartnerOptions[0] || [];
       const commonPartnerIds = firstStorePartners
@@ -604,6 +629,127 @@ const Cart: React.FC = () => {
     );
   };
 
+  const handleWhatsAppOrder = async () => {
+    if (isCheckingOutRef.current) {
+      toast.error('Checkout already in progress. Please wait...');
+      return;
+    }
+
+    if (items.length === 0) {
+      toast.error('Your cart is empty');
+      return;
+    }
+
+    if (!whatsappStoreInfo) {
+      toast.error('WhatsApp ordering is not available for this store');
+      return;
+    }
+
+    if (!deliveryInfo.phone) {
+      toast.error('Please add your phone number before ordering on WhatsApp');
+      return;
+    }
+
+    if (fulfillmentRequiresAddress(fulfillmentMethod) && !deliveryInfo.address) {
+      toast.error('Please fill in your delivery address');
+      return;
+    }
+
+    localStorage.setItem('deliveryInfo', JSON.stringify(deliveryInfo));
+    isCheckingOutRef.current = true;
+    setIsWhatsAppOrdering(true);
+
+    const db = getFirestore();
+    try {
+      for (const item of items) {
+        const productRef = doc(db, 'products', item.product.id);
+        const productSnap = await getDoc(productRef);
+        if (!productSnap.exists() || !productSnap.data().inStock) {
+          toast.error(`Sorry, ${item.product.name} is out of stock.`);
+          isCheckingOutRef.current = false;
+          setIsWhatsAppOrdering(false);
+          return;
+        }
+      }
+
+      const auth = getAuth();
+      const currentUser = auth.currentUser;
+      const idToken = currentUser ? await currentUser.getIdToken() : null;
+      const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+      const url = `${API_BASE.replace(/\/$/, '')}/checkout`;
+      const checkoutItems = items.map((item) => ({
+        productId: item.product.id,
+        storeId: item.product.storeId,
+        quantity: item.quantity,
+      }));
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(idToken ? { Authorization: `Bearer ${idToken}` } : {}),
+        },
+        body: JSON.stringify({
+          items: checkoutItems,
+          shipping: null,
+          checkoutChannel: 'whatsapp',
+          deliveryInfo: {
+            ...deliveryInfo,
+            name: deliveryInfo.name || user?.name || 'WhatsApp Customer',
+            fulfillmentMethod,
+            deliveryPartnerName: availableDeliveryPartners.find((partner) => partner.id === deliveryInfo.deliveryPartner)?.name || '',
+          },
+        }),
+      });
+
+      let body: CheckoutApiResponse | null = null;
+      const contentType = resp.headers.get('content-type') || '';
+      if (contentType.includes('application/json')) {
+        body = await resp.json();
+      } else {
+        const text = await resp.text();
+        if (!resp.ok) {
+          toast.error('Could not register order: ' + (text || resp.statusText));
+          return;
+        }
+        try { body = JSON.parse(text); } catch { body = null; }
+      }
+
+      if (!resp.ok || !body?.orderIds?.length) {
+        toast.error('Could not register order: ' + (body?.error || resp.statusText));
+        return;
+      }
+
+      const orderId = body.orderIds[0];
+      const orderReference = body.invoiceNumbers?.[0] || orderId.slice(-8).toUpperCase();
+      const waUrl = buildWhatsAppOrderURL(
+        items.map((item) => ({ name: item.product.name, qty: item.quantity, price: item.product.price })),
+        {
+          storeName: whatsappStoreInfo.name,
+          whatsappNumber: whatsappStoreInfo.number,
+          currency: whatsappStoreInfo.currency,
+          orderReference,
+          orderId,
+        },
+      );
+
+      if (!waUrl) {
+        toast.error('Could not open WhatsApp');
+        return;
+      }
+
+      window.open(waUrl, '_blank', 'noopener,noreferrer');
+      clearCart();
+      toast.success(`Order ${orderReference} registered. Finish the chat on WhatsApp — the store will mark it paid.`);
+    } catch (error) {
+      console.error('WhatsApp order failed:', error);
+      toast.error('Failed to register WhatsApp order');
+    } finally {
+      isCheckingOutRef.current = false;
+      setIsWhatsAppOrdering(false);
+    }
+  };
+
   const handleCheckout = async () => {
     if (isCheckingOutRef.current) {
       toast.error('Checkout already in progress. Please wait...');
@@ -615,13 +761,22 @@ const Cart: React.FC = () => {
       return;
     }
     
-    // Validate delivery info for guest checkout (required for all users)
-    if (!deliveryInfo.phone || !deliveryInfo.address) {
-      toast.error('Please fill in your phone number and delivery address');
+    // Validate contact info for all fulfillment types
+    if (!deliveryInfo.phone) {
+      toast.error('Please fill in your phone number');
       return;
     }
 
-    if (availableDeliveryPartners.length > 0 && !deliveryInfo.deliveryPartner) {
+    if (fulfillmentRequiresAddress(fulfillmentMethod) && !deliveryInfo.address) {
+      toast.error('Please fill in your delivery address');
+      return;
+    }
+
+    if (
+      fulfillmentRequiresAddress(fulfillmentMethod)
+      && availableDeliveryPartners.length > 0
+      && !deliveryInfo.deliveryPartner
+    ) {
       toast.error('Please choose a delivery partner');
       return;
     }
@@ -714,6 +869,7 @@ const Cart: React.FC = () => {
           shipping: null,
           deliveryInfo: {
             ...deliveryInfo,
+            fulfillmentMethod,
             deliveryPartnerName: availableDeliveryPartners.find((partner) => partner.id === deliveryInfo.deliveryPartner)?.name || '',
           }
         }),
@@ -867,6 +1023,9 @@ const Cart: React.FC = () => {
     ? { currency: cartCurInfo.secondaryCurrency, rate: cartCurInfo.rate }
     : undefined;
 
+  const continueShoppingUrl = resolveStoreShopUrl({ pathname: location.pathname, items });
+  const continueShoppingLabel = resolveStoreShopLabel(continueShoppingUrl);
+
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
@@ -891,26 +1050,28 @@ const Cart: React.FC = () => {
                         : undefined;
                       return (
                         <li key={item.product.id} className="py-4 flex flex-col sm:flex-row">
-                          <div className="sm:w-24 sm:h-24 mb-4 sm:mb-0 flex-shrink-0">
-                            <img 
-                              src={item.product.image} 
-                              alt={item.product.name} 
-                              className="w-full h-full object-cover rounded-md"
+                          <div className="sm:w-24 sm:h-24 mb-4 sm:mb-0 flex-shrink-0 overflow-hidden rounded-md">
+                            <ProductVisual
+                              product={item.product}
+                              className="w-full h-full object-cover"
                             />
                           </div>
                           <div className="sm:ml-4 flex-grow">
                             <div className="flex flex-col sm:flex-row sm:justify-between">
                               <div>
                                 <h3 className="font-medium text-gray-900 min-w-0">
-                                  <Link 
-                                    to={item.product.slug && item.product.store?.slug 
-                                      ? `/${item.product.store.slug}/product/${item.product.slug}`
-                                      : `/product/id/${item.product.id}`
-                                    } 
-                                    className="hover:text-market-primary block min-w-0"
-                                  >
-                                    <ClampedText text={item.product.name} maxLines={2} className="font-medium text-gray-900" as="span" />
-                                  </Link>
+                                  {(() => {
+                                    const productHref = buildProductRelativePath(
+                                      item.product,
+                                      item.product.store?.slug,
+                                    );
+                                    const label = <ClampedText text={item.product.name} maxLines={2} className="font-medium text-gray-900" as="span" />;
+                                    return isExternalUrl(productHref) ? (
+                                      <a href={productHref} className="hover:text-market-primary block min-w-0">{label}</a>
+                                    ) : (
+                                      <Link to={productHref} className="hover:text-market-primary block min-w-0">{label}</Link>
+                                    );
+                                  })()}
                                 </h3>
                                 <p className="text-sm text-gray-500">
                                   {store?.name}
@@ -977,8 +1138,8 @@ const Cart: React.FC = () => {
                   </ul>
                 </CardContent>
                 <CardFooter className="flex justify-between">
-                  <Button variant="outline" onClick={() => navigate('/')}>
-                    Continue Shopping
+                  <Button variant="outline" onClick={() => navigate(continueShoppingUrl)}>
+                    {continueShoppingLabel}
                   </Button>
                   <Button variant="outline" onClick={() => clearCart()}>
                     Clear Cart
@@ -1083,11 +1244,38 @@ const Cart: React.FC = () => {
                   </div>
                   
                   <Separator />
+
+                  {/* Fulfillment Method */}
+                  <div className="pt-2 space-y-3">
+                    <p className="text-sm font-medium">How would you like to receive your order?</p>
+                    <RadioGroup
+                      value={fulfillmentMethod}
+                      onValueChange={(value) => setFulfillmentMethod(value as CustomerFulfillmentMethod)}
+                      className="grid gap-2"
+                    >
+                      {availableFulfillmentOptions.map((option) => (
+                        <div key={option} className="flex items-center space-x-2 rounded-lg border p-3">
+                          <RadioGroupItem value={option} id={`fulfillment-${option}`} />
+                          <Label htmlFor={`fulfillment-${option}`} className="flex items-center gap-2 cursor-pointer font-normal">
+                            {option === 'delivery' && <Truck size={16} />}
+                            {option === 'pickup' && <MapPin size={16} />}
+                            {option === 'dine_in' && <UtensilsCrossed size={16} />}
+                            {getFulfillmentLabel(option)}
+                          </Label>
+                        </div>
+                      ))}
+                    </RadioGroup>
+                  </div>
+
+                  <Separator />
                   
                   {/* Delivery Information */}
                   <div className="pt-2 space-y-3">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="text-sm font-medium">Delivery Information</p>
+                      <p className="text-sm font-medium">
+                        {fulfillmentRequiresAddress(fulfillmentMethod) ? 'Delivery Information' : 'Contact Information'}
+                      </p>
+                      {fulfillmentRequiresAddress(fulfillmentMethod) && (
                       <div className="flex gap-2">
                         <Button
                           type="button"
@@ -1112,6 +1300,7 @@ const Cart: React.FC = () => {
                           </Button>
                         )}
                       </div>
+                      )}
                     </div>
                     
                     {hasSavedInfo && (
@@ -1164,8 +1353,25 @@ const Cart: React.FC = () => {
                         onChange={(e) => setDeliveryInfo({ ...deliveryInfo, phone: e.target.value })}
                         required
                       />
-                      <p className="text-xs text-gray-500 mt-1">Required to contact you for delivery</p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        {fulfillmentRequiresAddress(fulfillmentMethod)
+                          ? 'Required to contact you for delivery'
+                          : 'Required so we can reach you about your order'}
+                      </p>
                     </div>
+
+                    {!fulfillmentRequiresAddress(fulfillmentMethod) && (
+                      <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg">
+                        <p className="text-xs text-amber-900">
+                          {fulfillmentMethod === 'pickup'
+                            ? 'You chose pick up — no delivery address needed. We will contact you when your order is ready.'
+                            : 'You chose dine in — no delivery address needed. Add table or timing notes below if helpful.'}
+                        </p>
+                      </div>
+                    )}
+
+                    {fulfillmentRequiresAddress(fulfillmentMethod) && (
+                      <>
                     <div>
                       <Label htmlFor="address">Delivery Address *</Label>
                       <Input
@@ -1206,8 +1412,12 @@ const Cart: React.FC = () => {
                         <p className="text-xs text-gray-500 mt-1">Only partners enabled by the store admin are shown.</p>
                       </div>
                     )}
+                      </>
+                    )}
                     <div>
-                      <Label htmlFor="notes">Delivery Notes</Label>
+                      <Label htmlFor="notes">
+                        {fulfillmentRequiresAddress(fulfillmentMethod) ? 'Delivery Notes' : 'Order Notes'}
+                      </Label>
                       <Input
                         id="notes"
                         placeholder="Any special instructions"
@@ -1215,7 +1425,7 @@ const Cart: React.FC = () => {
                         onChange={(e) => setDeliveryInfo({ ...deliveryInfo, notes: e.target.value })}
                       />
                     </div>
-                    {deliveryInfo.coordinates.lat !== 0 && (
+                    {fulfillmentRequiresAddress(fulfillmentMethod) && deliveryInfo.coordinates.lat !== 0 && (
                       <p className="text-xs text-green-600">
                         ✓ Location captured: {deliveryInfo.coordinates.lat.toFixed(4)}, {deliveryInfo.coordinates.lng.toFixed(4)}
                       </p>
@@ -1231,26 +1441,20 @@ const Cart: React.FC = () => {
                     >
                       {isCheckingOut ? 'Placing Order...' : (user ? 'Place Order' : 'Place Order as Guest')}
                     </Button>
-                    {whatsappStoreInfo && (() => {
-                      const waUrl = buildWhatsAppOrderURL(
-                        items.map(item => ({ name: item.product.name, qty: item.quantity, price: item.product.price })),
-                        { storeName: whatsappStoreInfo.name, whatsappNumber: whatsappStoreInfo.number, currency: whatsappStoreInfo.currency }
-                      );
-                      return waUrl ? (
-                        <a
-                          href={waUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="w-full flex items-center justify-center gap-2 rounded-md px-4 py-2 text-sm font-medium text-white bg-[#25D366] hover:bg-[#1ebe5d] transition-colors"
-                        >
-                          <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
-                            <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
-                            <path d="M12 0C5.373 0 0 5.373 0 12c0 2.113.549 4.098 1.51 5.823L0 24l6.335-1.49A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.802 9.802 0 01-5.002-1.373l-.358-.213-3.758.884.944-3.653-.234-.374A9.788 9.788 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
-                          </svg>
-                          Order via WhatsApp
-                        </a>
-                      ) : null;
-                    })()}
+                    {whatsappStoreInfo && (
+                      <Button
+                        type="button"
+                        onClick={handleWhatsAppOrder}
+                        disabled={items.length === 0 || isCheckingOut || isWhatsAppOrdering}
+                        className="w-full flex items-center justify-center gap-2 bg-[#25D366] hover:bg-[#1ebe5d] text-white"
+                      >
+                        <svg viewBox="0 0 24 24" fill="currentColor" className="h-4 w-4" aria-hidden="true">
+                          <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347z"/>
+                          <path d="M12 0C5.373 0 0 5.373 0 12c0 2.113.549 4.098 1.51 5.823L0 24l6.335-1.49A11.945 11.945 0 0012 24c6.627 0 12-5.373 12-12S18.627 0 12 0zm0 21.818a9.802 9.802 0 01-5.002-1.373l-.358-.213-3.758.884.944-3.653-.234-.374A9.788 9.788 0 012.182 12C2.182 6.57 6.57 2.182 12 2.182S21.818 6.57 21.818 12 17.43 21.818 12 21.818z"/>
+                        </svg>
+                        {isWhatsAppOrdering ? 'Registering order...' : 'Order via WhatsApp'}
+                      </Button>
+                    )}
                     {!user && (
                       <p className="text-xs text-gray-500 text-center w-full">
                         Have an account? <a href="/login" className="text-blue-600 hover:underline">Sign in</a> to save your info
@@ -1270,7 +1474,7 @@ const Cart: React.FC = () => {
               <h2 className="text-2xl font-semibold mb-2">Your cart is empty</h2>
               <p className="text-gray-600 mb-6">Looks like you haven't added any products to your cart yet.</p>
               <Button asChild>
-                <Link to="/">Start Shopping</Link>
+                <Link to={continueShoppingUrl}>{continueShoppingLabel}</Link>
               </Button>
             </div>
           </div>

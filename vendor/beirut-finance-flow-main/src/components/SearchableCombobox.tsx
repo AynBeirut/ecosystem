@@ -27,6 +27,8 @@ type SearchableComboboxProps = {
   searchPlaceholder?: string;
   emptyText?: string;
   className?: string;
+  /** Shorter label in the closed trigger; dropdown still uses full option labels. */
+  displayLabel?: string;
   disabled?: boolean;
   /** Custom renderer for each option row. Falls back to plain label text. */
   renderOption?: (option: SearchableOption) => ReactNode;
@@ -45,6 +47,7 @@ export function SearchableCombobox({
   searchPlaceholder = 'Type to search…',
   emptyText = 'No matches.',
   className,
+  displayLabel,
   disabled,
   renderOption,
   onAddNew,
@@ -68,7 +71,7 @@ export function SearchableCombobox({
   }, [options, query]);
 
   return (
-    <div>
+    <div className="min-w-0">
       <Popover open={open} onOpenChange={setOpen}>
         <PopoverTrigger asChild>
           <Button
@@ -77,9 +80,11 @@ export function SearchableCombobox({
             role="combobox"
             aria-expanded={open}
             disabled={disabled}
-            className={cn('w-full justify-between font-normal', className)}
+            className={cn('w-full min-w-0 justify-between font-normal', className)}
           >
-            <span className="truncate text-left">{selected?.label || placeholder}</span>
+            <span className="min-w-0 truncate text-left">
+              {displayLabel ?? selected?.label ?? placeholder}
+            </span>
             <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
           </Button>
         </PopoverTrigger>

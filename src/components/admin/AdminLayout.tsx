@@ -1,12 +1,12 @@
-import React, { Suspense, useEffect, useState } from 'react';
+import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { ChevronDown, CreditCard, FileText } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, CreditCard, FileText } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAdminNavigation, type AdminNavItem } from '@/hooks/useAdminNavigation';
 import MobileHeader from '@/components/MobileHeader';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
-import AdminPageFallback from '@/components/admin/AdminPageFallback';
+import AdminOutletFallback from '@/components/admin/AdminOutletFallback';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { preloadAdminRoute, preloadCommonAdminRoutes } from '@/lib/adminRoutePreload';
 import { doc, getDoc, getFirestore, updateDoc } from 'firebase/firestore';
@@ -57,6 +57,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/delivery': 'Delivery',
   '/admin/builder': 'Store Builder',
   '/admin/templates': 'Templates',
+  '/admin/theme-editor': 'Theme Editor',
   '/admin/announcements': 'Announcements',
   '/admin/analytics': 'Analytics',
   '/admin/revenue': 'Revenue',
@@ -65,8 +66,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/inventory': 'Inventory',
   '/admin/customers': 'Customers',
   '/admin/purchases': 'Purchases',
-  '/admin/finance': 'Finance Suite',
-  '/admin/finance/invoices': 'Invoice Manager',
+  '/admin/finance/account-statement': 'Account Statement',
+  '/admin/invoice-manager': 'Invoice Manager',
+  '/admin/invoice-manager/invoices': 'Invoice Manager',
   '/admin/staff': 'Staff',
   '/admin/sub-accounts': 'Sub-Accounts',
   '/admin/account-statement': 'Account Statement',
@@ -83,6 +85,7 @@ const PAGE_TITLES: Record<string, string> = {
 function resolvePageTitle(pathname: string, fallback: string) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
   if (pathname.startsWith('/admin/crm')) return 'Sales CRM';
+  if (pathname.startsWith('/admin/invoice-manager')) return 'Invoice Manager';
   if (pathname.startsWith('/admin/finance')) return 'Business Finance';
   if (pathname.startsWith('/admin/ai')) return 'AI Tools';
   const segment = pathname.split('/').filter(Boolean).pop();
@@ -95,19 +98,30 @@ function renderSidebarNavItem(
   isRouteActive: (route: string) => boolean,
   activeClass: string,
   inactiveClass: string,
+  collapsed: boolean,
+  onNavigate?: () => void,
 ) {
   const Icon = item.icon;
-  const className = `flex items-center rounded-lg px-2.5 py-2 text-sm transition ${
-    isRouteActive(item.to) ? activeClass : inactiveClass
-  }`;
+  const className = cn(
+    'flex items-center rounded-lg py-2 text-sm transition',
+    collapsed ? 'justify-center px-2 py-2.5' : 'px-2.5',
+    isRouteActive(item.to) ? activeClass : inactiveClass,
+  );
 
   const itemKey = `${item.to}::${item.label}`;
+  const iconClass = cn('h-4 w-4 shrink-0 opacity-80', !collapsed && 'mr-2.5');
 
   if (item.external) {
     return (
-      <a key={itemKey} href={item.to} className={className}>
-        <Icon className="mr-2.5 h-4 w-4 shrink-0 opacity-80" />
-        <span>{item.label}</span>
+      <a
+        key={itemKey}
+        href={item.to}
+        className={className}
+        title={collapsed ? item.label : undefined}
+        onClick={onNavigate}
+      >
+        <Icon className={iconClass} />
+        {!collapsed ? <span>{item.label}</span> : null}
       </a>
     );
   }
@@ -116,12 +130,78 @@ function renderSidebarNavItem(
     <Link
       key={itemKey}
       to={item.to}
+      title={collapsed ? item.label : undefined}
       onMouseEnter={() => preloadAdminRoute(item.to)}
+      onClick={onNavigate}
       className={className}
     >
-      <Icon className="mr-2.5 h-4 w-4 shrink-0 opacity-80" />
-      <span>{item.label}</span>
+      <Icon className={iconClass} />
+      {!collapsed ? <span>{item.label}</span> : null}
     </Link>
+  );
+}
+
+type SidebarMode = 'auto' | 'open';
+
+const SIDEBAR_MODE_KEY = 'grabio-admin-sidebar-mode';
+const SIDEBAR_EXPANDED_KEY = 'grabio-admin-sidebar-expanded';
+
+function readSidebarMode(): SidebarMode {
+  if (typeof window === 'undefined') return 'auto';
+  return window.localStorage.getItem(SIDEBAR_MODE_KEY) === 'open' ? 'open' : 'auto';
+}
+
+function SidebarModeToggle({
+  mode,
+  expanded,
+  onChange,
+}: {
+  mode: SidebarMode;
+  expanded: boolean;
+  onChange: (mode: SidebarMode) => void;
+}) {
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        className="flex h-9 w-9 items-center justify-center rounded-lg border border-white/10 text-[10px] font-bold uppercase tracking-wide text-slate-300 hover:bg-white/5 hover:text-white"
+        title={mode === 'open' ? 'Sidebar pinned open' : 'Sidebar auto-hide'}
+        onClick={() => onChange(mode === 'open' ? 'auto' : 'open')}
+      >
+        {mode === 'open' ? 'O' : 'A'}
+      </button>
+    );
+  }
+
+  return (
+    <div
+      className="mb-3 flex rounded-lg border border-white/10 bg-black/10 p-0.5 text-[11px] font-medium"
+      role="group"
+      aria-label="Sidebar behavior"
+    >
+      <button
+        type="button"
+        className={cn(
+          'flex-1 rounded-md px-2 py-1.5 transition',
+          mode === 'auto' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-300 hover:text-white',
+        )}
+        title="Auto-hide sidebar when you open a page"
+        onClick={() => onChange('auto')}
+      >
+        Auto
+      </button>
+      <button
+        type="button"
+        className={cn(
+          'flex-1 rounded-md px-2 py-1.5 transition',
+          mode === 'open' ? 'bg-teal-600 text-white shadow-sm' : 'text-slate-300 hover:text-white',
+        )}
+        title="Keep sidebar open"
+        onClick={() => onChange('open')}
+      >
+        Open
+      </button>
+    </div>
   );
 }
 
@@ -151,12 +231,75 @@ function AdminLayoutShell() {
   } = useAdminNavigation();
 
   const [storeStatus, setStoreStatus] = useState<'online' | 'offline' | null>(null);
+  const [sidebarMode, setSidebarMode] = useState<SidebarMode>(() => readSidebarMode());
+  const [sidebarExpanded, setSidebarExpanded] = useState(() => {
+    if (typeof window === 'undefined') return true;
+    if (readSidebarMode() === 'open') return true;
+    return window.localStorage.getItem(SIDEBAR_EXPANDED_KEY) !== '0';
+  });
+  const skipInitialCollapse = useRef(true);
   const { theme } = useAdminTheme();
   const pageTitle = resolvePageTitle(location.pathname, dashboardLabel);
+
+  const collapseSidebar = useCallback(() => {
+    if (sidebarMode === 'open') return;
+    setSidebarExpanded(false);
+    window.localStorage.setItem(SIDEBAR_EXPANDED_KEY, '0');
+  }, [sidebarMode]);
+
+  const expandSidebar = useCallback(() => {
+    setSidebarExpanded(true);
+    window.localStorage.setItem(SIDEBAR_EXPANDED_KEY, '1');
+  }, []);
+
+  const toggleSidebar = useCallback(() => {
+    if (sidebarMode === 'open') return;
+    setSidebarExpanded((open) => {
+      const next = !open;
+      window.localStorage.setItem(SIDEBAR_EXPANDED_KEY, next ? '1' : '0');
+      return next;
+    });
+  }, [sidebarMode]);
+
+  const setSidebarBehavior = useCallback((mode: SidebarMode) => {
+    setSidebarMode(mode);
+    window.localStorage.setItem(SIDEBAR_MODE_KEY, mode);
+    if (mode === 'open') {
+      expandSidebar();
+      return;
+    }
+    collapseSidebar();
+  }, [collapseSidebar, expandSidebar]);
+
+  const flatSidebarItems = useMemo(() => {
+    const seen = new Set<string>();
+    return [...menuGroups.daily, ...menuGroups.setup].flatMap((group) =>
+      group.items.filter((item) => {
+        if (!item.visible || seen.has(item.to)) return false;
+        seen.add(item.to);
+        return true;
+      }),
+    );
+  }, [menuGroups.daily, menuGroups.setup]);
 
   useEffect(() => {
     document.title = `${pageTitle} — Grabio`;
   }, [pageTitle]);
+
+  useEffect(() => {
+    if (sidebarMode === 'open' && !sidebarExpanded) {
+      expandSidebar();
+    }
+  }, [expandSidebar, sidebarExpanded, sidebarMode]);
+
+  useEffect(() => {
+    if (sidebarMode === 'open') return;
+    if (skipInitialCollapse.current) {
+      skipInitialCollapse.current = false;
+      return;
+    }
+    collapseSidebar();
+  }, [location.pathname, collapseSidebar, sidebarMode]);
 
   useEffect(() => {
     const schedule = () => preloadCommonAdminRoutes();
@@ -167,6 +310,14 @@ function AdminLayoutShell() {
       if (timeoutId != null) window.clearTimeout(timeoutId);
     };
   }, []);
+
+  useEffect(() => {
+    if (location.pathname.startsWith('/admin/finance')) {
+      preloadAdminRoute('/admin/finance/accounting');
+    } else if (location.pathname.startsWith('/admin/invoice-manager')) {
+      preloadAdminRoute('/admin/invoice-manager/invoices');
+    }
+  }, [location.pathname]);
 
   useEffect(() => {
     const loadStatus = async () => {
@@ -255,19 +406,59 @@ function AdminLayoutShell() {
       </div>
 
       <div className="flex flex-1 min-h-0 min-w-0 items-stretch">
-        <aside className="admin-shell-sidebar hidden lg:flex lg:flex-col w-[17.5rem] shrink-0 self-stretch">
-          <div className="p-5 flex-shrink-0 border-b border-border/50">
-            <Link to="/" className="text-xl font-bold tracking-tight text-white">
-              Grabio
+        <aside
+          className={cn(
+            'admin-shell-sidebar hidden lg:flex lg:flex-col shrink-0 self-stretch relative transition-[width] duration-300 ease-in-out overflow-hidden',
+            sidebarExpanded ? 'w-[17.5rem]' : 'w-16',
+          )}
+        >
+          <button
+            type="button"
+            onClick={toggleSidebar}
+            disabled={sidebarMode === 'open'}
+            className={cn(
+              'admin-shell-sidebar-toggle absolute -right-3 top-5 z-10 flex h-6 w-6 items-center justify-center rounded-full border shadow-sm',
+              sidebarMode === 'open' && 'cursor-default opacity-40',
+            )}
+            aria-label={sidebarExpanded ? 'Collapse sidebar' : 'Expand sidebar'}
+            title={
+              sidebarMode === 'open'
+                ? 'Pinned open — switch to Auto to collapse'
+                : sidebarExpanded
+                  ? 'Collapse menu'
+                  : 'Open menu'
+            }
+          >
+            {sidebarExpanded ? (
+              <ChevronLeft className="h-3.5 w-3.5" aria-hidden />
+            ) : (
+              <ChevronRight className="h-3.5 w-3.5" aria-hidden />
+            )}
+          </button>
+
+          <div className={cn('flex-shrink-0 border-b border-border/50', sidebarExpanded ? 'p-5' : 'p-3')}>
+            <Link
+              to="/"
+              className={cn(
+                'font-bold tracking-tight text-white',
+                sidebarExpanded ? 'text-xl' : 'flex h-9 w-9 items-center justify-center rounded-lg bg-teal-600 text-sm',
+              )}
+              title="Grabio home"
+            >
+              {sidebarExpanded ? 'Grabio' : 'G'}
             </Link>
-            <p className="admin-shell-section-label text-xs mt-1 uppercase tracking-wider">{dashboardLabel}</p>
+            {sidebarExpanded ? (
+              <p className="admin-shell-section-label text-xs mt-1 uppercase tracking-wider">{dashboardLabel}</p>
+            ) : null}
           </div>
 
-          <nav className="flex-1 min-h-0 overflow-y-auto py-4 px-3">
-            <div className="space-y-5">
+          <nav className="flex-1 min-h-0 overflow-y-auto py-4 px-2">
+            {sidebarExpanded ? (
+            <div className="space-y-5 px-1">
               <Link
                 to="/admin/dashboard"
                 onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
+                onClick={collapseSidebar}
                 className={`flex items-center px-3 py-2.5 rounded-xl border transition ${
                   isRouteActive('/admin/dashboard')
                     ? 'bg-teal-500/15 text-teal-300 border-teal-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
@@ -305,6 +496,8 @@ function AdminLayoutShell() {
                                 isRouteActive,
                                 'bg-teal-500/15 text-teal-300',
                                 'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                                false,
+                                collapseSidebar,
                               ),
                             )}
                         </div>
@@ -342,6 +535,8 @@ function AdminLayoutShell() {
                                 isRouteActive,
                                 'bg-indigo-500/15 text-indigo-300',
                                 'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                                false,
+                                collapseSidebar,
                               ),
                             )}
                         </div>
@@ -357,6 +552,7 @@ function AdminLayoutShell() {
                 <Link
                   to="/subscription"
                   onMouseEnter={() => preloadAdminRoute('/subscription')}
+                  onClick={collapseSidebar}
                   className={`flex items-center px-3 py-2.5 text-sm font-medium rounded-xl border transition ${
                     isRouteActive('/subscription')
                       ? 'bg-indigo-500/15 text-indigo-300 border-indigo-500/25'
@@ -378,16 +574,75 @@ function AdminLayoutShell() {
                 <span>Store Owner Guide</span>
               </a>
             </div>
+            ) : (
+            <div className="space-y-1">
+              <Link
+                to="/admin/dashboard"
+                title="Dashboard Home"
+                onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
+                onClick={collapseSidebar}
+                className={cn(
+                  'flex items-center justify-center rounded-lg py-2.5 transition',
+                  isRouteActive('/admin/dashboard')
+                    ? 'bg-teal-500/15 text-teal-300'
+                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                )}
+              >
+                <StoreIcon className="h-4 w-4 shrink-0 opacity-90" />
+              </Link>
+              {flatSidebarItems.map((item) =>
+                renderSidebarNavItem(
+                  item,
+                  isRouteActive,
+                  'bg-teal-500/15 text-teal-300',
+                  'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                  true,
+                  collapseSidebar,
+                ),
+              )}
+              <div className="pt-2 flex justify-center">
+                <AdminThemeToggle variant="compact" className="admin-theme-toggle" />
+              </div>
+              {user?.role === 'admin' ? (
+                <Link
+                  to="/subscription"
+                  title="Subscription"
+                  onMouseEnter={() => preloadAdminRoute('/subscription')}
+                  onClick={collapseSidebar}
+                  className={cn(
+                    'flex items-center justify-center rounded-lg py-2.5 transition',
+                    isRouteActive('/subscription')
+                      ? 'bg-indigo-500/15 text-indigo-300'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                  )}
+                >
+                  <CreditCard className="h-4 w-4 shrink-0 text-teal-400" />
+                </Link>
+              ) : null}
+            </div>
+            )}
           </nav>
 
-          <div className="shrink-0 border-t border-border/50 p-4">
-            <AdminUserStrip variant="sidebar" />
+          <div className={cn('shrink-0 border-t border-border/50', sidebarExpanded ? 'p-4' : 'p-2 flex flex-col items-center gap-2')}>
+            <SidebarModeToggle mode={sidebarMode} expanded={sidebarExpanded} onChange={setSidebarBehavior} />
+            {sidebarExpanded ? (
+              <AdminUserStrip variant="sidebar" />
+            ) : (
+              <button
+                type="button"
+                onClick={expandSidebar}
+                className="h-9 w-9 rounded-lg bg-gradient-to-br from-teal-500 to-teal-700 flex items-center justify-center text-white text-sm font-semibold shadow-md"
+                title="Open menu"
+              >
+                {(user?.name ? String(user.name).charAt(0) : 'G')}
+              </button>
+            )}
           </div>
         </aside>
 
         <main className="flex-1 min-w-0 min-h-0 p-4 md:p-6">
           <div className="mx-auto w-full max-w-screen-2xl">
-            <Suspense fallback={<AdminPageFallback />}>
+            <Suspense fallback={<AdminOutletFallback />}>
               <Outlet />
             </Suspense>
           </div>

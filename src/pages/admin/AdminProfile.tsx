@@ -1,11 +1,10 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { getFirestore, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { getFirestore, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { consumePackageDraftForStore } from '@/lib/applyPackageDraft';
 import { getAuth, multiFactor, TotpMultiFactorGenerator, type MultiFactorInfo, type TotpSecret } from 'firebase/auth';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId, resolveStoreIdForAuthUser } from '@/lib/storeUtils';
-import { mapGrabioInvoiceTemplateToFinance } from '@/lib/invoiceTemplateMap';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,12 +13,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
-import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil, ImagePlus, Palette, GripVertical, ChevronUp, ChevronDown, Globe } from 'lucide-react';
+import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil, ImagePlus, Palette, GripVertical, ChevronUp, ChevronDown, Globe, QrCode, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting, AiModelPricingSetting } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
+import { buildStorePublicUrl, buildStoreQrCodeUrl, buildStoreQrTargetUrl } from '@/lib/storeUrls';
 import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
 import { SUPPORTED_CURRENCIES, normalizeCurrencyCode } from '@/lib/money/currencies';
 import { formatMoney } from '@/lib/money/format';
@@ -34,7 +34,8 @@ import {
   normalizeAccountingMode,
   supportsArabicEntry,
 } from '@/lib/accountingMode';
-import { resolveAccountingModeLocked } from '@/lib/accountingModeLock';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 type DomainDnsRecord = {
   type: string;
@@ -127,7 +128,6 @@ function buildProfileSavePayload(
     description: data.description,
     invoiceNumberPrefix: data.invoiceNumberPrefix,
     lastInvoiceNumber: data.lastInvoiceNumber,
-    invoiceTemplate: data.invoiceTemplate,
     mainCurrency: normalizeCurrencyCode(data.mainCurrency),
     numberFormat: data.numberFormat === 'compact' ? 'compact' : 'full',
     accountingMode: normalizeAccountingMode(data.accountingMode),
@@ -139,17 +139,6 @@ function buildProfileSavePayload(
     customExchangeRate: typeof data.customExchangeRate === 'number' && data.customExchangeRate > 0
       ? data.customExchangeRate
       : 0,
-    financeDocumentSettings: {
-      invoiceTemplate: mapGrabioInvoiceTemplateToFinance(data.invoiceTemplate),
-      ...(data.templateColors?.primary != null
-        ? { primaryColor: data.templateColors.primary }
-        : {}),
-      ...(data.templateColors?.secondary != null
-        ? { secondaryColor: data.templateColors.secondary }
-        : data.templateColors?.highlight != null
-          ? { secondaryColor: data.templateColors.highlight }
-          : {}),
-    },
     taxNumber: data.taxNumber,
     productCategories: data.productCategories,
     priceMultiplier: data.priceMultiplier,
@@ -432,6 +421,11 @@ const AdminProfile: React.FC = () => {
   const [slugSuggestions, setSlugSuggestions] = useState<string[]>([]);
   const [isCheckingSlug, setIsCheckingSlug] = useState(false);
   const [slugAvailable, setSlugAvailable] = useState(false);
+  const [showStoreQr, setShowStoreQr] = useState(false);
+  const [qrDestination, setQrDestination] = useState<'home' | 'product'>('home');
+  const [qrProductId, setQrProductId] = useState('');
+  const [qrProducts, setQrProducts] = useState<Array<{ id: string; name: string; slug?: string }>>([]);
+  const [isLoadingQrProducts, setIsLoadingQrProducts] = useState(false);
   const [newPageName, setNewPageName] = useState<string>('');
   const [isRegisteringDomain, setIsRegisteringDomain] = useState(false);
   const [isCheckingDomainStatus, setIsCheckingDomainStatus] = useState(false);
@@ -460,6 +454,61 @@ const AdminProfile: React.FC = () => {
   const setProfileSectionOpen = (id: ProfileSectionId, open: boolean) => {
     setOpenProfileSections((prev) => ({ ...prev, [id]: open }));
   };
+
+  const selectedQrProduct = useMemo(
+    () => qrProducts.find((product) => product.id === qrProductId) ?? null,
+    [qrProducts, qrProductId],
+  );
+
+  const qrTargetUrl = useMemo(() => {
+    if (!formData.slug?.trim()) return '';
+    if (qrDestination === 'product' && selectedQrProduct) {
+      const productPathSlug = selectedQrProduct.slug?.trim() || selectedQrProduct.id;
+      return buildStoreQrTargetUrl(formData.slug, 'product', productPathSlug);
+    }
+    return buildStoreQrTargetUrl(formData.slug, 'home');
+  }, [formData.slug, qrDestination, selectedQrProduct]);
+
+  useEffect(() => {
+    if (!showStoreQr || !profileStoreId) return;
+
+    let cancelled = false;
+    const loadQrProducts = async () => {
+      setIsLoadingQrProducts(true);
+      try {
+        const db = getFirestore();
+        const productsQuery = query(collection(db, 'products'), where('storeId', '==', profileStoreId));
+        const snap = await getDocs(productsQuery);
+        if (cancelled) return;
+
+        const items = snap.docs
+          .map((docSnap) => {
+            const data = docSnap.data();
+            const name = typeof data.name === 'string' ? data.name.trim() : '';
+            if (!name) return null;
+            return {
+              id: docSnap.id,
+              name,
+              slug: typeof data.slug === 'string' ? data.slug.trim() : undefined,
+            };
+          })
+          .filter((item): item is { id: string; name: string; slug?: string } => item !== null)
+          .sort((a, b) => a.name.localeCompare(b.name));
+
+        setQrProducts(items);
+        setQrProductId((prev) => (prev && items.some((item) => item.id === prev) ? prev : items[0]?.id ?? ''));
+      } catch {
+        if (!cancelled) setQrProducts([]);
+      } finally {
+        if (!cancelled) setIsLoadingQrProducts(false);
+      }
+    };
+
+    void loadQrProducts();
+    return () => {
+      cancelled = true;
+    };
+  }, [showStoreQr, profileStoreId]);
 
   const refreshMfaStatus = async () => {
     const auth = getAuth();
@@ -638,7 +687,7 @@ const AdminProfile: React.FC = () => {
     const storeName = formData.name || 'Your Store';
     const contactEmail = formData.email || 'support@example.com';
     const contactPhone = formData.phone || '';
-    const website = formData.website || `https://grabio.space/${formData.slug || ''}`;
+    const website = formData.website || (formData.slug ? buildStorePublicUrl(formData.slug) : '');
     const today = new Date().toISOString().slice(0, 10);
 
     const policy = [
@@ -1289,7 +1338,6 @@ const AdminProfile: React.FC = () => {
         const displayName = String(formData.name || '').trim();
         const mergedFinance = stripUndefinedDeep({
           ...existingFinance,
-          ...(payload.financeDocumentSettings as Record<string, unknown>),
         });
 
         // 1) Small identity write first (reliable for invoices/PDFs)
@@ -1309,7 +1357,6 @@ const AdminProfile: React.FC = () => {
           accountingLanguage: normalizeAccountingLanguage(formData.accountingLanguage, nextAccountingMode),
           invoiceNumberPrefix: formData.invoiceNumberPrefix || '',
           lastInvoiceNumber: formData.lastInvoiceNumber ?? 0,
-          invoiceTemplate: formData.invoiceTemplate || 'modern',
           financeDocumentSettings: mergedFinance,
         };
         if (logoFile && formData.logo) {
@@ -1382,7 +1429,7 @@ const AdminProfile: React.FC = () => {
               <p className="font-medium text-sm">Storefront pages &amp; theme</p>
               <p className="text-xs text-muted-foreground mt-0.5">
                 Homepage sections, colors, and store copy — Theme Editor (requires Builder module).
-                Invoice logo and template are in <strong>Invoice Settings</strong> below.
+                A4 invoice logo and template are in <strong>Business Finance → Settings → Documents</strong>.
               </p>
             </div>
             <Button type="button" variant="default" onClick={() => navigate('/admin/theme-editor')}>
@@ -1428,7 +1475,7 @@ const AdminProfile: React.FC = () => {
             <CardHeader>
               <CardTitle>Business Identity</CardTitle>
               <CardDescription>
-                Name and address shown on invoices and official documents
+                Store name, URL, and shop logo (website header — separate from A4 invoice logo)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -1494,8 +1541,116 @@ const AdminProfile: React.FC = () => {
                       )}
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">
-                      https://grabio.space/{formData.slug || 'your-store-name'}
+                      {formData.slug ? buildStorePublicUrl(formData.slug) : 'https://your-store.grabio.space'}
                     </p>
+                    {formData.slug && (
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => setShowStoreQr((prev) => !prev)}
+                        >
+                          <QrCode className="h-4 w-4 mr-2" />
+                          {showStoreQr ? 'Hide QR Code' : 'Generate QR Code'}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            void navigator.clipboard.writeText(buildStorePublicUrl(formData.slug || ''));
+                            toast({ title: 'Copied', description: 'Store link copied to clipboard.' });
+                          }}
+                        >
+                          <Copy className="h-4 w-4 mr-2" />
+                          Copy Link
+                        </Button>
+                      </div>
+                    )}
+                    {showStoreQr && formData.slug && (
+                      <div className="mt-4 flex flex-col items-start gap-3 rounded-lg border p-4 bg-muted/30 w-full max-w-md">
+                        <div className="w-full space-y-3">
+                          <Label className="text-sm font-medium">QR code opens</Label>
+                          <RadioGroup
+                            value={qrDestination}
+                            onValueChange={(value) => setQrDestination(value as 'home' | 'product')}
+                            className="grid gap-2"
+                          >
+                            <label htmlFor="qr-home" className="flex items-center gap-2 text-sm cursor-pointer">
+                              <RadioGroupItem value="home" id="qr-home" />
+                              Store home page
+                            </label>
+                            <label htmlFor="qr-product" className="flex items-center gap-2 text-sm cursor-pointer">
+                              <RadioGroupItem value="product" id="qr-product" />
+                              Product page directly
+                            </label>
+                          </RadioGroup>
+
+                          {qrDestination === 'product' && (
+                            <div className="space-y-2">
+                              <Label htmlFor="qr-product-select" className="text-sm">Choose product</Label>
+                              {isLoadingQrProducts ? (
+                                <p className="text-xs text-muted-foreground">Loading products…</p>
+                              ) : qrProducts.length === 0 ? (
+                                <p className="text-xs text-muted-foreground">Add at least one product to generate a product QR.</p>
+                              ) : (
+                                <Select value={qrProductId} onValueChange={setQrProductId}>
+                                  <SelectTrigger id="qr-product-select">
+                                    <SelectValue placeholder="Select a product" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {qrProducts.map((product) => (
+                                      <SelectItem key={product.id} value={product.id}>
+                                        {product.name}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              )}
+                            </div>
+                          )}
+                        </div>
+
+                        {qrTargetUrl && (qrDestination === 'home' || selectedQrProduct) && (
+                          <>
+                            <img
+                              src={buildStoreQrCodeUrl(qrTargetUrl)}
+                              alt={`QR code for ${formData.slug}.grabio.space`}
+                              className="h-48 w-48 rounded-md border bg-white p-2"
+                            />
+                            <p className="text-xs text-muted-foreground break-all">{qrTargetUrl}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {qrDestination === 'product'
+                                ? 'Scan to open this product — ideal for menu items, shelf tags, or packaging.'
+                                : 'Scan to open your store — print for table tents, packaging, or social posts.'}
+                            </p>
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() => {
+                                  void navigator.clipboard.writeText(qrTargetUrl);
+                                  toast({ title: 'Copied', description: 'QR link copied to clipboard.' });
+                                }}
+                              >
+                                <Copy className="h-4 w-4 mr-2" />
+                                Copy QR Link
+                              </Button>
+                              <Button
+                                type="button"
+                                variant="secondary"
+                                size="sm"
+                                onClick={() => window.open(buildStoreQrCodeUrl(qrTargetUrl, 512), '_blank', 'noopener,noreferrer')}
+                              >
+                                Download QR (large)
+                              </Button>
+                            </div>
+                          </>
+                        )}
+                      </div>
+                    )}
                     {slugError && (
                       <div className="mt-2">
                         <p className="text-xs text-red-500 mb-2">{slugError}</p>
@@ -1537,6 +1692,33 @@ const AdminProfile: React.FC = () => {
                   placeholder="https://your-website.com"
                 />
               </div>
+
+              <div>
+                <Label htmlFor="storeLogo">Store logo (shop &amp; website)</Label>
+                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-4">
+                  {logoPreview ? (
+                    <img
+                      src={logoPreview}
+                      alt="Store logo preview"
+                      className="h-16 w-auto max-w-[200px] rounded border bg-white object-contain p-1"
+                    />
+                  ) : (
+                    <div className="h-16 w-28 rounded border border-dashed flex items-center justify-center text-xs text-muted-foreground">
+                      No logo
+                    </div>
+                  )}
+                  <Input
+                    id="storeLogo"
+                    type="file"
+                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                    onChange={handleLogoChange}
+                    className="max-w-sm"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Used on your storefront and marketplace card — not on A4 invoices (set those under Business Finance).
+                </p>
+              </div>
             </CardContent>
           </AdminPanel>
 
@@ -1545,7 +1727,7 @@ const AdminProfile: React.FC = () => {
             <CardHeader>
               <CardTitle>Contact Information</CardTitle>
               <CardDescription>
-                Contact details printed on invoices and business documents
+                Contact details for your store (A4 document block can override in Business Finance)
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -2313,8 +2495,8 @@ const AdminProfile: React.FC = () => {
           {/* Invoice Configuration */}
           <ProfileCollapsibleSection
             id="invoice"
-            title="Invoice Settings"
-            description="Customize invoice appearance and numbering"
+            title="Invoice numbering"
+            description="Prefix and sequence — A4 layout and document logo are in Business Finance"
             open={isProfileSectionOpen('invoice')}
             onOpenChange={(open) => setProfileSectionOpen('invoice', open)}
           >
@@ -2347,6 +2529,15 @@ const AdminProfile: React.FC = () => {
                     Next invoice: {(formData.invoiceNumberPrefix || 'INV')}-{String((formData.lastInvoiceNumber || 0) + 1).padStart(3, '0')}
                   </p>
                 </div>
+              </div>
+
+              <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/80 p-4 text-sm text-muted-foreground">
+                <strong className="text-slate-800">A4 invoice template</strong> (logo, company block, print layout) uses the{' '}
+                <strong className="text-slate-800">Logo</strong> and company fields above; open{' '}
+                <a href="/admin/invoice-manager/invoices" className="text-teal-700 font-medium hover:underline">
+                  Invoice Manager
+                </a>{' '}
+                to preview printed invoices.
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">
@@ -2486,50 +2677,6 @@ const AdminProfile: React.FC = () => {
                     </p>
                   </div>
                 )}
-              </div>
-
-              <div>
-                <Label htmlFor="invoiceLogo">Company logo (invoices &amp; PDFs)</Label>
-                <div className="mt-2 flex flex-col sm:flex-row sm:items-center gap-4">
-                  {logoPreview ? (
-                    <img
-                      src={logoPreview}
-                      alt="Company logo preview"
-                      className="h-16 w-auto max-w-[200px] rounded border bg-white object-contain p-1"
-                    />
-                  ) : (
-                    <div className="h-16 w-28 rounded border border-dashed flex items-center justify-center text-xs text-muted-foreground">
-                      No logo
-                    </div>
-                  )}
-                  <Input
-                    id="invoiceLogo"
-                    type="file"
-                    accept="image/png,image/jpeg,image/webp,image/svg+xml"
-                    onChange={handleLogoChange}
-                    className="max-w-sm"
-                  />
-                </div>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Shown on invoices, estimates, and receipts. PNG or JPG recommended. Save Changes after upload.
-                </p>
-              </div>
-
-              <div>
-                <Label htmlFor="invoiceTemplate">Invoice Template</Label>
-                <select
-                  id="invoiceTemplate"
-                  value={formData.invoiceTemplate || 'modern'}
-                  onChange={(e) => setFormData(prev => ({ ...prev, invoiceTemplate: e.target.value as 'modern' | 'classic' | 'vibrant' }))}
-                  className="w-full p-2 border rounded-md"
-                >
-                  <option value="modern">Modern (Blue/Teal)</option>
-                  <option value="classic">Classic (Black/Gold)</option>
-                  <option value="vibrant">Vibrant (Orange/Purple)</option>
-                </select>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Choose the design style for your invoices
-                </p>
               </div>
 
               <div>
@@ -3285,7 +3432,7 @@ const AdminProfile: React.FC = () => {
             <Button
               type="button"
               variant="secondary"
-              onClick={() => window.open(`/store/${formData.slug}`, '_blank', 'noopener,noreferrer')}
+              onClick={() => window.open(buildStorePublicUrl(formData.slug || ''), '_blank', 'noopener,noreferrer')}
               disabled={!formData.slug}
             >
               Visit Store Profile

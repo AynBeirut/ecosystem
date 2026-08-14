@@ -3,12 +3,14 @@ import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useAuth } from '@/context/useAuth';
 import { Navigate, Link, useLocation, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
+import { auth } from '@/lib/firebase';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import ModuleGate from '@/components/ModuleGate';
 import { checkSubscriptionAccess } from '@/lib/subscriptionGuard';
 import type { StoreProfile } from '@/types/storeProfile';
 import { getActualStoreId } from '@/lib/storeUtils';
 import AdminEmbedLoader from '@/components/admin/AdminEmbedLoader';
+import FinanceModuleLoadingShell from '@/pages/admin/finance/FinanceModuleLoadingShell';
 
 
 const ProtectedRoute: React.FC<{ 
@@ -27,6 +29,26 @@ const ProtectedRoute: React.FC<{
   const [subscriptionMessage, setSubscriptionMessage] = useState('');
   const subscriptionAllowedRef = useRef(false);
   const ipAllowedRef = useRef(false);
+  const lastKnownUserRef = useRef(user);
+  const authRecoveryUntilRef = useRef(0);
+
+  const isBuilderAuthGracePath = useMemo(
+    () =>
+      location.pathname.startsWith('/admin/theme-editor') ||
+      location.pathname.startsWith('/admin/templates'),
+    [location.pathname],
+  );
+
+  useEffect(() => {
+    if (user) {
+      lastKnownUserRef.current = user;
+      authRecoveryUntilRef.current = 0;
+      return;
+    }
+    if ((lastKnownUserRef.current || auth.currentUser) && authRecoveryUntilRef.current === 0) {
+      authRecoveryUntilRef.current = Date.now() + (isBuilderAuthGracePath ? 15000 : 2500);
+    }
+  }, [user, isBuilderAuthGracePath]);
 
   const loadingTitle = useMemo(() => {
     const path = location.pathname;
@@ -39,11 +61,28 @@ const ProtectedRoute: React.FC<{
     return 'Loading';
   }, [location.pathname]);
 
-  const LoadingShell = () => (
-    <div className="flex min-h-[40vh] items-center justify-center py-12">
-      <AdminEmbedLoader label={`Opening ${loadingTitle}…`} compact />
-    </div>
-  );
+  const LoadingShell = ({ message }: { message?: string } = {}) => {
+    const path = location.pathname;
+    const label = message || `Opening ${loadingTitle}…`;
+    if (path.startsWith('/admin/theme-editor')) {
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#f6f6f7]">
+          <AdminEmbedLoader label={label} compact />
+        </div>
+      );
+    }
+    if (path.startsWith('/admin/finance')) {
+      return <FinanceModuleLoadingShell variant="finance" message={label} />;
+    }
+    if (path.startsWith('/admin/invoice-manager')) {
+      return <FinanceModuleLoadingShell variant="invoice" message={label} />;
+    }
+    return (
+      <div className="flex min-h-[40vh] items-center justify-center py-12">
+        <AdminEmbedLoader label={label} compact />
+      </div>
+    );
+  };
 
   const requiresAdminIpCheck = useMemo(() => {
     return Boolean(allowedRoles && allowedRoles.includes('admin') && user?.role === 'admin');
@@ -215,7 +254,13 @@ const ProtectedRoute: React.FC<{
         const profile = profileSnap.exists()
           ? ({ id: storeId, ...profileSnap.data() } as StoreProfile)
           : null;
-        const access = checkSubscriptionAccess(profile);
+        const profileForAccess = profile
+          ? ({
+              ...profile,
+              email: String(profile.email || (user as { email?: string })?.email || ''),
+            } as StoreProfile)
+          : null;
+        const access = checkSubscriptionAccess(profileForAccess);
 
         if (!cancelled) {
           if (access.allowed) {
@@ -225,7 +270,7 @@ const ProtectedRoute: React.FC<{
             subscriptionAllowedRef.current = false;
             setSubscriptionState('blocked');
             setSubscriptionMessage(access.message || 'No active subscription found.');
-            if (access.redirectTo) {
+            if (access.redirectTo && access.redirectTo !== '/blocked') {
               navigate(access.redirectTo, { replace: true, state: { from: location } });
             }
           }
@@ -252,6 +297,21 @@ const ProtectedRoute: React.FC<{
 
   if (!user) {
     const dest = `${location.pathname}${location.search}`;
+    const firebaseSignedIn = Boolean(auth.currentUser);
+
+    if (firebaseSignedIn) {
+      return <LoadingShell message="Restoring your session…" />;
+    }
+
+    const canRecoverAuth =
+      isBuilderAuthGracePath &&
+      Boolean(lastKnownUserRef.current) &&
+      Date.now() < authRecoveryUntilRef.current;
+
+    if (canRecoverAuth) {
+      return <LoadingShell message="Restoring your session…" />;
+    }
+
     if (dest && dest !== '/login' && !dest.startsWith('/login?')) {
       try {
         localStorage.setItem('redirectAfterLogin', dest);

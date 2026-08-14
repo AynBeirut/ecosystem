@@ -9,7 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Badge } from "@/components/ui/badge";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
-import { formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useAppContext } from "@/context/AppContext";
 import { SearchableCombobox, type SearchableOption } from "@/components/SearchableCombobox";
 import InvoiceAllocationDialog from "@/components/InvoiceAllocationDialog";
@@ -25,9 +25,12 @@ import type {
 import type { Invoice, PurchaseOrder } from "@/types/index";
 import { type AccountingLanguage } from "@/lib/grabio/accountingMode";
 import { mapGrabioCodeToPcg } from "@/lib/ledger/grabioToPcgMap";
-import { isAccountsPayableCode, isAccountsReceivableCode } from "@/lib/ledger/accountControlCodes";
+import { isAccountsPayableCode, isAccountsReceivableCode, isCashOrBankCode, pickDefaultApAccount, pickDefaultArAccount } from "@/lib/ledger/accountControlCodes";
 import { buildOpenInvoices, buildOpenPurchaseOrders, validateAllocations } from "@/lib/ledger/openItems";
 import { loadCostCenters } from "@/lib/firestore/costCentersFirestore";
+import VoucherRegisterPanel, { type RegisterFilter } from "@/components/VoucherRegisterPanel";
+import type { JournalEntry, JournalLine } from "@/types/generalLedger";
+import { buildClientByGrabioMap, resolvePcgDisplay } from "@/lib/ledger/grabioToPcgMap";
 
 type DraftLine = {
   accountId: string;
@@ -70,20 +73,13 @@ type Props = {
     lines: JournalLineInput[];
     voucherMeta?: Record<string, unknown>;
   }) => void;
-  onSaveDraft?: (payload: {
-    voucherType: VoucherType;
-    date: string;
-    memo: string;
-    lines: JournalLineInput[];
-    voucherMeta?: Record<string, unknown>;
-  }) => void;
-  onSubmitForApproval?: (payload: {
-    voucherType: VoucherType;
-    date: string;
-    memo: string;
-    lines: JournalLineInput[];
-    voucherMeta?: Record<string, unknown>;
-  }) => void;
+  registerEntries?: JournalEntry[];
+  registerLines?: JournalLine[];
+  systemGuideEnabled?: boolean;
+  onRegisterPostDraft?: (entryId: string) => void;
+  postingRegisterDraft?: boolean;
+  onRegisterReverse?: (entryId: string) => void;
+  reversingRegister?: boolean;
 };
 
 function activeAccounts(accounts: LedgerAccount[], isLebaneseCoa?: boolean) {
@@ -125,6 +121,36 @@ function mapDraftLine(line: DraftLine, mainCurrency?: string): JournalLineInput 
   };
 }
 
+function mirrorJvAmount(
+  lines: DraftLine[],
+  idx: number,
+  field: "debit" | "credit",
+  value: string,
+): DraftLine[] {
+  const next = lines.map((line) => ({ ...line }));
+  if (field === "debit") {
+    next[idx] = { ...next[idx], debit: value, credit: value ? "" : next[idx].credit };
+  } else {
+    next[idx] = { ...next[idx], credit: value, debit: value ? "" : next[idx].debit };
+  }
+
+  const pairIdx = idx === 0 ? 1 : idx === 1 ? 0 : -1;
+  if (pairIdx < 0 || pairIdx >= next.length) return next;
+
+  if (!value.trim()) {
+    if (field === "debit") next[pairIdx] = { ...next[pairIdx], credit: "" };
+    else next[pairIdx] = { ...next[pairIdx], debit: "" };
+    return next;
+  }
+
+  if (field === "debit") {
+    next[pairIdx] = { ...next[pairIdx], credit: value, debit: "" };
+  } else {
+    next[pairIdx] = { ...next[pairIdx], debit: value, credit: "" };
+  }
+  return next;
+}
+
 export default function VoucherEntryPanel({
   storeId,
   accounts,
@@ -138,15 +164,25 @@ export default function VoucherEntryPanel({
   mainCurrency,
   posting,
   onPost,
-  onSaveDraft,
-  onSubmitForApproval,
+  registerEntries = [],
+  registerLines = [],
+  systemGuideEnabled = false,
+  onRegisterPostDraft,
+  postingRegisterDraft,
+  onRegisterReverse,
+  reversingRegister,
 }: Props) {
   const { clients = [], suppliers = [] } = useAppContext() as {
     clients?: Array<{ id: string; name: string; email?: string; phone?: string }>;
     suppliers?: Array<{ id: string; name: string; email?: string; phone?: string }>;
   };
   const accts = useMemo(() => activeAccounts(accounts, isLebaneseCoa), [accounts, isLebaneseCoa]);
+  const cashBankAccounts = useMemo(
+    () => accts.filter((account) => isCashOrBankCode(account.code)),
+    [accts],
+  );
   const acctById = useMemo(() => new Map(accts.map((a) => [a.id, a])), [accts]);
+  const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
   const [costCenters, setCostCenters] = useState<LedgerCostCenter[]>([]);
   const [voucherTab, setVoucherTab] = useState<VoucherType>("JV");
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
@@ -165,7 +201,6 @@ export default function VoucherEntryPanel({
   } | null>(null);
 
   const [pvFrom, setPvFrom] = useState("");
-  const [pvTo, setPvTo] = useState("");
   const [pvAmount, setPvAmount] = useState("");
   const [pvPayee, setPvPayee] = useState("");
   const [pvSupplierId, setPvSupplierId] = useState("");
@@ -173,7 +208,6 @@ export default function VoucherEntryPanel({
   const [pvCheckNumber, setPvCheckNumber] = useState("");
 
   const [rvInto, setRvInto] = useState("");
-  const [rvFrom, setRvFrom] = useState("");
   const [rvAmount, setRvAmount] = useState("");
   const [rvPayer, setRvPayer] = useState("");
   const [rvClientId, setRvClientId] = useState("");
@@ -183,6 +217,14 @@ export default function VoucherEntryPanel({
   const [cvTo, setCvTo] = useState("");
   const [cvAmount, setCvAmount] = useState("");
   const [cvRef, setCvRef] = useState("");
+
+  const registerFilter = useMemo<RegisterFilter>(() => {
+    if (voucherTab === "JV") return "jv";
+    if (voucherTab === "PV") return "pv";
+    if (voucherTab === "RV") return "rv";
+    if (voucherTab === "CV") return "cv";
+    return "all";
+  }, [voucherTab]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -304,8 +346,8 @@ export default function VoucherEntryPanel({
     setPendingPost(null);
   };
 
-  const postJv = (mode: 'post' | 'draft' | 'pending' = 'post') => {
-    if (!jvBalanced && mode === 'post') {
+  const postJv = () => {
+    if (!jvBalanced) {
       toast.error("Entry must be balanced before posting.");
       return;
     }
@@ -314,15 +356,30 @@ export default function VoucherEntryPanel({
       toast.error("Add at least two lines with accounts and amounts.");
       return;
     }
-    const payload = { voucherType: "JV" as const, date: entryDate, memo: memo || "Journal voucher", lines, voucherMeta: {} };
-    if (mode === 'draft' && onSaveDraft) onSaveDraft(payload);
-    else if (mode === 'pending' && onSubmitForApproval) onSubmitForApproval(payload);
-    else finalizePost(payload);
+    finalizePost({
+      voucherType: "JV",
+      date: entryDate,
+      memo: memo || "Journal voucher",
+      lines,
+      voucherMeta: {},
+    });
   };
 
   const postPv = () => {
     const amount = Number(pvAmount) || 0;
-    if (!pvFrom || !pvTo || amount <= 0) return;
+    if (!pvFrom || amount <= 0) {
+      toast.error("Select cash/bank account and enter an amount.");
+      return;
+    }
+    if (!pvPayee.trim() && !pvSupplierId) {
+      toast.error("Select or enter a payee.");
+      return;
+    }
+    const apAccount = pickDefaultApAccount(accts);
+    if (!apAccount) {
+      toast.error("No accounts payable account found in chart of accounts.");
+      return;
+    }
     const meta = {
       payee: pvPayee,
       supplierId: pvSupplierId || undefined,
@@ -332,18 +389,18 @@ export default function VoucherEntryPanel({
       checkAmount: amount,
       amount,
       paidFromAccountId: pvFrom,
-      paidToAccountId: pvTo,
+      paidToAccountId: apAccount.id,
     };
     maybeShowAllocation({
       voucherType: "PV",
       date: entryDate,
       memo: memo || `Payment voucher${pvPayee ? ` — ${pvPayee}` : ""}`,
       lines: [
-        { accountId: pvTo, debit: amount, credit: 0, description: "Payment" },
+        { accountId: apAccount.id, debit: amount, credit: 0, description: "Payment" },
         { accountId: pvFrom, debit: 0, credit: amount, description: "Paid from" },
       ],
       voucherMeta: meta,
-      knockOffAccountId: pvTo,
+      knockOffAccountId: apAccount.id,
       paymentAmount: amount,
       partyLabel: pvPayee || "Supplier",
       partyId: pvSupplierId || undefined,
@@ -353,13 +410,25 @@ export default function VoucherEntryPanel({
 
   const postRv = () => {
     const amount = Number(rvAmount) || 0;
-    if (!rvInto || !rvFrom || amount <= 0) return;
+    if (!rvInto || amount <= 0) {
+      toast.error("Select cash/bank account and enter an amount.");
+      return;
+    }
+    if (!rvPayer.trim() && !rvClientId) {
+      toast.error("Select or enter a payer.");
+      return;
+    }
+    const arAccount = pickDefaultArAccount(accts);
+    if (!arAccount) {
+      toast.error("No accounts receivable account found in chart of accounts.");
+      return;
+    }
     const meta = {
       payer: rvPayer,
       clientId: rvClientId || undefined,
       receiptRef: rvRef,
       receivedIntoAccountId: rvInto,
-      receivedFromAccountId: rvFrom,
+      receivedFromAccountId: arAccount.id,
     };
     maybeShowAllocation({
       voucherType: "RV",
@@ -367,10 +436,10 @@ export default function VoucherEntryPanel({
       memo: memo || `Receipt voucher${rvPayer ? ` — ${rvPayer}` : ""}`,
       lines: [
         { accountId: rvInto, debit: amount, credit: 0, description: "Received into" },
-        { accountId: rvFrom, debit: 0, credit: amount, description: "Received from" },
+        { accountId: arAccount.id, debit: 0, credit: amount, description: "Received from" },
       ],
       voucherMeta: meta,
-      knockOffAccountId: rvFrom,
+      knockOffAccountId: arAccount.id,
       paymentAmount: amount,
       partyLabel: rvPayer || "Client",
       partyId: rvClientId || undefined,
@@ -405,147 +474,251 @@ export default function VoucherEntryPanel({
 
   return (
     <>
+      <div className={isLebaneseCoa ? "legacy-erp-shell overflow-hidden" : undefined}>
+        {isLebaneseCoa ? (
+          <div className="legacy-erp-toolbar">
+            Journal voucher entry · {voucherTab}
+          </div>
+        ) : null}
+        <div className={isLebaneseCoa ? "legacy-erp-body space-y-3" : undefined}>
       <Tabs value={voucherTab} onValueChange={(v) => setVoucherTab(v as VoucherType)}>
-        <TabsList className="flex flex-wrap h-auto gap-1 mb-4">
+        <TabsList className={cn("flex h-auto flex-wrap gap-1 mb-4", isLebaneseCoa && "rounded-sm border border-slate-400 bg-[#e8e6dc] p-1")}>
           <TabsTrigger value="JV">Journal (JV)</TabsTrigger>
           <TabsTrigger value="PV">Payment (PV)</TabsTrigger>
           <TabsTrigger value="RV">Receipt (RV)</TabsTrigger>
           <TabsTrigger value="CV">Contra (CV)</TabsTrigger>
         </TabsList>
 
-        <div className="grid gap-4 sm:grid-cols-2 mb-4">
+        <div className={cn("grid gap-4 sm:grid-cols-2 mb-4", isLebaneseCoa && "legacy-erp-field-grid mb-3")}>
           <div>
             <Label>Date</Label>
-            <Input type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
+            <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
           </div>
           <div>
             <Label>Memo</Label>
-            <Input value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Description" />
+            <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Description" />
           </div>
         </div>
 
         <TabsContent value="JV" className="mt-0 space-y-4">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Account</TableHead>
-                <TableHead>Debit</TableHead>
-                <TableHead>Credit</TableHead>
-                <TableHead>FX amt</TableHead>
-                <TableHead>Rate</TableHead>
-                <TableHead>Cost ctr</TableHead>
-                <TableHead>Line memo</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {draftLines.map((line, idx) => (
-                <TableRow key={idx}>
-                  <TableCell>
-                    <LedgerAccountCombobox
-                      accounts={accts}
-                      accountingLanguage={accountingLanguage}
-                      isLebaneseCoa={isLebaneseCoa}
-                      pcgClientAccounts={pcgClientAccounts}
-                      value={line.accountId}
-                      onValueChange={(v) => {
-                        const next = [...draftLines];
-                        next[idx] = { ...next[idx], accountId: v };
-                        setDraftLines(next);
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.debit}
-                      data-jv-line={idx}
-                      data-jv-field="debit"
-                      onKeyDown={(e) => handleLineKeyDown(e, idx, "debit")}
-                      onChange={(e) => {
-                        const next = [...draftLines];
-                        next[idx] = { ...next[idx], debit: e.target.value, credit: e.target.value ? "" : next[idx].credit };
-                        setDraftLines(next);
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={line.credit}
-                      onKeyDown={(e) => handleLineKeyDown(e, idx, "credit")}
-                      onChange={(e) => {
-                        const next = [...draftLines];
-                        next[idx] = { ...next[idx], credit: e.target.value, debit: e.target.value ? "" : next[idx].debit };
-                        setDraftLines(next);
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      placeholder="FX"
-                      value={line.amountFx}
-                      onChange={(e) => {
-                        const next = [...draftLines];
-                        next[idx] = { ...next[idx], amountFx: e.target.value };
-                        setDraftLines(next);
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      type="number"
-                      min="0"
-                      step="0.000001"
-                      placeholder="Rate"
-                      value={line.fxRate}
-                      onChange={(e) => {
-                        const next = [...draftLines];
-                        next[idx] = { ...next[idx], fxRate: e.target.value };
-                        setDraftLines(next);
-                      }}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <Select
-                      value={line.costCenterId || "__none"}
-                      onValueChange={(v) => {
-                        const next = [...draftLines];
-                        next[idx] = { ...next[idx], costCenterId: v === "__none" ? "" : v };
-                        setDraftLines(next);
-                      }}
-                    >
-                      <SelectTrigger className="w-[100px]"><SelectValue placeholder="—" /></SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="__none">—</SelectItem>
-                        {costCenters.map((c) => (
-                          <SelectItem key={c.id} value={c.id}>{c.code}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <Input
-                      value={line.description}
-                      onKeyDown={(e) => handleLineKeyDown(e, idx, "description")}
-                      onChange={(e) => {
-                        const next = [...draftLines];
-                        next[idx] = { ...next[idx], description: e.target.value };
-                        setDraftLines(next);
-                      }}
-                    />
-                  </TableCell>
+          {isLebaneseCoa ? (
+            <div className="max-h-[min(28rem,60vh)] overflow-y-auto overflow-x-hidden rounded-md border border-slate-300 bg-white">
+              <table className="w-full table-fixed border-collapse text-sm">
+                <colgroup>
+                  <col style={{ width: '42%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '14%' }} />
+                  <col style={{ width: '30%' }} />
+                </colgroup>
+                <thead className="sticky top-0 z-10 bg-[#316ac5] text-white">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-semibold">Account</th>
+                    <th className="px-2 py-1.5 text-right text-[11px] font-semibold">Debit</th>
+                    <th className="px-2 py-1.5 text-right text-[11px] font-semibold">Credit</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-semibold">Line memo</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {draftLines.map((line, idx) => {
+                    const account = acctById.get(line.accountId);
+                    const accountTitle =
+                      account && isLebaneseCoa
+                        ? resolvePcgDisplay(account.code, account.name, clientByGrabio)?.name || account.name
+                        : account?.name;
+                    return (
+                      <tr key={idx} className="border-b border-slate-200">
+                        <td className="max-w-0 px-2 py-1 align-top">
+                          <LedgerAccountCombobox
+                            accounts={accts}
+                            accountingLanguage={accountingLanguage}
+                            isLebaneseCoa={isLebaneseCoa}
+                            pcgClientAccounts={pcgClientAccounts}
+                            value={line.accountId}
+                            compactSelectedLabel
+                            className="h-8 w-full min-w-0 text-xs"
+                            onValueChange={(v) => {
+                              const next = [...draftLines];
+                              next[idx] = { ...next[idx], accountId: v };
+                              setDraftLines(next);
+                            }}
+                          />
+                          {accountTitle ? (
+                            <p className="mt-0.5 truncate text-[10px] text-muted-foreground" title={accountTitle}>
+                              {accountTitle}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-2 py-1 align-top">
+                          <Input
+                            className="legacy-erp-input h-8 text-right tabular-nums"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.debit}
+                            data-jv-line={idx}
+                            data-jv-field="debit"
+                            onKeyDown={(e) => handleLineKeyDown(e, idx, "debit")}
+                            onChange={(e) => {
+                              setDraftLines(mirrorJvAmount(draftLines, idx, "debit", e.target.value));
+                            }}
+                          />
+                        </td>
+                        <td className="px-2 py-1 align-top">
+                          <Input
+                            className="legacy-erp-input h-8 text-right tabular-nums"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.credit}
+                            onKeyDown={(e) => handleLineKeyDown(e, idx, "credit")}
+                            onChange={(e) => {
+                              setDraftLines(mirrorJvAmount(draftLines, idx, "credit", e.target.value));
+                            }}
+                          />
+                        </td>
+                        <td className="px-2 py-1 align-top">
+                          <Input
+                            className="legacy-erp-input h-8"
+                            value={line.description}
+                            onKeyDown={(e) => handleLineKeyDown(e, idx, "description")}
+                            onChange={(e) => {
+                              const next = [...draftLines];
+                              next[idx] = { ...next[idx], description: e.target.value };
+                              setDraftLines(next);
+                            }}
+                          />
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+          <div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Account</TableHead>
+                  <TableHead>Debit</TableHead>
+                  <TableHead>Credit</TableHead>
+                  <TableHead>FX amt</TableHead>
+                  <TableHead>Rate</TableHead>
+                  <TableHead>Cost ctr</TableHead>
+                  <TableHead>Line memo</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-          <div className="flex flex-wrap items-center justify-between gap-2">
+              </TableHeader>
+              <TableBody>
+                {draftLines.map((line, idx) => (
+                    <TableRow key={idx}>
+                      <TableCell>
+                        <LedgerAccountCombobox
+                          accounts={accts}
+                          accountingLanguage={accountingLanguage}
+                          isLebaneseCoa={isLebaneseCoa}
+                          pcgClientAccounts={pcgClientAccounts}
+                          value={line.accountId}
+                          onValueChange={(v) => {
+                            const next = [...draftLines];
+                            next[idx] = { ...next[idx], accountId: v };
+                            setDraftLines(next);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.debit}
+                          data-jv-line={idx}
+                          data-jv-field="debit"
+                          onKeyDown={(e) => handleLineKeyDown(e, idx, "debit")}
+                          onChange={(e) => {
+                            setDraftLines(mirrorJvAmount(draftLines, idx, "debit", e.target.value));
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={line.credit}
+                          onKeyDown={(e) => handleLineKeyDown(e, idx, "credit")}
+                          onChange={(e) => {
+                            setDraftLines(mirrorJvAmount(draftLines, idx, "credit", e.target.value));
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          placeholder="FX"
+                          value={line.amountFx}
+                          onChange={(e) => {
+                            const next = [...draftLines];
+                            next[idx] = { ...next[idx], amountFx: e.target.value };
+                            setDraftLines(next);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.000001"
+                          placeholder="Rate"
+                          value={line.fxRate}
+                          onChange={(e) => {
+                            const next = [...draftLines];
+                            next[idx] = { ...next[idx], fxRate: e.target.value };
+                            setDraftLines(next);
+                          }}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={line.costCenterId || "__none"}
+                          onValueChange={(v) => {
+                            const next = [...draftLines];
+                            next[idx] = { ...next[idx], costCenterId: v === "__none" ? "" : v };
+                            setDraftLines(next);
+                          }}
+                        >
+                          <SelectTrigger className="w-[100px]">
+                            <SelectValue placeholder="—" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none">—</SelectItem>
+                            {costCenters.map((c) => (
+                              <SelectItem key={c.id} value={c.id}>
+                                {c.code}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          value={line.description}
+                          onKeyDown={(e) => handleLineKeyDown(e, idx, "description")}
+                          onChange={(e) => {
+                            const next = [...draftLines];
+                            next[idx] = { ...next[idx], description: e.target.value };
+                            setDraftLines(next);
+                          }}
+                        />
+                      </TableCell>
+                    </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
+          )}
+          <div className={cn("flex flex-wrap items-center justify-between gap-2", isLebaneseCoa && "legacy-erp-totals")}>
             <Button variant="outline" size="sm" onClick={() => setDraftLines((p) => [...p, emptyLine()])}>
               <Plus className="h-4 w-4 mr-1" /> Add line
             </Button>
@@ -555,17 +728,7 @@ export default function VoucherEntryPanel({
               {jvBalanced && <Badge variant="outline" className="ml-2 text-green-700">Balanced</Badge>}
             </p>
             <div className="flex gap-2">
-              {onSaveDraft ? (
-                <Button variant="outline" onClick={() => postJv('draft')} disabled={posting || !jvBalanced}>
-                  Save draft
-                </Button>
-              ) : null}
-              {onSubmitForApproval ? (
-                <Button variant="secondary" onClick={() => postJv('pending')} disabled={posting || !jvBalanced}>
-                  Submit for approval
-                </Button>
-              ) : null}
-              <Button onClick={() => postJv('post')} disabled={posting || !jvBalanced}>
+              <Button onClick={postJv} disabled={posting || !jvBalanced}>
                 {posting ? "Posting…" : "Post JV"}
               </Button>
             </div>
@@ -576,28 +739,24 @@ export default function VoucherEntryPanel({
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Pay from (cash/bank)</Label>
-              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={pvFrom} onValueChange={setPvFrom} placeholder="Search cash/bank account…" />
-            </div>
-            <div>
-              <Label>Pay to (expense / AP)</Label>
-              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={pvTo} onValueChange={setPvTo} placeholder="Search expense/AP account…" />
+              <LedgerAccountCombobox accounts={cashBankAccounts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={pvFrom} onValueChange={setPvFrom} placeholder="Select cash or bank…" />
             </div>
             <div>
               <Label>Amount</Label>
-              <Input type="number" min="0" step="0.01" value={pvAmount} onChange={(e) => setPvAmount(e.target.value)} />
+              <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} type="number" min="0" step="0.01" value={pvAmount} onChange={(e) => setPvAmount(e.target.value)} />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label>Payee</Label>
               <SearchableCombobox options={supplierOptions} value={pvSupplierId} onValueChange={selectPvSupplier} placeholder="Select supplier" searchPlaceholder="Search suppliers…" emptyText="No suppliers found." />
-              <Input className="mt-2" value={pvPayee} onChange={(e) => setPvPayee(e.target.value)} placeholder="Or type payee name" />
+              <Input className={cn("mt-2", isLebaneseCoa && "legacy-erp-input")} value={pvPayee} onChange={(e) => setPvPayee(e.target.value)} placeholder="Or type payee name" />
             </div>
             <div className="sm:col-span-2">
               <Label>Reference</Label>
-              <Input value={pvRef} onChange={(e) => setPvRef(e.target.value)} />
+              <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} value={pvRef} onChange={(e) => setPvRef(e.target.value)} />
             </div>
             <div className="sm:col-span-2">
               <Label>Check number (optional)</Label>
-              <Input value={pvCheckNumber} onChange={(e) => setPvCheckNumber(e.target.value)} placeholder="For check register workflow" />
+              <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} value={pvCheckNumber} onChange={(e) => setPvCheckNumber(e.target.value)} placeholder="For check register workflow" />
             </div>
           </div>
           <Button onClick={postPv} disabled={posting}>Post PV</Button>
@@ -607,24 +766,20 @@ export default function VoucherEntryPanel({
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Receive into (cash/bank)</Label>
-              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={rvInto} onValueChange={setRvInto} placeholder="Search cash/bank account…" />
-            </div>
-            <div>
-              <Label>Received from (AR / other)</Label>
-              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={rvFrom} onValueChange={setRvFrom} placeholder="Search AR account…" />
+              <LedgerAccountCombobox accounts={cashBankAccounts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={rvInto} onValueChange={setRvInto} placeholder="Select cash or bank…" />
             </div>
             <div>
               <Label>Amount</Label>
-              <Input type="number" min="0" step="0.01" value={rvAmount} onChange={(e) => setRvAmount(e.target.value)} />
+              <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} type="number" min="0" step="0.01" value={rvAmount} onChange={(e) => setRvAmount(e.target.value)} />
             </div>
-            <div>
+            <div className="sm:col-span-2">
               <Label>Payer</Label>
               <SearchableCombobox options={clientOptions} value={rvClientId} onValueChange={selectRvClient} placeholder="Select client" searchPlaceholder="Search clients…" emptyText="No clients found." />
-              <Input className="mt-2" value={rvPayer} onChange={(e) => setRvPayer(e.target.value)} placeholder="Or type payer name" />
+              <Input className={cn("mt-2", isLebaneseCoa && "legacy-erp-input")} value={rvPayer} onChange={(e) => setRvPayer(e.target.value)} placeholder="Or type payer name" />
             </div>
             <div className="sm:col-span-2">
               <Label>Reference</Label>
-              <Input value={rvRef} onChange={(e) => setRvRef(e.target.value)} />
+              <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} value={rvRef} onChange={(e) => setRvRef(e.target.value)} />
             </div>
           </div>
           <Button onClick={postRv} disabled={posting}>Post RV</Button>
@@ -652,6 +807,28 @@ export default function VoucherEntryPanel({
           <Button onClick={postCv} disabled={posting}>Post CV</Button>
         </TabsContent>
       </Tabs>
+
+      {registerEntries.length ? (
+        <div className="-mx-2 mt-2 sm:-mx-0">
+          <VoucherRegisterPanel
+            entries={registerEntries}
+            lines={registerLines}
+            accountingLanguage={accountingLanguage}
+            isLebaneseCoa={isLebaneseCoa}
+            pcgClientAccounts={pcgClientAccounts}
+            systemGuideEnabled={systemGuideEnabled}
+            defaultOpen={false}
+            initialFilter={registerFilter}
+            lockFilter
+            onPostDraft={onRegisterPostDraft}
+            postingDraft={postingRegisterDraft}
+            onReverse={onRegisterReverse}
+            reversing={reversingRegister}
+          />
+        </div>
+      ) : null}
+        </div>
+      </div>
 
       <InvoiceAllocationDialog
         open={allocOpen}

@@ -5,12 +5,18 @@ import { getActualStoreId } from '@/lib/storeUtils';
 import { resolveStoreEntitlements, type StoreEntitlements } from '@/lib/entitlements';
 import type { StoreProfile } from '@/types/storeProfile';
 
+const profileCache = new Map<string, StoreProfile>();
+
+export function peekCachedStoreProfile(storeId: string | null): StoreProfile | null {
+  if (!storeId) return null;
+  return profileCache.get(storeId) ?? null;
+}
+
 export function useStoreEntitlements() {
   const { user } = useAuth();
-  const [profile, setProfile] = useState<StoreProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-
   const storeId = user ? getActualStoreId(user) : null;
+  const [profile, setProfile] = useState<StoreProfile | null>(() => peekCachedStoreProfile(storeId));
+  const [loading, setLoading] = useState(() => Boolean(storeId && !profileCache.has(storeId)));
 
   const load = useCallback(async (options?: { silent?: boolean; fromServer?: boolean }) => {
     if (!storeId) {
@@ -25,14 +31,29 @@ export function useStoreEntitlements() {
         ? await getDocFromServer(ref).catch(() => getDoc(ref))
         : await getDoc(ref);
       setProfile(snap.exists() ? (snap.data() as StoreProfile) : null);
+      if (snap.exists()) {
+        profileCache.set(storeId, snap.data() as StoreProfile);
+      } else {
+        profileCache.delete(storeId);
+      }
     } finally {
       if (!options?.silent) setLoading(false);
     }
   }, [storeId]);
 
   useEffect(() => {
-    void load();
-  }, [load]);
+    if (!storeId) {
+      setProfile(null);
+      setLoading(false);
+      return;
+    }
+    const cached = profileCache.get(storeId);
+    if (cached) {
+      setProfile(cached);
+      setLoading(false);
+    }
+    void load({ silent: Boolean(cached) });
+  }, [load, storeId]);
 
   useEffect(() => {
     const onProfileUpdated = () => {

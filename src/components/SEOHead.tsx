@@ -38,7 +38,8 @@ const SEOHead: React.FC<SEOHeadProps> = ({
   facebookAppId,
   structuredData,
 }) => {
-  const fullTitle = title.includes(SITE_NAME) ? title : `${title} | ${SITE_NAME}`;
+  const safeTitle = String(title || siteName || SITE_NAME);
+  const fullTitle = safeTitle.includes(SITE_NAME) ? safeTitle : `${safeTitle} | ${SITE_NAME}`;
   const canonicalUrl = url || (typeof window !== 'undefined' ? window.location.href : 'https://grabio.space');
   const robotsContent = `${robotsIndex ? 'index' : 'noindex'}, ${robotsFollow ? 'follow' : 'nofollow'}`;
 

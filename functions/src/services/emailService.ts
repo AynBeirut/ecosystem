@@ -477,3 +477,57 @@ export async function sendOrderConfirmationEmail(params: {
 
   await sendEmail(template);
 }
+
+async function sendEmailOrThrow(template: EmailTemplate): Promise<void> {
+  const transporter = nodemailer.createTransport(SMTP_CONFIG);
+  await transporter.sendMail({
+    from: SMTP_FROM,
+    to: template.to,
+    subject: template.subject,
+    html: template.html,
+  });
+}
+
+export async function sendWordPressAccessEmail(params: {
+  to: string;
+  businessName: string;
+  domain: string;
+  webuzoUsername: string;
+  ftpUsername: string;
+  ftpHost: string;
+  accessUrl: string;
+}): Promise<void> {
+  const { to, businessName, domain, webuzoUsername, ftpUsername, ftpHost, accessUrl } = params;
+  const template: EmailTemplate = {
+    to,
+    subject: `Your WordPress hosting is ready — ${businessName}`,
+    html: `
+      <html>
+        <body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333;">
+          <div style="max-width: 600px; margin: 0 auto; padding: 20px;">
+            <h2 style="color: #2563eb;">WordPress environment created</h2>
+            <p>Hi,</p>
+            <p>Your WordPress hosting environment for <strong>${businessName}</strong> is ready on <strong>${domain}</strong>.</p>
+
+            <div style="background: #f0f9ff; border-left: 4px solid #2563eb; padding: 15px; margin: 20px 0;">
+              <p style="margin: 0 0 8px 0;"><strong>Hosting username:</strong> ${webuzoUsername}</p>
+              <p style="margin: 0 0 8px 0;"><strong>FTP host:</strong> ${ftpHost}</p>
+              <p style="margin: 0;"><strong>FTP username:</strong> ${ftpUsername}</p>
+            </div>
+
+            <p>For security, your hosting and FTP passwords are available through this one-time link:</p>
+            <p><a href="${accessUrl}" style="display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px;">View credentials securely</a></p>
+            <p style="color: #6b7280; font-size: 13px;">This link expires in 7 days and works once.</p>
+
+            <p style="margin-top: 30px;">
+              Best regards,<br>
+              <strong>The Grabio Team</strong>
+            </p>
+          </div>
+        </body>
+      </html>
+    `,
+  };
+
+  await sendEmailOrThrow(template);
+}

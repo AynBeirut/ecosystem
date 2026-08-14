@@ -1,4 +1,4 @@
-export type WordPressProvisioningStatus = 'pending' | 'in_progress' | 'completed' | 'cancelled';
+export type WordPressProvisioningStatus = 'pending' | 'in_progress' | 'completed' | 'failed' | 'cancelled';
 
 export type WordPressProvisioningRequest = {
   id: string;
@@ -13,6 +13,14 @@ export type WordPressProvisioningRequest = {
   updatedAt: string;
   completedAt?: string;
   opsNotes?: string;
+  webuzoUsername?: string;
+  hostingDomain?: string;
+  ftpUsername?: string;
+  ftpHost?: string;
+  panelUrl?: string;
+  provisionError?: string;
+  accessEmailSentAt?: string;
+  provisionedAt?: string;
 };
 
 export type WordPressProvisioningInput = {

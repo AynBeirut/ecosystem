@@ -15,6 +15,7 @@ import { isCountedSaleStatus, isDateInRange, normalizeDateString, resolveOrderIt
 import { fetchPlatformExpenses } from '@/lib/financeData';
 import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 import { formatMoney } from '@/lib/money/format';
+import { assertAccountPaymentAllowed } from '@/lib/accountPaymentGuard';
 import { useSystemGuide } from '@/hooks/useSystemGuide';
 import SystemGuideInfo from '@/components/system-guide/SystemGuideInfo';
 import { cn } from '@/lib/utils';
@@ -162,7 +163,10 @@ interface DetailedStatement {
   closingBalance: number;
 }
 
-const AdminAccountStatement: React.FC = () => {
+const AdminAccountStatement: React.FC<{
+  embedded?: boolean;
+  fixedTab?: 'sales' | 'purchases';
+}> = ({ embedded = false, fixedTab }) => {
   const { enabled: systemGuideEnabled } = useSystemGuide();
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -176,15 +180,19 @@ const AdminAccountStatement: React.FC = () => {
   // Symbol-less, separator-kept number for fixed-column PDF statements (currency shown in header).
   // Honors the store's number style: 'compact' keeps large LBP figures short in tight columns.
   const numDoc = (n: number) => formatMoney(Number(n) || 0, { currency: baseCurrency, style: numberStyle, withSymbol: false });
-  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales' | 'cashCollections' | 'payments'>('customers');
+  const [activeTab, setActiveTab] = useState<'customers' | 'suppliers' | 'products' | 'purchases' | 'expenses' | 'sales' | 'cashCollections' | 'payments'>(fixedTab ?? 'customers');
 
   useEffect(() => {
+    if (fixedTab) {
+      setActiveTab(fixedTab);
+      return;
+    }
     const tab = searchParams.get('tab');
     const allowed = ['customers', 'suppliers', 'products', 'purchases', 'expenses', 'sales', 'cashCollections', 'payments'] as const;
     if (tab && (allowed as readonly string[]).includes(tab)) {
       setActiveTab(tab as typeof activeTab);
     }
-  }, [searchParams]);
+  }, [fixedTab, searchParams]);
   const [loading, setLoading] = useState(true);
   
   const [customers, setCustomers] = useState<CustomerBalance[]>([]);
@@ -1225,6 +1233,25 @@ const AdminAccountStatement: React.FC = () => {
 
     try {
       const db = getFirestore();
+
+      const guard = await assertAccountPaymentAllowed(db, {
+        storeId: user.storeId,
+        accountId: paymentModal.accountId,
+        accountName: paymentModal.accountName,
+        accountType: paymentModal.accountType,
+        direction: paymentModal.direction,
+        amount,
+        date: newPayment.date,
+        method: newPayment.method,
+        fingerprint,
+      });
+      if (!guard.allowed) {
+        alert(guard.reason);
+        paymentSaveInFlightRef.current = false;
+        setSavingPayment(false);
+        return null;
+      }
+
       const idempotencyQuery = query(
         collection(db, 'accountPayments'),
         where('storeId', '==', user.storeId),
@@ -1725,11 +1752,11 @@ const AdminAccountStatement: React.FC = () => {
 
   const openPartyLedger = (type: 'supplier' | 'customer', name: string) => {
     const params = new URLSearchParams({
-      tab: 'general-ledger',
+      report: 'general-ledger',
       partyName: name,
       partyType: type === 'customer' ? 'client' : 'supplier',
     });
-    navigate(`/admin/finance/accounting?${params.toString()}`);
+    navigate(`/admin/finance/reports?${params.toString()}`);
   };
 
   const openStatementLine = (txn: DetailedTransaction) => {
@@ -3579,50 +3606,10 @@ const AdminAccountStatement: React.FC = () => {
     doc.save('customers_statement.pdf');
   };
 
-  return (
-    <AdminPageShell
-      title={(
-        <span className="inline-flex items-center gap-2">
-          Account Statement
-          <SystemGuideInfo
-            enabled={systemGuideEnabled}
-            label="What Account Statement does"
-            title="Account Statement"
-            content={[
-              'This page brings together customer balances, supplier balances, product sales, purchases, expenses, payments, and cash collections in one place.',
-              'Use the Section picker to move between views, then filter dates or export the current section when you need a printable statement.',
-            ]}
-            className="border-white/25 text-white/80 hover:text-white"
-          />
-        </span>
-      )}
-      description="Detailed overview of financial transactions and balances"
-      eyebrow="Business Tools"
-      backTo="/admin/finance/quotations"
-      backLabel="Business Finance"
-      actions={(
-        <div className="flex flex-wrap gap-2">
-          <button
-            type="button"
-            onClick={exportAllToExcel}
-            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
-          >
-            <Download size={18} />
-            Export Excel
-          </button>
-          <button
-            type="button"
-            onClick={exportAllToPDF}
-            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
-          >
-            <FileDown size={18} />
-            Export PDF
-          </button>
-        </div>
-      )}
-    >
-
+  const pageContent = (
+    <>
       <AdminPanel className="overflow-hidden p-0">
+        {!embedded && (
         <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3 border-b border-slate-100 p-4 sm:p-6">
           <div className="rounded-xl border border-slate-100 bg-slate-50/90 p-3 sm:p-4">
             <div className={adminStatLabelClass}>Total Sales</div>
@@ -3656,7 +3643,9 @@ const AdminAccountStatement: React.FC = () => {
             <div className="mt-1 text-xl sm:text-2xl font-bold tabular-nums text-emerald-600">{money(totalCashDeposited)}</div>
           </div>
         </div>
+        )}
 
+        {!embedded && (
         <div className="border-b border-slate-100 bg-slate-50/50 px-4 py-3 sm:px-6">
           <label htmlFor="account-statement-section" className={cn(adminSectionLabelClass, 'mb-2 block')}>
             Section
@@ -3674,6 +3663,7 @@ const AdminAccountStatement: React.FC = () => {
             ))}
           </select>
         </div>
+        )}
 
         <div className="p-4 sm:p-6">
           {activeTab === 'customers' && (
@@ -5326,6 +5316,56 @@ const AdminAccountStatement: React.FC = () => {
           </div>
         </div>
       )}
+    </>
+  );
+
+  if (embedded) {
+    return pageContent;
+  }
+
+  return (
+    <AdminPageShell
+      title={(
+        <span className="inline-flex items-center gap-2">
+          Account Statement
+          <SystemGuideInfo
+            enabled={systemGuideEnabled}
+            label="What Account Statement does"
+            title="Account Statement"
+            content={[
+              'This page brings together customer balances, supplier balances, product sales, purchases, expenses, payments, and cash collections in one place.',
+              'Use the Section picker to move between views, then filter dates or export the current section when you need a printable statement.',
+            ]}
+            className="border-white/25 text-white/80 hover:text-white"
+          />
+        </span>
+      )}
+      description="Detailed overview of financial transactions and balances"
+      eyebrow="Business Tools"
+      backTo="/admin/finance/accounting"
+      backLabel="Business Finance"
+      actions={(
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={exportAllToExcel}
+            className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded hover:bg-green-700 text-sm"
+          >
+            <Download size={18} />
+            Export Excel
+          </button>
+          <button
+            type="button"
+            onClick={exportAllToPDF}
+            className="flex items-center gap-2 bg-red-600 text-white px-4 py-2 rounded hover:bg-red-700 text-sm"
+          >
+            <FileDown size={18} />
+            Export PDF
+          </button>
+        </div>
+      )}
+    >
+      {pageContent}
     </AdminPageShell>
   );
 };

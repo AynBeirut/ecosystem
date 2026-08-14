@@ -1,0 +1,456 @@
+@layer components {
+  .legacy-erp-shell {
+    @apply rounded-md border border-slate-300 bg-[#ece9d8] text-slate-900 shadow-sm;
+  }
+
+  .dark .legacy-erp-shell {
+    @apply border-slate-600 bg-slate-900 text-slate-100;
+  }
+
+  .legacy-erp-toolbar {
+    @apply flex flex-wrap items-center gap-2 border-b border-slate-400/60 bg-gradient-to-b from-[#f5f4ea] to-[#e8e6dc] px-3 py-2 text-xs font-semibold uppercase tracking-wide text-slate-700;
+  }
+
+  .dark .legacy-erp-toolbar {
+    @apply border-slate-600 from-slate-800 to-slate-900 text-slate-200;
+  }
+
+  .legacy-erp-body {
+    @apply bg-[#f7f6f2] p-2;
+  }
+
+  .dark .legacy-erp-body {
+    @apply bg-slate-950/40 p-2;
+  }
+
+  .legacy-erp-field-grid {
+    @apply grid gap-2 sm:grid-cols-2 lg:grid-cols-4;
+  }
+
+  .legacy-erp-field-grid label {
+    @apply text-[11px] font-semibold uppercase tracking-wide text-slate-600;
+  }
+
+  .dark .legacy-erp-field-grid label {
+    @apply text-slate-400;
+  }
+
+  .legacy-erp-field-grid .legacy-erp-input {
+    @apply h-8 rounded-sm border border-slate-400 bg-white px-2 text-sm shadow-inner;
+  }
+
+  .dark .legacy-erp-field-grid .legacy-erp-input {
+    @apply border-slate-600 bg-slate-900;
+  }
+
+  .legacy-erp-grid {
+    @apply w-full border-collapse text-xs;
+  }
+
+  .legacy-erp-grid thead tr {
+    @apply bg-[#316ac5] text-white;
+  }
+
+  .dark .legacy-erp-grid thead tr {
+    @apply bg-[#1e4a8a];
+  }
+
+  .legacy-erp-grid th {
+    @apply border border-[#2a5dad] px-2 py-1.5 text-left font-semibold;
+  }
+
+  .legacy-erp-grid td {
+    @apply border border-slate-300 bg-white px-2 py-1 tabular-nums;
+  }
+
+  .dark .legacy-erp-grid td {
+    @apply border-slate-600 bg-slate-900;
+  }
+
+  .legacy-erp-grid tbody tr:hover td {
+    @apply bg-[#fff7cc];
+  }
+
+  .dark .legacy-erp-grid tbody tr:hover td {
+    @apply bg-slate-800;
+  }
+
+  .legacy-erp-grid tbody tr.is-selected td {
+    @apply bg-[#316ac5]/15;
+  }
+
+  .legacy-erp-register-trigger {
+    @apply flex w-full items-center justify-between gap-3 border-b border-slate-300 bg-[#e8e6dc] px-3 py-2 text-left transition-colors hover:bg-[#dedbd0];
+  }
+
+  .dark .legacy-erp-register-trigger {
+    @apply border-slate-600 bg-slate-800 hover:bg-slate-700;
+  }
+
+  .legacy-erp-split {
+    @apply grid gap-2 xl:grid-cols-[minmax(320px,0.85fr)_minmax(0,1.15fr)];
+  }
+
+  .legacy-erp-totals {
+    @apply mt-2 flex flex-wrap justify-end gap-4 border-t border-slate-400/70 pt-2 text-xs font-semibold;
+  }
+
+  .legacy-erp-btn {
+    @apply inline-flex h-7 items-center rounded-sm border border-slate-500 bg-gradient-to-b from-[#fefefe] to-[#e3e3e3] px-3 text-[11px] font-semibold uppercase tracking-wide text-slate-800 shadow-sm hover:from-white hover:to-[#d8d8d8];
+  }
+
+  .legacy-erp-btn:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  .legacy-erp-btn--primary {
+    @apply border-[#2a5dad] from-[#5b9aea] to-[#316ac5] text-white hover:from-[#6aa3ec] hover:to-[#2a5dad];
+  }
+
+  .legacy-erp-alert {
+    @apply rounded-sm border border-amber-500/70 bg-amber-50 px-3 py-2 text-xs text-amber-950;
+  }
+
+  .legacy-erp-alert--error {
+    @apply border-red-400 bg-red-50 text-red-900;
+  }
+
+  .legacy-erp-soa-band {
+    @apply flex flex-wrap items-center justify-between gap-2 border border-[#2a5dad] bg-[#316ac5] px-2 py-1.5 text-[11px] font-semibold text-white;
+  }
+
+  .legacy-erp-soa-summary {
+    @apply border border-slate-400/70 bg-[#e8e6dc] px-2 py-1 text-[11px] text-slate-800;
+  }
+
+  .legacy-erp-soa-scroll {
+    @apply max-h-[min(28rem,60vh)] overflow-auto border border-slate-400/70;
+  }
+
+  .legacy-erp-grid th.legacy-erp-num,
+  .legacy-erp-grid td.legacy-erp-num {
+    text-align: right;
+  }
+
+  .legacy-erp-grid td.memo-cell {
+    @apply max-w-[16rem] truncate;
+  }
+
+  .legacy-erp-tb-toolbar {
+    @apply flex flex-wrap items-center justify-between gap-2 border-b border-slate-400/60 bg-gradient-to-b from-[#f5f4ea] to-[#e8e6dc] px-2 py-1.5;
+  }
+
+  .legacy-erp-tb-design {
+    @apply flex items-center gap-2 text-[11px] font-semibold text-slate-700;
+  }
+
+  .legacy-erp-tb-design__select {
+    @apply h-7 min-w-[10rem] rounded-sm border border-slate-400 bg-white px-2 text-[11px] shadow-inner;
+  }
+
+  .legacy-erp-tb-actions {
+    @apply flex flex-wrap items-center gap-1;
+  }
+
+  .legacy-erp-tb-title {
+    @apply border-b border-[#2a5dad] bg-[#e8eef8] py-1.5 text-center text-sm font-bold uppercase tracking-[0.2em] text-[#1e4a8a];
+  }
+
+  .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l1 td {
+    @apply bg-[#d9e3ef] font-bold text-[#8b0000];
+  }
+
+  .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l2 td {
+    @apply bg-white font-bold text-[#1e4a8a];
+  }
+
+  .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l3 td {
+    @apply bg-[#e6f4fb];
+  }
+
+  .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l4 td {
+    @apply bg-[#faf6e8];
+  }
+
+  .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--totals td {
+    @apply bg-[#e8e6dc] font-semibold;
+  }
+
+  .legacy-erp-tb--classic {
+    @apply border-slate-300 bg-[#ece9d8] text-slate-900;
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-toolbar,
+  .legacy-erp-tb--classic .legacy-erp-tb-toolbar {
+    @apply border-slate-400/60 from-[#f5f4ea] to-[#e8e6dc] text-slate-700;
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-body {
+    @apply bg-[#f7f6f2] text-slate-900;
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-field-grid label {
+    @apply text-slate-600;
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-field-grid .legacy-erp-input,
+  .legacy-erp-tb--classic input.legacy-erp-input {
+    @apply border-slate-400 bg-white text-slate-900;
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-tb-title {
+    @apply border-[#2a5dad] bg-[#e8eef8] text-[#1e4a8a];
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-grid th {
+    @apply border-slate-400/70 bg-[#316ac5] text-white;
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-grid td {
+    @apply border-slate-300/80 bg-white text-slate-900;
+  }
+
+  .legacy-erp-tb--classic .legacy-erp-soa-summary {
+    @apply border-slate-400/70 bg-[#e8e6dc] text-slate-800;
+  }
+
+  .legacy-erp-tb-criteria {
+    @apply rounded-sm border border-slate-400/70 bg-white/80 p-2;
+  }
+
+  .legacy-erp-tb-criteria__actions {
+    @apply mt-2 flex flex-wrap items-center gap-3;
+  }
+
+  .legacy-erp-btn--search {
+    @apply h-8 min-w-[6.5rem] px-4 text-xs;
+  }
+
+  .legacy-erp-tb-criteria__hint {
+    @apply text-[11px] text-slate-600;
+  }
+
+  .legacy-erp-tb-empty {
+    @apply rounded-sm border border-dashed border-slate-400/60 bg-white/60 px-3 py-6 text-center text-[11px] text-slate-600;
+  }
+
+  .legacy-erp-options-dialog--compact {
+    @apply max-w-xl;
+  }
+
+  .legacy-erp-options-compact {
+    @apply grid gap-3 sm:grid-cols-2;
+  }
+
+  .legacy-erp-options-compact .legacy-erp-options-list {
+    @apply max-h-none space-y-1 overflow-visible pr-0;
+  }
+
+  .legacy-erp-tb-actions-row {
+    @apply flex flex-wrap items-center gap-2 border-b border-slate-400/40 pb-2;
+  }
+
+  .legacy-erp-tb-options {
+    @apply rounded-sm border border-slate-400/70 bg-white p-3 text-[11px] shadow-sm;
+  }
+
+  .legacy-erp-tb-options__footer {
+    @apply mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-300 pt-2;
+  }
+
+  .dark .legacy-erp-tb-title {
+    @apply border-slate-600 bg-slate-800 text-slate-100;
+  }
+
+  .dark .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l1 td {
+    @apply bg-slate-800 text-red-300;
+  }
+
+  .dark .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l2 td {
+    @apply bg-slate-900 text-sky-300;
+  }
+
+  .dark .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l3 td {
+    @apply bg-slate-800/80;
+  }
+
+  .dark .legacy-erp-tb-grid tbody tr.legacy-erp-tb-row--l4 td {
+    @apply bg-slate-900/70;
+  }
+
+  .legacy-erp-options-dialog {
+    @apply max-h-[min(90vh,720px)];
+  }
+
+  .legacy-erp-options-body {
+    @apply max-h-[min(70vh,560px)] overflow-auto;
+  }
+
+  .legacy-erp-options-layout {
+    @apply grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(220px,0.8fr)];
+  }
+
+  .legacy-erp-options-panel {
+    @apply rounded-sm border border-slate-400/70 bg-white/70 p-2;
+  }
+
+  .legacy-erp-options-panel--dept {
+    @apply mt-2;
+  }
+
+  .legacy-erp-options-heading {
+    @apply mb-2 border-b border-slate-300 pb-1 text-[11px] font-bold uppercase tracking-wide text-slate-700;
+  }
+
+  .legacy-erp-options-columns {
+    @apply grid gap-3 md:grid-cols-2;
+  }
+
+  .legacy-erp-options-list {
+    @apply max-h-[min(42vh,360px)] space-y-0.5 overflow-auto pr-1;
+  }
+
+  .legacy-erp-options-check {
+    @apply flex items-start gap-2 py-0.5 leading-tight text-slate-800;
+  }
+
+  .legacy-erp-options-check input {
+    @apply mt-0.5 shrink-0;
+  }
+
+  .legacy-erp-options-check--disabled {
+    @apply text-slate-400;
+  }
+
+  .voucher-register {
+    @apply overflow-hidden rounded-lg border border-slate-300 bg-white shadow-sm;
+  }
+
+  .dark .voucher-register {
+    @apply border-slate-600 bg-slate-900;
+  }
+
+  .voucher-register__trigger {
+    @apply flex w-full items-center justify-between gap-3 border-b border-slate-200 bg-slate-50 px-3 py-2.5 text-left transition-colors hover:bg-slate-100;
+  }
+
+  .dark .voucher-register__trigger {
+    @apply border-slate-700 bg-slate-800/80 hover:bg-slate-800;
+  }
+
+  .voucher-register__trigger-main {
+    @apply flex min-w-0 items-center gap-2 text-sm font-semibold text-slate-800;
+  }
+
+  .dark .voucher-register__trigger-main {
+    @apply text-slate-100;
+  }
+
+  .voucher-register__trigger-meta {
+    @apply flex shrink-0 items-center gap-1 text-xs font-medium text-slate-500;
+  }
+
+  .voucher-register__count {
+    @apply rounded-full bg-slate-200 px-2 py-0.5 text-[11px] font-semibold tabular-nums text-slate-700;
+  }
+
+  .voucher-register__count--draft {
+    @apply bg-amber-100 text-amber-900;
+  }
+
+  .voucher-register__body {
+    @apply space-y-3 p-3;
+  }
+
+  .voucher-register__toolbar {
+    @apply flex flex-col gap-2 sm:flex-row sm:items-center;
+  }
+
+  .voucher-register__filter-pill {
+    @apply inline-flex h-9 items-center rounded-md border border-slate-200 bg-slate-50 px-3 text-xs font-medium text-slate-700;
+  }
+
+  .voucher-register__select {
+    @apply h-9 w-full min-w-[9rem] rounded-md border border-slate-200 bg-white text-xs sm:w-auto;
+  }
+
+  .voucher-register__search {
+    @apply flex h-9 min-w-0 flex-1 items-center gap-2 rounded-md border border-slate-200 bg-white px-2.5;
+  }
+
+  .voucher-register__search-input {
+    @apply h-8 flex-1 border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0;
+  }
+
+  .voucher-register__table-wrap {
+    @apply max-h-80 overflow-auto rounded-md border border-slate-200;
+  }
+
+  .voucher-register__table {
+    @apply w-full border-collapse text-xs;
+  }
+
+  .voucher-register__table thead tr {
+    @apply bg-[#316ac5] text-white;
+  }
+
+  .voucher-register__table th {
+    @apply border-b border-[#2a5dad] px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wide;
+  }
+
+  .voucher-register__table td {
+    @apply border-b border-slate-100 px-3 py-2.5 align-middle text-slate-700;
+  }
+
+  .voucher-register__row {
+    @apply cursor-pointer transition-colors hover:bg-[#fff9e6];
+  }
+
+  .voucher-register__desc {
+    @apply max-w-[18rem] truncate text-sm leading-snug text-slate-800;
+  }
+
+  .voucher-register__ref {
+    @apply text-[11px] font-medium uppercase tracking-wide text-slate-500;
+  }
+
+  .voucher-register__type {
+    @apply inline-flex min-w-[2.25rem] items-center justify-center rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide;
+  }
+
+  .voucher-register__type--rv {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .voucher-register__type--pv {
+    @apply bg-orange-100 text-orange-800;
+  }
+
+  .voucher-register__type--jv {
+    @apply bg-blue-100 text-blue-800;
+  }
+
+  .voucher-register__type--cv {
+    @apply bg-violet-100 text-violet-800;
+  }
+
+  .voucher-register__type--other {
+    @apply bg-slate-100 text-slate-700;
+  }
+
+  .voucher-register__empty {
+    @apply py-10 text-center text-sm text-slate-500;
+  }
+
+  .voucher-register__footer {
+    @apply text-[11px] text-slate-500;
+  }
+
+  .voucher-register__section-title {
+    @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
+  }
+
+  .voucher-register__drafts {
+    @apply space-y-2;
+  }
+}

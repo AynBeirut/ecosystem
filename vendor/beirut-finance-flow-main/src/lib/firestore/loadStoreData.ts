@@ -89,6 +89,7 @@ export async function loadStoreData(storeId: string): Promise<LoadedStoreData> {
   ]);
 
   const clients = customersSnap.docs.map((d) => mapFsClient(d.id, d.data() as Record<string, unknown>));
+  const clientsById = new Map(clients.map((client) => [client.id, client]));
   const fgCostMap = buildFinishedGoodsCostMap(
     finishedGoodsSnap.docs.map((d) => ({ data: d.data() as Record<string, unknown> })),
   );
@@ -106,9 +107,11 @@ export async function loadStoreData(storeId: string): Promise<LoadedStoreData> {
     if (!purchaseOrdersById.has(po.id)) purchaseOrdersById.set(po.id, po);
   }
   const purchaseOrders = [...purchaseOrdersById.values()];
-  const fallbackInvoices = ordersSnap.docs.map((d) =>
-    mapFsPlatformOrder(d.id, d.data() as Record<string, unknown>),
-  );
+  const fallbackInvoices = ordersSnap.docs.map((d) => {
+    const data = d.data() as Record<string, unknown>;
+    const customerId = data.customerId != null ? String(data.customerId) : '';
+    return mapFsPlatformOrder(d.id, data, clientsById.get(customerId));
+  });
 
   return {
     clients,

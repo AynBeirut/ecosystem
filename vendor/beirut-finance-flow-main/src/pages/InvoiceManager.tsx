@@ -376,8 +376,29 @@ const InvoiceManager = () => {
 
   const handlePreviewInvoice = (invoiceData: any = null) => {
     if (invoiceData) {
+      const normalizedItems = Array.isArray(invoiceData.items) ? invoiceData.items : [];
+      const subtotalFromItems = normalizedItems.reduce((sum: number, item: any) => {
+        const quantity = Number(item?.quantity ?? 0) || 0;
+        const unitPrice = Number(item?.unitPrice ?? item?.price ?? item?.priceAtOrder ?? item?.salePrice ?? 0) || 0;
+        const lineSubtotal = Number(item?.subtotal ?? item?.total ?? item?.lineTotal ?? quantity * unitPrice) || 0;
+        return sum + lineSubtotal;
+      }, 0);
+      const subtotal = Number(invoiceData.subtotal ?? subtotalFromItems ?? invoiceData.amount ?? invoiceData.total ?? 0) || 0;
+      const discount = Number(invoiceData.discount ?? invoiceData.discountAmount ?? 0) || 0;
+      const taxRate = Number(invoiceData.tax ?? invoiceData.taxRate ?? 0) || 0;
+      const taxAmount = Number(invoiceData.taxAmount ?? invoiceData.vat ?? subtotal * (taxRate / 100)) || 0;
+      const total = Number(invoiceData.total ?? (subtotal + taxAmount - discount)) || 0;
+
       setSelectedInvoiceId(invoiceData.id);
-      setPreviewInvoiceData(invoiceData);
+      setPreviewInvoiceData({
+        ...invoiceData,
+        invoiceNumber: invoiceData.invoiceNumber || invoiceData.id,
+        subtotal,
+        discount,
+        tax: taxRate,
+        taxAmount,
+        total,
+      });
     } else {
       const values = form.getValues();
       const totals = calculateTotals();
@@ -836,7 +857,7 @@ const InvoiceManager = () => {
                       Date: {previewInvoiceData.date}
                     </p>
                     <p className="text-gray-500">
-                      Invoice #: {previewInvoiceData.id || "Draft"}
+                      Invoice #: {previewInvoiceData.invoiceNumber || previewInvoiceData.id || "Draft"}
                     </p>
                   </div>
                 </div>

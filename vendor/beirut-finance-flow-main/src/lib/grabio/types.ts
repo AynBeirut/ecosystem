@@ -1,6 +1,10 @@
 export type GrabioSubscriptionTier = 'trial' | 'starter' | 'pro' | 'business' | 'premium';
 
 export type FinanceDocumentSettings = {
+  documentLogo?: string;
+  documentCompanyName?: string;
+  documentAddress?: string;
+  documentTaxId?: string;
   primaryColor?: string;
   secondaryColor?: string;
   invoiceTemplate?: 'basic' | 'modern' | 'professional';
@@ -35,6 +39,7 @@ export type GrabioStoreProfile = {
   ownerId?: string;
   isDemo?: boolean;
   taxId?: string;
+  taxNumber?: string;
   commercialRegistry?: string;
   /** Base currency for calculations (synced from Grabio Admin Profile). */
   mainCurrency?: string;

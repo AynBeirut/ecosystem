@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Navigate } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
+import { buildStorePublicUrl } from '@/lib/storeUrls';
 
 interface Props {
   hostname: string;
@@ -61,12 +61,27 @@ const CustomDomainStore: React.FC<Props> = ({ hostname }) => {
     );
   }
 
+  useEffect(() => {
+    if (storeSlug) {
+      window.location.replace(buildStorePublicUrl(storeSlug));
+    }
+  }, [storeSlug]);
+
   if (storeSlug) {
-    return <Navigate to={`/${storeSlug}`} replace />;
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
+      </div>
+    );
   }
 
   if (storeId) {
-    return <Navigate to={`/store/id/${storeId}`} replace />;
+    return (
+      <div className="min-h-screen flex items-center justify-center flex-col gap-4 p-8 text-center">
+        <h1 className="text-2xl font-bold">Store Not Found</h1>
+        <p className="text-muted-foreground">This domain is not linked to a store yet.</p>
+      </div>
+    );
   }
 
   return null;

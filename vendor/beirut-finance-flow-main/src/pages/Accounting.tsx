@@ -1,10 +1,11 @@
 import { useMemo, useState, useEffect, useCallback } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { useAccounting } from "@/context/AccountingContext";
 import { useLedger } from "@/context/LedgerContext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,9 +13,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Scale, Plus, RefreshCw, CheckCircle2, AlertTriangle, Lock, Unlock, FileSpreadsheet, Layers, FileText, Receipt, TrendingUp, TrendingDown, Wallet, Calculator, Landmark, GitCompare, CalendarRange, PieChart, Repeat, Building2, type LucideIcon } from "lucide-react";
+import { BookOpen, Scale, Plus, RefreshCw, CheckCircle2, AlertTriangle, Lock, Unlock, FileSpreadsheet, Layers, FileText, Receipt, TrendingUp, TrendingDown, Wallet, Calculator, Landmark, GitCompare, CalendarRange, PieChart, Repeat, Building2, ChevronDown, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, cn } from "@/lib/utils";
 import type { JournalLineInput, PeriodLockType, VoucherMeta, VoucherType } from "@/types/generalLedger";
 import { buildReconciliationReport, lebaneseGlLookupCodes, tbBalanceForCodes } from "@/lib/ledger/reconciliation";
 import { buildVatFilingSummary, vatFilingSummaryToCsv } from "@/lib/ledger/vatFilingSummary";
@@ -70,7 +71,6 @@ import { loadPcgClientAccounts } from "@/lib/firestore/pcgClientAccountsFirestor
 import type { PcgClientAccount } from "@/types/generalLedger";
 import type { LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
 import AccountantWorkspacePanel from "@/components/AccountantWorkspacePanel";
-import VoucherRegisterPanel from "@/components/VoucherRegisterPanel";
 import LedgerActivityDialog from "@/components/LedgerActivityDialog";
 import { LedgerAccountCombobox } from "@/components/LedgerAccountCombobox";
 import VoucherDetailDialog from "@/components/VoucherDetailDialog";
@@ -85,6 +85,7 @@ import PartyStatementPanel from "@/components/PartyStatementPanel";
 import GeneralLedgerPanel from "@/components/GeneralLedgerPanel";
 import BulkVoucherImportPanel from "@/components/BulkVoucherImportPanel";
 import { loadSettlements, saveSettlementsForEntry } from "@/lib/firestore/settlementFirestore";
+import TrialBalancePanel from "@/components/TrialBalancePanel";
 import { buildExtendedTrialBalance, extendedTrialBalanceToCsv } from "@/lib/ledger/trialBalanceExtended";
 import {
   buildR10SalaryWithholdingReport,
@@ -94,11 +95,11 @@ import {
 } from "@/lib/ledger/lebaneseTaxReports";
 import { downloadCsvText } from "@/lib/csvExport";
 import { downloadXlsxFromCsv } from "@/lib/xlsxExport";
-import type { SettlementAllocationInput, TrialBalanceViewMode, VoucherLineSettlement } from "@/types/generalLedger";
+import type { SettlementAllocationInput, VoucherLineSettlement } from "@/types/generalLedger";
 import type { LedgerActivityFocus } from "@/lib/ledger/ledgerActivity";
 import { consumeLedgerFocus } from "@/lib/ledger/ledgerActivity";
-import AccountingHubPanel from "@/components/AccountingHubPanel";
 import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
+import { useFinanceShellState } from "@/context/FinanceShellStateContext";
 
 function monthBounds(year: number, month: number): { start: string; end: string } {
   const start = `${year}-${String(month).padStart(2, "0")}-01`;
@@ -124,6 +125,7 @@ const ACCOUNTING_REPORT_TABS = new Set([
   "depreciation",
   "reconciliation",
   "general-ledger",
+  "party-soa",
   "vat-filing",
   "ar-aging",
   "ap-aging",
@@ -142,12 +144,30 @@ const ACCOUNTING_SETTINGS_TABS = new Set([
   "checks",
 ]);
 
+const STOCK_REPORT_TABS = new Set(["sales", "purchases", "inventory", "products"]);
+
 function tabBackLink(tab: string): { to: string; label: string } {
   if (ACCOUNTING_REPORT_TABS.has(tab)) {
-    return { to: "/admin/finance/reports", label: "Back to Reports" };
+    const module =
+      tab === "ap-aging" || tab === "purchases"
+        ? "payables"
+        : tab === "ar-aging" || tab === "sales"
+          ? "receivables"
+          : tab === "bank-rec" || tab === "cash-flow"
+            ? "bank"
+            : tab === "depreciation"
+              ? "assets"
+              : "reports";
+    return { to: `/admin/finance/${module}?report=${encodeURIComponent(tab)}`, label: "Back" };
+  }
+  if (STOCK_REPORT_TABS.has(tab)) {
+    return { to: `/admin/finance/stock?report=${encodeURIComponent(tab)}`, label: "Back" };
   }
   if (ACCOUNTING_SETTINGS_TABS.has(tab)) {
-    return { to: "/admin/finance/settings", label: "Back to Settings" };
+    if (tab === "coa") {
+      return { to: "/admin/finance/coa?setting=coa", label: "Back" };
+    }
+    return { to: `/admin/finance/tools?setting=${encodeURIComponent(tab)}`, label: "Back" };
   }
   return { to: "/admin/finance/accounting", label: "Back to Accounting" };
 }
@@ -186,8 +206,21 @@ const ACCOUNTING_TAB_ROWS: AccountingTabDef[][] = [
 
 const Accounting = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { logout, invoices, purchaseOrders, paymentOrders, activeOrganizationId, recordInvoicePayment } = useAppContext();
   const { embedded } = useFinanceEmbed();
+  const { activeFinanceTab, reportsEmbedTab, settingsEmbedTab, openReport, openSetting, openQuickStatement, setFinanceReturnUrl } =
+    useFinanceShellState();
+  const isReportsEmbed =
+    embedded &&
+    ['reports', 'payables', 'receivables', 'bank', 'assets', 'stock'].includes(activeFinanceTab) &&
+    Boolean(reportsEmbedTab) &&
+    (ACCOUNTING_REPORT_TABS.has(reportsEmbedTab) || STOCK_REPORT_TABS.has(reportsEmbedTab));
+  const isSettingsEmbed =
+    embedded &&
+    Boolean(settingsEmbedTab) &&
+    (activeFinanceTab === 'tools' || activeFinanceTab === 'coa');
+  const isHubEmbed = isReportsEmbed || isSettingsEmbed;
   const { profile, storeId: grabioStoreId } = useGrabioStore();
   const financeStoreId = grabioStoreId || activeOrganizationId || "";
   const accountingLanguage = normalizeAccountingLanguage(
@@ -211,7 +244,6 @@ const Accounting = () => {
     refreshLedger,
     postVoucherEntry,
     postAdjustmentEntry,
-    saveDraftVoucher,
     postDraftVoucher,
     reverseEntry,
     setOpeningBalance,
@@ -235,26 +267,67 @@ const Accounting = () => {
   const [reopenTargetId, setReopenTargetId] = useState("");
   const [periodActionLoading, setPeriodActionLoading] = useState(false);
 
-  const [activeTab, setActiveTab] = useState("hub");
+  const [activeTab, setActiveTab] = useState("vouchers");
   const [searchParams] = useSearchParams();
+
+  const isDeepLinkView =
+    !embedded &&
+    !isHubEmbed &&
+    (ACCOUNTING_REPORT_TABS.has(activeTab) || ACCOUNTING_SETTINGS_TABS.has(activeTab));
+  const isPrimaryView = !isDeepLinkView && !isHubEmbed;
+
+  const selectPrimaryTab = useCallback((tab: "vouchers" | "workspace" | "party-soa") => {
+    setActiveTab(tab);
+  }, []);
 
   const goToTab = useCallback(
     (tab: string) => {
-      if (tab === "hub") {
-        navigate("/admin/finance/accounting");
-        setActiveTab("hub");
+      if (ACCOUNTING_PRIMARY_TABS.has(tab)) {
+        selectPrimaryTab(tab as "vouchers" | "workspace" | "party-soa");
+        return;
+      }
+      if (embedded && ACCOUNTING_REPORT_TABS.has(tab)) {
+        openReport(tab);
+        return;
+      }
+      if (embedded && ACCOUNTING_SETTINGS_TABS.has(tab)) {
+        openSetting(tab);
+        return;
+      }
+      if (isReportsEmbed && ACCOUNTING_REPORT_TABS.has(tab)) {
+        openReport(tab);
+        return;
+      }
+      if (isSettingsEmbed && ACCOUNTING_SETTINGS_TABS.has(tab)) {
+        openSetting(tab);
         return;
       }
       navigate(`/admin/finance/accounting?tab=${encodeURIComponent(tab)}`);
       setActiveTab(tab);
     },
-    [navigate],
+    [embedded, isReportsEmbed, isSettingsEmbed, navigate, openReport, openSetting, selectPrimaryTab],
   );
 
   const navigateFromQuickBar = useCallback(
     (tab: string) => {
+      if (embedded && ACCOUNTING_REPORT_TABS.has(tab)) {
+        openReport(tab);
+        return;
+      }
+      if (embedded && ACCOUNTING_SETTINGS_TABS.has(tab)) {
+        openSetting(tab);
+        return;
+      }
       const reportOrSettings =
         ACCOUNTING_REPORT_TABS.has(tab) || ACCOUNTING_SETTINGS_TABS.has(tab);
+      if (isReportsEmbed && ACCOUNTING_REPORT_TABS.has(tab)) {
+        openReport(tab);
+        return;
+      }
+      if (isSettingsEmbed && ACCOUNTING_SETTINGS_TABS.has(tab)) {
+        openSetting(tab);
+        return;
+      }
       if (reportOrSettings) {
         navigate(`/admin/finance/accounting?tab=${encodeURIComponent(tab)}`);
         setActiveTab(tab);
@@ -262,7 +335,7 @@ const Accounting = () => {
       }
       goToTab(tab);
     },
-    [goToTab, navigate],
+    [embedded, goToTab, isReportsEmbed, isSettingsEmbed, navigate, openReport, openSetting],
   );
   const [posting, setPosting] = useState(false);
   const [openingAccountId, setOpeningAccountId] = useState("");
@@ -275,13 +348,13 @@ const Accounting = () => {
   const [pcgClientAccounts, setPcgClientAccounts] = useState<PcgClientAccount[]>([]);
   const [pcgPrefillAccount, setPcgPrefillAccount] = useState<LebanesePcgAccount | null>(null);
   const [pcgPrefillKey, setPcgPrefillKey] = useState(0);
+  const [coaWorkingOpen, setCoaWorkingOpen] = useState(false);
   const [glPresetAccountId, setGlPresetAccountId] = useState("");
   const [ledgerFocus, setLedgerFocus] = useState<LedgerActivityFocus | null>(null);
   const [quickVoucherEntryId, setQuickVoucherEntryId] = useState("");
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settlements, setSettlements] = useState<VoucherLineSettlement[]>([]);
-  const [tbViewMode, setTbViewMode] = useState<TrialBalanceViewMode>("2col");
-  const [tbStartDate, setTbStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
+  const [tbStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
   const [postingDraft, setPostingDraft] = useState(false);
   const [reversing, setReversing] = useState(false);
 
@@ -297,9 +370,12 @@ const Accounting = () => {
   const openAccountDrill = useCallback(
     (accountId: string) => {
       setGlPresetAccountId(accountId);
+      if (isReportsEmbed && reportsEmbedTab && reportsEmbedTab !== 'general-ledger') {
+        setFinanceReturnUrl(`${location.pathname}${location.search}`);
+      }
       navigateFromQuickBar("general-ledger");
     },
-    [navigateFromQuickBar],
+    [isReportsEmbed, location.pathname, location.search, navigateFromQuickBar, reportsEmbedTab, setFinanceReturnUrl],
   );
 
   const openClientVouchers = useCallback((clientId: string | undefined, clientName: string) => {
@@ -367,9 +443,9 @@ const Accounting = () => {
       buildExtendedTrialBalance(accounts, entries, lines, {
         startDate: tbStartDate,
         endDate: asOfDate,
-        viewMode: tbViewMode,
+        viewMode: '6col',
       }),
-    [accounts, entries, lines, tbStartDate, asOfDate, tbViewMode],
+    [accounts, entries, lines, tbStartDate, asOfDate],
   );
 
   const r10Report = useMemo(
@@ -383,13 +459,38 @@ const Accounting = () => {
   );
 
   useEffect(() => {
+    if (isReportsEmbed && reportsEmbedTab) {
+      setActiveTab(reportsEmbedTab);
+      return;
+    }
+    if (isSettingsEmbed && settingsEmbedTab) {
+      setActiveTab(settingsEmbedTab);
+      return;
+    }
+    if (embedded && activeFinanceTab === "accounting") {
+      const tab = searchParams.get("tab");
+      if (tab && ACCOUNTING_PRIMARY_TABS.has(tab)) {
+        setActiveTab(tab);
+        return;
+      }
+      setActiveTab("vouchers");
+      return;
+    }
     const tab = searchParams.get("tab");
     if (!tab) {
-      setActiveTab("hub");
+      setActiveTab("vouchers");
       return;
     }
     setActiveTab(tab);
-  }, [searchParams]);
+  }, [
+    activeFinanceTab,
+    embedded,
+    isReportsEmbed,
+    reportsEmbedTab,
+    isSettingsEmbed,
+    settingsEmbedTab,
+    searchParams,
+  ]);
 
   useEffect(() => {
     const parsed = consumeLedgerFocus();
@@ -411,6 +512,7 @@ const Accounting = () => {
     (account: LebanesePcgAccount) => {
       setPcgPrefillAccount(account);
       setPcgPrefillKey((key) => key + 1);
+      setCoaWorkingOpen(true);
       navigateFromQuickBar("coa");
     },
     [navigateFromQuickBar],
@@ -719,60 +821,6 @@ const Accounting = () => {
     }
   };
 
-  const handleSaveDraft = async (payload: {
-    voucherType: VoucherType;
-    date: string;
-    memo: string;
-    lines: JournalLineInput[];
-    voucherMeta?: Record<string, unknown>;
-  }) => {
-    setPosting(true);
-    try {
-      await saveDraftVoucher({
-        date: new Date(payload.date).toISOString(),
-        memo: payload.memo,
-        lines: payload.lines,
-        voucherType: payload.voucherType,
-        voucherMeta: (payload.voucherMeta || {}) as VoucherMeta,
-        draftStatus: "draft",
-      });
-      toast.success("Draft saved.");
-      await refreshLedger();
-      goToTab("vouchers");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save draft");
-    } finally {
-      setPosting(false);
-    }
-  };
-
-  const handleSubmitForApproval = async (payload: {
-    voucherType: VoucherType;
-    date: string;
-    memo: string;
-    lines: JournalLineInput[];
-    voucherMeta?: Record<string, unknown>;
-  }) => {
-    setPosting(true);
-    try {
-      await saveDraftVoucher({
-        date: new Date(payload.date).toISOString(),
-        memo: payload.memo,
-        lines: payload.lines,
-        voucherType: payload.voucherType,
-        voucherMeta: (payload.voucherMeta || {}) as VoucherMeta,
-        draftStatus: "pending_approval",
-      });
-      toast.success("Submitted for approval.");
-      await refreshLedger();
-      goToTab("vouchers");
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to submit for approval");
-    } finally {
-      setPosting(false);
-    }
-  };
-
   const handlePostDraft = async (entryId: string) => {
     setPostingDraft(true);
     try {
@@ -857,13 +905,12 @@ const Accounting = () => {
     </Badge>
   ) : null;
 
-  const isHubView = activeTab === "hub";
-  const showQuickBar = isHubView || ACCOUNTING_PRIMARY_TABS.has(activeTab);
-  const backLink = !isHubView ? tabBackLink(activeTab) : null;
+  const showQuickBar = isPrimaryView;
+  const backLink = isDeepLinkView ? tabBackLink(activeTab) : null;
 
   return (
     <FinancePageShell onLogout={logout}>
-      <div className="space-y-6">
+      <div className={embedded ? 'space-y-3' : 'space-y-6'}>
         {!embedded && (
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="finance-page-header">
@@ -911,19 +958,26 @@ const Accounting = () => {
         </div>
         )}
 
-        {embedded && !isHubView && backLink && (
-          <div className="rounded-lg border bg-white px-4 py-3 flex flex-wrap items-center gap-2">
-            <Link to={backLink.to} className="text-sm font-medium text-teal-700 hover:text-teal-900">
-              ← {backLink.label}
-            </Link>
-            <span className="text-xs text-muted-foreground ml-auto">As of {asOfDate}</span>
+        {embedded && isHubEmbed && (
+          <div className="flex flex-wrap items-center gap-2 pb-1">
+            <Label htmlFor="hub-embed-as-of" className="text-xs whitespace-nowrap">
+              As of
+            </Label>
+            <Input
+              id="hub-embed-as-of"
+              type="date"
+              value={asOfDate}
+              onChange={(e) => setAsOfDate(e.target.value)}
+              className="w-[150px] bg-white text-slate-900 border-slate-300"
+            />
             <Button variant="outline" size="sm" onClick={() => void refreshLedger()} disabled={loading}>
-              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+              <RefreshCw className={`h-4 w-4 mr-1 ${loading ? "animate-spin" : ""}`} />
+              Refresh
             </Button>
           </div>
         )}
 
-        <SystemGuideBanner enabled={systemGuideEnabled} />
+        {!isHubEmbed && !embedded && <SystemGuideBanner enabled={systemGuideEnabled} />}
 
         {closedPeriods.length > 0 && (
           <div className="flex flex-wrap gap-2">
@@ -936,7 +990,7 @@ const Accounting = () => {
           </div>
         )}
 
-        {showQuickBar && (
+        {showQuickBar && !embedded && (
         <AccountingQuickBar
           totals={subledgerTotals}
           balanced={trialBalance.balanced}
@@ -945,13 +999,8 @@ const Accounting = () => {
           systemGuideEnabled={systemGuideEnabled}
           onNavigate={navigateFromQuickBar}
           onOpenSearch={() => setCommandPaletteOpen(true)}
+          onOpenQuickStatement={embedded ? openQuickStatement : undefined}
         />
-        )}
-
-        {isHubView && (
-          <div className="rounded-lg border bg-white p-4 md:p-6">
-            <AccountingHubPanel />
-          </div>
         )}
 
         <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
@@ -1049,7 +1098,6 @@ const Accounting = () => {
           </DialogContent>
         </Dialog>
 
-        {!isHubView && (
         <Tabs value={activeTab} onValueChange={goToTab}>
           <div className="finance-accounting-tabs-shell hidden" aria-hidden />
 
@@ -1071,103 +1119,124 @@ const Accounting = () => {
 
           <TabsContent value="coa" className="mt-4">
             {isLebaneseCoa ? (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Your Working Account Numbers
-                    <SystemGuideInfo
-                      enabled={systemGuideEnabled}
-                      label="What working account numbers are"
-                      title="Client sub-accounts"
-                      content={[
-                        "Map your accountant's own account numbers under the official PCG chart.",
-                        "Reports and exports show these codes; underlying ledger balances stay on Grabio posting accounts.",
-                      ]}
-                    />
-                  </CardTitle>
-                  <CardDescription>
-                    Add only the accounts the accountant needs under the Lebanese PCG chart. Reports show these
-                    numbers while ledger totals stay unchanged.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  {financeStoreId ? (
-                    <PcgClientAccountsPanel
-                      storeId={financeStoreId}
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div>
+                        <CardTitle className="flex items-center gap-2">
+                          Account List — Lebanese PCG
+                          <SystemGuideInfo
+                            enabled={systemGuideEnabled}
+                            label="What the PCG list is"
+                            title="Lebanese PCG chart"
+                            content={[
+                              "Standard plan comptable — classes 1 through 7.",
+                              "Click a number for voucher movements. Use Add on a class or detail row to create working account numbers.",
+                            ]}
+                          />
+                        </CardTitle>
+                        <CardDescription className="mt-1">
+                          Expand a class, click an account for movements, or Add to map your working numbers.
+                        </CardDescription>
+                      </div>
+                      <Button variant="outline" size="sm" onClick={() => void ensureCoa()}>
+                        Sync chart
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent>
+                    <LebanesePcgCoaPanel
                       activeLedgerAccounts={accounts.filter((a) => a.isActive)}
-                      rows={pcgClientAccounts}
-                      onChange={setPcgClientAccounts}
-                      prefillAccount={pcgPrefillAccount}
-                      prefillKey={pcgPrefillKey}
+                      pcgClientAccounts={pcgClientAccounts}
+                      entries={entries}
+                      lines={lines}
+                      asOfDate={asOfDate}
+                      accountingLanguage={accountingLanguage}
+                      onAddClientAccount={openClientAccountFromPcg}
                     />
-                  ) : (
-                    <p className="text-sm text-muted-foreground">Select a store to manage client codes.</p>
-                  )}
-                </CardContent>
-              </Card>
-            ) : null}
+                  </CardContent>
+                </Card>
 
-            {isLebaneseCoa ? (
-              <Card className="mt-4">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    Account List — Lebanese PCG
-                    <SystemGuideInfo
-                      enabled={systemGuideEnabled}
-                      label="What the PCG list is"
-                      title="Lebanese PCG chart"
-                      content={[
-                        "Reference list from the standard Lebanese plan comptable. Use it to pick parent codes when adding working numbers.",
-                        "G = group header, D = detail account. Balances post to operational Grabio accounts linked to each PCG code.",
-                      ]}
-                    />
-                  </CardTitle>
-                  <CardDescription>
-                    Standard chart from your PCG template (Code · Name · Arabic · G/D · Cur). Operational GL
-                    balances remain on Grabio posting accounts; reports show PCG or your client sub-account codes.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <LebanesePcgCoaPanel
-                    activeLedgerAccounts={accounts.filter((a) => a.isActive)}
-                    pcgClientAccounts={pcgClientAccounts}
-                    onAddClientAccount={openClientAccountFromPcg}
-                  />
-                </CardContent>
-              </Card>
-            ) : null}
-
-            <Card className={isLebaneseCoa ? "mt-4" : undefined}>
+                <Collapsible open={coaWorkingOpen} onOpenChange={setCoaWorkingOpen}>
+                  <Card>
+                    <CollapsibleTrigger asChild>
+                      <button type="button" className="w-full text-left">
+                        <CardHeader className="flex flex-row items-center justify-between gap-3 pb-3">
+                          <div>
+                            <CardTitle className="flex items-center gap-2">
+                              Your Working Account Numbers
+                              <SystemGuideInfo
+                                enabled={systemGuideEnabled}
+                                label="What working account numbers are"
+                                title="Client sub-accounts"
+                                content={[
+                                  "Your accountant's own codes under the PCG chart.",
+                                  "Reports show these numbers; balances post through linked Grabio accounts.",
+                                ]}
+                              />
+                            </CardTitle>
+                            <CardDescription className="mt-1">
+                              {pcgClientAccounts.length
+                                ? `${pcgClientAccounts.length} working account${pcgClientAccounts.length === 1 ? "" : "s"} — expand to edit or import`
+                                : "No working accounts yet — expand to add or import"}
+                            </CardDescription>
+                          </div>
+                          <ChevronDown
+                            className={cn(
+                              "h-4 w-4 shrink-0 text-muted-foreground transition-transform",
+                              coaWorkingOpen && "rotate-180",
+                            )}
+                          />
+                        </CardHeader>
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <CardContent className="pt-0">
+                        {financeStoreId ? (
+                          <PcgClientAccountsPanel
+                            storeId={financeStoreId}
+                            activeLedgerAccounts={accounts.filter((a) => a.isActive)}
+                            rows={pcgClientAccounts}
+                            onChange={setPcgClientAccounts}
+                            prefillAccount={pcgPrefillAccount}
+                            prefillKey={pcgPrefillKey}
+                          />
+                        ) : (
+                          <p className="text-sm text-muted-foreground">Select a store to manage client codes.</p>
+                        )}
+                      </CardContent>
+                    </CollapsibleContent>
+                  </Card>
+                </Collapsible>
+              </div>
+            ) : (
+            <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  {isLebaneseCoa ? "Active posting accounts (Grabio)" : "Chart of Accounts"}
+                  Chart of Accounts
                   <SystemGuideInfo
                     enabled={systemGuideEnabled}
                     label="What the chart of accounts is"
                     title="Chart of Accounts"
                     content={[
                       "Every ledger account used for posting sales, purchases, expenses, and manual vouchers.",
-                      "Use Ledger on a row to see activity, or Sync/Initialize to add missing PCG template accounts.",
+                      "Use Ledger on a row to see activity, or Sync/Initialize to add missing template accounts.",
                     ]}
                   />
                 </CardTitle>
                 <CardDescription>
-                  {accounts.length
-                    ? isLebaneseCoa
-                      ? `${accounts.length} ledger accounts (${accounts.filter((a) => a.isPcgChart).length} PCG chart + ${accounts.filter((a) => !a.isPcgChart).length} operational posting). Click Initialize to add any missing Excel chart rows.`
-                      : `${accounts.length} accounts`
-                    : "Default SMB template will seed on first load."}
+                  {accounts.length ? `${accounts.length} accounts` : "Default SMB template will seed on first load."}
                 </CardDescription>
               </CardHeader>
               <CardContent>
                 <Button variant="outline" size="sm" className="mb-4" onClick={() => void ensureCoa()}>
-                  {isLebaneseCoa ? "Sync full PCG chart" : "Initialize / Refresh COA"}
+                  Initialize / Refresh COA
                 </Button>
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>{isLebaneseCoa ? "Account number" : "Code"}</TableHead>
-                      {isLebaneseCoa ? <TableHead className="w-[88px]">Grabio</TableHead> : null}
+                      <TableHead>Code</TableHead>
                       <TableHead>Name</TableHead>
                       {arabicEntry ? <TableHead>Arabic name</TableHead> : null}
                       <TableHead>Type</TableHead>
@@ -1179,16 +1248,7 @@ const Accounting = () => {
                   <TableBody>
                     {accounts.map((a) => (
                       <TableRow key={a.id}>
-                        <TableCell className="font-mono text-xs tabular-nums">
-                          {isLebaneseCoa
-                            ? displayPcgCodeForLedgerRow(a, clientByGrabio, clientByParentPcg)
-                            : a.code}
-                        </TableCell>
-                        {isLebaneseCoa ? (
-                          <TableCell className="font-mono text-xs text-muted-foreground tabular-nums">
-                            {displayGrabioCodeForLedgerRow(a, clientByParentPcg)}
-                          </TableCell>
-                        ) : null}
+                        <TableCell className="font-mono text-xs tabular-nums">{a.code}</TableCell>
                         <TableCell>{a.name}</TableCell>
                         {arabicEntry ? (
                           <TableCell dir="rtl" className="text-right">
@@ -1202,14 +1262,7 @@ const Accounting = () => {
                             type="button"
                             variant="ghost"
                             size="sm"
-                            onClick={() =>
-                              openAccountActivity(
-                                a.id,
-                                isLebaneseCoa
-                                  ? formatPcgAccountLabel(a, accountingLanguage, clientByGrabio)
-                                  : `${a.code} · ${a.name}`,
-                              )
-                            }
+                            onClick={() => openAccountActivity(a.id, `${a.code} · ${a.name}`)}
                           >
                             Ledger
                           </Button>
@@ -1273,6 +1326,7 @@ const Accounting = () => {
                 </Dialog>
               </CardContent>
             </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="vouchers" className="mt-4">
@@ -1306,25 +1360,16 @@ const Accounting = () => {
                   mainCurrency={profile?.mainCurrency}
                   posting={posting}
                   onPost={(p) => void handlePostVoucher(p)}
-                  onSaveDraft={(p) => void handleSaveDraft(p)}
-                  onSubmitForApproval={(p) => void handleSubmitForApproval(p)}
+                  registerEntries={entries}
+                  registerLines={lines}
+                  systemGuideEnabled={systemGuideEnabled}
+                  onRegisterPostDraft={(id) => void handlePostDraft(id)}
+                  postingRegisterDraft={postingDraft}
+                  onRegisterReverse={(id) => void handleReverseEntry(id)}
+                  reversingRegister={reversing}
                 />
               </CardContent>
             </Card>
-            <div className="mt-4">
-              <VoucherRegisterPanel
-                entries={entries}
-                lines={lines}
-                accountingLanguage={accountingLanguage}
-                isLebaneseCoa={isLebaneseCoa}
-                pcgClientAccounts={pcgClientAccounts}
-                systemGuideEnabled={systemGuideEnabled}
-                onPostDraft={(id) => void handlePostDraft(id)}
-                postingDraft={postingDraft}
-                onReverse={(id) => void handleReverseEntry(id)}
-                reversing={reversing}
-              />
-            </div>
           </TabsContent>
 
           <TabsContent value="vat-filing" className="mt-4">
@@ -1977,185 +2022,19 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="trial-balance" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Scale className="h-5 w-5" />
-                  Trial Balance
-                  <SystemGuideInfo
-                    enabled={systemGuideEnabled}
-                    label="What Trial Balance does"
-                    title="Trial Balance"
-                    content={[
-                      "Trial Balance lists each ledger account with its debit or credit balance as of the selected date.",
-                      "Use it to confirm the books are balanced and to spot accounts that need review before you trust the final reports.",
-                    ]}
-                  />
-                </CardTitle>
-                <CardDescription className="flex flex-wrap items-center gap-2">
-                  Read-only · as of {asOfDate}
-                  {isLebaneseCoa ? (
-                    <Badge variant="secondary">PCG / client codes (Phase 3)</Badge>
-                  ) : null}
-                  {periodLockBanner}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {!loading && accounts.length > 0 && entries.length === 0 ? (
-                  <p className="mb-4 text-sm text-amber-700 dark:text-amber-300">
-                    Ledger accounts loaded but no journal history yet for this store. Click <strong>Refresh</strong> above
-                    or confirm you are on the correct store ({financeStoreId || activeOrganizationId || "unknown"}).
-                  </p>
-                ) : null}
-                {!loading && accounts.length === 0 && financeStoreId ? (
-                  <p className="mb-4 text-sm text-amber-700 dark:text-amber-300">
-                    No ledger data loaded. Click <strong>Refresh</strong> or use Initialize / Sync COA on the Chart of Accounts tab.
-                  </p>
-                ) : null}
-                <div className="mb-4 flex flex-wrap items-center gap-2">
-                  <Select value={tbViewMode} onValueChange={(v) => setTbViewMode(v as TrialBalanceViewMode)}>
-                    <SelectTrigger className="w-[140px]"><SelectValue /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="2col">2-column</SelectItem>
-                      <SelectItem value="4col">4-column</SelectItem>
-                      <SelectItem value="6col">6-column</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  {tbViewMode !== "2col" ? (
-                    <>
-                      <Label className="text-sm">Period from</Label>
-                      <Input type="date" className="w-[160px]" value={tbStartDate} onChange={(e) => setTbStartDate(e.target.value)} />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadCsvText(`trial-balance-${tbViewMode}.csv`, extendedTrialBalanceToCsv(extendedTrialBalance))}
-                      >
-                        Export CSV
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => downloadXlsxFromCsv(`trial-balance-${tbViewMode}.xlsx`, "Trial Balance", extendedTrialBalanceToCsv(extendedTrialBalance))}
-                      >
-                        Export XLSX
-                      </Button>
-                    </>
-                  ) : null}
-                  {trialBalance.balanced ? (
-                    <Badge className="bg-green-600">
-                      <CheckCircle2 className="h-3 w-3 mr-1" /> Debits = Credits
-                    </Badge>
-                  ) : (
-                    <Badge variant="destructive">
-                      <AlertTriangle className="h-3 w-3 mr-1" /> Out of balance
-                    </Badge>
-                  )}
-                  <span className="text-sm text-muted-foreground">
-                    {formatCurrency(trialBalance.totalDebits)} debits · {formatCurrency(trialBalance.totalCredits)} credits
-                  </span>
-                </div>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>{isLebaneseCoa ? "PCG code" : "Code"}</TableHead>
-                      <TableHead>Account</TableHead>
-                      {tbViewMode === "2col" ? <TableHead>Type</TableHead> : null}
-                      {tbViewMode !== "2col" ? (
-                        <>
-                          <TableHead className="text-right">Open Dr</TableHead>
-                          <TableHead className="text-right">Open Cr</TableHead>
-                          <TableHead className="text-right">Period Dr</TableHead>
-                          <TableHead className="text-right">Period Cr</TableHead>
-                          {tbViewMode === "6col" ? (
-                            <>
-                              <TableHead className="text-right">Close Dr</TableHead>
-                              <TableHead className="text-right">Close Cr</TableHead>
-                            </>
-                          ) : null}
-                        </>
-                      ) : (
-                        <>
-                          <TableHead className="text-right">Debit</TableHead>
-                          <TableHead className="text-right">Credit</TableHead>
-                        </>
-                      )}
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {tbViewMode === "2col"
-                      ? trialBalance.rows.map((r) => (
-                          <TableRow key={r.accountId}>
-                            <TableCell>
-                              {isLebaneseCoa ? (() => {
-                                const account = accounts.find((a) => a.id === r.accountId);
-                                return (
-                                  <span className="font-mono text-xs tabular-nums">
-                                    {account
-                                      ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg)
-                                      : displayPcgCode(r.accountCode, clientByGrabio)}
-                                  </span>
-                                );
-                              })() : (
-                                <span className="font-mono">{r.accountCode}</span>
-                              )}
-                            </TableCell>
-                            <TableCell>{r.accountName}</TableCell>
-                            <TableCell className="capitalize">{r.accountType}</TableCell>
-                            <TableCell className="text-right">{r.debit ? formatCurrency(r.debit) : "—"}</TableCell>
-                            <TableCell className="text-right">{r.credit ? formatCurrency(r.credit) : "—"}</TableCell>
-                            <TableCell>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountDrill(r.accountId)}>
-                                GL
-                              </Button>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.accountCode} · ${r.accountName}`)}>
-                                Activity
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      : extendedTrialBalance.rows.map((r) => {
-                          const account = accounts.find((a) => a.id === r.accountId);
-                          const pcgCode =
-                            account && isLebaneseCoa
-                              ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg)
-                              : r.accountCode;
-                          return (
-                          <TableRow key={r.accountId}>
-                            <TableCell className="font-mono text-xs tabular-nums">{pcgCode}</TableCell>
-                            <TableCell>{r.accountName}</TableCell>
-                            <TableCell className="text-right">{r.openingDebit ? formatCurrency(r.openingDebit) : "—"}</TableCell>
-                            <TableCell className="text-right">{r.openingCredit ? formatCurrency(r.openingCredit) : "—"}</TableCell>
-                            <TableCell className="text-right">{r.periodDebit ? formatCurrency(r.periodDebit) : "—"}</TableCell>
-                            <TableCell className="text-right">{r.periodCredit ? formatCurrency(r.periodCredit) : "—"}</TableCell>
-                            {tbViewMode === "6col" ? (
-                              <>
-                                <TableCell className="text-right">{r.closingDebit ? formatCurrency(r.closingDebit) : "—"}</TableCell>
-                                <TableCell className="text-right">{r.closingCredit ? formatCurrency(r.closingCredit) : "—"}</TableCell>
-                              </>
-                            ) : null}
-                            <TableCell>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountDrill(r.accountId)}>
-                                GL
-                              </Button>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.accountCode} · ${r.accountName}`)}>
-                                Activity
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                          );
-                        })}
-                    <TableRow className="font-semibold border-t-2">
-                      <TableCell colSpan={4}>Totals</TableCell>
-                      <TableCell className="text-right">{formatCurrency(trialBalance.totalDebits)}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(trialBalance.totalCredits)}</TableCell>
-                    </TableRow>
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            <TrialBalancePanel
+              accounts={accounts}
+              entries={entries}
+              lines={lines}
+              asOfDate={asOfDate}
+              loading={loading}
+              isLebaneseCoa={isLebaneseCoa}
+              pcgClientAccounts={pcgClientAccounts}
+              accountingLanguage={accountingLanguage}
+              currencyCode={profile?.mainCurrency || (isLebaneseCoa ? 'LBP' : 'USD')}
+              onRefresh={() => void refreshLedger()}
+              onOpenGl={openAccountDrill}
+            />
           </TabsContent>
 
           <TabsContent value="balance-sheet" className="mt-4">
@@ -2598,7 +2477,6 @@ const Accounting = () => {
             )}
           </TabsContent>
         </Tabs>
-        )}
 
         <LedgerActivityDialog
           focus={ledgerFocus}

@@ -110,7 +110,7 @@ interface FirestoreTimestampLike {
 }
 
 type OrderItemUpdateValue = string | number | 'percentage' | 'fixed';
-type DeliveryMethod = 'standard' | 'express' | 'same_day' | 'pickup';
+type DeliveryMethod = 'standard' | 'express' | 'same_day' | 'pickup' | 'dine_in';
 type PickupCarrierOption = { id: string; name: string; type: 'shipping' | 'local' | 'own' };
 type OrderViewFilters = {
   searchTerm: string;
@@ -130,6 +130,7 @@ const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
   expressDelivery: false,
   sameDay: false,
   pickup: true,
+  dineIn: false,
   standardTime: '3-5 days',
   expressTime: '1-2 days',
   sameDayTime: '4-6 hours',
@@ -704,6 +705,9 @@ const AdminOrders: React.FC = () => {
     if (settings.pickup) {
       options.push({ value: 'pickup', label: 'Store Pickup', fee: 0, time: 'Customer pickup' });
     }
+    if (settings.dineIn) {
+      options.push({ value: 'dine_in', label: 'Dine In', fee: 0, time: 'In-store dining' });
+    }
     return options;
   };
 
@@ -736,11 +740,12 @@ const AdminOrders: React.FC = () => {
     const settings = getEffectiveDeliverySettings();
     const freeThreshold = Number(settings.freeShippingThreshold || 0);
 
-    if (freeThreshold > 0 && orderNetBeforeDelivery >= freeThreshold && method !== 'pickup') {
+    if (freeThreshold > 0 && orderNetBeforeDelivery >= freeThreshold && method !== 'pickup' && method !== 'dine_in') {
       return 0;
     }
 
     if (method === 'pickup') return 0;
+    if (method === 'dine_in') return 0;
     if (method === 'express') return Number(settings.expressFee || 0);
     if (method === 'same_day') return Number(settings.sameDayFee || 0);
     return Number(settings.standardFee || 0);
@@ -748,6 +753,7 @@ const AdminOrders: React.FC = () => {
 
   const locationSupportsDeliveryMethod = (location: FulfillmentLocation, method: DeliveryMethod) => {
     if (method === 'pickup') return location.supportsPickup !== false;
+    if (method === 'dine_in') return location.supportsPickup !== false;
     if (method === 'express') return location.supportsExpress !== false;
     if (method === 'same_day') return location.supportsSameDay !== false;
     return location.supportsStandard !== false;
@@ -2546,7 +2552,7 @@ const AdminOrders: React.FC = () => {
   };
 
   const normalizeDeliveryMethod = (method?: string): DeliveryMethod => {
-    if (method === 'express' || method === 'same_day' || method === 'pickup' || method === 'standard') {
+    if (method === 'express' || method === 'same_day' || method === 'pickup' || method === 'dine_in' || method === 'standard') {
       return method;
     }
     return 'standard';
@@ -3904,6 +3910,7 @@ const AdminOrders: React.FC = () => {
               <SelectItem value="express">Express</SelectItem>
               <SelectItem value="same_day">Same Day</SelectItem>
               <SelectItem value="pickup">Pickup</SelectItem>
+              <SelectItem value="dine_in">Dine In</SelectItem>
             </SelectContent>
           </Select>
           <Select value={selectedOrderViewId || 'none'} onValueChange={(value) => applySavedView(value === 'none' ? '' : value)}>
@@ -4049,6 +4056,7 @@ const AdminOrders: React.FC = () => {
                         {new Date(order.createdAt || '').toLocaleDateString()} | {order.customerName}
                         {order.assignedSalesPersonName && ` | Sales: ${order.assignedSalesPersonName}`}
                         {order.deliveryMethod && ` | Delivery: ${order.deliveryMethod.replace('_', ' ')}`}
+                        {order.orderChannel === 'whatsapp' && ' | WhatsApp'}
                         {typeof order.deliveryFee === 'number' && ` (${money(order.deliveryFee)})`}
                       </CardDescription>
                     </div>

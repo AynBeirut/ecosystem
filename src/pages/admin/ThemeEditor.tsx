@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { doc, getFirestore, setDoc } from 'firebase/firestore';
 import {
   ArrowLeft,
@@ -21,10 +21,12 @@ import SectionTreePanel from '@/components/builder/SectionTreePanel';
 import SectionSettingsPanel from '@/components/builder/SectionSettingsPanel';
 import StoreContentPanel from '@/components/builder/StoreContentPanel';
 import ThemePickerPanel from '@/components/builder/ThemePickerPanel';
+import BuilderPublishConfirmDialog from '@/components/builder/BuilderPublishConfirmDialog';
 import { EditorSidebarRail } from '@/components/builder/EditorSidebarRail';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 import { mergeSectionOrderFromProfile } from '@/lib/storeSectionDefaults';
 import {
+  buildEditorPreviewSrc,
   defaultEditorLayoutDraft,
   EDITOR_PREVIEW_READY,
   postEditorPreviewState,
@@ -68,6 +70,7 @@ const ThemeEditor: React.FC = () => {
   const [rightOpen, setRightOpen] = useState(true);
   const [leftTab, setLeftTab] = useState<LeftPanelTab>('themes');
   const [previewVersion, setPreviewVersion] = useState(0);
+  const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const previewStateRef = useRef({ sectionOrder, layout: layoutDraft, content: contentDraft, theme: themeDraft });
   const previewRevisionRef = useRef(0);
 
@@ -121,11 +124,8 @@ const ThemeEditor: React.FC = () => {
 
   const previewPath = useMemo(() => {
     if (!storeId) return null;
-    const base = profile?.slug
-      ? `/store/${profile.slug}?editorPreview=1&editorEmbed=1`
-      : `/store/id/${storeId}?editorPreview=1&editorEmbed=1`;
-    return `${base}&v=${previewVersion}`;
-  }, [profile?.slug, storeId, previewVersion]);
+    return buildEditorPreviewSrc(storeId, profile?.slug || profile?.storeSlug, previewVersion);
+  }, [profile?.slug, profile?.storeSlug, storeId, previewVersion]);
 
   const selectedSection = !selectedId || selectedId === 'store_header' || selectedId === 'navigation'
     ? null
@@ -393,12 +393,6 @@ const ThemeEditor: React.FC = () => {
             </a>
           </Button>
         )}
-        <Link
-          to="/admin/templates"
-          className="text-xs text-white/70 hover:text-white hidden lg:inline underline-offset-2 hover:underline"
-        >
-          Classic drag &amp; drop editor
-        </Link>
         <Button
           size="sm"
           variant="secondary"
@@ -413,11 +407,21 @@ const ThemeEditor: React.FC = () => {
           size="sm"
           className="bg-white text-[#303030] hover:bg-white/90"
           disabled={saving}
-          onClick={() => void handleSave(true)}
+          onClick={() => setPublishConfirmOpen(true)}
         >
           Publish
         </Button>
       </header>
+
+      <BuilderPublishConfirmDialog
+        open={publishConfirmOpen}
+        onOpenChange={setPublishConfirmOpen}
+        isLive={profile?.status === 'online'}
+        onConfirm={() => {
+          setPublishConfirmOpen(false);
+          void handleSave(true);
+        }}
+      />
 
       <div className="flex-1 flex min-h-0">
         {/* Left sidebar */}

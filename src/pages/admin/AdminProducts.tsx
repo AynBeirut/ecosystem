@@ -49,6 +49,15 @@ import { assertCanCreateProduct, assertCanUploadBytes, assertCanUploadCatalogIma
 import { CATALOG_PRODUCT_COUNT_VERSION, isCatalogCountableProductData } from '@/lib/catalogProductCount';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 
 const DEFAULT_PRODUCT_CATEGORIES = [
   'Electronics',
@@ -64,9 +73,10 @@ const DEFAULT_PRODUCT_CATEGORIES = [
   'Other',
 ];
 
-const AdminProducts: React.FC = () => {
+const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { money } = useStoreCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
   const [recipes, setRecipes] = useState<Array<{ id: string; name?: string; costPerUnit?: number }>>([]);
@@ -929,23 +939,79 @@ const AdminProducts: React.FC = () => {
     toast({ title: 'Storefront Visibility Updated', description: `Product is now ${updatedStock ? 'visible online' : 'hidden online'}.` });
   };
 
-  return (
-    <AdminPageShell
-      title={canManageInventory ? 'Manage Products' : 'View Products'}
-      description={canManageInventory ? 'Add, edit, and manage your store products' : 'View your store products'}
-      eyebrow="Daily Operations"
-      backTo={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'}
-      backLabel="Back to Inventory"
-      actions={
-        canManageInventory ? (
-          <Button type="button" onClick={() => void openAddProductDialog()}>
-            <Plus className="h-4 w-4 mr-2" />
-            Add Product
-          </Button>
-        ) : undefined
-      }
-    >
-        {planLimits?.productLimit != null && countableProductsCount >= planLimits.productLimit && (
+  const productTypeLabel = (product: Product) => {
+    if (product.productType === 'service') {
+      return product.serviceBillingType === 'monthly'
+        ? 'Service · Monthly'
+        : product.serviceBillingType === 'yearly'
+          ? 'Service · Yearly'
+          : 'Service · One-time';
+    }
+    if (product.productType === 'composed') return 'Composed';
+    return 'Item';
+  };
+
+  const productStockQty = (product: Product) => {
+    if (product.productType === 'service') return '—';
+    return String(finishedGoodsStock[product.id] ?? product.stock ?? 0);
+  };
+
+  const embeddedPriceList = embedded ? (
+    <AdminPanel className="overflow-hidden p-0">
+      {products.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-12 text-center">
+          <Package className="h-10 w-10 text-muted-foreground mb-3" />
+          <p className="text-sm font-medium text-slate-700">No items yet</p>
+          <p className="text-xs text-muted-foreground mt-1">Products added in catalog will appear here.</p>
+        </div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item</TableHead>
+              <TableHead className="hidden sm:table-cell">SKU</TableHead>
+              <TableHead className="hidden md:table-cell">Category</TableHead>
+              <TableHead className="hidden lg:table-cell">Type</TableHead>
+              <TableHead className="text-right">Price</TableHead>
+              <TableHead className="text-right hidden sm:table-cell">Cost</TableHead>
+              <TableHead className="text-right">Stock</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {products.map((product) => (
+              <TableRow key={product.id}>
+                <TableCell className="font-medium max-w-[14rem]">
+                  <ClampedText text={product.name} maxLines={2} className="text-sm" as="span" />
+                </TableCell>
+                <TableCell className="hidden sm:table-cell text-muted-foreground">
+                  {product.sku?.trim() || '—'}
+                </TableCell>
+                <TableCell className="hidden md:table-cell text-muted-foreground">
+                  {product.category || '—'}
+                </TableCell>
+                <TableCell className="hidden lg:table-cell text-muted-foreground">
+                  {productTypeLabel(product)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums font-medium">
+                  {money(Number(product.price) || 0)}
+                </TableCell>
+                <TableCell className="text-right tabular-nums hidden sm:table-cell text-muted-foreground">
+                  {product.costPrice != null && product.costPrice > 0
+                    ? money(Number(product.costPrice))
+                    : '—'}
+                </TableCell>
+                <TableCell className="text-right tabular-nums">{productStockQty(product)}</TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </AdminPanel>
+  ) : null;
+
+  const productsBody = (
+    <>
+        {!embedded && planLimits?.productLimit != null && countableProductsCount >= planLimits.productLimit && (
           <Alert variant="destructive" className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -960,7 +1026,7 @@ const AdminProducts: React.FC = () => {
             </AlertDescription>
           </Alert>
         )}
-        {!catalogImagesAllowed && (
+        {!embedded && !catalogImagesAllowed && (
           <Alert className="mb-4">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -974,7 +1040,7 @@ const AdminProducts: React.FC = () => {
             </AlertDescription>
           </Alert>
         )}
-        {planLimits?.storageLimitMb != null && planLimits.storageUsedMb >= planLimits.storageLimitMb * 0.9 && (
+        {!embedded && planLimits?.storageLimitMb != null && planLimits.storageUsedMb >= planLimits.storageLimitMb * 0.9 && (
           <Alert className="mb-4 border-amber-500/50 bg-amber-50 text-amber-900">
             <AlertCircle className="h-4 w-4" />
             <AlertDescription>
@@ -987,6 +1053,7 @@ const AdminProducts: React.FC = () => {
             </AlertDescription>
           </Alert>
         )}
+        {embedded ? embeddedPriceList : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {products.map((product) => (
             <AdminPanel key={product.id}>
@@ -1161,6 +1228,7 @@ const AdminProducts: React.FC = () => {
             </div>
           )}
         </div>
+        )}
 
 
       {/* Add Product Dialog */}
@@ -1880,6 +1948,30 @@ const AdminProducts: React.FC = () => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="min-w-0">{productsBody}</div>;
+  }
+
+  return (
+    <AdminPageShell
+      title={canManageInventory ? 'Manage Products' : 'View Products'}
+      description={canManageInventory ? 'Add, edit, and manage your store products' : 'View your store products'}
+      eyebrow="Daily Operations"
+      backTo={user?.role === 'admin' ? '/admin/inventory' : '/team/dashboard'}
+      backLabel="Back to Inventory"
+      actions={
+        canManageInventory ? (
+          <Button type="button" onClick={() => void openAddProductDialog()}>
+            <Plus className="h-4 w-4 mr-2" />
+            Add Product
+          </Button>
+        ) : undefined
+      }
+    >
+      {productsBody}
     </AdminPageShell>
   );
 };

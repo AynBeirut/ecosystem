@@ -1,17 +1,15 @@
 import type {
   GeneralLedgerReport,
-  GeneralLedgerReportRow,
   JournalEntry,
   JournalLine,
   LedgerAccount,
 } from '@/types/generalLedger';
+import {
+  buildGeneralLedgerRowsFromContext,
+  createLedgerReportContext,
+} from '@/lib/ledger/ledgerReportContext';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
-
-function inRange(date: string, start: string, end: string): boolean {
-  const d = date.slice(0, 10);
-  return d >= start.slice(0, 10) && d <= end.slice(0, 10);
-}
 
 export function buildGeneralLedgerReport(
   account: LedgerAccount,
@@ -19,46 +17,14 @@ export function buildGeneralLedgerReport(
   lines: JournalLine[],
   options: { startDate: string; endDate: string; costCenterId?: string },
 ): GeneralLedgerReport {
-  const postedBefore = new Set(
-    entries.filter((e) => e.status === 'posted' && e.date.slice(0, 10) < options.startDate.slice(0, 10)).map((e) => e.id),
-  );
-  const postedInRange = entries
-    .filter((e) => e.status === 'posted' && inRange(e.date, options.startDate, options.endDate))
-    .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
-
-  let openingBalance = round2(account.openingBalance || 0);
-  for (const line of lines) {
-    if (line.accountId !== account.id || !postedBefore.has(line.entryId)) continue;
-    if (options.costCenterId && line.costCenterId !== options.costCenterId) continue;
-    if (account.normalBalance === 'debit') openingBalance = round2(openingBalance + line.debit - line.credit);
-    else openingBalance = round2(openingBalance + line.credit - line.debit);
-  }
-
-  const rows: GeneralLedgerReportRow[] = [];
-  let running = openingBalance;
-
-  for (const entry of postedInRange) {
-    const entryLines = lines
-      .filter((l) => l.entryId === entry.id && l.accountId === account.id)
-      .filter((l) => !options.costCenterId || l.costCenterId === options.costCenterId);
-    for (const line of entryLines) {
-      const debit = round2(line.debit || 0);
-      const credit = round2(line.credit || 0);
-      if (account.normalBalance === 'debit') running = round2(running + debit - credit);
-      else running = round2(running + credit - debit);
-      rows.push({
-        date: entry.date.slice(0, 10),
-        entryId: entry.id,
-        voucherNumber: entry.voucherNumber,
-        voucherType: entry.voucherType,
-        memo: entry.memo,
-        debit,
-        credit,
-        runningBalance: running,
-        costCenterId: line.costCenterId,
-      });
-    }
-  }
+  const ctx = createLedgerReportContext(entries, lines, options);
+  const built = buildGeneralLedgerRowsFromContext(account, ctx, {
+    costCenterId: options.costCenterId,
+    includeZeroActivity: true,
+  });
+  const openingBalance = built?.openingBalance ?? round2(account.openingBalance || 0);
+  const closingBalance = built?.closingBalance ?? openingBalance;
+  const rows = built?.rows ?? [];
 
   return {
     accountId: account.id,
@@ -67,7 +33,7 @@ export function buildGeneralLedgerReport(
     startDate: options.startDate.slice(0, 10),
     endDate: options.endDate.slice(0, 10),
     openingBalance,
-    closingBalance: running,
+    closingBalance,
     rows,
   };
 }

@@ -24,6 +24,7 @@ import {
   type InvoicePaymentInput,
   type PlatformOrderInput,
 } from '@/lib/ledger/autoPosting';
+import { paymentSourceKey, upsertAutoPaymentReceiptDoc } from '@/lib/ledger/paymentReceiptDoc';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -56,7 +57,24 @@ export async function glPostInvoicePayment(
 ): Promise<void> {
   try {
     const accounts = await ensureDefaultChartOfAccounts(storeId);
-    await autoPostInvoicePayment(storeId, invoice, payment, accounts);
+    const posted = await autoPostInvoicePayment(storeId, invoice, payment, accounts);
+    if (!posted) return;
+    const event = `payment-${payment.id}`;
+    const sourceKey = paymentSourceKey('invoice_payment', invoice.id, event);
+    await upsertAutoPaymentReceiptDoc({
+      storeId,
+      sourceType: 'invoice_payment',
+      sourceId: payment.id,
+      sourceKey,
+      direction: 'in',
+      amount: payment.amount,
+      date: payment.paymentDate.slice(0, 10),
+      method: payment.paymentMethod || 'cash',
+      partyName: invoice.clientName || `Invoice ${invoice.id}`,
+      currency: invoice.currency,
+      journalEntryId: posted.entryId,
+      voucherNumber: posted.voucherNumber,
+    });
   } catch (err) {
     logGlError('invoice-payment', err);
   }
@@ -188,14 +206,32 @@ export async function glPostPurchasePayment(storeId: string, payment: PaymentOrd
       currency: payment.currency,
       status: 'fulfilled',
     };
-    await autoPostPurchasePaid(
+    const event = `paid-${payment.id}`;
+    const posted = await autoPostPurchasePaid(
       storeId,
       stubPo,
       accounts,
       payment.paymentMethod || 'bank',
       undefined,
-      `paid-${payment.id}`,
+      event,
     );
+    if (!posted) return;
+    const sourceKey = paymentSourceKey('purchase_payment', stubPo.id, event);
+    await upsertAutoPaymentReceiptDoc({
+      storeId,
+      sourceType: 'payment_order',
+      sourceId: payment.id,
+      sourceKey,
+      direction: 'out',
+      amount: payment.amount,
+      date: payment.date.slice(0, 10),
+      method: payment.paymentMethod || 'bank',
+      partyName: payment.supplierName || 'Supplier',
+      currency: payment.currency,
+      notes: payment.notes,
+      journalEntryId: posted.entryId,
+      voucherNumber: posted.voucherNumber,
+    });
   } catch (err) {
     logGlError('purchase-paid', err);
   }

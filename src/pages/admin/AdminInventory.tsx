@@ -14,7 +14,7 @@ import AdminPanel from '@/components/admin/AdminPanel';
 import SwipeableLayout from '@/components/SwipeableLayout';
 import { getDaysUntilExpiry } from '@/lib/expiryUtils';
 
-const AdminInventory: React.FC = () => {
+const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -166,16 +166,9 @@ const AdminInventory: React.FC = () => {
     ? Math.max(0, Math.round(((totalTrackedItems - Math.min(totalTrackedItems, attentionCount)) / totalTrackedItems) * 100))
     : 100;
 
-  return (
-    <SwipeableLayout>
-      <AdminPageShell
-          title="Inventory Overview"
-          description="Comprehensive view of all inventory items and valuation."
-          eyebrow="Stock & Catalog"
-          backTo="/admin/dashboard"
-        >
-
-        {/* Quick Navigation */}
+  const inventoryBody = (
+    <>
+        {!embedded && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <AdminNavCard title="Products" description="Manage all product types: Simple items, Services, and Composed products" icon={Package} gradient="from-teal-500 to-teal-700" onClick={() => navigate('/admin/products')} />
           <AdminNavCard title="Suppliers" description="Manage suppliers and vendor relationships" icon={TrendingUp} gradient="from-violet-500 to-purple-700" onClick={() => navigate('/admin/suppliers')} />
@@ -186,6 +179,7 @@ const AdminInventory: React.FC = () => {
           <AdminNavCard title="Production" description="Plan and track daily production batches" icon={Factory} gradient="from-indigo-500 to-indigo-700" onClick={() => navigate('/admin/production')} />
           <AdminNavCard title="Finished Goods" description="Track manufactured items ready for sale" icon={Package} gradient="from-green-500 to-emerald-700" onClick={() => navigate('/admin/finished-goods')} />
         </div>
+        )}
 
         {/* Summary Cards */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
@@ -450,6 +444,22 @@ const AdminInventory: React.FC = () => {
             </AdminPanel>
           </TabsContent>
         </Tabs>
+    </>
+  );
+
+  if (embedded) {
+    return <div className="min-w-0">{inventoryBody}</div>;
+  }
+
+  return (
+    <SwipeableLayout>
+      <AdminPageShell
+          title="Inventory Overview"
+          description="Comprehensive view of all inventory items and valuation."
+          eyebrow="Stock & Catalog"
+          backTo="/admin/dashboard"
+        >
+        {inventoryBody}
       </AdminPageShell>
     </SwipeableLayout>
   );

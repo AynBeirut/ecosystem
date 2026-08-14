@@ -3,6 +3,8 @@ import { useAuth } from '@/context/useAuth';
 import { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc } from 'firebase/firestore';
 import { StoreProfile } from '@/types/storeProfile';
+import { checkSubscriptionAccess } from '@/lib/subscriptionGuard';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Ban, Mail, CreditCard } from 'lucide-react';
@@ -16,14 +18,26 @@ export default function Blocked() {
     const fetchProfile = async () => {
       if (!user?.id) return;
       const db = getFirestore();
-      const profileRef = doc(db, 'storeProfiles', user.id);
+      const storeId = getActualStoreId(user);
+      if (!storeId) return;
+      const profileRef = doc(db, 'storeProfiles', storeId);
       const profileSnap = await getDoc(profileRef);
       if (profileSnap.exists()) {
-        setProfile(profileSnap.data() as StoreProfile);
+        const nextProfile = profileSnap.data() as StoreProfile;
+        setProfile(nextProfile);
+
+        const profileForAccess = {
+          ...nextProfile,
+          email: String(nextProfile.email || (user as { email?: string })?.email || ''),
+        } as StoreProfile;
+        const access = checkSubscriptionAccess(profileForAccess);
+        if (access.allowed) {
+          navigate('/admin/dashboard', { replace: true });
+        }
       }
     };
-    fetchProfile();
-  }, [user]);
+    void fetchProfile();
+  }, [user, navigate]);
 
   const formatDate = (dateString?: string) => {
     if (!dateString) return 'N/A';
