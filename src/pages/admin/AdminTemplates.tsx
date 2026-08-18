@@ -252,7 +252,7 @@ const CONTACT_FORM_OPTIONS: Array<{ id: ContactFormStyle; label: string; desc: s
   { id: 8, label: 'Compact Inline',   desc: 'Name & Email side-by-side, compact' },
   { id: 9, label: 'Full Details',     desc: 'All fields: Name, Email, Phone, Subject, Message, Company' },
   { id: 10, label: 'Newsletter Style', desc: 'Email-focused subscription form' },
-  { id: 11, label: 'Appointment',     desc: 'Includes date/time picker fields' },
+  { id: 11, label: 'Table Reservation', desc: 'Date · time · party size · pre-order notes' },
   { id: 12, label: 'Quote Request',   desc: 'Product selection + quantity' },
   { id: 13, label: 'Support Ticket',  desc: 'Priority selector + issue type' },
   { id: 14, label: 'Feedback Form',   desc: 'Rating slider + comment' },

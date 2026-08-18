@@ -54,7 +54,13 @@ export function firstCleanText(...values: unknown[]): string {
 }
 
 export function resolveInvoiceNumber(doc: AnyRecord): string {
-  const direct = firstCleanText(doc.invoiceNumber, doc.orderNumber);
+  const direct = firstCleanText(
+    doc.invoiceNumber,
+    doc.orderNumber,
+    doc.voucherNumber,
+    doc.receiptNumber,
+    doc.receiptNo,
+  );
   if (direct) return direct;
 
   const notes = normalizeHumanText(doc.notes);

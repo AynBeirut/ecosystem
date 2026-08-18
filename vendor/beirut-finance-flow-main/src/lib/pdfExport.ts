@@ -219,6 +219,48 @@ function isNipcoLegacyCompany(company: any): boolean {
   return name.includes("nipco") || taxId.startsWith("4055989");
 }
 
+/** One branded PDF layout for every exportable document type on matching stores. */
+function shouldUseStoreBrandedPdf(company: any): boolean {
+  return isNipcoLegacyCompany(company);
+}
+
+function brandedPdfFileName(type: ExportableType, doc: any): string {
+  const safeId = resolveDocumentNumber(doc).replace(/[^\w.-]+/g, "_");
+  return `${TITLE_MAP[type].replace(/\s+/g, "-")}-${safeId}.pdf`;
+}
+
+function ensureExportLineItems(type: ExportableType, doc: any): any {
+  const items = Array.isArray(doc.items) ? doc.items : [];
+  if (items.length > 0) return doc;
+
+  const amount = Number(doc.amount ?? doc.total ?? doc.subtotal ?? 0) || 0;
+  const description = sanitizeHumanText(
+    type === "receipt"
+      ? firstNonEmpty(
+          doc.notes,
+          doc.paymentMethod ? `Payment (${doc.paymentMethod})` : "",
+          "Payment received",
+        )
+      : type === "payment"
+        ? firstNonEmpty(doc.notes, "Payment order")
+        : firstNonEmpty(doc.notes, TITLE_MAP[type]),
+  );
+
+  if (!description && amount <= 0) return doc;
+
+  return {
+    ...doc,
+    items: [
+      {
+        description: description || TITLE_MAP[type],
+        quantity: 1,
+        unitPrice: amount,
+        subtotal: amount,
+      },
+    ],
+  };
+}
+
 function formatLegacyDate(value: unknown): string {
   const parsed = value ? new Date(String(value)) : new Date();
   const date = Number.isNaN(parsed.getTime()) ? new Date() : parsed;
@@ -682,10 +724,10 @@ export async function exportDocumentAsPdf(
     doc = normalized.doc;
     company = normalized.company;
 
-    if (type === "invoice" && isNipcoLegacyCompany(company)) {
-      const pdf = await buildNipcoModernPdf(type, doc, company);
-      const safeId = resolveDocumentNumber(doc).replace(/[^\w.-]+/g, "_");
-      pdf.save(`Invoice-${safeId}.pdf`);
+    if (shouldUseStoreBrandedPdf(company)) {
+      const brandedDoc = ensureExportLineItems(type, doc);
+      const pdf = await buildNipcoModernPdf(type, brandedDoc, company);
+      pdf.save(brandedPdfFileName(type, brandedDoc));
       return true;
     }
 
@@ -915,12 +957,11 @@ export async function buildDocumentPdfFile(
     doc = normalized.doc;
     company = normalized.company;
 
-    if (type === "invoice" && isNipcoLegacyCompany(company)) {
-      const pdf = await buildNipcoModernPdf(type, doc, company);
-      const safeId = resolveDocumentNumber(doc).replace(/[^\w.-]+/g, "_");
-      const fileName = `Invoice-${safeId}.pdf`;
+    if (shouldUseStoreBrandedPdf(company)) {
+      const brandedDoc = ensureExportLineItems(type, doc);
+      const pdf = await buildNipcoModernPdf(type, brandedDoc, company);
       const blob = pdf.output("blob");
-      return new File([blob], fileName, { type: "application/pdf" });
+      return new File([blob], brandedPdfFileName(type, brandedDoc), { type: "application/pdf" });
     }
 
     const currency = doc.currency || "USD";

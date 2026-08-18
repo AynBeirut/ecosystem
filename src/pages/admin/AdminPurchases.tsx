@@ -10,7 +10,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,6 +19,7 @@ import { Purchase, PurchaseItem, Supplier, RawMaterial, PaymentRecord } from '@/
 import { StoreProfile } from '@/types/storeProfile';
 import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
+import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 import { formatMoney as fmtMoney } from '@/lib/money/format';
 import { glPostPurchaseReceived } from '@/lib/platformGl';
@@ -32,6 +32,10 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { useIsMobile } from '@/hooks/use-mobile';
+
+const DIALOG_NATIVE_SELECT_CLASS =
+  'flex h-11 w-full min-h-[44px] touch-manipulation rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-auto';
 
 type PurchaseItemLike = PurchaseItem & { unitCost?: unknown; rawPrice?: unknown; price?: unknown };
 
@@ -94,6 +98,7 @@ function normalizePurchase(purchase: Purchase): Purchase {
 const AdminPurchases: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [rawMaterials, setRawMaterials] = useState<RawMaterial[]>([]);
@@ -168,6 +173,8 @@ const AdminPurchases: React.FC = () => {
   }, [newPurchase.supplierId]);
 
   const [isCreatingNewSupplier, setIsCreatingNewSupplier] = useState(false);
+  const [creatingMaterialIndex, setCreatingMaterialIndex] = useState<number | null>(null);
+  const [inlineMaterial, setInlineMaterial] = useState({ name: '', unit: 'kg', costPerUnit: '' });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -327,6 +334,65 @@ const AdminPurchases: React.FC = () => {
     } catch (error) {
       console.error('Error creating supplier:', error);
       toast({ title: "Error", description: "Failed to create supplier", variant: "destructive" });
+    }
+  };
+
+  const handleCreateInlineRawMaterial = async (itemIndex: number) => {
+    const cost = parseFloat(inlineMaterial.costPerUnit);
+    if (!inlineMaterial.name.trim() || !user?.storeId || !Number.isFinite(cost) || cost <= 0) {
+      toast({
+        title: 'Error',
+        description: 'Material name and unit cost are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const storePrefix = user.storeId.substring(0, 5).toUpperCase();
+      const sku = generateSKU(storePrefix, 'MAT', rawMaterials.length + 1);
+      const barcode = generateBarcode();
+      const materialData = {
+        name: inlineMaterial.name.trim(),
+        unit: inlineMaterial.unit,
+        currentStock: 0,
+        minimumThreshold: 10,
+        reorderPoint: 20,
+        costPerUnit: cost,
+        preferredSupplierId: newPurchase.supplierId || '',
+        storageLocation: '',
+        expiryTracking: false,
+        expiryDate: '',
+        expiryAlertDays: 30,
+        warrantyPeriod: 0,
+        sku,
+        barcode,
+        storeId: user.storeId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        warrantyStartDate: new Date().toISOString(),
+      };
+
+      const docRef = await addDoc(collection(db, 'rawMaterials'), materialData);
+      const created = { id: docRef.id, ...materialData } as RawMaterial;
+      setRawMaterials((prev) => [...prev, created]);
+
+      const updatedItems = [...newPurchase.items];
+      updatedItems[itemIndex] = {
+        ...updatedItems[itemIndex],
+        itemType: 'raw_material',
+        rawMaterialId: docRef.id,
+        productId: '',
+        unitPrice: cost,
+      };
+      setNewPurchase({ ...newPurchase, items: updatedItems });
+      setCreatingMaterialIndex(null);
+      setInlineMaterial({ name: '', unit: 'kg', costPerUnit: '' });
+      toast({ title: 'Success', description: 'Material created and added to this line' });
+    } catch (error) {
+      console.error('Error creating raw material:', error);
+      toast({ title: 'Error', description: 'Failed to create raw material', variant: 'destructive' });
     }
   };
 
@@ -1963,14 +2029,23 @@ const AdminPurchases: React.FC = () => {
         <AdminStatCard title="Amount Due" value={money(purchaseStats.amountDue)} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 ? 'text-orange-600' : undefined} />
       </div>
 
-      <Dialog open={isAddingPurchase} onOpenChange={setIsAddingPurchase}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+      <Dialog open={isAddingPurchase} onOpenChange={(open) => {
+        setIsAddingPurchase(open);
+        if (!open) {
+          setCreatingMaterialIndex(null);
+          setInlineMaterial({ name: '', unit: 'kg', costPerUnit: '' });
+        }
+      }}>
+        <DialogContent
+          className="sm:max-w-4xl"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
           <DialogHeader>
             <DialogTitle>Create Purchase Order</DialogTitle>
             <DialogDescription>Order raw materials from supplier</DialogDescription>
           </DialogHeader>
           <div className="grid gap-4">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <div className="flex items-center justify-between mb-1">
                   <Label htmlFor="supplierId">Supplier *</Label>
@@ -1986,21 +2061,19 @@ const AdminPurchases: React.FC = () => {
                 </div>
 
                 {!isCreatingNewSupplier ? (
-                  <Select
+                  <select
+                    id="supplierId"
+                    className={DIALOG_NATIVE_SELECT_CLASS}
                     value={newPurchase.supplierId}
-                    onValueChange={(value) => setNewPurchase({ ...newPurchase, supplierId: value })}
+                    onChange={(e) => setNewPurchase({ ...newPurchase, supplierId: e.target.value })}
                   >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select supplier" />
-                    </SelectTrigger>
-                        <SelectContent>
-                          {suppliers.map(supplier => (
-                            <SelectItem key={supplier.id} value={supplier.id}>
-                              {supplier.name}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                    <option value="">Select supplier</option>
+                    {suppliers.map((supplier) => (
+                      <option key={supplier.id} value={supplier.id}>
+                        {supplier.name}
+                      </option>
+                    ))}
+                  </select>
                     ) : (
                       <div className="space-y-3 p-3 border rounded-md bg-gray-50">
                         <Input
@@ -2083,99 +2156,169 @@ const AdminPurchases: React.FC = () => {
                     const lineTotal = qty * price;
 
                     return (
-                      <div key={index} className="space-y-2 p-3 border rounded-lg mb-3">
-                        <div className="grid grid-cols-12 gap-2 items-end">
-                          <div className="col-span-3">
+                      <div key={index} className="space-y-3 p-3 border rounded-lg mb-3">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
                             <Label className="text-xs">Item Type</Label>
-                            <Select
+                            <select
+                              className={DIALOG_NATIVE_SELECT_CLASS}
                               value={item.itemType || 'raw_material'}
-                              onValueChange={(value: 'raw_material' | 'product') => {
+                              onChange={(e) => {
+                                const value = e.target.value as 'raw_material' | 'product';
                                 const updated = [...newPurchase.items];
                                 updated[index] = { ...updated[index], itemType: value, rawMaterialId: '', productId: '' };
                                 setNewPurchase({ ...newPurchase, items: updated });
+                                setCreatingMaterialIndex(null);
                               }}
                             >
-                              <SelectTrigger>
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="raw_material">Raw Material</SelectItem>
-                                <SelectItem value="product">Simple Product</SelectItem>
-                              </SelectContent>
-                            </Select>
+                              <option value="raw_material">Raw Material</option>
+                              <option value="product">Simple Product</option>
+                            </select>
                           </div>
-                          <div className="col-span-5">
-                            <Label className="text-xs">{item.itemType === 'product' ? 'Product' : 'Raw Material'}</Label>
+                          <div>
+                            <div className="flex items-center justify-between mb-1">
+                              <Label className="text-xs">{item.itemType === 'product' ? 'Product' : 'Raw Material'}</Label>
+                              {item.itemType !== 'product' && creatingMaterialIndex !== index ? (
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="text-xs h-auto p-0"
+                                  onClick={() => {
+                                    setCreatingMaterialIndex(index);
+                                    setInlineMaterial({ name: '', unit: 'kg', costPerUnit: '' });
+                                  }}
+                                >
+                                  + Add new material
+                                </Button>
+                              ) : item.itemType !== 'product' ? (
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="text-xs h-auto p-0"
+                                  onClick={() => setCreatingMaterialIndex(null)}
+                                >
+                                  Select existing
+                                </Button>
+                              ) : null}
+                            </div>
                             {item.itemType === 'product' ? (
-                              <Select
+                              <select
+                                className={DIALOG_NATIVE_SELECT_CLASS}
                                 value={item.productId || ''}
-                                onValueChange={(value) => updateItem(index, 'productId', value)}
+                                onChange={(e) => updateItem(index, 'productId', e.target.value)}
                               >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select product" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {simpleProducts.map(prod => (
-                                    <SelectItem key={prod.id} value={prod.id}>
-                                      {prod.name} {prod.sku ? `(${prod.sku})` : ''}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                <option value="">Select product</option>
+                                {simpleProducts.map((prod) => (
+                                  <option key={prod.id} value={prod.id}>
+                                    {prod.name}{prod.sku ? ` (${prod.sku})` : ''}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : creatingMaterialIndex === index ? (
+                              <div className="space-y-2 p-3 border rounded-md bg-muted/40">
+                                <Input
+                                  placeholder="Material name *"
+                                  value={inlineMaterial.name}
+                                  onChange={(e) => setInlineMaterial((prev) => ({ ...prev, name: e.target.value }))}
+                                />
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  <select
+                                    className={DIALOG_NATIVE_SELECT_CLASS}
+                                    value={inlineMaterial.unit}
+                                    onChange={(e) => setInlineMaterial((prev) => ({ ...prev, unit: e.target.value }))}
+                                  >
+                                    <option value="kg">kg</option>
+                                    <option value="g">g</option>
+                                    <option value="L">L</option>
+                                    <option value="ml">ml</option>
+                                    <option value="pcs">pcs</option>
+                                    <option value="box">box</option>
+                                  </select>
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="Unit cost *"
+                                    value={inlineMaterial.costPerUnit}
+                                    onChange={(e) => setInlineMaterial((prev) => ({ ...prev, costPerUnit: e.target.value }))}
+                                  />
+                                </div>
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="w-full"
+                                  onClick={() => void handleCreateInlineRawMaterial(index)}
+                                >
+                                  Save material
+                                </Button>
+                              </div>
+                            ) : rawMaterials.length === 0 ? (
+                              <button
+                                type="button"
+                                className={`${DIALOG_NATIVE_SELECT_CLASS} text-left text-muted-foreground`}
+                                onClick={() => {
+                                  setCreatingMaterialIndex(index);
+                                  setInlineMaterial({ name: '', unit: 'kg', costPerUnit: '' });
+                                }}
+                              >
+                                No materials yet — tap to add one
+                              </button>
                             ) : (
-                              <Select
+                              <select
+                                className={DIALOG_NATIVE_SELECT_CLASS}
                                 value={item.rawMaterialId || ''}
-                                onValueChange={(value) => updateItem(index, 'rawMaterialId', value)}
+                                onChange={(e) => updateItem(index, 'rawMaterialId', e.target.value)}
                               >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Select material" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  {rawMaterials.map(mat => (
-                                    <SelectItem key={mat.id} value={mat.id}>
-                                      {mat.name} ({mat.unit})
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
+                                <option value="">Select material</option>
+                                {rawMaterials.map((mat) => (
+                                  <option key={mat.id} value={mat.id}>
+                                    {mat.name} ({mat.unit})
+                                  </option>
+                                ))}
+                              </select>
                             )}
                           </div>
-                        <div className="col-span-2">
-                          <Label className="text-xs">Quantity</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="Enter quantity"
-                            value={item.quantity === '' || item.quantity === 0 ? '' : item.quantity}
-                            onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
-                          />
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-xs">Unit Price</Label>
-                          <Input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            placeholder="Enter price"
-                            value={item.unitPrice === '' || item.unitPrice === 0 ? '' : item.unitPrice}
-                            onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value))}
-                          />
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          <div>
+                            <Label className="text-xs">Quantity</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="Qty"
+                              value={item.quantity === '' || item.quantity === 0 ? '' : item.quantity}
+                              onChange={(e) => updateItem(index, 'quantity', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                            />
+                          </div>
+                          <div>
+                            <Label className="text-xs">Unit Price</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              placeholder="Price"
+                              value={item.unitPrice === '' || item.unitPrice === 0 ? '' : item.unitPrice}
+                              onChange={(e) => updateItem(index, 'unitPrice', e.target.value === '' ? '' : parseFloat(e.target.value))}
+                            />
+                          </div>
                         </div>
-                        <div className="col-span-2">
-                          <Label className="text-xs">Total</Label>
-                          <p className="text-sm font-medium">{money(lineTotal)}</p>
-                        </div>
-                        <div className="col-span-1">
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <Label className="text-xs">Total</Label>
+                            <p className="text-sm font-medium py-1">{money(lineTotal)}</p>
+                          </div>
                           <Button
                             type="button"
                             variant="destructive"
                             size="sm"
                             onClick={() => removeItem(index)}
                           >
-                            <Minus className="h-4 w-4" />
+                            <Minus className="h-4 w-4 mr-1" />
+                            Remove
                           </Button>
-                        </div>
                         </div>
                       </div>
                     );
@@ -2200,19 +2343,23 @@ const AdminPurchases: React.FC = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <div>
                     <Label>Tax Type</Label>
-                    <Select value={newPurchase.taxType} onValueChange={(value: 'none' | 'VAT' | 'TTC') => setNewPurchase({ ...newPurchase, taxType: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="none">No Tax</SelectItem>
-                        <SelectItem value="VAT">VAT</SelectItem>
-                        <SelectItem value="TTC">TTC</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <select
+                      className={DIALOG_NATIVE_SELECT_CLASS}
+                      value={newPurchase.taxType}
+                      onChange={(e) =>
+                        setNewPurchase({
+                          ...newPurchase,
+                          taxType: e.target.value as 'none' | 'VAT' | 'TTC',
+                        })
+                      }
+                    >
+                      <option value="none">No Tax</option>
+                      <option value="VAT">VAT</option>
+                      <option value="TTC">TTC</option>
+                    </select>
                   </div>
                   {newPurchase.taxType !== 'none' && (
                     <div>

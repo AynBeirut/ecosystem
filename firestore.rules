@@ -61,6 +61,14 @@ service cloud.firestore {
         && p.isDemo == true;
     }
 
+    /** GL pilot / QA stores (e.g. E-Moove) — keep finance ops when subscription checker marks blocked. */
+    function isPilotFinanceStore(storeId) {
+      let p = storeProfileData(storeId);
+      return storeProfileExists(storeId)
+        && p.keys().hasAny(['isTestAccount'])
+        && p.isTestAccount == true;
+    }
+
     function isBlockedCommerceStatus(storeId) {
       let p = storeProfileData(storeId);
       return storeProfileExists(storeId)
@@ -187,6 +195,45 @@ service cloud.firestore {
         && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.status == 'active';
     }
 
+    /** Grabio users doc: admin actively switched to this store (multi-store owners). */
+    function isActiveStoreAdmin(storeId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin'
+        && (
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('activeStoreId', '') == storeId
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('primaryStoreId', '') == storeId
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('storeId', '') == storeId
+        );
+    }
+
+    function isStoreFinanceTeam(storeId) {
+      return isStoreAdmin(storeId)
+        || isActiveSubAccountForStore(storeId)
+        || isActiveStoreAdmin(storeId)
+        || isGrabioOps();
+    }
+
+    // Business Finance / GL: daily ops — allow reads on non-demo stores even when subscriptionStatus is blocked/expired.
+    function isStoreFinanceEligible(storeId) {
+      return storeProfileExists(storeId)
+        && !isDemoStoreProfile(storeId)
+        && (!isBlockedCommerceStatus(storeId) || isPilotFinanceStore(storeId));
+    }
+
+    function canReadStoreFinance(storeId) {
+      return request.auth != null
+        && storeProfileExists(storeId)
+        && !isDemoStoreProfile(storeId)
+        && isStoreFinanceTeam(storeId);
+    }
+
+    function canWriteStoreFinance(storeId) {
+      return request.auth != null
+        && isStoreFinanceEligible(storeId)
+        && (isStoreAdmin(storeId) || isActiveStoreAdmin(storeId) || isGrabioOps());
+    }
+
     function storeHasSalesCrm(storeId) {
       let p = get(/databases/$(database)/documents/storeProfiles/$(storeId)).data;
       return (p.addOns is list && p.addOns.hasAny(['salesCrm']))
@@ -224,67 +271,83 @@ service cloud.firestore {
       }
 
       match /financeEstimates/{estimateId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeReceipts/{receiptId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeInvoices/{invoiceId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financePayments/{paymentId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeExpenses/{expenseId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeSuppliers/{supplierId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financePurchaseOrders/{poId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financePaymentOrders/{paymentOrderId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeInventoryMovements/{movementId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeCurrencySettings/{settingId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financePaymentMethods/{methodId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeStaff/{staffId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeStaffPayments/{paymentId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeDeliveryPersons/{personId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeDeliveryOrders/{orderId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeCashCollections/{collectionId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       // POS paired terminals — owner/admin read; writes via Cloud Functions only
@@ -304,65 +367,78 @@ service cloud.firestore {
       }
 
       match /financeCashTransactions/{transactionId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeOperationalExpenses/{expenseId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeExpenseEntries/{entryId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /financeSettings/{docId} {
-        allow read: if isStoreAdmin(storeId);
-        allow write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /ledgerAccounts/{accountId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /journalEntries/{entryId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /journalLines/{lineId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /journalEntryKeys/{sourceKey} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /ledgerMeta/{docId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /pcgClientAccounts/{accountId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /fixedAssets/{assetId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /bankRecSessions/{sessionId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
 
         match /statementLines/{lineId} {
-          allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+          allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
         }
 
         match /bankRecMatches/{matchId} {
-          allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+          allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
         }
       }
 
       match /ledgerPeriodClosures/{periodId} {
-        allow read: if isStoreAdmin(storeId) && isRealStore(storeId);
-        allow create, update: if isStoreAdmin(storeId) && isRealStore(storeId)
+        allow read: if canReadStoreFinance(storeId);
+        allow create, update: if canWriteStoreFinance(storeId)
           && request.resource.data.keys().hasAll(['storeId', 'periodType', 'startDate', 'endDate', 'label', 'isClosed', 'history'])
           && request.resource.data.storeId == storeId
           && request.resource.data.periodType in ['month', 'quarter']
@@ -372,40 +448,46 @@ service cloud.firestore {
       }
 
       match /ledgerCostCenters/{centerId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /recurringVoucherTemplates/{templateId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /voucherLineSettlements/{settlementId} {
-        allow read: if isStoreAdmin(storeId) && isRealStore(storeId);
-        allow create: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow create: if canWriteStoreFinance(storeId);
         allow update, delete: if false;
       }
 
       match /ledgerAuditLog/{logId} {
-        allow read: if isStoreAdmin(storeId) && isRealStore(storeId);
-        allow create: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow create: if canWriteStoreFinance(storeId);
         allow update, delete: if false;
       }
 
       // Platform COD delivery wallet (Admin Orders path — unprefixed subcollections)
       match /deliveryPersons/{personId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /deliveryOrders/{orderId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /cashCollections/{collectionId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
 
       match /cashBalance/{docId} {
-        allow read, write: if isStoreAdmin(storeId) && isRealStore(storeId);
+        allow read: if canReadStoreFinance(storeId);
+        allow write: if canWriteStoreFinance(storeId);
       }
     }
 
@@ -439,20 +521,26 @@ service cloud.firestore {
         && (isStoreAdmin(resource.data.storeId) || isActiveSubAccountForStore(resource.data.storeId));
     }
 
-    // Orders: real stores only for writes; guest read-by-id for tracking
+    // Orders: store team daily ops — allow admin updates even if subscription field is missing on profile
     match /orders/{orderId} {
       allow create: if request.auth != null
         && request.resource.data.storeId is string
-        && isRealStore(request.resource.data.storeId);
+        && storeProfileExists(request.resource.data.storeId)
+        && !isDemoStoreProfile(request.resource.data.storeId)
+        && !isBlockedCommerceStatus(request.resource.data.storeId)
+        && isStoreAdmin(request.resource.data.storeId);
       allow update: if request.auth != null
         && resource.data.storeId is string
-        && isRealStore(resource.data.storeId);
+        && storeProfileExists(resource.data.storeId)
+        && !isDemoStoreProfile(resource.data.storeId)
+        && !isBlockedCommerceStatus(resource.data.storeId)
+        && isStoreAdmin(resource.data.storeId);
       allow get: if true;
       allow list: if request.auth != null;
       allow delete: if request.auth != null
         && resource.data.status == 'cancelled'
         && resource.data.storeId is string
-        && isRealStore(resource.data.storeId);
+        && isStoreAdmin(resource.data.storeId);
     }
 
     // Users -> follows: only owner can create/delete their follow docs
@@ -661,7 +749,7 @@ service cloud.firestore {
     match /finishedGoodsInventory/{itemId} {
       allow read: if request.auth != null
         && resource.data.storeId is string
-        && isStoreAdmin(resource.data.storeId);
+        && isStoreFinanceTeam(resource.data.storeId);
       allow create, update: if request.auth != null
         && request.resource.data.storeId is string
         && isRealStore(request.resource.data.storeId)
@@ -686,12 +774,14 @@ service cloud.firestore {
       allow delete: if false;
     }
 
-    // Staff: real store owners only
+    // Staff: store team read; writes owner/admin on real stores
     match /staff/{staffId} {
       allow read: if request.auth != null
         && resource.data.storeId is string
-        && isRealStore(resource.data.storeId)
-        && isStoreAdmin(resource.data.storeId);
+        && (
+          isStoreAdmin(resource.data.storeId) ||
+          isActiveSubAccountForStore(resource.data.storeId)
+        );
       allow create: if request.auth != null
         && request.resource.data.storeId is string
         && isRealStore(request.resource.data.storeId)
@@ -841,11 +931,12 @@ service cloud.firestore {
         && resource.data.status == 'cancelled';
     }
 
-    // Sub-Accounts: store owner manages team on real stores
+    // Sub-Accounts: store team can read peers for attribution; owner manages writes
     match /subAccounts/{accountId} {
       allow read: if request.auth != null && (
         isLinkedSubAccount(accountId) ||
-        (resource.data.storeId is string && isStoreAdmin(resource.data.storeId))
+        (resource.data.storeId is string && isStoreAdmin(resource.data.storeId)) ||
+        (resource.data.storeId is string && isActiveSubAccountForStore(resource.data.storeId))
       );
       allow create: if request.auth != null
         && request.resource.data.storeId is string

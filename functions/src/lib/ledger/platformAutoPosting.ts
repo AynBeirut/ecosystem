@@ -22,6 +22,7 @@ import {
   resolvePurchaseReceiveSplit,
   type PurchaseReceiveInput,
 } from './purchaseReceiveAmounts';
+import { resolveExpenseAccountCode } from './expenseAccountRouting';
 
 function getDb() {
   return admin.firestore();
@@ -29,23 +30,10 @@ function getDb() {
 
 const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
-const EXPENSE_GL_MAP: Record<string, string> = {
-  rent: GL_ACCOUNT_CODES.RENT,
-  utilities: GL_ACCOUNT_CODES.UTILITIES,
-  payroll: GL_ACCOUNT_CODES.PAYROLL,
-  marketing: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
-  insurance: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
-  other: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
-};
-
 function cashOrBank(method?: string): string {
   const m = (method || '').toLowerCase();
   if (m === 'bank' || m === 'card' || m === 'stripe' || m === 'square') return GL_ACCOUNT_CODES.BANK;
   return GL_ACCOUNT_CODES.CASH;
-}
-
-function expenseAccountCode(category?: string): string {
-  return EXPENSE_GL_MAP[(category || '').toLowerCase()] || GL_ACCOUNT_CODES.GENERAL_EXPENSE;
 }
 
 export type OrderCogsLine = {
@@ -97,6 +85,7 @@ export type PlatformExpenseInput = {
   date: string;
   category?: string;
   description?: string;
+  vendor?: string;
   amount: number;
   paymentMethod?: string;
 };
@@ -345,7 +334,14 @@ export async function autoPostExpensePaid(
   const amount = round2(expense.amount);
   if (amount <= 0) return null;
 
-  const expenseAcct = accountByCode(accounts, expenseAccountCode(expense.category));
+  const expenseAcct = accountByCode(
+    accounts,
+    resolveExpenseAccountCode({
+      category: expense.category,
+      vendor: expense.vendor,
+      description: expense.description,
+    }),
+  );
   const cashAcct = accountByCode(accounts, cashOrBank(expense.paymentMethod));
 
   return postJournalEntry(

@@ -1233,6 +1233,7 @@ export async function syncPosExpenses(req: Request, res: Response): Promise<void
       date: string;
       category: string;
       description: string;
+      vendor: string;
       amount: number;
       paymentMethod: string;
     }> = [];
@@ -1265,7 +1266,16 @@ export async function syncPosExpenses(req: Request, res: Response): Promise<void
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
-      stagedExpenses.push({ ref: docRef, docId, date, category, description, amount, paymentMethod });
+      stagedExpenses.push({
+        ref: docRef,
+        docId,
+        date,
+        category,
+        description,
+        vendor: String(e.vendor || '').trim(),
+        amount,
+        paymentMethod,
+      });
       count++;
     }
     await batch.commit();
@@ -1277,6 +1287,7 @@ export async function syncPosExpenses(req: Request, res: Response): Promise<void
           date: expense.date,
           category: expense.category,
           description: expense.description,
+          vendor: expense.vendor,
           amount: expense.amount,
           paymentMethod: expense.paymentMethod,
         });

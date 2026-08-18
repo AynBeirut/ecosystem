@@ -21,6 +21,7 @@ type Props = {
   openItems: OpenItemRow[];
   partyLabel: string;
   onConfirm: (allocations: SettlementAllocationInput[]) => void;
+  onSkip?: () => void;
 };
 
 export default function InvoiceAllocationDialog({
@@ -30,6 +31,7 @@ export default function InvoiceAllocationDialog({
   openItems,
   partyLabel,
   onConfirm,
+  onSkip,
 }: Props) {
   const [amounts, setAmounts] = useState<Record<string, string>>({});
 
@@ -120,8 +122,15 @@ export default function InvoiceAllocationDialog({
           Allocated: {formatCurrency(allocatedTotal)} / {formatCurrency(paymentAmount)}
         </p>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            Skip
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (onSkip) onSkip();
+              else onOpenChange(false);
+            }}
+          >
+            Skip — post without allocation
           </Button>
           <Button type="button" onClick={handleConfirm} disabled={allocatedTotal > paymentAmount}>
             Apply & post

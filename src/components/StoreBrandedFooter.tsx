@@ -7,6 +7,8 @@ interface StoreBrandedFooterProps {
   contactEmail?: string;
   contactPhone?: string;
   primaryColor?: string;
+  contactLabel?: string;
+  contactHref?: string;
 }
 
 const StoreBrandedFooter: React.FC<StoreBrandedFooterProps> = ({
@@ -15,6 +17,8 @@ const StoreBrandedFooter: React.FC<StoreBrandedFooterProps> = ({
   contactEmail,
   contactPhone,
   primaryColor,
+  contactLabel = 'Contact Us',
+  contactHref = '/contact',
 }) => {
   const year = new Date().getFullYear();
   const accent = primaryColor || '#38B2AC';
@@ -33,8 +37,8 @@ const StoreBrandedFooter: React.FC<StoreBrandedFooterProps> = ({
         <p className="text-sm font-semibold text-gray-900">{storeName}</p>
         <p className="text-xs text-gray-500">© {year} {storeName}</p>
         <div className="text-xs text-gray-600 flex flex-wrap items-center justify-center gap-2">
-          <Link to="/contact" className="font-medium hover:underline" style={{ color: accent }}>
-            Contact Us
+          <Link to={contactHref} className="font-medium hover:underline" style={{ color: accent }}>
+            {contactLabel}
           </Link>
           {contactEmail && (
             <>

@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { Heart, Trash2 } from 'lucide-react';
 import Header from '@/components/Header';
@@ -8,9 +8,11 @@ import { useFavorites } from '@/context/FavoritesContext';
 import { resolveStoreShopLabel, resolveStoreShopUrl } from '@/lib/storeNavigation';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import { sortProductsInStockFirst } from '@/lib/productSort';
 
 const Favorites: React.FC = () => {
   const { favorites, removeFromFavorites } = useFavorites();
+  const sortedFavorites = useMemo(() => sortProductsInStockFirst(favorites), [favorites]);
   const shopUrl = resolveStoreShopUrl({ products: favorites });
   const shopLabel = resolveStoreShopLabel(shopUrl);
 
@@ -30,9 +32,9 @@ const Favorites: React.FC = () => {
           )}
         </div>
 
-        {favorites.length > 0 ? (
+        {sortedFavorites.length > 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-            {favorites.map((product) => (
+            {sortedFavorites.map((product) => (
               <ProductCard key={product.id} product={product} />
             ))}
           </div>

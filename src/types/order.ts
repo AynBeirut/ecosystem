@@ -34,6 +34,7 @@ export interface Order {
   autoRouted?: boolean
   deliveryCoordinates?: { lat: number; lng: number }
   total?: number
+  currency?: string
   status?: string
   items?: OrderItem[]
   createdAt?: Date | string | number
@@ -73,6 +74,12 @@ export interface Order {
   pickupCarrier?: string
   pickupNotes?: string
   pickupStatus?: 'scheduled' | 'picked_up' | 'cancelled'
+  scheduledFor?: string
+  guestCount?: number
+  confirmedAt?: string
+  confirmedBy?: string
+  scheduledReminder1hSentAt?: string
+  scheduledReminder30mSentAt?: string
 }
 
 export interface PaymentRecord {

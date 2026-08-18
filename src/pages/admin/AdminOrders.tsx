@@ -35,7 +35,7 @@ import { useSystemGuide } from '@/hooks/useSystemGuide';
 import SystemGuideInfo from '@/components/system-guide/SystemGuideInfo';
 
 const devLog = (...args: unknown[]) => {
-  if (import.meta.env.DEV) devLog(...args);
+  if (import.meta.env.DEV) console.log(...args);
 };
 import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
 import {
@@ -60,7 +60,16 @@ const ORDER_STATUSES = [
   { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
 ];
 
-const ENABLE_ORDER_RAW_MATERIAL_DEDUCTION = false;
+const DIALOG_NATIVE_SELECT_CLASS =
+  'flex h-11 w-full min-h-[44px] touch-manipulation rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-auto';
+
+const PAYMENT_METHODS = [
+  { value: 'cash', label: 'Cash' },
+  { value: 'bank_transfer', label: 'Bank Transfer' },
+  { value: 'check', label: 'Check' },
+  { value: 'credit_card', label: 'Credit Card' },
+  { value: 'mobile_payment', label: 'Mobile Payment' },
+] as const;
 
 interface ProductForOrder {
   id: string;
@@ -168,7 +177,7 @@ const AdminOrders: React.FC = () => {
   const [isCreatingOrder, setIsCreatingOrder] = useState(false);
   const [editingOrder, setEditingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingOrder, setViewingOrder] = useState<(Order & { id: string }) | null>(null);
-  // payingOrder removed — payments handled in Account Statement
+  const [payingOrder, setPayingOrder] = useState<(Order & { id: string }) | null>(null);
   const [refundingOrder, setRefundingOrder] = useState<(Order & { id: string }) | null>(null);
   const [viewingPaymentVoucher, setViewingPaymentVoucher] = useState<{ order: Order & { id: string }; payment: PaymentRecord } | null>(null);
   const [voidingPayment, setVoidingPayment] = useState<(Order & { id: string }) | null>(null);
@@ -177,6 +186,7 @@ const AdminOrders: React.FC = () => {
   const [mergingOrder, setMergingOrder] = useState<(Order & { id: string }) | null>(null);
   const [mergeTargetOrderId, setMergeTargetOrderId] = useState('');
   const [selectedOrderIds, setSelectedOrderIds] = useState<string[]>([]);
+  const [statusUpdatingOrderId, setStatusUpdatingOrderId] = useState<string | null>(null);
   const [isPickupDialogOpen, setIsPickupDialogOpen] = useState(false);
   const [pickupData, setPickupData] = useState({
     pickupDate: new Date().toISOString().split('T')[0],
@@ -188,6 +198,12 @@ const AdminOrders: React.FC = () => {
     refundDate: new Date().toISOString().split('T')[0],
     refundMethod: 'cash',
     refundNotes: '',
+  });
+  const [paymentData, setPaymentData] = useState({
+    amountPaid: 0,
+    paymentDate: new Date().toISOString().split('T')[0],
+    paymentMethod: 'cash',
+    paymentNotes: '',
   });
   
   const [newOrder, setNewOrder] = useState({
@@ -286,7 +302,7 @@ const AdminOrders: React.FC = () => {
   // Double-click prevention locks
   const isCreatingOrderRef = useRef(false);
   const isVoidingPaymentRef = useRef(false);
-
+  const isPayingOrderRef = useRef(false);
   const isRefundingOrderRef = useRef(false);
 
   const isOrderEligibleForSplitMerge = (order: Order & { id: string }) => {
@@ -318,6 +334,25 @@ const AdminOrders: React.FC = () => {
 
     return 'unpaid';
   };
+
+  const getOrderAmountDue = (order: Order & { id: string }) =>
+    Math.max(0, Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100);
+
+  const openPayOrderDialog = (order: Order & { id: string }) => {
+    setPayingOrder(order);
+    setPaymentData({
+      amountPaid: getOrderAmountDue(order),
+      paymentDate: new Date().toISOString().split('T')[0],
+      paymentMethod: 'cash',
+      paymentNotes: '',
+    });
+  };
+
+  const isOrderPaymentDue = (order: Order & { id: string }) =>
+    order.status !== 'cancelled' && getNormalizedPaymentStatus(order) !== 'paid';
+
+  const resolveOrderStatusValue = (status?: string) =>
+    ORDER_STATUSES.some((entry) => entry.value === status) ? String(status) : 'pending';
 
   const hasInventoryEvent = (transactions: InventoryTransaction[], idempotencyKey: string) => {
     return (transactions || []).some((tx: InventoryTransaction) => tx?.idempotencyKey === idempotencyKey);
@@ -845,6 +880,15 @@ const AdminOrders: React.FC = () => {
         return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
       };
 
+      const fetchCollectionOptional = async (collectionName: string) => {
+        try {
+          return await fetchCollection(collectionName);
+        } catch (err) {
+          devLog(`AdminOrders: ${collectionName} skipped`, err);
+          return [];
+        }
+      };
+
       try {
         // Fetch store profile
         const profileRef = doc(db, 'storeProfiles', user.storeId);
@@ -857,8 +901,8 @@ const AdminOrders: React.FC = () => {
           fetchCollection('orders'),
           fetchCollection('products'),
           fetchCollection('customers'),
-          fetchCollection('staff'),
-          fetchCollection('subAccounts'),
+          fetchCollectionOptional('staff'),
+          fetchCollectionOptional('subAccounts'),
         ]);
 
         let locations: FulfillmentLocation[] = [];
@@ -1388,195 +1432,229 @@ const AdminOrders: React.FC = () => {
   };
 
   const handleStatusChange = async (orderId: string, newStatus: string) => {
-    if (!user?.storeId) return;
+    const storeId = resolveStoreId();
+    if (!storeId) {
+      toast({ title: 'Error', description: 'Store not found. Please sign in again.', variant: 'destructive' });
+      return;
+    }
+
+    const order = orders.find((o) => o.id === orderId);
+    if (!order) {
+      toast({ title: 'Error', description: 'Order not found', variant: 'destructive' });
+      return;
+    }
+
+    if (newStatus === order.status) return;
+
+    setStatusUpdatingOrderId(orderId);
+    let sideEffectWarning = false;
+
     try {
       const db = getFirestore();
       const orderRef = doc(db, 'orders', orderId);
-      const order = orders.find(o => o.id === orderId);
-      
-      if (!order) {
-        toast({ title: "Error", description: "Order not found", variant: "destructive" });
-        return;
-      }
-      
+      const items = order.items || [];
+
       // Version counter to make idempotency keys unique across multiple deliver→rollback→deliver cycles
       const currentDeliveryCount = Number((order as Order & { _stockDeliveryCount?: number })._stockDeliveryCount || 0);
       let nextDeliveryCount = currentDeliveryCount;
 
-      // Handle rollback from counted sale state to non-sale state
-      if (isCountedSaleStatus(order.status) && !isCountedSaleStatus(newStatus)) {
-        // Reversing status - need to restore finished goods
-        const fgQuery = query(
-          collection(db, 'finishedGoodsInventory'),
-          where('storeId', '==', user.storeId)
-        );
-        const fgSnapshot = await getDocs(fgQuery);
+      try {
+        // Handle rollback from counted sale state to non-sale state
+        if (isCountedSaleStatus(order.status) && !isCountedSaleStatus(newStatus)) {
+          const fgQuery = query(
+            collection(db, 'finishedGoodsInventory'),
+            where('storeId', '==', storeId),
+          );
+          const fgSnapshot = await getDocs(fgQuery);
 
-        for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
-          const item = order.items[lineIdx];
-          const itemProductId = resolveOrderItemProductKey(item);
-          if (!itemProductId) continue;
+          for (let lineIdx = 0; lineIdx < items.length; lineIdx++) {
+            const item = items[lineIdx];
+            const itemProductId = resolveOrderItemProductKey(item);
+            if (!itemProductId) continue;
 
-          // Use currentDeliveryCount so this rollback cancels exactly the vN delivery
-          const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
-          // The matching delivery key that MUST exist before we restore — prevents phantom restores
-          const requiredDeliveryKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
+            const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
+            const requiredDeliveryKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
 
-          const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
-          
-          if (matchingFG) {
-            await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
-              const qty = item.quantity;
-              const cost = (fgData.costPrice as number) || 0;
-              const newBalance = round3(((fgData.currentBalance as number) || 0) + qty);
-              return {
-                currentBalance: newBalance,
-                quantitySold: round3(Math.max(0, ((fgData.quantitySold as number) || 0) - qty)),
-                totalValue: round3(newBalance * cost),
-                transaction: {
-                  id: `TXN-ROLLBACK-${Date.now()}-${item.productId}`,
-                  date: new Date().toISOString(),
-                  actionType: 'return',
-                  quantity: qty,
-                  unitCost: cost,
-                  totalCost: round3(cost * qty),
-                  reason: `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
-                  referenceId: orderId,
-                  referenceNumber: order.invoiceNumber || orderId,
-                  userId: user.id,
-                  userName: user.name,
-                  idempotencyKey,
-                },
-              };
-            }, requiredDeliveryKey);
-          } else {
-            await applySimpleProductStockChange(
-              db,
-              itemProductId,
-              Number(item.quantity || 0),
-              'restore',
-              idempotencyKey,
-              `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
-              orderId,
-              order.invoiceNumber || orderId,
-              requiredDeliveryKey,
-            );
+            const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
+
+            if (matchingFG) {
+              await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
+                const qty = item.quantity;
+                const cost = (fgData.costPrice as number) || 0;
+                const newBalance = round3(((fgData.currentBalance as number) || 0) + qty);
+                return {
+                  currentBalance: newBalance,
+                  quantitySold: round3(Math.max(0, ((fgData.quantitySold as number) || 0) - qty)),
+                  totalValue: round3(newBalance * cost),
+                  transaction: {
+                    id: `TXN-ROLLBACK-${Date.now()}-${item.productId}`,
+                    date: new Date().toISOString(),
+                    actionType: 'return',
+                    quantity: qty,
+                    unitCost: cost,
+                    totalCost: round3(cost * qty),
+                    reason: `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
+                    referenceId: orderId,
+                    referenceNumber: order.invoiceNumber || orderId,
+                    userId: user?.id,
+                    userName: user?.name,
+                    idempotencyKey,
+                  },
+                };
+              }, requiredDeliveryKey);
+            } else {
+              await applySimpleProductStockChange(
+                db,
+                itemProductId,
+                Number(item.quantity || 0),
+                'restore',
+                idempotencyKey,
+                `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
+                orderId,
+                order.invoiceNumber || orderId,
+                requiredDeliveryKey,
+              );
+            }
+          }
+
+          if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
+            await applyRawMaterialStockFromOrder(db, order, 'restore');
           }
         }
 
-        if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
-          await applyRawMaterialStockFromOrder(db, order, 'restore');
-        }
-      }
-      
-      // If marking as delivered, deduct from finished goods inventory
-      if (isCountedSaleStatus(newStatus) && !isCountedSaleStatus(order.status)) {
-        // Increment version so each re-delivery gets a fresh unique idempotency key
-        nextDeliveryCount = currentDeliveryCount + 1;
+        if (isCountedSaleStatus(newStatus) && !isCountedSaleStatus(order.status)) {
+          nextDeliveryCount = currentDeliveryCount + 1;
 
-        const fgQuery = query(
-          collection(db, 'finishedGoodsInventory'),
-          where('storeId', '==', user.storeId)
-        );
-        const fgSnapshot = await getDocs(fgQuery);
-        const cogsLines: OrderCogsLine[] = [];
+          const fgQuery = query(
+            collection(db, 'finishedGoodsInventory'),
+            where('storeId', '==', storeId),
+          );
+          const fgSnapshot = await getDocs(fgQuery);
+          const cogsLines: OrderCogsLine[] = [];
 
-        for (let lineIdx = 0; lineIdx < order.items.length; lineIdx++) {
-          const item = order.items[lineIdx];
-          const itemProductId = resolveOrderItemProductKey(item);
-          if (!itemProductId) continue;
+          for (let lineIdx = 0; lineIdx < items.length; lineIdx++) {
+            const item = items[lineIdx];
+            const itemProductId = resolveOrderItemProductKey(item);
+            if (!itemProductId) continue;
 
-          // Use nextDeliveryCount so 2nd delivery generates a new key never seen before
-          const idempotencyKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${nextDeliveryCount}`);
+            const idempotencyKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${nextDeliveryCount}`);
 
-          const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
-          
-          if (matchingFG) {
-            const fgCost = (matchingFG.data().costPrice as number) || 0;
-            cogsLines.push({ productKey: itemProductId, quantity: item.quantity, unitCost: fgCost });
-            await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
-              const qty = item.quantity;
-              const cost = (fgData.costPrice as number) || 0;
-              const newBalance = round3(Math.max(0, ((fgData.currentBalance as number) || 0) - qty));
-              return {
-                currentBalance: newBalance,
-                quantitySold: round3(((fgData.quantitySold as number) || 0) + qty),
-                totalValue: round3(newBalance * cost),
-                transaction: {
-                  id: `TXN-${Date.now()}-${item.productId}`,
-                  date: new Date().toISOString(),
-                  actionType: 'sold',
-                  quantity: -qty,
-                  unitCost: cost,
-                  totalCost: round3(cost * qty),
-                  reason: `Sale from order ${order.invoiceNumber || order.id}`,
-                  referenceId: orderId,
-                  referenceNumber: order.invoiceNumber || order.id,
-                  userId: user.id,
-                  userName: user.name,
-                  idempotencyKey,
-                },
-              };
+            const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
+
+            if (matchingFG) {
+              const fgCost = (matchingFG.data().costPrice as number) || 0;
+              cogsLines.push({ productKey: itemProductId, quantity: item.quantity, unitCost: fgCost });
+              await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
+                const qty = item.quantity;
+                const cost = (fgData.costPrice as number) || 0;
+                const newBalance = round3(Math.max(0, ((fgData.currentBalance as number) || 0) - qty));
+                return {
+                  currentBalance: newBalance,
+                  quantitySold: round3(((fgData.quantitySold as number) || 0) + qty),
+                  totalValue: round3(newBalance * cost),
+                  transaction: {
+                    id: `TXN-${Date.now()}-${item.productId}`,
+                    date: new Date().toISOString(),
+                    actionType: 'sold',
+                    quantity: -qty,
+                    unitCost: cost,
+                    totalCost: round3(cost * qty),
+                    reason: `Sale from order ${order.invoiceNumber || order.id}`,
+                    referenceId: orderId,
+                    referenceNumber: order.invoiceNumber || order.id,
+                    userId: user?.id,
+                    userName: user?.name,
+                    idempotencyKey,
+                  },
+                };
+              });
+            } else {
+              await applySimpleProductStockChange(
+                db,
+                itemProductId,
+                Number(item.quantity || 0),
+                'consume',
+                idempotencyKey,
+                `Sale from order ${order.invoiceNumber || order.id}`,
+                orderId,
+                order.invoiceNumber || order.id,
+              );
+            }
+          }
+
+          if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
+            await applyRawMaterialStockFromOrder(db, order, 'consume');
+          }
+
+          const glCogs = cogsLines.length > 0
+            ? cogsLines
+            : await resolveOrderCogsLines(storeId, items);
+          await glPostOrderSaleRecognized(
+            storeId,
+            orderGlInputFromOrder({ ...order, id: orderId, storeId }, glCogs),
+          );
+
+          if (isPlatformOrderCod({ ...order, id: orderId })) {
+            await syncCodOrderToDeliveryWallet(storeId, {
+              id: orderId,
+              storeId,
+              invoiceNumber: order.invoiceNumber,
+              customerName: order.customerName,
+              total: order.total,
+              paymentMethod: order.paymentMethod,
+              paymentStatus: order.paymentStatus,
+              amountPaid: order.amountPaid,
+              assignedDeliveryPerson: order.assignedDeliveryPerson,
+              assignedDeliveryPersonName: order.assignedDeliveryPersonName,
             });
-          } else {
-            await applySimpleProductStockChange(
-              db,
-              itemProductId,
-              Number(item.quantity || 0),
-              'consume',
-              idempotencyKey,
-              `Sale from order ${order.invoiceNumber || order.id}`,
-              orderId,
-              order.invoiceNumber || order.id,
-            );
           }
         }
-
-        if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
-          await applyRawMaterialStockFromOrder(db, order, 'consume');
-        }
-
-        const glCogs = cogsLines.length > 0
-          ? cogsLines
-          : await resolveOrderCogsLines(user.storeId, order.items);
-        await glPostOrderSaleRecognized(
-          user.storeId,
-          orderGlInputFromOrder({ ...order, id: orderId, storeId: user.storeId }, glCogs),
-        );
-
-        if (isPlatformOrderCod({ ...order, id: orderId })) {
-          await syncCodOrderToDeliveryWallet(user.storeId, {
-            id: orderId,
-            storeId: user.storeId,
-            invoiceNumber: order.invoiceNumber,
-            customerName: order.customerName,
-            total: order.total,
-            paymentMethod: order.paymentMethod,
-            paymentStatus: order.paymentStatus,
-            amountPaid: order.amountPaid,
-            assignedDeliveryPerson: order.assignedDeliveryPerson,
-            assignedDeliveryPersonName: order.assignedDeliveryPersonName,
-          });
-        }
+      } catch (sideEffectError) {
+        sideEffectWarning = true;
+        console.error('Order status side effects failed:', sideEffectError);
       }
-      
+
       await updateDoc(orderRef, {
         status: newStatus,
         updatedAt: new Date().toISOString(),
-        // Persist version counter so next rollback/re-deliver cycle uses correct keys
         ...(nextDeliveryCount !== currentDeliveryCount ? { _stockDeliveryCount: nextDeliveryCount } : {}),
       });
-      setOrders(orders.map(o => o.id === orderId ? { ...o, status: newStatus, _stockDeliveryCount: nextDeliveryCount } as typeof o : o));
-      
-      await logAction(user.id, user.name, user.role, 'update', 'order', orderId, {
-        oldValue: { status: order.status },
-        newValue: { status: newStatus }
-      }, user.storeId);
-      
-      toast({ title: "Success", description: "Order status updated!" });
+      setOrders(
+        orders.map((o) =>
+          o.id === orderId
+            ? ({ ...o, status: newStatus, _stockDeliveryCount: nextDeliveryCount } as typeof o)
+            : o,
+        ),
+      );
+
+      if (user?.id) {
+        await logAction(user.id, user.name, user.role, 'update', 'order', orderId, {
+          oldValue: { status: order.status },
+          newValue: { status: newStatus },
+        }, storeId);
+      }
+
+      toast({
+        title: sideEffectWarning ? 'Status updated with warning' : 'Success',
+        description: sideEffectWarning
+          ? 'Order status saved, but stock/wallet sync had an issue.'
+          : 'Order status updated!',
+        variant: sideEffectWarning ? 'destructive' : 'default',
+      });
     } catch (error) {
       console.error('Error updating status:', error);
-      toast({ title: "Error", description: "Failed to update status", variant: "destructive" });
+      const code = (error as { code?: string })?.code;
+      const message = error instanceof Error ? error.message : 'Failed to update status';
+      toast({
+        title: 'Error',
+        description:
+          code === 'permission-denied'
+            ? 'Permission denied updating this order. Try signing out and back in, or contact support.'
+            : message,
+        variant: 'destructive',
+      });
+    } finally {
+      setStatusUpdatingOrderId(null);
     }
   };
 
@@ -2092,6 +2170,137 @@ const AdminOrders: React.FC = () => {
       
       if (operationSucceeded) {
         setVoidingPayment(null);
+      }
+    }
+  };
+
+  const handlePayOrder = async () => {
+    if (isPayingOrderRef.current) {
+      devLog('Payment operation already in progress');
+      return;
+    }
+
+    if (!payingOrder || !user?.storeId) return;
+
+    isPayingOrderRef.current = true;
+    let operationSucceeded = false;
+
+    try {
+      const db = getFirestore();
+      const orderRef = doc(db, 'orders', payingOrder.id);
+
+      const currentPaid = Number(payingOrder.amountPaid || 0);
+      const totalAmount = Number(payingOrder.total || 0);
+      const remainingAmount = getOrderAmountDue(payingOrder);
+      const enteredAmount = Number(paymentData.amountPaid || 0);
+
+      if (!Number.isFinite(enteredAmount) || enteredAmount <= 0) {
+        toast({ title: 'Invalid Amount', description: 'Payment amount must be greater than zero.', variant: 'destructive' });
+        return;
+      }
+
+      if (!paymentData.paymentDate) {
+        toast({ title: 'Missing Payment Date', description: 'Please select the payment date.', variant: 'destructive' });
+        return;
+      }
+
+      if (!paymentData.paymentMethod) {
+        toast({ title: 'Missing Payment Method', description: 'Please select a payment method.', variant: 'destructive' });
+        return;
+      }
+
+      const sanitizedAmount = Math.round(enteredAmount * 100) / 100;
+      if (sanitizedAmount > remainingAmount + 0.0001) {
+        toast({
+          title: 'Amount Exceeds Balance Due',
+          description: `Maximum allowed is ${money(remainingAmount)} for this order.`,
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      const newAmountPaid = Math.round((currentPaid + sanitizedAmount) * 100) / 100;
+
+      let paymentStatus: 'unpaid' | 'partial' | 'paid' = 'unpaid';
+      if (newAmountPaid >= totalAmount && totalAmount > 0) {
+        paymentStatus = 'paid';
+      } else if (newAmountPaid > 0) {
+        paymentStatus = 'partial';
+      }
+
+      const paymentRecord: PaymentRecord = {
+        id: `PMT-${Date.now()}`,
+        amount: sanitizedAmount,
+        entryType: 'payment',
+        date: paymentData.paymentDate,
+        method: paymentData.paymentMethod,
+        notes: paymentData.paymentNotes,
+        recordedBy: user.name || 'System',
+        recordedAt: new Date().toISOString(),
+      };
+
+      const existingHistory = payingOrder.paymentHistory || [];
+      const updatedHistory = [...existingHistory, paymentRecord];
+
+      await updateDoc(orderRef, {
+        paymentStatus,
+        amountPaid: newAmountPaid,
+        remainingAmount: Math.max(0, Math.round((totalAmount - newAmountPaid) * 100) / 100),
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: paymentData.paymentMethod,
+        paymentNotes: paymentData.paymentNotes,
+        paymentHistory: updatedHistory,
+        updatedAt: new Date().toISOString(),
+      });
+
+      const updatedOrder = {
+        ...payingOrder,
+        paymentStatus,
+        amountPaid: newAmountPaid,
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: paymentData.paymentMethod,
+        paymentNotes: paymentData.paymentNotes,
+        paymentHistory: updatedHistory,
+      };
+
+      setOrders(orders.map((o) => (o.id === payingOrder.id ? updatedOrder : o)));
+
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'order_payment',
+        payingOrder.id,
+        {
+          oldValue: { amountPaid: currentPaid, paymentStatus: payingOrder.paymentStatus },
+          newValue: { amountPaid: newAmountPaid, paymentStatus, ...paymentData },
+        },
+        user.storeId,
+      );
+
+      operationSucceeded = true;
+
+      toast({
+        title: 'Success',
+        description: `Payment recorded! Status: ${paymentStatus === 'paid' ? 'Fully Paid' : paymentStatus === 'partial' ? 'Partially Paid' : 'Unpaid'}`,
+      });
+
+      setViewingPaymentVoucher({ order: updatedOrder, payment: paymentRecord });
+    } catch (error) {
+      console.error('Error recording payment:', error);
+      toast({ title: 'Error', description: 'Failed to record payment', variant: 'destructive' });
+    } finally {
+      isPayingOrderRef.current = false;
+
+      if (operationSucceeded) {
+        setPayingOrder(null);
+        setPaymentData({
+          amountPaid: 0,
+          paymentDate: new Date().toISOString().split('T')[0],
+          paymentMethod: 'cash',
+          paymentNotes: '',
+        });
       }
     }
   };
@@ -3316,6 +3525,14 @@ const AdminOrders: React.FC = () => {
   const projectedRefundedPaidAmount = refundingOrder
     ? Math.max(0, Math.round(((refundingOrder.amountPaid || 0) - Number(refundData.amount || 0)) * 100) / 100)
     : 0;
+  const payingOrderRemainingAmount = payingOrder ? getOrderAmountDue(payingOrder) : 0;
+  const projectedAmountPaid = payingOrder
+    ? Math.round(((payingOrder.amountPaid || 0) + Number(paymentData.amountPaid || 0)) * 100) / 100
+    : 0;
+  const projectedRemainingAmount = Math.max(
+    0,
+    Math.round((payingOrderRemainingAmount - Number(paymentData.amountPaid || 0)) * 100) / 100,
+  );
 
   return (
     <AdminPageShell
@@ -3336,6 +3553,7 @@ const AdminOrders: React.FC = () => {
       )}
       description="Create and manage customer sales orders"
       eyebrow="Daily Operations"
+      className="max-w-full overflow-x-hidden"
       actions={
         <Button onClick={() => setIsCreatingOrder(true)}>
           <Plus className="mr-2 h-4 w-4" />
@@ -3348,10 +3566,11 @@ const AdminOrders: React.FC = () => {
           if (!open) {
             setIsCreatingOrder(false);
             setEditingOrder(null);
+            setIsCreatingNewCustomer(false);
             setNewOrder(getEmptyOrderForm());
           }
         }}>
-            <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-4xl">
               <DialogHeader>
                 <DialogTitle>{editingOrder ? 'Edit Order' : 'Create New Order'}</DialogTitle>
                 <DialogDescription>
@@ -3393,7 +3612,7 @@ const AdminOrders: React.FC = () => {
                       </div>
                     ) : (
                       <div className="space-y-2">
-                        <Popover open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
+                        <Popover modal open={customerSearchOpen} onOpenChange={setCustomerSearchOpen}>
                           <PopoverTrigger asChild>
                             <Button
                               id="orderCustomer"
@@ -3409,10 +3628,26 @@ const AdminOrders: React.FC = () => {
                               <User className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                             </Button>
                           </PopoverTrigger>
-                          <PopoverContent id="orderCustomerList" className="w-full p-0">
+                          <PopoverContent id="orderCustomerList" className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                             <Command>
                               <CommandInput placeholder="Search customer..." />
-                              <CommandEmpty>No customer found.</CommandEmpty>
+                              <CommandEmpty>
+                                <div className="p-3 text-center space-y-2">
+                                  <p className="text-sm text-muted-foreground">No customer found.</p>
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => {
+                                      setCustomerSearchOpen(false);
+                                      setIsCreatingNewCustomer(true);
+                                    }}
+                                  >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    Add New Customer
+                                  </Button>
+                                </div>
+                              </CommandEmpty>
                               <CommandGroup className="max-h-[200px] overflow-auto">
                                 {customers.map(customer => (
                                   <CommandItem
@@ -3455,7 +3690,7 @@ const AdminOrders: React.FC = () => {
                   <div>
                     <Label htmlFor="orderSalesPerson">Sales Person</Label>
                     <div className="space-y-2">
-                      <Popover open={salesPersonSearchOpen} onOpenChange={setSalesPersonSearchOpen}>
+                      <Popover modal open={salesPersonSearchOpen} onOpenChange={setSalesPersonSearchOpen}>
                         <PopoverTrigger asChild>
                           <Button
                             id="orderSalesPerson"
@@ -3472,7 +3707,7 @@ const AdminOrders: React.FC = () => {
                             <User className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                           </Button>
                         </PopoverTrigger>
-                        <PopoverContent id="orderSalesPersonList" className="w-full p-0">
+                        <PopoverContent id="orderSalesPersonList" className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
                           <Command>
                             <CommandInput placeholder="Search sales person..." />
                             <CommandEmpty>No sales person found.</CommandEmpty>
@@ -3559,9 +3794,9 @@ const AdminOrders: React.FC = () => {
                       const itemTotal = itemPrice - itemDiscount;
                       
                       return (
-                        <div key={index} className="p-3 bg-gray-50 rounded-lg space-y-2">
-                          <div className="flex gap-2 items-center">
-                            <div className="flex-1">
+                        <div key={index} className="p-3 bg-gray-50 rounded-lg space-y-3">
+                          <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+                            <div className="flex-1 min-w-0">
                               <Label htmlFor={`order-item-product-${index}`} className="sr-only">Product</Label>
                               <Select
                                 value={item.productId}
@@ -3579,38 +3814,40 @@ const AdminOrders: React.FC = () => {
                                 </SelectContent>
                               </Select>
                             </div>
-                            <div>
-                              <Label htmlFor={`order-item-qty-${index}`} className="sr-only">Quantity</Label>
-                              <Input
-                                id={`order-item-qty-${index}`}
-                                type="number"
-                                min="0.01"
-                                step="0.01"
-                                value={item.quantity || ''}
-                                onChange={(e) => {
-                                  const val = e.target.value;
-                                  updateOrderItem(index, 'quantity', val === '' ? '' : parseFloat(val) || 0);
-                                }}
-                                className="w-20"
-                                placeholder="Qty"
-                              />
+                            <div className="flex items-center gap-2 sm:shrink-0">
+                              <div>
+                                <Label htmlFor={`order-item-qty-${index}`} className="sr-only">Quantity</Label>
+                                <Input
+                                  id={`order-item-qty-${index}`}
+                                  type="number"
+                                  min="0.01"
+                                  step="0.01"
+                                  value={item.quantity || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    updateOrderItem(index, 'quantity', val === '' ? '' : parseFloat(val) || 0);
+                                  }}
+                                  className="w-24"
+                                  placeholder="Qty"
+                                />
+                              </div>
+                              <div className="min-w-[5rem] text-right font-medium">
+                                {money(itemTotal)}
+                              </div>
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeOrderItem(index)}
+                                aria-label={`Remove item ${index + 1}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-red-500" />
+                              </Button>
                             </div>
-                            <div className="w-28 text-right font-medium">
-                              {money(itemTotal)}
-                            </div>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => removeOrderItem(index)}
-                              aria-label={`Remove item ${index + 1}`}
-                            >
-                              <Trash2 className="h-4 w-4 text-red-500" />
-                            </Button>
                           </div>
                           
                           {/* Item discount controls */}
-                          <div className="flex gap-2 items-center pl-2">
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:pl-2">
                             <Label htmlFor={`order-item-discount-type-${index}`} className="text-xs text-gray-600 w-16">Discount:</Label>
                             <Select
                               value={item.discountType || 'percentage'}
@@ -3690,7 +3927,7 @@ const AdminOrders: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="orderDeliveryMethod">Delivery Method</Label>
                     <Select
@@ -3769,7 +4006,7 @@ const AdminOrders: React.FC = () => {
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="orderDiscountType">Discount Type</Label>
                     <Select value={newOrder.discountType} onValueChange={(value: 'percentage' | 'fixed') => setNewOrder({ ...newOrder, discountType: value })}>
@@ -3849,8 +4086,8 @@ const AdminOrders: React.FC = () => {
           <AdminStatCard title="Unpaid / Partial" value={unpaidOrdersCount} icon={AlertCircle} gradient="from-red-500 to-rose-700" subtitle="Needs payment follow-up" valueClassName={unpaidOrdersCount > 0 ? 'text-red-600' : undefined} />
         </div>
 
-        {/* Search + Views */}
-        <div className="mb-4 grid grid-cols-1 lg:grid-cols-3 gap-3">
+        {/* Search + Views — stack on mobile */}
+        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
           <Input
             placeholder="Search by customer, invoice number, order ID, or status..."
             value={searchTerm}
@@ -4037,9 +4274,9 @@ const AdminOrders: React.FC = () => {
             filteredOrders.map((order) => (
               <AdminPanel key={order.id}>
                 <CardHeader>
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                    <div className="min-w-0 flex-1">
+                      <CardTitle className="flex flex-wrap items-center gap-2">
                         {isOrderEligibleForShippingWorkflow(order) && (
                           <input
                             type="checkbox"
@@ -4060,22 +4297,19 @@ const AdminOrders: React.FC = () => {
                         {typeof order.deliveryFee === 'number' && ` (${money(order.deliveryFee)})`}
                       </CardDescription>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Select
-                        value={order.status}
-                        onValueChange={(value) => handleStatusChange(order.id, value)}
+                    <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto lg:justify-end">
+                      <select
+                        className={`${DIALOG_NATIVE_SELECT_CLASS} sm:max-w-[10rem]`}
+                        value={resolveOrderStatusValue(order.status)}
+                        disabled={statusUpdatingOrderId === order.id}
+                        onChange={(e) => void handleStatusChange(order.id, e.target.value)}
                       >
-                        <SelectTrigger className="w-40">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {ORDER_STATUSES.map(status => (
-                            <SelectItem key={status.value} value={status.value}>
-                              {status.label}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                        {ORDER_STATUSES.map((status) => (
+                          <option key={status.value} value={status.value}>
+                            {status.label}
+                          </option>
+                        ))}
+                      </select>
                       {['pending', 'confirmed', 'processing', 'ready', 'delivered'].includes(order.status || '') && 
                        !(order.paymentHistory && order.paymentHistory.length > 0) && 
                        !(order.paymentStatus === 'paid' || (order.amountPaid || 0) > 0) && (
@@ -4146,6 +4380,17 @@ const AdminOrders: React.FC = () => {
                           title="Generate Shipping Label"
                         >
                           Label
+                        </Button>
+                      )}
+                      {isOrderPaymentDue(order) && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="w-full basis-full sm:w-auto sm:basis-auto"
+                          onClick={() => openPayOrderDialog(order)}
+                        >
+                          <DollarSign className="h-4 w-4 mr-1" />
+                          Mark Paid
                         </Button>
                       )}
                       {order.status !== 'cancelled' && (
@@ -4219,7 +4464,7 @@ const AdminOrders: React.FC = () => {
                             <div>
                               <p className="text-sm text-gray-500">Amount Due</p>
                               <p className="font-bold text-lg text-red-600">
-                                {money((order.total || 0) - (order.amountPaid || 0))}
+                                {money(getOrderAmountDue(order))}
                               </p>
                             </div>
                           )}
@@ -4727,6 +4972,158 @@ const AdminOrders: React.FC = () => {
               <DialogFooter>
                 <Button variant="outline" onClick={() => setRefundingOrder(null)}>Cancel</Button>
                 <Button variant="destructive" onClick={handleRefundOrder}>Record Refund</Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
+
+        {payingOrder && (
+          <Dialog open={!!payingOrder} onOpenChange={() => setPayingOrder(null)}>
+            <DialogContent
+              className="max-w-md"
+              onOpenAutoFocus={(event) => event.preventDefault()}
+            >
+              <DialogHeader>
+                <DialogTitle>Record Payment</DialogTitle>
+                <DialogDescription>
+                  Order: {payingOrder.invoiceNumber || `#${payingOrder.id.slice(0, 8)}`}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4">
+                <div className="grid grid-cols-2 gap-4 rounded bg-muted/40 p-3">
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total Amount</p>
+                    <p className="font-bold">{money(payingOrder.total || 0)}</p>
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Already Paid</p>
+                    <p className="font-bold text-green-600">{money(payingOrder.amountPaid || 0)}</p>
+                  </div>
+                  <div className="col-span-2">
+                    <p className="text-sm text-muted-foreground">Amount Due</p>
+                    <p className="font-bold text-red-600">{money(payingOrderRemainingAmount)}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentAmount">Payment Amount *</Label>
+                  <Input
+                    id="paymentAmount"
+                    type="number"
+                    min="0"
+                    max={payingOrderRemainingAmount}
+                    step="0.01"
+                    value={paymentData.amountPaid || ''}
+                    onChange={(e) => {
+                      const nextAmount = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                      const boundedAmount = Number.isFinite(nextAmount)
+                        ? Math.max(0, Math.min(payingOrderRemainingAmount, nextAmount))
+                        : 0;
+                      setPaymentData({ ...paymentData, amountPaid: boundedAmount });
+                    }}
+                  />
+                  <div className="mt-2 flex flex-wrap gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPaymentData({
+                          ...paymentData,
+                          amountPaid: Math.round(payingOrderRemainingAmount * 0.25 * 100) / 100,
+                        })
+                      }
+                    >
+                      25%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() =>
+                        setPaymentData({
+                          ...paymentData,
+                          amountPaid: Math.round(payingOrderRemainingAmount * 0.5 * 100) / 100,
+                        })
+                      }
+                    >
+                      50%
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setPaymentData({ ...paymentData, amountPaid: payingOrderRemainingAmount })}
+                    >
+                      Full Due
+                    </Button>
+                  </div>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    After this payment: paid {money(projectedAmountPaid)} | remaining {money(projectedRemainingAmount)}
+                  </p>
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentDate">Payment Date *</Label>
+                  <Input
+                    id="paymentDate"
+                    type="date"
+                    value={paymentData.paymentDate}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentMethod">Payment Method *</Label>
+                  {isMobile ? (
+                    <select
+                      id="paymentMethod"
+                      className={DIALOG_NATIVE_SELECT_CLASS}
+                      value={paymentData.paymentMethod}
+                      onChange={(e) => setPaymentData({ ...paymentData, paymentMethod: e.target.value })}
+                    >
+                      {PAYMENT_METHODS.map((method) => (
+                        <option key={method.value} value={method.value}>
+                          {method.label}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <Select
+                      value={paymentData.paymentMethod}
+                      onValueChange={(value) => setPaymentData({ ...paymentData, paymentMethod: value })}
+                    >
+                      <SelectTrigger id="paymentMethod">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent position="item-aligned">
+                        {PAYMENT_METHODS.map((method) => (
+                          <SelectItem key={method.value} value={method.value}>
+                            {method.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  )}
+                </div>
+
+                <div>
+                  <Label htmlFor="paymentNotes">Notes (optional)</Label>
+                  <Textarea
+                    id="paymentNotes"
+                    placeholder="Transaction reference, check number, etc."
+                    value={paymentData.paymentNotes}
+                    onChange={(e) => setPaymentData({ ...paymentData, paymentNotes: e.target.value })}
+                  />
+                </div>
+              </div>
+              <DialogFooter className="flex-col gap-2 sm:flex-row">
+                <Button variant="outline" className="w-full sm:w-auto" onClick={() => setPayingOrder(null)}>
+                  Cancel
+                </Button>
+                <Button className="w-full sm:w-auto" onClick={handlePayOrder}>
+                  Mark Paid
+                </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>

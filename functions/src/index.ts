@@ -48,6 +48,7 @@ import { getRobotsTxt, getSitemap, submitSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
 import { dispatchOrderNotifications, retryOrderNotification } from './services/orderNotifications';
 import { getFcmTokensForStoreOwner, sendFcmMulticast } from './services/fcmTokens';
+import { getStoreClosedDayMessage, isStoreOpenOnDate } from './lib/storeWorkingDays';
 import {
   createSupplierReturn,
   updateSupplierReturnStatus,
@@ -380,6 +381,10 @@ interface DeliveryInfo {
   notes?: string;
   coordinates?: unknown;
   fulfillmentMethod?: 'delivery' | 'pickup' | 'dine_in';
+  scheduledDate?: string;
+  scheduledTime?: string;
+  guestCount?: number;
+  deliveryPartnerName?: string;
 }
 
 interface StoreProfile {
@@ -478,6 +483,22 @@ app.post('/checkout', async (req: Request, res: Response) => {
       itemsByStore[it.storeId].push(it);
     }
     console.log('Items by store:', itemsByStore);
+
+    const scheduledDateCheck = String(deliveryInfo?.scheduledDate || '').trim();
+    if (scheduledDateCheck) {
+      for (const storeId of Object.keys(itemsByStore)) {
+        const profileSnap = await db.doc(`storeProfiles/${storeId}`).get();
+        const settings = (profileSnap.data()?.deliverySettings || {}) as {
+          workingDays?: string;
+          workingHours?: string;
+        };
+        if (!isStoreOpenOnDate(scheduledDateCheck, settings.workingDays)) {
+          return res.status(400).json({
+            error: getStoreClosedDayMessage(settings.workingDays, settings.workingHours),
+          });
+        }
+      }
+    }
 
     let ordersCreated = 0;
     const orderIds: string[] = [];
@@ -652,6 +673,21 @@ app.post('/checkout', async (req: Request, res: Response) => {
               ? (deliveryInfo?.address || 'Dine In')
               : (deliveryInfo?.address || '');
 
+        const scheduledDate = String(deliveryInfo?.scheduledDate || '').trim();
+        const scheduledTime = String(deliveryInfo?.scheduledTime || '').trim();
+        const scheduledFor = scheduledDate && scheduledTime
+          ? `${scheduledDate}T${scheduledTime}`
+          : scheduledDate || scheduledTime || null;
+        const guestCountRaw = Number(deliveryInfo?.guestCount);
+        const guestCount = Number.isFinite(guestCountRaw) && guestCountRaw > 0
+          ? Math.round(guestCountRaw)
+          : null;
+        const scheduleNote = scheduledFor ? `Scheduled for: ${scheduledFor}` : '';
+        const guestNote = guestCount ? `Party size: ${guestCount}` : '';
+        const deliveryNotes = [deliveryInfo?.notes, scheduleNote, guestNote, checkoutChannel === 'whatsapp' ? 'Placed via WhatsApp' : '']
+          .filter(Boolean)
+          .join(' · ');
+
         const orderRef = db.collection('orders').doc();
         transaction.set(orderRef, {
           storeId: orderData.storeId,
@@ -683,7 +719,9 @@ app.post('/checkout', async (req: Request, res: Response) => {
           deliveryMethod: orderDeliveryMethod,
           deliveryAddress: resolvedDeliveryAddress,
           deliveryCity: fulfillmentMethod === 'delivery' ? (deliveryInfo?.city || '') : '',
-          deliveryNotes: deliveryInfo?.notes || (checkoutChannel === 'whatsapp' ? 'Placed via WhatsApp' : ''),
+          deliveryNotes,
+          scheduledFor,
+          guestCount,
           deliveryCoordinates: fulfillmentMethod === 'delivery' ? (deliveryInfo?.coordinates || null) : null,
           paymentStatus: 'unpaid',
           amountPaid: 0,
@@ -816,6 +854,8 @@ export { checkExpiringStock } from './scheduled/checkExpiringStock';
 export { checkLowStockAlert } from './scheduled/checkLowStock';
 export { fetchExchangeRates } from './scheduled/fetchExchangeRates';
 export { runRecurringVouchers } from './scheduled/runRecurringVouchers';
+export { autoCloseFiscalPeriods } from './scheduled/autoCloseFiscalPeriods';
+export { checkScheduledOrderReminders } from './scheduled/checkScheduledOrderReminders';
 // Export Firestore triggers: new order + order status / payment status change notifications
 export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
 export { onAccountPaymentCreated } from './triggers/accountPaymentSync';

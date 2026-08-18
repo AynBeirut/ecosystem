@@ -12,6 +12,7 @@ import {
 import { getFinanceDb } from '@/integrations/firebase/client';
 import { sanitizeForFirestore } from '@/lib/firestore/storeCollection';
 import { assertPeriodOpenForPost } from '@/lib/ledger/periodLock';
+import { journalDateOnly, parseJournalDateInput } from '@/lib/ledger/periodLockCore';
 import { normalizeCurrencyCode } from '@/lib/money/currencies';
 import { lockAccountingModeOnFirstPost } from '@/lib/grabio/accountingMode';
 import { allocateVoucherNumberInTransaction, voucherSerialsRef } from '@/lib/ledger/voucherSerial';
@@ -137,6 +138,9 @@ export async function postJournalEntry(
 
   await assertPeriodOpenForPost(input.storeId, input.date);
 
+  const entryDateIso = parseJournalDateInput(input.date);
+  const entryYear = Number(journalDateOnly(entryDateIso).slice(0, 4));
+
   // Accurate currency label: caller-provided currency, else the store's base currency.
   const currency = input.currency
     ? normalizeCurrencyCode(input.currency)
@@ -193,6 +197,7 @@ export async function postJournalEntry(
           serialSnap,
           input.storeId,
           input.voucherType,
+          entryYear,
         );
       }
 
@@ -200,7 +205,7 @@ export async function postJournalEntry(
       const entry = sanitizeForFirestore({
         id: entryId,
         storeId: input.storeId,
-        date: input.date,
+        date: entryDateIso,
         memo: input.memo,
         status: 'posted' as const,
         sourceType: input.sourceType,
@@ -232,12 +237,20 @@ export async function postJournalEntry(
       return { entryId, idempotentReplay: false, voucherNumber };
     });
     if (!created.idempotentReplay) {
-      await lockAccountingModeOnFirstPost(input.storeId);
-      const { appendLedgerAuditLog } = await import('@/lib/firestore/ledgerAuditFirestore');
-      await appendLedgerAuditLog(input.storeId, 'posted', {
-        entryId: created.entryId,
-        actorUid: input.createdBy,
-      });
+      try {
+        await lockAccountingModeOnFirstPost(input.storeId);
+      } catch (err) {
+        console.warn('[Ledger] accountingModeLocked update skipped', err);
+      }
+      try {
+        const { appendLedgerAuditLog } = await import('@/lib/firestore/ledgerAuditFirestore');
+        await appendLedgerAuditLog(input.storeId, 'posted', {
+          entryId: created.entryId,
+          actorUid: input.createdBy,
+        });
+      } catch (err) {
+        console.warn('[Ledger] audit log append skipped', err);
+      }
     }
     return {
       entryId: created.entryId,

@@ -1,19 +1,49 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { LedgerAccountCombobox } from '@/components/LedgerAccountCombobox';
 import { buildGeneralLedgerReport, generalLedgerToCsv } from '@/lib/ledger/generalLedgerReport';
+import { createGlPresentationContext } from '@/lib/ledger/glEntryPresentation';
 import { loadCostCenters } from '@/lib/firestore/costCentersFirestore';
 import type { JournalEntry, JournalLine, LedgerAccount, LedgerCostCenter, PcgClientAccount } from '@/types/generalLedger';
-import { formatCurrency } from '@/lib/utils';
+import { cn, formatCurrency } from '@/lib/utils';
 import type { AccountingLanguage } from '@/lib/grabio/accountingMode';
 import { downloadCsvText } from '@/lib/csvExport';
 import { downloadXlsxFromCsv } from '@/lib/xlsxExport';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useEffect } from 'react';
+
+type PurchaseOrderLike = {
+  id: string;
+  supplierId?: string;
+  supplierName?: string;
+  poNumber?: string;
+  purchaseOrderNumber?: string;
+};
+
+type PaymentOrderLike = {
+  id: string;
+  supplierId?: string;
+  supplierName?: string;
+  purchaseOrderId?: string;
+};
+
+type InvoiceLike = {
+  id: string;
+  invoiceNumber?: string;
+  clientName: string;
+  amount?: number;
+  paymentMethod?: string;
+};
+
+type ExpenseLike = {
+  id: string;
+  category: string;
+  name: string;
+};
 
 type Props = {
   storeId: string;
@@ -24,8 +54,23 @@ type Props = {
   pcgClientAccounts?: PcgClientAccount[];
   accountingLanguage?: AccountingLanguage;
   presetAccountId?: string;
+  defaultStartDate?: string;
+  defaultEndDate?: string;
+  storeCurrency?: string;
+  purchaseOrders?: PurchaseOrderLike[];
+  paymentOrders?: PaymentOrderLike[];
+  invoices?: InvoiceLike[];
+  expenses?: ExpenseLike[];
   onOpenEntry?: (entryId: string) => void;
 };
+
+function typeBadgeClass(type?: string): string {
+  if (type === 'RV' || type === 'Sale') return 'bg-emerald-50 text-emerald-700 ring-emerald-200';
+  if (type === 'PV') return 'bg-orange-50 text-orange-700 ring-orange-200';
+  if (type === 'JV') return 'bg-blue-50 text-blue-700 ring-blue-200';
+  if (type === 'CV') return 'bg-violet-50 text-violet-700 ring-violet-200';
+  return 'bg-slate-100 text-slate-700 ring-slate-200';
+}
 
 export default function GeneralLedgerPanel({
   storeId,
@@ -36,11 +81,18 @@ export default function GeneralLedgerPanel({
   pcgClientAccounts = [],
   accountingLanguage,
   presetAccountId,
+  defaultStartDate,
+  defaultEndDate,
+  storeCurrency = 'USD',
+  purchaseOrders = [],
+  paymentOrders = [],
+  invoices = [],
+  expenses = [],
   onOpenEntry,
 }: Props) {
   const [accountId, setAccountId] = useState('');
-  const [startDate, setStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
-  const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [startDate, setStartDate] = useState(() => defaultStartDate || `${new Date().getFullYear()}-01-01`);
+  const [endDate, setEndDate] = useState(() => defaultEndDate || new Date().toISOString().slice(0, 10));
   const [costCenterId, setCostCenterId] = useState('');
   const [costCenters, setCostCenters] = useState<LedgerCostCenter[]>([]);
 
@@ -53,7 +105,22 @@ export default function GeneralLedgerPanel({
     if (presetAccountId) setAccountId(presetAccountId);
   }, [presetAccountId]);
 
+  useEffect(() => {
+    if (defaultStartDate) setStartDate(defaultStartDate);
+  }, [defaultStartDate]);
+
+  useEffect(() => {
+    if (defaultEndDate) setEndDate(defaultEndDate);
+  }, [defaultEndDate]);
+
   const selectedAccount = accounts.find((a) => a.id === accountId);
+
+  const presentation = useMemo(
+    () => createGlPresentationContext(purchaseOrders, paymentOrders, invoices, expenses, accounts),
+    [purchaseOrders, paymentOrders, invoices, expenses, accounts],
+  );
+
+  const reportCurrency = selectedAccount?.currency === 'LL' ? 'LBP' : selectedAccount?.currency || storeCurrency;
 
   const report = useMemo(() => {
     if (!selectedAccount) return null;
@@ -61,14 +128,20 @@ export default function GeneralLedgerPanel({
       startDate,
       endDate,
       costCenterId: costCenterId || undefined,
+      defaultCurrency: reportCurrency,
+      presentation,
     });
-  }, [selectedAccount, entries, lines, startDate, endDate, costCenterId]);
+  }, [selectedAccount, entries, lines, startDate, endDate, costCenterId, reportCurrency, presentation]);
+
+  const fmt = (amount: number, currency?: string) => formatCurrency(amount, currency || reportCurrency);
 
   return (
     <Card>
       <CardHeader>
         <CardTitle>General ledger</CardTitle>
-        <CardDescription>Account movement with running balance · filter by cost center.</CardDescription>
+        <CardDescription>
+          Client/supplier, category (expense · purchase · sales), and running balance · {reportCurrency}
+        </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -107,9 +180,10 @@ export default function GeneralLedgerPanel({
 
         {report ? (
           <>
-            <div className="flex flex-wrap gap-4 text-sm">
-              <span>Opening: <strong>{formatCurrency(report.openingBalance)}</strong></span>
-              <span>Closing: <strong>{formatCurrency(report.closingBalance)}</strong></span>
+            <div className="flex flex-wrap gap-4 text-sm items-center">
+              <span>Opening: <strong>{fmt(report.openingBalance)}</strong></span>
+              <span>Closing: <strong>{fmt(report.closingBalance)}</strong></span>
+              <span className="text-muted-foreground">{report.rows.length} lines</span>
               <Button type="button" variant="outline" size="sm" onClick={() => downloadCsvText(`gl-${report.accountCode}.csv`, generalLedgerToCsv(report))}>
                 Export CSV
               </Button>
@@ -117,13 +191,17 @@ export default function GeneralLedgerPanel({
                 Export XLSX
               </Button>
             </div>
-            <div className="rounded-md border max-h-96 overflow-auto">
+            <div className="rounded-md border max-h-[32rem] overflow-auto">
               <Table>
-                <TableHeader>
+                <TableHeader className="sticky top-0 z-10 bg-background">
                   <TableRow>
                     <TableHead>Date</TableHead>
+                    <TableHead>Type</TableHead>
                     <TableHead>Voucher</TableHead>
-                    <TableHead>Memo</TableHead>
+                    <TableHead>Party</TableHead>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Details</TableHead>
+                    <TableHead>Ref</TableHead>
                     <TableHead className="text-right">Debit</TableHead>
                     <TableHead className="text-right">Credit</TableHead>
                     <TableHead className="text-right">Balance</TableHead>
@@ -133,12 +211,34 @@ export default function GeneralLedgerPanel({
                 <TableBody>
                   {report.rows.map((row, idx) => (
                     <TableRow key={`${row.entryId}-${idx}`}>
-                      <TableCell>{row.date}</TableCell>
-                      <TableCell className="font-mono text-xs">{row.voucherNumber || row.entryId.slice(0, 8)}</TableCell>
-                      <TableCell>{row.memo}</TableCell>
-                      <TableCell className="text-right">{row.debit ? formatCurrency(row.debit) : '—'}</TableCell>
-                      <TableCell className="text-right">{row.credit ? formatCurrency(row.credit) : '—'}</TableCell>
-                      <TableCell className="text-right">{formatCurrency(row.runningBalance)}</TableCell>
+                      <TableCell className="whitespace-nowrap text-xs">{row.date}</TableCell>
+                      <TableCell>
+                        <Badge variant="outline" className={cn('text-[10px] font-semibold ring-1 ring-inset', typeBadgeClass(row.typeLabel))}>
+                          {row.typeLabel || row.voucherType || '—'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">
+                        {row.voucherNumber || row.entryId.slice(0, 10)}
+                      </TableCell>
+                      <TableCell className="max-w-[140px] truncate text-xs" title={row.party}>
+                        {row.party || '—'}
+                      </TableCell>
+                      <TableCell className="max-w-[160px] truncate text-xs text-muted-foreground" title={row.category}>
+                        {row.category || '—'}
+                      </TableCell>
+                      <TableCell className="max-w-[180px] truncate text-xs" title={row.displayDescription || row.memo}>
+                        {row.displayDescription || row.memo || '—'}
+                      </TableCell>
+                      <TableCell className="font-mono text-xs whitespace-nowrap">{row.reference || '—'}</TableCell>
+                      <TableCell className="text-right text-xs whitespace-nowrap">
+                        {row.debit ? fmt(row.debit, row.currency) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-xs whitespace-nowrap">
+                        {row.credit ? fmt(row.credit, row.currency) : '—'}
+                      </TableCell>
+                      <TableCell className="text-right text-xs whitespace-nowrap font-medium">
+                        {fmt(row.runningBalance, row.currency)}
+                      </TableCell>
                       <TableCell>
                         {onOpenEntry ? (
                           <Button type="button" variant="ghost" size="sm" onClick={() => onOpenEntry(row.entryId)}>View</Button>

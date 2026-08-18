@@ -89,14 +89,17 @@ const DEFAULT_QUICK_ACTION_IDS = [
   'analytics',
   'products',
   'purchases',
+  'expenses',
 ];
 
 /** Mobile home — finance-first; hide SEO/marketing/sync from defaults. */
 const MOBILE_DEFAULT_QUICK_ACTION_IDS = [
   'invoice-manager',
+  'expenses',
   'customers',
   'sales-crm',
   'orders',
+  'purchases',
   'inventory',
   'payments',
   'delivery',
@@ -109,6 +112,7 @@ const QUICK_ACTION_GRADIENTS: Record<string, string> = {
   orders: 'from-orange-400 to-orange-600',
   products: 'from-teal-500 to-teal-700',
   purchases: 'from-sky-500 to-blue-700',
+  expenses: 'from-rose-500 to-red-700',
   customers: 'from-indigo-500 to-indigo-700',
   'sales-crm': 'from-emerald-500 to-teal-700',
   payments: 'from-amber-500 to-orange-600',
@@ -280,6 +284,13 @@ const AdminDashboard: React.FC = () => {
     { id: 'products', to: '/admin/products', label: 'Products', icon: Package, visible: canViewInventory },
     { id: 'orders', to: '/admin/orders', label: 'Orders', icon: Clock, visible: true },
     { id: 'purchases', to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: user?.role === 'admin' && canManageInventory },
+    {
+      id: 'expenses',
+      to: '/admin/invoice-manager/expenses',
+      label: 'Expenses',
+      icon: DollarSign,
+      visible: invoiceManagerEnabled || canUseBusinessTools,
+    },
     { id: 'customers', to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
     {
       id: 'sales-crm',
@@ -316,7 +327,7 @@ const AdminDashboard: React.FC = () => {
     { id: 'delivery', to: '/admin/delivery', label: 'Delivery', icon: Package, visible: canManageDeliveries },
     { id: 'announcements', to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
     { id: 'analytics', to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: canViewReports },
-  ], [canManageDeliveries, canViewInventory, canViewReports, crmEnabled, user, canUseModule]);
+  ], [canManageDeliveries, canViewInventory, canViewReports, crmEnabled, user, canUseModule, canManageInventory, canUseBusinessTools, invoiceManagerEnabled, financeSuiteVisible]);
 
   const visibleQuickActionItems = useMemo(
     () => quickActionItems.filter((item) => item.visible),

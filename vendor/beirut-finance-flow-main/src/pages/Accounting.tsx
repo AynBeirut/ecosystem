@@ -16,10 +16,19 @@ import { Badge } from "@/components/ui/badge";
 import { BookOpen, Scale, Plus, RefreshCw, CheckCircle2, AlertTriangle, Lock, Unlock, FileSpreadsheet, Layers, FileText, Receipt, TrendingUp, TrendingDown, Wallet, Calculator, Landmark, GitCompare, CalendarRange, PieChart, Repeat, Building2, ChevronDown, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { JournalLineInput, PeriodLockType, VoucherMeta, VoucherType } from "@/types/generalLedger";
-import { buildReconciliationReport, lebaneseGlLookupCodes, tbBalanceForCodes } from "@/lib/ledger/reconciliation";
+import type { JournalLineInput, LedgerPeriodClosure, PeriodLockType, VoucherMeta, VoucherType } from "@/types/generalLedger";
+import { lebaneseGlLookupCodes, tbBalanceForCodes } from "@/lib/ledger/reconciliation";
 import { buildVatFilingSummary, vatFilingSummaryToCsv } from "@/lib/ledger/vatFilingSummary";
+import { buildLebanonVatReturnForm } from "@/lib/ledger/lebanonVatReturnForm";
+import { buildLebanonR10FormFromGl } from "@/lib/ledger/lebanonR10Form";
+import { buildLebanonCnss190AFormFromGl } from "@/lib/ledger/lebanonCnss190AForm";
 import { vatFilingMofWorksheet } from "@/lib/ledger/vatFilingMofExport";
+import { normalizeDateRange } from "@/lib/reportPeriodPresets";
+import { currentVatQuarter, quarterBounds } from "@/lib/ledger/lebanonVatQuarterPeriod";
+import LebanonVatReturnFormPanel from "@/components/LebanonVatReturnFormPanel";
+import LebanonR10FormPanel from "@/components/LebanonR10FormPanel";
+import LebanonCnss190AFormPanel from "@/components/LebanonCnss190AFormPanel";
+import CustomDateRangeToolbar from "@/components/CustomDateRangeToolbar";
 import { buildIncomeStatement, incomeStatementToCsv } from "@/lib/ledger/incomeStatement";
 import {
   AGED_RECEIVABLES_BUCKET_LABELS,
@@ -56,6 +65,7 @@ import SystemGuideInfo from "@/components/SystemGuideInfo";
 import SystemGuideBanner from "@/components/SystemGuideBanner";
 import VoucherEntryPanel from "@/components/VoucherEntryPanel";
 import BankReconciliationPanel from "@/components/BankReconciliationPanel";
+import ReconciliationPanel from "@/components/ReconciliationPanel";
 import { getFinanceAuth } from "@/integrations/firebase/client";
 import { useGrabioStore } from "@/hooks/useGrabioStore";
 import {
@@ -98,6 +108,7 @@ import { downloadXlsxFromCsv } from "@/lib/xlsxExport";
 import type { SettlementAllocationInput, VoucherLineSettlement } from "@/types/generalLedger";
 import type { LedgerActivityFocus } from "@/lib/ledger/ledgerActivity";
 import { consumeLedgerFocus } from "@/lib/ledger/ledgerActivity";
+import { parseJournalDateInput, resolveFiscalQuarterForDate } from "@/lib/ledger/periodLockCore";
 import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
 import { useFinanceShellState } from "@/context/FinanceShellStateContext";
 
@@ -142,6 +153,7 @@ const ACCOUNTING_SETTINGS_TABS = new Set([
   "bulk-import",
   "recurring",
   "checks",
+  "year-end-close",
 ]);
 
 const STOCK_REPORT_TABS = new Set(["sales", "purchases", "inventory", "products"]);
@@ -201,13 +213,14 @@ const ACCOUNTING_TAB_ROWS: AccountingTabDef[][] = [
     { value: "checks", label: "Checks", icon: FileText, tone: "orange" },
     { value: "cost-centers", label: "Cost Centers", icon: Building2, tone: "slate" },
     { value: "bulk-import", label: "Bulk Import", icon: FileSpreadsheet, tone: "cyan" },
+    { value: "year-end-close", label: "Year-end Close", shortLabel: "Close", icon: CalendarRange, tone: "rose" },
   ],
 ];
 
 const Accounting = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, invoices, purchaseOrders, paymentOrders, activeOrganizationId, recordInvoicePayment } = useAppContext();
+  const { logout, invoices, purchaseOrders, paymentOrders, expenses, activeOrganizationId, recordInvoicePayment } = useAppContext();
   const { embedded } = useFinanceEmbed();
   const { activeFinanceTab, reportsEmbedTab, settingsEmbedTab, openReport, openSetting, openQuickStatement, setFinanceReturnUrl } =
     useFinanceShellState();
@@ -258,10 +271,16 @@ const Accounting = () => {
 
   const [closeDialogOpen, setCloseDialogOpen] = useState(false);
   const [reopenDialogOpen, setReopenDialogOpen] = useState(false);
-  const [periodType, setPeriodType] = useState<PeriodLockType>("month");
+  const [periodType, setPeriodType] = useState<PeriodLockType>("quarter");
   const [periodYear, setPeriodYear] = useState(() => new Date().getFullYear());
   const [periodMonth, setPeriodMonth] = useState(() => new Date().getMonth() + 1);
-  const [periodQuarter, setPeriodQuarter] = useState(() => Math.floor(new Date().getMonth() / 3) + 1);
+  const [periodQuarter, setPeriodQuarter] = useState(() => {
+    try {
+      return resolveFiscalQuarterForDate(new Date().toISOString().slice(0, 10)).quarter;
+    } catch {
+      return Math.floor(new Date().getMonth() / 3) + 1;
+    }
+  });
   const [closeNote, setCloseNote] = useState("");
   const [reopenReason, setReopenReason] = useState("");
   const [reopenTargetId, setReopenTargetId] = useState("");
@@ -448,11 +467,6 @@ const Accounting = () => {
     [accounts, entries, lines, tbStartDate, asOfDate],
   );
 
-  const r10Report = useMemo(
-    () => buildR10SalaryWithholdingReport(accounts, entries, lines, asOfDate),
-    [accounts, entries, lines, asOfDate],
-  );
-
   const cnssReport = useMemo(
     () => buildCnssSummaryReport(accounts, entries, lines, asOfDate),
     [accounts, entries, lines, asOfDate],
@@ -518,17 +532,18 @@ const Accounting = () => {
     [navigateFromQuickBar],
   );
 
-  const [vatMonth, setVatMonth] = useState(() => new Date().getMonth() + 1);
-  const [vatYear, setVatYear] = useState(() => new Date().getFullYear());
-  const vatPeriod = useMemo(() => monthBounds(vatYear, vatMonth), [vatYear, vatMonth]);
-
-  const [plMonth, setPlMonth] = useState(() => new Date().getMonth() + 1);
-  const [plYear, setPlYear] = useState(() => new Date().getFullYear());
-  const plPeriod = useMemo(() => monthBounds(plYear, plMonth), [plYear, plMonth]);
-
-  const [cfMonth, setCfMonth] = useState(() => new Date().getMonth() + 1);
-  const [cfYear, setCfYear] = useState(() => new Date().getFullYear());
-  const cfPeriod = useMemo(() => monthBounds(cfYear, cfMonth), [cfYear, cfMonth]);
+  const [periodStartDate, setPeriodStartDate] = useState(() => {
+    const y = new Date().getFullYear();
+    return quarterBounds(y, currentVatQuarter()).startDate;
+  });
+  const [periodEndDate, setPeriodEndDate] = useState(() => {
+    const y = new Date().getFullYear();
+    return quarterBounds(y, currentVatQuarter()).endDate;
+  });
+  const reportPeriod = useMemo(
+    () => normalizeDateRange(periodStartDate, periodEndDate),
+    [periodStartDate, periodEndDate],
+  );
 
   const [depMonth, setDepMonth] = useState(() => new Date().getMonth() + 1);
   const [depYear, setDepYear] = useState(() => new Date().getFullYear());
@@ -558,19 +573,98 @@ const Accounting = () => {
     void reloadFixedAssets();
   }, [reloadFixedAssets]);
 
+  useEffect(() => {
+    const y = new Date().getFullYear();
+    const bounds = quarterBounds(y, currentVatQuarter());
+    setPeriodStartDate(bounds.startDate);
+    setPeriodEndDate(bounds.endDate);
+  }, [financeStoreId]);
+
+  const periodShortcuts = useMemo(() => {
+    const end = asOfDate.slice(0, 10);
+    const y = end.slice(0, 4);
+    return [
+      { label: "YTD", startDate: `${y}-01-01`, endDate: end },
+      { label: "This month", startDate: `${end.slice(0, 7)}-01`, endDate: end },
+    ];
+  }, [asOfDate]);
+
   const vatFiling = useMemo(
     () =>
       buildVatFilingSummary(accounts, entries, lines, {
-        startDate: vatPeriod.start,
-        endDate: vatPeriod.end,
+        startDate: reportPeriod.startDate,
+        endDate: reportPeriod.endDate,
         currency: entries[0]?.currency || "USD",
       }),
-    [accounts, entries, lines, vatPeriod.start, vatPeriod.end],
+    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate],
+  );
+
+  const vatIncomeStatement = useMemo(
+    () => buildIncomeStatement(accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate),
+    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate],
+  );
+
+  const lebanonVatForm = useMemo(
+    () => buildLebanonVatReturnForm(vatFiling, vatIncomeStatement),
+    [vatFiling, vatIncomeStatement],
+  );
+
+  const lebanonR10Form = useMemo(
+    () =>
+      buildLebanonR10FormFromGl(
+        accounts,
+        entries,
+        lines,
+        reportPeriod.startDate,
+        reportPeriod.endDate,
+        profile?.mainCurrency || 'LBP',
+      ),
+    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate, profile?.mainCurrency],
+  );
+
+  const lebanonCnss190AForm = useMemo(
+    () =>
+      buildLebanonCnss190AFormFromGl(
+        accounts,
+        entries,
+        lines,
+        reportPeriod.startDate,
+        reportPeriod.endDate,
+        profile?.mainCurrency || 'LBP',
+      ),
+    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate, profile?.mainCurrency],
+  );
+
+  const r10Report = useMemo(
+    () =>
+      buildR10SalaryWithholdingReport(
+        accounts,
+        entries,
+        lines,
+        reportPeriod.endDate || asOfDate,
+      ),
+    [accounts, entries, lines, asOfDate, reportPeriod.endDate],
   );
 
   const incomeStatement = useMemo(
-    () => buildIncomeStatement(accounts, entries, lines, plPeriod.start, plPeriod.end),
-    [accounts, entries, lines, plPeriod.start, plPeriod.end],
+    () => {
+      if (!reportPeriod.startDate || !reportPeriod.endDate) {
+        return buildIncomeStatement(accounts, entries, lines, asOfDate.slice(0, 10), asOfDate.slice(0, 10));
+      }
+      return buildIncomeStatement(accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate);
+    },
+    [accounts, asOfDate, entries, lines, reportPeriod.endDate, reportPeriod.startDate],
+  );
+
+  const plHasActivity = useMemo(
+    () =>
+      incomeStatement.revenue.rows.length +
+        incomeStatement.otherIncome.rows.length +
+        incomeStatement.cogs.rows.length +
+        incomeStatement.operatingExpenses.rows.length +
+        incomeStatement.financialExpenses.rows.length >
+      0,
+    [incomeStatement],
   );
 
   const arAging = useMemo(
@@ -586,11 +680,11 @@ const Accounting = () => {
   const cashFlow = useMemo(
     () =>
       buildCashFlowStatement(accounts, entries, lines, {
-        startDate: cfPeriod.start,
-        endDate: cfPeriod.end,
+        startDate: reportPeriod.startDate,
+        endDate: reportPeriod.endDate,
         currency: entries[0]?.currency || "USD",
       }),
-    [accounts, entries, lines, cfPeriod.start, cfPeriod.end],
+    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate],
   );
 
   const depPreview = useMemo(() => {
@@ -672,7 +766,7 @@ const Accounting = () => {
 
   const handleAdjustmentPost = useCallback(
     async (payload: { date: string; memo: string; lines: JournalLineInput[]; sourceId: string; event: string }) => {
-      if (isDateLocked(new Date(payload.date).toISOString())) {
+      if (isDateLocked(parseJournalDateInput(payload.date))) {
         toast.error("That period is closed.");
         return;
       }
@@ -690,26 +784,46 @@ const Accounting = () => {
   );
 
   const subledgerTotals = useMemo(() => {
+    const clientMap = new Map<string, number>();
+    for (const row of arAging.rows) {
+      clientMap.set(row.clientName, (clientMap.get(row.clientName) || 0) + row.outstanding);
+    }
+    const supplierMap = new Map<string, number>();
+    for (const row of apAging.rows) {
+      supplierMap.set(row.supplierName, (supplierMap.get(row.supplierName) || 0) + row.outstanding);
+    }
+    const clientBalances = Array.from(clientMap.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+    const supplierBalances = Array.from(supplierMap.entries())
+      .map(([name, amount]) => ({ name, amount }))
+      .sort((a, b) => b.amount - a.amount);
+
     if (isLebaneseCoa) {
       return {
-        cashOnHand: tbBalanceForCodes(trialBalance, lebaneseGlLookupCodes("cash", true)),
-        bankBalance: tbBalanceForCodes(trialBalance, lebaneseGlLookupCodes("bank", true)),
+        cashOnHand: cashBalance.cashOnHand || tbBalanceForCodes(trialBalance, lebaneseGlLookupCodes("cash", true)),
+        bankBalance: cashBalance.bankBalance || tbBalanceForCodes(trialBalance, lebaneseGlLookupCodes("bank", true)),
+        deliveryHeldCash: cashBalance.deliveryHeldCash || tbBalanceForCodes(trialBalance, lebaneseGlLookupCodes("online", true)),
         accountsReceivable: arAging.subledgerTotal,
         accountsPayable: apAging.subledgerTotal,
+        arGlBalance: arAging.glBalance,
+        apGlBalance: apAging.glBalance,
+        clientBalances,
+        supplierBalances,
       };
     }
     return {
-      cashOnHand: cashBalance.cash || 0,
-      bankBalance: cashBalance.bank || 0,
+      cashOnHand: cashBalance.cashOnHand || cashBalance.cash || 0,
+      bankBalance: cashBalance.bankBalance || cashBalance.bank || 0,
+      deliveryHeldCash: cashBalance.deliveryHeldCash || 0,
       accountsReceivable: arAging.subledgerTotal,
       accountsPayable: apAging.subledgerTotal,
+      arGlBalance: arAging.glBalance,
+      apGlBalance: apAging.glBalance,
+      clientBalances,
+      supplierBalances,
     };
-  }, [isLebaneseCoa, trialBalance, cashBalance, arAging.subledgerTotal, apAging.subledgerTotal]);
-
-  const reconciliation = useMemo(
-    () => buildReconciliationReport(accounts, entries, lines, asOfDate, subledgerTotals, { lebaneseCoa: isLebaneseCoa }),
-    [accounts, entries, lines, asOfDate, subledgerTotals, isLebaneseCoa],
-  );
+  }, [isLebaneseCoa, trialBalance, cashBalance, arAging, apAging]);
 
   const handleCreateFixedAsset = async () => {
     if (!activeOrganizationId) return;
@@ -777,18 +891,20 @@ const Accounting = () => {
     lines: JournalLineInput[];
     voucherMeta?: Record<string, unknown>;
   }) => {
-    if (isDateLocked(new Date(payload.date).toISOString())) {
-      toast.error("That period is closed — cannot post journal entries for that date.");
-      return;
+    if (isDateLocked(parseJournalDateInput(payload.date))) {
+      const message = "That period is closed — cannot post journal entries for that date.";
+      toast.error(message);
+      throw new Error(message);
     }
     if (payload.lines.length < 2) {
-      toast.error("Add at least two lines with amounts.");
-      return;
+      const message = "Add at least two lines with amounts.";
+      toast.error(message);
+      throw new Error(message);
     }
     setPosting(true);
     try {
       const result = await postVoucherEntry({
-        date: new Date(payload.date).toISOString(),
+        date: parseJournalDateInput(payload.date),
         memo: payload.memo,
         lines: payload.lines,
         voucherType: payload.voucherType,
@@ -815,7 +931,9 @@ const Accounting = () => {
       await refreshLedger();
       goToTab("vouchers");
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to post entry");
+      const message = err instanceof Error ? err.message : "Failed to post entry";
+      toast.error(message);
+      throw err instanceof Error ? err : new Error(message);
     } finally {
       setPosting(false);
     }
@@ -850,12 +968,12 @@ const Accounting = () => {
       toast.error("Select account and amount.");
       return;
     }
-    if (isDateLocked(new Date(openingDate).toISOString())) {
+    if (isDateLocked(parseJournalDateInput(openingDate))) {
       toast.error("That period is closed — cannot post opening balances for that date.");
       return;
     }
     try {
-      await setOpeningBalance(openingAccountId, Number(openingAmount), new Date(openingDate).toISOString());
+      await setOpeningBalance(openingAccountId, Number(openingAmount), parseJournalDateInput(openingDate));
       toast.success("Opening balance saved.");
       setOpeningAmount("");
     } catch (err) {
@@ -898,10 +1016,20 @@ const Accounting = () => {
   };
 
   const closedPeriods = periodClosures.filter((p) => p.isClosed);
-  const periodLockBanner = asOfPeriodLocked && asOfPeriod ? (
-    <Badge variant="outline" className="border-amber-500 text-amber-800 bg-amber-50">
-      <Lock className="h-3 w-3 mr-1" />
-      {asOfPeriod.label} closed
+  const manualClosedPeriods = closedPeriods.filter(
+    (p) => !p.history?.some((h) => h.action === "close" && String(h.reason || "").includes("Auto-closed")),
+  );
+  const periodLockBanner = asOfPeriod ? (
+    <Badge
+      variant="outline"
+      className={
+        asOfPeriodLocked
+          ? "border-amber-500 text-amber-800 bg-amber-50"
+          : "border-green-600 text-green-800 bg-green-50"
+      }
+    >
+      {asOfPeriodLocked ? <Lock className="h-3 w-3 mr-1" /> : null}
+      {asOfPeriod.label} — {asOfPeriodLocked ? "locked" : "open for posting"}
     </Badge>
   ) : null;
 
@@ -931,7 +1059,18 @@ const Accounting = () => {
               Vouchers, workspace, and party statements — reports and setup are on other tabs.
             </p>
           </div>
-          <div className="finance-as-of-toolbar flex items-center gap-2">
+          <div className="finance-as-of-toolbar flex flex-wrap items-end gap-3">
+            <CustomDateRangeToolbar
+              compact
+              startDate={periodStartDate}
+              endDate={periodEndDate}
+              onStartDateChange={setPeriodStartDate}
+              onEndDateChange={setPeriodEndDate}
+              showVatQuarters={isLebaneseCoa}
+              quarterYear={Number(asOfDate.slice(0, 4)) || new Date().getFullYear()}
+              shortcuts={periodShortcuts}
+            />
+            <div className="flex items-center gap-2">
             <Label htmlFor="as-of" className="finance-as-of-label text-xs whitespace-nowrap">As of</Label>
             <Input
               id="as-of"
@@ -948,18 +1087,29 @@ const Accounting = () => {
               <Lock className="h-4 w-4 mr-1" />
               Close Period
             </Button>
-            {closedPeriods.length > 0 && (
+            {manualClosedPeriods.length > 0 && (
               <Button size="sm" variant="outline" onClick={() => setReopenDialogOpen(true)}>
                 <Unlock className="h-4 w-4 mr-1" />
                 Reopen
               </Button>
             )}
+            </div>
           </div>
         </div>
         )}
 
         {embedded && isHubEmbed && (
-          <div className="flex flex-wrap items-center gap-2 pb-1">
+          <div className="flex flex-wrap items-end gap-2 pb-1">
+            <CustomDateRangeToolbar
+              compact
+              startDate={periodStartDate}
+              endDate={periodEndDate}
+              onStartDateChange={setPeriodStartDate}
+              onEndDateChange={setPeriodEndDate}
+              showVatQuarters={isLebaneseCoa}
+              quarterYear={Number(asOfDate.slice(0, 4)) || new Date().getFullYear()}
+              shortcuts={periodShortcuts}
+            />
             <Label htmlFor="hub-embed-as-of" className="text-xs whitespace-nowrap">
               As of
             </Label>
@@ -979,16 +1129,7 @@ const Accounting = () => {
 
         {!isHubEmbed && !embedded && <SystemGuideBanner enabled={systemGuideEnabled} />}
 
-        {closedPeriods.length > 0 && (
-          <div className="flex flex-wrap gap-2">
-            {closedPeriods.map((p) => (
-              <Badge key={p.id} variant="outline" className="border-amber-500 text-amber-800">
-                <Lock className="h-3 w-3 mr-1" />
-                {p.label} locked
-              </Badge>
-            ))}
-          </div>
-        )}
+        {periodLockBanner ? <div className="flex flex-wrap gap-2">{periodLockBanner}</div> : null}
 
         {showQuickBar && !embedded && (
         <AccountingQuickBar
@@ -1008,7 +1149,8 @@ const Accounting = () => {
             <DialogHeader>
               <DialogTitle>Close accounting period</DialogTitle>
               <DialogDescription>
-                Once closed, no new journal entries can post with a date in that period. Existing entries become read-only until an admin reopens the period.
+                Fiscal quarters auto-close on the 30th: Q1 Jan 1–Mar 30 · Q2 Apr 1–Jun 30 · Q3 Jul 1–Sep 30 · Q4 Oct 1–Dec 30.
+                Manual close is optional — expired quarters lock automatically.
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4">
@@ -1043,7 +1185,9 @@ const Accounting = () => {
                       <SelectTrigger><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {[1, 2, 3, 4].map((q) => (
-                          <SelectItem key={q} value={String(q)}>Q{q}</SelectItem>
+                          <SelectItem key={q} value={String(q)}>
+                            {q === 1 ? "Q1 · Jan 1 – Mar 30" : q === 2 ? "Q2 · Apr 1 – Jun 30" : q === 3 ? "Q3 · Jul 1 – Sep 30" : "Q4 · Oct 1 – Dec 30"}
+                          </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
@@ -1078,7 +1222,7 @@ const Accounting = () => {
                 <Select value={reopenTargetId} onValueChange={setReopenTargetId}>
                   <SelectTrigger><SelectValue placeholder="Select closed period" /></SelectTrigger>
                   <SelectContent>
-                    {closedPeriods.map((p) => (
+                    {manualClosedPeriods.map((p) => (
                       <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>
                     ))}
                   </SelectContent>
@@ -1359,7 +1503,7 @@ const Accounting = () => {
                   settlements={settlements}
                   mainCurrency={profile?.mainCurrency}
                   posting={posting}
-                  onPost={(p) => void handlePostVoucher(p)}
+                  onPost={handlePostVoucher}
                   registerEntries={entries}
                   registerLines={lines}
                   systemGuideEnabled={systemGuideEnabled}
@@ -1373,6 +1517,15 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="vat-filing" className="mt-4">
+            {isLebaneseCoa ? (
+              <LebanonVatReturnFormPanel
+                storeId={financeStoreId}
+                glForm={lebanonVatForm}
+                companyName={profile?.name || profile?.storeName}
+                taxId={(profile as { taxId?: string } | null)?.taxId}
+                systemGuideEnabled={systemGuideEnabled}
+              />
+            ) : (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -1394,39 +1547,7 @@ const Accounting = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex flex-wrap items-end gap-4">
-                  <div>
-                    <Label htmlFor="vat-month">Period</Label>
-                    <div className="flex gap-2 mt-1">
-                      <Select value={String(vatMonth)} onValueChange={(v) => setVatMonth(Number(v))}>
-                        <SelectTrigger id="vat-month" className="w-[140px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                            <SelectItem key={m} value={String(m)}>
-                              {new Date(2000, m - 1, 1).toLocaleString(undefined, { month: "long" })}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <Select value={String(vatYear)} onValueChange={(v) => setVatYear(Number(v))}>
-                        <SelectTrigger className="w-[100px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[vatYear - 1, vatYear, vatYear + 1].map((y) => (
-                            <SelectItem key={y} value={String(y)}>
-                              {y}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {vatFiling.startDate} → {vatFiling.endDate}
-                    </p>
-                  </div>
+                <div className="flex flex-wrap items-end justify-end gap-4">
                   <Button type="button" variant="outline" size="sm" onClick={downloadVatCsv}>
                     Export CSV
                   </Button>
@@ -1510,6 +1631,7 @@ const Accounting = () => {
                 )}
               </CardContent>
             </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="ar-aging" className="mt-4">
@@ -1732,39 +1854,7 @@ const Accounting = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex flex-wrap items-end justify-between gap-4">
-                  <div className="flex flex-wrap gap-4">
-                    <div>
-                      <Label>Month</Label>
-                      <Select value={String(cfMonth)} onValueChange={(v) => setCfMonth(Number(v))}>
-                        <SelectTrigger className="w-[140px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                            <SelectItem key={m} value={String(m)}>
-                              {new Date(2000, m - 1, 1).toLocaleString(undefined, { month: "long" })}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div>
-                      <Label>Year</Label>
-                      <Select value={String(cfYear)} onValueChange={(v) => setCfYear(Number(v))}>
-                        <SelectTrigger className="w-[100px]">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {[2024, 2025, 2026, 2027].map((y) => (
-                            <SelectItem key={y} value={String(y)}>
-                              {y}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </div>
-                  </div>
+                <div className="flex flex-wrap items-end justify-end gap-4">
                   <Button type="button" variant="outline" size="sm" onClick={downloadCashFlowCsv}>
                     Export CSV
                   </Button>
@@ -2151,38 +2241,23 @@ const Accounting = () => {
                     title="Profit & Loss"
                     content={[
                       "Period revenue minus expenses — the standard report every Lebanon ERP (Libra, Odoo, PIMS2) provides alongside Trial Balance.",
-                      "Use monthly period selectors; export CSV for your accountant or MoF filing pack.",
+                      "Pick From and To dates (defaults to year-to-date through As of). Export CSV for your accountant or MoF filing pack.",
                     ]}
                   />
                 </CardTitle>
-                <CardDescription>Period activity only · {plPeriod.start} → {plPeriod.end}</CardDescription>
+                <CardDescription>Period activity only · {reportPeriod.startDate || "…"} → {reportPeriod.endDate || "…"}</CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
-                <div className="flex flex-wrap items-end gap-4">
-                  <div>
-                    <Label>Month</Label>
-                    <Select value={String(plMonth)} onValueChange={(v) => setPlMonth(Number(v))}>
-                      <SelectTrigger className="w-[120px]"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {Array.from({ length: 12 }, (_, i) => i + 1).map((m) => (
-                          <SelectItem key={m} value={String(m)}>{m}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div>
-                    <Label>Year</Label>
-                    <Select value={String(plYear)} onValueChange={(v) => setPlYear(Number(v))}>
-                      <SelectTrigger className="w-[100px]"><SelectValue /></SelectTrigger>
-                      <SelectContent>
-                        {[plYear - 1, plYear, plYear + 1].map((y) => (
-                          <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={downloadPlCsv}>Export CSV</Button>
+                <div className="flex flex-wrap items-end justify-end gap-2 w-full max-w-full">
+                  <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={downloadPlCsv}>
+                    Export CSV
+                  </Button>
                 </div>
+                {!plHasActivity ? (
+                  <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
+                    No revenue or expense activity in {reportPeriod.startDate} → {reportPeriod.endDate}. Widen the date range (e.g. YTD) or click Refresh if you just posted.
+                  </p>
+                ) : null}
                 {([
                   incomeStatement.revenue,
                   incomeStatement.otherIncome,
@@ -2218,14 +2293,17 @@ const Accounting = () => {
                     </div>
                   ) : null
                 ))}
-                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4 text-sm border-t pt-4">
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t pt-4 text-sm">
+                  <span className="font-medium">Total revenue: <strong>{formatCurrency(incomeStatement.totalRevenue)}</strong></span>
                   <span>Gross profit: <strong>{formatCurrency(incomeStatement.grossProfit)}</strong></span>
                   <span>Operating income: <strong>{formatCurrency(incomeStatement.operatingIncome)}</strong></span>
-                  <span>Total revenue: <strong>{formatCurrency(incomeStatement.totalRevenue)}</strong></span>
                   <span>Net income: <strong>{formatCurrency(incomeStatement.netIncome)}</strong></span>
                 </div>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="year-end-close" className="mt-4">
             <YearEndClosePanel
               accounts={accounts}
               entries={entries}
@@ -2261,6 +2339,8 @@ const Accounting = () => {
               entries={entries}
               lines={lines}
               settlements={settlements}
+              purchaseOrders={purchaseOrders}
+              paymentOrders={paymentOrders}
               isLebaneseCoa={isLebaneseCoa}
               pcgClientAccounts={pcgClientAccounts}
               accountingLanguage={accountingLanguage}
@@ -2278,15 +2358,43 @@ const Accounting = () => {
               pcgClientAccounts={pcgClientAccounts}
               accountingLanguage={accountingLanguage}
               presetAccountId={glPresetAccountId}
+              defaultStartDate={reportPeriod.startDate}
+              defaultEndDate={reportPeriod.endDate}
+              storeCurrency={profile?.mainCurrency || (isLebaneseCoa ? 'LBP' : 'USD')}
+              purchaseOrders={purchaseOrders}
+              paymentOrders={paymentOrders}
+              invoices={invoices}
+              expenses={expenses}
               onOpenEntry={setQuickVoucherEntryId}
             />
           </TabsContent>
 
-          <TabsContent value="tax-reports" className="mt-4">
+          <TabsContent value="tax-reports" className="mt-4 space-y-4">
+            {isLebaneseCoa ? (
+              <>
+                <LebanonR10FormPanel
+                  storeId={financeStoreId}
+                  glForm={lebanonR10Form}
+                  companyName={profile?.name || profile?.storeName}
+                  taxId={(profile as { taxId?: string } | null)?.taxId}
+                  systemGuideEnabled={systemGuideEnabled}
+                />
+                <LebanonCnss190AFormPanel
+                  storeId={financeStoreId}
+                  glForm={lebanonCnss190AForm}
+                  companyName={profile?.name || profile?.storeName}
+                  companyNumber={(profile as { cnssNumber?: string; taxId?: string } | null)?.cnssNumber || (profile as { taxId?: string } | null)?.taxId}
+                  systemGuideEnabled={systemGuideEnabled}
+                />
+              </>
+            ) : null}
+            {!isLebaneseCoa ? (
             <Card>
               <CardHeader>
                 <CardTitle>Lebanese tax reports</CardTitle>
-                <CardDescription>R10 salary withholding · CNSS employer summary · as of {asOfDate}</CardDescription>
+                <CardDescription>
+                  R10 salary withholding · CNSS employer summary · as of {asOfDate}
+                </CardDescription>
               </CardHeader>
               <CardContent className="space-y-6">
                 <div className="flex flex-wrap gap-2">
@@ -2317,6 +2425,7 @@ const Accounting = () => {
                 </div>
               </CardContent>
             </Card>
+            ) : null}
           </TabsContent>
 
           <TabsContent value="recurring" className="mt-4">
@@ -2407,55 +2516,26 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="reconciliation" className="mt-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Subledger Reconciliation
-                  <SystemGuideInfo
-                    enabled={systemGuideEnabled}
-                    label="What reconciliation checks"
-                    title="Subledger reconciliation"
-                    content={[
-                      "Compares general ledger balances to operational subledgers (cash, bank, AR, AP) as of the date above.",
-                      "A variance means invoices, payments, or postings need review before you trust the books.",
-                    ]}
-                  />
-                </CardTitle>
-                <CardDescription>
-                  GL vs operational snapshots. AR and AP subledger totals match the AR/AP Aging tabs (as of date above).
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Account</TableHead>
-                      <TableHead className="text-right">GL</TableHead>
-                      <TableHead className="text-right">Subledger</TableHead>
-                      <TableHead className="text-right">Variance</TableHead>
-                      <TableHead>Status</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {reconciliation.rows.map((r) => (
-                      <TableRow key={r.label}>
-                        <TableCell>{r.label}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(r.glAmount)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(r.subledgerAmount)}</TableCell>
-                        <TableCell className="text-right">{formatCurrency(r.variance)}</TableCell>
-                        <TableCell>
-                          {r.matched ? (
-                            <Badge variant="outline" className="text-green-700">Matched</Badge>
-                          ) : (
-                            <Badge variant="destructive">Variance</Badge>
-                          )}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+            {activeOrganizationId ? (
+              <ReconciliationPanel
+                storeId={activeOrganizationId}
+                accounts={accounts}
+                entries={entries}
+                lines={lines}
+                asOfDate={asOfDate}
+                subledger={subledgerTotals}
+                isLebaneseCoa={isLebaneseCoa}
+                arAging={arAging}
+                apAging={apAging}
+                onRefresh={() => refreshLedger()}
+                loading={loading}
+                systemGuideEnabled={systemGuideEnabled}
+              />
+            ) : (
+              <Card>
+                <CardContent className="py-8 text-muted-foreground">Select a store to reconcile accounts.</CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="bank-rec" className="mt-4">

@@ -24,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { useAuth } from '@/context/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { cn } from '@/lib/utils';
+import { compareProductsInStockFirst } from '@/lib/productSort';
 
 type BrowseTab = 'stores' | 'products';
 
@@ -105,15 +106,20 @@ const Marketplace: React.FC = () => {
     });
 
     const deduped = Array.from(new Map(filtered.map((p) => [p.id, p])).values());
-    let ordered = deduped;
-    if (user?.following?.length) {
-      const followingSet = new Set(user.following);
-      ordered = deduped.slice().sort((a, b) => {
-        const aFollow = followingSet.has(a.storeId) ? 0 : 1;
-        const bFollow = followingSet.has(b.storeId) ? 0 : 1;
-        return aFollow - bFollow;
-      });
-    }
+    const followingSet = user?.following?.length ? new Set(user.following) : null;
+    const ordered = deduped
+      .map((product, index) => ({ product, index }))
+      .sort((a, b) => {
+        if (followingSet) {
+          const aFollow = followingSet.has(a.product.storeId) ? 0 : 1;
+          const bFollow = followingSet.has(b.product.storeId) ? 0 : 1;
+          if (aFollow !== bFollow) return aFollow - bFollow;
+        }
+        const stockCmp = compareProductsInStockFirst(a.product, b.product);
+        if (stockCmp !== 0) return stockCmp;
+        return a.index - b.index;
+      })
+      .map(({ product }) => product);
     setFilteredProducts(ordered);
 
     let nextStores = allStores.filter((store) => {

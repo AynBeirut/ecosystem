@@ -3,6 +3,8 @@ import {
   assertDateNotInClosedPeriod,
   buildMonthPeriod,
   buildQuarterPeriod,
+  journalDateOnly,
+  listQuartersNeedingAutoClose,
   type LedgerPeriodClosure,
   type PeriodLockAuditEvent,
   type PeriodLockType,
@@ -36,14 +38,40 @@ export async function loadClosedPeriodClosures(storeId: string): Promise<LedgerP
   return all.filter((c) => c.isClosed);
 }
 
+export async function autoCloseExpiredFiscalQuarters(
+  storeId: string,
+  actor: PeriodLockActor = { userId: 'system', userEmail: 'auto-close@grabio.space' },
+): Promise<LedgerPeriodClosure[]> {
+  const all = await loadPeriodClosures(storeId);
+  const today = journalDateOnly(new Date().toISOString());
+  const year = Number(today.slice(0, 4));
+  const due = listQuartersNeedingAutoClose(today, all, year - 2, year);
+  const closed: LedgerPeriodClosure[] = [];
+  for (const item of due) {
+    closed.push(
+      await closeLedgerPeriod(
+        storeId,
+        'quarter',
+        item.year,
+        item.quarter,
+        actor,
+        'Auto-closed at fiscal quarter end (30th)',
+      ),
+    );
+  }
+  return closed;
+}
+
 export async function assertPeriodOpenForPost(storeId: string, dateIso: string): Promise<void> {
+  await autoCloseExpiredFiscalQuarters(storeId);
   const closures = await loadClosedPeriodClosures(storeId);
-  assertDateNotInClosedPeriod(dateIso, closures, 'post journal entries');
+  assertDateNotInClosedPeriod(dateIso, closures, 'post journal entries', journalDateOnly(new Date().toISOString()));
 }
 
 export async function assertPeriodOpenForMutation(storeId: string, entryDateIso: string): Promise<void> {
+  await autoCloseExpiredFiscalQuarters(storeId);
   const closures = await loadClosedPeriodClosures(storeId);
-  assertDateNotInClosedPeriod(entryDateIso, closures, 'edit or delete journal entries');
+  assertDateNotInClosedPeriod(entryDateIso, closures, 'edit or delete journal entries', journalDateOnly(new Date().toISOString()));
 }
 
 function resolvePeriod(

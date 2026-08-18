@@ -1,3 +1,5 @@
+import { buildStorePublicUrl } from '@/lib/storeUrls';
+
 export interface WhatsAppCartItem {
   name: string;
   qty: number;
@@ -8,30 +10,59 @@ export interface WhatsAppCartItem {
 export interface WhatsAppStoreInfo {
   storeName: string;
   whatsappNumber: string;
-  currency?: string; // e.g. "USD", "LBP". Defaults to "USD"
+  currency?: string;
   orderReference?: string;
   orderId?: string;
+  storeSlug?: string;
+}
+
+export interface WhatsAppOrderDetails {
+  customerName?: string;
+  customerPhone?: string;
+  fulfillmentMethod?: string;
+  scheduledDate?: string;
+  scheduledTime?: string;
+  guestCount?: number;
+  notes?: string;
+  address?: string;
+}
+
+function formatScheduleLine(scheduledDate?: string, scheduledTime?: string): string | null {
+  if (!scheduledDate && !scheduledTime) return null;
+  if (scheduledDate && scheduledTime) {
+    const d = new Date(`${scheduledDate}T${scheduledTime}:00`);
+    if (!Number.isNaN(d.getTime())) {
+      return new Intl.DateTimeFormat('en-GB', {
+        weekday: 'short',
+        day: 'numeric',
+        month: 'short',
+        year: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        hour12: true,
+      }).format(d);
+    }
+    return `${scheduledDate} at ${scheduledTime}`;
+  }
+  return scheduledDate || scheduledTime || null;
 }
 
 /**
  * Builds a wa.me URL pre-filled with a formatted order message.
- *
- * @returns A wa.me URL string, or null if whatsappNumber is absent/empty.
  */
 export function buildWhatsAppOrderURL(
   cartItems: WhatsAppCartItem[],
-  storeInfo: WhatsAppStoreInfo
+  storeInfo: WhatsAppStoreInfo,
+  details?: WhatsAppOrderDetails,
 ): string | null {
   const { storeName, whatsappNumber, currency = 'USD', orderReference, orderId } = storeInfo;
 
   if (!whatsappNumber || cartItems.length === 0) return null;
 
-  // Strip everything except digits
   const phone = whatsappNumber.replace(/\D/g, '');
   if (!phone) return null;
 
   const formatPrice = (amount: number) => {
-    // Format with 2 decimal places; avoid unnecessary trailing .00 for LBP-style amounts
     if (currency === 'LBP' || currency === 'LL') {
       return amount.toLocaleString('en-US', { maximumFractionDigits: 0 });
     }
@@ -39,7 +70,7 @@ export function buildWhatsAppOrderURL(
   };
 
   const itemLines = cartItems
-    .map(item => {
+    .map((item) => {
       const variantPart = item.variant ? ` (${item.variant})` : '';
       return `- ${item.qty}x ${item.name}${variantPart} — ${formatPrice(item.price * item.qty)} ${currency}`;
     })
@@ -50,19 +81,48 @@ export function buildWhatsAppOrderURL(
   const messageParts = [
     `Hi, I'd like to place an order from ${storeName}:`,
     '',
-    itemLines,
-    '',
-    `Total: ${formatPrice(total)} ${currency}`,
   ];
+
+  if (details?.customerName?.trim()) {
+    messageParts.push(`Customer: ${details.customerName.trim()}`);
+  }
+  if (details?.customerPhone?.trim()) {
+    messageParts.push(`Phone: ${details.customerPhone.trim()}`);
+  }
+  if (details?.fulfillmentMethod?.trim()) {
+    messageParts.push(`Service: ${details.fulfillmentMethod.trim()}`);
+  }
+  const scheduleLine = formatScheduleLine(details?.scheduledDate, details?.scheduledTime);
+  if (scheduleLine) {
+    messageParts.push(`Scheduled: ${scheduleLine}`);
+  }
+  if (details?.guestCount && details.guestCount > 0) {
+    messageParts.push(`Party size: ${details.guestCount} ${details.guestCount === 1 ? 'person' : 'people'}`);
+  }
+  if (details?.address?.trim()) {
+    messageParts.push(`Address: ${details.address.trim()}`);
+  }
+  if (details?.notes?.trim()) {
+    messageParts.push(`Notes: ${details.notes.trim()}`);
+  }
+
+  if (messageParts[messageParts.length - 1] !== '') {
+    messageParts.push('');
+  }
+
+  messageParts.push(itemLines, '', `Total: ${formatPrice(total)} ${currency}`);
 
   if (orderReference) {
     messageParts.push('', `Order reference: ${orderReference}`);
   }
   if (orderId) {
-    messageParts.push(`Track: https://grabio.space/track-order?orderId=${orderId}`);
+    const trackPath = `/track-order?orderId=${encodeURIComponent(orderId)}`;
+    const trackUrl = storeInfo.storeSlug?.trim()
+      ? buildStorePublicUrl(storeInfo.storeSlug.trim(), trackPath)
+      : `https://grabio.space${trackPath}`;
+    messageParts.push(`Track: ${trackUrl}`);
   }
 
   const message = messageParts.join('\n');
-
   return `https://wa.me/${phone}?text=${encodeURIComponent(message)}`;
 }

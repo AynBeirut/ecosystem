@@ -113,9 +113,18 @@ const PCG_CLASS_LABELS: Record<string, string> = {
 function effectiveParentCode(row: LebanesePcgAccount, byCode: Map<string, LebanesePcgAccount>): string | undefined {
   const explicit = String(row.parentCode || '').trim();
   if (explicit && byCode.has(explicit)) return explicit;
-  const inferred = inferPcgParentCode(row.code, byCode);
+
+  const code = String(row.code || '').trim();
+  // Lebanese PCG detail lines (6011…) roll up under their 4-digit group header (6010).
+  if (/^\d{4,}$/.test(code) && !code.endsWith('0')) {
+    const groupCode = `${code.slice(0, 3)}0`;
+    const group = byCode.get(groupCode);
+    if (group?.kind === 'G') return groupCode;
+  }
+
+  const inferred = inferPcgParentCode(code, byCode);
   if (inferred) return inferred;
-  return pcgClassDigit(row.code);
+  return pcgClassDigit(code);
 }
 
 export function buildPcgTree(

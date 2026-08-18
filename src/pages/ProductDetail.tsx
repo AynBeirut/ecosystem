@@ -1,5 +1,5 @@
 
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import SEOHead from '@/components/SEOHead';
@@ -7,7 +7,7 @@ import { pixelAddToCart, pixelViewContent, trackMetaConversionEvent } from '@/li
 import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
-import { formatMoney } from '@/lib/money/format';
+import { formatDualMoneyLines, formatMoney } from '@/lib/money/format';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { fetchPublicProductStock } from '@/lib/publicProductStockService';
 import { canReadStoreInventory } from '@/lib/storeInventoryAccess';
@@ -29,7 +29,8 @@ import { generateSlug } from '@/lib/slugify';
 import ClampedText from '@/components/ClampedText';
 import ProductVisual from '@/components/ProductVisual';
 import { resolveStoreShopUrl } from '@/lib/storeNavigation';
-import { buildStorePublicUrl, buildStoreRelativePath, isExternalUrl, isStoreBrandedHost, redirectToStoreSubdomain, storeSlugFromHostname } from '@/lib/storeUrls';
+import { buildStoreMobileNavLinks, buildStoreRelativePath, buildStoreRootPath, buildStoreTabPath, isExternalUrl, isStoreBrandedHost, redirectToStoreSubdomain, storeSlugFromHostname } from '@/lib/storeUrls';
+import { getStoreContactPageLabel } from '@/lib/storeContactPage';
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
@@ -54,6 +55,11 @@ const ProductDetail: React.FC = () => {
   
   const { addToCart } = useCart();
   const { isFavorite, addToFavorites, removeFromFavorites } = useFavorites();
+
+  const mobileNavLinks = useMemo(() => {
+    if (!store?.slug) return undefined;
+    return buildStoreMobileNavLinks(store, getStoreContactPageLabel(store.contactFormStyle));
+  }, [store]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
@@ -515,6 +521,7 @@ const ProductDetail: React.FC = () => {
           subscriptionTier={store?.subscriptionTier}
           hasCustomDomain={!!store?.customDomain}
           hasImportedDesign={store?.hasImportedDesign}
+          mobileNavLinks={mobileNavLinks}
         />
         <div className="container mx-auto px-4 py-12">
           <div className="animate-pulse max-w-6xl mx-auto">
@@ -551,6 +558,7 @@ const ProductDetail: React.FC = () => {
           subscriptionTier={store?.subscriptionTier}
           hasCustomDomain={!!store?.customDomain}
           hasImportedDesign={store?.hasImportedDesign}
+          mobileNavLinks={mobileNavLinks}
         />
         <div className="container mx-auto px-4 py-12 flex justify-center">
           <div className="text-center">
@@ -601,6 +609,7 @@ const ProductDetail: React.FC = () => {
         subscriptionTier={store?.subscriptionTier}
         hasCustomDomain={!!store?.customDomain}
         hasImportedDesign={store?.hasImportedDesign}
+        mobileNavLinks={mobileNavLinks}
       />
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-6xl mx-auto">
@@ -649,18 +658,27 @@ const ProductDetail: React.FC = () => {
                   as="h1"
                 />
                 
-                <div className="flex items-center mb-4">
-                  {showPublicPrices && Number(product.price) > 0 ? (
-                    <span className="text-2xl font-semibold text-market-primary">
-                      {formatMoney(Number(product.price || 0), {
-                        currency: store?.mainCurrency || 'USD',
-                        style: 'full',
-                        secondary: store?.secondaryCurrency && store?.customExchangeRate && store.customExchangeRate > 0
-                          ? { currency: store.secondaryCurrency, rate: store.customExchangeRate }
-                          : undefined,
-                      })}
-                    </span>
-                  ) : null}
+                <div className="flex items-center mb-4 gap-3">
+                  {showPublicPrices && Number(product.price) > 0 ? (() => {
+                    const secondaryOpt =
+                      store?.secondaryCurrency && store?.customExchangeRate && store.customExchangeRate > 0
+                        ? { currency: store.secondaryCurrency, rate: store.customExchangeRate }
+                        : undefined;
+                    const lines = formatDualMoneyLines(Number(product.price || 0), {
+                      currency: store?.mainCurrency || 'USD',
+                      style: 'full',
+                      numbersOnly: Boolean(secondaryOpt),
+                      secondary: secondaryOpt,
+                    });
+                    return (
+                      <div className="flex flex-col">
+                        <span className="text-2xl font-semibold text-market-primary">{lines.primary}</span>
+                        {lines.secondary ? (
+                          <span className="text-sm text-gray-600">{lines.secondary}</span>
+                        ) : null}
+                      </div>
+                    );
+                  })() : null}
                   
                   {product.productType === 'composed' && product.stock !== undefined && (
                     <Badge variant={product.stock > 5 ? "default" : product.stock > 0 ? "outline" : "destructive"} className={`ml-3 ${product.stock <= 5 && product.stock > 0 ? "border-orange-500 text-orange-700" : ""}`}>
@@ -880,11 +898,14 @@ const ProductDetail: React.FC = () => {
           contactEmail={store.contactInfo?.email}
           contactPhone={store.contactInfo?.phone}
           primaryColor={store.templateColors?.primary}
+          contactLabel={getStoreContactPageLabel(store.contactFormStyle)}
+          contactHref={store.slug ? buildStoreTabPath(store.slug, 'contact') : '/contact'}
         />
       )}
       <WhatsAppChatWidget
         phone={store?.subscriptionTier !== 'trial' ? store?.whatsappBusiness : undefined}
         storeName={store?.name}
+        productName={product?.name}
       />
     </div>
   );

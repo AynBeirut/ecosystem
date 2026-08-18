@@ -20,6 +20,7 @@ const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
   sameDay: false,
   pickup: true,
   dineIn: false,
+  scheduledOrdersEnabled: false,
   standardTime: '3-5 days',
   expressTime: '1-2 days',
   sameDayTime: '4-6 hours',
@@ -315,6 +316,20 @@ const AdminDelivery: React.FC = () => {
                       onCheckedChange={(checked) => handleSettingChange('dineIn', checked)}
                     />
                   </div>
+
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <Calendar className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">Schedule Orders</div>
+                        <div className="text-sm text-muted-foreground">Let customers pick a date/time on checkout</div>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={Boolean(deliverySettings.scheduledOrdersEnabled)}
+                      onCheckedChange={(checked) => handleSettingChange('scheduledOrdersEnabled', checked)}
+                    />
+                  </div>
                 </div>
               </CardContent>
             </AdminPanel>
@@ -354,6 +369,7 @@ const AdminDelivery: React.FC = () => {
                     <SelectContent>
                       <SelectItem value="Monday to Friday">Monday to Friday</SelectItem>
                       <SelectItem value="Monday to Saturday">Monday to Saturday</SelectItem>
+                      <SelectItem value="Monday to Sunday">Monday to Sunday</SelectItem>
                       <SelectItem value="Every day">Every day</SelectItem>
                     </SelectContent>
                   </Select>

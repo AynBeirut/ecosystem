@@ -48,6 +48,17 @@ export async function computePublicProductStock(
     }),
   );
 
+  const recipesById = new Map(recipesList.filter((r) => r.id).map((r) => [r.id as string, r]));
+  const productRecipeByProductId = new Map<string, string>();
+
+  const productsSnap = await getDb().collection('products').where('storeId', '==', storeId).get();
+  productsSnap.docs.forEach((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+    const recipeId = String(doc.data().recipeId || '').trim();
+    if (recipeId) productRecipeByProductId.set(doc.id, recipeId);
+  });
+
+  const stockContext = { recipesById, productRecipeByProductId };
+
   const results: PublicProductStockItem[] = [];
 
   for (const productId of uniqueIds) {
@@ -66,7 +77,7 @@ export async function computePublicProductStock(
 
     if (product.productType === 'composed' && product.recipeId) {
       const recipe = recipesList.find((r) => r.id === product.recipeId);
-      const availableStock = calculateAvailableStock(recipe, rawMaterialsList);
+      const availableStock = calculateAvailableStock(recipe, rawMaterialsList, stockContext);
       results.push({
         productId,
         availableStock,

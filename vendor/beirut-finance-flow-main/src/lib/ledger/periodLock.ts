@@ -12,6 +12,7 @@ import {
   assertDateNotInClosedPeriod,
   buildMonthPeriod,
   buildQuarterPeriod,
+  journalDateOnly,
 } from '@/lib/ledger/periodLockCore';
 
 const nowIso = () => new Date().toISOString();
@@ -40,12 +41,12 @@ export async function loadClosedPeriodClosures(storeId: string): Promise<LedgerP
 
 export async function assertPeriodOpenForPost(storeId: string, dateIso: string): Promise<void> {
   const closures = await loadClosedPeriodClosures(storeId);
-  assertDateNotInClosedPeriod(dateIso, closures, 'post journal entries');
+  assertDateNotInClosedPeriod(dateIso, closures, 'post journal entries', journalDateOnly(new Date().toISOString()));
 }
 
 export async function assertPeriodOpenForMutation(storeId: string, entryDateIso: string): Promise<void> {
   const closures = await loadClosedPeriodClosures(storeId);
-  assertDateNotInClosedPeriod(entryDateIso, closures, 'edit or delete journal entries');
+  assertDateNotInClosedPeriod(entryDateIso, closures, 'edit or delete journal entries', journalDateOnly(new Date().toISOString()));
 }
 
 function resolvePeriod(

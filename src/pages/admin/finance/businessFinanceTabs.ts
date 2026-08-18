@@ -27,6 +27,7 @@ export const ACCOUNTING_SETTINGS_TABS = [
   'bulk-import',
   'recurring',
   'checks',
+  'year-end-close',
 ] as const;
 
 /** Opened from Settings → Documents (A4 print branding, not POS receipts). */

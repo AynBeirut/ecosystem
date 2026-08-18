@@ -1,12 +1,16 @@
 #!/usr/bin/env node
 /**
- * Fix Jinan recipe material SKUs (name remap), derive boiled-bean costs,
- * calculate product costs, write jinan/pricing_review.csv + jinan/expenses.csv
+ * Jinan kitchen — trace recipes → materials → real cost per sell unit.
+ * Prices validated against handwritten recipe cards in jinan/image data/recipies/
+ *
+ *   node scripts/jinanPricingReview.cjs
  */
 const fs = require('fs');
 const path = require('path');
 
 const ROOT = path.join(__dirname, '..', 'jinan');
+const REPORT_DIR = path.join(__dirname, '..', 'reporting', 'data');
+
 const OLD_TO_NAME = {
   'JNK-MAT-00001': 'Cashew', 'JNK-MAT-00002': 'Agar', 'JNK-MAT-00003': 'Water', 'JNK-MAT-00004': 'Salt',
   'JNK-MAT-00005': 'Almond', 'JNK-MAT-00006': 'Lemon', 'JNK-MAT-00007': 'Apple Molasses', 'JNK-MAT-00008': 'Vanilla',
@@ -19,7 +23,133 @@ const OLD_TO_NAME = {
   'JNK-MAT-00029': 'Chili Pepper', 'JNK-MAT-00030': 'Tahini Dates Ball',
 };
 
+/** Handwritten recipe card prices — override CSV when they disagree */
+const RECIPE_CARD_PRICES = {
+  'JNK-MAT-00013': { packSize: '1 kg', packPriceUSD: '12', unit: 'kg', costPerUnit: '12', source: 'Almond Labni + Almond Cheese cards' },
+  'JNK-MAT-00020': { packSize: '1 kg', packPriceUSD: '12', unit: 'kg', costPerUnit: '12', source: 'Cashew Cheese card' },
+  'JNK-MAT-00031': { packSize: '10 kg', packPriceUSD: '45', unit: 'kg', costPerUnit: '4.5', source: 'Ice Cream Cookie card' },
+  'JNK-MAT-00061': { packSize: '10 liter', packPriceUSD: '1.5', unit: 'liter', costPerUnit: '0.15', source: 'pack math' },
+  'JNK-MAT-00062': { packSize: '100 gr', packPriceUSD: '10', unit: 'kg', costPerUnit: '100', source: '100g=$10 → $100/kg' },
+  'JNK-MAT-00064': { packSize: '100 gr', packPriceUSD: '1', unit: 'kg', costPerUnit: '10', source: 'Dough card' },
+  'JNK-MAT-00065': { packSize: '1 kg', packPriceUSD: '7', unit: 'kg', costPerUnit: '7', source: 'Strawberry Ice Cream card' },
+  'JNK-MAT-00066': { packSize: '1 kg', packPriceUSD: '2.5', unit: 'kg', costPerUnit: '2.5', source: 'Ice cream cards' },
+  'JNK-MAT-00067': { packSize: '1 kg', packPriceUSD: '10', unit: 'kg', costPerUnit: '10', source: 'Berries Ice Cream card' },
+  'JNK-MAT-00017': { packSize: '1 kg', packPriceUSD: '4', unit: 'kg', costPerUnit: '4', source: 'Recipe cards' },
+  'JNK-MAT-00018': { packSize: '950 gr', packPriceUSD: '14', unit: 'gram', costPerUnit: (14 / 950).toFixed(6), source: 'Croissant card' },
+  'JNK-MAT-00021': { packSize: '1 kg', packPriceUSD: '17', unit: 'kg', costPerUnit: '17', source: 'Chocolate Sauce card' },
+};
+
 const CANONICAL_RECIPE = fs.readFileSync(path.join(ROOT, 'backups', 'recipe_ingredients-canonical.txt'), 'utf8');
+
+/** Owner sell-unit rules — traced from recipe cards + Jinan sell practice */
+const CASHEW_GRAMS_PER_JAR = 250; // 600g cashew batch → 2.4 jars
+const ALMOND_GRAMS_PER_JAR = 250; // 500g almond batch → 2 jars; 250g @ $12/kg = $3 almond/jar
+const SAUCE_GRAMS_PER_JAR = 250;
+
+const SELL_UNIT_RULES = {
+  // Nut spreads: each sold jar = 250g nut (NOT batch finished weight ÷ 250)
+  'JNK-PROD-00001': { type: 'nutPerJar', nutKgPerBatch: 0.6, nutGramsPerJar: CASHEW_GRAMS_PER_JAR, name: 'Cashew Cheese Cream' },
+  'JNK-PROD-00002': { type: 'nutPerJar', nutKgPerBatch: 0.5, nutGramsPerJar: ALMOND_GRAMS_PER_JAR, name: 'Almond Labni' },
+  'JNK-PROD-00003': { type: 'nutPerJar', nutKgPerBatch: 0.5, nutGramsPerJar: ALMOND_GRAMS_PER_JAR, name: 'Almond Cheese' },
+  // Sauces: 250g finished sauce per jar (batch weight ÷ 250)
+  'JNK-PROD-00004': { type: 'gramsPerJar', batchGrams: 1780, name: 'Caramel Sauce' },
+  'JNK-PROD-00005': { type: 'gramsPerJar', batchGrams: 1825, name: 'Chocolate Sauce' },
+  // Ice cream cookie — recipe card: 11 boxes × 150g
+  'JNK-PROD-00006': { type: 'fixed', units: 11, label: '150g cookie box (11/batch)' },
+  // Ice cream — 1240g batch, 12 retail cups (craft box)
+  'JNK-PROD-00007': { type: 'fixed', units: 12, label: 'ice cream cup (~103g)' },
+  'JNK-PROD-00008': { type: 'fixed', units: 12, label: 'ice cream cup (~103g)' },
+  'JNK-PROD-00009': { type: 'fixed', units: 1, label: '1 coco/caramel sundae' },
+  'JNK-PROD-00010': { type: 'fixed', units: 1, label: '1 berries sundae' },
+  // Dough — recipe card: 2800g batch, 350g/pizza → 8 pizzas
+  'JNK-PROD-00011': { type: 'fixed', units: 8, label: '350g dough/pizza' },
+  'JNK-PROD-00012': { type: 'fixed', units: 4, label: 'pizza sauce / 4 pies' },
+  'JNK-PROD-00013': { type: 'fixed', units: 1, label: '1 pizza' },
+  'JNK-PROD-00014': { type: 'fixed', units: 35, label: '1 empty croissant' },
+  'JNK-PROD-00015': { type: 'fixed', units: 1, label: '1 almond croissant' },
+  'JNK-PROD-00016': { type: 'fixed', units: 1, label: '1 date croissant' },
+  'JNK-PROD-00017': { type: 'fixed', units: 1, label: 'whole cake 2540g' },
+  'JNK-PROD-00018': { type: 'fixed', units: 1, label: '1 foul plate' },
+};
+
+function buildSellUnits() {
+  const out = {};
+  for (const [sku, rule] of Object.entries(SELL_UNIT_RULES)) {
+    if (rule.type === 'nutPerJar') {
+      const gramsPerJar = rule.nutGramsPerJar || CASHEW_GRAMS_PER_JAR;
+      const units = (rule.nutKgPerBatch * 1000) / gramsPerJar;
+      out[sku] = {
+        units,
+        label: `${gramsPerJar}g nut/jar (${rule.nutKgPerBatch * 1000}g nut/batch → ${units} jar(s))`,
+      };
+    } else if (rule.type === 'gramsPerJar') {
+      const units = rule.batchGrams / SAUCE_GRAMS_PER_JAR;
+      out[sku] = {
+        units,
+        label: `${SAUCE_GRAMS_PER_JAR}g sauce/jar (${rule.batchGrams}g batch → ${units} jars)`,
+      };
+    } else {
+      out[sku] = { units: rule.units, label: rule.label };
+    }
+  }
+  return out;
+}
+
+function buildPackagingByProduct(sellUnits) {
+  const jar250 = (sku) => [{ sku: 'JNK-MAT-00045', qty: sellUnits[sku].units }];
+  return {
+    'JNK-PROD-00001': jar250('JNK-PROD-00001'),
+    'JNK-PROD-00002': jar250('JNK-PROD-00002'),
+    'JNK-PROD-00003': jar250('JNK-PROD-00003'),
+    'JNK-PROD-00004': jar250('JNK-PROD-00004'),
+    'JNK-PROD-00005': jar250('JNK-PROD-00005'),
+    'JNK-PROD-00006': [{ sku: 'JNK-MAT-00049', qty: 11 }],
+    'JNK-PROD-00007': [{ sku: 'JNK-MAT-00049', qty: 12 }],
+    'JNK-PROD-00008': [{ sku: 'JNK-MAT-00049', qty: 12 }],
+    'JNK-PROD-00009': [{ sku: 'JNK-MAT-00049', qty: 1 }],
+    'JNK-PROD-00010': [{ sku: 'JNK-MAT-00049', qty: 1 }],
+    'JNK-PROD-00017': [{ sku: 'JNK-MAT-00052', qty: 1 }, { sku: 'JNK-MAT-00053', qty: 1 }],
+    'JNK-PROD-00018': [{ sku: 'JNK-MAT-00050', qty: 1 }],
+  };
+}
+
+const SELL_UNITS = buildSellUnits();
+const PACKAGING_BY_PRODUCT = buildPackagingByProduct(SELL_UNITS);
+const PACKAGING_SKUS = new Set(
+  Object.values(PACKAGING_BY_PRODUCT).flat().map((p) => p.sku),
+);
+
+const FOOD_COST_TARGET = 0.32;
+const LEMON_KG_PER_PIECE = 0.12;
+
+function parsePack(raw) {
+  const original = String(raw || '').trim();
+  const s = original.toLowerCase().replace(/\s+/g, ' ').trim();
+  if (!s) return null;
+  let m = s.match(/^([\d.]+)\s+sheets?\s*(?:\/\s*[\d.]+\s*(?:gr|g))?$/);
+  if (m) return { qty: Number(m[1]), unit: 'piece', packLabel: original };
+  m = s.match(/^([\d.]+)\s*(kg|kilos?|kgs)$/);
+  if (m) return { qty: Number(m[1]), unit: 'kg', packLabel: original };
+  m = s.match(/^([\d.]+)\s*(lit|liter|litre|l|lites)$/);
+  if (m) return { qty: Number(m[1]), unit: 'liter', packLabel: original };
+  m = s.match(/^([\d.]+)\s*(gr|g|gram|grams)$/);
+  if (m) return { qty: Number(m[1]), unit: 'gram', packLabel: original };
+  m = s.match(/^([\d.]+)\s*(ml)$/);
+  if (m) return { qty: Number(m[1]), unit: 'ml', packLabel: original };
+  m = s.match(/^([\d.]+)\s*(pc|pcs|piece|pieces|ball)$/);
+  if (m) return { qty: Number(m[1]), unit: 'piece', packLabel: original };
+  m = s.match(/^([\d.]+)(gr|g)$/);
+  if (m) return { qty: Number(m[1]), unit: 'gram', packLabel: original };
+  return null;
+}
+
+function recomputeCostFromPack(mat) {
+  const price = num(mat.packPriceUSD);
+  const pack = parsePack(mat.packSize);
+  if (!pack || !price) return mat;
+  const cpu = Number((price / pack.qty).toFixed(6));
+  return { ...mat, unit: pack.unit, costPerUnit: String(cpu) };
+}
 
 function parseCsv(text) {
   const lines = text.trim().split(/\r?\n/);
@@ -45,16 +175,68 @@ function num(v) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function round2(n) {
+  return Math.round(n * 100) / 100;
+}
+
+function applyRecipeCardPrices(matBySku) {
+  for (const [sku, patch] of Object.entries(RECIPE_CARD_PRICES)) {
+    if (!matBySku[sku]) continue;
+    Object.assign(matBySku[sku], patch);
+  }
+}
+
+function oldSkuForMaterial(sku, matBySku) {
+  const mat = matBySku[sku];
+  if (!mat) return null;
+  return Object.entries(OLD_TO_NAME).find(([, name]) => name.toLowerCase() === mat.name.toLowerCase())?.[0] || null;
+}
+
+/** Recipe quantities are authored in kg (or L for liquids, or piece count for lemons). */
+function quantityInMaterialUnit(mat, recipeQty, oldSku) {
+  let q = num(recipeQty);
+  const unit = (mat.unit || 'kg').toLowerCase();
+
+  if (OLD_TO_NAME[oldSku] === 'Lemon' && q > 0 && q < 10) {
+    q *= LEMON_KG_PER_PIECE;
+  }
+
+  switch (unit) {
+    case 'kg':
+      return q;
+    case 'gram':
+    case 'g':
+      return q * 1000;
+    case 'liter':
+    case 'l':
+      return q;
+    case 'piece':
+      return q;
+    default:
+      return q;
+  }
+}
+
+function materialLineCost(matBySku, sku, recipeQty) {
+  const mat = matBySku[sku];
+  if (!mat) return { cost: 0, name: '?', qtyUsed: 0, unit: '' };
+  const oldSku = oldSkuForMaterial(sku, matBySku);
+  const qtyUsed = quantityInMaterialUnit(mat, recipeQty, oldSku);
+  const cost = qtyUsed * num(mat.costPerUnit);
+  return { cost, name: mat.name, qtyUsed, unit: mat.unit, costPerUnit: num(mat.costPerUnit) };
+}
+
 function main() {
   let mats = parseCsv(fs.readFileSync(path.join(ROOT, 'raw_materials.csv'), 'utf8')).filter((r) => r.name);
   const prods = parseCsv(fs.readFileSync(path.join(ROOT, 'products.csv'), 'utf8')).filter((r) => r.name);
   const nameToSku = Object.fromEntries(mats.map((m) => [m.name.toLowerCase(), m.sku]));
-  const matBySku = Object.fromEntries(mats.map((m) => [m.sku, { ...m }]));
+  const matBySku = Object.fromEntries(mats.map((m) => [m.sku, recomputeCostFromPack({ ...m })]));
 
-  // Derive boiled bean cost from dry (2.5x yield, no gas in recipe — gas is expense)
+  applyRecipeCardPrices(matBySku);
+
+  const YIELD = 2.5;
   const dryFava = matBySku['JNK-MAT-00011'];
   const dryChick = matBySku['JNK-MAT-00001'];
-  const YIELD = 2.5;
   if (dryFava && matBySku['JNK-MAT-00072']) {
     matBySku['JNK-MAT-00072'].costPerUnit = (num(dryFava.costPerUnit) / YIELD).toFixed(4);
     matBySku['JNK-MAT-00072'].packPriceUSD = '';
@@ -65,13 +247,16 @@ function main() {
     matBySku['JNK-MAT-00073'].packPriceUSD = '';
     matBySku['JNK-MAT-00073'].packSize = `derived from ${dryChick.name}`;
   }
-  mats = Object.values(matBySku).sort((a, b) => a.sku.localeCompare(b.sku));
-  fs.writeFileSync(path.join(ROOT, 'raw_materials.csv'), toCsv(
-    ['sku', 'name', 'packSize', 'packPriceUSD', 'unit', 'costPerUnit', 'currentStock', 'minimumThreshold', 'reorderPoint', 'storageLocation'],
-    mats.filter((m) => m.name),
-  ));
 
-  // Remap canonical recipe SKUs
+  mats = Object.values(matBySku).sort((a, b) => a.sku.localeCompare(b.sku));
+  fs.writeFileSync(
+    path.join(ROOT, 'raw_materials.csv'),
+    toCsv(
+      ['sku', 'name', 'packSize', 'packPriceUSD', 'unit', 'costPerUnit', 'currentStock', 'minimumThreshold', 'reorderPoint', 'storageLocation'],
+      mats.filter((m) => m.name),
+    ),
+  );
+
   const fixedLines = ['productSku,recipeName,outputQuantity,outputUnit,ingredientType,ingredientSku,quantity'];
   for (const line of CANONICAL_RECIPE.trim().split(/\r?\n/).slice(1)) {
     const parts = line.split(',');
@@ -85,46 +270,50 @@ function main() {
     if (!newSku) throw new Error(`No material for ${matName} (${ingredientSku}) in ${productSku}`);
     fixedLines.push([productSku, recipeName, outputQuantity, outputUnit, ingredientType, newSku, quantity].join(','));
   }
+
+  for (const [productSku, packs] of Object.entries(PACKAGING_BY_PRODUCT)) {
+    const headLine = CANONICAL_RECIPE.trim().split(/\r?\n/).slice(1).find((l) => l.startsWith(`${productSku},`));
+    const headParts = headLine ? headLine.split(',') : [];
+    const outputQuantity = headParts[2] || '1';
+    const outputUnit = headParts[3] || 'piece';
+    const recipeName = headParts[1] || productSku;
+    for (const pack of packs) {
+      fixedLines.push(
+        [productSku, recipeName, outputQuantity, outputUnit, 'material', pack.sku, pack.qty].join(','),
+      );
+    }
+  }
   fs.writeFileSync(path.join(ROOT, 'recipe_ingredients.csv'), fixedLines.join('\n') + '\n');
 
   const recipes = parseCsv(fixedLines.join('\n'));
-  const prodBySku = Object.fromEntries(prods.map((p) => [p.sku, p]));
+  const batchMemo = new Map();
 
-  function materialUnitCost(sku, qty, oldSku) {
-    const mat = matBySku[sku];
-    if (!mat) return 0;
-    let q = num(qty);
-    const unit = (mat.unit || 'kg').toLowerCase();
-    if (OLD_TO_NAME[oldSku] === 'Lemon' && q > 0 && q < 10) q *= 0.12;
-    // Recipe lines use kg; some materials are priced per gram
-    if (unit === 'gram' && q > 0 && q < 50) q *= 1000;
-    if (unit === 'piece' && q > 0 && q < 3) q *= 1; // count
-    return q * num(mat.costPerUnit);
-  }
-
-  const batchCostMemo = {};
-
-  function outputQtyInKg(outputQuantity, outputUnit) {
+  function outputMassKg(outputQuantity, outputUnit) {
     const q = num(outputQuantity) || 1;
     const u = (outputUnit || 'piece').toLowerCase();
     if (u === 'kg') return q;
     if (u === 'gram' || u === 'g') return q / 1000;
-    return q; // piece — quantity is count fraction (e.g. 0.25 of 4-pizza sauce batch)
+    return null;
   }
 
-  function batchCost(productSku, stack = new Set()) {
-    if (batchCostMemo[productSku] != null) return batchCostMemo[productSku];
+  function batchCostDetail(productSku, stack = new Set(), includePackaging = true) {
+    const key = `${productSku}|${includePackaging ? 'full' : 'prod'}`;
+    if (batchMemo.has(key)) return batchMemo.get(key);
     if (stack.has(productSku)) throw new Error(`Cycle: ${productSku}`);
     stack.add(productSku);
+
     const lines = recipes.filter((r) => r.productSku === productSku);
     const head = lines[0] || {};
     let total = 0;
+    const ingredients = [];
+
     for (const r of lines) {
+      if (!includePackaging && PACKAGING_SKUS.has(r.ingredientSku)) continue;
+
       if (r.ingredientType === 'product') {
-        const subBatch = batchCost(r.ingredientSku, stack);
+        const sub = batchCostDetail(r.ingredientSku, stack, false);
         const subLines = recipes.filter((x) => x.productSku === r.ingredientSku);
         const subHead = subLines[0] || {};
-        const subOutKg = outputQtyInKg(subHead.outputQuantity, subHead.outputUnit);
         const subOutUnit = (subHead.outputUnit || 'piece').toLowerCase();
         let fraction;
         if (subOutUnit === 'piece') {
@@ -132,114 +321,128 @@ function main() {
           const q = num(r.quantity);
           fraction = q < 1 ? q : q / subCount;
         } else {
-          fraction = num(r.quantity) / subOutKg;
+          const subMass = outputMassKg(subHead.outputQuantity, subHead.outputUnit);
+          fraction = subMass ? num(r.quantity) / subMass : num(r.quantity);
         }
-        total += subBatch * fraction;
+        const cost = sub.total * fraction;
+        total += cost;
+        ingredients.push({
+          type: 'product',
+          sku: r.ingredientSku,
+          name: prods.find((p) => p.sku === r.ingredientSku)?.name || r.ingredientSku,
+          qty: r.quantity,
+          cost: round2(cost),
+        });
       } else {
-        const oldSku = Object.entries(OLD_TO_NAME).find(([, n]) => nameToSku[n.toLowerCase()] === r.ingredientSku)?.[0];
-        total += materialUnitCost(r.ingredientSku, r.quantity, oldSku);
+        const line = materialLineCost(matBySku, r.ingredientSku, r.quantity);
+        total += line.cost;
+        ingredients.push({
+          type: PACKAGING_SKUS.has(r.ingredientSku) ? 'packaging' : 'material',
+          sku: r.ingredientSku,
+          name: line.name,
+          qty: r.quantity,
+          qtyUsed: round2(line.qtyUsed),
+          unit: line.unit,
+          costPerUnit: line.costPerUnit,
+          cost: round2(line.cost),
+        });
       }
     }
-    batchCostMemo[productSku] = total;
-    return total;
+
+    const result = {
+      total: round2(total),
+      output: `${head.outputQuantity} ${head.outputUnit}`,
+      ingredients: ingredients.sort((a, b) => b.cost - a.cost),
+    };
+    batchMemo.set(key, result);
+    stack.delete(productSku);
+    return result;
   }
 
-  const SELL_UNITS = {
-    'JNK-PROD-00001': { units: 7.6, label: '1900g batch ≈ 7.6×250g jars' },
-    'JNK-PROD-00002': { units: 6, label: '1500g batch ≈ 6×250g jars' },
-    'JNK-PROD-00003': { units: 8, label: '2000g batch = 8×250g jars' },
-    'JNK-PROD-00004': { units: 7.12, label: '1780g batch ≈ 7×250g jars' },
-    'JNK-PROD-00005': { units: 7.3, label: '1825g batch ≈ 7×250g jars' },
-    'JNK-PROD-00006': { units: 11, label: '11 cookie boxes per batch' },
-    'JNK-PROD-00007': { units: 12, label: '1240g ≈ 12 portions' },
-    'JNK-PROD-00008': { units: 12, label: '1240g ≈ 12 portions' },
-    'JNK-PROD-00009': { units: 1, label: '1 composed sundae unit' },
-    'JNK-PROD-00010': { units: 1, label: '1 sundae' },
-    'JNK-PROD-00011': { units: 8, label: '2800g dough = 8 pizzas OR 72 buns' },
-    'JNK-PROD-00012': { units: 4, label: 'sauce batch = 4 pizzas' },
-    'JNK-PROD-00013': { units: 1, label: '1 pizza' },
-    'JNK-PROD-00014': { units: 35, label: '35 croissants per batch' },
-    'JNK-PROD-00015': { units: 1, label: '1 croissant' },
-    'JNK-PROD-00016': { units: 1, label: '1 croissant' },
-    'JNK-PROD-00017': { units: 1, label: 'whole cake (2540g batch)' },
-    'JNK-PROD-00018': { units: 1, label: '1 foul plate' },
-  };
-
-  const FOOD_COST_TARGET = 0.32;
   const pricingRows = [];
+  const breakdownProducts = [];
 
   function pricingDecision(costPerUnit, recommended, owner) {
     if (!owner || owner <= 0) {
-      return { decision: 'NEED_OWNER_PRICE', note: 'Add owner estimate in products.csv price column' };
+      return { decision: 'NEED_OWNER_PRICE', note: 'Add price in products.csv' };
     }
     if (owner < recommended) {
-      return {
-        decision: 'BELOW_FLOOR',
-        note: `Raise to at least $${recommended.toFixed(2)} (32% food-cost floor) or cut recipe cost`,
-      };
+      return { decision: 'BELOW_FLOOR', note: `Raise to ≥ $${recommended.toFixed(2)} (32% food-cost floor)` };
     }
     const foodCostPct = (costPerUnit / owner) * 100;
-    const ratio = owner / recommended;
     if (foodCostPct <= 35) {
-      return {
-        decision: 'STRONG_MARGIN',
-        note: ratio >= 3
-          ? 'Owner well above floor — premium OK; confirm sell unit matches batch split'
-          : 'Owner above floor with strong margin',
-      };
+      return { decision: 'STRONG_MARGIN', note: foodCostPct <= 20 ? 'Healthy margin' : 'Good margin' };
     }
     if (foodCostPct <= 50) {
-      return { decision: 'ACCEPTABLE', note: 'Owner above floor; margin OK for kitchen retail' };
+      return { decision: 'ACCEPTABLE', note: 'Above floor; OK for retail kitchen' };
     }
-    return {
-      decision: 'THIN_MARGIN',
-      note: 'Owner above floor but food cost high — review portions or price',
-    };
+    return { decision: 'THIN_MARGIN', note: 'Review price or portions' };
   }
 
   for (const p of prods.filter((row) => row.name && row.sku)) {
-    const batch = batchCost(p.sku);
+    const detail = batchCostDetail(p.sku, new Set(), true);
+    const production = batchCostDetail(p.sku, new Set(), false);
     const sell = SELL_UNITS[p.sku] || { units: 1, label: '1 unit' };
-    const costPerSellUnit = batch / sell.units;
+    const costPerSellUnit = detail.total / sell.units;
+    const productionPerSellUnit = production.total / sell.units;
+    const packagingPerSellUnit = costPerSellUnit - productionPerSellUnit;
     const recommended = Math.ceil((costPerSellUnit / FOOD_COST_TARGET) * 2) / 2;
     const owner = num(p.price);
-    const gap = owner ? owner - recommended : null;
-    const foodCostPctAtOwner = owner ? (costPerSellUnit / owner) * 100 : null;
     const { decision, note } = pricingDecision(costPerSellUnit, recommended, owner);
 
     pricingRows.push({
       sku: p.sku,
       name: p.name,
       category: p.category || '',
-      batchCostUSD: batch.toFixed(2),
+      batchCostUSD: detail.total.toFixed(2),
+      productionBatchCostUSD: production.total.toFixed(2),
       sellUnit: sell.label,
       costPerUnitUSD: costPerSellUnit.toFixed(2),
+      productionCostPerUnitUSD: productionPerSellUnit.toFixed(2),
+      packagingCostPerUnitUSD: packagingPerSellUnit.toFixed(2),
       breakEvenPriceUSD: costPerSellUnit.toFixed(2),
       recommendedPriceUSD: recommended.toFixed(2),
       ownerEstimateUSD: owner ? owner.toFixed(2) : '',
-      gapVsRecommendedUSD: gap != null ? gap.toFixed(2) : '',
-      ownerFoodCostPct: foodCostPctAtOwner != null ? foodCostPctAtOwner.toFixed(1) + '%' : '',
+      gapVsRecommendedUSD: owner ? (owner - recommended).toFixed(2) : '',
+      ownerFoodCostPct: owner ? ((costPerSellUnit / owner) * 100).toFixed(1) + '%' : '',
       marginAtOwnerPct: owner ? (((owner - costPerSellUnit) / owner) * 100).toFixed(0) + '%' : '',
-      ownerVsRecommendedRatio: owner && recommended ? (owner / recommended).toFixed(1) + 'x' : '',
       decision,
       note,
+    });
+
+    breakdownProducts.push({
+      sku: p.sku,
+      name: p.name,
+      batchOutput: detail.output,
+      batchCostUSD: detail.total,
+      productionBatchCostUSD: production.total,
+      sellUnitsPerBatch: sell.units,
+      sellUnitLabel: sell.label,
+      costPerSellUnitUSD: round2(costPerSellUnit),
+      productionCostPerSellUnitUSD: round2(productionPerSellUnit),
+      packagingCostPerSellUnitUSD: round2(packagingPerSellUnit),
+      floor32pctUSD: recommended,
+      ownerPriceUSD: owner || null,
+      foodCostPctAtOwner: owner ? round2((costPerSellUnit / owner) * 100) : null,
+      ingredients: detail.ingredients,
     });
   }
 
   const headers = [
-    'sku', 'name', 'category', 'batchCostUSD', 'sellUnit', 'costPerUnitUSD', 'breakEvenPriceUSD',
-    'recommendedPriceUSD', 'ownerEstimateUSD', 'gapVsRecommendedUSD', 'ownerFoodCostPct', 'marginAtOwnerPct',
-    'ownerVsRecommendedRatio', 'decision', 'note',
+    'sku', 'name', 'category', 'batchCostUSD', 'productionBatchCostUSD', 'sellUnit',
+    'costPerUnitUSD', 'productionCostPerUnitUSD', 'packagingCostPerUnitUSD',
+    'breakEvenPriceUSD', 'recommendedPriceUSD', 'ownerEstimateUSD', 'gapVsRecommendedUSD',
+    'ownerFoodCostPct', 'marginAtOwnerPct', 'decision', 'note',
   ];
-
   fs.writeFileSync(path.join(ROOT, 'pricing_review.csv'), toCsv(headers, pricingRows));
 
-  const reportDir = path.join(__dirname, '..', 'reporting', 'data');
-  fs.mkdirSync(reportDir, { recursive: true });
+  fs.mkdirSync(REPORT_DIR, { recursive: true });
   const summary = {
     generatedAt: new Date().toISOString(),
     store: "Jinan's Kitchen",
+    methodology: 'Recipe card prices + nested recipes (sub-products exclude jar/packaging) + packaging on final sell unit',
     foodCostTargetPct: FOOD_COST_TARGET * 100,
+    recipeCardPriceFixes: RECIPE_CARD_PRICES,
     productCount: pricingRows.length,
     decisions: pricingRows.reduce((acc, r) => {
       acc[r.decision] = (acc[r.decision] || 0) + 1;
@@ -247,35 +450,51 @@ function main() {
     }, {}),
     products: pricingRows,
   };
+  fs.writeFileSync(path.join(REPORT_DIR, 'jinan-pricing-decision.json'), JSON.stringify(summary, null, 2));
   fs.writeFileSync(
-    path.join(reportDir, 'jinan-pricing-decision.json'),
-    JSON.stringify(summary, null, 2),
+    path.join(REPORT_DIR, 'jinan-product-cost-breakdown.json'),
+    JSON.stringify({ generatedAt: new Date().toISOString(), products: breakdownProducts }, null, 2),
   );
 
-  // Gas as operating expense (not in recipes)
+  // Human audit: every ingredient line per product
+  const auditLines = ['productSku,productName,sellUnit,ingredientSku,ingredientName,recipeQty,usedQty,unit,costPerUnitUSD,lineCostUSD,lineType'];
+  for (const p of breakdownProducts) {
+    for (const ing of p.ingredients) {
+      auditLines.push([
+        p.sku,
+        `"${p.name}"`,
+        `"${p.sellUnitLabel}"`,
+        ing.sku,
+        `"${ing.name}"`,
+        ing.qty,
+        ing.qtyUsed ?? '',
+        ing.unit ?? '',
+        ing.costPerUnit ?? '',
+        ing.cost,
+        ing.type,
+      ].join(','));
+    }
+  }
+  fs.writeFileSync(path.join(ROOT, 'real_cost_audit.csv'), auditLines.join('\n') + '\n');
+
   const gasPer15Days = 55;
-  const gasMonthly = (gasPer15Days * 2).toFixed(2);
-  fs.writeFileSync(path.join(ROOT, 'expenses.csv'), toCsv(
-    ['name', 'category', 'amountUSD', 'frequency', 'notes'],
-    [{
+  fs.writeFileSync(
+    path.join(ROOT, 'expenses.csv'),
+    toCsv(['name', 'category', 'amountUSD', 'frequency', 'notes'], [{
       name: 'Cooking Gas (Gaz)',
       category: '613 Generator & Diesel Expense',
       amountUSD: gasPer15Days.toFixed(2),
       frequency: 'every 15 days',
-      notes: `~$${gasMonthly}/month — operating expense, not allocated per recipe`,
-    }],
-  ));
+      notes: `~$${(gasPer15Days * 2).toFixed(2)}/month — not in recipe COGS`,
+    }]),
+  );
 
-  console.log('Wrote jinan/recipe_ingredients.csv (fixed SKUs)');
-  console.log('Wrote jinan/pricing_review.csv');
-  console.log('Wrote reporting/data/jinan-pricing-decision.json');
-  console.log('Wrote jinan/expenses.csv');
-  console.log('');
-  console.log('Decision summary:', summary.decisions);
+  console.log('✅ Traced', pricingRows.length, 'products from recipe cards');
+  console.log('Decisions:', summary.decisions);
   console.log('');
   for (const r of pricingRows) {
     console.log(
-      `${r.sku} ${r.name}: cost $${r.costPerUnitUSD} | floor $${r.recommendedPriceUSD} | owner $${r.ownerEstimateUSD} | ${r.decision}`,
+      `${r.sku} ${r.name}: COGS $${r.costPerUnitUSD} (food $${r.productionCostPerUnitUSD} + pack $${r.packagingCostPerUnitUSD}) | floor $${r.recommendedPriceUSD} | sell $${r.ownerEstimateUSD} | ${r.decision}`,
     );
   }
 }

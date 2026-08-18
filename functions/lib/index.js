@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onWordPressProvisioningRequestCreated = exports.onAccountPaymentCreated = exports.onOrderStatusChanged = exports.onOrderCreated = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onWordPressProvisioningRequestCreated = exports.onAccountPaymentCreated = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkScheduledOrderReminders = exports.autoCloseFiscalPeriods = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -86,6 +86,7 @@ const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
 const orderNotifications_1 = require("./services/orderNotifications");
 const fcmTokens_1 = require("./services/fcmTokens");
+const storeWorkingDays_1 = require("./lib/storeWorkingDays");
 const supplierReturns_1 = require("./api/supplierReturns");
 const crmReps_1 = require("./api/crmReps");
 const dropship_1 = require("./api/dropship");
@@ -430,6 +431,18 @@ app.post('/checkout', async (req, res) => {
             itemsByStore[it.storeId].push(it);
         }
         console.log('Items by store:', itemsByStore);
+        const scheduledDateCheck = String(deliveryInfo?.scheduledDate || '').trim();
+        if (scheduledDateCheck) {
+            for (const storeId of Object.keys(itemsByStore)) {
+                const profileSnap = await db.doc(`storeProfiles/${storeId}`).get();
+                const settings = (profileSnap.data()?.deliverySettings || {});
+                if (!(0, storeWorkingDays_1.isStoreOpenOnDate)(scheduledDateCheck, settings.workingDays)) {
+                    return res.status(400).json({
+                        error: (0, storeWorkingDays_1.getStoreClosedDayMessage)(settings.workingDays, settings.workingHours),
+                    });
+                }
+            }
+        }
         let ordersCreated = 0;
         const orderIds = [];
         const invoiceNumbers = [];
@@ -551,6 +564,20 @@ app.post('/checkout', async (req, res) => {
                     : fulfillmentMethod === 'dine_in'
                         ? (deliveryInfo?.address || 'Dine In')
                         : (deliveryInfo?.address || '');
+                const scheduledDate = String(deliveryInfo?.scheduledDate || '').trim();
+                const scheduledTime = String(deliveryInfo?.scheduledTime || '').trim();
+                const scheduledFor = scheduledDate && scheduledTime
+                    ? `${scheduledDate}T${scheduledTime}`
+                    : scheduledDate || scheduledTime || null;
+                const guestCountRaw = Number(deliveryInfo?.guestCount);
+                const guestCount = Number.isFinite(guestCountRaw) && guestCountRaw > 0
+                    ? Math.round(guestCountRaw)
+                    : null;
+                const scheduleNote = scheduledFor ? `Scheduled for: ${scheduledFor}` : '';
+                const guestNote = guestCount ? `Party size: ${guestCount}` : '';
+                const deliveryNotes = [deliveryInfo?.notes, scheduleNote, guestNote, checkoutChannel === 'whatsapp' ? 'Placed via WhatsApp' : '']
+                    .filter(Boolean)
+                    .join(' · ');
                 const orderRef = db.collection('orders').doc();
                 transaction.set(orderRef, {
                     storeId: orderData.storeId,
@@ -580,7 +607,9 @@ app.post('/checkout', async (req, res) => {
                     deliveryMethod: orderDeliveryMethod,
                     deliveryAddress: resolvedDeliveryAddress,
                     deliveryCity: fulfillmentMethod === 'delivery' ? (deliveryInfo?.city || '') : '',
-                    deliveryNotes: deliveryInfo?.notes || (checkoutChannel === 'whatsapp' ? 'Placed via WhatsApp' : ''),
+                    deliveryNotes,
+                    scheduledFor,
+                    guestCount,
                     deliveryCoordinates: fulfillmentMethod === 'delivery' ? (deliveryInfo?.coordinates || null) : null,
                     paymentStatus: 'unpaid',
                     amountPaid: 0,
@@ -706,6 +735,10 @@ var fetchExchangeRates_1 = require("./scheduled/fetchExchangeRates");
 Object.defineProperty(exports, "fetchExchangeRates", { enumerable: true, get: function () { return fetchExchangeRates_1.fetchExchangeRates; } });
 var runRecurringVouchers_1 = require("./scheduled/runRecurringVouchers");
 Object.defineProperty(exports, "runRecurringVouchers", { enumerable: true, get: function () { return runRecurringVouchers_1.runRecurringVouchers; } });
+var autoCloseFiscalPeriods_1 = require("./scheduled/autoCloseFiscalPeriods");
+Object.defineProperty(exports, "autoCloseFiscalPeriods", { enumerable: true, get: function () { return autoCloseFiscalPeriods_1.autoCloseFiscalPeriods; } });
+var checkScheduledOrderReminders_1 = require("./scheduled/checkScheduledOrderReminders");
+Object.defineProperty(exports, "checkScheduledOrderReminders", { enumerable: true, get: function () { return checkScheduledOrderReminders_1.checkScheduledOrderReminders; } });
 // Export Firestore triggers: new order + order status / payment status change notifications
 var orderNotifications_2 = require("./triggers/orderNotifications");
 Object.defineProperty(exports, "onOrderCreated", { enumerable: true, get: function () { return orderNotifications_2.onOrderCreated; } });

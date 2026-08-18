@@ -50,6 +50,8 @@ export interface FormatMoneyOptions {
   style?: NumberFormatStyle;
   /** Prepend/append the currency symbol. Defaults to true. */
   withSymbol?: boolean;
+  /** Omit currency symbols on dual-line storefront prices (USD 2dp, LBP whole). */
+  numbersOnly?: boolean;
   /** Optional secondary/display currency overlay (Phase 3). */
   secondary?: SecondaryDisplay;
 }
@@ -110,4 +112,29 @@ export function formatMoney(amount: number, options: FormatMoneyOptions = {}): s
   }
 
   return base;
+}
+
+/** Split base + secondary prices for stacked storefront display. */
+export function formatDualMoneyLines(
+  amount: number,
+  options: FormatMoneyOptions = {},
+): { primary: string; secondary?: string } {
+  const { currency, style, withSymbol = true, numbersOnly = false, secondary } = options;
+  const showSymbol = numbersOnly ? false : withSymbol;
+  const primary = formatAmount(amount, currency, style, showSymbol);
+
+  if (
+    secondary &&
+    Number.isFinite(secondary.rate) &&
+    secondary.rate > 0 &&
+    normalizeCurrencyCode(secondary.currency) !== normalizeCurrencyCode(currency)
+  ) {
+    const converted = (Number.isFinite(amount) ? amount : 0) * secondary.rate;
+    return {
+      primary,
+      secondary: formatAmount(converted, secondary.currency, style, showSymbol),
+    };
+  }
+
+  return { primary };
 }

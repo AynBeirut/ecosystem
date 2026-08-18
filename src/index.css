@@ -295,6 +295,48 @@
     @apply rounded-xl border border-slate-200/80 bg-[#0b1220] text-white;
   }
 
+  [data-admin-theme="dark"] .admin-mobile-header {
+    background-color: hsl(var(--admin-sidebar));
+    border-color: hsl(var(--admin-border-subtle) / 0.85);
+    color: hsl(var(--admin-text));
+  }
+
+  [data-admin-theme="light"] .admin-mobile-header {
+    @apply border-slate-200 bg-white text-slate-900;
+  }
+
+  [data-admin-theme="dark"] .admin-mobile-header-title {
+    color: hsl(var(--admin-text));
+  }
+
+  [data-admin-theme="light"] .admin-mobile-header-title {
+    @apply text-slate-900;
+  }
+
+  [data-admin-theme="dark"] .admin-mobile-header button {
+    color: hsl(var(--admin-text));
+  }
+
+  [data-admin-theme="dark"] .admin-mobile-header button:hover {
+    background-color: hsl(var(--admin-elevated-hover) / 0.65);
+  }
+
+  [data-admin-theme="light"] .admin-mobile-header button {
+    @apply text-slate-700 hover:bg-slate-100;
+  }
+
+  .admin-shell-daily-ops-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-300;
+  }
+
+  .admin-shell-daily-ops-link {
+    @apply rounded-lg px-3 py-1.5 text-xs font-semibold border transition bg-white/10 text-white border-white/20 hover:bg-white/20;
+  }
+
+  .admin-shell-daily-ops-link.is-active {
+    @apply bg-teal-500/30 text-teal-50 border-teal-400/50;
+  }
+
   [data-admin-theme="light"] .admin-shell-sidebar {
     @apply bg-[#0f172a] text-slate-300 border-r border-white/5;
   }

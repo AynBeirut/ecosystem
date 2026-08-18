@@ -18,6 +18,7 @@ import {
   postJournalEntry,
   type PostJournalResult,
 } from '@/lib/ledger/postingService';
+import { resolveExpenseAccountCode } from '@/lib/ledger/expenseAccountRouting';
 import { resolvePostingAccount } from '@/lib/ledger/postingAccountResolver';
 import { collection, doc, getDocs, query, updateDoc, where } from 'firebase/firestore';
 import { getFinanceDb } from '@/integrations/firebase/client';
@@ -51,17 +52,12 @@ async function getPostedAccountNetDebitBalance(storeId: string, account: LedgerA
   return computeAccountNetDebitBalance(account.id, account.openingBalance || 0, lines, postedEntryIds);
 }
 
-const EXPENSE_GL_MAP: Partial<Record<ExpenseCategory, string>> = {
-  rent: '610',
-  utilities: '612',
-  payroll: '601',
-  marketing: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
-  insurance: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
-  other: GL_ACCOUNT_CODES.GENERAL_EXPENSE,
-};
-
-function expenseAccountCode(category: ExpenseCategory): string {
-  return EXPENSE_GL_MAP[category] || GL_ACCOUNT_CODES.GENERAL_EXPENSE;
+function expenseAccountCode(expense: Pick<Expense, 'category' | 'name' | 'description'>): string {
+  return resolveExpenseAccountCode({
+    category: expense.category,
+    vendor: expense.name,
+    description: expense.description,
+  });
 }
 
 function cashOrBank(method?: string): string {
@@ -305,7 +301,7 @@ export async function autoPostExpensePaid(
   const amount = round2(paidAmount);
   if (amount <= 0) return null;
 
-  const expenseAcct = accountByCode(accounts, expenseAccountCode(expense.category));
+  const expenseAcct = accountByCode(accounts, expenseAccountCode(expense));
   const cashAcct = accountByCode(accounts, cashOrBank(paymentMethod));
 
   return postJournalEntry(
@@ -430,11 +426,17 @@ export async function autoPostPurchasePaid(
     {
       storeId,
       date: new Date().toISOString(),
-      memo: `Purchase payment ${po.id}`,
+      memo: `Purchase payment — ${po.supplierName || 'Supplier'} (${po.id})`,
       sourceType: 'purchase_payment',
       sourceId: po.id,
       event,
       voucherType: 'PV',
+      voucherMeta: {
+        payee: po.supplierName,
+        supplierId: po.supplierId,
+        paidFromAccountId: cashAcct.id,
+        paidToAccountId: ap.id,
+      },
       createdBy,
       lines: [
         { accountId: ap.id, debit: amount, credit: 0 },

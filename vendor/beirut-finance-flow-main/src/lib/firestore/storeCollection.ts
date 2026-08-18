@@ -12,11 +12,19 @@ import { FINANCE_COLLECTIONS, type FinanceCollectionKey } from './paths';
 
 const nowIso = () => new Date().toISOString();
 
-/** Firestore rejects `undefined` field values — strip them before writes. */
-export function sanitizeForFirestore<T extends Record<string, unknown>>(data: T): T {
+/** Firestore rejects `undefined` field values — strip them recursively before writes. */
+export function sanitizeForFirestore<T>(data: T): T {
+  if (data === undefined) return data;
+  if (data === null || typeof data !== 'object') return data;
+  if (Array.isArray(data)) {
+    return data
+      .filter((item) => item !== undefined)
+      .map((item) => sanitizeForFirestore(item)) as T;
+  }
   const out: Record<string, unknown> = {};
-  for (const [key, value] of Object.entries(data)) {
-    if (value !== undefined) out[key] = value;
+  for (const [key, value] of Object.entries(data as Record<string, unknown>)) {
+    if (value === undefined) continue;
+    out[key] = sanitizeForFirestore(value);
   }
   return out as T;
 }

@@ -24,13 +24,19 @@ import type {
 } from "@/types/generalLedger";
 import type { Invoice, PurchaseOrder } from "@/types/index";
 import { type AccountingLanguage } from "@/lib/grabio/accountingMode";
-import { mapGrabioCodeToPcg } from "@/lib/ledger/grabioToPcgMap";
-import { isAccountsPayableCode, isAccountsReceivableCode, isCashOrBankCode, pickDefaultApAccount, pickDefaultArAccount } from "@/lib/ledger/accountControlCodes";
+import {
+  isAccountsPayableCode,
+  isAccountsReceivableCode,
+  isCashOrBankCode,
+  pickDefaultApAccount,
+  pickDefaultArAccount,
+} from "@/lib/ledger/accountControlCodes";
 import { buildOpenInvoices, buildOpenPurchaseOrders, validateAllocations } from "@/lib/ledger/openItems";
 import { loadCostCenters } from "@/lib/firestore/costCentersFirestore";
 import VoucherRegisterPanel, { type RegisterFilter } from "@/components/VoucherRegisterPanel";
 import type { JournalEntry, JournalLine } from "@/types/generalLedger";
-import { buildClientByGrabioMap, resolvePcgDisplay } from "@/lib/ledger/grabioToPcgMap";
+import { buildClientByGrabioMap, mapPcgCodeToGrabioCodes, resolvePcgDisplay } from "@/lib/ledger/grabioToPcgMap";
+import { parseJournalDateInput } from "@/lib/ledger/periodLockCore";
 
 type DraftLine = {
   accountId: string;
@@ -72,7 +78,7 @@ type Props = {
     memo: string;
     lines: JournalLineInput[];
     voucherMeta?: Record<string, unknown>;
-  }) => void;
+  }) => Promise<void>;
   registerEntries?: JournalEntry[];
   registerLines?: JournalLine[];
   systemGuideEnabled?: boolean;
@@ -82,16 +88,30 @@ type Props = {
   reversingRegister?: boolean;
 };
 
+/** Map PCG display/chart rows to Grabio operational account ids used for posting. */
+function resolveOperationalAccountId(
+  accountId: string,
+  accounts: LedgerAccount[],
+  acctById: Map<string, LedgerAccount>,
+): string {
+  const account = acctById.get(accountId) ?? accounts.find((row) => row.id === accountId);
+  if (!account || !account.isPcgChart) return accountId;
+  const grabioCodes = mapPcgCodeToGrabioCodes(account.code);
+  if (grabioCodes.length === 1) {
+    const operational = accounts.find(
+      (row) => row.code === grabioCodes[0] && row.isActive && !row.isPcgChart,
+    );
+    if (operational) return operational.id;
+  }
+  return accountId;
+}
+
 function activeAccounts(accounts: LedgerAccount[], isLebaneseCoa?: boolean) {
   const active = accounts.filter((a) => a.isActive);
   if (!isLebaneseCoa) return active.sort((a, b) => a.code.localeCompare(b.code));
+  // Vouchers post to Grabio operational accounts (601, 102, …). PCG template rows are display-only.
   return active
-    .filter((account) => {
-      if (account.pcgKind === "G") return false;
-      if (account.isPcgChart) return true;
-      if (mapGrabioCodeToPcg(account.code)) return false;
-      return true;
-    })
+    .filter((account) => account.pcgKind !== "G" && !account.isPcgChart)
     .sort((a, b) => a.code.localeCompare(b.code, undefined, { numeric: true }));
 }
 
@@ -177,11 +197,9 @@ export default function VoucherEntryPanel({
     suppliers?: Array<{ id: string; name: string; email?: string; phone?: string }>;
   };
   const accts = useMemo(() => activeAccounts(accounts, isLebaneseCoa), [accounts, isLebaneseCoa]);
-  const cashBankAccounts = useMemo(
-    () => accts.filter((account) => isCashOrBankCode(account.code)),
-    [accts],
-  );
   const acctById = useMemo(() => new Map(accts.map((a) => [a.id, a])), [accts]);
+  const allAcctById = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  const [pvStatus, setPvStatus] = useState<{ kind: "error" | "success" | "info"; text: string } | null>(null);
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
   const [costCenters, setCostCenters] = useState<LedgerCostCenter[]>([]);
   const [voucherTab, setVoucherTab] = useState<VoucherType>("JV");
@@ -201,6 +219,7 @@ export default function VoucherEntryPanel({
   } | null>(null);
 
   const [pvFrom, setPvFrom] = useState("");
+  const [pvTo, setPvTo] = useState("");
   const [pvAmount, setPvAmount] = useState("");
   const [pvPayee, setPvPayee] = useState("");
   const [pvSupplierId, setPvSupplierId] = useState("");
@@ -208,6 +227,7 @@ export default function VoucherEntryPanel({
   const [pvCheckNumber, setPvCheckNumber] = useState("");
 
   const [rvInto, setRvInto] = useState("");
+  const [rvFrom, setRvFrom] = useState("");
   const [rvAmount, setRvAmount] = useState("");
   const [rvPayer, setRvPayer] = useState("");
   const [rvClientId, setRvClientId] = useState("");
@@ -230,6 +250,26 @@ export default function VoucherEntryPanel({
     if (!storeId) return;
     void loadCostCenters(storeId).then(setCostCenters);
   }, [storeId]);
+
+  useEffect(() => {
+    if (pvFrom) return;
+    const cash =
+      accts.find((row) => row.code === "102") ||
+      accts.find((row) => isCashOrBankCode(row.code));
+    if (cash) setPvFrom(cash.id);
+  }, [accts, pvFrom]);
+
+  useEffect(() => {
+    if (pvTo) return;
+    const ap = pickDefaultApAccount(accts);
+    if (ap) setPvTo(ap.id);
+  }, [accts, pvTo]);
+
+  useEffect(() => {
+    if (rvFrom) return;
+    const ar = pickDefaultArAccount(accts);
+    if (ar) setRvFrom(ar.id);
+  }, [accts, rvFrom]);
 
   const draftTotals = useMemo(() => {
     const debit = draftLines.reduce((s, l) => s + (Number(l.debit) || 0), 0);
@@ -272,14 +312,14 @@ export default function VoucherEntryPanel({
     if (client) setRvPayer(client.name);
   };
 
-  const finalizePost = (payload: {
+  const finalizePost = async (payload: {
     voucherType: VoucherType;
     date: string;
     memo: string;
     lines: JournalLineInput[];
     voucherMeta?: Record<string, unknown>;
   }) => {
-    onPost(payload);
+    await onPost(payload);
   };
 
   const maybeShowAllocation = (payload: {
@@ -296,13 +336,13 @@ export default function VoucherEntryPanel({
   }) => {
     const acct = acctById.get(payload.knockOffAccountId);
     if (!acct) {
-      finalizePost(payload);
+      void finalizePost(payload);
       return;
     }
     const isAr = isAccountsReceivableCode(acct.code);
     const isAp = isAccountsPayableCode(acct.code);
     if (!isAr && !isAp) {
-      finalizePost(payload);
+      void finalizePost(payload);
       return;
     }
     const openItems =
@@ -310,7 +350,7 @@ export default function VoucherEntryPanel({
         ? buildOpenInvoices(invoices, settlements, payload.partyId)
         : buildOpenPurchaseOrders(purchaseOrders, paymentOrders, settlements, payload.partyId);
     if (!openItems.length) {
-      finalizePost(payload);
+      void finalizePost(payload);
       return;
     }
     setPendingPost({
@@ -324,26 +364,69 @@ export default function VoucherEntryPanel({
       partyLabel: payload.partyLabel,
     });
     setAllocOpen(true);
+    toast.info('Apply this payment to open invoices/POs, or click Skip to post without allocation.');
   };
 
-  const handleAllocationConfirm = (allocations: SettlementAllocationInput[]) => {
+  const postWithoutAllocation = async () => {
+    if (!pendingPost) return;
+    try {
+      await finalizePost({
+        voucherType: pendingPost.voucherType,
+        date: pendingPost.date,
+        memo: pendingPost.memo,
+        lines: pendingPost.lines,
+        voucherMeta: pendingPost.voucherMeta,
+      });
+      if (pendingPost.voucherType === "PV") {
+        setPvStatus({ kind: "success", text: "Payment voucher posted." });
+        setPvAmount("");
+        setPvRef("");
+        setPvCheckNumber("");
+      }
+      setPendingPost(null);
+      setAllocOpen(false);
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Failed to post voucher.";
+      if (pendingPost.voucherType === "PV") {
+        setPvStatus({ kind: "error", text });
+      }
+      toast.error(text);
+    }
+  };
+
+  const handleAllocationConfirm = async (allocations: SettlementAllocationInput[]) => {
     if (!pendingPost) return;
     const check = validateAllocations(pendingPost.paymentAmount, allocations, pendingPost.openItems);
     if (!check.valid) {
       toast.error(check.message);
       return;
     }
-    finalizePost({
-      voucherType: pendingPost.voucherType,
-      date: pendingPost.date,
-      memo: pendingPost.memo,
-      lines: pendingPost.lines,
-      voucherMeta: {
-        ...(pendingPost.voucherMeta || {}),
-        allocations,
-      },
-    });
-    setPendingPost(null);
+    try {
+      await finalizePost({
+        voucherType: pendingPost.voucherType,
+        date: pendingPost.date,
+        memo: pendingPost.memo,
+        lines: pendingPost.lines,
+        voucherMeta: {
+          ...(pendingPost.voucherMeta || {}),
+          allocations,
+        },
+      });
+      if (pendingPost.voucherType === "PV") {
+        setPvStatus({ kind: "success", text: "Payment voucher posted." });
+        setPvAmount("");
+        setPvRef("");
+        setPvCheckNumber("");
+      }
+      setPendingPost(null);
+      setAllocOpen(false);
+    } catch (err) {
+      const text = err instanceof Error ? err.message : "Failed to post voucher.";
+      if (pendingPost.voucherType === "PV") {
+        setPvStatus({ kind: "error", text });
+      }
+      toast.error(text);
+    }
   };
 
   const postJv = () => {
@@ -356,7 +439,7 @@ export default function VoucherEntryPanel({
       toast.error("Add at least two lines with accounts and amounts.");
       return;
     }
-    finalizePost({
+    void finalizePost({
       voucherType: "JV",
       date: entryDate,
       memo: memo || "Journal voucher",
@@ -365,42 +448,72 @@ export default function VoucherEntryPanel({
     });
   };
 
-  const postPv = () => {
+  const postPv = async () => {
+    setPvStatus(null);
+    try {
+      parseJournalDateInput(entryDate);
+    } catch {
+      const text = "Enter a valid voucher date (2000–2099).";
+      setPvStatus({ kind: "error", text });
+      toast.error(text);
+      return;
+    }
     const amount = Number(pvAmount) || 0;
-    if (!pvFrom || amount <= 0) {
-      toast.error("Select cash/bank account and enter an amount.");
+    const paidFromId = resolveOperationalAccountId(pvFrom, accounts, allAcctById);
+    const paidToId = resolveOperationalAccountId(pvTo, accounts, allAcctById);
+    if (!paidFromId || !paidToId || amount <= 0) {
+      const text = "Select cash/bank, expense/AP account, and enter an amount.";
+      setPvStatus({ kind: "error", text });
+      toast.error(text);
       return;
     }
     if (!pvPayee.trim() && !pvSupplierId) {
-      toast.error("Select or enter a payee.");
+      const text = "Select or enter a payee.";
+      setPvStatus({ kind: "error", text });
+      toast.error(text);
       return;
     }
-    const apAccount = pickDefaultApAccount(accts);
-    if (!apAccount) {
-      toast.error("No accounts payable account found in chart of accounts.");
-      return;
-    }
-    const meta = {
+    const meta: Record<string, unknown> = {
       payee: pvPayee,
-      supplierId: pvSupplierId || undefined,
       paymentRef: pvRef,
-      checkNumber: pvCheckNumber || pvRef || undefined,
-      checkStatus: pvCheckNumber ? "issued" : undefined,
       checkAmount: amount,
       amount,
-      paidFromAccountId: pvFrom,
-      paidToAccountId: apAccount.id,
+      paidFromAccountId: paidFromId,
+      paidToAccountId: paidToId,
+      ...(pvSupplierId ? { supplierId: pvSupplierId } : {}),
+      ...(pvCheckNumber ? { checkNumber: pvCheckNumber, checkStatus: "issued" } : {}),
+      ...(pvRef && !pvCheckNumber ? { checkNumber: pvRef } : {}),
     };
-    maybeShowAllocation({
-      voucherType: "PV",
+    const payload = {
+      voucherType: "PV" as const,
       date: entryDate,
       memo: memo || `Payment voucher${pvPayee ? ` — ${pvPayee}` : ""}`,
       lines: [
-        { accountId: apAccount.id, debit: amount, credit: 0, description: "Payment" },
-        { accountId: pvFrom, debit: 0, credit: amount, description: "Paid from" },
+        { accountId: paidToId, debit: amount, credit: 0, description: "Payment" },
+        { accountId: paidFromId, debit: 0, credit: amount, description: "Paid from" },
       ],
       voucherMeta: meta,
-      knockOffAccountId: apAccount.id,
+    };
+    const knockOffAcct = allAcctById.get(paidToId) ?? acctById.get(paidToId);
+    const isAp = knockOffAcct ? isAccountsPayableCode(knockOffAcct.code) : false;
+    const isAr = knockOffAcct ? isAccountsReceivableCode(knockOffAcct.code) : false;
+    if (!isAp && !isAr) {
+      try {
+        await finalizePost(payload);
+        setPvStatus({ kind: "success", text: "Payment voucher posted." });
+        setPvAmount("");
+        setPvRef("");
+        setPvCheckNumber("");
+      } catch (err) {
+        const text = err instanceof Error ? err.message : "Failed to post payment voucher.";
+        setPvStatus({ kind: "error", text });
+        toast.error(text);
+      }
+      return;
+    }
+    maybeShowAllocation({
+      ...payload,
+      knockOffAccountId: paidToId,
       paymentAmount: amount,
       partyLabel: pvPayee || "Supplier",
       partyId: pvSupplierId || undefined,
@@ -410,17 +523,12 @@ export default function VoucherEntryPanel({
 
   const postRv = () => {
     const amount = Number(rvAmount) || 0;
-    if (!rvInto || amount <= 0) {
-      toast.error("Select cash/bank account and enter an amount.");
+    if (!rvInto || !rvFrom || amount <= 0) {
+      toast.error("Select cash/bank, AR account, and enter an amount.");
       return;
     }
     if (!rvPayer.trim() && !rvClientId) {
       toast.error("Select or enter a payer.");
-      return;
-    }
-    const arAccount = pickDefaultArAccount(accts);
-    if (!arAccount) {
-      toast.error("No accounts receivable account found in chart of accounts.");
       return;
     }
     const meta = {
@@ -428,7 +536,7 @@ export default function VoucherEntryPanel({
       clientId: rvClientId || undefined,
       receiptRef: rvRef,
       receivedIntoAccountId: rvInto,
-      receivedFromAccountId: arAccount.id,
+      receivedFromAccountId: rvFrom,
     };
     maybeShowAllocation({
       voucherType: "RV",
@@ -436,10 +544,10 @@ export default function VoucherEntryPanel({
       memo: memo || `Receipt voucher${rvPayer ? ` — ${rvPayer}` : ""}`,
       lines: [
         { accountId: rvInto, debit: amount, credit: 0, description: "Received into" },
-        { accountId: arAccount.id, debit: 0, credit: amount, description: "Received from" },
+        { accountId: rvFrom, debit: 0, credit: amount, description: "Received from" },
       ],
       voucherMeta: meta,
-      knockOffAccountId: arAccount.id,
+      knockOffAccountId: rvFrom,
       paymentAmount: amount,
       partyLabel: rvPayer || "Client",
       partyId: rvClientId || undefined,
@@ -450,7 +558,7 @@ export default function VoucherEntryPanel({
   const postCv = () => {
     const amount = Number(cvAmount) || 0;
     if (!cvFrom || !cvTo || amount <= 0) return;
-    finalizePost({
+    void finalizePost({
       voucherType: "CV",
       date: entryDate,
       memo: memo || "Contra voucher — transfer",
@@ -492,7 +600,14 @@ export default function VoucherEntryPanel({
         <div className={cn("grid gap-4 sm:grid-cols-2 mb-4", isLebaneseCoa && "legacy-erp-field-grid mb-3")}>
           <div>
             <Label>Date</Label>
-            <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} type="date" value={entryDate} onChange={(e) => setEntryDate(e.target.value)} />
+            <Input
+              className={isLebaneseCoa ? "legacy-erp-input" : undefined}
+              type="date"
+              min="2000-01-01"
+              max="2099-12-31"
+              value={entryDate}
+              onChange={(e) => setEntryDate(e.target.value)}
+            />
           </div>
           <div>
             <Label>Memo</Label>
@@ -534,8 +649,6 @@ export default function VoucherEntryPanel({
                             isLebaneseCoa={isLebaneseCoa}
                             pcgClientAccounts={pcgClientAccounts}
                             value={line.accountId}
-                            compactSelectedLabel
-                            className="h-8 w-full min-w-0 text-xs"
                             onValueChange={(v) => {
                               const next = [...draftLines];
                               next[idx] = { ...next[idx], accountId: v };
@@ -739,7 +852,11 @@ export default function VoucherEntryPanel({
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Pay from (cash/bank)</Label>
-              <LedgerAccountCombobox accounts={cashBankAccounts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={pvFrom} onValueChange={setPvFrom} placeholder="Select cash or bank…" />
+              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={pvFrom} onValueChange={setPvFrom} placeholder="Search cash/bank account…" />
+            </div>
+            <div>
+              <Label>Pay to (expense / AP)</Label>
+              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={pvTo} onValueChange={setPvTo} placeholder="Search expense/AP account…" />
             </div>
             <div>
               <Label>Amount</Label>
@@ -759,14 +876,33 @@ export default function VoucherEntryPanel({
               <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} value={pvCheckNumber} onChange={(e) => setPvCheckNumber(e.target.value)} placeholder="For check register workflow" />
             </div>
           </div>
-          <Button onClick={postPv} disabled={posting}>Post PV</Button>
+          {pvStatus ? (
+            <p
+              className={cn(
+                "rounded-md border px-3 py-2 text-sm",
+                pvStatus.kind === "error" && "border-red-300 bg-red-50 text-red-800",
+                pvStatus.kind === "success" && "border-green-300 bg-green-50 text-green-800",
+                pvStatus.kind === "info" && "border-sky-300 bg-sky-50 text-sky-900",
+              )}
+              role="status"
+            >
+              {pvStatus.text}
+            </p>
+          ) : null}
+          <Button type="button" onClick={() => void postPv()} disabled={posting}>
+            {posting ? "Posting…" : "Post PV"}
+          </Button>
         </TabsContent>
 
         <TabsContent value="RV" className="mt-0 space-y-4">
           <div className="grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Receive into (cash/bank)</Label>
-              <LedgerAccountCombobox accounts={cashBankAccounts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={rvInto} onValueChange={setRvInto} placeholder="Select cash or bank…" />
+              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={rvInto} onValueChange={setRvInto} placeholder="Search cash/bank account…" />
+            </div>
+            <div>
+              <Label>Received from (AR / other)</Label>
+              <LedgerAccountCombobox accounts={accts} accountingLanguage={accountingLanguage} isLebaneseCoa={isLebaneseCoa} pcgClientAccounts={pcgClientAccounts} value={rvFrom} onValueChange={setRvFrom} placeholder="Search AR account…" />
             </div>
             <div>
               <Label>Amount</Label>
@@ -832,11 +968,18 @@ export default function VoucherEntryPanel({
 
       <InvoiceAllocationDialog
         open={allocOpen}
-        onOpenChange={setAllocOpen}
+        onOpenChange={(open) => {
+          if (!open && pendingPost) {
+            void postWithoutAllocation();
+            return;
+          }
+          setAllocOpen(open);
+        }}
         paymentAmount={pendingPost?.paymentAmount || 0}
         openItems={pendingPost?.openItems || []}
         partyLabel={pendingPost?.partyLabel || ""}
         onConfirm={handleAllocationConfirm}
+        onSkip={postWithoutAllocation}
       />
     </>
   );

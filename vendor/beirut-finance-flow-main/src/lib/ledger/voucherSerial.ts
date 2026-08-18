@@ -30,10 +30,12 @@ export function allocateVoucherNumberInTransaction(
   serialSnap: { exists: () => boolean; data: () => Record<string, unknown> | undefined },
   storeId: string,
   voucherType: VoucherType,
+  entryYear?: number,
 ): string {
   const data = serialSnap.exists() ? serialSnap.data() : undefined;
   const counters = (data?.counters as Record<string, number>) || {};
-  const { voucherNumber, counterKey, next } = peekNextVoucherSerial(counters, voucherType);
+  const year = entryYear && Number.isFinite(entryYear) ? entryYear : new Date().getFullYear();
+  const { voucherNumber, counterKey, next } = peekNextVoucherSerial(counters, voucherType, year);
   tx.set(
     serialRef,
     {

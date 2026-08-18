@@ -12,6 +12,7 @@ const ROUTE_PRELOADERS: Record<string, Preloader> = {
   '/admin/revenue': () => import('@/pages/admin/AdminRevenue'),
   '/admin/marketing': () => import('@/pages/admin/AdminMarketing'),
   '/admin/orders': () => import('@/pages/admin/AdminOrders'),
+  '/admin/scheduled-orders': () => import('@/pages/admin/AdminScheduledOrders'),
   '/admin/inventory': () => import('@/pages/admin/AdminInventory'),
   '/admin/customers': () => import('@/pages/admin/AdminCustomers'),
   '/admin/purchases': () => import('@/pages/admin/AdminPurchases'),

@@ -58,6 +58,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { useStoreCurrency } from '@/hooks/useStoreCurrency';
+import { getCurrencyDecimals } from '@/lib/money/currencies';
 
 const DEFAULT_PRODUCT_CATEGORIES = [
   'Electronics',
@@ -76,7 +77,7 @@ const DEFAULT_PRODUCT_CATEGORIES = [
 const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { money } = useStoreCurrency();
+  const { money, currency } = useStoreCurrency();
   const [products, setProducts] = useState<Product[]>([]);
   const [finishedGoodsStock, setFinishedGoodsStock] = useState<Record<string, number>>({});
   const [recipes, setRecipes] = useState<Array<{ id: string; name?: string; costPerUnit?: number }>>([]);
@@ -669,7 +670,10 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
     setNewProduct({
       name: product.name || '',
       description: product.description || '',
-      price: product.price?.toString() || '',
+      price:
+        product.price != null && Number.isFinite(Number(product.price))
+          ? Number(product.price).toFixed(getCurrencyDecimals(currency))
+          : '',
       category: product.category || '',
       deliveryTime: product.deliveryTime || '',
       image: product.image || '',
@@ -1066,8 +1070,8 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
                       className="text-lg font-semibold leading-none tracking-tight"
                       as="h3"
                     />
-                    <CardDescription className="text-xl font-bold text-primary">
-                      ${product.price}
+                    <CardDescription className="text-xl font-bold text-primary tabular-nums">
+                      {money(Number(product.price) || 0)}
                     </CardDescription>
                   </div>
                   <div className="flex flex-col gap-1 items-end">

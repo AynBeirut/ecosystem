@@ -13,12 +13,13 @@ import {
 import { useAuth } from '@/context/useAuth';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 
 interface MobileHeaderProps {
   title?: string;
   showBackButton?: boolean;
   showHomeButton?: boolean;
-  variant?: 'brand' | 'light';
+  variant?: 'brand' | 'light' | 'admin';
 }
 
 const MobileHeader: React.FC<MobileHeaderProps> = ({
@@ -42,7 +43,9 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
   return (
     <header
       className={
-        variant === 'light'
+        variant === 'admin'
+          ? 'admin-mobile-header sticky top-0 z-50 w-full border-b md:hidden'
+          : variant === 'light'
           ? 'sticky top-0 z-50 w-full border-b border-black/[0.06] bg-white/85 backdrop-blur-xl md:hidden'
           : 'sticky top-0 z-50 w-full bg-white border-b border-gray-100 md:hidden'
       }
@@ -59,7 +62,9 @@ const MobileHeader: React.FC<MobileHeaderProps> = ({
               <Home className="h-5 w-5" />
             </Button>
           )}
-          <h1 className="text-lg font-semibold truncate">{title}</h1>
+          <h1 className={cn('text-lg font-semibold truncate', variant === 'admin' && 'admin-mobile-header-title')}>
+            {title}
+          </h1>
         </div>
 
         <div className="flex items-center gap-2">

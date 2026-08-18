@@ -12,6 +12,7 @@ import AdminNavCard from '@/components/admin/AdminNavCard';
 import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
 import SwipeableLayout from '@/components/SwipeableLayout';
+import StockMovementReport from '@/components/admin/StockMovementReport';
 import { getDaysUntilExpiry } from '@/lib/expiryUtils';
 
 const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
@@ -167,9 +168,9 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
     : 100;
 
   const inventoryBody = (
-    <>
+    <div className="min-w-0">
         {!embedded && (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <AdminNavCard title="Products" description="Manage all product types: Simple items, Services, and Composed products" icon={Package} gradient="from-teal-500 to-teal-700" onClick={() => navigate('/admin/products')} />
           <AdminNavCard title="Suppliers" description="Manage suppliers and vendor relationships" icon={TrendingUp} gradient="from-violet-500 to-purple-700" onClick={() => navigate('/admin/suppliers')} />
           <AdminNavCard title="Purchases" description="Create purchase orders for raw materials and finished products" icon={ShoppingCart} gradient="from-sky-500 to-blue-700" onClick={() => navigate('/admin/purchases')} />
@@ -182,7 +183,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
         )}
 
         {/* Summary Cards */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
+        <div className="hidden sm:grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-3 md:gap-4 mb-6">
           <AdminStatCard title="Total Value" value={`$${totalInventoryValue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Across all inventory" />
           <AdminStatCard title="Simple Products" value={stats.simpleProducts.count} icon={Package} gradient="from-teal-500 to-teal-700" subtitle={`$${stats.simpleProducts.totalValue.toFixed(2)} value`} />
           <AdminStatCard title="Services" value={stats.services.count} icon={Wrench} gradient="from-cyan-500 to-blue-700" subtitle="Active services" />
@@ -234,15 +235,15 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
                 <p className="text-sm font-medium mb-2">Priority Actions</p>
                 <div className="space-y-2 text-sm">
                   {totalLowStock > 0 && (
-                    <div className="flex items-center justify-between rounded-md border bg-white p-2">
-                      <span className="flex items-center gap-2 text-orange-700"><AlertTriangle className="h-4 w-4" /> Restock low-stock items</span>
-                      <Button size="sm" variant="outline" onClick={() => navigate('/admin/purchases')}>Create PO</Button>
+                    <div className="flex flex-col gap-2 rounded-md border bg-white p-2 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="flex items-center gap-2 text-orange-700"><AlertTriangle className="h-4 w-4 shrink-0" /> Restock low-stock items</span>
+                      <Button size="sm" variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => navigate('/admin/purchases')}>Create PO</Button>
                     </div>
                   )}
                   {(expiryStats.expired + expiryStats.expiringSoon) > 0 && (
-                    <div className="flex items-center justify-between rounded-md border bg-white p-2">
-                      <span className="flex items-center gap-2 text-red-700"><ShieldAlert className="h-4 w-4" /> Review expiry items</span>
-                      <Button size="sm" variant="outline" onClick={() => navigate('/admin/finished-goods')}>Open Expiry View</Button>
+                    <div className="flex flex-col gap-2 rounded-md border bg-white p-2 sm:flex-row sm:items-center sm:justify-between">
+                      <span className="flex items-center gap-2 text-red-700"><ShieldAlert className="h-4 w-4 shrink-0" /> Review expiry items</span>
+                      <Button size="sm" variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => navigate('/admin/finished-goods')}>Open Expiry View</Button>
                     </div>
                   )}
                   {totalLowStock === 0 && (expiryStats.expired + expiryStats.expiringSoon) === 0 && (
@@ -281,16 +282,36 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
         </div>
 
         {/* Detailed Tabs */}
-        <Tabs defaultValue="simple" className="space-y-4">
-          <TabsList className="grid w-full grid-cols-5">
-            <TabsTrigger value="simple">Simple Items</TabsTrigger>
-            <TabsTrigger value="services">Services</TabsTrigger>
-            <TabsTrigger value="raw">Raw Materials</TabsTrigger>
-            <TabsTrigger value="finished">Finished Goods</TabsTrigger>
-            <TabsTrigger value="expiry" className={expiryStats.expired > 0 ? 'text-red-600' : expiryStats.expiringSoon > 0 ? 'text-orange-500' : ''}>
-              Expiry {(expiryStats.expired + expiryStats.expiringSoon) > 0 && `(${expiryStats.expired + expiryStats.expiringSoon})`}
-            </TabsTrigger>
-          </TabsList>
+        <Tabs defaultValue="movement" className="min-w-0 space-y-3">
+          <div className="min-w-0 -mx-1 px-1 sm:mx-0 sm:px-0">
+            <div className="overflow-x-auto overscroll-x-contain pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+              <TabsList className="inline-flex h-10 w-max flex-nowrap gap-1 p-1 lg:grid lg:w-full lg:grid-cols-6">
+                <TabsTrigger value="movement" className="shrink-0 whitespace-nowrap px-3 text-xs sm:text-sm">
+                  Movement
+                </TabsTrigger>
+                <TabsTrigger value="simple" className="shrink-0 whitespace-nowrap px-3 text-xs sm:text-sm">
+                  <span className="lg:hidden">Simple</span>
+                  <span className="hidden lg:inline">Simple Items</span>
+                </TabsTrigger>
+                <TabsTrigger value="services" className="shrink-0 whitespace-nowrap px-3 text-xs sm:text-sm">Services</TabsTrigger>
+                <TabsTrigger value="raw" className="shrink-0 whitespace-nowrap px-3 text-xs sm:text-sm">
+                  <span className="lg:hidden">Raw Mat.</span>
+                  <span className="hidden lg:inline">Raw Materials</span>
+                </TabsTrigger>
+                <TabsTrigger value="finished" className="shrink-0 whitespace-nowrap px-3 text-xs sm:text-sm">
+                  <span className="lg:hidden">Finished</span>
+                  <span className="hidden lg:inline">Finished Goods</span>
+                </TabsTrigger>
+                <TabsTrigger value="expiry" className={`shrink-0 whitespace-nowrap px-3 text-xs sm:text-sm ${expiryStats.expired > 0 ? 'text-red-600' : expiryStats.expiringSoon > 0 ? 'text-orange-500' : ''}`}>
+                  Expiry {(expiryStats.expired + expiryStats.expiringSoon) > 0 && `(${expiryStats.expired + expiryStats.expiringSoon})`}
+                </TabsTrigger>
+              </TabsList>
+            </div>
+          </div>
+
+          <TabsContent value="movement">
+            <StockMovementReport />
+          </TabsContent>
 
           <TabsContent value="simple">
             <AdminPanel>
@@ -300,7 +321,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Items</p>
                       <p className="text-2xl font-bold">{stats.simpleProducts.count}</p>
@@ -327,13 +348,13 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Active Services</p>
                       <p className="text-2xl font-bold">{stats.services.count}</p>
                     </div>
                   </div>
-                  <Button onClick={() => navigate('/admin/products')}>
+                  <Button className="w-full sm:w-auto" onClick={() => navigate('/admin/products')}>
                     Manage Services
                   </Button>
                 </div>
@@ -349,7 +370,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Items</p>
                       <p className="text-2xl font-bold">{stats.rawMaterials.count}</p>
@@ -363,11 +384,11 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
                       <p className="text-2xl font-bold text-orange-500">{stats.rawMaterials.lowStock}</p>
                     </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button onClick={() => navigate('/admin/raw-materials')}>
+                  <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                    <Button className="w-full sm:w-auto" onClick={() => navigate('/admin/raw-materials')}>
                       Manage Raw Materials
                     </Button>
-                    <Button variant="outline" onClick={() => navigate('/admin/purchases')}>
+                    <Button className="w-full sm:w-auto" variant="outline" onClick={() => navigate('/admin/purchases')}>
                       Purchase Orders
                     </Button>
                   </div>
@@ -384,7 +405,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
               </CardHeader>
               <CardContent>
                 <div className="space-y-4">
-                  <div className="grid grid-cols-3 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                     <div>
                       <p className="text-sm text-muted-foreground">Total Items</p>
                       <p className="text-2xl font-bold">{stats.finishedGoods.count}</p>
@@ -398,7 +419,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
                       <p className="text-2xl font-bold text-orange-500">{stats.finishedGoods.lowStock}</p>
                     </div>
                   </div>
-                  <Button onClick={() => navigate('/admin/finished-goods')}>
+                  <Button className="w-full sm:w-auto" onClick={() => navigate('/admin/finished-goods')}>
                     Manage Finished Goods
                   </Button>
                 </div>
@@ -423,12 +444,12 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
                 ) : (
                   <div className="space-y-2">
                     {expiryStats.items.map((item, i) => (
-                      <div key={i} className="flex items-center justify-between p-2 rounded-md border">
-                        <div>
+                      <div key={i} className="flex flex-col gap-2 rounded-md border p-2 sm:flex-row sm:items-center sm:justify-between">
+                        <div className="min-w-0">
                           <span className="font-medium">{item.name}</span>
                           <span className="ml-2 text-xs text-muted-foreground">{item.type}</span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex flex-wrap items-center gap-2 shrink-0">
                           <span className="text-xs text-muted-foreground">{item.expiryDate}</span>
                           {item.daysLeft < 0 ? (
                             <Badge variant="destructive">Expired {Math.abs(item.daysLeft)}d ago</Badge>
@@ -444,7 +465,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
             </AdminPanel>
           </TabsContent>
         </Tabs>
-    </>
+    </div>
   );
 
   if (embedded) {
@@ -458,6 +479,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
           description="Comprehensive view of all inventory items and valuation."
           eyebrow="Stock & Catalog"
           backTo="/admin/dashboard"
+          className="[&_.admin-page-hero]:hidden [&_.admin-page-hero]:md:block"
         >
         {inventoryBody}
       </AdminPageShell>

@@ -63,6 +63,15 @@ async function computePublicProductStock(storeId, productIds) {
         id: doc.id,
         ...doc.data(),
     }));
+    const recipesById = new Map(recipesList.filter((r) => r.id).map((r) => [r.id, r]));
+    const productRecipeByProductId = new Map();
+    const productsSnap = await getDb().collection('products').where('storeId', '==', storeId).get();
+    productsSnap.docs.forEach((doc) => {
+        const recipeId = String(doc.data().recipeId || '').trim();
+        if (recipeId)
+            productRecipeByProductId.set(doc.id, recipeId);
+    });
+    const stockContext = { recipesById, productRecipeByProductId };
     const results = [];
     for (const productId of uniqueIds) {
         const productSnap = await getDb().collection('products').doc(productId).get();
@@ -73,7 +82,7 @@ async function computePublicProductStock(storeId, productIds) {
             continue;
         if (product.productType === 'composed' && product.recipeId) {
             const recipe = recipesList.find((r) => r.id === product.recipeId);
-            const availableStock = (0, composedProductStock_1.calculateAvailableStock)(recipe, rawMaterialsList);
+            const availableStock = (0, composedProductStock_1.calculateAvailableStock)(recipe, rawMaterialsList, stockContext);
             results.push({
                 productId,
                 availableStock,

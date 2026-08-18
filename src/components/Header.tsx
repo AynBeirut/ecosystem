@@ -20,7 +20,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getSubAccountHomePath, isManagerSubAccount } from '@/lib/subAccountAccess';
-import { isGrabioStoreSubdomain } from '@/lib/storeUrls';
+import { isGrabioStoreSubdomain, type StoreMobileNavLink } from '@/lib/storeUrls';
 import StoreVisual from '@/components/StoreVisual';
 
 // Helper function to determine if a color is light or dark
@@ -55,7 +55,9 @@ interface HeaderProps {
   hasCustomDomain?: boolean;
   hasImportedDesign?: boolean;
   /** Light frosted bar for marketplace / browse pages */
-  variant?: 'brand' | 'light';
+  variant?: 'light' | 'brand';
+  /** Store tab links for mobile menu (white-label storefronts). */
+  mobileNavLinks?: StoreMobileNavLink[];
 }
 
 const Header: React.FC<HeaderProps> = ({ 
@@ -68,6 +70,7 @@ const Header: React.FC<HeaderProps> = ({
   hasCustomDomain = false,
   hasImportedDesign = false,
   variant = 'brand',
+  mobileNavLinks,
 }) => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const { user, logout } = useAuth();
@@ -106,6 +109,10 @@ const Header: React.FC<HeaderProps> = ({
     : logoPosition === 'right'
       ? 'flex-row-reverse'
       : 'flex-row';
+
+  const hasStoreMobileNav = useWhiteLabel && (mobileNavLinks?.length ?? 0) > 0;
+  const hasAccountMobileLinks = !!user && (user.role === 'admin' || user.role === 'sub_account' || user.role === 'user');
+  const showMobileMenuButton = !useWhiteLabel || hasStoreMobileNav || hasAccountMobileLinks;
 
   return (
     <header
@@ -261,38 +268,70 @@ const Header: React.FC<HeaderProps> = ({
               </>
             ) : (
               <>
-                {/* Guest Track Order Button */}
                 <Button asChild variant="ghost" size="sm">
                   <Link to="/track-order">Track Order</Link>
                 </Button>
-                <Button asChild variant="outline" size="sm">
-                  <Link to="/login">Sign in</Link>
-                </Button>
+                {!useWhiteLabel && (
+                  <Button asChild variant="outline" size="sm">
+                    <Link to="/login">Sign in</Link>
+                  </Button>
+                )}
               </>
             )}
 
             {/* Mobile Menu Button */}
-            <button
-              className={`md:hidden p-2 rounded-full ${iconBg} focus:outline-none`}
-              onClick={toggleMenu}
-              aria-label="Open menu"
-            >
-              {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
-            </button>
+            {showMobileMenuButton && (
+              <button
+                className={`md:hidden p-2 rounded-full ${iconBg} focus:outline-none`}
+                onClick={toggleMenu}
+                aria-label={isMenuOpen ? 'Close menu' : 'Open menu'}
+              >
+                {isMenuOpen ? <X size={20} /> : <Menu size={20} />}
+              </button>
+            )}
           </div>
         </div>
 
         {/* Mobile Menu */}
-        {isMenuOpen && (
+        {isMenuOpen && showMobileMenuButton && (
           <div className={`md:hidden mt-3 py-3 border-t ${isLightBg ? 'border-gray-300' : 'border-white/20'}`}>
-            <nav className="flex flex-col space-y-3">
-              <Link
-                to={useWhiteLabel ? storeHomePath : '/'}
-                className={`px-2 py-1 ${textColor} ${hoverColor}`}
-                onClick={toggleMenu}
-              >
-                {useWhiteLabel && storeName ? storeName : 'Home'}
-              </Link>
+            <nav className="flex max-h-[70vh] flex-col space-y-3 overflow-y-auto">
+              {hasStoreMobileNav ? (
+                <>
+                  {mobileNavLinks!.map((link) => (
+                    <Link
+                      key={`${link.path}-${link.label}`}
+                      to={link.path}
+                      className={`px-2 py-1 ${textColor} ${hoverColor}`}
+                      onClick={toggleMenu}
+                    >
+                      {link.label}
+                    </Link>
+                  ))}
+                  <Link
+                    to="/favorites"
+                    className={`px-2 py-1 ${textColor} ${hoverColor}`}
+                    onClick={toggleMenu}
+                  >
+                    Favorites
+                  </Link>
+                  <Link
+                    to="/track-order"
+                    className={`px-2 py-1 ${textColor} ${hoverColor}`}
+                    onClick={toggleMenu}
+                  >
+                    Track Order
+                  </Link>
+                </>
+              ) : (
+                <Link
+                  to={useWhiteLabel ? storeHomePath : '/'}
+                  className={`px-2 py-1 ${textColor} ${hoverColor}`}
+                  onClick={toggleMenu}
+                >
+                  {useWhiteLabel && storeName ? storeName : 'Home'}
+                </Link>
+              )}
               
               {user && (user.role === 'admin' || user.role === 'sub_account') && (
                 <Link

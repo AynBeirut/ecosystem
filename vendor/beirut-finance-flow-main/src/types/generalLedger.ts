@@ -76,6 +76,8 @@ export interface PartyStatementRow {
   runningBalance: number;
   matchedDocumentId?: string;
   memo?: string;
+  supplierName?: string;
+  description?: string;
 }
 
 export interface PartyStatementReport {
@@ -140,6 +142,12 @@ export interface GeneralLedgerReportRow {
   credit: number;
   runningBalance: number;
   costCenterId?: string;
+  currency?: string;
+  typeLabel?: string;
+  party?: string;
+  category?: string;
+  reference?: string;
+  displayDescription?: string;
 }
 
 export interface GeneralLedgerReport {

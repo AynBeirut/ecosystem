@@ -9,6 +9,7 @@ export const DEFAULT_STORE_DELIVERY_SETTINGS: StoreDeliverySettings = {
   sameDay: false,
   pickup: true,
   dineIn: false,
+  scheduledOrdersEnabled: false,
   standardTime: '3-5 days',
   expressTime: '1-2 days',
   sameDayTime: '4-6 hours',
@@ -98,4 +99,10 @@ export function resolveCheckoutDeliveryAddress(
   if (method === 'pickup') return address?.trim() || 'Store Pickup';
   if (method === 'dine_in') return address?.trim() || 'Dine In';
   return address?.trim() || '';
+}
+
+export function isScheduledOrdersEnabled(
+  settings?: Partial<StoreDeliverySettings> | null,
+): boolean {
+  return Boolean(mergeDeliverySettings(settings).scheduledOrdersEnabled);
 }

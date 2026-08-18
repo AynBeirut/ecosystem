@@ -25,12 +25,99 @@ export function buildStoreRootPath(storeSlug: string): string {
   return isOnStoreSubdomain(storeSlug) ? '/' : `/store/${storeSlug.trim().toLowerCase()}`;
 }
 
+/** Relative router path for all products listing (not store home). */
+export function buildStoreProductsPath(storeSlug: string): string {
+  const root = buildStoreRootPath(storeSlug);
+  const base = root === '/' ? '' : root;
+  return `${base}/products`;
+}
+
 /** Relative router path for all products or a category listing. */
 export function buildStoreCategoryPath(storeSlug: string, category?: string | null): string {
   const root = buildStoreRootPath(storeSlug);
   if (!category?.trim()) return root;
   const base = root === '/' ? '' : root;
   return `${base}/category/${generateSlug(category)}`;
+}
+
+/** Store tab paths for home / products / contact / about (storefront nav). */
+export function buildStoreTabPath(
+  storeSlug: string,
+  tab: 'home' | 'products' | 'contact' | 'about',
+): string {
+  if (tab === 'products') return buildStoreProductsPath(storeSlug);
+  const root = buildStoreRootPath(storeSlug);
+  const query = tab === 'home' ? 'view=home' : `view=${tab}`;
+  if (root === '/') return `/?${query}`;
+  return `${root}?${query}`;
+}
+
+export type StoreMobileNavLink = { label: string; path: string };
+
+type StoreMobileNavInput = {
+  slug?: string | null;
+  aboutUs?: string | null;
+  mission?: string | null;
+  vision?: string | null;
+  contactInfo?: { phone?: string; email?: string } | null;
+  location?: string | null;
+  website?: string | null;
+  socialLinks?: {
+    facebook?: string;
+    instagram?: string;
+    twitter?: string;
+    whatsapp?: string;
+  } | null;
+  customPages?: Array<{ id: string; name: string; order: number }> | null;
+  enabledModules?: { blog_publisher?: boolean } | null;
+};
+
+/** Header mobile menu links — mirrors storefront tab bar (Home, Products, Reserve, etc.). */
+export function buildStoreMobileNavLinks(
+  store: StoreMobileNavInput,
+  contactPageLabel: string,
+): StoreMobileNavLink[] {
+  const slug = store.slug?.trim();
+  if (!slug) return [];
+
+  const hasAbout = !!(store.aboutUs || store.mission || store.vision);
+  const hasContact = !!(
+    store.contactInfo?.phone
+    || store.contactInfo?.email
+    || store.location
+    || store.website
+    || store.socialLinks?.facebook
+    || store.socialLinks?.instagram
+    || store.socialLinks?.twitter
+    || store.socialLinks?.whatsapp
+  );
+  const customPages = Array.isArray(store.customPages)
+    ? [...store.customPages].sort((a, b) => a.order - b.order)
+    : [];
+
+  const links: StoreMobileNavLink[] = [
+    { label: 'Home', path: buildStoreTabPath(slug, 'home') },
+  ];
+  if (hasAbout) links.push({ label: 'About Us', path: buildStoreTabPath(slug, 'about') });
+  links.push({ label: 'Products', path: buildStoreTabPath(slug, 'products') });
+  for (const page of customPages) {
+    links.push({
+      label: page.name,
+      path: buildStoreCustomPagePath(slug, page.id),
+    });
+  }
+  if (hasContact) links.push({ label: contactPageLabel, path: buildStoreTabPath(slug, 'contact') });
+  if (store.enabledModules?.blog_publisher) {
+    links.push({ label: 'Blog', path: buildStoreRelativePath(slug, '/blog') });
+  }
+  return links;
+}
+
+function buildStoreCustomPagePath(storeSlug: string, pageId: string): string {
+  const root = buildStoreRootPath(storeSlug);
+  const query = `view=${encodeURIComponent(pageId)}`;
+  if (root === '/') return `/?${query}`;
+  return `${root}?${query}`;
 }
 
 export function storeSlugFromHostname(hostname: string): string | undefined {

@@ -1,6 +1,6 @@
 import React, { Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
-import { ChevronDown, ChevronLeft, ChevronRight, CreditCard, FileText } from 'lucide-react';
+import { ChevronDown, ChevronLeft, ChevronRight, Clock, CreditCard, FileText, type LucideIcon } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { useAdminNavigation, type AdminNavItem } from '@/hooks/useAdminNavigation';
@@ -63,9 +63,12 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/revenue': 'Revenue',
   '/admin/marketing': 'Email Marketing',
   '/admin/orders': 'Orders',
+  '/admin/scheduled-orders': 'Scheduled Orders',
   '/admin/inventory': 'Inventory',
   '/admin/customers': 'Customers',
   '/admin/purchases': 'Purchases',
+  '/admin/suppliers': 'Suppliers',
+  '/admin/invoice-manager/expenses': 'Expenses',
   '/admin/finance/account-statement': 'Account Statement',
   '/admin/invoice-manager': 'Invoice Manager',
   '/admin/invoice-manager/invoices': 'Invoice Manager',
@@ -223,8 +226,6 @@ function AdminLayoutShell() {
     toggleMenuGroup,
     isRouteActive,
     dashboardLabel,
-    crmEnabled,
-    canProcessPayments,
     canViewInventory,
     StoreIcon,
     Settings2,
@@ -240,6 +241,25 @@ function AdminLayoutShell() {
   const skipInitialCollapse = useRef(true);
   const { theme } = useAdminTheme();
   const pageTitle = resolvePageTitle(location.pathname, dashboardLabel);
+
+  const canViewOrders = user?.role === 'admin' || user?.permissions?.includes('view_orders');
+  const canViewCustomers = user?.role === 'admin' || user?.permissions?.includes('view_customers');
+  const canManageInventory = user?.role === 'admin' || user?.permissions?.includes('manage_inventory');
+
+  const dailyOpsLinks = useMemo(
+    () =>
+      (
+        [
+          { to: '/admin/orders', label: 'Orders', visible: Boolean(canViewOrders) },
+          { to: '/admin/scheduled-orders', label: 'Scheduled', icon: Clock, visible: Boolean(canViewOrders) },
+          { to: '/admin/customers', label: 'Customers', visible: Boolean(canViewCustomers) },
+          { to: '/admin/invoice-manager/expenses', label: 'Expenses', visible: user?.role === 'admin' },
+          { to: '/admin/purchases', label: 'Purchases', visible: Boolean(canManageInventory) },
+          { to: '/admin/suppliers', label: 'Suppliers', visible: user?.role === 'admin' && Boolean(canViewInventory) },
+        ] as Array<{ to: string; label: string; visible: boolean; icon?: LucideIcon }>
+      ).filter((link) => link.visible),
+    [canManageInventory, canViewCustomers, canViewInventory, canViewOrders, user?.role],
+  );
 
   const collapseSidebar = useCallback(() => {
     if (sidebarMode === 'open') return;
@@ -358,38 +378,35 @@ function AdminLayoutShell() {
       )}
     >
       {isMobile && (
-        <MobileHeader title={pageTitle} showBackButton={false} showHomeButton />
+        <MobileHeader title={pageTitle} showBackButton={false} showHomeButton variant="admin" />
       )}
 
       <div className="md:hidden px-4 pt-3 pb-3 border-b backdrop-blur-md shrink-0 admin-shell-mobile-bar">
         <div className="space-y-3">
-          <div className="admin-shell-mobile-hero px-3 py-3">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-teal-300/90">Daily Operations</div>
-            <div className="mt-2 flex flex-wrap gap-2">
-              <Link
-                to={user?.role === 'admin' ? '/admin/inventory' : '/admin/products'}
-                className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/15 hover:bg-white/15"
-              >
-                Inventory
-              </Link>
-              <Link to="/admin/orders" className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/15 hover:bg-white/15">
-                Orders
-              </Link>
-              <Link to="/admin/customers" className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/15 hover:bg-white/15">
-                Customers
-              </Link>
-              {crmEnabled && (
-                <Link to="/admin/crm/pipeline" className="rounded-lg bg-teal-500/20 px-3 py-1.5 text-xs font-medium text-teal-100 border border-teal-400/30">
-                  Sales CRM
-                </Link>
-              )}
-              {canProcessPayments && (
-                <Link to="/admin/payments" className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-medium text-white border border-white/15 hover:bg-white/15">
-                  Payments
-                </Link>
-              )}
+          {dailyOpsLinks.length > 0 && (
+            <div className="admin-shell-mobile-hero px-3 py-3">
+              <div className="admin-shell-daily-ops-label">Daily Operations</div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {dailyOpsLinks.map((link) => {
+                  const Icon = link.icon;
+                  return (
+                  <Link
+                    key={link.to}
+                    to={link.to}
+                    onMouseEnter={() => preloadAdminRoute(link.to)}
+                    className={cn(
+                      'admin-shell-daily-ops-link inline-flex items-center gap-1.5',
+                      isRouteActive(link.to) && 'is-active',
+                    )}
+                  >
+                    {Icon ? <Icon className="h-3.5 w-3.5 shrink-0" aria-hidden /> : null}
+                    {link.label}
+                  </Link>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          )}
           {storeStatus && user?.role === 'admin' && (
             <button
               type="button"
@@ -640,7 +657,7 @@ function AdminLayoutShell() {
           </div>
         </aside>
 
-        <main className="flex-1 min-w-0 min-h-0 p-4 md:p-6">
+        <main className="flex-1 min-w-0 min-h-0 overflow-x-hidden p-4 md:p-6">
           <div className="mx-auto w-full max-w-screen-2xl">
             <Suspense fallback={<AdminOutletFallback />}>
               <Outlet />

@@ -58,21 +58,7 @@ export async function loadStoreData(storeId: string): Promise<LoadedStoreData> {
   // Canonical data migration runs server-side: scripts/migrateCanonicalFinanceData.cjs
   // (admin SDK). Do not migrate on client load — it blocks UI and can fail rules on writes.
 
-  const [
-    customersSnap,
-    productsSnap,
-    finishedGoodsSnap,
-    suppliersSnap,
-    purchasesSnap,
-    ordersSnap,
-    invoices,
-    estimates,
-    receipts,
-    payments,
-    expenses,
-    paymentOrders,
-    financePurchaseOrders,
-  ] = await Promise.all([
+  const settled = await Promise.allSettled([
     getDocs(query(collection(getFinanceDb(), 'customers'), where('storeId', '==', storeId))),
     getDocs(query(collection(getFinanceDb(), 'products'), where('storeId', '==', storeId))),
     getDocs(query(collection(getFinanceDb(), 'finishedGoodsInventory'), where('storeId', '==', storeId))),
@@ -87,6 +73,26 @@ export async function loadStoreData(storeId: string): Promise<LoadedStoreData> {
     loadStoreSubcollection(storeId, 'paymentOrders', mapFsPaymentOrder),
     loadStoreSubcollection(storeId, 'purchaseOrders', mapFsPurchaseOrder),
   ]);
+
+  const emptySnap = { docs: [] as Array<{ id: string; data: () => Record<string, unknown> }> };
+  const pickSnap = (idx: number) =>
+    settled[idx].status === 'fulfilled' ? settled[idx].value : emptySnap;
+  const pickList = <T,>(idx: number): T[] =>
+    settled[idx].status === 'fulfilled' ? settled[idx].value : [];
+
+  const customersSnap = pickSnap(0);
+  const productsSnap = pickSnap(1);
+  const finishedGoodsSnap = pickSnap(2);
+  const suppliersSnap = pickSnap(3);
+  const purchasesSnap = pickSnap(4);
+  const ordersSnap = pickSnap(5);
+  const invoices = pickList<Invoice>(6);
+  const estimates = pickList<Estimate>(7);
+  const receipts = pickList<Receipt>(8);
+  const payments = pickList<Payment>(9);
+  const expenses = pickList<Expense>(10);
+  const paymentOrders = pickList<PaymentOrder>(11);
+  const financePurchaseOrders = pickList<PurchaseOrder>(12);
 
   const clients = customersSnap.docs.map((d) => mapFsClient(d.id, d.data() as Record<string, unknown>));
   const clientsById = new Map(clients.map((client) => [client.id, client]));

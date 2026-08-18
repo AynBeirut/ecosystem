@@ -12,7 +12,6 @@ import {
 import { accountCodeNumeric } from '@/lib/ledger/accountCodeRange';
 import {
   buildClientByGrabioMap,
-  mapGrabioCodeToPcg,
   resolvePcgDisplay,
 } from '@/lib/ledger/grabioToPcgMap';
 import type { AccountingLanguage } from '@/lib/grabio/accountingMode';
@@ -48,12 +47,7 @@ function statementAccounts(accounts: LedgerAccount[], isLebaneseCoa?: boolean) {
   const active = accounts.filter((a) => a.isActive);
   if (!isLebaneseCoa) return active.sort((a, b) => accountCodeNumeric(a.code) - accountCodeNumeric(b.code));
   return active
-    .filter((account) => {
-      if (account.pcgKind === 'G') return false;
-      if (account.isPcgChart) return true;
-      if (mapGrabioCodeToPcg(account.code)) return false;
-      return true;
-    })
+    .filter((account) => account.pcgKind !== 'G' && !account.isPcgChart)
     .sort((a, b) => accountCodeNumeric(a.code) - accountCodeNumeric(b.code));
 }
 

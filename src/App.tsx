@@ -84,6 +84,7 @@ const AdminAnalytics = lazy(() => import("./pages/admin/AdminAnalytics"));
 const AdminRevenue = lazy(() => import("./pages/admin/AdminRevenue"));
 const AdminMarketing = lazy(() => import("./pages/admin/AdminMarketing"));
 const AdminOrders = lazy(() => import("./pages/admin/AdminOrders"));
+const AdminScheduledOrders = lazy(() => import("./pages/admin/AdminScheduledOrders"));
 const AdminSuppliers = lazy(() => import("./pages/admin/AdminSuppliers"));
 const AdminSupplierStatements = lazy(() => import("./pages/admin/AdminSupplierStatements"));
 const AdminRawMaterials = lazy(() => import("./pages/admin/AdminRawMaterials"));
@@ -194,10 +195,11 @@ function AppFooter() {
                           <>
                             <Route element={<StoreDetail />}>
                               <Route index />
+                              <Route path="products" />
                               <Route path="category/:categorySlug" />
                             </Route>
-                            <Route path="/product/:productSlug" element={<ProductDetail />} />
                             <Route path="/product/id/:id" element={<ProductDetail />} />
+                            <Route path="/product/:productSlug" element={<ProductDetail />} />
                             <Route path="/blog" element={<StoreBlog />} />
                             <Route path="/blog/:postId" element={<StoreBlogPost />} />
                             <Route path="/cart" element={<Cart />} />
@@ -215,16 +217,18 @@ function AppFooter() {
                             <Route path="/" element={<CustomDomainStore hostname={_hostname} />} />
                             <Route path="/store/:slug" element={<StoreDetail />}>
                               <Route index />
+                              <Route path="products" />
                               <Route path="category/:categorySlug" />
                             </Route>
                             <Route path="/store/id/:id" element={<StoreDetail />}>
                               <Route index />
+                              <Route path="products" />
                               <Route path="category/:categorySlug" />
                             </Route>
                             <Route path="/store/:slug/blog" element={<StoreBlog />} />
                             <Route path="/store/:slug/blog/:postId" element={<StoreBlogPost />} />
-                            <Route path="/store/:storeSlug/product/:productSlug" element={<ProductDetail />} />
                             <Route path="/product/id/:id" element={<ProductDetail />} />
+                            <Route path="/product/:productSlug" element={<ProductDetail />} />
                             <Route path="/cart" element={<Cart />} />
                             <Route path="/favorites" element={<Favorites />} />
                             <Route path="/track-order" element={<GuestOrderTracking />} />
@@ -248,6 +252,7 @@ function AppFooter() {
                         <Route path="/marketplace" element={<Navigate to="/search" replace />} />
                         <Route path="/store/:slug" element={<StoreDetail />}>
                           <Route index />
+                          <Route path="products" />
                           <Route path="category/:categorySlug" />
                         </Route>
                         <Route path="/store/:slug/blog" element={<StoreBlog />} />
@@ -256,6 +261,7 @@ function AppFooter() {
                         {/* Backward compatibility routes */}
                         <Route path="/store/id/:id" element={<StoreDetail />}>
                           <Route index />
+                          <Route path="products" />
                           <Route path="category/:categorySlug" />
                         </Route>
                         <Route path="/product/id/:id" element={<ProductDetail />} />
@@ -308,6 +314,7 @@ function AppFooter() {
                         <Route path="/admin/revenue" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_reports" requiredModule="analytics"><AdminRevenue /></ProtectedRoute>} />
                         <Route path="/admin/marketing" element={<ProtectedRoute allowedRoles={['admin']}><AdminMarketing /></ProtectedRoute>} />
                         <Route path="/admin/orders" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_orders" requiredModule="invoicing"><AdminOrders /></ProtectedRoute>} />
+                        <Route path="/admin/scheduled-orders" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="view_orders" requiredModule="invoicing"><AdminScheduledOrders /></ProtectedRoute>} />
                         {/* Inventory Management */}
                         <Route path="/admin/inventory" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminInventory /></ProtectedRoute>} />
                         <Route path="/admin/suppliers" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminSuppliers /></ProtectedRoute>} />
@@ -389,9 +396,11 @@ function AppFooter() {
                         <Route path="/blog/:slug" element={<BlogPost />} />
                         {/* Legacy store paths → {slug}.grabio.space */}
                         <Route path="/store/:slug" element={<StoreSlugRedirect />} />
+                        <Route path="/store/:slug/products" element={<StoreSlugRedirect />} />
                         <Route path="/store/:slug/category/:categorySlug" element={<StoreSlugRedirect />} />
                         <Route path="/store/:storeSlug/product/:productSlug" element={<StoreSlugRedirect />} />
                         <Route path="/:slug" element={<StoreSlugRedirect />} />
+                        <Route path="/:slug/products" element={<StoreSlugRedirect />} />
                         <Route path="/:slug/category/:categorySlug" element={<StoreSlugRedirect />} />
                         <Route path="/:storeSlug/product/:productSlug" element={<StoreSlugRedirect />} />
                         <Route path="/privacy" element={<PrivacyPolicy />} />

@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams, useLocation } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, runTransaction, orderBy, serverTimestamp } from 'firebase/firestore';
 import SEOHead from '@/components/SEOHead';
 import { auth as firebaseAuth } from '@/lib/firebase';
@@ -35,6 +35,10 @@ import {
   buildStorePublicUrl,
   buildStoreRelativePath,
   buildStoreCategoryPath,
+  buildStoreProductsPath,
+  buildStoreRootPath,
+  buildStoreTabPath,
+  buildStoreMobileNavLinks,
   isStoreBrandedHost,
   redirectToStoreSubdomain,
   storeSlugFromHostname,
@@ -49,33 +53,67 @@ import type { EditorPreviewStatePayload, EditorSelectableId } from '@/lib/editor
 import { EDITOR_PREVIEW_READY, EDITOR_PREVIEW_STATE, isEditorPreviewActive } from '@/lib/editorPreviewBridge';
 import { mergeSectionOrderFromProfile } from '@/lib/storeSectionDefaults';
 import { mergeTemplateColors } from '@/lib/storeContentDraft';
+import { sortProductsInStockFirst } from '@/lib/productSort';
+import { getStoreContactPageLabel } from '@/lib/storeContactPage';
+import { getStoreClosedDayMessage, isStoreOpenOnDate } from '@/lib/storeWorkingDays';
 
 // ── Store-level contact form (sends message to storeContactMessages/{storeId}/messages) ──
-const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { cardSoft: string; sectionTitle: string; mutedText: string }; formStyle?: 1 | 2 | 3 | 4 | 5 | 6 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15 }> = ({ storeId, storeName, theme, formStyle = 1 }) => {
-  const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '', company: '', priority: 'normal', rating: 5 });
+const StoreContactForm: React.FC<{
+  storeId: string;
+  storeName: string;
+  theme: { cardSoft: string; sectionTitle: string; mutedText: string };
+  formStyle?: 1 | 2 | 3 | 4 | 5 | 6 | 8 | 9 | 10 | 11 | 12 | 13 | 14 | 15;
+  workingDays?: string;
+  workingHours?: string;
+}> = ({ storeId, storeName, theme, formStyle = 1, workingDays, workingHours }) => {
+  const [form, setForm] = useState({ name: '', email: '', phone: '', subject: '', message: '', company: '', priority: 'normal', rating: 5, guestCount: '2' });
   const [sending, setSending] = useState(false);
   const [done, setDone] = useState(false);
   const [err, setErr] = useState('');
+  const [dateError, setDateError] = useState('');
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) =>
-    setForm(prev => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setForm((prev) => ({ ...prev, [name]: value }));
+    if (formStyle === 11 && name === 'subject') {
+      if (!value.trim()) {
+        setDateError('');
+      } else if (!isStoreOpenOnDate(value, workingDays)) {
+        setDateError(getStoreClosedDayMessage(workingDays, workingHours));
+      } else {
+        setDateError('');
+      }
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (formStyle === 11 && form.subject && !isStoreOpenOnDate(form.subject, workingDays)) {
+      setDateError(getStoreClosedDayMessage(workingDays, workingHours));
+      return;
+    }
     setSending(true);
     setErr('');
     try {
+      let subject = form.subject || `Message from ${form.name}`;
+      let message = form.message;
+      if (formStyle === 11) {
+        subject = `Table reservation · ${form.subject} · ${form.company} · ${form.guestCount} guests`;
+        message = form.message?.trim()
+          ? `Party size: ${form.guestCount}. Pre-order / notes: ${form.message.trim()}`
+          : `Party size: ${form.guestCount}.`;
+      }
       const res = await fetch(`${API_URL}/contact/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, subject: form.subject || `Message from ${form.name}`, storeId }),
+        body: JSON.stringify({ ...form, subject, message, storeId }),
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || 'Failed to send');
       }
       setDone(true);
-      setForm({ name: '', email: '', phone: '', subject: '', message: '', company: '', priority: 'normal', rating: 5 });
+      setForm({ name: '', email: '', phone: '', subject: '', message: '', company: '', priority: 'normal', rating: 5, guestCount: '2' });
     } catch {
       setErr('Failed to send. Please try again.');
     } finally {
@@ -109,18 +147,18 @@ const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { 
     );
   }
 
-  // Appointment style with date/time (style 11)
+  // Table reservation (style 11 — food / restaurant stores)
   if (formStyle === 11) {
     return (
       <Card className={theme.cardSoft}>
         <CardContent className="p-6">
-          <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>Book an Appointment</h3>
+          <h3 className={`font-semibold text-lg mb-4 ${theme.sectionTitle}`}>Table Reservation</h3>
           {done ? (
             <div className="flex flex-col items-center py-8 gap-3 text-center">
               <svg className="w-12 h-12 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-              <p className={`font-medium ${theme.sectionTitle}`}>Appointment Requested!</p>
-              <p className={`text-sm ${theme.mutedText}`}>We'll confirm your booking soon.</p>
-              <button onClick={() => setDone(false)} className={`text-xs underline mt-1 ${theme.mutedText}`}>Book another</button>
+              <p className={`font-medium ${theme.sectionTitle}`}>Reservation Requested!</p>
+              <p className={`text-sm ${theme.mutedText}`}>We&apos;ll confirm your table soon.</p>
+              <button type="button" onClick={() => setDone(false)} className={`text-xs underline mt-1 ${theme.mutedText}`}>Book another table</button>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-3">
@@ -129,17 +167,28 @@ const StoreContactForm: React.FC<{ storeId: string; storeName: string; theme: { 
               <Input name="phone" type="tel" placeholder="Phone Number *" value={form.phone} onChange={handleChange} required />
               <div className="grid grid-cols-2 gap-2">
                 <div className="space-y-1">
-                  <Label htmlFor="appt-date" className="text-xs">Preferred Date</Label>
-                  <Input id="appt-date" name="subject" type="date" value={form.subject} onChange={handleChange} required />
+                  <Label htmlFor="res-date" className="text-xs">Date *</Label>
+                  <Input id="res-date" name="subject" type="date" value={form.subject} onChange={handleChange} required className={dateError ? 'border-red-500' : undefined} />
                 </div>
                 <div className="space-y-1">
-                  <Label htmlFor="appt-time" className="text-xs">Preferred Time</Label>
-                  <Input id="appt-time" name="company" type="time" value={form.company} onChange={handleChange} required />
+                  <Label htmlFor="res-time" className="text-xs">Time *</Label>
+                  <Input id="res-time" name="company" type="time" value={form.company} onChange={handleChange} required />
                 </div>
               </div>
-              <Textarea name="message" placeholder="Additional notes or special requests..." rows={3} value={form.message} onChange={handleChange} className="resize-none" />
+              {dateError ? (
+                <p className="text-sm text-red-600">{dateError}</p>
+              ) : workingDays ? (
+                <p className={`text-xs ${theme.mutedText}`}>
+                  Open: {workingDays}{workingHours ? ` · ${workingHours}` : ''}
+                </p>
+              ) : null}
+              <div className="space-y-1">
+                <Label htmlFor="res-guests" className="text-xs">How many people? *</Label>
+                <Input id="res-guests" name="guestCount" type="number" min="1" max="50" placeholder="Number of guests" value={form.guestCount} onChange={handleChange} required />
+              </div>
+              <Textarea name="message" placeholder="Any pre-order or special requests? (optional)" rows={3} value={form.message} onChange={handleChange} className="resize-none" />
               {err && <p className="text-sm text-red-500">{err}</p>}
-              <Button type="submit" disabled={sending} className="w-full">{sending ? 'Sending...' : 'Request Appointment'}</Button>
+              <Button type="submit" disabled={sending} className="w-full">{sending ? 'Sending...' : 'Request Reservation'}</Button>
             </form>
           )}
         </CardContent>
@@ -338,8 +387,50 @@ async function enrichStoreProductsWithStock(
   });
 }
 
+const DEFAULT_STORE_TAB: Record<string, 'home' | 'products'> = {
+  'jinans-kitchen': 'products',
+};
+
+function resolveStoreTabFromLocation(
+  pathname: string,
+  searchParams: URLSearchParams,
+  categorySlug?: string,
+  storeSlug?: string,
+  hostnameSlug?: string,
+): string {
+  const path = pathname.replace(/\/+$/, '') || '/';
+  const view = searchParams.get('view');
+
+  if (path.endsWith('/products') || view === 'products') return 'products';
+  if (categorySlug || path.includes('/category/')) return 'products';
+  if (view === 'contact') return 'contact';
+  if (view === 'about') return 'about';
+  if (view === 'home') return 'home';
+  if (view) return view;
+
+  const slugKey = hostnameSlug || storeSlug;
+  if (slugKey && DEFAULT_STORE_TAB[slugKey] === 'products' && path === '/') {
+    return 'products';
+  }
+
+  if (path === '/' || path.startsWith('/store/')) return 'home';
+  return 'home';
+}
+
+function resolveInitialStoreTab(): string {
+  if (typeof window === 'undefined') return 'home';
+  return resolveStoreTabFromLocation(
+    window.location.pathname,
+    new URLSearchParams(window.location.search),
+    undefined,
+    storeSlugFromHostname(window.location.hostname),
+    storeSlugFromHostname(window.location.hostname),
+  );
+}
+
 const StoreDetail: React.FC = () => {
   const { id, slug, categorySlug } = useParams<{ id?: string; slug?: string; categorySlug?: string }>();
+  const location = useLocation();
   const hostnameStoreSlug = typeof window !== 'undefined' ? storeSlugFromHostname(window.location.hostname) : undefined;
   const navigate = useNavigate();
   const [storeId, setStoreId] = useState<string | null>(null);
@@ -369,7 +460,7 @@ const StoreDetail: React.FC = () => {
   const [editorHighlightSection, setEditorHighlightSection] = useState<EditorSelectableId | null>(null);
   const [liveEditorState, setLiveEditorState] = useState<EditorPreviewStatePayload | null>(null);
   // Page navigation state
-  const [activePage, setActivePage] = useState<string>('home');
+  const [activePage, setActivePage] = useState<string>(resolveInitialStoreTab);
 
   useEffect(() => {
     if (!editorPreview) return;
@@ -410,22 +501,32 @@ const StoreDetail: React.FC = () => {
     () => categoryFromSlug(productCategories, normalizedCategorySlug),
     [productCategories, normalizedCategorySlug]
   );
-  const filteredProducts = useMemo(
-    () => (selectedCategory ? products.filter((product) => product.category === selectedCategory) : products),
-    [products, selectedCategory]
-  );
+  const filteredProducts = useMemo(() => {
+    const scoped = selectedCategory
+      ? products.filter((product) => product.category === selectedCategory)
+      : products;
+    return sortProductsInStockFirst(scoped);
+  }, [products, selectedCategory]);
+
+  const mobileNavLinks = useMemo(() => {
+    if (!store?.slug) return undefined;
+    return buildStoreMobileNavLinks(store, getStoreContactPageLabel(store.contactFormStyle));
+  }, [store]);
 
   const handleCategoryNavigate = useCallback((path: string) => {
-    setActivePage('products');
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     navigate(path);
   }, [navigate]);
 
   useEffect(() => {
-    if (normalizedCategorySlug) {
-      setActivePage('products');
-    }
-  }, [normalizedCategorySlug]);
+    setActivePage(resolveStoreTabFromLocation(
+      location.pathname,
+      searchParams,
+      normalizedCategorySlug,
+      slug,
+      hostnameStoreSlug,
+    ));
+  }, [location.pathname, normalizedCategorySlug, slug, hostnameStoreSlug, searchParams]);
 
   // Derive banner images safely (store may be null before load)
   const bannerImagesCount = React.useMemo(() => {
@@ -730,6 +831,7 @@ const StoreDetail: React.FC = () => {
           subscriptionTier={store?.subscriptionTier}
           hasCustomDomain={!!store?.customDomain}
           hasImportedDesign={store?.hasImportedDesign}
+          mobileNavLinks={mobileNavLinks}
         />
         <div className="container mx-auto px-4 py-12 flex justify-center">
           <div className="animate-pulse space-y-8 w-full max-w-4xl">
@@ -765,6 +867,7 @@ const StoreDetail: React.FC = () => {
           subscriptionTier={store?.subscriptionTier}
           hasCustomDomain={!!store?.customDomain}
           hasImportedDesign={store?.hasImportedDesign}
+          mobileNavLinks={mobileNavLinks}
         />
         <div className="container mx-auto px-4 py-12 flex justify-center">
           <div className="text-center">
@@ -968,6 +1071,7 @@ const StoreDetail: React.FC = () => {
   const menuStyle = liveEditorState?.layout?.menuStyle ?? store.menuStyle ?? 'classic';
   const aboutLayout = liveThemeFields?.aboutLayout ?? store.aboutLayout ?? 'left';
   const contactFormStyle = liveThemeFields?.contactFormStyle ?? store.contactFormStyle ?? 1;
+  const contactPageLabel = getStoreContactPageLabel(contactFormStyle);
   const ratingDisplayType = liveContent?.ratingDisplayType ?? liveThemeFields?.ratingDisplayType ?? store.ratingDisplayType ?? 'stars';
   const pageLayout = liveThemeFields?.pageLayout ?? store.pageLayout ?? 'contained';
   const storeCardLayout = liveEditorState?.layout?.storeCardStyle ?? store.storeCardStyle ?? 'standard';
@@ -1412,7 +1516,7 @@ const StoreDetail: React.FC = () => {
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
                   <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} showPrice={showPublicPrices} />
+                    <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} showPrice={showPublicPrices} />
                   </div>
                 ))}
               </div>
@@ -1587,7 +1691,7 @@ const StoreDetail: React.FC = () => {
         );
 
       case 'contact':
-        return <StoreContactForm storeId={storeId} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle} />;
+        return <StoreContactForm storeId={storeId} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle} workingDays={store.deliverySettings?.workingDays} workingHours={store.deliverySettings?.workingHours} />;
 
       case 'hero':
         // Hero/Banner section with different layout options
@@ -1763,6 +1867,7 @@ const StoreDetail: React.FC = () => {
         subscriptionTier={store.subscriptionTier}
         hasCustomDomain={!!store.customDomain}
         hasImportedDesign={store.hasImportedDesign}
+        mobileNavLinks={mobileNavLinks}
       />
       )}
       
@@ -1915,7 +2020,7 @@ const StoreDetail: React.FC = () => {
             ...(hasAbout ? [{ id: 'about', label: 'About Us' }] : []),
             { id: 'products', label: 'Products' },
             ...customPages.sort((a, b) => a.order - b.order).map(p => ({ id: p.id, label: p.name })),
-            ...(hasContact ? [{ id: 'contact', label: 'Contact Us' }] : []),
+            ...(hasContact ? [{ id: 'contact', label: contactPageLabel }] : []),
           ];
           if (navPages.length <= 1) return null;
           return (
@@ -1939,11 +2044,16 @@ const StoreDetail: React.FC = () => {
                       return;
                     }
                     if (p.id === 'products' && store.slug) {
-                      handleCategoryNavigate(buildStoreCategoryPath(store.slug));
+                      handleCategoryNavigate(buildStoreTabPath(store.slug, 'products'));
                       return;
                     }
-                    if (p.id === 'home' && store.slug && selectedCategory) {
-                      navigate(buildStoreCategoryPath(store.slug));
+                    if (p.id === 'home' && store.slug) {
+                      handleCategoryNavigate(buildStoreTabPath(store.slug, 'home'));
+                      return;
+                    }
+                    if ((p.id === 'contact' || p.id === 'about') && store.slug) {
+                      handleCategoryNavigate(buildStoreTabPath(store.slug, p.id as 'contact' | 'about'));
+                      return;
                     }
                     setActivePage(p.id);
                   }}
@@ -2046,7 +2156,7 @@ const StoreDetail: React.FC = () => {
               <div className={productGridClass}>
                 {filteredProducts.map((product, index) => (
                   <div key={product.id} className={`min-w-0 ${productDisplayType === 'masonry' ? 'break-inside-avoid mb-4' : ''}`} style={productDisplayType === 'masonry' ? { animationDelay: `${index * 45}ms` } : undefined}>
-                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} whatsappNumber={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined} storeName={store.name} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} showPrice={showPublicPrices} />
+                  <ProductCard product={product} displayType={productDisplayType} animation={productCardAnimation} currency={store.mainCurrency} secondaryCurrency={store.secondaryCurrency} exchangeRate={store.customExchangeRate} showCommerceActions={showCommerceActions} showPrice={showPublicPrices} />
                   </div>
                 ))}
               </div>
@@ -2082,10 +2192,10 @@ const StoreDetail: React.FC = () => {
           </div>
         ))}
 
-        {/* Contact Us Page */}
+        {/* Contact / Reserve Page */}
         {activePage === 'contact' && (
           <div className="space-y-6">
-            <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>Contact Us</h2>
+            <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>{contactPageLabel}</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Contact Details Card */}
               <Card className={currentTheme.cardSoft} style={contentCardStyle}>
@@ -2169,12 +2279,12 @@ const StoreDetail: React.FC = () => {
                         Message on WhatsApp
                       </a>
                     ) : (
-                      <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle as 1 | 2 | 3 | 4 | 5 | 6} />
+                      <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle as 1 | 2 | 3 | 4 | 5 | 6 | 11} workingDays={store.deliverySettings?.workingDays} workingHours={store.deliverySettings?.workingHours} />
                     )}
                   </CardContent>
                 </Card>
               ) : (
-                <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle as 1 | 2 | 3 | 4 | 5 | 6} />
+                <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle as 1 | 2 | 3 | 4 | 5 | 6 | 11} workingDays={store.deliverySettings?.workingDays} workingHours={store.deliverySettings?.workingHours} />
               )}
             </div>
           </div>
@@ -2189,13 +2299,15 @@ const StoreDetail: React.FC = () => {
           contactEmail={store.contactInfo?.email}
           contactPhone={store.contactInfo?.phone}
           primaryColor={store.templateColors?.primary}
+          contactLabel={contactPageLabel}
+          contactHref={store.slug ? buildStoreTabPath(store.slug, 'contact') : '/contact'}
         />
       )}
       {!editorPreview && (
-      <WhatsAppChatWidget
-        phone={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined}
-        storeName={store.name}
-      />
+        <WhatsAppChatWidget
+          phone={store.subscriptionTier !== 'trial' ? store.whatsappBusiness : undefined}
+          storeName={store.name}
+        />
       )}
     </div>
   );

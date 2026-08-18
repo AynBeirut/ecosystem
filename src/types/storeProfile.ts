@@ -102,6 +102,8 @@ export interface StoreDeliverySettings {
   deliveryPartners?: DeliveryPartnerSetting[];
   ownDeliveryEnabled?: boolean;
   defaultPickupCarrier?: string;
+  /** When true, cart shows optional date/time to schedule the order. */
+  scheduledOrdersEnabled?: boolean;
 }
 
 export interface MarketplaceIntegrationSetting {

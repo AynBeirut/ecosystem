@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
+import { LedgerAccountCombobox } from '@/components/LedgerAccountCombobox';
 import { accountCodeNumeric, accountsInCodeRange, isAccountInCodeRange } from '@/lib/ledger/accountCodeRange';
 import {
   buildClientByGrabioMap,
@@ -10,6 +12,15 @@ import {
   formatPcgAccountLabel,
 } from '@/lib/ledger/grabioToPcgMap';
 import { buildExtendedTrialBalance, extendedTrialBalanceToCsv } from '@/lib/ledger/trialBalanceExtended';
+import {
+  buildLebaneseTrialBalanceTree,
+  collectTrialBalanceTreeGroupIds,
+  defaultExpandedTrialBalanceNodes,
+  emptyExtendedRow,
+  flattenTrialBalanceTree,
+  rowHasActivity,
+  type TrialBalanceTreeNode,
+} from '@/lib/ledger/trialBalanceHierarchy';
 import type { AccountingLanguage } from '@/lib/grabio/accountingMode';
 import type {
   JournalEntry,
@@ -62,6 +73,7 @@ type TbOptions = Record<TbColumnKey, boolean> & {
   rowStartingBalance: boolean;
   rowClosingBalance: boolean;
   excludeClosingBalance: boolean;
+  hideInactiveAccounts: boolean;
   deptGroup1: boolean;
   deptGroup2: boolean;
   deptGroup3: boolean;
@@ -86,6 +98,7 @@ const ACTIVE_ROW_OPTIONS: Array<{ key: keyof TbOptions; label: string }> = [
   { key: 'auxiliaryAccounts', label: 'Auxiliary accounts' },
   { key: 'auxiliaryClassAccounts', label: 'Auxiliary class accounts' },
   { key: 'includeZeroBalance', label: 'Zero-balance accounts' },
+  { key: 'hideInactiveAccounts', label: 'Hide inactive accounts' },
   { key: 'totalLevel1', label: 'Total level 1' },
   { key: 'totalLevel2', label: 'Total level 2' },
   { key: 'totalLevel3', label: 'Total level 3' },
@@ -116,6 +129,7 @@ const DEFAULT_OPTIONS: TbOptions = {
   rowStartingBalance: false,
   rowClosingBalance: false,
   excludeClosingBalance: true,
+  hideInactiveAccounts: true,
   deptGroup1: false,
   deptGroup2: false,
   deptGroup3: false,
@@ -176,23 +190,6 @@ function formatLegacyAmount(
   return { text: formatCurrency(value, currency), negative: false };
 }
 
-function emptyExtendedRow(account: LedgerAccount): TrialBalanceExtendedRow {
-  return {
-    accountId: account.id,
-    accountCode: account.code,
-    accountName: account.name,
-    accountType: account.type,
-    debit: 0,
-    credit: 0,
-    openingDebit: 0,
-    openingCredit: 0,
-    periodDebit: 0,
-    periodCredit: 0,
-    closingDebit: 0,
-    closingCredit: 0,
-  };
-}
-
 function normalizeCode(code: string): string {
   return String(code || '').trim().replace(/\./g, '').split('-')[0] || '';
 }
@@ -220,17 +217,6 @@ function tbRowClass(level: 1 | 2 | 3 | 4, isGroup: boolean): string {
   return '';
 }
 
-function rowHasActivity(row: TrialBalanceExtendedRow): boolean {
-  return (
-    row.openingDebit > 0 ||
-    row.openingCredit > 0 ||
-    row.periodDebit > 0 ||
-    row.periodCredit > 0 ||
-    row.closingDebit > 0 ||
-    row.closingCredit > 0
-  );
-}
-
 function accountsInTrialBalanceRange(
   accounts: LedgerAccount[],
   fromCode: string,
@@ -238,23 +224,27 @@ function accountsInTrialBalanceRange(
   isLebaneseCoa: boolean,
   clientByGrabio: Map<string, PcgClientAccount>,
   clientByParentPcg: Map<string, PcgClientAccount[]>,
+  hideInactiveAccounts = true,
 ): LedgerAccount[] {
   const from = fromCode.trim();
   const to = toCode.trim();
   if (!from && !to) {
-    return accounts.filter((account) => account.isActive);
+    return accounts.filter((account) => !hideInactiveAccounts || account.isActive);
   }
 
   const lo = from || '0';
   const hi = to || '9'.repeat(12);
 
   if (!isLebaneseCoa) {
-    return accountsInCodeRange(accounts, lo, hi, { classes17Only: false });
+    return accountsInCodeRange(accounts, lo, hi, {
+      classes17Only: false,
+      activeOnly: hideInactiveAccounts,
+    });
   }
 
   return accounts
     .filter((account) => {
-      if (!account.isActive) return false;
+      if (hideInactiveAccounts && !account.isActive) return false;
       const displayCode = displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg);
       return isAccountInCodeRange(displayCode, lo, hi) || isAccountInCodeRange(account.code, lo, hi);
     })
@@ -391,6 +381,7 @@ export default function TrialBalancePanel({
   const [options, setOptions] = useState<TbOptions>(DEFAULT_OPTIONS);
   const [appliedFrom, setAppliedFrom] = useState('');
   const [appliedTo, setAppliedTo] = useState('');
+  const [expandedTbNodes, setExpandedTbNodes] = useState<Set<string>>(() => new Set());
 
   const invalidateReport = () => {
     setSearchError(null);
@@ -407,12 +398,40 @@ export default function TrialBalancePanel({
     return account.name;
   };
 
+  const codeForRange = (account: LedgerAccount) => {
+    if (isLebaneseCoa) return displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg);
+    return account.code;
+  };
+
+  const accountIdForCode = (code: string) => {
+    const trimmed = code.trim();
+    if (!trimmed) return '';
+    const match = accounts.find(
+      (account) =>
+        account.isActive &&
+        (codeForRange(account) === trimmed || account.code === trimmed),
+    );
+    return match?.id ?? '';
+  };
+
+  const setFromAccountId = (accountId: string) => {
+    const account = accounts.find((a) => a.id === accountId);
+    setFromCode(account ? codeForRange(account) : '');
+    invalidateReport();
+  };
+
+  const setToAccountId = (accountId: string) => {
+    const account = accounts.find((a) => a.id === accountId);
+    setToCode(account ? codeForRange(account) : '');
+    invalidateReport();
+  };
+
   const accountCodeLabel = (account: LedgerAccount) => {
     if (isLebaneseCoa) return displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg);
     return account.code;
   };
 
-  const displayRows = useMemo(() => {
+  const flatDisplayRows = useMemo(() => {
     if (!report) return [];
 
     const byId = new Map(report.rows.map((row) => [row.accountId, row]));
@@ -424,6 +443,7 @@ export default function TrialBalancePanel({
       Boolean(isLebaneseCoa),
       clientByGrabio,
       clientByParentPcg,
+      options.hideInactiveAccounts,
     );
 
     pool = pool.filter((account) => {
@@ -486,14 +506,91 @@ export default function TrialBalancePanel({
     options.totalLevel2,
     options.totalLevel3,
     options.totalLevel4,
+    options.hideInactiveAccounts,
     report,
     toCode,
   ]);
 
+  const hierarchyRoots = useMemo(() => {
+    if (!report || !isLebaneseCoa) return [];
+    const byId = new Map(report.rows.map((row) => [row.accountId, row]));
+    return buildLebaneseTrialBalanceTree(
+      accounts,
+      byId,
+      appliedFrom || fromCode,
+      appliedTo || toCode,
+      pcgClientAccounts,
+      {
+        hideInactiveAccounts: options.hideInactiveAccounts,
+        includeZeroBalance: options.includeZeroBalance,
+      },
+    );
+  }, [
+    accounts,
+    appliedFrom,
+    appliedTo,
+    fromCode,
+    options.hideInactiveAccounts,
+    isLebaneseCoa,
+    options.includeZeroBalance,
+    pcgClientAccounts,
+    report,
+    toCode,
+  ]);
+
+  useEffect(() => {
+    if (!report || !isLebaneseCoa || hierarchyRoots.length === 0) return;
+    setExpandedTbNodes(defaultExpandedTrialBalanceNodes(hierarchyRoots));
+  }, [appliedFrom, appliedTo, report, isLebaneseCoa]);
+
+  const displayRows = useMemo(() => {
+    if (!report) return [];
+    if (isLebaneseCoa) {
+      if (hierarchyRoots.length === 0) return [];
+      return flattenTrialBalanceTree(hierarchyRoots, expandedTbNodes).map((node) => ({
+        account:
+          node.account ||
+          ({
+            id: node.id,
+            code: node.code,
+            name: node.name,
+            nameAr: node.nameAr,
+            type: 'expense',
+            normalBalance: 'debit',
+            isActive: true,
+            isSystem: false,
+            openingBalance: 0,
+            storeId: '',
+            pcgKind: node.pcgKind,
+          } as LedgerAccount),
+        row: node.row,
+        treeNode: node,
+      }));
+    }
+    return flatDisplayRows.map((item) => ({ ...item, treeNode: undefined as TrialBalanceTreeNode | undefined }));
+  }, [expandedTbNodes, flatDisplayRows, hierarchyRoots, isLebaneseCoa, report]);
+
+  const toggleTbNode = (nodeId: string) => {
+    setExpandedTbNodes((prev) => {
+      const next = new Set(prev);
+      if (next.has(nodeId)) next.delete(nodeId);
+      else next.add(nodeId);
+      return next;
+    });
+  };
+
+  const expandAllTbGroups = () => {
+    setExpandedTbNodes(new Set(collectTrialBalanceTreeGroupIds(hierarchyRoots)));
+  };
+
+  const collapseAllTbGroups = () => {
+    setExpandedTbNodes(defaultExpandedTrialBalanceNodes(hierarchyRoots));
+  };
+
   const totals = useMemo(() => {
     return displayRows.reduce(
-      (acc, { account, row }) => {
-        if (account.pcgKind === 'G') return acc;
+      (acc, { account, row, treeNode }) => {
+        if (account.pcgKind === 'G' || treeNode?.isGroup) return acc;
         acc.starting += signedNet(row.openingDebit, row.openingCredit);
         acc.movementDebit += row.periodDebit;
         acc.movementCredit += row.periodCredit;
@@ -604,8 +701,9 @@ export default function TrialBalancePanel({
       Boolean(isLebaneseCoa),
       clientByGrabio,
       clientByParentPcg,
+      options.hideInactiveAccounts,
     ).length;
-  }, [accounts, clientByGrabio, clientByParentPcg, fromCode, isLebaneseCoa, toCode]);
+  }, [accounts, clientByGrabio, clientByParentPcg, fromCode, options.hideInactiveAccounts, isLebaneseCoa, toCode]);
 
   const colCount = 2 + visibleColumnCount(options) + 1;
   const amountColCount = visibleColumnCount(options);
@@ -616,7 +714,7 @@ export default function TrialBalancePanel({
       <CardHeader className="border-b bg-slate-50/80 pb-4">
         <CardTitle className="text-lg">Trial balance</CardTitle>
         <CardDescription>
-          Account range · period · {currencyLabel}. Use Refresh above to reload ledger data.
+          Account range · period. Use Refresh above to reload ledger data.
         </CardDescription>
       </CardHeader>
 
@@ -631,28 +729,30 @@ export default function TrialBalancePanel({
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
           <div className="space-y-1">
             <label htmlFor="tb-from" className="text-xs font-medium text-slate-700">From account</label>
-            <Input
-              id="tb-from"
-              className="font-mono bg-white"
-              value={fromCode}
-              onChange={(e) => {
-                setFromCode(e.target.value);
-                invalidateReport();
-              }}
-              placeholder="601"
+            <LedgerAccountCombobox
+              accounts={accounts.filter((account) => account.isActive)}
+              value={accountIdForCode(fromCode)}
+              onValueChange={setFromAccountId}
+              isLebaneseCoa={isLebaneseCoa}
+              pcgClientAccounts={pcgClientAccounts}
+              accountingLanguage={accountingLanguage}
+              placeholder="Select start account…"
+              compactSelectedLabel
+              className="bg-white font-mono"
             />
           </div>
           <div className="space-y-1">
             <label htmlFor="tb-to" className="text-xs font-medium text-slate-700">To account</label>
-            <Input
-              id="tb-to"
-              className="font-mono bg-white"
-              value={toCode}
-              onChange={(e) => {
-                setToCode(e.target.value);
-                invalidateReport();
-              }}
-              placeholder="701"
+            <LedgerAccountCombobox
+              accounts={accounts.filter((account) => account.isActive)}
+              value={accountIdForCode(toCode)}
+              onValueChange={setToAccountId}
+              isLebaneseCoa={isLebaneseCoa}
+              pcgClientAccounts={pcgClientAccounts}
+              accountingLanguage={accountingLanguage}
+              placeholder="Select end account…"
+              compactSelectedLabel
+              className="bg-white font-mono"
             />
           </div>
           <div className="space-y-1">
@@ -767,6 +867,21 @@ export default function TrialBalancePanel({
                   ))}
                 </div>
               </div>
+              {isLebaneseCoa && report && hierarchyRoots.length > 0 ? (
+                <div>
+                  <p className="mb-2 border-b border-slate-200 pb-1 text-xs font-bold uppercase tracking-wide text-slate-700">
+                    Account hierarchy
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button type="button" variant="outline" size="sm" onClick={expandAllTbGroups}>
+                      Expand all groups
+                    </Button>
+                    <Button type="button" variant="outline" size="sm" onClick={collapseAllTbGroups}>
+                      Collapse groups
+                    </Button>
+                  </div>
+                </div>
+              ) : null}
             </div>
             <div className="mt-3 flex flex-wrap justify-end gap-2 border-t border-slate-300 pt-2">
               <Button type="button" variant="outline" size="sm" onClick={() => setOptions(DEFAULT_OPTIONS)}>
@@ -824,24 +939,49 @@ export default function TrialBalancePanel({
                   {displayRows.length === 0 ? (
                     <tr>
                       <td colSpan={colCount} className={`${TB_CELL} text-muted-foreground`}>
-                        No accounts with activity in this range and period.
+                        {isLebaneseCoa && hierarchyRoots.length === 0
+                          ? 'No PCG accounts in this range. Try wider codes (e.g. 6010 → 6999) and Search again.'
+                          : 'No accounts with activity in this range and period.'}
                       </td>
                     </tr>
                   ) : null}
-                  {displayRows.map(({ account, row }) => {
-                    const code = formatDisplayAccountCode(accountCodeLabel(account));
-                    const level = displayCodeLevel(code, account.pcgKind);
-                    const isGroup = account.pcgKind === 'G';
+                  {displayRows.map(({ account, row, treeNode }) => {
+                    const code = formatDisplayAccountCode(
+                      treeNode?.code || accountCodeLabel(account),
+                    );
+                    const level = displayCodeLevel(code, treeNode?.pcgKind || account.pcgKind);
+                    const isGroup = Boolean(treeNode?.isGroup || account.pcgKind === 'G');
+                    const hasChildren = Boolean(treeNode?.hasChildren);
+                    const isExpanded = treeNode ? expandedTbNodes.has(treeNode.id) : false;
                     const start = formatLegacyAmount(signedNet(row.openingDebit, row.openingCredit), currencyCode);
                     const movementBal = formatLegacyAmount(signedNet(row.periodDebit, row.periodCredit), currencyCode);
                     const balance = formatLegacyAmount(signedNet(row.closingDebit, row.closingCredit), currencyCode);
-                    const name = accountLabel(account);
+                    const name = treeNode?.name || accountLabel(account);
+                    const rowKey = treeNode?.id || row.accountId;
                     return (
-                      <tr key={row.accountId} className={cn('border-b', tbRowClass(level, isGroup))}>
+                      <tr key={rowKey} className={cn('border-b', tbRowClass(level, isGroup))}>
                         <td className={`${TB_CELL} font-mono text-[10px] leading-tight`} title={code}>
-                          {code}
+                          <div className="flex items-start gap-0.5">
+                            {hasChildren ? (
+                              <button
+                                type="button"
+                                className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600"
+                                aria-label={isExpanded ? 'Collapse account group' : 'Expand account group'}
+                                onClick={() => treeNode && toggleTbNode(treeNode.id)}
+                              >
+                                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                              </button>
+                            ) : (
+                              <span className="inline-block h-4 w-4 shrink-0" />
+                            )}
+                            <span>{code}</span>
+                          </div>
                         </td>
-                        <td className={`${TB_CELL} truncate text-[11px] leading-snug`} title={name}>
+                        <td
+                          className={`${TB_CELL} truncate text-[11px] leading-snug`}
+                          title={name}
+                          style={{ paddingLeft: `${8 + (treeNode?.depth || 0) * 14}px` }}
+                        >
                           {name}
                         </td>
                         {options.startingDebit ? <td className={TB_NUM_CELL}>{tbAmountCell(row.openingDebit, currencyCode)}</td> : null}
@@ -862,7 +1002,7 @@ export default function TrialBalancePanel({
                           </td>
                         ) : null}
                         <td className="px-0 py-1 text-center">
-                          {!isGroup && onOpenGl ? (
+                          {!isGroup && onOpenGl && account.id && !account.id.startsWith('pcg:') && !account.id.startsWith('class:') ? (
                             <button type="button" className="text-[10px] text-[#2a5dad] hover:underline" onClick={() => onOpenGl(account.id)}>
                               GL
                             </button>
@@ -877,12 +1017,12 @@ export default function TrialBalancePanel({
                     </td>
                     {options.startingDebit ? (
                       <td className={TB_NUM_CELL}>
-                        {tbAmountCell(displayRows.reduce((s, { account, row }) => (account.pcgKind === 'G' ? s : s + row.openingDebit), 0), currencyCode)}
+                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingDebit), 0), currencyCode)}
                       </td>
                     ) : null}
                     {options.startingCredit ? (
                       <td className={TB_NUM_CELL}>
-                        {tbAmountCell(displayRows.reduce((s, { account, row }) => (account.pcgKind === 'G' ? s : s + row.openingCredit), 0), currencyCode)}
+                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingCredit), 0), currencyCode)}
                       </td>
                     ) : null}
                     {options.startingBalanceLbp ? (

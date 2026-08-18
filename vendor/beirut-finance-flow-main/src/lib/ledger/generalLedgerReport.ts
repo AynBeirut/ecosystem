@@ -15,12 +15,20 @@ export function buildGeneralLedgerReport(
   account: LedgerAccount,
   entries: JournalEntry[],
   lines: JournalLine[],
-  options: { startDate: string; endDate: string; costCenterId?: string },
+  options: {
+    startDate: string;
+    endDate: string;
+    costCenterId?: string;
+    defaultCurrency?: string;
+    presentation?: import('@/lib/ledger/glEntryPresentation').GlPresentationContext;
+  },
 ): GeneralLedgerReport {
   const ctx = createLedgerReportContext(entries, lines, options);
   const built = buildGeneralLedgerRowsFromContext(account, ctx, {
     costCenterId: options.costCenterId,
     includeZeroActivity: true,
+    presentation: options.presentation,
+    defaultCurrency: options.defaultCurrency,
   });
   const openingBalance = built?.openingBalance ?? round2(account.openingBalance || 0);
   const closingBalance = built?.closingBalance ?? openingBalance;
@@ -39,9 +47,21 @@ export function buildGeneralLedgerReport(
 }
 
 export function generalLedgerToCsv(report: GeneralLedgerReport): string {
-  const header = ['Date', 'Voucher', 'Type', 'Memo', 'Debit', 'Credit', 'Balance', 'Cost Center'];
+  const header = ['Date', 'Type', 'Voucher', 'Party', 'Category', 'Reference', 'Description', 'Debit', 'Credit', 'Balance', 'Currency'];
   const body = report.rows.map((r) =>
-    [r.date, r.voucherNumber || r.entryId, r.voucherType || '', (r.memo || '').replace(/,/g, ' '), r.debit, r.credit, r.runningBalance, r.costCenterId || ''].join(','),
+    [
+      r.date,
+      r.typeLabel || r.voucherType || '',
+      r.voucherNumber || r.entryId,
+      (r.party || '').replace(/,/g, ' '),
+      (r.category || '').replace(/,/g, ' '),
+      (r.reference || '').replace(/,/g, ' '),
+      (r.displayDescription || r.memo || '').replace(/,/g, ' '),
+      r.debit,
+      r.credit,
+      r.runningBalance,
+      r.currency || '',
+    ].join(','),
   );
   return [header.join(','), ...body].join('\n');
 }

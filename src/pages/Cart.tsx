@@ -23,16 +23,22 @@ import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
 import { pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
 import ClampedText from '@/components/ClampedText';
 import ProductVisual from '@/components/ProductVisual';
-import { formatMoney } from '@/lib/money/format';
+import { formatDualMoneyLines } from '@/lib/money/format';
 import { resolveStoreShopLabel, resolveStoreShopUrl } from '@/lib/storeNavigation';
 import { buildProductRelativePath, buildStoreRelativePath, isExternalUrl } from '@/lib/storeUrls';
+import { getApiBaseUrl } from '@/lib/apiBase';
 import {
   CustomerFulfillmentMethod,
   getFulfillmentLabel,
   getStoreFulfillmentOptions,
   intersectFulfillmentOptions,
   fulfillmentRequiresAddress,
+  isScheduledOrdersEnabled,
 } from '@/lib/fulfillmentOptions';
+import {
+  getStoreClosedDayMessage,
+  isStoreOpenOnDateForStores,
+} from '@/lib/storeWorkingDays';
 
 type StorePaymentMethods = {
   creditCard: boolean;
@@ -97,12 +103,19 @@ const Cart: React.FC = () => {
   const [availableDeliveryPartners, setAvailableDeliveryPartners] = useState<DeliveryPartnerOption[]>([]);
   const [availableFulfillmentOptions, setAvailableFulfillmentOptions] = useState<CustomerFulfillmentMethod[]>(['delivery']);
   const [fulfillmentMethod, setFulfillmentMethod] = useState<CustomerFulfillmentMethod>('delivery');
+  const [scheduledOrdersEnabled, setScheduledOrdersEnabled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
+  const [guestCount, setGuestCount] = useState('');
+  const [storeWorkingDaysList, setStoreWorkingDaysList] = useState<string[]>([]);
+  const [storeWorkingHours, setStoreWorkingHours] = useState('');
+  const [scheduledDateError, setScheduledDateError] = useState('');
   const [isGettingLocation, setIsGettingLocation] = useState(false);
   const [isCheckingOut, setIsCheckingOut] = useState(false);
   const [isWhatsAppOrdering, setIsWhatsAppOrdering] = useState(false);
   const [hasSavedInfo, setHasSavedInfo] = useState(false);
   const [storeCurrencyInfo, setStoreCurrencyInfo] = useState<Record<string, { currency: string; secondaryCurrency?: string; rate?: number }>>({});
-  const [whatsappStoreInfo, setWhatsappStoreInfo] = useState<{ number: string; name: string; currency?: string } | null>(null);
+  const [whatsappStoreInfo, setWhatsappStoreInfo] = useState<{ number: string; name: string; currency?: string; slug?: string } | null>(null);
   
   // Double-click prevention lock
   const isCheckingOutRef = useRef(false);
@@ -127,6 +140,19 @@ const Cart: React.FC = () => {
       }
     }
   }, []);
+
+  const validateScheduledDate = (date: string): boolean => {
+    if (!date.trim()) {
+      setScheduledDateError('');
+      return true;
+    }
+    if (storeWorkingDaysList.length > 0 && !isStoreOpenOnDateForStores(date, storeWorkingDaysList)) {
+      setScheduledDateError(getStoreClosedDayMessage(storeWorkingDaysList[0], storeWorkingHours));
+      return false;
+    }
+    setScheduledDateError('');
+    return true;
+  };
 
   // Fetch exchange rates for all stores in cart
   useEffect(() => {
@@ -178,7 +204,7 @@ const Cart: React.FC = () => {
         if (storeDoc.exists()) {
           const data = storeDoc.data() as StoreProfile;
           if (data.whatsappBusiness && data.subscriptionTier !== 'trial') {
-            setWhatsappStoreInfo({ number: data.whatsappBusiness, name: data.name, currency: data.mainCurrency });
+            setWhatsappStoreInfo({ number: data.whatsappBusiness, name: data.name, currency: data.mainCurrency, slug: data.slug });
           } else {
             setWhatsappStoreInfo(null);
           }
@@ -204,6 +230,9 @@ const Cart: React.FC = () => {
       const db = getFirestore();
       const storePartnerOptions: DeliveryPartnerOption[][] = [];
       const storeFulfillmentOptions: CustomerFulfillmentMethod[][] = [];
+      const scheduledFlags: boolean[] = [];
+      const workingDaysCollected: string[] = [];
+      let primaryWorkingHours = '';
 
       const buildStorePartnerOptions = (storeData: StoreProfile): DeliveryPartnerOption[] => {
         const settings = storeData.deliverySettings || {};
@@ -227,19 +256,33 @@ const Cart: React.FC = () => {
             const storeData = storeDoc.data() as StoreProfile;
             storePartnerOptions.push(buildStorePartnerOptions(storeData));
             storeFulfillmentOptions.push(getStoreFulfillmentOptions(storeData.deliverySettings));
+            scheduledFlags.push(isScheduledOrdersEnabled(storeData.deliverySettings));
+            workingDaysCollected.push(storeData.deliverySettings?.workingDays || 'Every day');
+            if (!primaryWorkingHours) {
+              primaryWorkingHours = storeData.deliverySettings?.workingHours || '';
+            }
           } else {
             storePartnerOptions.push([{ id: 'in_house', name: 'In-house Delivery', type: 'own' }]);
             storeFulfillmentOptions.push(['delivery']);
+            scheduledFlags.push(false);
+            workingDaysCollected.push('Every day');
           }
         } catch (error) {
           console.error('Error fetching delivery partners for store:', storeId, error);
           storePartnerOptions.push([{ id: 'in_house', name: 'In-house Delivery', type: 'own' }]);
           storeFulfillmentOptions.push(['delivery']);
+          scheduledFlags.push(false);
+          workingDaysCollected.push('Every day');
         }
       }
 
+      setStoreWorkingDaysList(workingDaysCollected);
+      setStoreWorkingHours(primaryWorkingHours);
       const commonFulfillmentOptions = intersectFulfillmentOptions(storeFulfillmentOptions);
       setAvailableFulfillmentOptions(commonFulfillmentOptions);
+      setScheduledOrdersEnabled(
+        scheduledFlags.length > 0 && scheduledFlags.every(Boolean),
+      );
       setFulfillmentMethod((prev) => (
         commonFulfillmentOptions.includes(prev) ? prev : commonFulfillmentOptions[0]
       ));
@@ -432,7 +475,7 @@ const Cart: React.FC = () => {
 
     const confirmStripe = async () => {
       try {
-        const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+        const API_BASE = getApiBaseUrl();
         const auth = getAuth();
         const currentUser = auth.currentUser;
         const idToken = currentUser ? await currentUser.getIdToken() : null;
@@ -510,7 +553,7 @@ const Cart: React.FC = () => {
 
     const confirmSquare = async () => {
       try {
-        const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+        const API_BASE = getApiBaseUrl();
         const auth = getAuth();
         const currentUser = auth.currentUser;
         const idToken = currentUser ? await currentUser.getIdToken() : null;
@@ -655,6 +698,11 @@ const Cart: React.FC = () => {
       return;
     }
 
+    if (scheduledDate && !validateScheduledDate(scheduledDate)) {
+      toast.error(scheduledDateError || "We're closed on that day — please choose another date.");
+      return;
+    }
+
     localStorage.setItem('deliveryInfo', JSON.stringify(deliveryInfo));
     isCheckingOutRef.current = true;
     setIsWhatsAppOrdering(true);
@@ -675,7 +723,7 @@ const Cart: React.FC = () => {
       const auth = getAuth();
       const currentUser = auth.currentUser;
       const idToken = currentUser ? await currentUser.getIdToken() : null;
-      const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+      const API_BASE = getApiBaseUrl();
       const url = `${API_BASE.replace(/\/$/, '')}/checkout`;
       const checkoutItems = items.map((item) => ({
         productId: item.product.id,
@@ -697,6 +745,9 @@ const Cart: React.FC = () => {
             ...deliveryInfo,
             name: deliveryInfo.name || user?.name || 'WhatsApp Customer',
             fulfillmentMethod,
+            scheduledDate: scheduledDate || undefined,
+            scheduledTime: scheduledTime || undefined,
+            guestCount: guestCount ? Number(guestCount) : undefined,
             deliveryPartnerName: availableDeliveryPartners.find((partner) => partner.id === deliveryInfo.deliveryPartner)?.name || '',
           },
         }),
@@ -730,6 +781,17 @@ const Cart: React.FC = () => {
           currency: whatsappStoreInfo.currency,
           orderReference,
           orderId,
+          storeSlug: whatsappStoreInfo.slug,
+        },
+        {
+          customerName: deliveryInfo.name || user?.name,
+          customerPhone: deliveryInfo.phone,
+          fulfillmentMethod: getFulfillmentLabel(fulfillmentMethod),
+          scheduledDate: scheduledDate || undefined,
+          scheduledTime: scheduledTime || undefined,
+          guestCount: guestCount ? Number(guestCount) : undefined,
+          notes: deliveryInfo.notes || undefined,
+          address: deliveryInfo.address || undefined,
         },
       );
 
@@ -769,6 +831,11 @@ const Cart: React.FC = () => {
 
     if (fulfillmentRequiresAddress(fulfillmentMethod) && !deliveryInfo.address) {
       toast.error('Please fill in your delivery address');
+      return;
+    }
+
+    if (scheduledDate && !validateScheduledDate(scheduledDate)) {
+      toast.error(scheduledDateError || "We're closed on that day — please choose another date.");
       return;
     }
 
@@ -844,10 +911,7 @@ const Cart: React.FC = () => {
         });
       }
 
-      // Use an env-configurable API base so production can point to the deployed
-      // Cloud Function URL (set VITE_API_BASE) while development uses '/api' and
-      // the Vite proxy to the local functions emulator.
-      const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
+      const API_BASE = getApiBaseUrl();
       const url = `${API_BASE.replace(/\/$/, '')}/checkout`;
 
       // Transform cart items to the format expected by the backend
@@ -870,6 +934,9 @@ const Cart: React.FC = () => {
           deliveryInfo: {
             ...deliveryInfo,
             fulfillmentMethod,
+            scheduledDate: scheduledDate || undefined,
+            scheduledTime: scheduledTime || undefined,
+            guestCount: guestCount ? Number(guestCount) : undefined,
             deliveryPartnerName: availableDeliveryPartners.find((partner) => partner.id === deliveryInfo.deliveryPartner)?.name || '',
           }
         }),
@@ -1019,21 +1086,54 @@ const Cart: React.FC = () => {
   const cartCurInfo = cartStoreIds.length === 1
     ? (storeCurrencyInfo[cartStoreIds[0]] || { currency: 'USD' })
     : { currency: 'USD' as string, secondaryCurrency: undefined as string | undefined, rate: undefined as number | undefined };
-  const cartSecondaryOpt = cartCurInfo.secondaryCurrency && cartCurInfo.rate && cartCurInfo.rate > 0
-    ? { currency: cartCurInfo.secondaryCurrency, rate: cartCurInfo.rate }
-    : undefined;
 
   const continueShoppingUrl = resolveStoreShopUrl({ pathname: location.pathname, items });
   const continueShoppingLabel = resolveStoreShopLabel(continueShoppingUrl);
 
+  type CurrencyInfo = { currency: string; secondaryCurrency?: string; rate?: number };
+
+  const getSecondaryOpt = (curInfo: CurrencyInfo) =>
+    curInfo.secondaryCurrency && curInfo.rate && curInfo.rate > 0
+      ? { currency: curInfo.secondaryCurrency, rate: curInfo.rate }
+      : undefined;
+
+  const renderDualMoney = (
+    amount: number,
+    curInfo: CurrencyInfo,
+    options?: { primaryClass?: string; secondaryClass?: string; align?: 'left' | 'right' },
+  ) => {
+    const lines = formatDualMoneyLines(amount, {
+      currency: curInfo.currency,
+      style: 'full',
+      numbersOnly: Boolean(getSecondaryOpt(curInfo)),
+      secondary: getSecondaryOpt(curInfo),
+    });
+    const alignClass = options?.align === 'left' ? 'items-start text-left' : 'items-end text-right';
+
+    if (lines.secondary) {
+      return (
+        <div className={`flex flex-col leading-tight min-w-0 ${alignClass}`}>
+          <span className={options?.primaryClass ?? 'font-medium text-market-primary'}>{lines.primary}</span>
+          <span className={options?.secondaryClass ?? 'text-xs text-gray-600'}>{lines.secondary}</span>
+        </div>
+      );
+    }
+
+    return (
+      <span className={options?.primaryClass ?? 'font-medium text-market-primary'}>
+        {lines.primary}
+      </span>
+    );
+  };
+
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen bg-gray-50 overflow-x-hidden">
       <Header />
-      <main className="container mx-auto px-4 py-8">
-        <h1 className="text-2xl font-bold mb-6">Shopping Cart</h1>
+      <main className="container mx-auto px-3 py-4 sm:px-4 sm:py-8 max-w-full">
+        <h1 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6">Shopping Cart</h1>
 
         {items.length > 0 ? (
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-8">
             {/* Cart Items */}
             <div className="lg:col-span-2">
               <Card>
@@ -1045,20 +1145,17 @@ const Cart: React.FC = () => {
                     {items.map((item) => {
                       const store = getStoreById(item.product.storeId);
                       const curInfo = storeCurrencyInfo[item.product.storeId] || { currency: 'USD' };
-                      const secondaryOpt = curInfo.secondaryCurrency && curInfo.rate && curInfo.rate > 0
-                        ? { currency: curInfo.secondaryCurrency, rate: curInfo.rate }
-                        : undefined;
                       return (
-                        <li key={item.product.id} className="py-4 flex flex-col sm:flex-row">
-                          <div className="sm:w-24 sm:h-24 mb-4 sm:mb-0 flex-shrink-0 overflow-hidden rounded-md">
+                        <li key={item.product.id} className="py-4 flex flex-col sm:flex-row gap-3 sm:gap-0">
+                          <div className="w-full h-40 sm:w-24 sm:h-24 flex-shrink-0 overflow-hidden rounded-md">
                             <ProductVisual
                               product={item.product}
                               className="w-full h-full object-cover"
                             />
                           </div>
-                          <div className="sm:ml-4 flex-grow">
-                            <div className="flex flex-col sm:flex-row sm:justify-between">
-                              <div>
+                          <div className="sm:ml-4 flex-grow min-w-0">
+                            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:gap-4">
+                              <div className="min-w-0 flex-1">
                                 <h3 className="font-medium text-gray-900 min-w-0">
                                   {(() => {
                                     const productHref = buildProductRelativePath(
@@ -1080,16 +1177,22 @@ const Cart: React.FC = () => {
                                   Delivery: {item.product.deliveryTime}
                                 </p>
                               </div>
-                              <div className="mt-2 sm:mt-0 text-right">
-                                <p className="font-medium text-market-primary">
-                                  {formatMoney(item.product.price, { currency: curInfo.currency, style: 'full', secondary: secondaryOpt })}
-                                </p>
-                                <p className="text-sm text-gray-500">
-                                  Subtotal: {formatMoney(item.product.price * item.quantity, { currency: curInfo.currency, style: 'full', secondary: secondaryOpt })}
-                                </p>
+                              <div className="shrink-0 sm:text-right">
+                                {renderDualMoney(Number(item.product.price || 0), curInfo)}
+                                <div className="mt-1">
+                                  <p className="text-xs text-gray-500">Subtotal</p>
+                                  {renderDualMoney(
+                                    Number(item.product.price || 0) * item.quantity,
+                                    curInfo,
+                                    {
+                                      primaryClass: 'text-sm font-medium text-gray-700',
+                                      secondaryClass: 'text-xs text-gray-500',
+                                    },
+                                  )}
+                                </div>
                               </div>
                             </div>
-                            <div className="mt-4 flex justify-between items-center">
+                            <div className="mt-4 flex flex-wrap justify-between items-center gap-3">
                               <div className="flex items-center">
                                 <Button 
                                   variant="outline" 
@@ -1137,11 +1240,11 @@ const Cart: React.FC = () => {
                     })}
                   </ul>
                 </CardContent>
-                <CardFooter className="flex justify-between">
-                  <Button variant="outline" onClick={() => navigate(continueShoppingUrl)}>
+                <CardFooter className="flex flex-col gap-2 sm:flex-row sm:justify-between">
+                  <Button variant="outline" className="w-full sm:w-auto" onClick={() => navigate(continueShoppingUrl)}>
                     {continueShoppingLabel}
                   </Button>
-                  <Button variant="outline" onClick={() => clearCart()}>
+                  <Button variant="outline" className="w-full sm:w-auto" onClick={() => clearCart()}>
                     Clear Cart
                   </Button>
                 </CardFooter>
@@ -1155,18 +1258,22 @@ const Cart: React.FC = () => {
                   <CardTitle>Order Summary</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-4">
-                  <div className="flex justify-between">
-                    <span>Subtotal</span>
-                    <span>{formatMoney(subtotal, { currency: cartCurInfo.currency, style: 'full', secondary: cartSecondaryOpt })}</span>
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="shrink-0">Subtotal</span>
+                    <div className="min-w-0">
+                      {renderDualMoney(subtotal, cartCurInfo, { primaryClass: 'font-medium' })}
+                    </div>
                   </div>
                   
                   {/* Credits feature removed */}
                   
                   <Separator />
                   
-                  <div className="flex justify-between font-semibold text-lg">
-                    <span>Total</span>
-                    <span>{formatMoney(total, { currency: cartCurInfo.currency, style: 'full', secondary: cartSecondaryOpt })}</span>
+                  <div className="flex items-start justify-between gap-3 font-semibold text-lg">
+                    <span className="shrink-0">Total</span>
+                    <div className="min-w-0">
+                      {renderDualMoney(total, cartCurInfo, { primaryClass: 'font-semibold text-lg text-market-primary' })}
+                    </div>
                   </div>
                   
                   {/* Payment Method */}
@@ -1178,64 +1285,64 @@ const Cart: React.FC = () => {
                       className="space-y-2"
                     >
                       {(availablePaymentMethods.creditCard || availablePaymentMethods.debitCard) && (
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="visa" id="visa" />
-                          <Label htmlFor="visa" className="flex items-center">
-                            <img src="https://placehold.co/40x25/2C5282/fff?text=VISA" alt="Visa" className="mr-2 h-6" />
+                        <div className="flex items-start space-x-2">
+                          <RadioGroupItem value="visa" id="visa" className="mt-1 shrink-0" />
+                          <Label htmlFor="visa" className="flex items-center min-w-0 leading-snug">
+                            <img src="https://placehold.co/40x25/2C5282/fff?text=VISA" alt="Visa" className="mr-2 h-6 shrink-0" />
                             Visa
                           </Label>
                         </div>
                       )}
                       {(availablePaymentMethods.creditCard || availablePaymentMethods.debitCard) && (
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="mastercard" id="mastercard" />
-                          <Label htmlFor="mastercard" className="flex items-center">
-                            <img src="https://placehold.co/40x25/ED8936/fff?text=MC" alt="Mastercard" className="mr-2 h-6" />
+                        <div className="flex items-start space-x-2">
+                          <RadioGroupItem value="mastercard" id="mastercard" className="mt-1 shrink-0" />
+                          <Label htmlFor="mastercard" className="flex items-center min-w-0 leading-snug">
+                            <img src="https://placehold.co/40x25/ED8936/fff?text=MC" alt="Mastercard" className="mr-2 h-6 shrink-0" />
                             Mastercard
                           </Label>
                         </div>
                       )}
                       {availablePaymentMethods.paypal && (
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="paypal" id="paypal" />
-                          <Label htmlFor="paypal" className="flex items-center">
-                            <img src="https://placehold.co/40x25/38B2AC/fff?text=PP" alt="PayPal" className="mr-2 h-6" />
+                        <div className="flex items-start space-x-2">
+                          <RadioGroupItem value="paypal" id="paypal" className="mt-1 shrink-0" />
+                          <Label htmlFor="paypal" className="flex items-center min-w-0 leading-snug">
+                            <img src="https://placehold.co/40x25/38B2AC/fff?text=PP" alt="PayPal" className="mr-2 h-6 shrink-0" />
                             PayPal
                           </Label>
                         </div>
                       )}
                       {availablePaymentMethods.square && (
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="square" id="square" />
-                          <Label htmlFor="square" className="flex items-center">
-                            <img src="https://placehold.co/40x25/0F172A/fff?text=SQ" alt="Square" className="mr-2 h-6" />
+                        <div className="flex items-start space-x-2">
+                          <RadioGroupItem value="square" id="square" className="mt-1 shrink-0" />
+                          <Label htmlFor="square" className="flex items-center min-w-0 leading-snug">
+                            <img src="https://placehold.co/40x25/0F172A/fff?text=SQ" alt="Square" className="mr-2 h-6 shrink-0" />
                             Square
                           </Label>
                         </div>
                       )}
                       {availablePaymentMethods.omt && (
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="omt" id="omt" />
-                          <Label htmlFor="omt" className="flex items-center">
-                            <img src="https://placehold.co/40x25/1A365D/fff?text=OMT" alt="OMT" className="mr-2 h-6" />
+                        <div className="flex items-start space-x-2">
+                          <RadioGroupItem value="omt" id="omt" className="mt-1 shrink-0" />
+                          <Label htmlFor="omt" className="flex items-center min-w-0 leading-snug">
+                            <img src="https://placehold.co/40x25/1A365D/fff?text=OMT" alt="OMT" className="mr-2 h-6 shrink-0" />
                             OMT Transfer
                           </Label>
                         </div>
                       )}
                       {availablePaymentMethods.bob && (
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="bob" id="bob" />
-                          <Label htmlFor="bob" className="flex items-center">
-                            <img src="https://placehold.co/40x25/0C4A6E/fff?text=BOB" alt="BOB Finance" className="mr-2 h-6" />
+                        <div className="flex items-start space-x-2">
+                          <RadioGroupItem value="bob" id="bob" className="mt-1 shrink-0" />
+                          <Label htmlFor="bob" className="flex items-center min-w-0 leading-snug">
+                            <img src="https://placehold.co/40x25/0C4A6E/fff?text=BOB" alt="BOB Finance" className="mr-2 h-6 shrink-0" />
                             BOB Finance
                           </Label>
                         </div>
                       )}
                       {availablePaymentMethods.cashOnDelivery && (
-                        <div className="flex items-center space-x-2">
-                          <RadioGroupItem value="cash" id="cash" />
-                          <Label htmlFor="cash" className="flex items-center">
-                            <img src="https://placehold.co/40x25/718096/fff?text=CASH" alt="Cash" className="mr-2 h-6" />
+                        <div className="flex items-start space-x-2">
+                          <RadioGroupItem value="cash" id="cash" className="mt-1 shrink-0" />
+                          <Label htmlFor="cash" className="flex items-center min-w-0 leading-snug">
+                            <img src="https://placehold.co/40x25/718096/fff?text=CASH" alt="Cash" className="mr-2 h-6 shrink-0" />
                             Cash on Delivery
                           </Label>
                         </div>
@@ -1267,50 +1374,112 @@ const Cart: React.FC = () => {
                     </RadioGroup>
                   </div>
 
+                  {scheduledOrdersEnabled && (
+                    <>
+                      <Separator />
+                      <div className="pt-2 space-y-3">
+                        <p className="text-sm font-medium">Schedule your order (optional)</p>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div className="space-y-1">
+                            <Label htmlFor="scheduled-date" className="text-xs">Date</Label>
+                            <Input
+                              id="scheduled-date"
+                              type="date"
+                              value={scheduledDate}
+                              onChange={(e) => {
+                                const next = e.target.value;
+                                setScheduledDate(next);
+                                validateScheduledDate(next);
+                              }}
+                              className={scheduledDateError ? 'border-red-500' : undefined}
+                            />
+                          </div>
+                          <div className="space-y-1">
+                            <Label htmlFor="scheduled-time" className="text-xs">Time</Label>
+                            <Input
+                              id="scheduled-time"
+                              type="time"
+                              value={scheduledTime}
+                              onChange={(e) => setScheduledTime(e.target.value)}
+                            />
+                          </div>
+                        </div>
+                        {scheduledDateError ? (
+                          <p className="text-xs text-red-600">{scheduledDateError}</p>
+                        ) : storeWorkingDaysList[0] ? (
+                          <p className="text-xs text-gray-500">
+                            Open: {storeWorkingDaysList[0]}
+                            {storeWorkingHours ? ` · ${storeWorkingHours}` : ''}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-gray-500">Leave blank for ASAP. Pick one or both fields.</p>
+                        )}
+                      </div>
+                    </>
+                  )}
+
+                  {(fulfillmentMethod === 'dine_in' || scheduledDate || scheduledTime) && (
+                    <>
+                      <Separator />
+                      <div className="space-y-1">
+                        <Label htmlFor="guest-count" className="text-xs">How many people?</Label>
+                        <Input
+                          id="guest-count"
+                          type="number"
+                          min={1}
+                          max={50}
+                          placeholder="Party size"
+                          value={guestCount}
+                          onChange={(e) => setGuestCount(e.target.value)}
+                        />
+                      </div>
+                    </>
+                  )}
+
                   <Separator />
                   
                   {/* Delivery Information */}
                   <div className="pt-2 space-y-3">
-                    <div className="flex items-center justify-between mb-2">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between mb-2">
                       <p className="text-sm font-medium">
                         {fulfillmentRequiresAddress(fulfillmentMethod) ? 'Delivery Information' : 'Contact Information'}
                       </p>
                       {fulfillmentRequiresAddress(fulfillmentMethod) && (
-                      <div className="flex gap-2">
                         <Button
                           type="button"
                           variant="outline"
                           size="sm"
                           onClick={handleGetLocation}
                           disabled={isGettingLocation}
-                          className="text-xs"
+                          className="text-xs w-full sm:w-auto shrink-0"
                         >
                           <MapPin size={14} className="mr-1" />
                           {isGettingLocation ? 'Getting...' : 'Use My Location'}
                         </Button>
-                        {hasSavedInfo && (
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            onClick={handleClearSavedInfo}
-                            className="text-xs text-red-600 hover:text-red-700"
-                          >
-                            Clear Saved Info
-                          </Button>
-                        )}
-                      </div>
                       )}
                     </div>
                     
                     {hasSavedInfo && (
                       <div className="bg-green-50 border border-green-200 p-3 rounded-lg">
-                        <p className="text-xs text-green-800 font-medium">
-                          ✓ Using your saved delivery information
-                        </p>
-                        <p className="text-xs text-green-700 mt-1">
-                          You can update any field below or clear to start fresh
-                        </p>
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                          <div className="min-w-0">
+                            <p className="text-xs text-green-800 font-medium">
+                              ✓ Using your saved delivery information
+                            </p>
+                            <p className="text-xs text-green-700 mt-1">
+                              You can update any field below or clear to start fresh
+                            </p>
+                          </div>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            onClick={handleClearSavedInfo}
+                            className="text-xs text-red-600 hover:text-red-700 shrink-0 self-start px-2 h-8"
+                          >
+                            Clear saved info
+                          </Button>
+                        </div>
                       </div>
                     )}
                     

@@ -1,4 +1,6 @@
 import type { GeneralLedgerReportRow, JournalEntry, JournalLine, LedgerAccount } from '@/types/generalLedger';
+import type { GlPresentationContext } from '@/lib/ledger/glEntryPresentation';
+import { presentGlEntry } from '@/lib/ledger/glEntryPresentation';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -14,6 +16,7 @@ export type LedgerReportContext = {
   postedInRange: JournalEntry[];
   linesByAccountId: Map<string, JournalLine[]>;
   linesByEntryAndAccount: Map<string, JournalLine[]>;
+  linesByEntryId: Map<string, JournalLine[]>;
 };
 
 export function createLedgerReportContext(
@@ -37,15 +40,20 @@ export function createLedgerReportContext(
 
   const linesByAccountId = new Map<string, JournalLine[]>();
   const linesByEntryAndAccount = new Map<string, JournalLine[]>();
+  const linesByEntryId = new Map<string, JournalLine[]>();
 
   for (const line of lines) {
     const byAccount = linesByAccountId.get(line.accountId);
     if (byAccount) byAccount.push(line);
     else linesByAccountId.set(line.accountId, [line]);
 
-    const key = `${line.entryId}\0${line.accountId}`;
-    const byEntry = linesByEntryAndAccount.get(key);
+    const byEntry = linesByEntryId.get(line.entryId);
     if (byEntry) byEntry.push(line);
+    else linesByEntryId.set(line.entryId, [line]);
+
+    const key = `${line.entryId}\0${line.accountId}`;
+    const byEntryAcct = linesByEntryAndAccount.get(key);
+    if (byEntryAcct) byEntryAcct.push(line);
     else linesByEntryAndAccount.set(key, [line]);
   }
 
@@ -56,13 +64,20 @@ export function createLedgerReportContext(
     postedInRange,
     linesByAccountId,
     linesByEntryAndAccount,
+    linesByEntryId,
   };
 }
 
 export function buildGeneralLedgerRowsFromContext(
   account: LedgerAccount,
   ctx: LedgerReportContext,
-  options?: { costCenterId?: string; includeZeroActivity?: boolean },
+  options?: {
+    costCenterId?: string;
+    includeZeroActivity?: boolean;
+    entriesById?: Map<string, JournalEntry>;
+    presentation?: GlPresentationContext;
+    defaultCurrency?: string;
+  },
 ): {
   openingBalance: number;
   closingBalance: number;
@@ -85,8 +100,8 @@ export function buildGeneralLedgerRowsFromContext(
   const rows: GeneralLedgerReportRow[] = [];
   let running = openingBalance;
 
-  for (const entry of ctx.postedInRange) {
-    const key = `${entry.id}\0${account.id}`;
+  for (const journalEntry of ctx.postedInRange) {
+    const key = `${journalEntry.id}\0${account.id}`;
     const entryLines = ctx.linesByEntryAndAccount.get(key);
     if (!entryLines) continue;
     for (const line of entryLines) {
@@ -95,16 +110,33 @@ export function buildGeneralLedgerRowsFromContext(
       const credit = round2(line.credit || 0);
       if (account.normalBalance === 'debit') running = round2(running + debit - credit);
       else running = round2(running + credit - debit);
+
+      const currency =
+        line.currency ||
+        journalEntry.currency ||
+        account.currency ||
+        options?.defaultCurrency ||
+        'USD';
+      const presentation = options?.presentation
+        ? presentGlEntry(journalEntry, line, options.presentation, ctx.linesByEntryId.get(journalEntry.id) || [])
+        : undefined;
+
       rows.push({
-        date: entry.date.slice(0, 10),
-        entryId: entry.id,
-        voucherNumber: entry.voucherNumber,
-        voucherType: entry.voucherType,
-        memo: entry.memo,
+        date: journalEntry.date.slice(0, 10),
+        entryId: journalEntry.id,
+        voucherNumber: journalEntry.voucherNumber,
+        voucherType: journalEntry.voucherType,
+        memo: journalEntry.memo,
         debit,
         credit,
         runningBalance: running,
         costCenterId: line.costCenterId,
+        currency,
+        typeLabel: presentation?.typeLabel,
+        party: presentation?.party,
+        category: presentation?.category,
+        reference: presentation?.reference,
+        displayDescription: presentation?.description,
       });
     }
   }

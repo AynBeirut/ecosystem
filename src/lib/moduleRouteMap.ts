@@ -9,6 +9,7 @@ export type ModuleRouteRule = {
 
 export const MODULE_ROUTE_MAP: ModuleRouteRule[] = [
   { pathPrefix: '/admin/orders', moduleId: 'invoicing', enforceOnly: true },
+  { pathPrefix: '/admin/scheduled-orders', moduleId: 'invoicing', enforceOnly: true },
   { pathPrefix: '/admin/analytics', moduleId: 'analytics', enforceOnly: true },
   { pathPrefix: '/admin/revenue', moduleId: 'analytics', enforceOnly: true },
   { pathPrefix: '/admin/reports', moduleId: 'analytics', enforceOnly: true },

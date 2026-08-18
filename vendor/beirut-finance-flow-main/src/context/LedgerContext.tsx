@@ -11,7 +11,7 @@ import {
   reopenLedgerPeriod,
   type PeriodLockActor,
 } from '@/lib/ledger/periodLock';
-import { findClosedPeriodForDate, periodContainingAsOfDate } from '@/lib/ledger/periodLockCore';
+import { findLockedPeriodForDate, journalDateOnly, periodContainingAsOfDate } from '@/lib/ledger/periodLockCore';
 import {
   postJournalEntry,
   postOpeningBalanceEntry,
@@ -115,7 +115,8 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
   const asOfPeriodLocked = Boolean(asOfPeriod?.isClosed);
 
   const isDateLocked = useCallback(
-    (dateIso: string) => Boolean(findClosedPeriodForDate(dateIso, closedPeriods)),
+    (dateIso: string) =>
+      Boolean(findLockedPeriodForDate(dateIso, closedPeriods, journalDateOnly(new Date().toISOString()))),
     [closedPeriods],
   );
 

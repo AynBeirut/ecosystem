@@ -35,6 +35,7 @@ const TOOLS_LABELS: Record<string, string> = {
   'bulk-import': 'Bulk import',
   recurring: 'Recurring vouchers',
   checks: 'Check register',
+  'year-end-close': 'Year-end close',
 };
 
 const REPORT_LABELS: Record<string, string> = {

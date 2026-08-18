@@ -53,6 +53,15 @@ describe('lebanesePcgTree', () => {
     expect(nodeCanAddClientAccount(class4!)).toBe(true);
   });
 
+  it('nests 6011 detail under 6010 group header', () => {
+    const tree = buildPcgTree(LEBANESE_PCG_CHART, []);
+    const class6 = tree.find((node) => node.code === '6');
+    const group6010 = class6?.children.find((node) => node.code === '6010');
+    expect(group6010).toBeTruthy();
+    expect(group6010?.children.some((node) => node.code === '6011')).toBe(true);
+    expect(group6010?.children.some((node) => node.code === '6012')).toBe(true);
+  });
+
   it('resolves operational ledger account for mapped PCG detail', () => {
     const tree = buildPcgTree(LEBANESE_PCG_CHART, []);
     const apNode = tree

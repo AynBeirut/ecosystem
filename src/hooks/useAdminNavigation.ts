@@ -197,6 +197,7 @@ export function useAdminNavigation() {
         title: 'Sales & Customers',
         items: [
           { to: '/admin/orders', label: 'Orders', icon: Package, visible: Boolean(canViewOrders) },
+          { to: '/admin/scheduled-orders', label: 'Scheduled Orders', icon: Clock, visible: Boolean(canViewOrders) },
           {
             to: '/admin/pos',
             label: 'Grabio POS',
