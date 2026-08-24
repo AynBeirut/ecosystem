@@ -21,7 +21,7 @@ function resolveFinanceAuthDomain(): string {
 
 /** Public Firebase web config (market-flow-7b074). Env vars override for local/staging. */
 const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY || 'AIzaSyA0jzU0136sQM4QpBz6J0TYEsPn2JDTn1U',
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: resolveFinanceAuthDomain(),
   projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'market-flow-7b074',
   storageBucket:

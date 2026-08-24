@@ -23,6 +23,8 @@ git push origin main && gh auth switch -u a-nooor && git push backup main && gh 
 
 Do not commit `.env.production`, credentials, or local backup folders.
 
+**GitHub secret scanning:** Firebase `apiKey` in `google-services.json` / `GoogleService-Info.plist` are **public client IDs** (required for mobile builds). In GitHub → Security → Secret scanning → mark as *used in tests* / resolved. Restrict keys in [Firebase Console → API keys](https://console.cloud.google.com/apis/credentials). Server keys (`FIREBASE_TOKEN`, `OPENAI_API_KEY`, etc.) stay in GitHub Secrets only.
+
 ### Session 2026-08-24 — Dual-push policy
 Code + docs mirrored: `AynBeirut/ecosystem` ↔ `a-nooor/ecosystem`; `AynBeirut/grabio-platform-docs` ↔ `a-nooor/grabio-platform-docs`.
 

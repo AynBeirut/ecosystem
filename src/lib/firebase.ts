@@ -17,8 +17,6 @@ function resolveFirebaseAuthDomain(): string {
     hostname === 'market-flow-7b074.web.app' ||
     hostname === 'market-flow-7b074.firebaseapp.com';
 
-  // Preview channels and Firebase-hosted domains should use the stable Firebase
-  // auth domain instead of the production custom domain.
   if (isFirebasePreview || isFirebaseHosted || hostname === 'localhost' || hostname === '127.0.0.1') {
     return 'market-flow-7b074.firebaseapp.com';
   }
@@ -27,13 +25,13 @@ function resolveFirebaseAuthDomain(): string {
 }
 
 const firebaseConfig = {
-  apiKey: "AIzaSyA0jzU0136sQM4QpBz6J0TYEsPn2JDTn1U",
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
   authDomain: resolveFirebaseAuthDomain(),
-  projectId: "market-flow-7b074",
-  storageBucket: "market-flow-7b074.firebasestorage.app",
-  messagingSenderId: "997465465802",
-  appId: "1:997465465802:web:3c6789ea41a9458a98e533",
-  measurementId: "G-YSSWDNYTSW"
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || 'market-flow-7b074',
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || 'market-flow-7b074.firebasestorage.app',
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || '997465465802',
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_GA4_ID || import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
 
 export const app = initializeApp(firebaseConfig);

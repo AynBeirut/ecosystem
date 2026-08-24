@@ -13,15 +13,19 @@ import {
   where 
 } from 'firebase/firestore';
 
-// Firebase configuration from environment
+// Firebase configuration from environment (no hardcoded keys)
 const firebaseConfig = {
-  apiKey: process.env.VITE_FIREBASE_API_KEY || "AIzaSyBFOB0TYXdAtTxgIHTOkrB_BqgLXMKm00Y",
-  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN || "marketflowghana.firebaseapp.com",
-  projectId: process.env.VITE_FIREBASE_PROJECT_ID || "marketflowghana",
-  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET || "marketflowghana.firebasestorage.app",
-  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "577311992329",
-  appId: process.env.VITE_FIREBASE_APP_ID || "1:577311992329:web:7cf7e18b1c7c9e5f867bb0"
+  apiKey: process.env.VITE_FIREBASE_API_KEY,
+  authDomain: process.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.VITE_FIREBASE_APP_ID,
 };
+
+if (!firebaseConfig.apiKey || !firebaseConfig.projectId) {
+  throw new Error('Set VITE_FIREBASE_* env vars before running migrateToSlugs.js');
+}
 
 // Initialize Firebase
 const app = initializeApp(firebaseConfig);
