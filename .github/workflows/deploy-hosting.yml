@@ -6,7 +6,6 @@ on:
     branches:
       - main
     paths:
-      - '.env.production'
       - '.github/workflows/deploy-hosting.yml'
       - 'src/**'
       - 'public/**'
@@ -14,6 +13,9 @@ on:
       - 'vite.config.ts'
       - 'package.json'
       - 'package-lock.json'
+
+permissions:
+  contents: read
 
 jobs:
   deploy:
@@ -42,11 +44,17 @@ jobs:
           VITE_ECOSYSTEM_ENFORCE_MODULES: 'true'
           VITE_PUBLIC_PRODUCT_STOCK_API: 'true'
 
-      - name: Verify modular checkout flag in bundle
+      - name: Verify modular flags in bundle
         run: |
-          rg -q 'VITE_ECOSYSTEM_MODULAR_CHECKOUT:"true"' dist/assets/index-*.js
+          rg -q 'VITE_ECOSYSTEM_MODULAR:"true"' dist/assets/index-*.js
+          rg -q 'modularCheckout' dist/assets/index-*.js
 
       - name: Deploy to Firebase Hosting
         env:
           FIREBASE_TOKEN: ${{ secrets.FIREBASE_TOKEN }}
-        run: npx firebase-tools deploy --only hosting --project market-flow-7b074 --non-interactive
+        run: |
+          if [ -z "$FIREBASE_TOKEN" ]; then
+            echo "::error::FIREBASE_TOKEN secret is missing on this repo. Add it under Settings → Secrets → Actions."
+            exit 1
+          fi
+          npx firebase-tools deploy --only hosting --project market-flow-7b074 --non-interactive
