@@ -4,7 +4,28 @@
 
 > **Docs:** Canonical platform documentation is in the Obsidian vault `~/Documents/grabio-platform-docs/` (architecture, backlog, deploy protocol, gotchas). Code-repo `backlog.md` is legacy.
 
-### Session 2026-08-23 — Handoffs
+## Git — dual push (required)
+
+**Every code or doc update must be pushed to both GitHub accounts** (primary + backup). Never leave one mirror behind.
+
+| What | Primary (`AynBeirut`) | Backup (`a-nooor`) | Git remote |
+|------|----------------------|-------------------|------------|
+| Main / ecosystem code | `ecosystem` | `backup` | this repo (`grabio space`) |
+| Platform docs | `origin` | `backup` | `~/Documents/grabio-platform-docs` |
+
+```bash
+# Code (from grabio space, branch main)
+git push ecosystem main && gh auth switch -u a-nooor && git push backup main && gh auth switch -u AynBeirut
+
+# Docs (from grabio-platform-docs)
+git push origin main && gh auth switch -u a-nooor && git push backup main && gh auth switch -u AynBeirut
+```
+
+Do not commit `.env.production`, credentials, or local backup folders.
+
+### Session 2026-08-24 — Dual-push policy
+Code + docs mirrored: `AynBeirut/ecosystem` ↔ `a-nooor/ecosystem`; `AynBeirut/grabio-platform-docs` ↔ `a-nooor/grabio-platform-docs`.
+
 Invoice Manager: `docs/handoff/invoice-manager.md`. Admin dashboard: `docs/handoff/admin-dashboard.md`.
 
 ### Session 2026-08-23 — Invoice app stays in-app
