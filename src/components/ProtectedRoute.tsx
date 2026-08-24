@@ -9,6 +9,12 @@ import ModuleGate from '@/components/ModuleGate';
 import { checkSubscriptionAccess } from '@/lib/subscriptionGuard';
 import type { StoreProfile } from '@/types/storeProfile';
 import { getActualStoreId } from '@/lib/storeUtils';
+import {
+  gateIpAllowedFor,
+  gateSubscriptionAllowed,
+  markGateIpAllowed,
+  markGateSubscriptionAllowed,
+} from '@/lib/vOpsCache';
 import AdminEmbedLoader from '@/components/admin/AdminEmbedLoader';
 import FinanceModuleLoadingShell from '@/pages/admin/finance/FinanceModuleLoadingShell';
 
@@ -96,7 +102,9 @@ const ProtectedRoute: React.FC<{
       return;
     }
 
-    if (ipAllowedRef.current) {
+    const storeIdForGate = user.storeId || user.id || '';
+    if (ipAllowedRef.current || gateIpAllowedFor(storeIdForGate)) {
+      ipAllowedRef.current = true;
       setIpCheckState('allowed');
       return;
     }
@@ -115,6 +123,7 @@ const ProtectedRoute: React.FC<{
         if (!profileSnap.exists()) {
           if (!cancelled) {
             ipAllowedRef.current = true;
+            markGateIpAllowed(storeId);
             setIpCheckState('allowed');
           }
           return;
@@ -128,6 +137,7 @@ const ProtectedRoute: React.FC<{
         if (!profile.adminIpWhitelistEnabled) {
           if (!cancelled) {
             ipAllowedRef.current = true;
+            markGateIpAllowed(storeId);
             setIpCheckState('allowed');
           }
           return;
@@ -149,6 +159,7 @@ const ProtectedRoute: React.FC<{
         if (hostname === 'localhost' || hostname === '127.0.0.1') {
           if (!cancelled) {
             ipAllowedRef.current = true;
+            markGateIpAllowed(storeId);
             setIpCheckState('allowed');
           }
           return;
@@ -188,6 +199,7 @@ const ProtectedRoute: React.FC<{
         if (!cancelled) {
           if (ipAllowed) {
             ipAllowedRef.current = true;
+            markGateIpAllowed(storeId);
             setIpCheckState('allowed');
           } else {
             ipAllowedRef.current = false;
@@ -228,7 +240,9 @@ const ProtectedRoute: React.FC<{
       return;
     }
 
-    if (subscriptionAllowedRef.current) {
+    const storeIdEarly = getActualStoreId(user) || '';
+    if (subscriptionAllowedRef.current || gateSubscriptionAllowed(storeIdEarly)) {
+      subscriptionAllowedRef.current = true;
       setSubscriptionState('allowed');
       return;
     }
@@ -265,6 +279,7 @@ const ProtectedRoute: React.FC<{
         if (!cancelled) {
           if (access.allowed) {
             subscriptionAllowedRef.current = true;
+            markGateSubscriptionAllowed(storeId);
             setSubscriptionState('allowed');
           } else {
             subscriptionAllowedRef.current = false;
@@ -288,7 +303,7 @@ const ProtectedRoute: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [user, requiresSubscriptionCheck, navigate, location.pathname]);
+  }, [user, requiresSubscriptionCheck, navigate, location]);
 
   // Wait for auth state to finish loading before making redirect decisions
   if (isLoading) {
@@ -322,15 +337,26 @@ const ProtectedRoute: React.FC<{
     return <Navigate to="/login" replace state={{ from: location }} />;
   }
 
-  if (requiresAdminIpCheck && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
-    return <LoadingShell />;
+  if (requiresAdminIpCheck) {
+    const sid = user.storeId || user.id || '';
+    const ipOk = ipAllowedRef.current || gateIpAllowedFor(sid) || ipCheckState === 'allowed';
+    if (!ipOk && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
+      return <LoadingShell />;
+    }
   }
 
-  if (requiresSubscriptionCheck && (subscriptionState === 'idle' || subscriptionState === 'checking')) {
-    return <LoadingShell />;
+  if (requiresSubscriptionCheck) {
+    const sid = getActualStoreId(user) || '';
+    const subOk =
+      subscriptionAllowedRef.current ||
+      gateSubscriptionAllowed(sid) ||
+      subscriptionState === 'allowed';
+    if (!subOk && (subscriptionState === 'idle' || subscriptionState === 'checking')) {
+      return <LoadingShell />;
+    }
   }
 
-  if (requiresSubscriptionCheck && subscriptionState === 'blocked') {
+  if (requiresSubscriptionCheck && subscriptionState === 'blocked' && !gateSubscriptionAllowed(getActualStoreId(user) || '')) {
     return (
       <div className="min-h-[50vh] flex items-center justify-center px-4">
         <div className="max-w-lg w-full border rounded-lg p-6 space-y-3 bg-white">

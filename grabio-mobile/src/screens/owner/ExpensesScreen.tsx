@@ -47,6 +47,7 @@ export default function ExpensesScreen() {
   const [description, setDescription] = useState('');
   const [amount, setAmount] = useState('');
   const [currency, setCurrency] = useState('USD');
+  const [markPaid, setMarkPaid] = useState(true);
   const [saving, setSaving] = useState(false);
 
   const loadExpenses = useCallback(() => {
@@ -101,7 +102,7 @@ export default function ExpensesScreen() {
 
   const totalToday = expenses.reduce((sum, e) => sum + (e.amount || 0), 0);
 
-  const saveExpense = async () => {
+  const saveExpense = async (paid: boolean) => {
     const amountNum = parseFloat(amount);
     if (!amount || isNaN(amountNum) || amountNum <= 0) {
       Alert.alert('Invalid', 'Enter a valid amount');
@@ -110,6 +111,7 @@ export default function ExpensesScreen() {
     setSaving(true);
     try {
       const createdAt = new Date().toISOString();
+      const today = createdAt.slice(0, 10);
       await financeExpensesRef!.add({
         storeId: user!.storeId,
         name: description.trim() || category,
@@ -117,17 +119,21 @@ export default function ExpensesScreen() {
         description: description.trim() || null,
         amount: amountNum,
         currency: currency.trim() || 'USD',
-        paymentMethod: 'cash',
-        status: 'paid',
+        paymentMethod: paid ? 'cash' : '',
+        status: paid ? 'paid' : 'unpaid',
+        paymentStatus: paid ? 'paid' : 'unpaid',
+        amountPaid: paid ? amountNum : 0,
+        remainingAmount: paid ? 0 : amountNum,
+        paymentDate: paid ? today : null,
         expenseDate: createdAt,
         startDate: createdAt,
         date: createdAt,
         createdAt,
         updatedAt: createdAt,
       });
-      setCategory('Other'); setDescription(''); setAmount(''); setCurrency('USD');
+      setCategory('Other'); setDescription(''); setAmount(''); setCurrency('USD'); setMarkPaid(true);
       setShowForm(false);
-      Alert.alert('Saved', 'Expense recorded');
+      Alert.alert('Saved', paid ? 'Expense recorded and marked paid.' : 'Expense saved (unpaid).');
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -240,8 +246,26 @@ export default function ExpensesScreen() {
               />
             </View>
 
-            <TouchableOpacity style={styles.saveBtn} onPress={saveExpense} disabled={saving}>
-              {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save</Text>}
+            <Text style={styles.fieldLabel}>Payment</Text>
+            <View style={styles.paymentRow}>
+              <TouchableOpacity
+                style={[styles.paymentChip, markPaid && styles.paymentChipActive]}
+                onPress={() => setMarkPaid(true)}
+              >
+                <Text style={[styles.paymentChipText, markPaid && styles.paymentChipTextActive]}>Paid</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.paymentChip, !markPaid && styles.paymentChipActive]}
+                onPress={() => setMarkPaid(false)}
+              >
+                <Text style={[styles.paymentChipText, !markPaid && styles.paymentChipTextActive]}>Unpaid</Text>
+              </TouchableOpacity>
+            </View>
+
+            <TouchableOpacity style={styles.saveBtn} onPress={() => void saveExpense(markPaid)} disabled={saving}>
+              {saving ? <ActivityIndicator color="#fff" /> : (
+                <Text style={styles.saveBtnText}>{markPaid ? 'Save & mark paid' : 'Save unpaid'}</Text>
+              )}
             </TouchableOpacity>
             <TouchableOpacity onPress={() => setShowForm(false)}>
               <Text style={styles.cancelText}>Cancel</Text>
@@ -305,6 +329,12 @@ const styles = StyleSheet.create({
   pickerBtn: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, marginBottom: 10, backgroundColor: COLORS.background },
   pickerBtnText: { fontSize: 14, color: COLORS.textPrimary, fontWeight: '600' },
   input: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, fontSize: 14, backgroundColor: COLORS.background, marginBottom: 10, color: '#1A202C' },
+  fieldLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  paymentRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  paymentChip: { flex: 1, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.md, paddingVertical: 10, alignItems: 'center', backgroundColor: COLORS.background },
+  paymentChipActive: { borderColor: COLORS.primary, backgroundColor: '#e0e7ff' },
+  paymentChipText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  paymentChipTextActive: { color: COLORS.primary },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 14, alignItems: 'center' },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   cancelText: { color: COLORS.textMuted, textAlign: 'center', marginTop: 12, fontSize: 14 },

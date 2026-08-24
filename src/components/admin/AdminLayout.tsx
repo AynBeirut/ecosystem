@@ -9,8 +9,10 @@ import PoweredByEmoove from '@/components/PoweredByEmoove';
 import AdminOutletFallback from '@/components/admin/AdminOutletFallback';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { preloadAdminRoute, preloadCommonAdminRoutes } from '@/lib/adminRoutePreload';
+import { preloadVOpsCatalogs } from '@/lib/vOpsCatalog';
 import { doc, getDoc, getFirestore, updateDoc } from 'firebase/firestore';
 import AdminThemeToggle from '@/components/admin/AdminThemeToggle';
+import GrabioGuideFloating from '@/components/admin/GrabioGuideFloating';
 import { AdminThemeProvider, useAdminTheme } from '@/hooks/useAdminTheme';
 import { cn } from '@/lib/utils';
 
@@ -63,6 +65,9 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/revenue': 'Revenue',
   '/admin/marketing': 'Email Marketing',
   '/admin/orders': 'Orders',
+  '/admin/v-pos': 'V·POS',
+  '/admin/v-purchase': 'V·Purchase',
+  '/admin/v-expense': 'V·Expense',
   '/admin/scheduled-orders': 'Scheduled Orders',
   '/admin/inventory': 'Inventory',
   '/admin/customers': 'Customers',
@@ -80,6 +85,15 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/audit-logs': 'Store Logs',
   '/admin/seo-analytics': 'SEO Analytics',
   '/admin/seo-audit': 'SEO Audit',
+  '/admin/seo-keywords': 'SEO Keywords',
+  '/admin/seo-technical': 'SEO Technical',
+  '/admin/seo-content': 'SEO Content',
+  '/admin/seo-competitors': 'SEO Competitors',
+  '/admin/seo-aeo': 'SEO AEO',
+  '/admin/seo-geo': 'SEO GEO',
+  '/admin/seo-programmatic': 'SEO Programmatic',
+  '/admin/seo-links': 'SEO Links',
+  '/admin/ai-agent': 'Sally',
   '/admin/crm': 'Sales CRM',
   '/subscription': 'Subscription',
   '/team/dashboard': 'Seller Dashboard',
@@ -250,16 +264,26 @@ function AdminLayoutShell() {
     () =>
       (
         [
+          { to: '/admin/v-pos', label: 'V·POS', visible: Boolean(canViewOrders) },
+          { to: '/admin/v-purchase', label: 'V·Buy', visible: Boolean(canManageInventory) },
+          { to: '/admin/v-expense', label: 'V·Exp', visible: user?.role === 'admin' },
           { to: '/admin/orders', label: 'Orders', visible: Boolean(canViewOrders) },
           { to: '/admin/scheduled-orders', label: 'Scheduled', icon: Clock, visible: Boolean(canViewOrders) },
           { to: '/admin/customers', label: 'Customers', visible: Boolean(canViewCustomers) },
-          { to: '/admin/invoice-manager/expenses', label: 'Expenses', visible: user?.role === 'admin' },
-          { to: '/admin/purchases', label: 'Purchases', visible: Boolean(canManageInventory) },
-          { to: '/admin/suppliers', label: 'Suppliers', visible: user?.role === 'admin' && Boolean(canViewInventory) },
         ] as Array<{ to: string; label: string; visible: boolean; icon?: LucideIcon }>
       ).filter((link) => link.visible),
-    [canManageInventory, canViewCustomers, canViewInventory, canViewOrders, user?.role],
+    [canManageInventory, canViewCustomers, canViewOrders, user?.role],
   );
+
+  // Warm V·OPS route chunks + catalogs while Daily Ops is visible.
+  useEffect(() => {
+    if (dailyOpsLinks.length === 0) return;
+    for (const link of dailyOpsLinks) {
+      if (link.to.startsWith('/admin/v-')) preloadAdminRoute(link.to);
+    }
+    const sid = getActualStoreId(user) || user?.storeId || '';
+    if (sid) preloadVOpsCatalogs(sid);
+  }, [dailyOpsLinks, user]);
 
   const collapseSidebar = useCallback(() => {
     if (sidebarMode === 'open') return;
@@ -370,6 +394,25 @@ function AdminLayoutShell() {
     }
   };
 
+  const isVPosMode =
+    location.pathname === '/admin/v-pos' ||
+    location.pathname === '/admin/v-purchase' ||
+    location.pathname === '/admin/v-expense';
+
+  if (isVPosMode) {
+    return (
+      <div
+        data-admin-theme={theme}
+        data-vpos-mode="true"
+        className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background text-foreground"
+      >
+        <Suspense fallback={<AdminOutletFallback />}>
+          <Outlet />
+        </Suspense>
+      </div>
+    );
+  }
+
   return (
     <div
       data-admin-theme={theme}
@@ -394,6 +437,8 @@ function AdminLayoutShell() {
                     key={link.to}
                     to={link.to}
                     onMouseEnter={() => preloadAdminRoute(link.to)}
+                    onTouchStart={() => preloadAdminRoute(link.to)}
+                    onFocus={() => preloadAdminRoute(link.to)}
                     className={cn(
                       'admin-shell-daily-ops-link inline-flex items-center gap-1.5',
                       isRouteActive(link.to) && 'is-active',
@@ -682,6 +727,8 @@ function AdminLayoutShell() {
           Go to Marketplace
         </Link>
       </footer>
+
+      <GrabioGuideFloating />
     </div>
   );
 }

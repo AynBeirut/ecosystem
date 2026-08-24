@@ -1,3 +1,5 @@
+import { SEO_CLUSTER_POSTS } from './seoClusterPosts';
+
 export interface BlogSection {
   type: 'h2' | 'h3' | 'p' | 'ul' | 'ol';
   content: string | string[];
@@ -674,6 +676,7 @@ export const BLOG_POSTS: BlogPost[] = [
       },
     ],
   },
+  ...SEO_CLUSTER_POSTS,
 ];
 
 export function getBlogPost(slug: string): BlogPost | undefined {

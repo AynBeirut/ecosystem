@@ -1,0 +1,29 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "Owner-confirmed patch — Daniel order + Rayan expense",
+  "additionalOrders": [
+    {
+      "date": "2026-08-12",
+      "importSource": "jinan-daily-ledger-2026-08-12-daniel",
+      "customerName": "Daniel",
+      "sales": [
+        { "label": "Cake", "amountUSD": 40 },
+        { "label": "2doz Bites", "amountUSD": 25 }
+      ],
+      "amountPaid": 40,
+      "paymentStatus": "partial",
+      "paymentNotes": "Notebook: Cake $40 paid, 2doz Bites $25 unpaid",
+      "invoiceNotes": "Daniel order — Cake + 2doz Bites (Aug 12 notebook)"
+    }
+  ],
+  "expenses": [
+    {
+      "date": "2026-08-18",
+      "importSource": "jinan-daily-ledger-expense-2026-08-18-rayan-personal",
+      "label": "Rayan (Personal)",
+      "amountUSD": 10,
+      "category": "Other",
+      "notes": "Notebook: confirmed by owner"
+    }
+  ]
+}

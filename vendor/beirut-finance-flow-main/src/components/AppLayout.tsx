@@ -63,7 +63,7 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
   const canManageOrg = currentUserRole === "owner" || currentUserRole === "admin";
   const location = useLocation();
   const { active: playStoreV1Nav } = usePlayStoreV1Nav();
-  const showGrabioAdminLink = !embedded && isGrabioPlatformHost();
+  const showGrabioAdminLink = !embedded && !playStoreV1Nav && isGrabioPlatformHost();
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -211,51 +211,27 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
               </Link>
             </Button>
 
-            {showGrabioAdminLink ? (
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                asChild
-              >
-                <a href={`${BRAND.ecosystemUrl}/admin/customers`}>
-                  <Users className="mr-2 h-4 w-4" /> Customers
-                </a>
-              </Button>
-            ) : (
-              <Button 
-                variant="ghost" 
-                className={cn("w-full justify-start",
-                  location.pathname === "/clients" && "bg-gray-100 dark:bg-gray-800")}
-                asChild
-              >
-                <Link to="/clients">
-                  <Users className="mr-2 h-4 w-4" /> Clients
-                </Link>
-              </Button>
-            )}
+            <Button 
+              variant="ghost" 
+              className={cn("w-full justify-start",
+                location.pathname === "/clients" && "bg-gray-100 dark:bg-gray-800")}
+              asChild
+            >
+              <Link to="/clients">
+                <Users className="mr-2 h-4 w-4" /> Clients
+              </Link>
+            </Button>
 
-            {showGrabioAdminLink ? (
-              <Button
-                variant="ghost"
-                className="w-full justify-start"
-                asChild
-              >
-                <a href={`${BRAND.ecosystemUrl}/admin/products`}>
-                  <Package className="mr-2 h-4 w-4" /> Products
-                </a>
-              </Button>
-            ) : (
-              <Button 
-                variant="ghost" 
-                className={cn("w-full justify-start",
-                  location.pathname === "/products" && "bg-gray-100 dark:bg-gray-800")}
-                asChild
-              >
-                <Link to="/products">
-                  <Package className="mr-2 h-4 w-4" /> Products
-                </Link>
-              </Button>
-            )}
+            <Button 
+              variant="ghost" 
+              className={cn("w-full justify-start",
+                location.pathname === "/products" && "bg-gray-100 dark:bg-gray-800")}
+              asChild
+            >
+              <Link to="/products">
+                <Package className="mr-2 h-4 w-4" /> Products
+              </Link>
+            </Button>
 
             <Button 
               variant="ghost" 
@@ -359,17 +335,6 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
             </Button>
             </>
             )}
-
-            <Button 
-              variant="ghost" 
-              className={cn("w-full justify-start",
-                location.pathname === "/settings" && "bg-gray-100 dark:bg-gray-800")}
-              asChild
-            >
-              <Link to="/settings">
-                <Settings className="mr-2 h-4 w-4" /> Settings
-              </Link>
-            </Button>
 
             {!playStoreV1Nav && (
             <Button 

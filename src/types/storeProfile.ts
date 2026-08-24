@@ -104,6 +104,8 @@ export interface StoreDeliverySettings {
   defaultPickupCarrier?: string;
   /** When true, cart shows optional date/time to schedule the order. */
   scheduledOrdersEnabled?: boolean;
+  /** When true, new marketplace orders skip pending and start at confirmed. */
+  autoAcceptOrders?: boolean;
 }
 
 export interface MarketplaceIntegrationSetting {

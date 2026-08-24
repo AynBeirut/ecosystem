@@ -6,7 +6,7 @@
  * - Firestore seo_events data (page views, CTA clicks, leads)
  *
  * Auth flow: user clicks "Connect Search Console" → Google OAuth popup →
- * access token stored in sessionStorage → GSC API calls made client-side.
+ * access token stored in localStorage → GSC API calls made client-side.
  */
 
 import React, { useState, useEffect, useCallback } from 'react';
@@ -58,13 +58,13 @@ import {
 } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { getGscToken, persistGscTokenToFirestore, resolveGscToken, clearGscTokenRemote, GSC_SCOPE, TOKEN_KEY } from '@/lib/seoTechnical';
+import { syncGscRankingsToKeywords } from '@/lib/seoKeywords';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 const GSC_PROPERTY     = import.meta.env.VITE_GSC_PROPERTY as string || 'https://www.grabio.space/';
-const GSC_SCOPE        = 'https://www.googleapis.com/auth/webmasters.readonly';
-const TOKEN_KEY        = 'grabio_gsc_token';
+const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -115,29 +115,28 @@ interface FirestoreStats {
 // ─── OAuth helpers ────────────────────────────────────────────────────────────
 
 function getStoredToken(): string | null {
+  return getGscToken();
+}
+
+async function storeToken(token: string, expiresIn: number): Promise<void> {
+  await persistGscTokenToFirestore(token, expiresIn);
+}
+
+async function clearToken(): Promise<void> {
+  await clearGscTokenRemote();
+}
+
+async function ensureGscTokenPersisted(accessToken: string): Promise<void> {
   try {
-    const raw = sessionStorage.getItem(TOKEN_KEY);
-    if (!raw) return null;
-    const { token, expires } = JSON.parse(raw) as { token: string; expires: number };
-    if (Date.now() > expires) {
-      sessionStorage.removeItem(TOKEN_KEY);
-      return null;
-    }
-    return token;
+    const raw = localStorage.getItem(TOKEN_KEY);
+    const expires = raw
+      ? Number((JSON.parse(raw) as { expires?: number }).expires ?? 0)
+      : Date.now() + 3600_000;
+    const remainingSeconds = Math.max(60, Math.floor((expires - Date.now()) / 1000));
+    await persistGscTokenToFirestore(accessToken, remainingSeconds);
   } catch {
-    return null;
+    await persistGscTokenToFirestore(accessToken, 3600);
   }
-}
-
-function storeToken(token: string, expiresIn: number): void {
-  sessionStorage.setItem(TOKEN_KEY, JSON.stringify({
-    token,
-    expires: Date.now() + expiresIn * 1000 - 60_000,
-  }));
-}
-
-function clearToken(): void {
-  sessionStorage.removeItem(TOKEN_KEY);
 }
 
 function launchOAuth(): Promise<string> {
@@ -171,8 +170,9 @@ function launchOAuth(): Promise<string> {
       if (!event.data || event.data.type !== 'GSC_TOKEN' && event.data.type !== 'GSC_ERROR') return;
       cleanup();
       if (event.data.type === 'GSC_TOKEN') {
-        storeToken(event.data.token, event.data.expiresIn);
-        resolve(event.data.token);
+        void storeToken(event.data.token, event.data.expiresIn).then(() => {
+          resolve(event.data.token);
+        });
       } else {
         reject(new Error(event.data.error || 'Authentication failed'));
       }
@@ -400,6 +400,8 @@ const AdminSEOAudit: React.FC = () => {
 
   // Firestore data
   const [fsStats, setFsStats]     = useState<FirestoreStats | null>(null);
+  const [rankSyncMsg, setRankSyncMsg] = useState<string | null>(null);
+  const [rankSyncing, setRankSyncing] = useState(false);
 
   const loadData = useCallback(async (tok: string) => {
     setLoading(true);
@@ -461,17 +463,23 @@ const AdminSEOAudit: React.FC = () => {
       setTotals({ clicks: totalClicks, impressions: totalImpressions, avgCtr, avgPos });
       setFsStats(fs);
       setLastRefresh(new Date());
+      await ensureGscTokenPersisted(tok);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       if (msg.includes('401') || msg.includes('403')) {
-        clearToken();
-        setToken(null);
+        void clearToken().then(() => setToken(null));
       }
       console.error('[SEOAudit]', err);
     } finally {
       setLoading(false);
     }
   }, [timeRange]);
+
+  useEffect(() => {
+    void resolveGscToken().then((tok) => {
+      if (tok) setToken(tok);
+    });
+  }, []);
 
   useEffect(() => {
     if (token) loadData(token);
@@ -491,12 +499,32 @@ const AdminSEOAudit: React.FC = () => {
   };
 
   const handleDisconnect = () => {
-    clearToken();
-    setToken(null);
-    setKeywords([]);
-    setPages([]);
-    setDailyGSC([]);
-    setFsStats(null);
+    void clearToken().then(() => {
+      setToken(null);
+      setKeywords([]);
+      setPages([]);
+      setDailyGSC([]);
+      setFsStats(null);
+    });
+  };
+
+  const handleKeywordRankSync = async () => {
+    const authToken = token ?? (await resolveGscToken());
+    if (!authToken) return;
+    setRankSyncing(true);
+    setRankSyncMsg(null);
+    try {
+      const result = await syncGscRankingsToKeywords(authToken);
+      setRankSyncMsg(
+        `${result.synced + result.addedFromGsc} keywords ranked` +
+          (result.pagesFixed ? ` · ${result.pagesFixed} page URLs fixed` : '') +
+          (result.topRanked[0] ? ` · best: “${result.topRanked[0].keyword}” #${result.topRanked[0].position}` : ''),
+      );
+    } catch (err) {
+      setRankSyncMsg(err instanceof Error ? err.message : 'Keyword rank sync failed');
+    } finally {
+      setRankSyncing(false);
+    }
   };
 
   // ── Summary insight banner ─────────────────────────────────────────────────
@@ -523,6 +551,9 @@ const AdminSEOAudit: React.FC = () => {
                 <SelectItem value="180d">Last 6 months</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" onClick={() => void handleKeywordRankSync()} disabled={loading || rankSyncing}>
+              {rankSyncing ? 'Updating ranks…' : 'Update keyword ranks'}
+            </Button>
             <Button variant="outline" size="icon" onClick={() => loadData(token)} disabled={loading}>
               <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
@@ -541,6 +572,9 @@ const AdminSEOAudit: React.FC = () => {
         {/* Connected — dashboard */}
         {token && (
           <>
+            {rankSyncMsg ? (
+              <AdminPanel className="mb-4 border-teal-200 bg-teal-50 text-sm text-teal-900">{rankSyncMsg}</AdminPanel>
+            ) : null}
             {/* Insight banner */}
             {!loading && totals.clicks > 0 && (
               <div className="bg-teal-900 text-white rounded-xl p-5 space-y-3">

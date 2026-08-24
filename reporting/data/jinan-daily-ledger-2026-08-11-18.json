@@ -1,0 +1,112 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "Handwritten Jinan's Kitchen daily planner — Aug 11–18 2026",
+  "currency": "USD",
+  "days": [
+    {
+      "date": "2026-08-11",
+      "sales": []
+    },
+    {
+      "date": "2026-08-12",
+      "sales": [
+        { "label": "foul x 2 + fatte", "amountUSD": 20 },
+        { "label": "foul + eggs + cheese bread", "amountUSD": 20 },
+        { "label": "Msabaha", "amountUSD": 7 }
+      ]
+    },
+    {
+      "date": "2026-08-13",
+      "sales": [
+        { "label": "foul", "amountUSD": 6 },
+        { "label": "Msabaha", "amountUSD": 7 },
+        { "label": "Almond fatteh & foul", "amountUSD": 18 },
+        {
+          "label": "Bernard Order (x10)",
+          "amountUSD": 275,
+          "notes": "Notebook: Leila sheet back; Bernar Camp order x10 on Aug 12 had no price"
+        }
+      ]
+    },
+    {
+      "date": "2026-08-14",
+      "sales": [
+        { "label": "eggs pita & foul", "amountUSD": 16 },
+        { "label": "eggs dough, fatti & foul", "amountUSD": 25 },
+        { "label": "Balila + foul + fatti", "amountUSD": 24 },
+        { "label": "foul x 2", "amountUSD": 12 },
+        { "label": "Knefi", "amountUSD": 12 }
+      ]
+    },
+    {
+      "date": "2026-08-15",
+      "sales": [
+        { "label": "foul & fatte", "amountUSD": 14 },
+        { "label": "paul", "amountUSD": 100 }
+      ]
+    },
+    {
+      "date": "2026-08-16",
+      "sales": [
+        { "label": "fatte x 2", "amountUSD": 16 },
+        { "label": "order (2 fatte, 2 Msabaha)", "amountUSD": 30 },
+        { "label": "fatte +", "amountUSD": 10 },
+        {
+          "label": "Sfra",
+          "amountUSD": 67,
+          "notes": "Notebook: fatte x2, foul x2, Msab x2"
+        },
+        { "label": "order Arepa x 2", "amountUSD": 40 },
+        {
+          "label": "open table Sheesh Barak",
+          "amountUSD": 50,
+          "notes": "Notebook: jinan's tray & lemonade 2 (x2) + Husband Rania Wael's sister"
+        },
+        { "label": "order Sheesh Barak (x2)", "amountUSD": 50 }
+      ]
+    },
+    {
+      "date": "2026-08-17",
+      "sales": [
+        { "label": "Tray - Msabaha", "amountUSD": 20 }
+      ]
+    },
+    {
+      "date": "2026-08-18",
+      "sales": [
+        {
+          "label": "order (7 people)",
+          "amountUSD": 200,
+          "notes": "Notebook: Sheesh barak + Sushi + Bites + Salad"
+        }
+      ]
+    }
+  ],
+  "expenses": [
+    { "date": "2026-08-11", "label": "Veggies", "amountUSD": 20, "category": "Ingredients" },
+    { "date": "2026-08-12", "label": "fuel", "amountUSD": 20, "category": "Utilities" },
+    { "date": "2026-08-12", "label": "water", "amountUSD": 25, "category": "Utilities" },
+    { "date": "2026-08-12", "label": "Moudina (Personal)", "amountUSD": 30, "category": "Other" },
+    { "date": "2026-08-12", "label": "Asrar (Employee)", "amountUSD": 100, "category": "Salaries" },
+    { "date": "2026-08-12", "label": "Veggies & Fruits", "amountUSD": 35, "category": "Ingredients" },
+    { "date": "2026-08-13", "label": "Veggies & stuff", "amountUSD": 14, "category": "Ingredients" },
+    { "date": "2026-08-14", "label": "Batroun Market", "amountUSD": 23, "category": "Ingredients" },
+    { "date": "2026-08-14", "label": "Employee", "amountUSD": 5, "category": "Salaries" },
+    { "date": "2026-08-14", "label": "personal (Amada)", "amountUSD": 25, "category": "Other" },
+    { "date": "2026-08-14", "label": "Personal (cafe)", "amountUSD": 16, "category": "Other" },
+    { "date": "2026-08-14", "label": "Najjar + Sahar", "amountUSD": 10, "category": "Other" },
+    { "date": "2026-08-15", "label": "Personal", "amountUSD": 15, "category": "Other" },
+    { "date": "2026-08-15", "label": "Asrar", "amountUSD": 3, "category": "Other" },
+    { "date": "2026-08-15", "label": "Medicine (Asrar)", "amountUSD": 12, "category": "Other" },
+    { "date": "2026-08-16", "label": "Seeds (Aref)", "amountUSD": 8, "category": "Ingredients" },
+    { "date": "2026-08-16", "label": "Stuff", "amountUSD": 9, "category": "Supplies" },
+    { "date": "2026-08-16", "label": "Asrar Employee", "amountUSD": 10, "category": "Salaries" },
+    { "date": "2026-08-16", "label": "Veggies", "amountUSD": 35, "category": "Ingredients" },
+    { "date": "2026-08-17", "label": "fuel", "amountUSD": 20, "category": "Utilities" },
+    { "date": "2026-08-17", "label": "Rayan (Rob)", "amountUSD": 36, "category": "Other" },
+    { "date": "2026-08-17", "label": "Veggies", "amountUSD": 20, "category": "Ingredients" },
+    { "date": "2026-08-17", "label": "Najjar", "amountUSD": 10, "category": "Other" },
+    { "date": "2026-08-17", "label": "Employee", "amountUSD": 3, "category": "Salaries" },
+    { "date": "2026-08-17", "label": "personal", "amountUSD": 20, "category": "Other" }
+  ]
+}

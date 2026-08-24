@@ -154,6 +154,10 @@ export default function OwnerDashboardScreen() {
               <Text style={[styles.actionLabel, { color: '#0f766e' }]}>Invoice Manager</Text>
             </TouchableOpacity>
           )}
+          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('OwnerProducts')}>
+            <Text style={styles.actionIcon}>📋</Text>
+            <Text style={styles.actionLabel}>Products</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('CreateOrder')}>
             <Text style={styles.actionIcon}>➕</Text>
             <Text style={styles.actionLabel}>New Order</Text>

@@ -69,7 +69,8 @@ export function sitemapPlugin(): Plugin {
       try {
         // sitemapPlugin.ts is at src/lib/sitemapPlugin.ts → go up two levels for project root
         const blogDataPath = resolve(__dirname, '../data/blog-posts.ts');
-        const source = readFileSync(blogDataPath, 'utf-8');
+        const clusterPath = resolve(__dirname, '../data/seoClusterPosts.ts');
+        const source = `${readFileSync(blogDataPath, 'utf-8')}\n${readFileSync(clusterPath, 'utf-8')}`;
 
         // Extract slugs and updatedAt from source with a simple regex
         const slugMatches = [...source.matchAll(/slug:\s*'([^']+)'/g)];

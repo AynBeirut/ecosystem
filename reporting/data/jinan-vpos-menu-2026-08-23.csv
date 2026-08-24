@@ -1,0 +1,36 @@
+sku,name,category,description,servingSize,price,vposVisible,dataStatus,icon,notes
+JNK-PROD-00003,Almond Cheese,Spreads,Almond cheese,300gr,12,true,recipe-complete,🧀,
+JNK-PROD-00002,Almond Labni,Spreads,Almond labni,250gr,10,true,recipe-complete,🥣,Yogurt-style spread
+JNK-PROD-00001,Cashew Cream,Spreads,Vegan cashew cream,250gr,8,true,recipe-complete,🥜,Nut cream — not cheese wedge
+JNK-PROD-00018,Foul + Veggies + Bread,Breakfast,Foul with veggies and bread,,6,true,recipe-complete,🫘,
+JNK-PROD-00019,Fatti + Veggies + Bread,Breakfast,Fatti with veggies and bread,,8,true,menu-only,🥣,Layered fatteh bowl
+JNK-PROD-00020,Balila + Veggies + Bread,Breakfast,Balila with veggies and bread,,6,true,menu-only,🌾,Wheat porridge dish
+JNK-PROD-00021,Msabaha + Veggies + Bread,Breakfast,Msabaha with veggies and bread,,7,true,menu-only,🍆,Eggplant msabaha
+JNK-PROD-00022,Almond Fatti + Veggies + Bread,Breakfast,Almond fatti with veggies and bread,,13,true,menu-only,🌰,
+JNK-PROD-00023,Jinan's Tray,Platters,Sourdough mini bread + almond cheese + cashew cream + seeds,,20,true,menu-only,🍱,Shared platter
+JNK-PROD-00024,Arepa — Eggs & Avocado,Arepas,Eggs + avocado + rocca + lemonade (2 pieces),2 pieces,15,true,menu-only,🥚,
+JNK-PROD-00025,Arepa — Tuna & Avocado,Arepas,Tuna + avocado + tomato + cashew cream + lemonade (2 pieces),2 pieces,18,true,menu-only,🐟,
+JNK-PROD-00026,Arepa — Mushroom & Avocado,Arepas,Mushroom + avocado + almond cheese + lemonade (2 pieces),2 pieces,20,true,menu-only,🍄,
+JNK-PROD-00027,Pancake — Tahini & Walnut,Bakery,3 layers with tahini apple molasses and walnut,,10,true,menu-only,🥞,
+JNK-PROD-00028,Pancake — Chocolate & Fruits,Bakery,Chocolate cashew cream sauce with fruits,,12,true,menu-only,🍫,
+JNK-PROD-00029,Avocado Protein Bowl,Bowls,Avocado banana chia spirulina pea powder and fruits,,13,true,menu-only,🥑,
+JNK-PROD-00030,Knefi,Bakery,Knefi with mini sourdough bread and apple molasses,,10,true,menu-only,🍯,Syrup dessert
+JNK-PROD-00031,Vegan Pizza,Bakery,Sourdough fresh tomato sauce and almond cheese,,15,true,menu-only,🍕,
+JNK-PROD-00032,Eggs Mana'eesh,Bakery,Sourdough eggs cumin walnuts (medium),medium,10,true,menu-only,🥚,Eggs — not baguette
+JNK-PROD-00033,Mushroom Mana'eesh,Bakery,Sourdough mushrooms cashew cream pickles (medium),medium,18,true,menu-only,🍄,
+JNK-PROD-00034,Gomashio Mana'eesh,Bakery,Sourdough olive oil gomashio mix (medium),medium,10,true,menu-only,🫓,Flatbread mana'eesh
+JNK-PROD-00035,Bread,Bakery,Bread,,5,true,menu-only,🫓,Local bread — not French loaf
+JNK-PROD-00004,Caramel Sauce,Sauces,Caramel sauce,,14,false,recipe-complete,🍯,Kitchen item — hidden from V·POS
+JNK-PROD-00005,Chocolate Sauce,Sauces,Chocolate sauce with cashew cream,,15,false,recipe-complete,🍫,Kitchen item — hidden from V·POS
+JNK-PROD-00006,Ice Cream Cookie Box,Bakery,Ice cream cookie,,8,false,recipe-complete,🍪,Not on current menu
+JNK-PROD-00007,Strawberry Ice Cream,Ice Cream,Strawberry ice cream,,10,false,recipe-complete,🍓,Not on current menu
+JNK-PROD-00008,Mixed Berries Ice Cream,Ice Cream,Mixed berries ice cream,,10,false,recipe-complete,🫐,Not on current menu
+JNK-PROD-00009,Coco Caramel Ice Cream,Ice Cream,Cookies with caramel and chocolate sauce,,12,false,recipe-complete,🍦,Not on current menu
+JNK-PROD-00010,Berries Ice Cream Sundae,Ice Cream,Cookies with mixed berry ice creams,,14,false,recipe-complete,🍧,Not on current menu
+JNK-PROD-00011,Dough,Bakery,Dough base,,12,false,recipe-complete,🫓,Semi-finished — hidden from V·POS
+JNK-PROD-00012,Pizza Sauce,Sauces,Pizza sauce,,6,false,recipe-complete,🍅,Semi-finished — hidden from V·POS
+JNK-PROD-00013,Pizza,Bakery,Legacy pizza SKU,,9,false,recipe-complete,🍕,Replaced by Vegan Pizza on menu
+JNK-PROD-00014,Empty Croissant,Bakery,Empty croissant,,5,false,recipe-complete,🥐,Semi-finished — hidden from V·POS
+JNK-PROD-00015,Almond Croissant,Bakery,Croissant stuffed with almond cheese,,4,false,recipe-complete,🥐,Not on current menu
+JNK-PROD-00016,Date Tahini Croissant,Bakery,Croissant stuffed with tahini dates ball,,3.5,false,recipe-complete,🌴,Not on current menu
+JNK-PROD-00017,Chocolate Cake,Bakery,Chocolate cake,,22,false,recipe-complete,🎂,Not on current menu

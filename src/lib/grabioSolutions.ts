@@ -219,31 +219,56 @@ export const GRABIO_SOLUTIONS: GrabioSolution[] = [
   },
   {
     slug: 'restaurant',
-    title: 'Restaurant & Kitchen Production Software',
+    title: 'Restaurant & Hospitality Software — POS, Kitchen Inventory, Recipe Costing',
     shortTitle: 'Restaurant',
     metaDescription:
-      'Grabio restaurant software — live recipe deduction on sale, ingredient consumption at checkout, kitchen inventory, and delivery workflow for cafes and cloud kitchens.',
-    heroTitle: 'Restaurant operations without a separate manufacturing step',
+      'Restaurant and hospitality software for Lebanon and MENA — Windows POS with dual currency, live recipe deduction at checkout, kitchen inventory, cloud kitchen delivery, and accounting in one platform.',
+    heroTitle: 'A restaurant solution built on inventory, POS, and accounting — not a silo',
     heroDescription:
-      'Recipes deduct ingredients automatically when you sell — built for cafes, restaurants, and cloud kitchens using Grabio marketplace and delivery modules.',
+      'For cafes, restaurants, and cloud kitchens that need recipe costing, kitchen stock, dual-currency POS, marketplace orders, and a general ledger — without middleware between your counter and your books.',
     keywords: [
       'restaurant inventory software',
+      'restaurant POS Lebanon',
+      'multi-currency restaurant POS Lebanon',
       'recipe costing POS',
       'cloud kitchen software',
+      'restaurant solution Lebanon',
+      'hospitality software MENA',
+      'kitchen inventory automation',
       'Grabio restaurant',
     ],
-    moduleIds: ['restaurant', 'delivery', 'stock'],
+    moduleIds: ['restaurant', 'delivery', 'stock', 'pos', 'invoicing', 'payments'],
     highlights: MODULE_FEATURE_ITEMS.restaurant ?? [],
     faqs: [
+      {
+        question: 'Is Grabio a restaurant solution or only back-office software?',
+        answer:
+          'Grabio is a modular business platform with a dedicated restaurant vertical: Restaurant Production for live recipe deduction, Windows POS for counter sales with dual currency, marketplace and delivery modules for cloud kitchens, and full general ledger accounting — in one account.',
+      },
       {
         question: 'How does Grabio handle restaurant inventory?',
         answer:
           'Grabio Restaurant Production deducts recipe ingredients automatically at the point of sale — so ingredient consumption is tracked without a separate manufacturing batch step.',
       },
       {
+        question: 'How is Grabio different from restaurant-only POS tools like Foodics?',
+        answer:
+          'Foodics and similar tools focus on F&B front-of-house workflows. Grabio combines restaurant production and POS with enterprise inventory, general ledger accounting, manufacturing BOM, and CRM — for operators who want hospitality plus back-office in one platform, not a patchwork of apps.',
+      },
+      {
+        question: 'Does Grabio support dual-currency restaurant billing in Lebanon?',
+        answer:
+          'Yes. Grabio Windows POS supports dual currency (USD/LBP) at checkout with inventory and accounting sync — built for Lebanese operators who price and settle in more than one currency.',
+      },
+      {
         question: 'Is Grabio suitable for cloud kitchens?',
         answer:
           'Yes. Cloud kitchens use Grabio for marketplace ordering, delivery workflow with GPS, kitchen ingredient deduction, and supplier purchase management in one platform.',
+      },
+      {
+        question: 'When should I choose Grabio over a reservation platform like TheFork?',
+        answer:
+          'TheFork Manager targets guest discovery and reservations. Grabio targets operations — POS, recipes, kitchen inventory, delivery, suppliers, and accounting. They solve different problems; many operators use discovery tools separately from their operations stack.',
       },
     ],
   },

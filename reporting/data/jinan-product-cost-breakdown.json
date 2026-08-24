@@ -1,0 +1,1216 @@
+{
+  "generatedAt": "2026-08-14T20:09:44.787Z",
+  "products": [
+    {
+      "sku": "JNK-PROD-00001",
+      "name": "Cashew Cheese Cream",
+      "batchOutput": "1900 gram",
+      "batchCostUSD": 10.99,
+      "productionBatchCostUSD": 10.51,
+      "sellUnitsPerBatch": 2.4,
+      "sellUnitLabel": "250g nut/jar (600g nut/batch → 2.4 jar(s))",
+      "costPerSellUnitUSD": 4.58,
+      "productionCostPerSellUnitUSD": 4.38,
+      "packagingCostPerSellUnitUSD": 0.2,
+      "floor32pctUSD": 14.5,
+      "ownerPriceUSD": 18,
+      "foodCostPctAtOwner": 25.44,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00020",
+          "name": "Cashew",
+          "qty": "0.6",
+          "qtyUsed": 0.6,
+          "unit": "kg",
+          "costPerUnit": 12,
+          "cost": 7.2
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00012",
+          "name": "Agar",
+          "qty": "0.03",
+          "qtyUsed": 30,
+          "unit": "gram",
+          "costPerUnit": 0.1,
+          "cost": 3
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00045",
+          "name": "Plastic Bottles 250 Ml",
+          "qty": "2.4",
+          "qtyUsed": 2.4,
+          "unit": "piece",
+          "costPerUnit": 0.2,
+          "cost": 0.48
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00061",
+          "name": "Water",
+          "qty": "2",
+          "qtyUsed": 2,
+          "unit": "liter",
+          "costPerUnit": 0.15,
+          "cost": 0.3
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.01",
+          "qtyUsed": 0.01,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0.01
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00002",
+      "name": "Almond Labni",
+      "batchOutput": "1500 gram",
+      "batchCostUSD": 8.15,
+      "productionBatchCostUSD": 7.75,
+      "sellUnitsPerBatch": 2,
+      "sellUnitLabel": "250g nut/jar (500g nut/batch → 2 jar(s))",
+      "costPerSellUnitUSD": 4.08,
+      "productionCostPerSellUnitUSD": 3.88,
+      "packagingCostPerSellUnitUSD": 0.2,
+      "floor32pctUSD": 13,
+      "ownerPriceUSD": 16,
+      "foodCostPctAtOwner": 25.47,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00013",
+          "name": "Almond",
+          "qty": "0.5",
+          "qtyUsed": 0.5,
+          "unit": "kg",
+          "costPerUnit": 12,
+          "cost": 6
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00012",
+          "name": "Agar",
+          "qty": "0.01",
+          "qtyUsed": 10,
+          "unit": "gram",
+          "costPerUnit": 0.1,
+          "cost": 1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00038",
+          "name": "Lemon",
+          "qty": "2",
+          "qtyUsed": 0.24,
+          "unit": "kg",
+          "costPerUnit": 2.5,
+          "cost": 0.6
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00045",
+          "name": "Plastic Bottles 250 Ml",
+          "qty": "2",
+          "qtyUsed": 2,
+          "unit": "piece",
+          "costPerUnit": 0.2,
+          "cost": 0.4
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00061",
+          "name": "Water",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "liter",
+          "costPerUnit": 0.15,
+          "cost": 0.15
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00003",
+      "name": "Almond Cheese",
+      "batchOutput": "2000 gram",
+      "batchCostUSD": 9.31,
+      "productionBatchCostUSD": 8.91,
+      "sellUnitsPerBatch": 2,
+      "sellUnitLabel": "250g nut/jar (500g nut/batch → 2 jar(s))",
+      "costPerSellUnitUSD": 4.66,
+      "productionCostPerSellUnitUSD": 4.46,
+      "packagingCostPerSellUnitUSD": 0.2,
+      "floor32pctUSD": 15,
+      "ownerPriceUSD": 20,
+      "foodCostPctAtOwner": 23.28,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00013",
+          "name": "Almond",
+          "qty": "0.5",
+          "qtyUsed": 0.5,
+          "unit": "kg",
+          "costPerUnit": 12,
+          "cost": 6
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00012",
+          "name": "Agar",
+          "qty": "0.02",
+          "qtyUsed": 20,
+          "unit": "gram",
+          "costPerUnit": 0.1,
+          "cost": 2
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00019",
+          "name": "Nutritional Yeast",
+          "qty": "0.02",
+          "qtyUsed": 20,
+          "unit": "gram",
+          "costPerUnit": 0.03,
+          "cost": 0.6
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00045",
+          "name": "Plastic Bottles 250 Ml",
+          "qty": "2",
+          "qtyUsed": 2,
+          "unit": "piece",
+          "costPerUnit": 0.2,
+          "cost": 0.4
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00061",
+          "name": "Water",
+          "qty": "2",
+          "qtyUsed": 2,
+          "unit": "liter",
+          "costPerUnit": 0.15,
+          "cost": 0.3
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.01",
+          "qtyUsed": 0.01,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0.01
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00004",
+      "name": "Caramel Sauce",
+      "batchOutput": "1780 gram",
+      "batchCostUSD": 10.56,
+      "productionBatchCostUSD": 9.14,
+      "sellUnitsPerBatch": 7.12,
+      "sellUnitLabel": "250g sauce/jar (1780g batch → 7.12 jars)",
+      "costPerSellUnitUSD": 1.48,
+      "productionCostPerSellUnitUSD": 1.28,
+      "packagingCostPerSellUnitUSD": 0.2,
+      "floor32pctUSD": 5,
+      "ownerPriceUSD": 14,
+      "foodCostPctAtOwner": 10.59,
+      "ingredients": [
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00001",
+          "name": "Cashew Cheese Cream",
+          "qty": "1.2",
+          "cost": 6.64
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.6",
+          "qtyUsed": 0.6,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 2.4
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00045",
+          "name": "Plastic Bottles 250 Ml",
+          "qty": "7.12",
+          "qtyUsed": 7.12,
+          "unit": "piece",
+          "costPerUnit": 0.2,
+          "cost": 1.42
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00062",
+          "name": "Vanilla",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 100,
+          "cost": 0.1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00005",
+      "name": "Chocolate Sauce",
+      "batchOutput": "1825 gram",
+      "batchCostUSD": 11.36,
+      "productionBatchCostUSD": 9.9,
+      "sellUnitsPerBatch": 7.3,
+      "sellUnitLabel": "250g sauce/jar (1825g batch → 7.3 jars)",
+      "costPerSellUnitUSD": 1.56,
+      "productionCostPerSellUnitUSD": 1.36,
+      "packagingCostPerSellUnitUSD": 0.2,
+      "floor32pctUSD": 5,
+      "ownerPriceUSD": 15,
+      "foodCostPctAtOwner": 10.37,
+      "ingredients": [
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00001",
+          "name": "Cashew Cheese Cream",
+          "qty": "1.2",
+          "cost": 6.64
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.6",
+          "qtyUsed": 0.6,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 2.4
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00045",
+          "name": "Plastic Bottles 250 Ml",
+          "qty": "7.3",
+          "qtyUsed": 7.3,
+          "unit": "piece",
+          "costPerUnit": 0.2,
+          "cost": 1.46
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00021",
+          "name": "Cacao",
+          "qty": "0.045",
+          "qtyUsed": 0.05,
+          "unit": "kg",
+          "costPerUnit": 17,
+          "cost": 0.77
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00062",
+          "name": "Vanilla",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 100,
+          "cost": 0.1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00006",
+      "name": "Ice Cream Cookie Box",
+      "batchOutput": "11 piece",
+      "batchCostUSD": 7.54,
+      "productionBatchCostUSD": 6.22,
+      "sellUnitsPerBatch": 11,
+      "sellUnitLabel": "150g cookie box (11/batch)",
+      "costPerSellUnitUSD": 0.69,
+      "productionCostPerSellUnitUSD": 0.57,
+      "packagingCostPerSellUnitUSD": 0.12,
+      "floor32pctUSD": 2.5,
+      "ownerPriceUSD": 8,
+      "foodCostPctAtOwner": 8.57,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00032",
+          "name": "Barley Flour",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "kg",
+          "costPerUnit": 2,
+          "cost": 2
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.45",
+          "qtyUsed": 0.45,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 1.8
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00031",
+          "name": "Tahini",
+          "qty": "0.3",
+          "qtyUsed": 0.3,
+          "unit": "kg",
+          "costPerUnit": 4.5,
+          "cost": 1.35
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00049",
+          "name": "Craft Box 750 Ml",
+          "qty": "11",
+          "qtyUsed": 11,
+          "unit": "piece",
+          "costPerUnit": 0.12,
+          "cost": 1.32
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00010",
+          "name": "Olive Oil",
+          "qty": "0.15",
+          "qtyUsed": 0.15,
+          "unit": "liter",
+          "costPerUnit": 6.25,
+          "cost": 0.94
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00062",
+          "name": "Vanilla",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 100,
+          "cost": 0.1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00061",
+          "name": "Water",
+          "qty": "0.2",
+          "qtyUsed": 0.2,
+          "unit": "liter",
+          "costPerUnit": 0.15,
+          "cost": 0.03
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00007",
+      "name": "Strawberry Ice Cream",
+      "batchOutput": "1240 gram",
+      "batchCostUSD": 8.3,
+      "productionBatchCostUSD": 6.86,
+      "sellUnitsPerBatch": 12,
+      "sellUnitLabel": "ice cream cup (~103g)",
+      "costPerSellUnitUSD": 0.69,
+      "productionCostPerSellUnitUSD": 0.57,
+      "packagingCostPerSellUnitUSD": 0.12,
+      "floor32pctUSD": 2.5,
+      "ownerPriceUSD": 10,
+      "foodCostPctAtOwner": 6.92,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00065",
+          "name": "Frozen Strawberry",
+          "qty": "0.8",
+          "qtyUsed": 0.8,
+          "unit": "kg",
+          "costPerUnit": 7,
+          "cost": 5.6
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00049",
+          "name": "Craft Box 750 Ml",
+          "qty": "12",
+          "qtyUsed": 12,
+          "unit": "piece",
+          "costPerUnit": 0.12,
+          "cost": 1.44
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00066",
+          "name": "Frozen Banana",
+          "qty": "0.4",
+          "qtyUsed": 0.4,
+          "unit": "kg",
+          "costPerUnit": 2.5,
+          "cost": 1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.04",
+          "qtyUsed": 0.04,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 0.16
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00062",
+          "name": "Vanilla",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 100,
+          "cost": 0.1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00008",
+      "name": "Mixed Berries Ice Cream",
+      "batchOutput": "1240 gram",
+      "batchCostUSD": 10.7,
+      "productionBatchCostUSD": 9.26,
+      "sellUnitsPerBatch": 12,
+      "sellUnitLabel": "ice cream cup (~103g)",
+      "costPerSellUnitUSD": 0.89,
+      "productionCostPerSellUnitUSD": 0.77,
+      "packagingCostPerSellUnitUSD": 0.12,
+      "floor32pctUSD": 3,
+      "ownerPriceUSD": 10,
+      "foodCostPctAtOwner": 8.92,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00067",
+          "name": "Frozen Mixed Berries",
+          "qty": "0.8",
+          "qtyUsed": 0.8,
+          "unit": "kg",
+          "costPerUnit": 10,
+          "cost": 8
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00049",
+          "name": "Craft Box 750 Ml",
+          "qty": "12",
+          "qtyUsed": 12,
+          "unit": "piece",
+          "costPerUnit": 0.12,
+          "cost": 1.44
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00066",
+          "name": "Frozen Banana",
+          "qty": "0.4",
+          "qtyUsed": 0.4,
+          "unit": "kg",
+          "costPerUnit": 2.5,
+          "cost": 1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.04",
+          "qtyUsed": 0.04,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 0.16
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00062",
+          "name": "Vanilla",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 100,
+          "cost": 0.1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00009",
+      "name": "Coco Caramel Ice Cream",
+      "batchOutput": "1 piece",
+      "batchCostUSD": 3.85,
+      "productionBatchCostUSD": 3.73,
+      "sellUnitsPerBatch": 1,
+      "sellUnitLabel": "1 coco/caramel sundae",
+      "costPerSellUnitUSD": 3.85,
+      "productionCostPerSellUnitUSD": 3.73,
+      "packagingCostPerSellUnitUSD": 0.12,
+      "floor32pctUSD": 12.5,
+      "ownerPriceUSD": 12,
+      "foodCostPctAtOwner": 32.08,
+      "ingredients": [
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00005",
+          "name": "Chocolate Sauce",
+          "qty": "0.3",
+          "cost": 1.63
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00004",
+          "name": "Caramel Sauce",
+          "qty": "0.3",
+          "cost": 1.54
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00006",
+          "name": "Ice Cream Cookie Box",
+          "qty": "1",
+          "cost": 0.57
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00049",
+          "name": "Craft Box 750 Ml",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "piece",
+          "costPerUnit": 0.12,
+          "cost": 0.12
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00010",
+      "name": "Berries Ice Cream Sundae",
+      "batchOutput": "1 piece",
+      "batchCostUSD": 3.92,
+      "productionBatchCostUSD": 3.8,
+      "sellUnitsPerBatch": 1,
+      "sellUnitLabel": "1 berries sundae",
+      "costPerSellUnitUSD": 3.92,
+      "productionCostPerSellUnitUSD": 3.8,
+      "packagingCostPerSellUnitUSD": 0.12,
+      "floor32pctUSD": 12.5,
+      "ownerPriceUSD": 14,
+      "foodCostPctAtOwner": 28,
+      "ingredients": [
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00008",
+          "name": "Mixed Berries Ice Cream",
+          "qty": "0.2",
+          "cost": 1.49
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00007",
+          "name": "Strawberry Ice Cream",
+          "qty": "0.2",
+          "cost": 1.11
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00006",
+          "name": "Ice Cream Cookie Box",
+          "qty": "1",
+          "cost": 0.57
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00005",
+          "name": "Chocolate Sauce",
+          "qty": "0.06",
+          "cost": 0.33
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00004",
+          "name": "Caramel Sauce",
+          "qty": "0.06",
+          "cost": 0.31
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00049",
+          "name": "Craft Box 750 Ml",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "piece",
+          "costPerUnit": 0.12,
+          "cost": 0.12
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00011",
+      "name": "Dough",
+      "batchOutput": "2800 gram",
+      "batchCostUSD": 4.94,
+      "productionBatchCostUSD": 4.94,
+      "sellUnitsPerBatch": 8,
+      "sellUnitLabel": "350g dough/pizza",
+      "costPerSellUnitUSD": 0.62,
+      "productionCostPerSellUnitUSD": 0.62,
+      "packagingCostPerSellUnitUSD": 0,
+      "floor32pctUSD": 2,
+      "ownerPriceUSD": 12,
+      "foodCostPctAtOwner": 5.15,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00064",
+          "name": "Starter",
+          "qty": "0.2",
+          "qtyUsed": 0.2,
+          "unit": "kg",
+          "costPerUnit": 10,
+          "cost": 2
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00009",
+          "name": "Whole Wheat Flour",
+          "qty": "1.6",
+          "qtyUsed": 1.6,
+          "unit": "kg",
+          "costPerUnit": 0.66,
+          "cost": 1.06
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00010",
+          "name": "Olive Oil",
+          "qty": "0.15",
+          "qtyUsed": 0.15,
+          "unit": "liter",
+          "costPerUnit": 6.25,
+          "cost": 0.94
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.18",
+          "qtyUsed": 0.18,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 0.72
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00061",
+          "name": "Water",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "liter",
+          "costPerUnit": 0.15,
+          "cost": 0.15
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00063",
+          "name": "Yeast",
+          "qty": "0.01",
+          "qtyUsed": 10,
+          "unit": "gram",
+          "costPerUnit": 0.008,
+          "cost": 0.08
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00012",
+      "name": "Pizza Sauce",
+      "batchOutput": "4 piece",
+      "batchCostUSD": 3.97,
+      "productionBatchCostUSD": 3.97,
+      "sellUnitsPerBatch": 4,
+      "sellUnitLabel": "pizza sauce / 4 pies",
+      "costPerSellUnitUSD": 0.99,
+      "productionCostPerSellUnitUSD": 0.99,
+      "packagingCostPerSellUnitUSD": 0,
+      "floor32pctUSD": 3.5,
+      "ownerPriceUSD": 6,
+      "foodCostPctAtOwner": 16.54,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00036",
+          "name": "Fresh Tomatoes",
+          "qty": "0.8",
+          "qtyUsed": 0.8,
+          "unit": "kg",
+          "costPerUnit": 2.5,
+          "cost": 2
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00068",
+          "name": "Pomegranate Sauce",
+          "qty": "0.06",
+          "qtyUsed": 60,
+          "unit": "gram",
+          "costPerUnit": 0.03,
+          "cost": 1.8
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00010",
+          "name": "Olive Oil",
+          "qty": "0.02",
+          "qtyUsed": 0.02,
+          "unit": "liter",
+          "costPerUnit": 6.25,
+          "cost": 0.13
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.01",
+          "qtyUsed": 0.01,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 0.04
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00013",
+      "name": "Pizza",
+      "batchOutput": "1 piece",
+      "batchCostUSD": 1.61,
+      "productionBatchCostUSD": 1.61,
+      "sellUnitsPerBatch": 1,
+      "sellUnitLabel": "1 pizza",
+      "costPerSellUnitUSD": 1.61,
+      "productionCostPerSellUnitUSD": 1.61,
+      "packagingCostPerSellUnitUSD": 0,
+      "floor32pctUSD": 5.5,
+      "ownerPriceUSD": 9,
+      "foodCostPctAtOwner": 17.89,
+      "ingredients": [
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00012",
+          "name": "Pizza Sauce",
+          "qty": "0.25",
+          "cost": 0.99
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00011",
+          "name": "Dough",
+          "qty": "0.35",
+          "cost": 0.62
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00014",
+      "name": "Empty Croissant",
+      "batchOutput": "35 piece",
+      "batchCostUSD": 5.48,
+      "productionBatchCostUSD": 5.48,
+      "sellUnitsPerBatch": 35,
+      "sellUnitLabel": "1 empty croissant",
+      "costPerSellUnitUSD": 0.16,
+      "productionCostPerSellUnitUSD": 0.16,
+      "packagingCostPerSellUnitUSD": 0,
+      "floor32pctUSD": 0.5,
+      "ownerPriceUSD": 5,
+      "foodCostPctAtOwner": 3.13,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00018",
+          "name": "Coconut Oil",
+          "qty": "0.3",
+          "qtyUsed": 300,
+          "unit": "gram",
+          "costPerUnit": 0.014737,
+          "cost": 4.42
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00009",
+          "name": "Whole Wheat Flour",
+          "qty": "1.6",
+          "qtyUsed": 1.6,
+          "unit": "kg",
+          "costPerUnit": 0.66,
+          "cost": 1.06
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00015",
+      "name": "Almond Croissant",
+      "batchOutput": "1 piece",
+      "batchCostUSD": 0.29,
+      "productionBatchCostUSD": 0.29,
+      "sellUnitsPerBatch": 1,
+      "sellUnitLabel": "1 almond croissant",
+      "costPerSellUnitUSD": 0.29,
+      "productionCostPerSellUnitUSD": 0.29,
+      "packagingCostPerSellUnitUSD": 0,
+      "floor32pctUSD": 1,
+      "ownerPriceUSD": 4,
+      "foodCostPctAtOwner": 7.25,
+      "ingredients": [
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00014",
+          "name": "Empty Croissant",
+          "qty": "0.0285714",
+          "cost": 0.16
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00003",
+          "name": "Almond Cheese",
+          "qty": "0.03",
+          "cost": 0.13
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00016",
+      "name": "Date Tahini Croissant",
+      "batchOutput": "1 piece",
+      "batchCostUSD": 0.36,
+      "productionBatchCostUSD": 0.36,
+      "sellUnitsPerBatch": 1,
+      "sellUnitLabel": "1 date croissant",
+      "costPerSellUnitUSD": 0.36,
+      "productionCostPerSellUnitUSD": 0.36,
+      "packagingCostPerSellUnitUSD": 0,
+      "floor32pctUSD": 1.5,
+      "ownerPriceUSD": 3.5,
+      "foodCostPctAtOwner": 10.29,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00076",
+          "name": "Tahini Dates Ball",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "piece",
+          "costPerUnit": 0.2,
+          "cost": 0.2
+        },
+        {
+          "type": "product",
+          "sku": "JNK-PROD-00014",
+          "name": "Empty Croissant",
+          "qty": "0.0285714",
+          "cost": 0.16
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00017",
+      "name": "Chocolate Cake",
+      "batchOutput": "2540 gram",
+      "batchCostUSD": 7.41,
+      "productionBatchCostUSD": 4.96,
+      "sellUnitsPerBatch": 1,
+      "sellUnitLabel": "whole cake 2540g",
+      "costPerSellUnitUSD": 7.41,
+      "productionCostPerSellUnitUSD": 4.96,
+      "packagingCostPerSellUnitUSD": 2.45,
+      "floor32pctUSD": 23.5,
+      "ownerPriceUSD": 22,
+      "foodCostPctAtOwner": 33.68,
+      "ingredients": [
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00053",
+          "name": "Cake Base",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "piece",
+          "costPerUnit": 1.9,
+          "cost": 1.9
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00021",
+          "name": "Cacao",
+          "qty": "0.1",
+          "qtyUsed": 0.1,
+          "unit": "kg",
+          "costPerUnit": 17,
+          "cost": 1.7
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00017",
+          "name": "Apple Molasses",
+          "qty": "0.3",
+          "qtyUsed": 0.3,
+          "unit": "kg",
+          "costPerUnit": 4,
+          "cost": 1.2
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00010",
+          "name": "Olive Oil",
+          "qty": "0.165",
+          "qtyUsed": 0.17,
+          "unit": "liter",
+          "costPerUnit": 6.25,
+          "cost": 1.03
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00009",
+          "name": "Whole Wheat Flour",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "kg",
+          "costPerUnit": 0.66,
+          "cost": 0.66
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00052",
+          "name": "Cake Box",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "piece",
+          "costPerUnit": 0.55,
+          "cost": 0.55
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00071",
+          "name": "Lemon Juice",
+          "qty": "0.06",
+          "qtyUsed": 0.06,
+          "unit": "kg",
+          "costPerUnit": 3,
+          "cost": 0.18
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00061",
+          "name": "Water",
+          "qty": "0.8",
+          "qtyUsed": 0.8,
+          "unit": "liter",
+          "costPerUnit": 0.15,
+          "cost": 0.12
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00070",
+          "name": "Lemon Zest",
+          "qty": "0.015",
+          "qtyUsed": 0.02,
+          "unit": "kg",
+          "costPerUnit": 3,
+          "cost": 0.05
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00069",
+          "name": "Bicarbonate",
+          "qty": "0.02",
+          "qtyUsed": 0.02,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0.02
+        }
+      ]
+    },
+    {
+      "sku": "JNK-PROD-00018",
+      "name": "Foul",
+      "batchOutput": "1 piece",
+      "batchCostUSD": 1.05,
+      "productionBatchCostUSD": 0.8,
+      "sellUnitsPerBatch": 1,
+      "sellUnitLabel": "1 foul plate",
+      "costPerSellUnitUSD": 1.05,
+      "productionCostPerSellUnitUSD": 0.8,
+      "packagingCostPerSellUnitUSD": 0.25,
+      "floor32pctUSD": 3.5,
+      "ownerPriceUSD": 6,
+      "foodCostPctAtOwner": 17.5,
+      "ingredients": [
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00010",
+          "name": "Olive Oil",
+          "qty": "0.05",
+          "qtyUsed": 0.05,
+          "unit": "liter",
+          "costPerUnit": 6.25,
+          "cost": 0.31
+        },
+        {
+          "type": "packaging",
+          "sku": "JNK-MAT-00050",
+          "name": "Lunch Box 826",
+          "qty": "1",
+          "qtyUsed": 1,
+          "unit": "piece",
+          "costPerUnit": 0.25,
+          "cost": 0.25
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00071",
+          "name": "Lemon Juice",
+          "qty": "0.055",
+          "qtyUsed": 0.06,
+          "unit": "kg",
+          "costPerUnit": 3,
+          "cost": 0.17
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00072",
+          "name": "Boiled Fava Beans",
+          "qty": "0.3",
+          "qtyUsed": 0.3,
+          "unit": "kg",
+          "costPerUnit": 0.48,
+          "cost": 0.14
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00073",
+          "name": "Boiled Chickpeas",
+          "qty": "0.15",
+          "qtyUsed": 0.15,
+          "unit": "kg",
+          "costPerUnit": 0.64,
+          "cost": 0.1
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00074",
+          "name": "Garlic",
+          "qty": "0.005",
+          "qtyUsed": 5,
+          "unit": "gram",
+          "costPerUnit": 0.015,
+          "cost": 0.08
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00075",
+          "name": "Chili Pepper",
+          "qty": "0.002",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 3,
+          "cost": 0.01
+        },
+        {
+          "type": "material",
+          "sku": "JNK-MAT-00035",
+          "name": "Salt",
+          "qty": "0.001",
+          "qtyUsed": 0,
+          "unit": "kg",
+          "costPerUnit": 1,
+          "cost": 0
+        }
+      ]
+    }
+  ]
+}

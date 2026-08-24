@@ -1,0 +1,25 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "Handwritten Jinan's Kitchen daily planner — Monday 3 Aug 2026",
+  "currency": "USD",
+  "days": [
+    {
+      "date": "2026-08-03",
+      "sales": [
+        { "label": "fatti", "amountUSD": 10 },
+        { "label": "foul", "amountUSD": 6 },
+        { "label": "foul", "amountUSD": 48 },
+        { "label": "order", "amountUSD": 25 },
+        { "label": "Azzamo", "amountUSD": 40 },
+        { "label": "foul", "amountUSD": 15 },
+        { "label": "fatti", "amountUSD": 8 }
+      ]
+    }
+  ],
+  "expenses": [
+    { "date": "2026-08-03", "label": "Home Rent", "amountUSD": 300, "category": "Rent", "notes": "Notebook: H.R" },
+    { "date": "2026-08-03", "label": "fuel", "amountUSD": 20, "category": "Utilities" },
+    { "date": "2026-08-03", "label": "personal", "amountUSD": 125, "category": "Other" },
+    { "date": "2026-08-03", "label": "cleaning material", "amountUSD": 150, "category": "Supplies", "notes": "Not written on page — confirmed by owner" }
+  ]
+}

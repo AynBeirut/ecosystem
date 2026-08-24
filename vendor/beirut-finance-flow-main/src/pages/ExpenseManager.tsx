@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Link } from "react-router-dom";
 import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { useAccounting } from "@/context/AccountingContext";
@@ -13,7 +14,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
-import { Plus, Receipt, Calendar, CreditCard, Wallet, Building2, Repeat, AlertCircle, Trash2, Edit, DollarSign } from "lucide-react";
+import { Plus, Receipt, Calendar, CreditCard, Wallet, Building2, Repeat, AlertCircle, Trash2, Edit, DollarSign, ScanLine } from "lucide-react";
 import { 
   Expense, 
   ExpenseCategory, 
@@ -23,6 +24,8 @@ import {
   PaymentStatus,
   EXPENSE_CATEGORY_LABELS 
 } from "@/types/accounting";
+import { OcrReceiptFlow, type OcrExpenseSave } from "@grabio/features/ocr";
+import { getFinanceStoreId } from "@/lib/firestore/storeContext";
 
 const ExpenseManager = () => {
   const { logout } = useAppContext();
@@ -38,6 +41,7 @@ const ExpenseManager = () => {
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isPayOpen, setIsPayOpen] = useState(false);
+  const [ocrOpen, setOcrOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
   const [activeTab, setActiveTab] = useState("all");
 
@@ -92,7 +96,7 @@ const ExpenseManager = () => {
       return;
     }
 
-    const id = createExpense({
+    createExpense({
       name: formData.name,
       description: formData.description || undefined,
       category: formData.category,
@@ -109,6 +113,24 @@ const ExpenseManager = () => {
     toast({ title: "Success", description: "Expense created successfully" });
     resetForm();
     setIsCreateOpen(false);
+  };
+
+  const handleOcrExpenseSave = async (data: OcrExpenseSave) => {
+    const known = Object.keys(EXPENSE_CATEGORY_LABELS);
+    const category = (known.includes(data.category) ? data.category : "other") as ExpenseCategory;
+    createExpense({
+      name: data.name,
+      description: data.vendorName || undefined,
+      category,
+      type: "one-time",
+      amount: data.amount,
+      startDate: data.date,
+      paymentMethod: "cash",
+      status: "unpaid",
+      notes: data.notes
+        ? `[OCR ${data.currency}] ${data.notes}`
+        : `[OCR ${data.currency}]`,
+    });
   };
 
   const handlePay = () => {
@@ -169,12 +191,21 @@ const ExpenseManager = () => {
             <p className="text-muted-foreground">Track and manage all business expenses</p>
           </div>
           
-          <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> Add Expense
-              </Button>
-            </DialogTrigger>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="default" className="bg-teal-600 hover:bg-teal-700" asChild>
+              <Link to="/admin/v-expense">
+                Quick expense
+              </Link>
+            </Button>
+            <Button variant="outline" onClick={() => setOcrOpen(true)}>
+              <ScanLine className="mr-2 h-4 w-4" /> Scan receipt
+            </Button>
+            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+              <DialogTrigger asChild>
+                <Button>
+                  <Plus className="mr-2 h-4 w-4" /> Add Expense
+                </Button>
+              </DialogTrigger>
             <DialogContent className="max-w-lg">
               <DialogHeader>
                 <DialogTitle>Create New Expense</DialogTitle>
@@ -305,7 +336,16 @@ const ExpenseManager = () => {
               </form>
             </DialogContent>
           </Dialog>
+          </div>
         </div>
+
+        <OcrReceiptFlow
+          open={ocrOpen}
+          onOpenChange={setOcrOpen}
+          storeId={getFinanceStoreId() || ""}
+          allowedDestinations={["expense"]}
+          onSaveExpense={handleOcrExpenseSave}
+        />
 
         {/* Summary Cards */}
         <div className="grid gap-4 md:grid-cols-4">

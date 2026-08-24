@@ -27,7 +27,13 @@
     "test:unit": "vitest run src/__tests__",
     "test:watch": "vitest watch",
     "test:firestore-rules": "JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\"",
-    "test:builder-phase1": "npm run build --prefix functions && node scripts/testStoreCommerceGuard.cjs && JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\""
+    "test:builder-phase1": "npm run build --prefix functions && node scripts/testStoreCommerceGuard.cjs && JAVA_HOME=\"$HOME/.local/jdk/jre-21\" PATH=\"$HOME/.local/jdk/jre-21/bin:$PATH\" firebase emulators:exec --only firestore \"node scripts/testFirestoreRules.cjs\"",
+    "seo:seed-content": "node scripts/seedSeoContentBatch.cjs --write",
+    "seo:content-phase3": "node scripts/runSeoContentPhase3.cjs --write",
+    "seo:programmatic-phase4": "node scripts/runSeoProgrammaticPhase4.cjs --write",
+    "seo:keywords-phase5": "node scripts/runSeoKeywordsPhase5.cjs --write",
+    "seo:ops-finish": "node scripts/runSeoOpsFinish.cjs --write",
+    "seo:audit-upload": "node scripts/seo-audit-upload.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^7.4.4",

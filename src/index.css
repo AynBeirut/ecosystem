@@ -273,6 +273,13 @@
     @apply border-slate-200/80 bg-white/80;
   }
 
+  html.vpos-fullscreen,
+  html.vpos-fullscreen body {
+    overflow: hidden;
+    height: 100%;
+    overscroll-behavior: none;
+  }
+
   [data-admin-theme="dark"] .admin-shell-footer {
     @apply border-border/80 bg-background;
   }
@@ -591,6 +598,126 @@
 
   [data-admin-theme="dark"] table tbody tr:hover {
     background-color: hsl(var(--admin-elevated-hover) / 0.55);
+  }
+
+  /* SEO Keywords — one compact bar, dark-native (no white stat cards) */
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem 1rem;
+    padding: 0.75rem 1rem;
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--admin-border-subtle) / 0.9);
+    background: hsl(var(--admin-elevated) / 0.55);
+    box-shadow: inset 0 1px 0 hsl(0 0% 100% / 0.05);
+  }
+
+  [data-admin-theme="light"] .seo-keywords-cute .seo-kw-bar {
+    @apply flex flex-wrap items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm;
+  }
+
+  .seo-keywords-cute .seo-kw-chips {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-chip {
+    display: inline-flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.2rem 0.65rem;
+    border-radius: 9999px;
+    border: 1px solid hsl(var(--admin-border-subtle) / 0.75);
+    background: hsl(var(--admin-hero) / 0.7);
+    font-size: 0.8125rem;
+    line-height: 1.25rem;
+  }
+
+  [data-admin-theme="light"] .seo-keywords-cute .seo-kw-chip {
+    @apply inline-flex items-baseline gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-0.5 text-[13px];
+  }
+
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-chip-value {
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: hsl(var(--admin-text));
+  }
+
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-chip-label {
+    color: hsl(var(--admin-text-muted));
+  }
+
+  [data-admin-theme="light"] .seo-keywords-cute .seo-kw-chip-value {
+    @apply font-bold tabular-nums text-slate-900;
+  }
+
+  [data-admin-theme="light"] .seo-keywords-cute .seo-kw-chip-label {
+    @apply text-slate-500;
+  }
+
+  .seo-keywords-cute .seo-kw-chip--active .seo-kw-chip-value {
+    color: hsl(160 55% 55%);
+  }
+
+  .seo-keywords-cute .seo-kw-chip--rank .seo-kw-chip-value {
+    color: hsl(265 55% 72%);
+  }
+
+  .seo-keywords-cute .seo-kw-chip--priority .seo-kw-chip-value {
+    color: hsl(38 85% 58%);
+  }
+
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-panel {
+    border-radius: 1rem;
+    border: 1px solid hsl(var(--admin-border-subtle) / 0.9);
+    background: hsl(var(--admin-elevated) / 0.45);
+    padding: 1rem 1.125rem;
+  }
+
+  [data-admin-theme="light"] .seo-keywords-cute .seo-kw-panel {
+    @apply rounded-xl border border-slate-200 bg-white p-4 shadow-sm;
+  }
+
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-alert {
+    margin-bottom: 0.75rem;
+    padding: 0.5rem 0.875rem;
+    border-radius: 0.75rem;
+    font-size: 0.8125rem;
+    font-weight: 500;
+    border: 1px solid hsl(var(--admin-border-subtle) / 0.8);
+    background: hsl(var(--admin-hero) / 0.8);
+    color: hsl(var(--admin-text));
+  }
+
+  .seo-keywords-cute .seo-kw-alert--ok {
+    border-color: hsl(160 45% 38% / 0.5);
+    color: hsl(160 55% 68%);
+  }
+
+  .seo-keywords-cute .seo-kw-alert--err {
+    border-color: hsl(0 45% 45% / 0.5);
+    color: hsl(0 65% 72%);
+  }
+
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-field-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em];
+    color: hsl(var(--admin-text-subtle));
+  }
+
+  [data-admin-theme="light"] .seo-keywords-cute .seo-kw-field-label {
+    @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-slate-500;
+  }
+
+  [data-admin-theme="dark"] .seo-keywords-cute .seo-kw-table-wrap {
+    margin-top: 1rem;
+    overflow-x: auto;
+    border-radius: 0.75rem;
+    border: 1px solid hsl(var(--admin-border-subtle) / 0.75);
+    background: hsl(var(--admin-bg) / 0.35);
   }
 
   [data-admin-theme="dark"] .admin-touch-target,

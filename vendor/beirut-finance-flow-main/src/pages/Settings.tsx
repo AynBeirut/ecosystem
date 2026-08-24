@@ -13,10 +13,12 @@ import { Sun, Moon, LogOut, Mail } from "lucide-react";
 import DataImportDialog from "@/components/DataImportDialog";
 import SimImportDialog from "@/components/SimImportDialog";
 import { BRAND } from "@/lib/branding";
+import { usePlayStoreV1Nav } from "@/hooks/usePlayStoreV1Nav";
 
 const Settings = () => {
   const { user, isDarkMode, toggleDarkMode, logout } = useAppContext();
   const { toast } = useToast();
+  const { active: playStoreV1Nav } = usePlayStoreV1Nav();
 
   const [notifications, setNotifications] = useState({
     email: true,
@@ -111,6 +113,7 @@ const Settings = () => {
           </TabsList>
           
           <TabsContent value="general" className="space-y-4 mt-6">
+            {!playStoreV1Nav && (
             <Card>
               <CardHeader>
                 <CardTitle>Company &amp; invoice branding</CardTitle>
@@ -127,6 +130,7 @@ const Settings = () => {
                 </a>
               </CardContent>
             </Card>
+            )}
             <Card>
               <CardHeader>
                 <CardTitle>Theme</CardTitle>

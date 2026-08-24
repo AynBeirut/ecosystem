@@ -80,7 +80,11 @@ const contact_1 = require("./api/contact");
 const domain_1 = require("./api/domain");
 const gdpr_1 = require("./api/gdpr");
 const ai_1 = require("./api/ai");
+const seoContent_1 = require("./api/seoContent");
+const seoAeo_1 = require("./api/seoAeo");
+const seoLinks_1 = require("./api/seoLinks");
 const agent_1 = require("./api/agent");
+const grabioGuide_1 = require("./api/grabioGuide");
 const metaCatalog_1 = require("./api/metaCatalog");
 const sitemap_1 = require("./api/sitemap");
 const marketing_1 = require("./api/marketing");
@@ -93,14 +97,19 @@ const dropship_1 = require("./api/dropship");
 const financeSso_1 = require("./api/financeSso");
 const wordpressAccess_1 = require("./api/wordpressAccess");
 const posSync_1 = require("./api/posSync");
+const storeEvents_1 = require("./api/storeEvents");
+const eventTickets_1 = require("./api/eventTickets");
+const eventReservations_1 = require("./api/eventReservations");
 const publicProductStock_1 = require("./api/publicProductStock");
 const r2_1 = require("./api/r2");
+const ocrReceipt_1 = require("./api/ocrReceipt");
 const moduleGate_1 = require("./middleware/moduleGate");
 const db = admin.firestore();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
 app.post('/webhook/stripe', express_1.default.raw({ type: 'application/json' }), stripeCheckout_1.handleStripeWebhook);
-app.use(express_1.default.json());
+// 8mb so /ocr/receipt can accept resized mobile photos as base64 (image is not persisted).
+app.use(express_1.default.json({ limit: '8mb' }));
 // Global request logger
 app.use((req, res, next) => {
     console.log('--- GLOBAL REQUEST LOG ---');
@@ -157,6 +166,13 @@ app.get('/health', (req, res) => {
             '/pos/heartbeat',
             '/pos/catalog',
             '/pos/orders',
+            '/pos/events',
+            '/pos/active-event',
+            '/pos/online-orders',
+            '/pos/event-tickets',
+            '/store/events',
+            '/store/events/reservations',
+            '/store/events/active',
             '/pos/products',
             '/pos/customers'
         ]
@@ -236,14 +252,19 @@ app.post('/gdpr/delete', gdpr_1.requestGdprDelete);
 // AI integration
 app.post('/ai/models', ai_1.getAiModels);
 app.post('/ai/generate', ai_1.generateAiContent);
+app.post('/seo/content-draft', seoContent_1.generateSeoContentDraft);
+app.post('/seo/validate-schema', seoAeo_1.validateSeoSchema);
+app.post('/seo/check-link', seoLinks_1.checkSeoLink);
 app.post('/ai/settings', ai_1.saveAiSettings);
 app.post('/ai/credits/balance', ai_1.getAiCreditBalance);
 app.post('/ai/credits/deduct', ai_1.deductAiCredits);
 app.post('/agent/query', agent_1.queryAgent);
+app.post('/agent/guide', grabioGuide_1.queryGrabioGuide);
 // Sitemap for SEO
 app.get('/sitemap.xml', sitemap_1.getSitemap);
 app.get('/robots.txt', sitemap_1.getRobotsTxt);
 app.post('/seo/sitemap/submit', sitemap_1.submitSitemap);
+app.post('/seo/platform/sitemap-ping', sitemap_1.pingPlatformSitemap);
 // Meta catalog sync
 app.get('/meta/catalog/feed', metaCatalog_1.getMetaCatalogFeed);
 app.post('/meta/catalog/sync', metaCatalog_1.syncMetaCatalog);
@@ -280,8 +301,33 @@ app.post('/pos/salaries', posSync_1.syncPosSalaries);
 app.post('/pos/raw-materials', posSync_1.syncPosRawMaterials);
 app.post('/pos/recipes', posSync_1.syncPosRecipes);
 app.post('/pos/refunds', posSync_1.syncPosRefunds);
+app.get('/pos/events', storeEvents_1.getPosEvents);
+app.get('/pos/active-event', storeEvents_1.getPosActiveEvent);
+app.get('/pos/online-orders', storeEvents_1.getPosOnlineOrders);
+app.get('/pos/event-tickets', eventTickets_1.lookupPosEventTickets);
+app.get('/pos/event-tickets/sync', eventTickets_1.getPosEventTicketsSync);
+app.post('/pos/event-tickets/link', eventTickets_1.linkPosEventTicket);
+app.post('/pos/event-tickets/issue', eventTickets_1.issuePosEventEntryTicket);
+app.post('/store/events', storeEvents_1.createStoreEvent);
+app.get('/store/events', storeEvents_1.listStoreEvents);
+app.get('/store/events/reservations', eventReservations_1.listStoreEventReservations);
+app.get('/store/events/active', storeEvents_1.getActiveStoreEvent);
+app.put('/store/events/active', storeEvents_1.setActiveStoreEvent);
+app.delete('/store/events/active', storeEvents_1.clearActiveStoreEvent);
+app.get('/store/events/:eventId', storeEvents_1.getStoreEvent);
+app.patch('/store/events/:eventId', storeEvents_1.updateStoreEvent);
+app.post('/store/events/:eventId/cancel', storeEvents_1.cancelStoreEvent);
+app.post('/store/events/:eventId/tickets', eventTickets_1.createEventTicket);
+app.get('/store/events/:eventId/tickets', eventTickets_1.listEventTickets);
+app.get('/store/events/:eventId/tickets/lookup', eventTickets_1.lookupEventTicketsAdmin);
+app.patch('/store/events/:eventId/tickets/:ticketId', eventTickets_1.updateEventTicket);
+app.post('/store/events/:eventId/tickets/:ticketId/cancel', eventTickets_1.cancelEventTicket);
+app.post('/store/events/:eventId/reservations', eventReservations_1.createEventReservation);
+app.get('/store/events/:eventId/reservations', eventReservations_1.listEventReservations);
+app.patch('/store/events/:eventId/reservations/:reservationId', eventReservations_1.updateEventReservation);
 app.post('/public/product-stock', publicProductStock_1.getPublicProductStock);
 app.post('/r2/presign', r2_1.presignR2Upload);
+app.post('/ocr/receipt', ocrReceipt_1.ocrReceipt);
 app.get('/marketing/campaigns', marketing_1.listCampaigns);
 app.post('/notifications/order/retry', async (req, res) => {
     try {

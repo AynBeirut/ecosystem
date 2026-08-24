@@ -9,7 +9,7 @@ import { RootStackParamList, TabParamList } from '../types';
 import { COLORS } from '../theme';
 
 const linking = {
-  prefixes: ['grabio://', 'https://grabio.space'],
+  prefixes: ['grabio://', 'https://grabio.space/track-order', 'https://grabio.space/order'],
   config: {
     screens: {
       MainTabs: {
@@ -123,8 +123,8 @@ function OwnerTabs() {
       />
       <Tab.Screen
         name="OwnerHome"
-        component={MarketplaceScreen}
-        options={{ tabBarLabel: 'Home', tabBarIcon: () => <Text>🏪</Text>, title: 'Marketplace', headerShown: false }}
+        component={CreateOrderScreen}
+        options={{ tabBarLabel: 'POS', tabBarIcon: () => <Text>🛒</Text>, title: 'Quick Sale', headerShown: true }}
       />
       <Tab.Screen
         name="OwnerCustomers"

@@ -1,0 +1,52 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "Handwritten Jinan's Kitchen daily planner — Aug 20–21 2026",
+  "currency": "USD",
+  "days": [
+    {
+      "date": "2026-08-20",
+      "sales": [
+        {
+          "label": "fatti x 3, Msabaha, pancake",
+          "amountUSD": 40,
+          "notes": "Notebook: fatti x3, Msabaha 1, pancake 1"
+        },
+        {
+          "label": "fatti x 4, foul x 3",
+          "amountUSD": 50
+        },
+        { "label": "foul & Hommous", "amountUSD": 13 },
+        {
+          "label": "fatti x 2, foul",
+          "amountUSD": 22,
+          "notes": "Notebook: fatti x2, foul 1"
+        },
+        { "label": "4 Arepas + drink", "amountUSD": 20 }
+      ]
+    },
+    {
+      "date": "2026-08-21",
+      "sales": [
+        {
+          "label": "Sofra x 10",
+          "amountUSD": 160,
+          "notes": "Notebook: Eggs, Arepa, pizza, foul, fatte, Msabake, Sweet & Tea"
+        },
+        {
+          "label": "Choclate Ice Cream x 2 + lunch",
+          "amountUSD": 100
+        },
+        { "label": "fatte & foul", "amountUSD": 14 }
+      ]
+    }
+  ],
+  "expenses": [
+    { "date": "2026-08-20", "label": "Bread & Yogurt", "amountUSD": 18, "category": "Ingredients" },
+    { "date": "2026-08-20", "label": "Veggies", "amountUSD": 15, "category": "Ingredients" },
+    { "date": "2026-08-20", "label": "Business Rent", "amountUSD": 300, "category": "Rent", "notes": "Notebook: B.R." },
+    { "date": "2026-08-20", "label": "Internet (Home)", "amountUSD": 25, "category": "Utilities" },
+    { "date": "2026-08-21", "label": "personal", "amountUSD": 25, "category": "Other" },
+    { "date": "2026-08-21", "label": "Veggies", "amountUSD": 12, "category": "Ingredients" },
+    { "date": "2026-08-21", "label": "Asrar employee", "amountUSD": 5, "category": "Salaries" }
+  ]
+}

@@ -63,6 +63,11 @@ export interface Order {
   status: 'pending' | 'confirmed' | 'processing' | 'ready' | 'delivered' | 'returned' | 'cancelled';
   createdAt: unknown;
   paymentMethod: string;
+  paymentStatus?: 'unpaid' | 'partial' | 'paid' | 'refunded';
+  amountPaid?: number;
+  remainingAmount?: number;
+  scheduledFor?: string;
+  invoiceNumber?: string;
 }
 
 export type RootStackParamList = {

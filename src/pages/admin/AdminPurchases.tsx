@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
+import { Link } from 'react-router-dom';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
@@ -13,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign, Clock, AlertTriangle } from 'lucide-react';
+import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign, Clock, AlertTriangle, ScanLine } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial, PaymentRecord } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
@@ -24,6 +25,8 @@ import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
 import { formatMoney as fmtMoney } from '@/lib/money/format';
 import { glPostPurchaseReceived } from '@/lib/platformGl';
 import { purchaseOrderForGlReceive } from '@/lib/purchaseGlInput';
+import { OcrReceiptFlow, type OcrPurchaseSave } from '@/features/ocr';
+import { ensureOcrMaterial, ensureOcrSupplier } from '@/lib/ocrEnsure';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -112,6 +115,7 @@ const AdminPurchases: React.FC = () => {
   // Loading states for button disabling
   const [isCreatingPO, setIsCreatingPO] = useState(false);
   const [isReceivingPO, setIsReceivingPO] = useState(false);
+  const [ocrOpen, setOcrOpen] = useState(false);
   
   const [newPurchase, setNewPurchase] = useState({
     supplierId: '',
@@ -1388,6 +1392,80 @@ const AdminPurchases: React.FC = () => {
     setNewPurchase({ ...newPurchase, items: updated });
   };
 
+  const handleOcrPurchaseSave = async (data: OcrPurchaseSave) => {
+    if (!user?.storeId) throw new Error('No store');
+    if (isAddingPurchaseRef.current) throw new Error('Purchase create already in progress');
+
+    isAddingPurchaseRef.current = true;
+    setIsCreatingPO(true);
+    try {
+      const db = getFirestore();
+      await enforceAndConsumeTrialOperation(db, user.storeId, 'purchase');
+      const invoiceNumber = await generatePONumber();
+
+      const normalizedItems: PurchaseItem[] = data.items.map((item) => {
+        const quantity = Number(item.quantity) || 0;
+        const unitPrice = Number(item.unitPrice) || 0;
+        return {
+          itemType: 'raw_material',
+          rawMaterialId: item.materialId,
+          materialName: item.materialName,
+          sku: item.sku || '',
+          unit: item.unit || 'piece',
+          quantity,
+          unitCost: unitPrice,
+          unitPrice,
+          subtotal: quantity * unitPrice,
+        };
+      });
+
+      const subtotal = normalizedItems.reduce((sum, item) => sum + item.quantity * (item.unitPrice || item.unitCost), 0);
+      const purchaseData = {
+        poNumber: invoiceNumber,
+        invoiceNumber,
+        supplierId: data.supplierId,
+        orderDate: data.orderDate ? new Date(data.orderDate).toISOString() : new Date().toISOString(),
+        expectedDeliveryDate: data.orderDate,
+        status: 'draft' as const,
+        items: normalizedItems,
+        subtotal,
+        taxType: 'none' as const,
+        taxRate: 0,
+        vat: 0,
+        totalAmount: subtotal,
+        totalCost: subtotal,
+        notes: data.notes ? `[OCR ${data.currency}] ${data.notes}` : `[OCR ${data.currency}]`,
+        paymentStatus: 'unpaid' as const,
+        amountPaid: 0,
+        storeId: user.storeId,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        source: 'ocr',
+      };
+
+      const docRef = await addDoc(collection(db, 'purchases'), purchaseData);
+      setPurchases([{ id: docRef.id, ...purchaseData }, ...purchases]);
+
+      try {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'create',
+          'purchase',
+          docRef.id,
+          { newValue: purchaseData },
+          user.storeId,
+        );
+      } catch (logError) {
+        console.error('Audit log failed:', logError);
+      }
+    } finally {
+      isAddingPurchaseRef.current = false;
+      setIsCreatingPO(false);
+    }
+  };
+
   const handleAddPurchase = async () => {
     if (isAddingPurchaseRef.current) {
       console.log('⚠️ Add purchase operation already in progress');
@@ -2016,10 +2094,22 @@ const AdminPurchases: React.FC = () => {
       backTo="/admin/inventory"
       backLabel="Back to Inventory"
       actions={
-        <Button onClick={() => setIsAddingPurchase(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Create Purchase Order
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="default" className="bg-teal-600 hover:bg-teal-700" asChild>
+            <Link to="/admin/v-purchase">
+              <ShoppingCart className="mr-2 h-4 w-4" />
+              Quick buy
+            </Link>
+          </Button>
+          <Button variant="outline" onClick={() => setOcrOpen(true)}>
+            <ScanLine className="mr-2 h-4 w-4" />
+            Scan receipt
+          </Button>
+          <Button onClick={() => setIsAddingPurchase(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Create Purchase Order
+          </Button>
+        </div>
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
@@ -2028,6 +2118,68 @@ const AdminPurchases: React.FC = () => {
         <AdminStatCard title="Total PO Value" value={money(purchaseStats.totalValue)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Sum of all orders" />
         <AdminStatCard title="Amount Due" value={money(purchaseStats.amountDue)} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 ? 'text-orange-600' : undefined} />
       </div>
+
+      <OcrReceiptFlow
+        open={ocrOpen}
+        onOpenChange={setOcrOpen}
+        storeId={user?.storeId || ''}
+        allowedDestinations={['purchase']}
+        suppliers={suppliers.map((s) => ({ id: s.id, name: s.name }))}
+        materials={rawMaterials.map((m) => ({
+          id: m.id,
+          name: m.name,
+          sku: m.sku,
+          unit: m.unit,
+        }))}
+        onEnsureSupplier={async (name) => {
+          if (!user?.storeId) throw new Error('No store');
+          const created = await ensureOcrSupplier({
+            storeId: user.storeId,
+            name,
+            existing: suppliers.map((s) => ({ id: s.id, name: s.name })),
+          });
+          if (!suppliers.some((s) => s.id === created.id)) {
+            setSuppliers((prev) => [
+              ...prev,
+              {
+                id: created.id,
+                storeId: user.storeId!,
+                name: created.name,
+                contactPerson: '',
+                email: '',
+                phone: '',
+                address: '',
+                createdAt: new Date().toISOString(),
+              } as Supplier,
+            ]);
+          }
+          return created;
+        }}
+        onEnsureMaterial={async (name, unitCost) => {
+          if (!user?.storeId) throw new Error('No store');
+          const created = await ensureOcrMaterial({
+            storeId: user.storeId,
+            name,
+            unitCost,
+            existingCount: rawMaterials.length,
+          });
+          setRawMaterials((prev) => [
+            ...prev,
+            {
+              id: created.id,
+              storeId: user.storeId!,
+              name: created.name,
+              sku: created.sku || '',
+              unit: created.unit || 'piece',
+              costPerUnit: unitCost,
+              currentStock: 0,
+              minStock: 0,
+            } as RawMaterial,
+          ]);
+          return created;
+        }}
+        onSavePurchase={handleOcrPurchaseSave}
+      />
 
       <Dialog open={isAddingPurchase} onOpenChange={(open) => {
         setIsAddingPurchase(open);

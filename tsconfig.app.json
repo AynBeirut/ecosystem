@@ -23,6 +23,7 @@
 
     "paths": {
       "@finance/*": ["./vendor/beirut-finance-flow-main/src/*"],
+      "@grabio/*": ["./src/*"],
       "@/*": ["./src/*"]
     }
   },

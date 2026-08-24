@@ -38,6 +38,10 @@
     ],
     "rewrites": [
       {
+        "source": "/sitemap.xml",
+        "function": "api"
+      },
+      {
         "source": "/invoice/**",
         "destination": "/invoice/index.html"
       },

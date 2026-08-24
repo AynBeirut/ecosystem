@@ -1,32 +1,29 @@
 import React from 'react';
-import { Bot } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import GrabioGuideChat from '@/components/admin/GrabioGuideChat';
+import SallyAvatar from '@/components/admin/SallyAvatar';
 
 const AdminAiAgent: React.FC = () => {
   return (
     <AdminPageShell
-      title="Grabio AI Agent"
-      description="Your in-dashboard AI specialist workspace."
-      backTo="/admin/dashboard"
-    >
-      <AdminPanel className="max-w-2xl overflow-hidden">
-        <div className="flex items-start gap-4 p-6">
-          <div className="rounded-xl bg-teal-500/15 p-3 text-teal-500 ring-1 ring-teal-500/25">
-            <Bot className="h-6 w-6" />
+        title="Sally"
+        description="Sally — setup, packages, modules, and admin navigation."
+        backTo="/admin/dashboard"
+      >
+        <AdminPanel className="max-w-2xl overflow-hidden">
+          <div className="flex items-center gap-3 border-b border-border/60 px-4 py-3 bg-gradient-to-r from-teal-500/5 to-pink-500/5">
+            <div className="rounded-full p-0.5 bg-gradient-to-br from-teal-400 to-teal-600 shadow-sm">
+              <SallyAvatar size="md" ring={false} className="ring-2 ring-white" />
+            </div>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">Sally</h2>
+              <p className="text-xs text-muted-foreground">Setup, packages, and where to click in admin.</p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-lg font-semibold text-foreground">Coming soon</h2>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Grabio AI Agent will be available on <strong className="text-foreground">30/7/2026</strong>.
-            </p>
-            <p className="mt-3 text-xs text-muted-foreground">
-              Structured action cards and telemetry feed — not a chat bubble.
-            </p>
-          </div>
-        </div>
-      </AdminPanel>
-    </AdminPageShell>
+          <GrabioGuideChat />
+        </AdminPanel>
+      </AdminPageShell>
   );
 };
 

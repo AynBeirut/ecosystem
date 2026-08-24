@@ -5,7 +5,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
-import { Mail, Phone, MapPin, Send, CheckCircle } from 'lucide-react';
+import { Mail, Phone, MapPin, Send, CheckCircle, ExternalLink } from 'lucide-react';
+import { GRABIO_NAP } from '@/lib/grabioBrandSchema';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
@@ -86,12 +87,12 @@ const ContactUs: React.FC = () => {
                   <div>
                     <p className="font-semibold text-gray-800 text-sm">Phone &amp; WhatsApp</p>
                     <a
-                      href="https://wa.me/96171110952"
+                      href={GRABIO_NAP.whatsappUrl}
                       target="_blank"
                       rel="noopener noreferrer"
                       className="text-sm text-green-600 hover:underline"
                     >
-                      +961 71 110 952
+                      {GRABIO_NAP.phoneDisplay}
                     </a>
                   </div>
                 </div>
@@ -102,7 +103,16 @@ const ContactUs: React.FC = () => {
                   </div>
                   <div>
                     <p className="font-semibold text-gray-800 text-sm">Location</p>
-                    <p className="text-sm text-gray-500">Beirut, Lebanon</p>
+                    <p className="text-sm text-gray-500">{GRABIO_NAP.city}, Lebanon</p>
+                    <a
+                      href={GRABIO_NAP.mapsShortUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-sm text-orange-600 hover:underline mt-1"
+                    >
+                      View on Google Maps
+                      <ExternalLink className="h-3 w-3" />
+                    </a>
                   </div>
                 </div>
               </CardContent>

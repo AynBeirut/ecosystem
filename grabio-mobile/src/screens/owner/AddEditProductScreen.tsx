@@ -20,6 +20,8 @@ export default function AddEditProductScreen() {
   const navigation = useNavigation<Nav>();
   const { user } = useAuth();
   const isEdit = !!params.productId;
+  const [limitedEdit, setLimitedEdit] = useState(false);
+  const [originalProductType, setOriginalProductType] = useState<string>('simple');
 
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
@@ -50,9 +52,14 @@ export default function AddEditProductScreen() {
           const d = doc.data()!;
           setName(d.name || '');
           setDescription(d.description || '');
-          setPrice(String(d.price || ''));
           setUnit(d.unit || '');
-          setProductType(d.productType === 'service' ? 'service' : 'simple');
+          const pt = String(d.productType || 'simple');
+          setOriginalProductType(pt);
+          setProductType(pt === 'service' ? 'service' : 'simple');
+          if (pt !== 'simple' && pt !== 'service') {
+            setLimitedEdit(true);
+          }
+          setPrice(String(d.sellingPrice ?? d.price ?? ''));
           setExpiryTracking(!!d.expiryTracking);
           setExpiryAlertDays(String(d.expiryAlertDays || 30));
           if (d.expiryDate && typeof d.expiryDate === 'string') {
@@ -122,33 +129,42 @@ export default function AddEditProductScreen() {
         imageUrl = await uploadImage(imageUri);
       }
 
-      const data: Record<string, unknown> = {
-        name: name.trim(),
-        description: description.trim() || null,
-        price: priceNum,
-        unit: unit.trim() || null,
-        productType,
-        inStock,
-        currency,
-        storeId: user!.storeId,
-        updatedAt: firestore.FieldValue.serverTimestamp(),
-      };
+      const data: Record<string, unknown> = limitedEdit
+        ? {
+            name: name.trim(),
+            price: priceNum,
+            sellingPrice: priceNum,
+            inStock,
+            currency,
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          }
+        : {
+            name: name.trim(),
+            description: description.trim() || null,
+            price: priceNum,
+            unit: unit.trim() || null,
+            productType,
+            inStock,
+            currency,
+            storeId: user!.storeId,
+            updatedAt: firestore.FieldValue.serverTimestamp(),
+          };
       if (imageUrl) { data.imageUrl = imageUrl; data.image = imageUrl; }
-      // Low stock threshold only for simple products
-      if (productType === 'simple' && lowStockThreshold !== '') {
-        data.lowStockThreshold = parseInt(lowStockThreshold, 10);
+      if (!limitedEdit) {
+        // Low stock threshold only for simple products
+        if (productType === 'simple' && lowStockThreshold !== '') {
+          data.lowStockThreshold = parseInt(lowStockThreshold, 10);
+        }
+        data.expiryTracking = expiryTracking;
+        data.expiryAlertDays = parseInt(expiryAlertDays, 10) || 30;
+        if (expiryTracking && expiryDate) {
+          const y = expiryDate.getFullYear();
+          const m = String(expiryDate.getMonth() + 1).padStart(2, '0');
+          const d2 = String(expiryDate.getDate()).padStart(2, '0');
+          data.expiryDate = `${y}-${m}-${d2}`;
+        }
+        if (productType === 'service') { data.inStock = true; }
       }
-      // Expiry tracking for both simple and service
-      data.expiryTracking = expiryTracking;
-      data.expiryAlertDays = parseInt(expiryAlertDays, 10) || 30;
-      if (expiryTracking && expiryDate) {
-        const y = expiryDate.getFullYear();
-        const m = String(expiryDate.getMonth() + 1).padStart(2, '0');
-        const d2 = String(expiryDate.getDate()).padStart(2, '0');
-        data.expiryDate = `${y}-${m}-${d2}`;
-      }
-      // Service is always in stock
-      if (productType === 'service') { data.inStock = true; }
 
       if (isEdit) {
         await firestore().collection('products').doc(params.productId).update(data);
@@ -171,6 +187,13 @@ export default function AddEditProductScreen() {
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 16 }}>
+      {limitedEdit ? (
+        <View style={styles.limitedBanner}>
+          <Text style={styles.limitedBannerText}>
+            Quick edit for {originalProductType.replace('_', ' ')} — recipe/BOM changes stay on web admin.
+          </Text>
+        </View>
+      ) : null}
       {/* Image Section */}
       {displayImage ? (
         <Image source={{ uri: displayImage }} style={styles.previewImage} />
@@ -194,7 +217,7 @@ export default function AddEditProductScreen() {
       <TextInput style={styles.input} value={name} onChangeText={setName} placeholder="e.g. Fresh Tomatoes" placeholderTextColor="#9ca3af" />
 
       <Text style={styles.label}>Description</Text>
-      <TextInput style={[styles.input, { height: 70 }]} value={description} onChangeText={setDescription} placeholder="Optional description" multiline placeholderTextColor="#9ca3af" />
+      <TextInput style={[styles.input, { height: 70 }]} value={description} onChangeText={setDescription} placeholder="Optional description" multiline placeholderTextColor="#9ca3af" editable={!limitedEdit} />
 
       <View style={styles.row}>
         <View style={{ flex: 2 }}>
@@ -208,8 +231,10 @@ export default function AddEditProductScreen() {
       </View>
 
       <Text style={styles.label}>Unit (optional)</Text>
-      <TextInput style={styles.input} value={unit} onChangeText={setUnit} placeholder="e.g. kg, piece, liter" placeholderTextColor="#9ca3af" />
+      <TextInput style={styles.input} value={unit} onChangeText={setUnit} placeholder="e.g. kg, piece, liter" placeholderTextColor="#9ca3af" editable={!limitedEdit} />
 
+      {!limitedEdit ? (
+      <>
       {/* Product Type */}
       <Text style={styles.label}>Product Type *</Text>
       <View style={styles.typeRow}>
@@ -312,6 +337,13 @@ export default function AddEditProductScreen() {
           </View>
         </>
       )}
+      </>
+      ) : (
+        <View style={styles.switchRow}>
+          <Text style={styles.label}>In Stock</Text>
+          <Switch value={inStock} onValueChange={setInStock} trackColor={{ true: COLORS.primary }} />
+        </View>
+      )}
 
       <TouchableOpacity style={styles.saveBtn} onPress={handleSave} disabled={loading}>
         {loading ? (
@@ -355,4 +387,6 @@ const styles = StyleSheet.create({
   dateCellText: { fontSize: 15, color: COLORS.textSecondary },
   dateCellTextActive: { color: '#fff', fontWeight: '700' },
   dateModalBtn: { flex: 1, padding: 14, borderRadius: RADIUS.md, alignItems: 'center' },
+  limitedBanner: { backgroundColor: '#fef3c7', borderRadius: RADIUS.md, padding: 12, marginBottom: 12 },
+  limitedBannerText: { fontSize: 13, color: '#92400e', lineHeight: 18 },
 });

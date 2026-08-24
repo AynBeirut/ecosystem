@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
-import { Clock, Truck, MapPin, Package, Calendar, UtensilsCrossed } from 'lucide-react';
+import { Clock, Truck, MapPin, Package, Calendar, UtensilsCrossed, Zap } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
@@ -21,6 +21,7 @@ const DEFAULT_DELIVERY_SETTINGS: StoreDeliverySettings = {
   pickup: true,
   dineIn: false,
   scheduledOrdersEnabled: false,
+  autoAcceptOrders: false,
   standardTime: '3-5 days',
   expressTime: '1-2 days',
   sameDayTime: '4-6 hours',
@@ -328,6 +329,20 @@ const AdminDelivery: React.FC = () => {
                     <Switch
                       checked={Boolean(deliverySettings.scheduledOrdersEnabled)}
                       onCheckedChange={(checked) => handleSettingChange('scheduledOrdersEnabled', checked)}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 border rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <Zap className="h-5 w-5 text-muted-foreground" />
+                      <div>
+                        <div className="font-medium">Auto-accept orders</div>
+                        <div className="text-sm text-muted-foreground">New online orders go straight to Confirmed (skip Pending)</div>
+                      </div>
+                    </div>
+                    <Switch
+                      checked={Boolean(deliverySettings.autoAcceptOrders)}
+                      onCheckedChange={(checked) => handleSettingChange('autoAcceptOrders', checked)}
                     />
                   </div>
                 </div>

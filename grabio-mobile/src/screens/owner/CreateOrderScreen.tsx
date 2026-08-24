@@ -8,6 +8,7 @@ import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
+import { subscribePosProducts } from '../../lib/posCatalog';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -37,7 +38,12 @@ export default function CreateOrderScreen() {
   const [orderItems, setOrderItems] = useState<OrderItem[]>([]);
   const [customerName, setCustomerName] = useState('');
   const [customerPhone, setCustomerPhone] = useState('');
+  const [selectedCustomerId, setSelectedCustomerId] = useState<string | undefined>();
   const [paymentMethod, setPaymentMethod] = useState('Cash');
+  const [markPaid, setMarkPaid] = useState(true);
+  const [scheduleEnabled, setScheduleEnabled] = useState(false);
+  const [scheduledDate, setScheduledDate] = useState('');
+  const [scheduledTime, setScheduledTime] = useState('');
   const [saving, setSaving] = useState(false);
   const [search, setSearch] = useState('');
 
@@ -48,15 +54,14 @@ export default function CreateOrderScreen() {
 
   useEffect(() => {
     if (!user?.storeId) { setLoading(false); return; }
-    const unsub = firestore()
-      .collection('products')
-      .where('storeId', '==', user.storeId)
-      .where('inStock', '==', true)
-      .onSnapshot((snap) => {
-        if (!snap) { setLoading(false); return; }
-        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
+    const unsub = subscribePosProducts(
+      user.storeId,
+      (rows) => {
+        setProducts(rows);
         setLoading(false);
-      });
+      },
+      () => setLoading(false),
+    );
     return unsub;
   }, [user?.storeId]);
 
@@ -83,6 +88,7 @@ export default function CreateOrderScreen() {
   const selectCustomer = (c: Customer) => {
     setCustomerName(c.name);
     setCustomerPhone(c.phone || '');
+    setSelectedCustomerId(c.id);
     setCustomerSearch(c.name);
     setShowSuggestions(false);
   };
@@ -121,7 +127,7 @@ export default function CreateOrderScreen() {
   const total = orderItems.reduce((sum, i) => sum + i.price * i.quantity, 0);
   const currency = orderItems[0]?.currency || 'USD';
 
-  const submitOrder = async () => {
+  const submitOrder = async (paid: boolean) => {
     if (!customerName.trim()) {
       Alert.alert('Missing', 'Customer name is required.');
       return;
@@ -130,25 +136,77 @@ export default function CreateOrderScreen() {
       Alert.alert('Empty order', 'Add at least one product');
       return;
     }
+    if (scheduleEnabled && (!scheduledDate.trim() || !scheduledTime.trim())) {
+      Alert.alert('Schedule', 'Enter both date (YYYY-MM-DD) and time (HH:MM).');
+      return;
+    }
     setSaving(true);
     try {
-      // Write to top-level orders collection (matches Firestore rules)
+      const nowIso = new Date().toISOString();
+      const today = nowIso.split('T')[0];
+      const scheduledFor = scheduleEnabled && scheduledDate && scheduledTime
+        ? `${scheduledDate.trim()}T${scheduledTime.trim()}`
+        : null;
+      const isPaid = paid && !scheduleEnabled;
+
+      let customerId = selectedCustomerId;
+      if (!customerId && user?.storeId) {
+        const phone = customerPhone.trim();
+        if (phone) {
+          const byPhone = await firestore()
+            .collection('customers')
+            .where('storeId', '==', user.storeId)
+            .where('phone', '==', phone)
+            .limit(1)
+            .get();
+          if (!byPhone.empty) customerId = byPhone.docs[0].id;
+        }
+        if (!customerId) {
+          const created = await firestore().collection('customers').add({
+            storeId: user.storeId,
+            name: customerName.trim(),
+            phone: phone || '',
+            email: '',
+            createdAt: nowIso,
+            notes: 'Created from mobile POS',
+          });
+          customerId = created.id;
+        }
+      }
+
       await firestore().collection('orders').add({
         storeId: user!.storeId,
-        customerId: user!.uid,
+        customerId: customerId || user!.uid,
         customerName: customerName.trim(),
         customerPhone: customerPhone.trim() || null,
         items: orderItems.map(({ productId, name, price, quantity }) => ({ productId, name, price, quantity })),
+        subtotal: total,
         total,
         currency,
-        status: 'confirmed',
-        paymentMethod,
+        status: isPaid ? 'delivered' : 'pending',
+        paymentStatus: isPaid ? 'paid' : 'unpaid',
+        amountPaid: isPaid ? total : 0,
+        remainingAmount: isPaid ? 0 : total,
+        paymentDate: isPaid ? today : null,
+        paymentMethod: isPaid ? paymentMethod.toLowerCase() : '',
+        paymentNotes: isPaid ? 'Mobile POS sale' : 'Mobile POS unpaid sale',
+        scheduledFor,
+        deliveryMethod: scheduledFor ? 'pickup' : 'pickup',
+        orderChannel: 'mobile_pos',
         createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: nowIso,
         createdByOwner: true,
+        createdBy: user!.uid,
       });
-          Alert.alert('Order Created', `Order for ${customerName} placed successfully.`, [
-        { text: 'OK', onPress: () => navigation.goBack() },
-      ]);
+      Alert.alert(
+        'Order Created',
+        scheduledFor
+          ? `Scheduled for ${scheduledDate} ${scheduledTime}${isPaid ? '' : ' · unpaid'}`
+          : isPaid
+            ? `Order for ${customerName} placed and marked paid.`
+            : `Unpaid order saved for ${customerName}.`,
+        [{ text: 'OK', onPress: () => navigation.goBack() }],
+      );
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
     } finally {
@@ -170,6 +228,7 @@ export default function CreateOrderScreen() {
             onChangeText={(v) => {
               setCustomerSearch(v);
               setCustomerName(v);
+              setSelectedCustomerId(undefined);
               setShowSuggestions(true);
             }}
             onFocus={() => setShowSuggestions(true)}
@@ -194,27 +253,71 @@ export default function CreateOrderScreen() {
           />
         </View>
 
-        {/* Payment Method */}
+        {/* Payment */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>💳 Payment Method</Text>
+          <Text style={styles.sectionTitle}>Payment</Text>
           <View style={styles.paymentRow}>
-            {PAYMENT_METHODS.map((pm) => (
-              <TouchableOpacity
-                key={pm}
-                style={[styles.paymentBtn, paymentMethod === pm && styles.paymentBtnActive]}
-                onPress={() => setPaymentMethod(pm)}
-              >
-                <Text style={[styles.paymentBtnText, paymentMethod === pm && styles.paymentBtnTextActive]}>
-                  {pm}
-                </Text>
-              </TouchableOpacity>
-            ))}
+            <TouchableOpacity
+              style={[styles.paymentBtn, markPaid && !scheduleEnabled && styles.paymentBtnActive]}
+              onPress={() => { setMarkPaid(true); setScheduleEnabled(false); }}
+            >
+              <Text style={[styles.paymentBtnText, markPaid && !scheduleEnabled && styles.paymentBtnTextActive]}>Paid now</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.paymentBtn, !markPaid && !scheduleEnabled && styles.paymentBtnActive]}
+              onPress={() => { setMarkPaid(false); setScheduleEnabled(false); }}
+            >
+              <Text style={[styles.paymentBtnText, !markPaid && !scheduleEnabled && styles.paymentBtnTextActive]}>Unpaid</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.paymentBtn, scheduleEnabled && styles.paymentBtnActive]}
+              onPress={() => { setScheduleEnabled(true); setMarkPaid(false); }}
+            >
+              <Text style={[styles.paymentBtnText, scheduleEnabled && styles.paymentBtnTextActive]}>Schedule</Text>
+            </TouchableOpacity>
           </View>
+          {markPaid && !scheduleEnabled ? (
+            <View style={[styles.paymentRow, { marginTop: 10 }]}>
+              {PAYMENT_METHODS.map((pm) => (
+                <TouchableOpacity
+                  key={pm}
+                  style={[styles.paymentBtn, paymentMethod === pm && styles.paymentBtnActive]}
+                  onPress={() => setPaymentMethod(pm)}
+                >
+                  <Text style={[styles.paymentBtnText, paymentMethod === pm && styles.paymentBtnTextActive]}>
+                    {pm}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          ) : null}
         </View>
+
+        {/* Schedule */}
+        {scheduleEnabled ? (
+          <View style={styles.section}>
+            <Text style={styles.sectionTitle}>Schedule for later</Text>
+            <TextInput
+              style={styles.input}
+              placeholder="Date YYYY-MM-DD"
+              placeholderTextColor="#9ca3af"
+              value={scheduledDate}
+              onChangeText={setScheduledDate}
+            />
+            <TextInput
+              style={styles.input}
+              placeholder="Time HH:MM (24h)"
+              placeholderTextColor="#9ca3af"
+              value={scheduledTime}
+              onChangeText={setScheduledTime}
+            />
+            <Text style={styles.hint}>Shows on Orders with a scheduled badge. Payment can be collected later.</Text>
+          </View>
+        ) : null}
 
         {/* Product Search */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>🛍️ Select Products</Text>
+          <Text style={styles.sectionTitle}>🛍️ Select Products ({filtered.length})</Text>
           <TextInput
             style={styles.input}
             placeholder="Search products…"
@@ -228,10 +331,13 @@ export default function CreateOrderScreen() {
             filtered.map((product) => {
               const inOrder = orderItems.find((i) => i.productId === product.id);
               return (
-                <View key={product.id} style={styles.productRow}>
+                <View key={product.id} style={[styles.productRow, !product.inStock && styles.productRowMuted]}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.productName}>{product.name}</Text>
-                    <Text style={styles.productPrice}>{product.currency || 'USD'} {product.price.toFixed(2)}</Text>
+                    <Text style={styles.productPrice}>
+                      {product.currency || 'USD'} {product.price.toFixed(2)}
+                      {!product.inStock ? ' · out of stock' : ''}
+                    </Text>
                   </View>
                   {inOrder ? (
                     <View style={styles.qtyControls}>
@@ -274,14 +380,18 @@ export default function CreateOrderScreen() {
         {/* Submit */}
         <TouchableOpacity
           style={[styles.submitBtn, orderItems.length === 0 && { opacity: 0.5 }]}
-          onPress={submitOrder}
+          onPress={() => void submitOrder(scheduleEnabled ? false : markPaid)}
           disabled={saving || orderItems.length === 0}
         >
           {saving ? (
             <ActivityIndicator color="#fff" />
           ) : (
             <Text style={styles.submitBtnText}>
-              Create Order {orderItems.length > 0 ? `· ${currency} ${total.toFixed(2)}` : ''}
+              {scheduleEnabled
+                ? `Schedule order ${orderItems.length > 0 ? `· ${currency} ${total.toFixed(2)}` : ''}`
+                : markPaid
+                  ? `Create & mark paid ${orderItems.length > 0 ? `· ${currency} ${total.toFixed(2)}` : ''}`
+                  : `Save unpaid ${orderItems.length > 0 ? `· ${currency} ${total.toFixed(2)}` : ''}`}
             </Text>
           )}
         </TouchableOpacity>
@@ -307,6 +417,7 @@ const styles = StyleSheet.create({
   paymentBtnTextActive: { color: '#fff', fontWeight: '700' },
 
   productRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: COLORS.border },
+  productRowMuted: { opacity: 0.72 },
   productName: { fontSize: 14, fontWeight: '600', color: COLORS.textPrimary },
   productPrice: { fontSize: 13, color: COLORS.primary, marginTop: 1 },
   addBtn: { backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.md, paddingHorizontal: 14, paddingVertical: 7 },
@@ -326,4 +437,5 @@ const styles = StyleSheet.create({
 
   submitBtn: { backgroundColor: COLORS.primary, marginHorizontal: 12, borderRadius: RADIUS.lg, padding: 16, alignItems: 'center', marginTop: 4 },
   submitBtnText: { color: '#fff', fontSize: 16, fontWeight: '700' },
+  hint: { fontSize: 12, color: COLORS.textSecondary, marginTop: -4 },
 });

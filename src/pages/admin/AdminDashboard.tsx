@@ -24,6 +24,7 @@ import {
   TrendingUp,
   Star,
   Bell,
+  Search,
   ChevronDown,
   Settings2,
   Layers,
@@ -32,7 +33,14 @@ import {
   LayoutGrid,
   Paintbrush,
   Wallet,
+  Activity,
+  Swords,
+  Bot,
+  MapPin,
+  Layers,
+  Link2,
 } from 'lucide-react';
+import SallyIconBadge, { SallyNavIcon } from '@/components/admin/SallyIconBadge';
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
 import { auth } from '@/lib/firebase';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
@@ -75,6 +83,7 @@ type QuickActionStoragePayload = {
 
 const MAX_QUICK_ACTIONS = 12;
 const DEFAULT_QUICK_ACTION_IDS = [
+  'sally',
   'invoice-manager',
   'customers',
   'sales-crm',
@@ -94,6 +103,7 @@ const DEFAULT_QUICK_ACTION_IDS = [
 
 /** Mobile home — finance-first; hide SEO/marketing/sync from defaults. */
 const MOBILE_DEFAULT_QUICK_ACTION_IDS = [
+  'sally',
   'invoice-manager',
   'expenses',
   'customers',
@@ -128,6 +138,14 @@ const QUICK_ACTION_GRADIENTS: Record<string, string> = {
   marketing: 'from-rose-400 to-pink-600',
   'seo-analytics': 'from-lime-500 to-green-700',
   'seo-audit': 'from-cyan-400 to-teal-600',
+  'seo-keywords': 'from-emerald-400 to-teal-700',
+  'seo-technical': 'from-cyan-500 to-blue-700',
+  'seo-content': 'from-violet-500 to-purple-700',
+  'seo-competitors': 'from-rose-500 to-orange-700',
+  'seo-aeo': 'from-indigo-500 to-violet-700',
+  'seo-geo': 'from-teal-600 to-emerald-800',
+  'seo-programmatic': 'from-slate-600 to-zinc-800',
+  'seo-links': 'from-blue-600 to-indigo-800',
   'service-renewals': 'from-blue-400 to-indigo-600',
   'marketplace-sync': 'from-amber-400 to-yellow-600',
   'product-reviews': 'from-yellow-400 to-amber-600',
@@ -293,6 +311,13 @@ const AdminDashboard: React.FC = () => {
     },
     { id: 'customers', to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
     {
+      id: 'sally',
+      to: '/admin/ai-agent',
+      label: 'Sally',
+      icon: SallyNavIcon,
+      visible: user?.role === 'admin',
+    },
+    {
       id: 'sales-crm',
       to: '/admin/crm/dashboard',
       label: 'Sales CRM',
@@ -319,6 +344,14 @@ const AdminDashboard: React.FC = () => {
     { id: 'marketing', to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
     { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
     { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
+    { id: 'seo-keywords', to: '/admin/seo-keywords', label: 'SEO Keywords', icon: Search, visible: user?.role === 'admin' },
+    { id: 'seo-technical', to: '/admin/seo-technical', label: 'SEO Technical', icon: Activity, visible: user?.role === 'admin' },
+    { id: 'seo-content', to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: user?.role === 'admin' },
+    { id: 'seo-competitors', to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Swords, visible: user?.role === 'admin' },
+    { id: 'seo-aeo', to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: user?.role === 'admin' },
+    { id: 'seo-geo', to: '/admin/seo-geo', label: 'SEO GEO', icon: MapPin, visible: user?.role === 'admin' },
+    { id: 'seo-programmatic', to: '/admin/seo-programmatic', label: 'SEO Programmatic', icon: Layers, visible: user?.role === 'admin' },
+    { id: 'seo-links', to: '/admin/seo-links', label: 'SEO Links', icon: Link2, visible: user?.role === 'admin' },
     { id: 'service-renewals', to: '/admin/service-renewals', label: 'Service Renewals', icon: Clock, visible: user?.role === 'admin' && moduleVisible('services') },
     { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' && moduleVisible('dropship') },
     { id: 'product-reviews', to: '/admin/product-reviews', label: 'Product Reviews', icon: Star, visible: user?.role === 'admin' },
@@ -564,6 +597,14 @@ const AdminDashboard: React.FC = () => {
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
           { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
           { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
+          { to: '/admin/seo-keywords', label: 'SEO Keywords', icon: Search, visible: user?.role === 'admin' },
+          { to: '/admin/seo-technical', label: 'SEO Technical', icon: Activity, visible: user?.role === 'admin' },
+          { to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: user?.role === 'admin' },
+          { to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Swords, visible: user?.role === 'admin' },
+          { to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: user?.role === 'admin' },
+          { to: '/admin/seo-geo', label: 'SEO GEO', icon: MapPin, visible: user?.role === 'admin' },
+          { to: '/admin/seo-programmatic', label: 'SEO Programmatic', icon: Layers, visible: user?.role === 'admin' },
+          { to: '/admin/seo-links', label: 'SEO Links', icon: Link2, visible: user?.role === 'admin' },
         ],
       },
       {
@@ -976,6 +1017,7 @@ const AdminDashboard: React.FC = () => {
                     {selectedQuickActions.map((item) => {
                       const Icon = item.icon;
                       const gradient = QUICK_ACTION_GRADIENTS[item.id] || DEFAULT_QUICK_GRADIENT;
+                      const isSally = item.id === 'sally';
                       return (
                         <Link key={item.id} to={item.to} className={cn('relative group flex items-center gap-3 p-3', adminDashboardListItemClass, 'hover:-translate-y-0.5')}>
                           {showQuickActionManager && (
@@ -991,9 +1033,13 @@ const AdminDashboard: React.FC = () => {
                               Remove
                             </button>
                           )}
-                          <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_12px_-4px_rgba(15,23,42,0.4)] group-hover:scale-105 transition-transform`}>
-                            <Icon className="h-4 w-4" />
-                          </div>
+                          {isSally ? (
+                            <SallyIconBadge size="tile" className="group-hover:scale-105 transition-transform" />
+                          ) : (
+                            <div className={`h-9 w-9 rounded-xl bg-gradient-to-br ${gradient} flex items-center justify-center text-white shadow-[inset_0_1px_0_rgba(255,255,255,0.2),0_6px_12px_-4px_rgba(15,23,42,0.4)] group-hover:scale-105 transition-transform`}>
+                              <Icon className="h-4 w-4" />
+                            </div>
+                          )}
                           <span className="text-sm font-medium text-slate-800 leading-tight">{item.label}</span>
                         </Link>
                       );

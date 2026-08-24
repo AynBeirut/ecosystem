@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
+import { PLATFORM_STATIC_SITEMAP } from '../lib/platformSitemapUrls';
 
 const BASE_URL = 'https://grabio.space';
 
@@ -7,7 +8,7 @@ interface AuthUser {
   uid: string;
 }
 
-type SubmissionTarget = 'bing';
+type SubmissionTarget = 'bing' | 'google';
 
 interface SubmissionResult {
   target: SubmissionTarget;
@@ -31,31 +32,87 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
-function urlEntry(loc: string, lastmod?: string, priority = '0.8'): string {
+function urlEntryFull(
+  loc: string,
+  lastmod?: string,
+  priority = '0.8',
+  changefreq = 'monthly',
+): string {
   const mod = lastmod ? `\n    <lastmod>${lastmod}</lastmod>` : '';
-  return `  <url>\n    <loc>${escapeXml(loc)}</loc>${mod}\n    <priority>${priority}</priority>\n  </url>`;
+  return `  <url>\n    <loc>${escapeXml(loc)}</loc>${mod}\n    <changefreq>${changefreq}</changefreq>\n    <priority>${priority}</priority>\n  </url>`;
+}
+
+function urlEntry(loc: string, lastmod?: string, priority = '0.8'): string {
+  return urlEntryFull(loc, lastmod, priority);
+}
+
+async function assertPlatformAdmin(req: Request): Promise<string> {
+  const token = getBearerToken(req);
+  if (!token) throw new Error('Missing bearer token');
+  const decoded = await admin.auth().verifyIdToken(token);
+  const userSnap = await admin.firestore().collection('users').doc(decoded.uid).get();
+  if (String(userSnap.data()?.role ?? '') !== 'admin') throw new Error('Platform admin access required');
+  return decoded.uid;
+}
+
+async function pingSearchEngines(sitemapUrl: string): Promise<SubmissionResult[]> {
+  const googleUrl = `https://www.google.com/ping?sitemap=${encodeURIComponent(sitemapUrl)}`;
+  const bing = await submitToBing(sitemapUrl);
+  let google: SubmissionResult = { target: 'google', ok: false, detail: 'skipped' };
+  try {
+    const response = await fetch(googleUrl, { method: 'GET' });
+    const body = await response.text();
+    google = {
+      target: 'google',
+      ok: response.ok,
+      status: response.status,
+      detail: body.slice(0, 120),
+    };
+  } catch (err) {
+    google = {
+      target: 'google',
+      ok: false,
+      detail: err instanceof Error ? err.message : 'google ping failed',
+    };
+  }
+  return [bing, google];
 }
 
 export async function getSitemap(req: Request, res: Response): Promise<void> {
   try {
     const db = admin.firestore();
+    const today = new Date().toISOString().split('T')[0];
 
-    // 1. Fetch all published stores
+    const staticEntries = PLATFORM_STATIC_SITEMAP.map((entry) =>
+      urlEntryFull(`${BASE_URL}${entry.path}`, today, entry.priority, entry.changefreq ?? 'monthly'),
+    );
+
+    const progSnap = await db.collection('seo_prog_pages').where('status', '==', 'published').get();
+    const programmaticEntries: string[] = [];
+    for (const d of progSnap.docs) {
+      const data = d.data() as { publishedAt?: { toDate: () => Date } };
+      const slug = d.id;
+      const lastmod = data.publishedAt?.toDate
+        ? data.publishedAt.toDate().toISOString().split('T')[0]
+        : today;
+      programmaticEntries.push(urlEntryFull(`${BASE_URL}/pages/${slug}`, lastmod, '0.6', 'monthly'));
+    }
+
+    // Published stores
     const storesSnap = await db.collection('storeProfiles').get();
     const storeEntries: string[] = [];
-    const storeSlugMap: Record<string, string> = {}; // id → slug
+    const storeSlugMap: Record<string, string> = {};
 
     for (const d of storesSnap.docs) {
       const data = d.data();
       const slug: string = data.slug || d.id;
       storeSlugMap[d.id] = slug;
-      const lastmod: string | undefined = data.updatedAt
-        ? new Date(data.updatedAt).toISOString().split('T')[0]
+      const lastmod: string | undefined = data.updatedAt?.toDate
+        ? data.updatedAt.toDate().toISOString().split('T')[0]
         : undefined;
       storeEntries.push(urlEntry(`${BASE_URL}/${escapeXml(slug)}`, lastmod, '0.9'));
     }
 
-    // 2. Fetch all products that have a slug
     const productsSnap = await db.collection('products').where('slug', '!=', '').get();
     const productEntries: string[] = [];
 
@@ -64,18 +121,19 @@ export async function getSitemap(req: Request, res: Response): Promise<void> {
       const productSlug: string = data.slug;
       const storeSlug = storeSlugMap[data.storeId];
       if (!storeSlug || !productSlug) continue;
-      const lastmod: string | undefined = data.updatedAt
-        ? new Date(data.updatedAt).toISOString().split('T')[0]
+      const lastmod: string | undefined = data.updatedAt?.toDate
+        ? data.updatedAt.toDate().toISOString().split('T')[0]
         : undefined;
       productEntries.push(
-        urlEntry(`${BASE_URL}/${escapeXml(storeSlug)}/product/${escapeXml(productSlug)}`, lastmod, '0.7')
+        urlEntry(`${BASE_URL}/${escapeXml(storeSlug)}/product/${escapeXml(productSlug)}`, lastmod, '0.7'),
       );
     }
 
     const xml = [
       '<?xml version="1.0" encoding="UTF-8"?>',
       '<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">',
-      urlEntry(`${BASE_URL}/`, undefined, '1.0'),
+      ...staticEntries,
+      ...programmaticEntries,
       ...storeEntries,
       ...productEntries,
       '</urlset>',
@@ -87,6 +145,33 @@ export async function getSitemap(req: Request, res: Response): Promise<void> {
   } catch (err) {
     console.error('Sitemap generation error:', err);
     res.status(500).send('Failed to generate sitemap');
+  }
+}
+
+/**
+ * POST /seo/platform/sitemap-ping
+ * Platform admin — ping Google + Bing with live sitemap URL.
+ */
+export async function pingPlatformSitemap(req: Request, res: Response): Promise<void> {
+  try {
+    const uid = await assertPlatformAdmin(req);
+    const sitemapUrl = `${BASE_URL}/sitemap.xml`;
+    const submittedAt = new Date().toISOString();
+    const results = await pingSearchEngines(sitemapUrl);
+
+    await admin.firestore().doc('seo_reporting/sitemap').set({
+      lastPingAt: submittedAt,
+      lastPingBy: uid,
+      sitemapUrl,
+      results,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+
+    res.json({ success: true, sitemapUrl, submittedAt, results });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Sitemap ping failed';
+    const status = message.includes('admin') ? 403 : message.includes('Missing bearer') ? 401 : 500;
+    res.status(status).json({ success: false, message });
   }
 }
 

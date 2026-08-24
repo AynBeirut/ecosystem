@@ -1,0 +1,44 @@
+{
+  "generatedAt": "2026-08-14T19:26:00.000Z",
+  "store": "Jinan's Kitchen",
+  "source": "Owner report — Aug 2026 conversation (220–322 plat/month)",
+  "volume": {
+    "platesPerMonthMin": 220,
+    "platesPerMonthMax": 322,
+    "unitLabel": "plat (plates/portions sold per month)"
+  },
+  "fixedOperatingExpenseUSD": {
+    "cookingGasPerMonth": 110,
+    "sourceFile": "jinan/expenses.csv",
+    "note": "Gaz ~$55 every 15 days"
+  },
+  "perPlateGasAllocationUSD": {
+    "at220Plates": 0.5,
+    "at322Plates": 0.34,
+    "formula": "gasPerMonth / platesPerMonth"
+  },
+  "scenarios": {
+    "unweightedMenuAverage": {
+      "disclaimer": "NOT measured sales mix — simple average of 18 catalog prices in jinan/products.csv",
+      "avgSellPriceUSD": 11.36,
+      "avgFoodCostPerPlateUSD": 1.31,
+      "sourceFiles": ["jinan/products.csv", "jinan/pricing_review.csv"],
+      "monthlyRevenueUSD": { "low": 2499.44, "high": 3658.28 },
+      "monthlyFoodCostUSD": { "low": 289.06, "high": 423.07 },
+      "monthlyFoodCostPlusGasUSD": { "low": 399.06, "high": 533.07 }
+    },
+    "foulPlateOnly": {
+      "disclaimer": "Illustrative if every plat were foul at $6 — unlikely; from JNK-PROD-00018",
+      "sellPriceUSD": 6,
+      "foodCostPerPlateUSD": 0.94,
+      "monthlyRevenueUSD": { "low": 1320, "high": 1932 },
+      "monthlyFoodCostUSD": { "low": 206.8, "high": 302.68 },
+      "monthlyFoodCostPlusGasUSD": { "low": 316.8, "high": 412.68 }
+    }
+  },
+  "pendingForAccurateForecast": [
+    "Actual product mix or average ticket price per plat",
+    "Labor and rent if allocating per plate",
+    "Other monthly opex beyond gas"
+  ]
+}

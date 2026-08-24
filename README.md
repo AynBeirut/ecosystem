@@ -4,6 +4,30 @@
 
 > **Docs:** Canonical platform documentation is in the Obsidian vault `~/Documents/grabio-platform-docs/` (architecture, backlog, deploy protocol, gotchas). Code-repo `backlog.md` is legacy.
 
+### Session 2026-08-23 — Handoffs
+Invoice Manager: `docs/handoff/invoice-manager.md`. Admin dashboard: `docs/handoff/admin-dashboard.md`.
+
+### Session 2026-08-23 — Invoice app stays in-app
+Products + clients stay in-app. One Settings. Footer `grabio.space/invoice` only. Hosting deployed. Upload **`grabio-invoice-mobile/release/invoice-1.2.10-14.aab`** (1.2.10 / code 14, minSdk 21). Next invoice code ≥ 15.
+
+### Session 2026-08-22 — Deploy v1.2.4
+Web hosting live (V·POS/V·Buy/V·Expense). Admin Android **1.2.5 (35)** → `grabio-mobile/release/grabio-1.2.5-35.aab` (orders chip fix + unpaid/schedule). Next admin versionCode ≥ 36.
+
+### Session 2026-08-22 — Native Invoice Manager + CRM app
+Standalone Expo app `grabio-invoice-mobile/` — Play package **`space.grabio.finance`**, signed with finance keystore (SHA1 `1B:EF:5B…`). Upload **`grabio-invoice-mobile/release/invoice-1.2.7-11.aab`** (versionName **1.2.7**, versionCode **11**). Play “no deobfuscation file” on v10 is a warning — R8 minify is off. Admin next ≥36; Invoice next ≥12. Trackers: `grabio-mobile/README.md`, `grabio-invoice-mobile/README.md`.
+
+### Session 2026-08-22 — Mobile admin POS fixes
+Create Order now loads all sellable products (matches V·POS). Composed/recipe products get quick price/stock edit. Owner Home tab → POS (no public marketplace exit).
+
+### Session 2026-08-22 — V·POS client autofill
+Phone match fills name; name typeahead picks existing customer; sale uses matched customerId (no duplicate).
+
+### Session 2026-08-22 — V·OPS speed (round 2)
+Bug: warm cache still force-refetched products/materials. Fixed. Catalogs now sessionStorage; ProtectedRoute sub/IP cached across routes; V pages eager-loaded; trial+invoice = one txn.
+
+### Session 2026-08-22 — OCR receipts
+Mobile scan → Vision OCR → confirm → save Purchase/Expense; image not stored. Needs Vision API enable + deploy before live.
+
 A comprehensive e-commerce platform built with React, TypeScript, and Firebase, enabling multiple vendors to manage their stores, products, and orders in a unified marketplace.
 
 ## Features

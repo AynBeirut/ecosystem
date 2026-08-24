@@ -1,0 +1,43 @@
+{
+  "expo": {
+    "name": "Grabio Invoice Manager",
+    "slug": "grabio-invoice-mobile",
+    "version": "1.2.10",
+    "orientation": "default",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "newArchEnabled": false,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#38B2AC"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "space.grabio.finance",
+      "googleServicesFile": "./GoogleService-Info.plist",
+      "infoPlist": {
+        "NSLocationWhenInUseUsageDescription": "Grabio CRM records GPS when logging field visits."
+      }
+    },
+    "scheme": "grabio-invoice",
+    "android": {
+      "versionCode": 14,
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#38B2AC"
+      },
+      "edgeToEdgeEnabled": true,
+      "package": "space.grabio.finance",
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION"
+      ]
+    },
+    "plugins": [
+      "@react-native-firebase/app",
+      "@react-native-google-signin/google-signin"
+    ]
+  }
+}

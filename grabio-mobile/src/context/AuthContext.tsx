@@ -3,7 +3,6 @@ import { getAuth, onAuthStateChanged, signOut as firebaseSignOut } from '@react-
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
   getFirestore,
-  FieldValue,
   collection,
   where,
   limit,
@@ -11,10 +10,9 @@ import {
   getDoc,
   query,
   doc,
-  setDoc,
 } from '@react-native-firebase/firestore';
-import { getMessaging, getToken, requestPermission, AuthorizationStatus } from '@react-native-firebase/messaging';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
+import { attachFcmTokenRefresh, registerPushNotifications } from '../lib/pushNotifications';
 
 interface AuthUser {
   uid: string;
@@ -116,33 +114,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           crmRepId,
         });
 
-        // Register FCM token after notification permission is granted
-        try {
-          const msg = getMessaging();
-          const authStatus = await requestPermission(msg);
-          const enabled =
-            authStatus === AuthorizationStatus.AUTHORIZED ||
-            authStatus === AuthorizationStatus.PROVISIONAL;
-          if (enabled) {
-            const token = await getToken(msg);
-            if (token) {
-              await setDoc(
-                doc(db, 'users', firebaseUser.uid, 'fcmTokens', token),
-                { token, platform: 'mobile', createdAt: FieldValue.serverTimestamp() },
-                { merge: true },
-              );
-              if (storeId) {
-                await setDoc(
-                  doc(db, 'users', firebaseUser.uid),
-                  { storeId, email: firebaseUser.email || null },
-                  { merge: true },
-                );
-              }
-            }
-          }
-        } catch (_) {
-          // FCM token registration is non-critical
-        }
+        void registerPushNotifications(firebaseUser.uid, storeId);
+        attachFcmTokenRefresh(firebaseUser.uid, storeId);
       } else {
         setUser(null);
         // Do NOT reset isGuest here — guest mode is set intentionally by the user

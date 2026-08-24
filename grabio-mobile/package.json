@@ -1,12 +1,14 @@
 {
   "name": "grabio-mobile",
-  "version": "1.2.0",
+  "version": "1.2.5",
   "main": "index.ts",
   "scripts": {
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",
-    "web": "expo start --web"
+    "web": "expo start --web",
+    "build:android:release": "cd android && ./gradlew bundleRelease assembleRelease",
+    "build:android:copy": "node -e \"const v=require('./app.json').expo; const tag=v.version+'-'+v.android.versionCode; require('fs').copyFileSync('android/app/build/outputs/bundle/release/app-release.aab','release/grabio-'+tag+'.aab'); require('fs').copyFileSync('android/app/build/outputs/apk/release/app-release.apk','release/grabio-'+tag+'.apk'); console.log('release/grabio-'+tag);\""
   },
   "dependencies": {
     "@react-native-async-storage/async-storage": "2.2.0",

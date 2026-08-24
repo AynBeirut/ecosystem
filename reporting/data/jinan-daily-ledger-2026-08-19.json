@@ -1,0 +1,22 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "Handwritten Jinan's Kitchen daily planner — Aug 19 2026",
+  "currency": "USD",
+  "days": [
+    {
+      "date": "2026-08-19",
+      "sales": [
+        { "label": "Msabaha + Zaatar Mankushi", "amountUSD": 12 },
+        { "label": "foul x 2", "amountUSD": 12 }
+      ]
+    }
+  ],
+  "expenses": [
+    { "date": "2026-08-19", "label": "Personal", "amountUSD": 25, "category": "Other" },
+    { "date": "2026-08-19", "label": "Veggies & fruits", "amountUSD": 40, "category": "Ingredients" },
+    { "date": "2026-08-19", "label": "Home Electricity", "amountUSD": 335, "category": "Utilities", "notes": "Notebook: H.E." },
+    { "date": "2026-08-19", "label": "Arepa + Almond", "amountUSD": 16, "category": "Ingredients" },
+    { "date": "2026-08-19", "label": "Avocado + Lemon", "amountUSD": 21, "category": "Ingredients" },
+    { "date": "2026-08-19", "label": "fuel", "amountUSD": 20, "category": "Utilities" }
+  ]
+}

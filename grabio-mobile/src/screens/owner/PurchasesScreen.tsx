@@ -22,6 +22,9 @@ interface Purchase {
   totalAmount?: number;
   totalCost?: number;
   status?: string;
+  paymentStatus?: string;
+  amountPaid?: number;
+  remainingAmount?: number;
   createdAt?: unknown;
 }
 
@@ -43,7 +46,9 @@ export default function PurchasesScreen() {
   const [productSuggestions, setProductSuggestions] = useState<{ id: string; name: string }[]>([]);
   const [qty, setQty] = useState('');
   const [cost, setCost] = useState('');
+  const [markPaid, setMarkPaid] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [markingPaidId, setMarkingPaidId] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -137,10 +142,11 @@ export default function PurchasesScreen() {
     setProductSuggestions([]);
     setQty('');
     setCost('');
+    setMarkPaid(true);
     setShowForm(false);
   };
 
-  const savePurchase = async () => {
+  const savePurchase = async (paid: boolean) => {
     if (!supplier.trim() || !itemName.trim() || !qty.trim()) {
       Alert.alert('Missing fields', 'Supplier name, item name, and quantity are required.');
       return;
@@ -149,21 +155,66 @@ export default function PurchasesScreen() {
     try {
       const qtyNum = parseInt(qty, 10);
       const costNum = parseFloat(cost) || 0;
+      const total = qtyNum * costNum;
+      const now = new Date().toISOString();
+      const today = now.slice(0, 10);
       await firestore().collection('purchases').add({
         storeId: user!.storeId,
         supplierName: supplier.trim(),
         items: [{ name: itemName.trim(), quantity: qtyNum, unitCost: costNum }],
-        total: qtyNum * costNum,
-        status: 'received',
+        total,
+        totalAmount: total,
+        status: paid ? 'received' : 'draft',
+        receivedDate: paid ? now : null,
+        paymentStatus: paid ? 'paid' : 'unpaid',
+        amountPaid: paid ? total : 0,
+        remainingAmount: paid ? 0 : total,
+        paymentMethod: paid ? 'cash' : '',
+        paymentDate: paid ? today : null,
+        paymentNotes: paid ? 'Mobile purchase — paid' : 'Mobile purchase — unpaid',
         createdAt: firestore.FieldValue.serverTimestamp(),
+        updatedAt: now,
       });
       resetForm();
-      Alert.alert('Saved', 'Purchase recorded.');
+      Alert.alert('Saved', paid ? 'Purchase recorded and marked paid.' : 'Purchase saved (unpaid).');
     } catch (err: unknown) {
       Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
     } finally {
       setSaving(false);
     }
+  };
+
+  const markPurchasePaid = async (purchase: Purchase) => {
+    const total = purchase.total ?? purchase.totalAmount ?? purchase.totalCost ?? 0;
+    if (total <= 0) return;
+    setMarkingPaidId(purchase.id);
+    const now = new Date().toISOString();
+    const today = now.slice(0, 10);
+    try {
+      await firestore().collection('purchases').doc(purchase.id).update({
+        status: 'received',
+        receivedDate: now,
+        paymentStatus: 'paid',
+        amountPaid: total,
+        remainingAmount: 0,
+        paymentMethod: 'cash',
+        paymentDate: today,
+        paymentNotes: 'Marked paid from mobile',
+        updatedAt: now,
+      });
+    } catch (err: unknown) {
+      Alert.alert('Error', err instanceof Error ? err.message : 'Failed to mark as paid');
+    } finally {
+      setMarkingPaidId(null);
+    }
+  };
+
+  const isPurchaseUnpaid = (purchase: Purchase) => {
+    if (purchase.paymentStatus === 'paid') return false;
+    if (purchase.paymentStatus === 'unpaid') return true;
+    const total = purchase.total ?? purchase.totalAmount ?? purchase.totalCost ?? 0;
+    const paid = Number(purchase.amountPaid || 0);
+    return total > 0 && paid < total;
   };
 
   const totalAmount = purchases.reduce((sum, p) => sum + (p.total ?? p.totalAmount ?? p.totalCost ?? 0), 0);
@@ -275,8 +326,30 @@ export default function PurchasesScreen() {
                 </View>
               </View>
 
-              <TouchableOpacity style={styles.saveBtn} onPress={savePurchase} disabled={saving}>
-                {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.saveBtnText}>Save Purchase</Text>}
+              <Text style={styles.fieldLabel}>Payment</Text>
+              <View style={styles.paymentRow}>
+                <TouchableOpacity
+                  style={[styles.paymentChip, markPaid && styles.paymentChipActive]}
+                  onPress={() => setMarkPaid(true)}
+                >
+                  <Text style={[styles.paymentChipText, markPaid && styles.paymentChipTextActive]}>Paid</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.paymentChip, !markPaid && styles.paymentChipActive]}
+                  onPress={() => setMarkPaid(false)}
+                >
+                  <Text style={[styles.paymentChipText, !markPaid && styles.paymentChipTextActive]}>Unpaid</Text>
+                </TouchableOpacity>
+              </View>
+
+              <TouchableOpacity style={styles.saveBtn} onPress={() => void savePurchase(markPaid)} disabled={saving}>
+                {saving ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Text style={styles.saveBtnText}>
+                    {markPaid ? 'Save & mark paid' : 'Save unpaid'}
+                  </Text>
+                )}
               </TouchableOpacity>
               <TouchableOpacity onPress={resetForm}>
                 <Text style={styles.cancelText}>Cancel</Text>
@@ -295,18 +368,33 @@ export default function PurchasesScreen() {
                 ? (p.createdAt as { toDate: () => Date }).toDate()
                 : null;
               const supplierLabel = p.supplierName || (p.supplierId ? supplierMap.get(p.supplierId) : undefined) || 'No supplier';
+              const unpaid = isPurchaseUnpaid(p);
               return (
                 <View key={p.id} style={styles.card}>
                   <View style={styles.cardRow}>
                     <Text style={styles.supplierName} numberOfLines={2}>{supplierLabel}</Text>
                     <Text style={styles.totalText}>{total > 0 ? `$${total.toFixed(2)}` : '—'}</Text>
                   </View>
+                  {unpaid ? <Text style={styles.unpaidBadge}>Unpaid</Text> : null}
                   {p.items?.map((i, idx) => (
                     <Text key={idx} style={styles.itemText} numberOfLines={2}>
                       • {i.name} × {i.quantity}{i.unitCost ? ` @ $${i.unitCost}` : ''}
                     </Text>
                   ))}
                   {date && <Text style={styles.dateText}>{date.toLocaleDateString()}</Text>}
+                  {unpaid ? (
+                    <TouchableOpacity
+                      style={styles.markPaidBtn}
+                      onPress={() => void markPurchasePaid(p)}
+                      disabled={markingPaidId === p.id}
+                    >
+                      {markingPaidId === p.id ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                      ) : (
+                        <Text style={styles.markPaidBtnText}>✓ Mark paid</Text>
+                      )}
+                    </TouchableOpacity>
+                  ) : null}
                 </View>
               );
             })
@@ -359,6 +447,9 @@ const styles = StyleSheet.create({
   totalText: { fontSize: 15, fontWeight: '700', color: COLORS.primary },
   itemText: { fontSize: 13, color: COLORS.textSecondary, marginTop: 2 },
   dateText: { fontSize: 11, color: COLORS.textMuted, marginTop: 6 },
+  unpaidBadge: { fontSize: 12, fontWeight: '700', color: COLORS.warning, marginBottom: 4 },
+  markPaidBtn: { marginTop: 10, backgroundColor: COLORS.success, borderRadius: RADIUS.md, paddingVertical: 8, alignItems: 'center' },
+  markPaidBtnText: { color: '#fff', fontWeight: '700', fontSize: 13 },
   form: { backgroundColor: COLORS.surface, marginHorizontal: 12, borderRadius: RADIUS.lg, padding: 16, marginBottom: 12, ...SHADOW.sm },
   formTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary, marginBottom: 12 },
   fieldLabel: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
@@ -374,6 +465,11 @@ const styles = StyleSheet.create({
   },
   rowInputs: { flexDirection: 'row', gap: 10 },
   rowField: { flex: 1 },
+  paymentRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  paymentChip: { flex: 1, borderWidth: 1.5, borderColor: COLORS.border, borderRadius: RADIUS.md, paddingVertical: 10, alignItems: 'center', backgroundColor: COLORS.background },
+  paymentChipActive: { borderColor: COLORS.primary, backgroundColor: COLORS.primaryLight },
+  paymentChipText: { fontSize: 14, fontWeight: '600', color: COLORS.textSecondary },
+  paymentChipTextActive: { color: COLORS.primary },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 14, alignItems: 'center', marginTop: 4 },
   saveBtnText: { color: '#fff', fontWeight: '700', fontSize: 15 },
   cancelText: { color: COLORS.textMuted, textAlign: 'center', marginTop: 12, fontSize: 14 },

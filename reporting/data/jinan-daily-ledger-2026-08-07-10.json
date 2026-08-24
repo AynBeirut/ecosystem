@@ -1,0 +1,74 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "Handwritten Jinan's Kitchen daily planner — Aug 7–10 2026",
+  "currency": "USD",
+  "days": [
+    {
+      "date": "2026-08-07",
+      "sales": [
+        { "label": "Bashir Dishes", "amountUSD": 20 },
+        { "label": "fatte x 2", "amountUSD": 16 }
+      ]
+    },
+    {
+      "date": "2026-08-08",
+      "sales": [
+        { "label": "order (x15) foul", "amountUSD": 90 },
+        { "label": "fatti & foul", "amountUSD": 14 },
+        {
+          "label": "M. Dergham",
+          "amountUSD": 225,
+          "notes": "Notebook: fatti x10, foul x10, Msabaher x10"
+        },
+        { "label": "Ghanan paca", "amountUSD": 15 },
+        { "label": "Walid pizza", "amountUSD": 15 }
+      ]
+    },
+    {
+      "date": "2026-08-09",
+      "sales": [
+        { "label": "Wael's order (45 people)", "amountUSD": 855 },
+        { "label": "Hana's friend", "amountUSD": 85 },
+        { "label": "Ghassan", "amountUSD": 15 },
+        { "label": "Soup", "amountUSD": 20 }
+      ]
+    },
+    {
+      "date": "2026-08-10",
+      "sales": [
+        { "label": "foul & fatte", "amountUSD": 14 },
+        {
+          "label": "3ammo Afif",
+          "amountUSD": 30,
+          "notes": "Notebook: foul + Balila + stroganoff"
+        },
+        { "label": "foul x 2", "amountUSD": 14 },
+        { "label": "Jinan", "amountUSD": 40 }
+      ]
+    }
+  ],
+  "expenses": [
+    { "date": "2026-08-07", "label": "Plates (stuff)", "amountUSD": 42, "category": "Supplies" },
+    { "date": "2026-08-07", "label": "Yogurt", "amountUSD": 10, "category": "Ingredients" },
+    { "date": "2026-08-07", "label": "Najjar", "amountUSD": 150, "category": "Other" },
+    { "date": "2026-08-07", "label": "Employee", "amountUSD": 10, "category": "Salaries" },
+    { "date": "2026-08-07", "label": "veggies", "amountUSD": 68, "category": "Ingredients" },
+    { "date": "2026-08-07", "label": "fuel", "amountUSD": 20, "category": "Utilities" },
+    { "date": "2026-08-08", "label": "Ice", "amountUSD": 10, "category": "Ingredients" },
+    { "date": "2026-08-08", "label": "Plastics", "amountUSD": 72, "category": "Supplies" },
+    { "date": "2026-08-08", "label": "Gas", "amountUSD": 46, "category": "Utilities" },
+    { "date": "2026-08-08", "label": "Nuts", "amountUSD": 7, "category": "Ingredients" },
+    { "date": "2026-08-08", "label": "Veggies & fruits", "amountUSD": 45, "category": "Ingredients" },
+    { "date": "2026-08-08", "label": "personal", "amountUSD": 10, "category": "Other" },
+    { "date": "2026-08-09", "label": "Phone charge", "amountUSD": 24, "category": "Utilities" },
+    { "date": "2026-08-09", "label": "greens", "amountUSD": 12, "category": "Ingredients" },
+    { "date": "2026-08-09", "label": "Madina", "amountUSD": 40, "category": "Other" },
+    { "date": "2026-08-09", "label": "Asrar + transport", "amountUSD": 30, "category": "Transport" },
+    { "date": "2026-08-09", "label": "DeDe", "amountUSD": 20, "category": "Other" },
+    { "date": "2026-08-09", "label": "Batroun Market", "amountUSD": 120, "category": "Ingredients" },
+    { "date": "2026-08-10", "label": "Table Rent", "amountUSD": 70, "category": "Rent", "notes": "Notebook: table" },
+    { "date": "2026-08-10", "label": "Home Electricity", "amountUSD": 103, "category": "Utilities", "notes": "Notebook: H.E" },
+    { "date": "2026-08-10", "label": "Employee", "amountUSD": 5, "category": "Salaries" },
+    { "date": "2026-08-10", "label": "Personal", "amountUSD": 20, "category": "Other" }
+  ]
+}

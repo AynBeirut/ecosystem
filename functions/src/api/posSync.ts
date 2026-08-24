@@ -19,6 +19,13 @@ import { resolveOrderCogsLines } from '../lib/ledger/resolveOrderCogs';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
 import { resolveProductIconFromPayload, resolveStoredProductIcon } from '../lib/productIcon';
+import { validateEventBelongsToStore, linkEventTicketToOrder, serializeEventTicket, ticketsCollection } from '../lib/storeEventsCore';
+import {
+  assertClientTotalMatches,
+  calculateEventOrderFinancials,
+  entryFeeBlocksTicketLink,
+} from '../lib/eventPricing';
+import { autoIssueEntryTicketsFromPosOrder } from '../lib/eventPosEntryTicket';
 
 const db = admin.firestore();
 
@@ -676,6 +683,12 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
       paymentMethod,
       timestamp,
       composedProductSource: composedProductSourceInput,
+      isEventSale,
+      eventId,
+      eventName,
+      eventSnapshot,
+      eventTicketId,
+      includeEventEntryFee,
     } = body as {
       storeId?: string;
       deviceId?: string;
@@ -686,6 +699,12 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
       paymentMethod?: string;
       timestamp?: string;
       composedProductSource?: ComposedProductSource;
+      isEventSale?: boolean;
+      eventId?: string;
+      eventName?: string;
+      eventSnapshot?: Record<string, unknown>;
+      eventTicketId?: string;
+      includeEventEntryFee?: boolean;
     };
 
     const authResult = await authenticatePosDevice(
@@ -752,10 +771,11 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
     );
 
     const totalsInput = totals || {};
-    const subtotal = Number(totalsInput.subtotal ?? 0);
+    let subtotal = Number(totalsInput.subtotal ?? 0);
     const taxAmount = Number(totalsInput.taxAmount ?? totalsInput.tax ?? 0);
-    const discountAmount = Number(totalsInput.discountAmount ?? totalsInput.discount ?? 0);
-    const total = Number(totalsInput.total ?? 0);
+    let discountAmount = Number(totalsInput.discountAmount ?? totalsInput.discount ?? 0);
+    let total = Number(totalsInput.total ?? 0);
+    const itemSubtotal = resolvedItems.reduce((sum, item) => sum + Number(item.total || 0), 0);
 
     const composedProductSource = normalizeComposedProductSource(
       composedProductSourceInput || authResult.auth.composedProductSource,
@@ -769,6 +789,105 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
       extractOrderCustomerInput(body),
     );
 
+    const normalizedEventId = String(eventId || '').trim();
+    const normalizedIsEventSale = isEventSale === true || Boolean(normalizedEventId);
+    let eventFields: Record<string, unknown> = {};
+    let linkedTicket: ReturnType<typeof serializeEventTicket> | null = null;
+
+    if (normalizedIsEventSale) {
+      if (!normalizedEventId) {
+        res.status(400).json({ error: 'eventId required when isEventSale is true' });
+        return;
+      }
+      const eventCheck = await validateEventBelongsToStore(db, authResult.auth.storeId, normalizedEventId);
+      if (!eventCheck.ok) {
+        res.status(400).json({ error: eventCheck.error });
+        return;
+      }
+
+      const normalizedEventTicketId = String(eventTicketId || '').trim();
+      if (normalizedEventTicketId) {
+        const ticketSnap = await ticketsCollection(db, authResult.auth.storeId, normalizedEventId)
+          .doc(normalizedEventTicketId)
+          .get();
+        if (!ticketSnap.exists) {
+          res.status(400).json({ error: 'Event ticket not found' });
+          return;
+        }
+        linkedTicket = serializeEventTicket(normalizedEventId, normalizedEventTicketId, ticketSnap.data() || {});
+        if (linkedTicket.status === 'cancelled') {
+          res.status(400).json({ error: 'Event ticket is cancelled' });
+          return;
+        }
+        if (linkedTicket.status === 'linked' && linkedTicket.linkedOrderId) {
+          res.status(400).json({ error: 'Event ticket already linked to another sale' });
+          return;
+        }
+        if (entryFeeBlocksTicketLink(eventCheck.event.settings, linkedTicket)) {
+          res.status(400).json({ error: 'Entry fee must be paid before linking this ticket to a sale' });
+          return;
+        }
+      }
+
+      const eventFinancials = calculateEventOrderFinancials(
+        itemSubtotal > 0 ? itemSubtotal : subtotal,
+        taxAmount,
+        eventCheck.event.settings,
+        {
+          includeEntryFee: includeEventEntryFee === true,
+          entryFeeAlreadyPaid: linkedTicket?.entryFeePaid === true,
+        },
+      );
+
+      if (eventFinancials.pricingEnforced) {
+        const totalCheck = assertClientTotalMatches(total, eventFinancials.total);
+        if (!totalCheck.ok) {
+          res.status(400).json({ error: totalCheck.message });
+          return;
+        }
+        subtotal = eventFinancials.subtotal;
+        discountAmount = eventFinancials.discountAmount;
+        total = eventFinancials.total;
+        eventFields = {
+          ...eventFields,
+          eventPricingApplied: true,
+          eventDiscountPercent: eventFinancials.eventDiscountPercent,
+          eventDiscountAmount: eventFinancials.eventDiscountAmount,
+          eventEntryFeeAmount: eventFinancials.eventEntryFeeAmount,
+        };
+      }
+
+      eventFields = {
+        ...eventFields,
+        isEventSale: true,
+        eventId: normalizedEventId,
+        eventName: String(eventName || eventCheck.event.name || '').trim(),
+        eventSnapshot:
+          eventSnapshot && typeof eventSnapshot === 'object'
+            ? eventSnapshot
+            : {
+                id: eventCheck.event.id,
+                name: eventCheck.event.name,
+                startAt: eventCheck.event.startAt,
+                endAt: eventCheck.event.endAt,
+                status: eventCheck.event.status,
+                saleMode: eventCheck.event.saleMode,
+                settings: eventCheck.event.settings,
+              },
+      };
+
+      if (linkedTicket) {
+        eventFields = {
+          ...eventFields,
+          eventTicketId: linkedTicket.id,
+          eventTicketNumber: linkedTicket.ticketNumber,
+          eventGuestName: linkedTicket.guestName,
+          customerName: linkedTicket.guestName || resolvedCustomer.customerName,
+        };
+      }
+    }
+
+    const normalizedEventTicketId = String(eventTicketId || '').trim();
     const orderRef = db.collection('orders').doc();
     const writeResult = await db.runTransaction(async (tx: unknown) => {
       const transaction = tx as {
@@ -828,6 +947,7 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
         posSaleTimestamp: saleTimestamp,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: saleTimestamp,
+        ...eventFields,
       };
 
       transaction.set(orderRef, orderData);
@@ -850,6 +970,42 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
         alreadyExisted: true,
       });
       return;
+    }
+
+    if (normalizedEventTicketId && normalizedEventId) {
+      try {
+        await linkEventTicketToOrder(
+          db,
+          authResult.auth.storeId,
+          normalizedEventId,
+          normalizedEventTicketId,
+          writeResult.orderId,
+          normalizedLocalSaleId,
+        );
+      } catch (ticketLinkError) {
+        console.warn('POS event ticket link failed:', ticketLinkError);
+      }
+    }
+
+    if (!normalizedEventTicketId) {
+      try {
+        await autoIssueEntryTicketsFromPosOrder(
+          db,
+          authResult.auth.storeId,
+          writeResult.orderId,
+          resolvedItems.map((item) => ({
+            productId: String(item.productId || ''),
+            quantity: Number(item.quantity || 0),
+          })),
+          {
+            customerName: String(eventFields.eventGuestName || resolvedCustomer.customerName || '').trim(),
+            customerPhone: resolvedCustomer.customerPhone,
+          },
+          normalizedLocalSaleId,
+        );
+      } catch (autoTicketError) {
+        console.warn('POS auto entry ticket issue failed:', autoTicketError);
+      }
     }
 
     if (composedProductSource === 'platform') {

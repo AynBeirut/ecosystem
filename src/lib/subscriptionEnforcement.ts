@@ -12,6 +12,7 @@ import {
 import { resolveStoreEntitlements } from '@/lib/entitlements';
 import type { StoreProfile } from '@/types/storeProfile';
 import { getCatalogProductCount } from '@/lib/catalogProductCount';
+import { isStoreMarkedNotTrial, markStoreNotTrial } from '@/lib/vOpsCache';
 
 type Tier = 'trial' | 'starter' | 'pro' | 'business';
 
@@ -137,6 +138,9 @@ export async function enforceAndConsumeTrialOperation(
   storeId: string,
   operationType: TrialOperationType
 ): Promise<void> {
+  // Paid / non-trial stores: skip the Firestore transaction entirely after first check.
+  if (isStoreMarkedNotTrial(storeId)) return;
+
   const monthKey = getMonthKey();
 
   await runTransaction(db, async (transaction) => {
@@ -145,7 +149,10 @@ export async function enforceAndConsumeTrialOperation(
     const profileData = profileSnap.exists() ? profileSnap.data() : {};
 
     const tier = normalizeTier(profileData?.subscriptionTier);
-    if (tier !== 'trial') return;
+    if (tier !== 'trial') {
+      markStoreNotTrial(storeId);
+      return;
+    }
 
     const limitRaw = profileData?.monthlyOperationsLimit ?? profileData?.monthly_operations_limit;
     const limit = toNumber(limitRaw, 30);
@@ -182,5 +189,77 @@ export async function enforceAndConsumeTrialOperation(
       operationType,
       createdAt: new Date().toISOString(),
     });
+  });
+}
+
+/**
+ * One round-trip: trial consume (if needed) + next invoice/PO number.
+ * Prefer this on V·POS / V·Buy save paths.
+ */
+export async function allocateInvoiceNumberWithTrial(
+  db: Firestore,
+  storeId: string,
+  operationType: TrialOperationType,
+  numberFallbackPrefix = 'INV',
+): Promise<string> {
+  const monthKey = getMonthKey();
+  const skipTrial = isStoreMarkedNotTrial(storeId);
+
+  return runTransaction(db, async (transaction) => {
+    const profileRef = doc(db, 'storeProfiles', storeId);
+    const profileSnap = await transaction.get(profileRef);
+    if (!profileSnap.exists()) {
+      throw new Error('Store profile not found');
+    }
+
+    const profileData = profileSnap.data();
+    const profile = profileData as StoreProfile;
+    const updates: Record<string, unknown> = {
+      updatedAt: new Date().toISOString(),
+    };
+
+    if (!skipTrial) {
+      const tier = normalizeTier(profileData?.subscriptionTier);
+      if (tier === 'trial') {
+        const limitRaw = profileData?.monthlyOperationsLimit ?? profileData?.monthly_operations_limit;
+        const limit = toNumber(limitRaw, 30);
+        if (limit <= 0) {
+          throw new Error('Trial operations are not available on this account.');
+        }
+        const currentMonth =
+          typeof profileData?.operationsMonthKey === 'string' ? profileData.operationsMonthKey : null;
+        const currentCountRaw =
+          profileData?.monthlyOperationsCount ?? profileData?.monthly_operations_count ?? 0;
+        const currentCount = toNumber(currentCountRaw, 0);
+        const nextCount = currentMonth === monthKey ? currentCount + 1 : 1;
+        if (nextCount > limit) {
+          throw new Error(`Trial monthly operation limit reached (${limit}/${limit}). Upgrade to continue.`);
+        }
+        Object.assign(updates, {
+          monthlyOperationsLimit: limit,
+          monthly_operations_limit: limit,
+          monthlyOperationsCount: nextCount,
+          monthly_operations_count: nextCount,
+          operationsMonthKey: monthKey,
+          lastTrialOperationType: operationType,
+          lastTrialOperationAt: new Date().toISOString(),
+        });
+        transaction.set(doc(collection(db, 'trialOperationUsage')), {
+          storeId,
+          monthKey,
+          operationType,
+          createdAt: new Date().toISOString(),
+        });
+      } else {
+        markStoreNotTrial(storeId);
+      }
+    }
+
+    const prefix = String(profile.invoiceNumberPrefix || numberFallbackPrefix);
+    const lastNumber = Number(profile.lastInvoiceNumber || 0);
+    const nextNumber = lastNumber + 1;
+    updates.lastInvoiceNumber = nextNumber;
+    transaction.set(profileRef, updates, { merge: true });
+    return `${prefix}-${String(nextNumber).padStart(3, '0')}`;
   });
 }

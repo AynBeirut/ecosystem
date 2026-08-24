@@ -11,6 +11,7 @@ import {
   LayoutGrid,
   LayoutTemplate,
   Landmark,
+  CalendarDays,
   Mail,
   Megaphone,
   Monitor,
@@ -26,6 +27,7 @@ import {
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
+import { SallyNavIcon } from '@/components/admin/SallyIconBadge';
 import { useAuth } from '@/context/useAuth';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { canUseInvoiceManagerApp } from '@/lib/entitlements';
@@ -51,9 +53,23 @@ const DEFAULT_OPEN_GROUPS: Record<string, boolean> = {
   daily_stock: true,
   daily_sales: true,
   setup_profile: false,
+  setup_seo: false,
   setup_template: false,
   setup_system: false,
 };
+
+const SEO_OPS_ROUTES = [
+  '/admin/seo-analytics',
+  '/admin/seo-audit',
+  '/admin/seo-keywords',
+  '/admin/seo-technical',
+  '/admin/seo-content',
+  '/admin/seo-competitors',
+  '/admin/seo-aeo',
+  '/admin/seo-geo',
+  '/admin/seo-programmatic',
+  '/admin/seo-links',
+];
 
 const PROFILE_SETUP_ROUTES = [
   '/admin/profile',
@@ -61,8 +77,6 @@ const PROFILE_SETUP_ROUTES = [
   '/admin/delivery',
   '/admin/announcements',
   '/admin/marketing',
-  '/admin/seo-analytics',
-  '/admin/seo-audit',
 ];
 
 const TEMPLATE_ROUTES = ['/admin/templates', '/admin/theme-editor', '/admin/builder'];
@@ -91,7 +105,11 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
   if (groupId === 'daily_sales') {
     return (
       pathname.startsWith('/admin/orders') ||
+      pathname.startsWith('/admin/v-pos') ||
+      pathname.startsWith('/admin/v-purchase') ||
+      pathname.startsWith('/admin/v-expense') ||
       pathname.startsWith('/admin/pos') ||
+      pathname.startsWith('/admin/events') ||
       pathname.startsWith('/admin/customers') ||
       pathname.startsWith('/admin/crm') ||
       pathname.startsWith('/admin/payments') ||
@@ -100,6 +118,9 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
   }
   if (groupId === 'setup_profile') {
     return PROFILE_SETUP_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
+  }
+  if (groupId === 'setup_seo') {
+    return SEO_OPS_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   }
   if (groupId === 'setup_template') {
     return TEMPLATE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
@@ -196,12 +217,21 @@ export function useAdminNavigation() {
         id: 'daily_sales',
         title: 'Sales & Customers',
         items: [
+          { to: '/admin/v-pos', label: 'V·POS', icon: ShoppingCart, visible: Boolean(canViewOrders) },
+          { to: '/admin/v-purchase', label: 'V·Purchase', icon: ShoppingCart, visible: Boolean(isAdmin && canManageInventory) },
+          { to: '/admin/v-expense', label: 'V·Expense', icon: CreditCard, visible: isAdmin },
           { to: '/admin/orders', label: 'Orders', icon: Package, visible: Boolean(canViewOrders) },
           { to: '/admin/scheduled-orders', label: 'Scheduled Orders', icon: Clock, visible: Boolean(canViewOrders) },
           {
             to: '/admin/pos',
             label: 'Grabio POS',
             icon: Monitor,
+            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('pos')),
+          },
+          {
+            to: '/admin/events',
+            label: 'Store Events',
+            icon: CalendarDays,
             visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('pos')),
           },
           { to: '/admin/customers', label: 'Customers', icon: Users, visible: Boolean(canViewCustomers) },
@@ -231,8 +261,22 @@ export function useAdminNavigation() {
             visible: isAdmin || user?.role === 'sub_account',
           },
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: isAdmin && Boolean(canViewReports) },
+        ],
+      },
+      {
+        id: 'setup_seo',
+        title: 'SEO Ops',
+        items: [
           { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: isAdmin },
           { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: isAdmin },
+          { to: '/admin/seo-keywords', label: 'SEO Keywords', icon: BarChart, visible: isAdmin },
+          { to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: isAdmin },
+          { to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Monitor, visible: isAdmin },
+          { to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: isAdmin },
+          { to: '/admin/seo-geo', label: 'SEO GEO', icon: Globe, visible: isAdmin },
+          { to: '/admin/seo-programmatic', label: 'Programmatic SEO', icon: LayoutGrid, visible: isAdmin },
+          { to: '/admin/seo-links', label: 'SEO Links', icon: Globe, visible: isAdmin },
+          { to: '/admin/seo-technical', label: 'SEO Technical', icon: Settings2, visible: isAdmin },
         ],
       },
       {
@@ -274,9 +318,9 @@ export function useAdminNavigation() {
           { to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: canUseBusinessTools },
           {
             to: '/admin/ai-agent',
-            label: 'AI Agent',
-            icon: Bot,
-            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('ai_agent')),
+            label: 'Sally',
+            icon: SallyNavIcon as typeof Bot,
+            visible: user?.role === 'admin',
           },
         ],
       },

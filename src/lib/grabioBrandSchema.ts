@@ -1,11 +1,31 @@
 /** Shared JSON-LD for Grabio marketing pages — helps search + AI crawlers. */
 
+/** Canonical NAP — keep in sync with Google Business Profile Contact tab. */
+export const GRABIO_NAP = {
+  name: 'Grabio',
+  streetAddress: 'VGMG+H8J',
+  city: 'Beirut',
+  region: 'Beirut Governorate',
+  country: 'LB',
+  phone: '+96171110952',
+  phoneDisplay: '+961 71 110 952',
+  whatsappUrl: 'https://wa.me/96171110952',
+  email: 'hello@grabio.space',
+  website: 'https://grabio.space',
+  gbpOpeningDate: '2013-01-01',
+  gbpActiveSince: '2013',
+  mapsShortUrl: 'https://maps.app.goo.gl/2RRAu3gfUNLZTw118',
+  mapsPlaceUrl:
+    'https://www.google.com/maps/place/VGMG%2BH8J+Grabio,+Beirut/data=!4m2!3m1!1s0x151f170026664769:0x935d324fcf443fa5!18m1!1e1',
+  gbpManageUrl: 'https://business.google.com/',
+} as const;
+
 export const GRABIO_ORG = {
   '@type': 'Organization' as const,
   '@id': 'https://grabio.space/#organization',
-  name: 'Grabio',
+  name: GRABIO_NAP.name,
   legalName: 'Grabio',
-  url: 'https://grabio.space',
+  url: GRABIO_NAP.website,
   logo: 'https://grabio.space/og-image.png',
   description:
     'Grabio is a modular cloud business platform for inventory, accounting, POS, CRM, manufacturing, and restaurant operations — built for MENA and global SMBs.',
@@ -14,13 +34,25 @@ export const GRABIO_ORG = {
   sameAs: [
     'https://www.linkedin.com/company/grabio',
     'https://play.google.com/store/apps/details?id=space.grabio.admin',
+    GRABIO_NAP.mapsShortUrl,
+    GRABIO_NAP.mapsPlaceUrl,
   ],
-  contactPoint: {
-    '@type': 'ContactPoint',
-    contactType: 'sales',
-    email: 'hello@grabio.space',
-    availableLanguage: ['English', 'Arabic', 'French'],
-  },
+  contactPoint: [
+    {
+      '@type': 'ContactPoint' as const,
+      contactType: 'customer service',
+      telephone: GRABIO_NAP.phone,
+      email: GRABIO_NAP.email,
+      url: GRABIO_NAP.website,
+      availableLanguage: ['English', 'Arabic', 'French'],
+    },
+    {
+      '@type': 'ContactPoint' as const,
+      contactType: 'sales',
+      url: GRABIO_NAP.whatsappUrl,
+      availableLanguage: ['English', 'Arabic', 'French'],
+    },
+  ],
 };
 
 export const GRABIO_SOFTWARE_APP = {

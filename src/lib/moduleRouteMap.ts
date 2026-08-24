@@ -26,6 +26,8 @@ export const MODULE_ROUTE_MAP: ModuleRouteRule[] = [
   { pathPrefix: '/admin/products', moduleId: 'stock', enforceOnly: true },
   { pathPrefix: '/admin/inventory', moduleId: 'stock', enforceOnly: true },
   { pathPrefix: '/admin/purchases', moduleId: 'stock', enforceOnly: true },
+  { pathPrefix: '/admin/v-purchase', moduleId: 'stock', enforceOnly: true },
+  { pathPrefix: '/admin/v-expense', moduleId: 'invoice_manager', enforceOnly: true },
   { pathPrefix: '/admin/suppliers', moduleId: 'stock', enforceOnly: true },
   { pathPrefix: '/admin/supplier-statements', moduleId: 'stock', enforceOnly: true },
   { pathPrefix: '/admin/returns', moduleId: 'stock', enforceOnly: true },

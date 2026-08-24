@@ -4288,9 +4288,21 @@ const AdminOrders: React.FC = () => {
                         {order.invoiceNumber ? order.invoiceNumber : `Order #${order.id.slice(0, 8)}`}
                         {getStatusBadge(order.status)}
                         {getPaymentBadge(order)}
+                        {(order as { isEventSale?: boolean }).isEventSale && (
+                          <Badge variant="outline" className="bg-violet-100 text-violet-800 border-violet-200">
+                            Event
+                            {(order as { eventTicketNumber?: string }).eventTicketNumber
+                              ? ` · ${(order as { eventTicketNumber?: string }).eventTicketNumber}`
+                              : ''}
+                          </Badge>
+                        )}
                       </CardTitle>
                       <CardDescription>
                         {new Date(order.createdAt || '').toLocaleDateString()} | {order.customerName}
+                        {(order as { eventGuestName?: string }).eventGuestName &&
+                          ` | Guest ticket: ${(order as { eventGuestName?: string }).eventGuestName}`}
+                        {(order as { eventName?: string }).eventName &&
+                          ` | ${(order as { eventName?: string }).eventName}`}
                         {order.assignedSalesPersonName && ` | Sales: ${order.assignedSalesPersonName}`}
                         {order.deliveryMethod && ` | Delivery: ${order.deliveryMethod.replace('_', ' ')}`}
                         {order.orderChannel === 'whatsapp' && ' | WhatsApp'}

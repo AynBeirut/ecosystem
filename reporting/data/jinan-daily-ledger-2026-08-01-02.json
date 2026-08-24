@@ -1,0 +1,37 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "Handwritten Jinan's Kitchen daily planner — page dated Sunday 2 Aug 2026",
+  "currency": "USD",
+  "days": [
+    {
+      "date": "2026-08-01",
+      "sales": [
+        { "label": "fath & Hommus", "amountUSD": 15 },
+        { "label": "foul & Hommus", "amountUSD": 13 },
+        { "label": "Cheese + Eggs & Hommus", "amountUSD": 40 },
+        { "label": "Pizza", "amountUSD": 24 },
+        { "label": "Safra", "amountUSD": 40 },
+        { "label": "Maheir", "amountUSD": 30 }
+      ]
+    },
+    {
+      "date": "2026-08-02",
+      "sales": [
+        { "label": "foul", "amountUSD": 6 },
+        { "label": "foul x 2", "amountUSD": 12 },
+        { "label": "foul & fatte", "amountUSD": 14 },
+        { "label": "fatte Almond", "amountUSD": 13 },
+        { "label": "samen", "amountUSD": 50 },
+        { "label": "order", "amountUSD": 40 },
+        { "label": "Order Bites", "amountUSD": 55 }
+      ]
+    }
+  ],
+  "expenses": [
+    { "date": "2026-08-02", "label": "Employee", "amountUSD": 10, "category": "Labor" },
+    { "date": "2026-08-02", "label": "Eggs", "amountUSD": 7, "category": "Ingredients" },
+    { "date": "2026-08-02", "label": "Bread & Veggies", "amountUSD": 18, "category": "Ingredients" },
+    { "date": "2026-08-02", "label": "plastics", "amountUSD": 29, "category": "Packaging" },
+    { "date": "2026-08-02", "label": "Employee", "amountUSD": 5, "category": "Labor" }
+  ]
+}

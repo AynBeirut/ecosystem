@@ -54,7 +54,10 @@ export default function OwnerProductsScreen() {
   };
 
   const renderProduct = ({ item }: { item: Product }) => {
-    const isSimple = item.productType === 'simple';
+  const isSimple = item.productType === 'simple';
+  const isService = item.productType === 'service';
+  const canQuickEdit = isSimple || isService || item.productType === 'finished_good';
+  const canFullEdit = isSimple || isService;
     return (
       <View style={styles.card}>
       <View style={styles.cardRow}>
@@ -87,20 +90,27 @@ export default function OwnerProductsScreen() {
         )}
 
         <View style={styles.actions}>
-          {isSimple ? (
+          {canQuickEdit ? (
             <>
               <TouchableOpacity
                 style={styles.editBtn}
                 onPress={() => navigation.navigate('AddEditProduct', { productId: item.id })}
               >
-                <Text style={styles.editBtnText}>✏️ Edit</Text>
+                <Text style={styles.editBtnText}>{canFullEdit ? '✏️ Edit' : '✏️ Quick edit'}</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteProduct(item)}>
-                <Text style={styles.deleteBtnText}>🗑️ Delete</Text>
-              </TouchableOpacity>
+              {isSimple ? (
+                <TouchableOpacity style={styles.deleteBtn} onPress={() => deleteProduct(item)}>
+                  <Text style={styles.deleteBtnText}>🗑️ Delete</Text>
+                </TouchableOpacity>
+              ) : null}
             </>
           ) : (
-            <Text style={styles.readOnlyNote}>Read-only on mobile</Text>
+            <TouchableOpacity
+              style={styles.editBtn}
+              onPress={() => navigation.navigate('AddEditProduct', { productId: item.id })}
+            >
+              <Text style={styles.editBtnText}>✏️ Price & stock</Text>
+            </TouchableOpacity>
           )}
         </View>
       </View>

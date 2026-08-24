@@ -356,6 +356,28 @@ service cloud.firestore {
         allow write: if false;
       }
 
+      // Store events — shared calendar source for Grabio admin + POS sync
+      match /storeEvents/{eventId} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow create, update, delete: if request.auth != null && isStoreAdmin(storeId);
+
+        match /eventTickets/{ticketId} {
+          allow read: if request.auth != null && isStoreAdmin(storeId);
+          allow create, update, delete: if request.auth != null && isStoreAdmin(storeId);
+        }
+
+        match /eventReservations/{reservationId} {
+          allow read: if request.auth != null && isStoreAdmin(storeId);
+          allow create, update, delete: if request.auth != null && isStoreAdmin(storeId);
+        }
+      }
+
+      // Active POS event pointer — one active event per store
+      match /posSettings/{docId} {
+        allow read: if request.auth != null && isStoreAdmin(storeId);
+        allow create, update, delete: if request.auth != null && isStoreAdmin(storeId);
+      }
+
       match /posPairingCodes/{code} {
         allow read: if request.auth != null && isStoreAdmin(storeId);
         allow write: if false;
@@ -1029,6 +1051,148 @@ service cloud.firestore {
     match /seo_audits/{siteId} {
       allow read: if request.auth != null;
       allow write: if false;
+    }
+
+    // SEO Keywords: platform marketing keyword engine (Phase 1)
+    match /seo_keywords/{keywordId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO Technical: Phase 2 health monitor (PageSpeed snapshots, redirect chains)
+    match /seo_technical/{docId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_broken_links/{linkId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO Content: Phase 3 content engine calendar + drafts
+    match /seo_content/{contentId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO Reporting: Phase 4 dashboard settings (organic target, etc.)
+    match /seo_reporting/{docId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO Competitors: Phase 5 gap engine
+    match /seo_competitors/{competitorId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_competitor_gaps/{gapId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO AEO: Phase 6 answer engine optimization
+    match /seo_aeo_faqs/{faqId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_aeo_citations/{citationId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_aeo_snippets/{snippetId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO GEO: Phase 7 local search
+    match /seo_geo/{docId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_geo_cities/{cityId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_geo_citations/{citationId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_geo_nap_comparisons/{entryId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO Programmatic: Phase 8 — public read published pages only
+    match /seo_prog_templates/{templateId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_prog_seeds/{docId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_prog_settings/{docId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_prog_pages/{pageSlug} {
+      allow get: if resource.data.status == 'published'
+        || (request.auth != null
+          && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+          && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin');
+      allow list: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+      allow create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    // SEO Link building: Phase 9
+    match /seo_link_prospects/{prospectId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_links_acquired/{linkId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
+    }
+
+    match /seo_links_settings/{docId} {
+      allow read, create, update, delete: if request.auth != null
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin';
     }
 
     // Store announcements: public read; real store owner writes

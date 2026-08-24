@@ -40,9 +40,24 @@ import {
   Search,
   Share2,
   ArrowRight,
+  FileDown,
+  Gauge,
+  FileText,
+  Target,
+  AlertTriangle,
 } from 'lucide-react';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import {
+  aggregateOrganicByMonth,
+  buildPrintableReportHtml,
+  loadSeoReportSnapshot,
+  openPrintableReport,
+  saveReportingSettings,
+  type SeoReportSnapshot,
+} from '@/lib/seoReporting';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -158,6 +173,9 @@ const AdminSEOAnalytics: React.FC = () => {
   const [sourceStats, setSourceStats] = useState<SourceStat[]>([]);
   const [recentLeads, setRecentLeads] = useState<(SeoLead & { id: string })[]>([]);
   const [funnelData, setFunnelData] = useState<{ name: string; value: number; pct: number }[]>([]);
+  const [reportSnapshot, setReportSnapshot] = useState<SeoReportSnapshot | null>(null);
+  const [organicTargetInput, setOrganicTargetInput] = useState('500');
+  const [savingTarget, setSavingTarget] = useState(false);
 
   const fetchData = useCallback(async () => {
     try {
@@ -281,6 +299,11 @@ const AdminSEOAnalytics: React.FC = () => {
       setRecentLeads(leads.slice(0, 20));
       setFunnelData(funnel);
       setLastRefresh(new Date());
+
+      const organicByMonth = aggregateOrganicByMonth(events);
+      const snapshot = await loadSeoReportSnapshot(organicByMonth);
+      setReportSnapshot(snapshot);
+      setOrganicTargetInput(String(snapshot.monthlyOrganicTarget));
     } catch (err) {
       console.error('[AdminSEOAnalytics] fetch error', err);
     } finally {
@@ -291,6 +314,32 @@ const AdminSEOAnalytics: React.FC = () => {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const saveOrganicTarget = async () => {
+    const value = Number(organicTargetInput);
+    if (!Number.isFinite(value) || value <= 0) return;
+    setSavingTarget(true);
+    try {
+      await saveReportingSettings({ monthlyOrganicTarget: value });
+      await fetchData();
+    } finally {
+      setSavingTarget(false);
+    }
+  };
+
+  const exportPdfReport = () => {
+    if (!reportSnapshot) return;
+    const html = buildPrintableReportHtml({
+      generatedAt: new Date().toLocaleString(),
+      timeRangeLabel: timeRange === '7d' ? 'Last 7 days' : timeRange === '30d' ? 'Last 30 days' : 'Last 90 days',
+      totalViews,
+      uniqueVisitors,
+      totalLeads,
+      topPages: pageStats.map((p) => ({ page: p.page, views: p.views })),
+      snapshot: reportSnapshot,
+    });
+    openPrintableReport(html);
+  };
 
   // ─── Source icon helper ────────────────────────────────────────────────────
   const sourceIcon = (name: string) => {
@@ -323,6 +372,10 @@ const AdminSEOAnalytics: React.FC = () => {
           </Select>
           <Button variant="outline" size="icon" onClick={fetchData} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          </Button>
+          <Button variant="outline" onClick={exportPdfReport} disabled={loading || !reportSnapshot}>
+            <FileDown className="h-4 w-4 mr-2" />
+            Export PDF
           </Button>
         </>
       )}
@@ -361,11 +414,15 @@ const AdminSEOAnalytics: React.FC = () => {
 
         {/* Tabs */}
         <Tabs defaultValue="traffic">
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex flex-wrap h-auto">
             <TabsTrigger value="traffic">Traffic</TabsTrigger>
             <TabsTrigger value="pages">Pages</TabsTrigger>
             <TabsTrigger value="leads">Leads</TabsTrigger>
             <TabsTrigger value="funnel">Funnel</TabsTrigger>
+            <TabsTrigger value="keywords">Keywords</TabsTrigger>
+            <TabsTrigger value="technical">Technical</TabsTrigger>
+            <TabsTrigger value="content">Content</TabsTrigger>
+            <TabsTrigger value="trends">MoM Trends</TabsTrigger>
           </TabsList>
 
           {/* ─── Traffic Tab ─────────────────────────────────────────── */}
@@ -739,6 +796,191 @@ const AdminSEOAnalytics: React.FC = () => {
                     </div>
                   </>
                 )}
+              </CardContent>
+            </AdminPanel>
+          </TabsContent>
+
+          {/* ─── Keywords Tab (Phase 4) ──────────────────────────────── */}
+          <TabsContent value="keywords" className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <StatCard title="Tracked keywords" value={reportSnapshot?.keywordSummary.totalTracked ?? 0} icon={Search} />
+              <StatCard title="Top 3" value={reportSnapshot?.keywordSummary.top3 ?? 0} icon={TrendingUp} accent="text-emerald-600" />
+              <StatCard title="Top 10" value={reportSnapshot?.keywordSummary.top10 ?? 0} icon={TrendingUp} accent="text-blue-600" />
+              <StatCard title="Top 20" value={reportSnapshot?.keywordSummary.top20 ?? 0} icon={TrendingUp} accent="text-indigo-600" />
+              <StatCard title="Unranked" value={reportSnapshot?.keywordSummary.unranked ?? 0} icon={Search} accent="text-gray-500" />
+            </div>
+
+            <div className="grid md:grid-cols-2 gap-6">
+              <AdminPanel>
+                <CardHeader><CardTitle className="text-base">Intent stage breakdown</CardTitle></CardHeader>
+                <CardContent>
+                  {reportSnapshot ? (
+                    <ResponsiveContainer width="100%" height={220}>
+                      <PieChart>
+                        <Pie
+                          data={[
+                            { name: 'Awareness', value: reportSnapshot.intentBreakdown.awareness },
+                            { name: 'Consideration', value: reportSnapshot.intentBreakdown.consideration },
+                            { name: 'Decision', value: reportSnapshot.intentBreakdown.decision },
+                          ]}
+                          dataKey="value"
+                          nameKey="name"
+                          cx="50%"
+                          cy="50%"
+                          outerRadius={80}
+                          label={({ name, value }) => `${name}: ${value}`}
+                        >
+                          <Cell fill="#0d9488" />
+                          <Cell fill="#0ea5e9" />
+                          <Cell fill="#8b5cf6" />
+                        </Pie>
+                        <Tooltip />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <p className="text-sm text-gray-400 py-8 text-center">Loading keyword data…</p>
+                  )}
+                </CardContent>
+              </AdminPanel>
+
+              <AdminPanel>
+                <CardHeader><CardTitle className="text-base">Top ranked keywords</CardTitle></CardHeader>
+                <CardContent>
+                  {!reportSnapshot?.topKeywords.length ? (
+                    <p className="text-sm text-gray-400">Add ranking positions in SEO Keywords.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {reportSnapshot.topKeywords.map((kw) => (
+                        <div key={kw.id} className="flex items-center justify-between text-sm border rounded-md px-3 py-2">
+                          <span>{kw.keyword}</span>
+                          <Badge>#{kw.rankingPosition}</Badge>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </AdminPanel>
+            </div>
+          </TabsContent>
+
+          {/* ─── Technical Tab (Phase 4) ─────────────────────────────── */}
+          <TabsContent value="technical" className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+              <StatCard
+                title="Health score"
+                value={`${reportSnapshot?.technicalHealth.healthScore ?? 0}%`}
+                sub={reportSnapshot?.technicalHealth.healthSource === 'gsc_ga4' ? 'GSC + GA4' : 'Refresh on SEO Technical'}
+                icon={Gauge}
+              />
+              <StatCard
+                title="GSC clicks (28d)"
+                value={(reportSnapshot?.technicalHealth.gscClicks ?? 0).toLocaleString()}
+                sub={
+                  reportSnapshot?.technicalHealth.gscPosition != null
+                    ? `Pos ${reportSnapshot.technicalHealth.gscPosition.toFixed(1)}`
+                    : undefined
+                }
+                icon={Search}
+              />
+              <StatCard
+                title="GA4 views (28d)"
+                value={(reportSnapshot?.technicalHealth.ga4PageViews ?? 0).toLocaleString()}
+                sub={`${reportSnapshot?.technicalHealth.ga4OrganicSessions ?? 0} organic sessions`}
+                icon={Eye}
+              />
+              <StatCard title="CWV alerts" value={reportSnapshot?.technicalHealth.cwvAlerts ?? 0} icon={AlertTriangle} accent="text-red-500" />
+            </div>
+            <p className="text-sm text-gray-500">
+              Canonical health from GSC + GA4. Refresh on{' '}
+              <a href="/admin/seo-technical" className="text-teal-600 underline">SEO Technical</a>.
+            </p>
+            <AdminPanel>
+              <CardHeader><CardTitle className="text-base">Core Web Vitals snapshot</CardTitle></CardHeader>
+              <CardContent>
+                {!reportSnapshot?.technicalHealth.pages.length ? (
+                  <p className="text-sm text-gray-400">Run PageSpeed on SEO Technical page.</p>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b text-gray-500 text-left">
+                          <th className="pb-2">URL</th>
+                          <th className="pb-2 text-right">Mobile</th>
+                          <th className="pb-2 text-right">LCP</th>
+                          <th className="pb-2 text-right">Alerts</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {reportSnapshot.technicalHealth.pages.map((row) => (
+                          <tr key={row.url} className="border-b last:border-0">
+                            <td className="py-2 font-mono text-xs truncate max-w-[240px]">{row.url}</td>
+                            <td className="py-2 text-right">{row.mobileScore ?? '—'}</td>
+                            <td className="py-2 text-right">{row.lcpSeconds != null ? `${row.lcpSeconds.toFixed(2)}s` : '—'}</td>
+                            <td className="py-2 text-right">
+                              {row.alerts.length ? <Badge variant="destructive">{row.alerts.length}</Badge> : <Badge variant="outline">OK</Badge>}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </CardContent>
+            </AdminPanel>
+          </TabsContent>
+
+          {/* ─── Content Tab (Phase 4) ───────────────────────────────── */}
+          <TabsContent value="content" className="space-y-6">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <StatCard title="Published this month" value={reportSnapshot?.contentPipeline.publishedThisMonth ?? 0} icon={FileText} accent="text-emerald-600" />
+              <StatCard title="In draft" value={reportSnapshot?.contentPipeline.inDraft ?? 0} icon={FileText} />
+              <StatCard title="In review" value={reportSnapshot?.contentPipeline.inReview ?? 0} icon={FileText} accent="text-amber-600" />
+              <StatCard title="Ideas" value={reportSnapshot?.contentPipeline.idea ?? 0} icon={FileText} accent="text-gray-500" />
+              <StatCard title="Total pipeline" value={reportSnapshot?.contentPipeline.total ?? 0} icon={FileText} accent="text-purple-600" />
+            </div>
+          </TabsContent>
+
+          {/* ─── MoM Trends Tab (Phase 4) ────────────────────────────── */}
+          <TabsContent value="trends" className="space-y-6">
+            <AdminPanel>
+              <CardHeader>
+                <CardTitle className="text-base">Organic sessions vs monthly target</CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-wrap items-end gap-3 max-w-sm">
+                  <div className="flex-1">
+                    <Label htmlFor="organic-target">Monthly organic target (sessions)</Label>
+                    <Input
+                      id="organic-target"
+                      type="number"
+                      min={1}
+                      value={organicTargetInput}
+                      onChange={(e) => setOrganicTargetInput(e.target.value)}
+                    />
+                  </div>
+                  <Button onClick={() => void saveOrganicTarget()} disabled={savingTarget}>
+                    {savingTarget ? 'Saving…' : 'Save target'}
+                  </Button>
+                </div>
+                {reportSnapshot?.momTrend.length ? (
+                  <ResponsiveContainer width="100%" height={280}>
+                    <BarChart data={reportSnapshot.momTrend} margin={{ top: 5, right: 10, bottom: 5, left: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+                      <XAxis dataKey="label" tick={{ fontSize: 11 }} />
+                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="organicSessions" name="Organic sessions" fill="#0d9488" radius={[4, 4, 0, 0]} />
+                      <Bar dataKey="target" name="Target" fill="#cbd5e1" radius={[4, 4, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                ) : (
+                  <p className="text-sm text-gray-400 py-8 text-center">No organic session data yet.</p>
+                )}
+                <p className="text-xs text-gray-500 flex items-center gap-1">
+                  <Target className="h-3.5 w-3.5" />
+                  Target line is set manually and stored in Firestore for month-over-month comparison.
+                </p>
               </CardContent>
             </AdminPanel>
           </TabsContent>

@@ -1,0 +1,38 @@
+{
+  "name": "grabio-invoice-mobile",
+  "version": "1.2.10",
+  "main": "index.ts",
+  "scripts": {
+    "start": "expo start",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
+    "build:android:release": "cd android && ./gradlew bundleRelease assembleRelease",
+    "build:android:copy": "node -e \"const v=require('./app.json').expo; const tag=v.version+'-'+v.android.versionCode; require('fs').mkdirSync('release',{recursive:true}); require('fs').copyFileSync('android/app/build/outputs/bundle/release/app-release.aab','release/invoice-'+tag+'.aab'); require('fs').copyFileSync('android/app/build/outputs/apk/release/app-release.apk','release/invoice-'+tag+'.apk'); console.log('release/invoice-'+tag);\""
+  },
+  "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-community/geolocation": "^3.4.0",
+    "@react-native-firebase/app": "^24.0.0",
+    "@react-native-firebase/auth": "^24.0.0",
+    "@react-native-firebase/firestore": "^24.0.0",
+    "@react-native-google-signin/google-signin": "^16.1.2",
+    "@react-navigation/bottom-tabs": "^7.15.9",
+    "@react-navigation/native": "^7.2.2",
+    "@react-navigation/native-stack": "^7.14.11",
+    "expo": "~54.0.33",
+    "expo-constants": "~18.0.13",
+    "expo-print": "~15.0.7",
+    "expo-sharing": "~14.0.7",
+    "expo-status-bar": "~3.0.9",
+    "react": "19.1.0",
+    "react-native": "0.81.5",
+    "react-native-safe-area-context": "~5.6.0",
+    "react-native-screens": "~4.16.0"
+  },
+  "devDependencies": {
+    "@react-native/metro-config": "^0.81.5",
+    "@types/react": "~19.1.0",
+    "typescript": "~5.9.2"
+  },
+  "private": true
+}

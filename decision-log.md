@@ -3,6 +3,202 @@
 > **Canonical decision log:** `~/Documents/grabio-platform-docs/Decision-Log/`  
 > Mirror significant decisions there when closing a sprint.
 
+## 2026-08-22 — V·Purchase + V·Expense (manual entry like V·POS)
+
+**Shipped (code):** Fullscreen quick entry matching V·POS patterns.
+- `/admin/v-purchase` — tap materials, supplier chips, cart, Save; Scan optional
+- `/admin/v-expense` — amount keypad, category tiles, Save; Scan optional
+- Daily Ops: **V·Buy** / **V·Exp**; Purchases/Expenses pages link to Quick buy / Quick expense
+
+**Deploy:** hosting (and already-live api unchanged for this UX).
+
+## 2026-08-22 — OCR receipt scan → Purchase / Expense (LOCKED A — implementing)
+
+**Locked**
+- Engine: **A Google Cloud Vision** (server `POST /ocr/receipt`)
+- Image: **not saved** — base64 in request only, discarded after OCR
+- Confirm UI before save; ambiguous → user picks (v1: destination locked by page — Purchases page → purchase, Expenses → expense; OCR still suggests type)
+- Shared module: `src/features/ocr/*` + `functions/src/api/ocrReceipt.ts`
+
+**Deploy note:** Enable **Cloud Vision API** on GCP project `market-flow-7b074` and grant the Functions runtime SA `roles/vision.user` (or Cloud Vision access). Then `firebase deploy --only functions:api,hosting`.
+
+**Status:** Vision API **ENABLED**; `functions:api` + hosting **deployed** 2026-08-22. Hard-refresh admin; smoke Scan receipt on phone.
+
+## 2026-08-22 — Grabio store events Phase 3 (pricing + reservations)
+
+**Shipped:**
+- Server-side event discount enforcement on `POST /pos/orders` when `discountEnabled`
+- Entry fee enforcement: unpaid tickets block link to POS sale; optional `includeEventEntryFee` on order
+- Event reservations: `eventReservations` subcollection + merged calendar tab
+- Orders admin shows Event badge, ticket #, guest name
+
+**Deploy:** `firebase deploy --only functions:api,firestore:rules,firestore:indexes,hosting`
+
+**Still open:** Windows POS UI for ticket lookup/pricing; free-drink package enforcement.
+
+## 2026-08-22 — Grabio store events Phase 2 (tickets + admin UI)
+
+**Shipped:**
+- Admin UI: `/admin/events` — calendar, list, create/edit, set active, issue tickets
+- Tickets: `stores/{storeId}/storeEvents/{eventId}/eventTickets/{ticketId}` with auto `# T-0001` numbers
+- Settings flags: entry fee, discount, require guest name, link tickets↔sales, reservations (stored; pricing still not enforced)
+- POS: `GET /pos/event-tickets`, `GET /pos/event-tickets/sync`, `POST /pos/event-tickets/link`
+- `POST /pos/orders` accepts `eventTicketId` — links guest name/ticket to sale
+
+**Deploy:** `firebase deploy --only functions:api,firestore:rules,hosting`
+
+**Phase 3 (not started):** enforce entry fee + event discount on totals; full reservations merge; Windows POS UI for ticket lookup.
+
+## 2026-08-22 — Grabio store events + POS sync (v1 backend)
+
+**Scope:** Event CRUD, active event pointer, POS pull sync, online-order polling, event-tagged POS sales. Pricing rules stored but not enforced.
+
+**Firestore:**
+- `stores/{storeId}/storeEvents/{eventId}`
+- `stores/{storeId}/posSettings/activeEvent`
+- `orders/{orderId}` optional: `isEventSale`, `eventId`, `eventName`, `eventSnapshot`
+
+**API (Bearer owner auth unless noted):**
+- `POST/GET /store/events`, `GET/PATCH /store/events/:eventId`, `POST /store/events/:eventId/cancel`
+- `GET/PUT/DELETE /store/events/active`
+- `GET /pos/events?since=`, `GET /pos/active-event`, `GET /pos/online-orders?since=` (device token auth)
+- `POST /pos/orders` accepts optional event fields
+
+**Not in v1:** POS PATCH active event, percent/entry/free-drink enforcement, FCM to POS.
+
+**Deploy:** `firebase deploy --only functions:api,firestore:rules` after staging checks — **no prod until Anwar approves.**
+
+**Next:** Linux Grabio builder Events UI (calendar/list/form); Windows POS event tagging after endpoint verification.
+
+## 2026-08-21 — Grabio Guide agent (Cursor API)
+
+**Shipped in repo:**
+- `POST /agent/guide` — onboarding specialist for store setup, features, and package choice
+- Cursor Cloud Agents API with **composer-2.5-fast** only (`functions/src/lib/cursorCloudAgent.ts`)
+- Tenant-scoped context + guardrails (`functions/src/lib/grabioGuideKnowledge.ts`, `functions/src/api/grabioGuide.ts`)
+- Knowledge doc: `docs/grabio-guide-knowledge.md`
+
+**Deploy:** `firebase deploy --only functions:api` (requires `CURSOR_API_KEY` on Cloud Functions — see `.credentials.md` / `SEO pending/cursor`)
+
+**Module gate:** `ai_agent` on store profile. UI still "Coming soon" — API-first; wire frontend next.
+
+**Credit controls (2026-08-21):** Off-topic prompts blocked locally (no Cursor call). Compact knowledge prompt. Max 4 history turns. 40 guide calls/store/day. Responses capped ~180 words in system rules.
+
+## 2026-08-21 — Grabio SEO Phase 9: Link Building Tracker
+
+**Shipped in repo:**
+- `/admin/seo-links` — prospect pipeline, acquired links log, monthly target progress bar, dead link recheck, CSV export
+- Cloud Function `POST /seo/check-link` (HTTP status via server-side HEAD/GET)
+- Firestore: `seo_link_prospects`, `seo_links_acquired`, `seo_links_settings`
+- Dashboard nav: **SEO Links**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules,functions:api`
+
+**Status:** All 9 phases of `plan-seo.md` admin modules are now implemented.
+
+## 2026-08-21 — Grabio SEO Phase 8: Programmatic SEO Engine
+
+**Shipped in repo:**
+- `/admin/seo-programmatic` — templates, seed data, batch generator, publish queue, dead page scan, volume vs target, sitemap snippet export
+- Public route `/pages/:slug` renders published programmatic pages from Firestore
+- Firestore: `seo_prog_templates`, `seo_prog_seeds`, `seo_prog_settings`, `seo_prog_pages`
+- Dashboard nav: **SEO Programmatic**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules`
+
+**Next:** Phase 9 link building tracker (`/admin/seo-links`)
+
+## 2026-08-21 — Grabio SEO Phase 7: GEO Module
+
+**Shipped in repo:**
+- `/admin/seo-geo` — per-city metrics (Beirut/Tripoli/Sidon/Other), LocalBusiness JSON-LD generator, NAP consistency panel, citation tracker, GBP checklist, entity SEO flags
+- Firestore: `seo_geo/config`, `seo_geo_cities`, `seo_geo_citations`, `seo_geo_nap_comparisons`
+- Dashboard nav: **SEO GEO**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules`
+
+**Next:** Phase 8 programmatic SEO (`/admin/seo-programmatic`)
+
+## 2026-08-21 — Grabio SEO Phase 6: AEO Module
+
+**Shipped in repo:**
+- `/admin/seo-aeo` — FAQ bank CRUD, FAQPage JSON-LD generator (copy), Phase 3 content AEO checklist, AI citation log, featured snippet tracker, JSON-LD validator
+- Firestore: `seo_aeo_faqs`, `seo_aeo_citations`, `seo_aeo_snippets`
+- Cloud Function `POST /seo/validate-schema` (server-side fetch + JSON-LD parse)
+- Dashboard nav: **SEO AEO**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules,functions`
+
+**Next:** Phase 7 GEO module (`/admin/seo-geo`)
+
+## 2026-08-21 — Grabio SEO Phase 5: Competitor Gap Engine
+
+**Shipped in repo:**
+- `/admin/seo-competitors` — competitor CRUD, paste keyword gaps, gap table with status (new / added / rejected)
+- One-click **Add to keywords** → Phase 1 with `keywordOrigin: competitor`
+- Compares pasted keywords against existing keyword engine; skips duplicates
+- SerpAPI stub hook in `seoCompetitors.ts` for future auto-fetch
+- Firestore: `seo_competitors`, `seo_competitor_gaps`
+- Dashboard nav: **SEO Competitors**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules`
+
+**Next:** Phase 6 AEO module (`/admin/seo-aeo`)
+
+## 2026-08-21 — Grabio SEO Phase 4: Reporting Dashboard
+
+**Shipped in repo:**
+- Enhanced `/admin/seo-analytics` — Keywords, Technical, Content, MoM Trends tabs
+- Pulls Phase 1–3 data: rankings, intent breakdown, CWV snapshot, content pipeline
+- Manual monthly organic target (Firestore `seo_reporting/settings`)
+- **Export PDF** — browser print one-page summary (traffic, keywords, content, 404s, health)
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules`
+
+**Note:** AI drafts (Phase 3) can be wired to Cursor API when ready — replace `/seo/content-draft` caller in `seoContent.ts`.
+
+**Next:** Phase 5 competitor gap engine (`/admin/seo-competitors`)
+
+## 2026-08-21 — Grabio SEO Phase 3: Content Engine
+
+**Shipped in repo:**
+- `/admin/seo-content` — content calendar, pillar/cluster map, gap alerts (&lt;5 cluster articles), on-page checklist, AI draft, copy + HTML export
+- Firestore `seo_content` + admin-only rules
+- Cloud Function `POST /seo/content-draft` (platform admin + `OPENAI_API_KEY`)
+- Dashboard nav: **SEO Content**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules,functions`
+
+**Owner follow-up:** Ensure `OPENAI_API_KEY` is set on Cloud Functions for AI drafts; link content items to Phase 1 keywords.
+
+**Next:** Phase 4 reporting completion (`/admin/seo-analytics` enhancements)
+
+## 2026-08-21 — Grabio SEO Phase 2: Technical Health Monitor
+
+**Shipped in repo:**
+- `/admin/seo-technical` — health score, broken 404 list with fix/redirect status, PageSpeed CWV table, redirect chain log, GSC sitemap + URL inspection
+- `src/lib/seoTechnical.ts` + Firestore `seo_technical`, `seo_broken_links`
+- `scripts/seo-audit-upload.mjs` (root) — adds `top_404_urls` to `seo_audits/grabio_space`
+- Dashboard nav: **SEO Technical**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules`
+
+**Owner follow-up:** Run `node scripts/seo-audit-upload.mjs` on VPS cron; add `VITE_PAGESPEED_API_KEY` for automated CWV checks; connect GSC on SEO Audit page before using inspection tab.
+
+**Next:** Phase 3 content engine (`/admin/seo-content`)
+
+## 2026-08-21 — Grabio SEO Phase 1: Keyword Engine
+
+**Shipped in repo:**
+- `/admin/seo-keywords` — CRUD, filters, sort, CSV import/export, priority flag (KD &lt; 40, vol 1k–10k)
+- Firestore collection `seo_keywords` + admin-only rules
+- Seed button loads software pillar keywords from `/solutions` data
+- Dashboard nav: **SEO Keywords**
+
+**Deploy:** `firebase deploy --only hosting,firestore:rules`
+
+**Next:** Phase 2 technical health monitor (`/admin/seo-technical`)
+
 ## 2026-08-01 — Grabio SEO pivot: software pillars + AEO + social tracking
 
 **Decision:** Continue Grabio SEO (not GJ Properties) with **software-first** positioning — inventory, accounting/GL, POS, mobile apps, CRM/PSA, restaurant, manufacturing, AI. Storefront/template builder is secondary (`/solutions/platform` only).

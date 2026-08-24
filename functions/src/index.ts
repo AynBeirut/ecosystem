@@ -42,9 +42,13 @@ import { sendContactEmail } from './api/contact';
 import { checkCustomDomainStatus, registerCustomDomain } from './api/domain';
 import { exportGdprData, requestGdprDelete } from './api/gdpr';
 import { getAiModels, saveAiSettings, getAiCreditBalance, deductAiCredits, generateAiContent } from './api/ai';
+import { generateSeoContentDraft } from './api/seoContent';
+import { validateSeoSchema } from './api/seoAeo';
+import { checkSeoLink } from './api/seoLinks';
 import { queryAgent } from './api/agent';
+import { queryGrabioGuide } from './api/grabioGuide';
 import { connectFacebookShop, connectInstagramShopping, createMetaAdsCampaign, enableDynamicProductAds, getMetaCatalogFeed, syncMetaCatalog, trackMetaConversionEvent } from './api/metaCatalog';
-import { getRobotsTxt, getSitemap, submitSitemap } from './api/sitemap';
+import { getRobotsTxt, getSitemap, pingPlatformSitemap, submitSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
 import { dispatchOrderNotifications, retryOrderNotification } from './services/orderNotifications';
 import { getFcmTokensForStoreOwner, sendFcmMulticast } from './services/fcmTokens';
@@ -79,15 +83,47 @@ import {
   syncPosRecipes,
   syncPosRefunds,
 } from './api/posSync';
+import {
+  createStoreEvent,
+  listStoreEvents,
+  getStoreEvent,
+  updateStoreEvent,
+  cancelStoreEvent,
+  setActiveStoreEvent,
+  clearActiveStoreEvent,
+  getActiveStoreEvent,
+  getPosEvents,
+  getPosActiveEvent,
+  getPosOnlineOrders,
+} from './api/storeEvents';
+import {
+  createEventTicket,
+  listEventTickets,
+  updateEventTicket,
+  cancelEventTicket,
+  lookupEventTicketsAdmin,
+  lookupPosEventTickets,
+  linkPosEventTicket,
+  getPosEventTicketsSync,
+  issuePosEventEntryTicket,
+} from './api/eventTickets';
+import {
+  createEventReservation,
+  listEventReservations,
+  updateEventReservation,
+  listStoreEventReservations,
+} from './api/eventReservations';
 import { getPublicProductStock } from './api/publicProductStock';
 import { presignR2Upload } from './api/r2';
+import { ocrReceipt } from './api/ocrReceipt';
 import { requireModule } from './middleware/moduleGate';
 const db = admin.firestore();
 
 const app = express();
 app.use(cors({ origin: true }));
 app.post('/webhook/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
-app.use(express.json());
+// 8mb so /ocr/receipt can accept resized mobile photos as base64 (image is not persisted).
+app.use(express.json({ limit: '8mb' }));
 // Global request logger
 app.use((req, res, next) => {
   console.log('--- GLOBAL REQUEST LOG ---');
@@ -145,6 +181,13 @@ app.get('/health', (req, res) => {
       '/pos/heartbeat',
       '/pos/catalog',
       '/pos/orders',
+      '/pos/events',
+      '/pos/active-event',
+      '/pos/online-orders',
+      '/pos/event-tickets',
+      '/store/events',
+      '/store/events/reservations',
+      '/store/events/active',
       '/pos/products',
       '/pos/customers'
     ]
@@ -232,15 +275,20 @@ app.post('/gdpr/delete', requestGdprDelete);
 // AI integration
 app.post('/ai/models', getAiModels);
 app.post('/ai/generate', generateAiContent);
+app.post('/seo/content-draft', generateSeoContentDraft);
+app.post('/seo/validate-schema', validateSeoSchema);
+app.post('/seo/check-link', checkSeoLink);
 app.post('/ai/settings', saveAiSettings);
 app.post('/ai/credits/balance', getAiCreditBalance);
 app.post('/ai/credits/deduct', deductAiCredits);
 app.post('/agent/query', queryAgent);
+app.post('/agent/guide', queryGrabioGuide);
 
 // Sitemap for SEO
 app.get('/sitemap.xml', getSitemap);
 app.get('/robots.txt', getRobotsTxt);
 app.post('/seo/sitemap/submit', submitSitemap);
+app.post('/seo/platform/sitemap-ping', pingPlatformSitemap);
 
 // Meta catalog sync
 app.get('/meta/catalog/feed', getMetaCatalogFeed);
@@ -280,8 +328,33 @@ app.post('/pos/salaries', syncPosSalaries);
 app.post('/pos/raw-materials', syncPosRawMaterials);
 app.post('/pos/recipes', syncPosRecipes);
 app.post('/pos/refunds', syncPosRefunds);
+app.get('/pos/events', getPosEvents);
+app.get('/pos/active-event', getPosActiveEvent);
+app.get('/pos/online-orders', getPosOnlineOrders);
+app.get('/pos/event-tickets', lookupPosEventTickets);
+app.get('/pos/event-tickets/sync', getPosEventTicketsSync);
+app.post('/pos/event-tickets/link', linkPosEventTicket);
+app.post('/pos/event-tickets/issue', issuePosEventEntryTicket);
+app.post('/store/events', createStoreEvent);
+app.get('/store/events', listStoreEvents);
+app.get('/store/events/reservations', listStoreEventReservations);
+app.get('/store/events/active', getActiveStoreEvent);
+app.put('/store/events/active', setActiveStoreEvent);
+app.delete('/store/events/active', clearActiveStoreEvent);
+app.get('/store/events/:eventId', getStoreEvent);
+app.patch('/store/events/:eventId', updateStoreEvent);
+app.post('/store/events/:eventId/cancel', cancelStoreEvent);
+app.post('/store/events/:eventId/tickets', createEventTicket);
+app.get('/store/events/:eventId/tickets', listEventTickets);
+app.get('/store/events/:eventId/tickets/lookup', lookupEventTicketsAdmin);
+app.patch('/store/events/:eventId/tickets/:ticketId', updateEventTicket);
+app.post('/store/events/:eventId/tickets/:ticketId/cancel', cancelEventTicket);
+app.post('/store/events/:eventId/reservations', createEventReservation);
+app.get('/store/events/:eventId/reservations', listEventReservations);
+app.patch('/store/events/:eventId/reservations/:reservationId', updateEventReservation);
 app.post('/public/product-stock', getPublicProductStock);
 app.post('/r2/presign', presignR2Upload);
+app.post('/ocr/receipt', ocrReceipt);
 app.get('/marketing/campaigns', listCampaigns);
 
 app.post('/notifications/order/retry', async (req: Request, res: Response) => {
@@ -688,6 +761,11 @@ app.post('/checkout', async (req: Request, res: Response) => {
           .filter(Boolean)
           .join(' · ');
 
+        const deliverySettings = (orderData.storeProfile as Record<string, unknown>)?.deliverySettings as
+          | { autoAcceptOrders?: boolean }
+          | undefined;
+        const initialStatus = deliverySettings?.autoAcceptOrders === true ? 'confirmed' : 'pending';
+
         const orderRef = db.collection('orders').doc();
         transaction.set(orderRef, {
           storeId: orderData.storeId,
@@ -715,7 +793,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           discountAmount: orderData.discountAmount,
           discount: orderData.discountAmount,
           total: orderData.total,
-          status: 'pending',
+          status: initialStatus,
           deliveryMethod: orderDeliveryMethod,
           deliveryAddress: resolvedDeliveryAddress,
           deliveryCity: fulfillmentMethod === 'delivery' ? (deliveryInfo?.city || '') : '',
@@ -743,7 +821,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
           items: orderData.orderItems,
           subtotal: orderData.subtotal,
           total: orderData.total,
-          status: 'pending',
+          status: initialStatus,
         });
       }
 

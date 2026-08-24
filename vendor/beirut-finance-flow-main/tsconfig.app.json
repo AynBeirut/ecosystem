@@ -17,6 +17,9 @@
     "noUnusedLocals": false,
     "noUnusedParameters": false,
     "paths": {
+      "@grabio/*": [
+        "../../src/*"
+      ],
       "@/*": [
         "./src/*"
       ]

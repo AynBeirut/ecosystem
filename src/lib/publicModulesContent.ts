@@ -71,8 +71,10 @@ export const MODULE_FEATURE_ITEMS: Record<string, string[]> = {
   restaurant: [
     'Live recipe deduction on sale',
     'Ingredient consumption at checkout',
-    'No separate manufacturing phase',
-    'Built for cafes and cloud kitchens',
+    'Kitchen inventory tied to POS and marketplace orders',
+    'Dual currency billing (USD/LBP) at the counter',
+    'Delivery workflow for cloud kitchens',
+    'General ledger accounting in the same platform',
   ],
   crm: [
     'Pipeline kanban and deal stages',

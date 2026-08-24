@@ -25,9 +25,19 @@ export async function getFcmTokensForUser(userId: string): Promise<string[]> {
 }
 
 export async function getFcmTokensForStoreOwner(storeId: string): Promise<string[]> {
+  const tokens = new Set<string>();
+
   const ownerId = await resolveStoreOwnerUserId(storeId);
-  if (!ownerId) return [];
-  return getFcmTokensForUser(ownerId);
+  if (ownerId) {
+    (await getFcmTokensForUser(ownerId)).forEach((t) => tokens.add(t));
+  }
+
+  const teamSnap = await db.collection('users').where('storeId', '==', storeId).get();
+  for (const userDoc of teamSnap.docs) {
+    (await getFcmTokensForUser(userDoc.id)).forEach((t) => tokens.add(t));
+  }
+
+  return [...tokens];
 }
 
 export async function sendFcmMulticast(
@@ -41,7 +51,10 @@ export async function sendFcmMulticast(
     tokens,
     notification: { title, body },
     data,
-    android: { priority: 'high' },
+    android: {
+      priority: 'high',
+      notification: { channelId: 'grabio_alerts' },
+    },
     apns: { payload: { aps: { sound: 'default', badge: 1 } } },
   });
 }
