@@ -2,29 +2,31 @@ import { createLedgerAccount, loadLedgerAccounts } from '@/lib/firestore/ledgerF
 import { loadPcgClientAccounts, savePcgClientAccount } from '@/lib/firestore/pcgClientAccountsFirestore';
 import { resolveStoreAccountingMode } from '@/lib/grabio/accountingMode';
 import { notifyLedgerChanged } from '@/lib/ledger/ledgerChanged';
+import { mapGrabioCodeToPcg } from '@/lib/ledger/grabioToPcgMap';
 import { nextSiblingAccountCode } from '@/lib/ledger/nextSiblingAccountCode';
 import {
+  PARTY_SUFFIX_DIGITS,
+  partyAccountTypeForParent,
   partyGrabioCode,
   partyParentCode,
   type PartyKind,
 } from '@/lib/ledger/partySubaccountCodes';
-import type { LedgerAccount, LedgerAccountType, NormalBalance, PcgClientAccount } from '@/types/generalLedger';
+import type { LedgerAccount, PcgClientAccount } from '@/types/generalLedger';
 
 export type { PartyKind } from '@/lib/ledger/partySubaccountCodes';
 export {
   PARTY_AR_PARENT,
   PARTY_AP_PARENT,
+  PARTY_CLIENT_PARENT,
   PARTY_GRABIO_AR,
   PARTY_GRABIO_AP,
-  partyParentCode,
+  PARTY_SUPPLIER_PARENT,
+  PARTY_SUFFIX_DIGITS,
+  partyAccountTypeForKind,
+  partyAccountTypeForParent,
   partyGrabioCode,
+  partyParentCode,
 } from '@/lib/ledger/partySubaccountCodes';
-
-function accountTypeForKind(kind: PartyKind): { type: LedgerAccountType; normalBalance: NormalBalance } {
-  return kind === 'client'
-    ? { type: 'asset', normalBalance: 'debit' }
-    : { type: 'liability', normalBalance: 'credit' };
-}
 
 export function existingPartySubaccount(
   kind: PartyKind,
@@ -65,9 +67,10 @@ export async function ensurePartySubaccount(input: {
     ...accounts.map((account) => account.code),
     ...pcgRows.map((row) => row.clientCode),
   ];
-  const code = nextSiblingAccountCode(parentCode, usedCodes, 4);
-  const { type, normalBalance } = accountTypeForKind(input.kind);
+  const code = nextSiblingAccountCode(parentCode, usedCodes, PARTY_SUFFIX_DIGITS);
+  const { type, normalBalance } = partyAccountTypeForParent(parentCode);
   const name = input.partyName.trim() || (input.kind === 'client' ? 'Client' : 'Supplier');
+  const parentPcgCode = mapGrabioCodeToPcg(parentCode) || parentCode;
 
   await createLedgerAccount(storeId, {
     code,
@@ -77,7 +80,7 @@ export async function ensurePartySubaccount(input: {
     parentCode,
     pcgKind: mode === 'lebanese' ? 'D' : undefined,
     isPcgChart: false,
-    grabioOperationalCode: mode === 'lebanese' ? grabio : undefined,
+    grabioOperationalCode: grabio,
     currency: parent?.currency || (mode === 'lebanese' ? 'LL' : undefined),
     partyId: input.partyId,
     partyType: input.kind,
@@ -87,7 +90,7 @@ export async function ensurePartySubaccount(input: {
     await savePcgClientAccount(storeId, {
       clientCode: code,
       grabioOperationalCode: grabio,
-      parentPcgCode: parentCode,
+      parentPcgCode,
       name,
       currency: parent?.currency === 'USD' ? 'USD' : 'LL',
       partyId: input.partyId,

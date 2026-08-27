@@ -7,7 +7,7 @@
 
 - Currency label **LBP** (never L£/LE); report amounts **full** digits; picker LBP | USD | both.
 - SOA/GL: one account per page; posted Edit = reverse + new voucher (never mutate posted lines).
-- Party subaccounts: AR `4111`/`110`, AP `4011`/`201`, parent + 4-digit sequence.
+- Party subaccounts: client **4010001…** under **401** sales; supplier **5010001…** under **501** COGS (4-digit suffix).
 - Deferred: 65-account COA audit until AM sends the account list.
 - P&L: match AM print (Class 7, B.I/Purchases/E.I, expenses, difference of exchange). LBP, 3 decimals, parentheses.
 

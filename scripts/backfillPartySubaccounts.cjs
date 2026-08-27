@@ -55,10 +55,11 @@ async function main() {
 
   const profileSnap = await db.collection('storeProfiles').doc(storeId).get();
   const mode = profileSnap.data()?.accountingMode === 'lebanese' ? 'lebanese' : 'international';
-  const arParent = mode === 'lebanese' ? '4111' : '110';
-  const apParent = mode === 'lebanese' ? '4011' : '201';
-  const arGrabio = '110';
-  const apGrabio = '201';
+  const clientParent = '401';
+  const supplierParent = '501';
+  const clientGrabio = '401';
+  const supplierGrabio = '501';
+  const PCG_PARENT = { '401': '7010', '501': '6111' };
 
   const [customersSnap, suppliersSnap, ledgerSnap, pcgSnap] = await Promise.all([
     db.collection('customers').where('storeId', '==', storeId).get(),
@@ -84,8 +85,8 @@ async function main() {
     const hasPcg = pcgRows.some((row) => row.partyType === party.kind && row.partyId === party.id);
     const hasLedger = accounts.some((row) => row.partyType === party.kind && row.partyId === party.id);
     if (hasPcg || hasLedger) continue;
-    const parent = party.kind === 'client' ? arParent : apParent;
-    const grabio = party.kind === 'client' ? arGrabio : apGrabio;
+    const parent = party.kind === 'client' ? clientParent : supplierParent;
+    const grabio = party.kind === 'client' ? clientGrabio : supplierGrabio;
     const code = nextSibling(parent, usedCodes, 4);
     usedCodes.push(code);
     planned.push({ ...party, parent, grabio, code });
@@ -102,8 +103,8 @@ async function main() {
   const ts = nowIso();
   for (const row of planned) {
     const parent = accounts.find((a) => a.code === row.parent);
-    const type = row.kind === 'client' ? 'asset' : 'liability';
-    const normalBalance = row.kind === 'client' ? 'debit' : 'credit';
+    const type = row.kind === 'client' ? 'revenue' : 'expense';
+    const normalBalance = row.kind === 'client' ? 'credit' : 'debit';
     const accountId = ledgerDocId(row.code);
     const body = {
       storeId,
@@ -135,7 +136,7 @@ async function main() {
         storeId,
         clientCode: row.code,
         grabioOperationalCode: row.grabio,
-        parentPcgCode: row.parent,
+        parentPcgCode: PCG_PARENT[row.grabio] || row.parent,
         name: row.name,
         currency: parent?.currency === 'USD' ? 'USD' : 'LL',
         partyId: row.id,
