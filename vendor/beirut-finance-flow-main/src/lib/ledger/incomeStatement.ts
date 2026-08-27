@@ -5,6 +5,7 @@ import type {
   JournalLine,
   LedgerAccount,
 } from '@/types/generalLedger';
+import { buildLebaneseProfitLossForm } from '@/lib/ledger/lebaneseProfitLoss';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -110,10 +111,12 @@ function buildSection(
     })
     .filter(Boolean) as IncomeStatementSection['rows'];
 
+  const subtotal = round2(rows.reduce((s, r) => s + r.amount, 0));
   return {
     title,
     rows,
-    subtotal: round2(rows.reduce((s, r) => s + r.amount, 0)),
+    subtotal,
+    total: subtotal,
   };
 }
 
@@ -166,27 +169,29 @@ export function buildIncomeStatement(
     grossProfit,
     operatingIncome,
     netIncome,
+    lebaneseForm: buildLebaneseProfitLossForm(accounts, entries, lines, startDate, endDate),
   };
 }
 
 export function incomeStatementToCsv(report: IncomeStatementReport): string {
-  const sections = [
-    report.revenue,
-    report.otherIncome,
-    report.cogs,
-    report.operatingExpenses,
-    report.financialExpenses,
-  ];
+  const form = report.lebaneseForm;
   const rows: string[][] = [
-    ['Income Statement', `${report.startDate} to ${report.endDate}`],
+    ['Profit and Loss', `${report.startDate} to ${report.endDate}`],
+    ['Currency', 'LBP'],
     [],
+    ['Line', 'Amount'],
+    ...form.lines.filter((l) => l.kind !== 'header' || l.label).map((l) => [l.label, l.kind === 'header' ? '' : String(l.amount)]),
+    [],
+    ['Account detail', '', '', ''],
     ['Section', 'Code', 'Account', 'Amount'],
-    ...sections.flatMap((section) => [
-      [section.title],
-      ...section.rows.map((r) => [section.title, r.code, r.name, String(r.amount)]),
-      ['', '', 'Subtotal', String(section.subtotal)],
-      [],
-    ]),
+    ...[report.revenue, report.otherIncome, report.cogs, report.operatingExpenses, report.financialExpenses].flatMap(
+      (section) => [
+        [section.title],
+        ...section.rows.map((r) => [section.title, r.code, r.name, String(r.amount)]),
+        ['', '', 'Subtotal', String(section.subtotal)],
+        [],
+      ],
+    ),
     ['Total revenue', '', '', String(report.totalRevenue)],
     ['Gross profit', '', '', String(report.grossProfit)],
     ['Operating income', '', '', String(report.operatingIncome)],

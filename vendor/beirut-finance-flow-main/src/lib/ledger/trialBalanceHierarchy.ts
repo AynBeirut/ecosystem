@@ -161,6 +161,18 @@ function resolvePrimaryLedgerAccount(
   return undefined;
 }
 
+function uniqueRows(rows: TrialBalanceExtendedRow[]): TrialBalanceExtendedRow[] {
+  const seen = new Set<string>();
+  const out: TrialBalanceExtendedRow[] = [];
+  for (const row of rows) {
+    const key = row.accountId || `${row.accountCode}:${row.accountName}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(row);
+  }
+  return out;
+}
+
 function buildNodeRow(
   node: PcgTreeNode,
   accounts: LedgerAccount[],
@@ -174,21 +186,22 @@ function buildNodeRow(
     type: 'expense',
   });
 
-  if (node.pcgKind === 'G' || node.id.startsWith('class:')) {
-    return sumExtendedRows(childRows, fallback);
-  }
-
   const ids = resolveLedgerAccountIdsForPcgNode(node, accounts);
-  const directRows = ids
-    .map((id) => rowByAccountId.get(id))
-    .filter((row): row is TrialBalanceExtendedRow => Boolean(row));
+  const fromLedger = uniqueRows(
+    ids.map((id) => rowByAccountId.get(id)).filter((row): row is TrialBalanceExtendedRow => Boolean(row)),
+  );
   const primary = resolvePrimaryLedgerAccount(ids, new Map(accounts.map((a) => [a.id, a])));
   if (primary) {
     fallback.accountId = primary.id;
     fallback.accountCode = primary.code;
     fallback.accountName = primary.name;
   }
-  return sumExtendedRows(directRows, fallback);
+
+  if (node.pcgKind === 'G' || node.id.startsWith('class:')) {
+    if (fromLedger.length) return sumExtendedRows(fromLedger, fallback);
+    return sumExtendedRows(childRows, fallback);
+  }
+  return sumExtendedRows(fromLedger, fallback);
 }
 
 function pruneTreeNode(
@@ -275,13 +288,27 @@ export function buildLebaneseTrialBalanceTree(
     if (options.hideInactiveAccounts && account.isActive === false) return false;
     return ledgerPoolMatchesRange(account, fromCode, toCode, clientByGrabio, clientByParentPcg);
   });
+  // Resolve Grabio operational rows against the full active chart so class 1–7
+  // headers roll up 102/601 even when the visible tree is PCG group codes.
+  const resolvePool = accounts.filter((account) => {
+    if (options.hideInactiveAccounts && account.isActive === false) return false;
+    return true;
+  });
 
   const filteredChart = filterPcgChartByAccountRange(LEBANESE_PCG_CHART, fromCode, toCode);
   const filteredClients = filterClientAccountsByRange(pcgClientAccounts, fromCode, toCode);
   const roots = buildPcgTree(filteredChart, filteredClients);
 
+  const rangedIds = new Set(pool.map((account) => account.id));
+  const rangedRows = new Map<string, TrialBalanceExtendedRow>();
+  for (const [id, row] of rowByAccountId) {
+    if (rangedIds.has(id) || pool.some((account) => account.code === row.accountCode)) {
+      rangedRows.set(id, row);
+    }
+  }
+
   return roots
-    .map((node) => buildTreeNode(node, pool, rowByAccountId, options.hideInactiveAccounts))
+    .map((node) => buildTreeNode(node, resolvePool, rangedRows, options.hideInactiveAccounts))
     .map((node) => (node ? pruneTreeNode(node, options.includeZeroBalance) : null))
     .filter((node): node is TrialBalanceTreeNode => Boolean(node));
 }

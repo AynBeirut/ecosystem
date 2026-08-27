@@ -3,6 +3,7 @@ import {
   buildGeneralLedgerRowsFromContext,
   createLedgerReportContext,
 } from '@/lib/ledger/ledgerReportContext';
+import { splitOpeningByNormalBalance } from '@/lib/ledger/formatLedgerAmount';
 import type {
   AccountRangeStatementReport,
   AccountRangeStatementSection,
@@ -11,7 +12,6 @@ import type {
   LedgerAccount,
 } from '@/types/generalLedger';
 
-/** Guard against browser freeze when the whole chart is selected (e.g. 65 → 6011). */
 export const ACCOUNT_RANGE_STATEMENT_MAX_ACCOUNTS = 40;
 
 export function countAccountsInStatementRange(
@@ -44,12 +44,15 @@ export function validateAccountRangeStatement(
   if (count === 0) {
     return `No active accounts in range ${from} → ${to}. Check codes (e.g. 601 → 609, 41110 → 41130).`;
   }
-  if (count > ACCOUNT_RANGE_STATEMENT_MAX_ACCOUNTS) {
-    const [lo, hi] =
-      accountCodeNumeric(from) <= accountCodeNumeric(to) ? [from, to] : [to, from];
-    return `Range ${lo} → ${hi} matches ${count} accounts — narrow to ${ACCOUNT_RANGE_STATEMENT_MAX_ACCOUNTS} or fewer.`;
-  }
   return null;
+}
+
+export function listAccountsInStatementRange(
+  accounts: LedgerAccount[],
+  fromCode: string,
+  toCode: string,
+): LedgerAccount[] {
+  return accountsInCodeRange(accounts, fromCode, toCode);
 }
 
 export function buildAccountRangeStatement(
@@ -78,11 +81,14 @@ export function buildAccountRangeStatement(
   for (const account of matched) {
     const built = buildGeneralLedgerRowsFromContext(account, ctx, { includeZeroActivity: true });
     if (!built) continue;
+    const opening = splitOpeningByNormalBalance(built.openingBalance, account.normalBalance);
     sections.push({
       accountId: account.id,
       accountCode: account.code,
       accountName: account.name,
       openingBalance: built.openingBalance,
+      openingDebit: opening.debit,
+      openingCredit: opening.credit,
       closingBalance: built.closingBalance,
       rows: built.rows,
     });
@@ -112,22 +118,15 @@ export function accountRangeStatementToCsv(report: AccountRangeStatementReport):
   ];
   for (const section of report.sections) {
     chunks.push(`Account,${section.accountCode},${section.accountName.replace(/,/g, ' ')}`);
-    chunks.push(`Opening,,,${section.openingBalance}`);
-    chunks.push('Date,Voucher,Type,Memo,Debit,Credit,Balance');
+    chunks.push('Date,Description,Debit,Credit,Balance');
+    chunks.push(
+      `${report.startDate},B/F,${section.openingDebit || ''},${section.openingCredit || ''},${section.openingBalance}`,
+    );
     for (const row of section.rows) {
-      chunks.push(
-        [
-          row.date,
-          row.voucherNumber || row.entryId,
-          row.voucherType || '',
-          (row.memo || '').replace(/,/g, ' '),
-          row.debit,
-          row.credit,
-          row.runningBalance,
-        ].join(','),
-      );
+      const desc = `${row.displayDescription || row.memo || ''} ${row.voucherType || ''} ${row.voucherNumber || row.entryId}`.replace(/,/g, ' ').trim();
+      chunks.push([row.date, desc, row.debit || '', row.credit || '', row.runningBalance].join(','));
     }
-    chunks.push(`Closing,,,${section.closingBalance}`);
+    chunks.push(`Total,,,${section.closingBalance}`);
     chunks.push('');
   }
   return chunks.join('\n');

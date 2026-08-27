@@ -30,7 +30,7 @@
 ## Lebanese PCG v2 (E-Moove pilot)
 
 - **Display:** ~522-account PCG tree (`LebanesePcgCoaPanel`) when `storeProfiles.accountingMode=lebanese`.
-- **Reports:** Trial Balance / Balance Sheet show PCG or client codes via `grabioToPcgMap` + `pcgClientAccounts` (display only).
+- **Reports:** Trial Balance / Balance Sheet show PCG or client codes via `grabioToPcgMap` + `pcgClientAccounts` (display only). P&L uses the Lebanese AM form (`lebaneseProfitLoss.ts`): Class 7, inventory C.O.S, expense buckets, FX others.
 - **Posting:** Unchanged on Grabio 3-digit `ledgerAccounts` — do not reseed E-Moove COA.
 - **Client codes:** Firestore `stores/{storeId}/pcgClientAccounts`; bulk import via Accounting UI or `scripts/seedEmoovePcgClientAccounts.cjs` (E-Moove store ID only).
 - **Stores:** E-Moove `EZfuoNQFTJVU4cubNuckpp4K7zw2` (pilot, 1 client code). Little Hands `8WgfKtgaE8aAXdqFhIfweEo5WFq2` — **Lebanese mode live 2026-07-29**, 0 client codes yet. Nipco off limits.

@@ -22,6 +22,7 @@ import {
   type PostJournalResult,
 } from '@/lib/ledger/postingService';
 import { postReversalEntry } from '@/lib/ledger/reversalPosting';
+import { LEDGER_CHANGED_EVENT } from '@/lib/ledger/ledgerChanged';
 import { buildTrialBalance } from '@/lib/ledger/trialBalance';
 import { buildBalanceSheet } from '@/lib/ledger/balanceSheet';
 import { voucherEventForType } from '@/lib/ledger/voucherSerial';
@@ -175,6 +176,14 @@ export const LedgerProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       return [];
     }
   }, [storeId, refreshLedger]);
+
+  useEffect(() => {
+    const onChanged = () => {
+      void refreshLedger();
+    };
+    window.addEventListener(LEDGER_CHANGED_EVENT, onChanged);
+    return () => window.removeEventListener(LEDGER_CHANGED_EVENT, onChanged);
+  }, [refreshLedger]);
 
   useEffect(() => {
     if (!storeId) return;

@@ -8,13 +8,15 @@ import {
   writeBatch,
 } from 'firebase/firestore';
 import { getFinanceDb } from '@/integrations/firebase/client';
-import type { JournalEntry, JournalLine, LedgerAccount, LedgerPeriodClosure } from '@/types/generalLedger';
+import type { JournalEntry, JournalLine, LedgerAccount, LedgerAccountType, LedgerPeriodClosure, NormalBalance } from '@/types/generalLedger';
 import {
   buildDefaultLedgerAccounts,
   coaModeVersion,
   ledgerAccountDocId,
 } from '@/lib/ledger/defaultChartOfAccounts';
 import { resolveStoreAccountingMode } from '@/lib/grabio/accountingMode';
+import { notifyLedgerChanged } from '@/lib/ledger/ledgerChanged';
+import { sanitizeForFirestore } from '@/lib/firestore/storeCollection';
 
 const nowIso = () => new Date().toISOString();
 const FIRESTORE_BATCH_LIMIT = 400;
@@ -116,6 +118,69 @@ export async function ensureDefaultChartOfAccounts(storeId: string): Promise<Led
   });
 
   return accounts;
+}
+
+function normalBalanceForType(type: LedgerAccountType): NormalBalance {
+  return type === 'liability' || type === 'equity' || type === 'revenue' ? 'credit' : 'debit';
+}
+
+export async function createLedgerAccount(
+  storeId: string,
+  input: {
+    code: string;
+    name: string;
+    nameAr?: string;
+    type: LedgerAccountType;
+    normalBalance?: NormalBalance;
+    parentCode?: string;
+    pcgKind?: string;
+    currency?: 'LL' | 'USD';
+    isPcgChart?: boolean;
+    grabioOperationalCode?: string;
+    partyId?: string;
+    partyType?: 'client' | 'supplier';
+    isSystem?: boolean;
+  },
+): Promise<LedgerAccount> {
+  const code = String(input.code || '').trim();
+  const name = String(input.name || '').trim();
+  if (!storeId.trim()) throw new Error('Store is required.');
+  if (!code) throw new Error('Account code is required.');
+  if (!/^[0-9A-Za-z.-]+$/.test(code)) throw new Error('Account code must be letters, digits, dot, or hyphen.');
+  if (!name) throw new Error('Account name is required.');
+
+  const id = ledgerAccountDocId(code);
+  const ref = doc(accountsCol(storeId), id);
+  const existing = await getDoc(ref);
+  if (existing.exists()) throw new Error(`Account code ${code} already exists.`);
+
+  const ts = nowIso();
+  const account: LedgerAccount = {
+    id,
+    storeId,
+    code,
+    name,
+    type: input.type,
+    normalBalance: input.normalBalance || normalBalanceForType(input.type),
+    isSystem: Boolean(input.isSystem),
+    isActive: true,
+    openingBalance: 0,
+    createdAt: ts,
+    updatedAt: ts,
+    ...(input.nameAr?.trim() ? { nameAr: input.nameAr.trim() } : {}),
+    ...(input.parentCode?.trim() ? { parentCode: input.parentCode.trim() } : {}),
+    ...(input.pcgKind ? { pcgKind: input.pcgKind } : {}),
+    ...(input.currency ? { currency: input.currency } : {}),
+    ...(input.isPcgChart ? { isPcgChart: true } : {}),
+    ...(input.grabioOperationalCode?.trim() ? { grabioOperationalCode: input.grabioOperationalCode.trim() } : {}),
+    ...(input.partyId?.trim() ? { partyId: input.partyId.trim() } : {}),
+    ...(input.partyType ? { partyType: input.partyType } : {}),
+  };
+
+  const { id: _id, ...body } = account;
+  await setDoc(ref, sanitizeForFirestore(body as unknown as Record<string, unknown>));
+  notifyLedgerChanged();
+  return account;
 }
 
 export async function updateLedgerAccountNames(

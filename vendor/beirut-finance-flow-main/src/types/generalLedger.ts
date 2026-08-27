@@ -166,6 +166,8 @@ export interface AccountRangeStatementSection {
   accountCode: string;
   accountName: string;
   openingBalance: number;
+  openingDebit: number;
+  openingCredit: number;
   closingBalance: number;
   rows: GeneralLedgerReportRow[];
 }
@@ -214,6 +216,9 @@ export interface LedgerAccount {
   grabioOperationalCode?: string;
   /** Full Lebanese PCG chart row (vs Grabio operational posting account). */
   isPcgChart?: boolean;
+  /** Auto-created AR/AP subaccount for a client or supplier. */
+  partyId?: string;
+  partyType?: 'client' | 'supplier';
   createdAt: string;
   updatedAt: string;
 }
@@ -332,6 +337,44 @@ export interface IncomeStatementSection {
   title: string;
   rows: IncomeStatementRow[];
   subtotal: number;
+  /** Alias of subtotal — VAT form reads `.total`. */
+  total: number;
+}
+
+export interface LebaneseProfitLossLine {
+  key: string;
+  label: string;
+  amount: number;
+  kind: 'header' | 'line' | 'total' | 'result';
+  underline?: boolean;
+  footer?: boolean;
+  accountIds?: string[];
+}
+
+export interface LebaneseProfitLossForm {
+  sales: number;
+  totalClass7: number;
+  beginningInventory: number;
+  purchasesGoods: number;
+  endingInventory: number;
+  totalCos: number;
+  grossProfit: number;
+  chargesGA: number;
+  salariesRelated: number;
+  taxes: number;
+  depreciationProvision: number;
+  bankInterest: number;
+  penalty: number;
+  totalExpenses: number;
+  profitBeforeTax: number;
+  others: number;
+  additions: number;
+  taxableProfit: number;
+  tax: number;
+  netProfit: number;
+  resultBeforeExchange: number;
+  resultAfterExchange: number;
+  lines: LebaneseProfitLossLine[];
 }
 
 export interface IncomeStatementReport {
@@ -347,6 +390,7 @@ export interface IncomeStatementReport {
   grossProfit: number;
   operatingIncome: number;
   netIncome: number;
+  lebaneseForm: LebaneseProfitLossForm;
 }
 
 export interface LedgerCostCenter {
@@ -660,6 +704,8 @@ export interface PcgClientAccount {
   name?: string;
   nameAr?: string;
   currency: 'LL' | 'USD';
+  partyId?: string;
+  partyType?: 'client' | 'supplier';
   createdAt: string;
   updatedAt: string;
 }

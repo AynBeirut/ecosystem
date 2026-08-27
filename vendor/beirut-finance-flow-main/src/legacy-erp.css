@@ -454,3 +454,24 @@
     @apply space-y-2;
   }
 }
+
+@media print {
+  @page {
+    size: landscape;
+    margin: 12mm;
+  }
+
+  .soa-print {
+    color: #000 !important;
+  }
+
+  .soa-print button {
+    color: inherit !important;
+    text-decoration: none !important;
+  }
+
+  .pl-print {
+    color: #000 !important;
+    max-width: none !important;
+  }
+}

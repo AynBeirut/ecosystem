@@ -3,6 +3,14 @@
 > **Canonical decision log:** `~/Documents/grabio-platform-docs/Decision-Log/`  
 > Mirror significant decisions there when closing a sprint.
 
+## 2026-08-27 — Accounting AM fixes (locked defaults)
+
+- Currency label **LBP** (never L£/LE); report amounts **full** digits; picker LBP | USD | both.
+- SOA/GL: one account per page; posted Edit = reverse + new voucher (never mutate posted lines).
+- Party subaccounts: AR `4111`/`110`, AP `4011`/`201`, parent + 4-digit sequence.
+- Deferred: 65-account COA audit until AM sends the account list.
+- P&L: match AM print (Class 7, B.I/Purchases/E.I, expenses, difference of exchange). LBP, 3 decimals, parentheses.
+
 ## 2026-08-22 — V·Purchase + V·Expense (manual entry like V·POS)
 
 **Shipped (code):** Fullscreen quick entry matching V·POS patterns.

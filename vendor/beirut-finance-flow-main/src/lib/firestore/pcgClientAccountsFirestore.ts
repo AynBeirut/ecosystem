@@ -49,6 +49,8 @@ export async function savePcgClientAccount(
     name: input.name?.trim() || undefined,
     nameAr: input.nameAr?.trim() || undefined,
     currency: input.currency === 'USD' ? 'USD' : 'LL',
+    partyId: input.partyId?.trim() || undefined,
+    partyType: input.partyType === 'supplier' ? 'supplier' : input.partyType === 'client' ? 'client' : undefined,
     createdAt: prevSnap?.exists() ? String(prevSnap.data()?.createdAt || nowIso()) : nowIso(),
     updatedAt: nowIso(),
   };

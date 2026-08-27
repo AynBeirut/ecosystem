@@ -25,8 +25,41 @@ Do not commit `.env.production`, credentials, or local backup folders.
 
 **GitHub secret scanning:** Firebase `apiKey` in `google-services.json` / `GoogleService-Info.plist` are **public client IDs** (required for mobile builds). In GitHub → Security → Secret scanning → mark as *used in tests* / resolved. Restrict keys in [Firebase Console → API keys](https://console.cloud.google.com/apis/credentials). Server keys (`FIREBASE_TOKEN`, `OPENAI_API_KEY`, etc.) stay in GitHub Secrets only.
 
+### Session 2026-08-27 — P&L AM form
+P&L tab now matches the AM print: INCOME / Total Class 7, C.O.S (B.I, Purchases Goods, E.I), Gross Profit, EXPENSES, Profit Before Tax, Others / Additions, Taxable / NET PROFIT, then Difference of Exchange footer. LBP column, 3 decimals, parentheses for losses. 65-account audit still waits on AM file. **Prod deploy requested 2026-08-27.**
+
+### Session 2026-08-27 — SOA print layout (AM sample)
+Statement of Account now matches the AM print: header Code/Name/Currency + From/To, B/F row, Date/Description/Dr/Cr/Balance with Db/Cr, totals, “Say Account Currency … Only”. Voucher serial stays clickable inside Description.
+
+### Session 2026-08-27 — Accounting AM fixes (P0–P3)
+Implemented from `docs/finishing.md` / accounting AM plan: TB class rollup + fallback; SOA/Quick/GL From→To with opening Dr/Cr and one account per page; COA add account; auto AR/AP subaccounts; voucher FX + preview + required JV party + edit = reverse+repost; **P&L AM form**. 65-account audit still waits on AM file. **Prod deploy requested 2026-08-27.**
+
+### Session 2026-08-27 — GL range + TB empty (AM)
+`docs/finishing.md`: GL needs From→To accounts; TB not showing rows; classes 1–7 all zero.
+
+### Session 2026-08-27 — Quick statement broken (AM)
+`docs/finishing.md`: quick statement preview still wrong — Dr/Cr, grouping, search, PCG display.
+
+### Session 2026-08-27 — Vouchers (AM)
+`docs/finishing.md`: currency + FX display, preview before post, JV party required, edit after post, auto client/supplier subaccounts.
+
+### Session 2026-08-27 — Account statement SOA (AM)
+`docs/finishing.md`: all accounts in flexible search; opening Dr/Cr; one statement per page; full voucher detail.
+
+### Session 2026-08-27 — GL voucher display (AM)
+`docs/finishing.md`: GL rows must open/display full voucher (dialog); clickable serial, not truncated id.
+
+### Session 2026-08-27 — Trial Balance UX (AM)
+`docs/finishing.md`: account entry UX, LE/currency clarity, full numbers (no K/M), currency picker, inline voucher view, fullscreen TB.
+
+### Session 2026-08-27 — Accounting finishing (AM)
+Account manager capture in `docs/finishing.md`: COA add-account (auto or manual code), **65 accounts** audit pending.
+
 ### Session 2026-08-24 — Dual-push policy
 Code + docs mirrored: `AynBeirut/ecosystem` ↔ `a-nooor/ecosystem`; `AynBeirut/grabio-platform-docs` ↔ `a-nooor/grabio-platform-docs`.
+
+### Session 2026-08-25 — Invoice launch crash fix
+v1.2.10 (code 14) crashed on launch (`expo-keep-awake` + minSdk 21). Upload **`grabio-invoice-mobile/release/invoice-1.2.11-15.aab`** (1.2.11 / code 15). Next code ≥ 16.
 
 Invoice Manager: `docs/handoff/invoice-manager.md`. Admin dashboard: `docs/handoff/admin-dashboard.md`.
 

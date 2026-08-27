@@ -16,7 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { BookOpen, Scale, Plus, RefreshCw, CheckCircle2, AlertTriangle, Lock, Unlock, FileSpreadsheet, Layers, FileText, Receipt, TrendingUp, TrendingDown, Wallet, Calculator, Landmark, GitCompare, CalendarRange, PieChart, Repeat, Building2, ChevronDown, type LucideIcon } from "lucide-react";
 import { toast } from "sonner";
 import { formatCurrency, cn } from "@/lib/utils";
-import type { JournalLineInput, LedgerPeriodClosure, PeriodLockType, VoucherMeta, VoucherType } from "@/types/generalLedger";
+import type { JournalEntry, JournalLine, JournalLineInput, LedgerPeriodClosure, PeriodLockType, VoucherMeta, VoucherType } from "@/types/generalLedger";
 import { lebaneseGlLookupCodes, tbBalanceForCodes } from "@/lib/ledger/reconciliation";
 import { buildVatFilingSummary, vatFilingSummaryToCsv } from "@/lib/ledger/vatFilingSummary";
 import { buildLebanonVatReturnForm } from "@/lib/ledger/lebanonVatReturnForm";
@@ -30,6 +30,8 @@ import LebanonR10FormPanel from "@/components/LebanonR10FormPanel";
 import LebanonCnss190AFormPanel from "@/components/LebanonCnss190AFormPanel";
 import CustomDateRangeToolbar from "@/components/CustomDateRangeToolbar";
 import { buildIncomeStatement, incomeStatementToCsv } from "@/lib/ledger/incomeStatement";
+import { lebanesePlHasActivity } from "@/lib/ledger/lebaneseProfitLoss";
+import LebaneseProfitLossDocument from "@/components/LebaneseProfitLossDocument";
 import {
   AGED_RECEIVABLES_BUCKET_LABELS,
   agedReceivablesToCsv,
@@ -64,6 +66,7 @@ import { useSystemGuide } from "@/hooks/useSystemGuide";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
 import SystemGuideBanner from "@/components/SystemGuideBanner";
 import VoucherEntryPanel from "@/components/VoucherEntryPanel";
+import AddLedgerAccountDialog from "@/components/AddLedgerAccountDialog";
 import BankReconciliationPanel from "@/components/BankReconciliationPanel";
 import ReconciliationPanel from "@/components/ReconciliationPanel";
 import { getFinanceAuth } from "@/integrations/firebase/client";
@@ -78,6 +81,7 @@ import PcgClientAccountsPanel from "@/components/PcgClientAccountsPanel";
 import { PcgMappedCodeBadge } from "@/components/PcgMappedAccountCell";
 import { buildClientByGrabioMap, buildClientByParentPcgMap, resolvePcgDisplay, formatPcgAccountLabel, formatGlAccountReference, remapCashFlowLineLabel, displayPcgCode, displayPcgCodeForLedgerRow, displayGrabioCodeForLedgerRow } from "@/lib/ledger/grabioToPcgMap";
 import { loadPcgClientAccounts } from "@/lib/firestore/pcgClientAccountsFirestore";
+import { LEDGER_CHANGED_EVENT } from "@/lib/ledger/ledgerChanged";
 import type { PcgClientAccount } from "@/types/generalLedger";
 import type { LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
 import AccountantWorkspacePanel from "@/components/AccountantWorkspacePanel";
@@ -368,6 +372,8 @@ const Accounting = () => {
   const [pcgPrefillAccount, setPcgPrefillAccount] = useState<LebanesePcgAccount | null>(null);
   const [pcgPrefillKey, setPcgPrefillKey] = useState(0);
   const [coaWorkingOpen, setCoaWorkingOpen] = useState(false);
+  const [coaAddOpen, setCoaAddOpen] = useState(false);
+  const [voucherEditPrefill, setVoucherEditPrefill] = useState<{ entry: JournalEntry; lines: JournalLine[] } | null>(null);
   const [glPresetAccountId, setGlPresetAccountId] = useState("");
   const [ledgerFocus, setLedgerFocus] = useState<LedgerActivityFocus | null>(null);
   const [quickVoucherEntryId, setQuickVoucherEntryId] = useState("");
@@ -435,11 +441,16 @@ const Accounting = () => {
       return;
     }
     let cancelled = false;
-    void loadPcgClientAccounts(financeStoreId).then((rows) => {
-      if (!cancelled) setPcgClientAccounts(rows);
-    });
+    const load = () => {
+      void loadPcgClientAccounts(financeStoreId).then((rows) => {
+        if (!cancelled) setPcgClientAccounts(rows);
+      });
+    };
+    load();
+    window.addEventListener(LEDGER_CHANGED_EVENT, load);
     return () => {
       cancelled = true;
+      window.removeEventListener(LEDGER_CHANGED_EVENT, load);
     };
   }, [isLebaneseCoa, financeStoreId]);
 
@@ -658,12 +669,13 @@ const Accounting = () => {
 
   const plHasActivity = useMemo(
     () =>
+      lebanesePlHasActivity(incomeStatement.lebaneseForm) ||
       incomeStatement.revenue.rows.length +
         incomeStatement.otherIncome.rows.length +
         incomeStatement.cogs.rows.length +
         incomeStatement.operatingExpenses.rows.length +
         incomeStatement.financialExpenses.rows.length >
-      0,
+        0,
     [incomeStatement],
   );
 
@@ -961,6 +973,23 @@ const Accounting = () => {
     } finally {
       setReversing(false);
     }
+  };
+
+  const beginEditPostedVoucher = (entry: JournalEntry) => {
+    if (entry.status !== "posted") {
+      toast.error("Only posted vouchers can be edited.");
+      return;
+    }
+    if (isDateLocked(entry.date)) {
+      toast.error("That period is closed — cannot reverse and repost this voucher.");
+      return;
+    }
+    setVoucherEditPrefill({
+      entry,
+      lines: lines.filter((line) => line.entryId === entry.id),
+    });
+    setQuickVoucherEntryId("");
+    goToTab("vouchers");
   };
 
   const handleOpeningBalance = async () => {
@@ -1287,6 +1316,9 @@ const Accounting = () => {
                       <Button variant="outline" size="sm" onClick={() => void ensureCoa()}>
                         Sync chart
                       </Button>
+                      <Button size="sm" onClick={() => setCoaAddOpen(true)}>
+                        Add account
+                      </Button>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -1374,8 +1406,11 @@ const Accounting = () => {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button variant="outline" size="sm" className="mb-4" onClick={() => void ensureCoa()}>
+                <Button variant="outline" size="sm" className="mb-4 mr-2" onClick={() => void ensureCoa()}>
                   Initialize / Refresh COA
+                </Button>
+                <Button size="sm" className="mb-4" onClick={() => setCoaAddOpen(true)}>
+                  Add account
                 </Button>
                 <Table>
                   <TableHeader>
@@ -1502,6 +1537,7 @@ const Accounting = () => {
                   paymentOrders={paymentOrders}
                   settlements={settlements}
                   mainCurrency={profile?.mainCurrency}
+                  fxRateDefault={profile?.customExchangeRate}
                   posting={posting}
                   onPost={handlePostVoucher}
                   registerEntries={entries}
@@ -1511,6 +1547,12 @@ const Accounting = () => {
                   postingRegisterDraft={postingDraft}
                   onRegisterReverse={(id) => void handleReverseEntry(id)}
                   reversingRegister={reversing}
+                  prefillEntry={voucherEditPrefill?.entry || null}
+                  prefillLines={voucherEditPrefill?.lines || []}
+                  onPrefillConsumed={() => setVoucherEditPrefill(null)}
+                  onReversePosted={async (entryId) => {
+                    await reverseEntry(entryId);
+                  }}
                 />
               </CardContent>
             </Card>
@@ -2122,8 +2164,12 @@ const Accounting = () => {
               pcgClientAccounts={pcgClientAccounts}
               accountingLanguage={accountingLanguage}
               currencyCode={profile?.mainCurrency || (isLebaneseCoa ? 'LBP' : 'USD')}
+              usdToLbp={profile?.customExchangeRate}
               onRefresh={() => void refreshLedger()}
-              onOpenGl={openAccountDrill}
+              onOpenGl={(accountId) => {
+                const account = accounts.find((row) => row.id === accountId);
+                openAccountActivity(accountId, account ? `${account.code} ${account.name}` : accountId);
+              }}
             />
           </TabsContent>
 
@@ -2231,76 +2277,17 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="profit-loss" className="mt-4 space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  Income statement (P&L)
-                  <SystemGuideInfo
-                    enabled={systemGuideEnabled}
-                    label="What P&L shows"
-                    title="Profit & Loss"
-                    content={[
-                      "Period revenue minus expenses — the standard report every Lebanon ERP (Libra, Odoo, PIMS2) provides alongside Trial Balance.",
-                      "Pick From and To dates (defaults to year-to-date through As of). Export CSV for your accountant or MoF filing pack.",
-                    ]}
-                  />
-                </CardTitle>
-                <CardDescription>Period activity only · {reportPeriod.startDate || "…"} → {reportPeriod.endDate || "…"}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-6">
-                <div className="flex flex-wrap items-end justify-end gap-2 w-full max-w-full">
-                  <Button type="button" variant="outline" size="sm" className="shrink-0" onClick={downloadPlCsv}>
-                    Export CSV
-                  </Button>
-                </div>
-                {!plHasActivity ? (
-                  <p className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-3 text-sm text-muted-foreground">
-                    No revenue or expense activity in {reportPeriod.startDate} → {reportPeriod.endDate}. Widen the date range (e.g. YTD) or click Refresh if you just posted.
-                  </p>
-                ) : null}
-                {([
-                  incomeStatement.revenue,
-                  incomeStatement.otherIncome,
-                  incomeStatement.cogs,
-                  incomeStatement.operatingExpenses,
-                  incomeStatement.financialExpenses,
-                ] as const).map((section) => (
-                  section.rows.length > 0 ? (
-                    <div key={section.title}>
-                      <h3 className="font-semibold mb-2">{section.title}</h3>
-                      <Table>
-                        <TableBody>
-                          {section.rows.map((r) => (
-                            <TableRow key={r.accountId}>
-                              <TableCell className="font-mono w-24">
-                                {isLebaneseCoa ? <PcgMappedCodeBadge grabioCode={r.code} clientByGrabio={clientByGrabio} /> : r.code}
-                              </TableCell>
-                              <TableCell>{r.name}</TableCell>
-                              <TableCell className="text-right">{formatCurrency(r.amount)}</TableCell>
-                              <TableCell className="w-[90px]">
-                                <Button variant="ghost" size="sm" onClick={() => openAccountDrill(r.accountId)}>GL</Button>
-                                <Button variant="ghost" size="sm" onClick={() => openAccountActivity(r.accountId, `${r.code} · ${r.name}`)}>Activity</Button>
-                              </TableCell>
-                            </TableRow>
-                          ))}
-                          <TableRow className="font-medium border-t">
-                            <TableCell colSpan={2}>Subtotal</TableCell>
-                            <TableCell className="text-right">{formatCurrency(section.subtotal)}</TableCell>
-                            <TableCell />
-                          </TableRow>
-                        </TableBody>
-                      </Table>
-                    </div>
-                  ) : null
-                ))}
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-2 border-t pt-4 text-sm">
-                  <span className="font-medium">Total revenue: <strong>{formatCurrency(incomeStatement.totalRevenue)}</strong></span>
-                  <span>Gross profit: <strong>{formatCurrency(incomeStatement.grossProfit)}</strong></span>
-                  <span>Operating income: <strong>{formatCurrency(incomeStatement.operatingIncome)}</strong></span>
-                  <span>Net income: <strong>{formatCurrency(incomeStatement.netIncome)}</strong></span>
-                </div>
-              </CardContent>
-            </Card>
+            <LebaneseProfitLossDocument
+              report={incomeStatement}
+              storeCurrency={profile?.mainCurrency || (isLebaneseCoa ? "LBP" : "USD")}
+              usdToLbp={profile?.customExchangeRate}
+              companyName={profile?.name || profile?.storeName}
+              hasActivity={plHasActivity}
+              systemGuideEnabled={systemGuideEnabled}
+              accounts={accounts}
+              onExportCsv={downloadPlCsv}
+              onOpenAccount={openAccountActivity}
+            />
           </TabsContent>
 
           <TabsContent value="year-end-close" className="mt-4">
@@ -2365,6 +2352,7 @@ const Accounting = () => {
               paymentOrders={paymentOrders}
               invoices={invoices}
               expenses={expenses}
+              usdToLbp={profile?.customExchangeRate}
               onOpenEntry={setQuickVoucherEntryId}
             />
           </TabsContent>
@@ -2585,6 +2573,17 @@ const Accounting = () => {
           isLebaneseCoa={isLebaneseCoa}
           pcgClientAccounts={pcgClientAccounts}
           accountingLanguage={accountingLanguage}
+          onEdit={quickVoucherEntry ? () => beginEditPostedVoucher(quickVoucherEntry) : undefined}
+        />
+        <AddLedgerAccountDialog
+          open={coaAddOpen}
+          onOpenChange={setCoaAddOpen}
+          storeId={financeStoreId}
+          accounts={accounts}
+          isLebaneseCoa={isLebaneseCoa}
+          pcgClientAccounts={pcgClientAccounts}
+          accountingLanguage={accountingLanguage}
+          onCreated={() => refreshLedger()}
         />
         <AccountingCommandPalette
           open={commandPaletteOpen}

@@ -28,11 +28,8 @@ import {
 import { generatePDF, generatePdfFile, sendDocumentEmail, type DocumentType } from "./helpers/documentLogic";
 import { resolveClientId, resolveSupplierId, syncLineItemsToCatalog } from "./helpers/catalogSync";
 import { toast } from "sonner";
-import {
-  glPostPurchasePayment,
-  glSyncInvoiceGl,
-  glSyncPurchasesOnLoad,
-} from "@/lib/ledger/glBridge";
+import { glPostPurchasePayment, glSyncInvoiceGl, glSyncPurchasesOnLoad } from "@/lib/ledger/glBridge";
+import { ensurePartySubaccount } from "@/lib/ledger/partySubaccount";
 import type { SimImportRunSummary, SimMigrationData } from "@/lib/simImport";
 
 /** Phase A1 removes this flag — all data reads/writes go through Firestore. */
@@ -1408,6 +1405,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
       email: client.email || '', tax_id: client.taxId || '',
     }, 'Context][Client');
     if (!ok) { setClients(prev => prev.filter(c => c.id !== id)); return null; }
+    if (orgId) {
+      void ensurePartySubaccount({ storeId: orgId, kind: 'client', partyId: id, partyName: client.name }).catch((err) => {
+        console.warn('[Client] AR subaccount skipped', err);
+      });
+    }
     return id;
   };
 
@@ -1439,6 +1441,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
       name: supplier.name, address: supplier.address || '', phone: supplier.phone || '', email: supplier.email || '',
     }, 'Context][Supplier');
     if (!ok) { setSuppliers(prev => prev.filter(s => s.id !== id)); return null; }
+    if (orgId) {
+      void ensurePartySubaccount({ storeId: orgId, kind: 'supplier', partyId: id, partyName: supplier.name }).catch((err) => {
+        console.warn('[Supplier] AP subaccount skipped', err);
+      });
+    }
     return id;
   };
 

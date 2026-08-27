@@ -40,6 +40,7 @@ type Props = {
   canReverse?: boolean;
   reversing?: boolean;
   onReverse?: (entryId: string) => void;
+  onEdit?: () => void;
 };
 
 export default function VoucherDetailDialog({
@@ -53,6 +54,7 @@ export default function VoucherDetailDialog({
   canReverse,
   reversing,
   onReverse,
+  onEdit,
 }: Props) {
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
   const arabicEntry = supportsArabicEntry(accountingLanguage);
@@ -106,6 +108,11 @@ export default function VoucherDetailDialog({
                     onClick={() => onReverse(entry.id)}
                   >
                     {reversing ? 'Reversing…' : 'Reverse'}
+                  </Button>
+                ) : null}
+                {onEdit && entry.status === 'posted' ? (
+                  <Button type="button" variant="outline" size="sm" onClick={onEdit}>
+                    Edit
                   </Button>
                 ) : null}
                 <Button type="button" variant="outline" size="sm" className="ml-auto" onClick={() => window.print()}>

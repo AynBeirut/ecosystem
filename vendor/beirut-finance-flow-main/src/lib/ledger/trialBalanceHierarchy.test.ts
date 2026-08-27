@@ -84,4 +84,51 @@ describe('trialBalanceHierarchy', () => {
     expect(expandedVisible.some((node) => node.code === '6011')).toBe(true);
     expect(expandedVisible.some((node) => node.code === '6012')).toBe(true);
   });
+
+  it('rolls Grabio operational 102/601 into class 1–7 totals', () => {
+    const cash = ledgerAccount({
+      id: 'op-102',
+      code: '102',
+      name: 'POS Cash Drawer',
+      type: 'asset',
+      normalBalance: 'debit',
+    });
+    const payroll = ledgerAccount({
+      id: 'op-601',
+      code: '601',
+      name: 'Salaries',
+      type: 'expense',
+      normalBalance: 'debit',
+    });
+    const rowByAccountId = new Map([
+      [
+        cash.id,
+        {
+          ...emptyExtendedRow(cash),
+          periodDebit: 400,
+          closingDebit: 400,
+        },
+      ],
+      [
+        payroll.id,
+        {
+          ...emptyExtendedRow(payroll),
+          periodDebit: 250,
+          closingDebit: 250,
+        },
+      ],
+    ]);
+
+    const roots = buildLebaneseTrialBalanceTree([cash, payroll], rowByAccountId, '1', '7', [], {
+      hideInactiveAccounts: true,
+      includeZeroBalance: true,
+    });
+
+    const class5 = roots.find((node) => node.code === '5');
+    const class6 = roots.find((node) => node.code === '6');
+    expect(class5?.row.periodDebit).toBeGreaterThan(0);
+    expect(class6?.row.periodDebit).toBeGreaterThan(0);
+    expect(class5?.row.periodDebit).toBe(400);
+    expect(class6?.row.periodDebit).toBe(250);
+  });
 });

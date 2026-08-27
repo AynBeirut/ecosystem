@@ -26,7 +26,7 @@
 |--------|--------|---------|---------|
 | **Trial Balance** | `trial-balance` | All ledger accounts; debits = credits check. Views: 2 / 4 / 6 column. | `lib/ledger/trialBalance.ts`, `trialBalanceExtended.ts` |
 | **Balance Sheet** | `balance-sheet` | Assets, liabilities, equity as of date. | `lib/ledger/balanceSheet.ts` |
-| **P&L** | `profit-loss` | Revenue, COGS, expenses, net result for period. | `lib/ledger/incomeStatement.ts` |
+| **P&L** | `profit-loss` | AM form: Class 7, B.I/Purchases/E.I, expenses, FX others. | `lib/ledger/lebaneseProfitLoss.ts` |
 
 **Depends on:** posted journal entries only · **As-of date** (header) · TB must balance before close period.
 

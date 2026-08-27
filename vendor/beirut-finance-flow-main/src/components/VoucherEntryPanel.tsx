@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -7,6 +7,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { LedgerAccountCombobox } from "@/components/LedgerAccountCombobox";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { cn, formatCurrency } from "@/lib/utils";
@@ -49,16 +57,29 @@ type DraftLine = {
   costCenterId: string;
 };
 
-const emptyLine = (): DraftLine => ({
+const emptyLine = (currency = ""): DraftLine => ({
   accountId: "",
   debit: "",
   credit: "",
   description: "",
-  transactionCurrency: "",
+  transactionCurrency: currency,
   fxRate: "",
   amountFx: "",
   costCenterId: "",
 });
+
+function lineFxBase(line: DraftLine): number | null {
+  const fx = Number(line.amountFx) || 0;
+  const rate = Number(line.fxRate) || 0;
+  if (fx > 0 && rate > 0) return Math.round(fx * rate * 100) / 100;
+  return null;
+}
+
+function normalizeLineCurrency(code?: string): "LBP" | "USD" {
+  const c = String(code || "").toUpperCase();
+  if (c === "USD") return "USD";
+  return "LBP";
+}
 
 type Props = {
   storeId?: string;
@@ -86,6 +107,11 @@ type Props = {
   postingRegisterDraft?: boolean;
   onRegisterReverse?: (entryId: string) => void;
   reversingRegister?: boolean;
+  fxRateDefault?: number;
+  prefillEntry?: JournalEntry | null;
+  prefillLines?: JournalLine[];
+  onPrefillConsumed?: () => void;
+  onReversePosted?: (entryId: string) => Promise<void>;
 };
 
 /** Map PCG display/chart rows to Grabio operational account ids used for posting. */
@@ -191,6 +217,11 @@ export default function VoucherEntryPanel({
   postingRegisterDraft,
   onRegisterReverse,
   reversingRegister,
+  fxRateDefault,
+  prefillEntry,
+  prefillLines = [],
+  onPrefillConsumed,
+  onReversePosted,
 }: Props) {
   const { clients = [], suppliers = [] } = useAppContext() as {
     clients?: Array<{ id: string; name: string; email?: string; phone?: string }>;
@@ -206,6 +237,17 @@ export default function VoucherEntryPanel({
   const [entryDate, setEntryDate] = useState(() => new Date().toISOString().slice(0, 10));
   const [memo, setMemo] = useState("");
   const [draftLines, setDraftLines] = useState<DraftLine[]>([emptyLine(), emptyLine()]);
+  const [jvClientId, setJvClientId] = useState("");
+  const [jvSupplierId, setJvSupplierId] = useState("");
+  const [editingPostedEntryId, setEditingPostedEntryId] = useState("");
+  const [preview, setPreview] = useState<{
+    voucherType: VoucherType;
+    date: string;
+    memo: string;
+    lines: JournalLineInput[];
+    voucherMeta?: Record<string, unknown>;
+  } | null>(null);
+  const pendingPreviewAction = useRef<(() => void | Promise<void>) | null>(null);
   const [allocOpen, setAllocOpen] = useState(false);
   const [pendingPost, setPendingPost] = useState<{
     voucherType: VoucherType;
@@ -245,6 +287,58 @@ export default function VoucherEntryPanel({
     if (voucherTab === "CV") return "cv";
     return "all";
   }, [voucherTab]);
+
+  useEffect(() => {
+    if (!prefillEntry) return;
+    const entry = prefillEntry;
+    const meta = (entry.voucherMeta || {}) as Record<string, unknown>;
+    const vt = (entry.voucherType || "JV") as VoucherType;
+    setVoucherTab(vt);
+    setEntryDate(entry.date.slice(0, 10));
+    setMemo(entry.memo || "");
+    setEditingPostedEntryId(entry.id);
+    if (vt === "JV") {
+      const mapped = prefillLines.map((line) => ({
+        accountId: line.accountId,
+        debit: line.debit ? String(line.debit) : "",
+        credit: line.credit ? String(line.credit) : "",
+        description: line.description || "",
+        transactionCurrency: line.transactionCurrency || mainCurrency || "",
+        fxRate: line.fxRate != null ? String(line.fxRate) : "",
+        amountFx: line.amountFx != null ? String(line.amountFx) : "",
+        costCenterId: line.costCenterId || "",
+      }));
+      setDraftLines(mapped.length >= 2 ? mapped : [...mapped, emptyLine(mainCurrency)]);
+      setJvClientId(String(meta.clientId || ""));
+      setJvSupplierId(String(meta.supplierId || ""));
+    }
+    if (vt === "PV") {
+      setPvFrom(String(meta.paidFromAccountId || ""));
+      setPvTo(String(meta.paidToAccountId || ""));
+      setPvAmount(String(meta.amount || meta.checkAmount || ""));
+      setPvPayee(String(meta.payee || ""));
+      setPvSupplierId(String(meta.supplierId || ""));
+      setPvRef(String(meta.paymentRef || ""));
+      setPvCheckNumber(String(meta.checkNumber || ""));
+    }
+    if (vt === "RV") {
+      setRvInto(String(meta.receivedIntoAccountId || ""));
+      setRvFrom(String(meta.receivedFromAccountId || ""));
+      setRvPayer(String(meta.payer || ""));
+      setRvClientId(String(meta.clientId || ""));
+      setRvRef(String(meta.receiptRef || ""));
+      const rvAmt = prefillLines.find((line) => line.debit > 0)?.debit;
+      if (rvAmt) setRvAmount(String(rvAmt));
+    }
+    if (vt === "CV") {
+      setCvFrom(String(meta.fromAccountId || ""));
+      setCvTo(String(meta.toAccountId || ""));
+      setCvRef(String(meta.transferRef || ""));
+      const cvAmt = prefillLines.find((line) => line.debit > 0)?.debit;
+      if (cvAmt) setCvAmount(String(cvAmt));
+    }
+    onPrefillConsumed?.();
+  }, [prefillEntry?.id]);
 
   useEffect(() => {
     if (!storeId) return;
@@ -320,6 +414,37 @@ export default function VoucherEntryPanel({
     voucherMeta?: Record<string, unknown>;
   }) => {
     await onPost(payload);
+  };
+
+  const openPreview = (
+    payload: {
+      voucherType: VoucherType;
+      date: string;
+      memo: string;
+      lines: JournalLineInput[];
+      voucherMeta?: Record<string, unknown>;
+    },
+    action: () => void | Promise<void>,
+  ) => {
+    setPreview(payload);
+    pendingPreviewAction.current = action;
+  };
+
+  const confirmPreview = async () => {
+    const action = pendingPreviewAction.current;
+    pendingPreviewAction.current = null;
+    setPreview(null);
+    if (!action) return;
+    try {
+      if (editingPostedEntryId && onReversePosted) {
+        await onReversePosted(editingPostedEntryId);
+        setEditingPostedEntryId("");
+        onPrefillConsumed?.();
+      }
+      await action();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to post voucher.");
+    }
   };
 
   const maybeShowAllocation = (payload: {
@@ -434,18 +559,31 @@ export default function VoucherEntryPanel({
       toast.error("Entry must be balanced before posting.");
       return;
     }
+    if (!jvClientId && !jvSupplierId) {
+      toast.error("Select a client or a supplier for this journal voucher.");
+      return;
+    }
     const lines = draftLines.map((l) => mapDraftLine(l, mainCurrency)).filter(Boolean) as JournalLineInput[];
     if (lines.length < 2) {
       toast.error("Add at least two lines with accounts and amounts.");
       return;
     }
-    void finalizePost({
-      voucherType: "JV",
+    const partyName =
+      clients.find((row) => row.id === jvClientId)?.name ||
+      suppliers.find((row) => row.id === jvSupplierId)?.name ||
+      "";
+    const payload = {
+      voucherType: "JV" as const,
       date: entryDate,
       memo: memo || "Journal voucher",
       lines,
-      voucherMeta: {},
-    });
+      voucherMeta: {
+        ...(jvClientId ? { clientId: jvClientId } : {}),
+        ...(jvSupplierId ? { supplierId: jvSupplierId } : {}),
+        ...(partyName ? { partyName } : {}),
+      },
+    };
+    openPreview(payload, () => finalizePost(payload));
   };
 
   const postPv = async () => {
@@ -497,27 +635,23 @@ export default function VoucherEntryPanel({
     const knockOffAcct = allAcctById.get(paidToId) ?? acctById.get(paidToId);
     const isAp = knockOffAcct ? isAccountsPayableCode(knockOffAcct.code) : false;
     const isAr = knockOffAcct ? isAccountsReceivableCode(knockOffAcct.code) : false;
-    if (!isAp && !isAr) {
-      try {
+    openPreview(payload, async () => {
+      if (!isAp && !isAr) {
         await finalizePost(payload);
         setPvStatus({ kind: "success", text: "Payment voucher posted." });
         setPvAmount("");
         setPvRef("");
         setPvCheckNumber("");
-      } catch (err) {
-        const text = err instanceof Error ? err.message : "Failed to post payment voucher.";
-        setPvStatus({ kind: "error", text });
-        toast.error(text);
+        return;
       }
-      return;
-    }
-    maybeShowAllocation({
-      ...payload,
-      knockOffAccountId: paidToId,
-      paymentAmount: amount,
-      partyLabel: pvPayee || "Supplier",
-      partyId: pvSupplierId || undefined,
-      documentType: "purchase_order",
+      maybeShowAllocation({
+        ...payload,
+        knockOffAccountId: paidToId,
+        paymentAmount: amount,
+        partyLabel: pvPayee || "Supplier",
+        partyId: pvSupplierId || undefined,
+        documentType: "purchase_order",
+      });
     });
   };
 
@@ -538,8 +672,8 @@ export default function VoucherEntryPanel({
       receivedIntoAccountId: rvInto,
       receivedFromAccountId: rvFrom,
     };
-    maybeShowAllocation({
-      voucherType: "RV",
+    const payload = {
+      voucherType: "RV" as const,
       date: entryDate,
       memo: memo || `Receipt voucher${rvPayer ? ` — ${rvPayer}` : ""}`,
       lines: [
@@ -547,19 +681,24 @@ export default function VoucherEntryPanel({
         { accountId: rvFrom, debit: 0, credit: amount, description: "Received from" },
       ],
       voucherMeta: meta,
-      knockOffAccountId: rvFrom,
-      paymentAmount: amount,
-      partyLabel: rvPayer || "Client",
-      partyId: rvClientId || undefined,
-      documentType: "invoice",
-    });
+    };
+    openPreview(payload, () =>
+      maybeShowAllocation({
+        ...payload,
+        knockOffAccountId: rvFrom,
+        paymentAmount: amount,
+        partyLabel: rvPayer || "Client",
+        partyId: rvClientId || undefined,
+        documentType: "invoice",
+      }),
+    );
   };
 
   const postCv = () => {
     const amount = Number(cvAmount) || 0;
     if (!cvFrom || !cvTo || amount <= 0) return;
-    void finalizePost({
-      voucherType: "CV",
+    const payload = {
+      voucherType: "CV" as const,
       date: entryDate,
       memo: memo || "Contra voucher — transfer",
       lines: [
@@ -567,7 +706,8 @@ export default function VoucherEntryPanel({
         { accountId: cvFrom, debit: 0, credit: amount, description: "Transfer from" },
       ],
       voucherMeta: { fromAccountId: cvFrom, toAccountId: cvTo, transferRef: cvRef },
-    });
+    };
+    openPreview(payload, () => finalizePost(payload));
   };
 
   const handleLineKeyDown = (e: React.KeyboardEvent, idx: number, field: keyof DraftLine) => {
@@ -614,20 +754,62 @@ export default function VoucherEntryPanel({
             <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} value={memo} onChange={(e) => setMemo(e.target.value)} placeholder="Description" />
           </div>
         </div>
+        {editingPostedEntryId ? (
+          <p className="mb-3 rounded-md border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            Editing posted voucher — Confirm reverses the original and posts a new serial. Posted lines are not rewritten.
+          </p>
+        ) : null}
 
         <TabsContent value="JV" className="mt-0 space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <Label>Client</Label>
+              <SearchableCombobox
+                options={clientOptions}
+                value={jvClientId}
+                onValueChange={(id) => {
+                  setJvClientId(id);
+                  if (id) setJvSupplierId("");
+                }}
+                placeholder="Select client"
+                searchPlaceholder="Search clients…"
+                emptyText="No clients found."
+              />
+            </div>
+            <div>
+              <Label>Supplier</Label>
+              <SearchableCombobox
+                options={supplierOptions}
+                value={jvSupplierId}
+                onValueChange={(id) => {
+                  setJvSupplierId(id);
+                  if (id) setJvClientId("");
+                }}
+                placeholder="Select supplier"
+                searchPlaceholder="Search suppliers…"
+                emptyText="No suppliers found."
+              />
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground">Required: client or supplier (not both empty).</p>
           {isLebaneseCoa ? (
             <div className="max-h-[min(28rem,60vh)] overflow-y-auto overflow-x-hidden rounded-md border border-slate-300 bg-white">
               <table className="w-full table-fixed border-collapse text-sm">
                 <colgroup>
-                  <col style={{ width: '42%' }} />
-                  <col style={{ width: '14%' }} />
-                  <col style={{ width: '14%' }} />
-                  <col style={{ width: '30%' }} />
+                  <col style={{ width: '28%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '10%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '12%' }} />
+                  <col style={{ width: '16%' }} />
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-[#316ac5] text-white">
                   <tr>
                     <th className="px-2 py-1.5 text-left text-[11px] font-semibold">Account</th>
+                    <th className="px-2 py-1.5 text-left text-[11px] font-semibold">Ccy</th>
+                    <th className="px-2 py-1.5 text-right text-[11px] font-semibold">FX amt</th>
+                    <th className="px-2 py-1.5 text-right text-[11px] font-semibold">Rate</th>
                     <th className="px-2 py-1.5 text-right text-[11px] font-semibold">Debit</th>
                     <th className="px-2 py-1.5 text-right text-[11px] font-semibold">Credit</th>
                     <th className="px-2 py-1.5 text-left text-[11px] font-semibold">Line memo</th>
@@ -660,6 +842,60 @@ export default function VoucherEntryPanel({
                               {accountTitle}
                             </p>
                           ) : null}
+                          {lineFxBase(line) != null ? (
+                            <p className="mt-0.5 text-[10px] text-slate-600">
+                              {line.amountFx} {normalizeLineCurrency(line.transactionCurrency)} × {line.fxRate} = {lineFxBase(line)}
+                            </p>
+                          ) : null}
+                        </td>
+                        <td className="px-1 py-1 align-top">
+                          <Select
+                            value={normalizeLineCurrency(line.transactionCurrency || mainCurrency)}
+                            onValueChange={(v) => {
+                              const next = [...draftLines];
+                              const storeCcy = normalizeLineCurrency(mainCurrency);
+                              next[idx] = {
+                                ...next[idx],
+                                transactionCurrency: v,
+                                fxRate: v !== storeCcy && fxRateDefault ? String(fxRateDefault) : next[idx].fxRate,
+                              };
+                              setDraftLines(next);
+                            }}
+                          >
+                            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="LBP">LBP</SelectItem>
+                              <SelectItem value="USD">USD</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </td>
+                        <td className="px-1 py-1 align-top">
+                          <Input
+                            className="legacy-erp-input h-8 text-right tabular-nums"
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            value={line.amountFx}
+                            onChange={(e) => {
+                              const next = [...draftLines];
+                              next[idx] = { ...next[idx], amountFx: e.target.value };
+                              setDraftLines(next);
+                            }}
+                          />
+                        </td>
+                        <td className="px-1 py-1 align-top">
+                          <Input
+                            className="legacy-erp-input h-8 text-right tabular-nums"
+                            type="number"
+                            min="0"
+                            step="0.000001"
+                            value={line.fxRate}
+                            onChange={(e) => {
+                              const next = [...draftLines];
+                              next[idx] = { ...next[idx], fxRate: e.target.value };
+                              setDraftLines(next);
+                            }}
+                          />
                         </td>
                         <td className="px-2 py-1 align-top">
                           <Input
@@ -713,6 +949,7 @@ export default function VoucherEntryPanel({
               <TableHeader>
                 <TableRow>
                   <TableHead>Account</TableHead>
+                  <TableHead>Ccy</TableHead>
                   <TableHead>Debit</TableHead>
                   <TableHead>Credit</TableHead>
                   <TableHead>FX amt</TableHead>
@@ -737,6 +974,32 @@ export default function VoucherEntryPanel({
                             setDraftLines(next);
                           }}
                         />
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={normalizeLineCurrency(line.transactionCurrency || mainCurrency)}
+                          onValueChange={(v) => {
+                            const next = [...draftLines];
+                            const storeCcy = normalizeLineCurrency(mainCurrency);
+                            next[idx] = {
+                              ...next[idx],
+                              transactionCurrency: v,
+                              fxRate: v !== storeCcy && fxRateDefault ? String(fxRateDefault) : next[idx].fxRate,
+                            };
+                            setDraftLines(next);
+                          }}
+                        >
+                          <SelectTrigger className="w-[88px]"><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="LBP">LBP</SelectItem>
+                            <SelectItem value="USD">USD</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        {lineFxBase(line) != null ? (
+                          <p className="mt-1 text-[10px] text-muted-foreground">
+                            {line.amountFx} × {line.fxRate} = {lineFxBase(line)}
+                          </p>
+                        ) : null}
                       </TableCell>
                       <TableCell>
                         <Input
@@ -832,7 +1095,7 @@ export default function VoucherEntryPanel({
           </div>
           )}
           <div className={cn("flex flex-wrap items-center justify-between gap-2", isLebaneseCoa && "legacy-erp-totals")}>
-            <Button variant="outline" size="sm" onClick={() => setDraftLines((p) => [...p, emptyLine()])}>
+            <Button variant="outline" size="sm" onClick={() => setDraftLines((p) => [...p, emptyLine(mainCurrency)])}>
               <Plus className="h-4 w-4 mr-1" /> Add line
             </Button>
             <p className="text-sm">
@@ -842,7 +1105,7 @@ export default function VoucherEntryPanel({
             </p>
             <div className="flex gap-2">
               <Button onClick={postJv} disabled={posting || !jvBalanced}>
-                {posting ? "Posting…" : "Post JV"}
+                {posting ? "Posting…" : "Preview JV"}
               </Button>
             </div>
           </div>
@@ -890,7 +1153,7 @@ export default function VoucherEntryPanel({
             </p>
           ) : null}
           <Button type="button" onClick={() => void postPv()} disabled={posting}>
-            {posting ? "Posting…" : "Post PV"}
+            {posting ? "Posting…" : "Preview PV"}
           </Button>
         </TabsContent>
 
@@ -918,7 +1181,7 @@ export default function VoucherEntryPanel({
               <Input className={isLebaneseCoa ? "legacy-erp-input" : undefined} value={rvRef} onChange={(e) => setRvRef(e.target.value)} />
             </div>
           </div>
-          <Button onClick={postRv} disabled={posting}>Post RV</Button>
+          <Button onClick={postRv} disabled={posting}>Preview RV</Button>
         </TabsContent>
 
         <TabsContent value="CV" className="mt-0 space-y-4">
@@ -940,7 +1203,7 @@ export default function VoucherEntryPanel({
               <Input value={cvRef} onChange={(e) => setCvRef(e.target.value)} />
             </div>
           </div>
-          <Button onClick={postCv} disabled={posting}>Post CV</Button>
+          <Button onClick={postCv} disabled={posting}>Preview CV</Button>
         </TabsContent>
       </Tabs>
 
@@ -965,6 +1228,62 @@ export default function VoucherEntryPanel({
       ) : null}
         </div>
       </div>
+
+      <Dialog open={Boolean(preview)} onOpenChange={(open) => !open && setPreview(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Preview {preview?.voucherType} before post</DialogTitle>
+            <DialogDescription>
+              {preview?.date} · {preview?.memo}
+              {editingPostedEntryId ? " · will reverse original then post a new serial" : ""}
+            </DialogDescription>
+          </DialogHeader>
+          {preview ? (
+            <div className="space-y-3 text-sm">
+              <p>
+                Party:{" "}
+                {String((preview.voucherMeta as Record<string, unknown> | undefined)?.partyName ||
+                  (preview.voucherMeta as Record<string, unknown> | undefined)?.payee ||
+                  (preview.voucherMeta as Record<string, unknown> | undefined)?.payer ||
+                  "—")}
+              </p>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Account</TableHead>
+                    <TableHead className="text-right">Debit</TableHead>
+                    <TableHead className="text-right">Credit</TableHead>
+                    <TableHead>FX</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {preview.lines.map((line, idx) => {
+                    const acct = allAcctById.get(line.accountId) || acctById.get(line.accountId);
+                    const fx =
+                      line.amountFx && line.fxRate
+                        ? `${line.amountFx} ${line.transactionCurrency || ""} × ${line.fxRate}`
+                        : "—";
+                    return (
+                      <TableRow key={`${line.accountId}-${idx}`}>
+                        <TableCell>{acct ? `${acct.code} · ${acct.name}` : line.accountId}</TableCell>
+                        <TableCell className="text-right">{line.debit ? formatCurrency(line.debit) : "—"}</TableCell>
+                        <TableCell className="text-right">{line.credit ? formatCurrency(line.credit) : "—"}</TableCell>
+                        <TableCell className="text-xs">{fx}</TableCell>
+                      </TableRow>
+                    );
+                  })}
+                </TableBody>
+              </Table>
+            </div>
+          ) : null}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={() => setPreview(null)}>Back</Button>
+            <Button type="button" disabled={posting} onClick={() => void confirmPreview()}>
+              {posting ? "Posting…" : "Confirm post"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <InvoiceAllocationDialog
         open={allocOpen}

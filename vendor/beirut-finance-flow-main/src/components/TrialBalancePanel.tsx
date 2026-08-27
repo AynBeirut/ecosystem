@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { LedgerAccountCombobox } from '@/components/LedgerAccountCombobox';
+import AccountRangePicker from '@/components/AccountRangePicker';
+import ReportCurrencyPicker from '@/components/ReportCurrencyPicker';
 import { accountCodeNumeric, accountsInCodeRange, isAccountInCodeRange } from '@/lib/ledger/accountCodeRange';
 import {
   buildClientByGrabioMap,
@@ -30,7 +31,12 @@ import type {
   TrialBalanceExtendedReport,
   TrialBalanceExtendedRow,
 } from '@/types/generalLedger';
-import { cn, formatCurrency } from '@/lib/utils';
+import { cn } from '@/lib/utils';
+import {
+  defaultOperationalAccountRange,
+  formatLedgerAmountForMode,
+  type ReportCurrencyMode,
+} from '@/lib/ledger/formatLedgerAmount';
 import { downloadCsvText } from '@/lib/csvExport';
 import { toast } from 'sonner';
 
@@ -44,6 +50,7 @@ type Props = {
   pcgClientAccounts?: PcgClientAccount[];
   accountingLanguage?: AccountingLanguage;
   currencyCode?: string;
+  usdToLbp?: number;
   onRefresh?: () => void;
   onOpenGl?: (accountId: string) => void;
 };
@@ -165,9 +172,9 @@ function formatDisplayAccountCode(code: string): string {
   return raw.length > 12 ? `${raw.slice(0, 12)}…` : raw;
 }
 
-function tbAmountCell(value: number, currency: string): string {
+function tbAmountCell(value: number, format: (n: number) => string): string {
   if (!value) return '—';
-  return formatCurrency(value, currency, 'compact');
+  return format(value);
 }
 
 const TB_HEAD = 'px-1 py-1.5 text-[10px] font-semibold leading-tight text-white';
@@ -183,11 +190,11 @@ function signedNet(debit: number, credit: number): number {
 
 function formatLegacyAmount(
   value: number,
-  currency: string,
+  format: (n: number) => string,
 ): { text: string; negative: boolean } {
-  if (!value) return { text: '0.00', negative: false };
-  if (value < 0) return { text: `(${formatCurrency(Math.abs(value), currency)})`, negative: true };
-  return { text: formatCurrency(value, currency), negative: false };
+  if (!value) return { text: format(0), negative: false };
+  if (value < 0) return { text: `(${format(Math.abs(value))})`, negative: true };
+  return { text: format(value), negative: false };
 }
 
 function normalizeCode(code: string): string {
@@ -362,12 +369,18 @@ export default function TrialBalancePanel({
   pcgClientAccounts = [],
   accountingLanguage,
   currencyCode = 'LBP',
+  usdToLbp,
   onRefresh,
   onOpenGl,
 }: Props) {
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
   const clientByParentPcg = useMemo(() => buildClientByParentPcgMap(pcgClientAccounts), [pcgClientAccounts]);
-  const currencyLabel = currencyCode.toUpperCase();
+  const [currencyMode, setCurrencyMode] = useState<ReportCurrencyMode>(
+    currencyCode.toUpperCase() === 'USD' ? 'USD' : 'LBP',
+  );
+  const [fullScreen, setFullScreen] = useState(false);
+  const fmtAmt = (n: number) => formatLedgerAmountForMode(n, currencyCode, currencyMode, usdToLbp);
+  const currencyLabel = currencyMode === 'both' ? 'LBP + USD' : currencyMode;
 
   const [fromCode, setFromCode] = useState('');
   const [toCode, setToCode] = useState('');
@@ -392,6 +405,14 @@ export default function TrialBalancePanel({
     const next = asOfDate.slice(0, 10);
     setEndDate((prev) => (prev === next ? prev : next));
   }, [asOfDate]);
+
+  useEffect(() => {
+    if (fromCode.trim() || toCode.trim()) return;
+    const range = defaultOperationalAccountRange(accounts);
+    if (!range.fromCode || !range.toCode) return;
+    setFromCode(range.fromCode);
+    setToCode(range.toCode);
+  }, [accounts, fromCode, toCode]);
 
   const accountLabel = (account: LedgerAccount) => {
     if (isLebaneseCoa) return formatPcgAccountLabel(account, accountingLanguage, clientByGrabio);
@@ -546,7 +567,9 @@ export default function TrialBalancePanel({
   const displayRows = useMemo(() => {
     if (!report) return [];
     if (isLebaneseCoa) {
-      if (hierarchyRoots.length === 0) return [];
+      if (hierarchyRoots.length === 0) {
+        return flatDisplayRows.map((item) => ({ ...item, treeNode: undefined as TrialBalanceTreeNode | undefined }));
+      }
       return flattenTrialBalanceTree(hierarchyRoots, expandedTbNodes).map((node) => ({
         account:
           node.account ||
@@ -710,12 +733,20 @@ export default function TrialBalancePanel({
   const canSearch = Boolean(fromCode.trim() && toCode.trim() && !loading && !computing);
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white shadow-sm">
+    <Card className={cn('overflow-hidden border-slate-200 bg-white shadow-sm', fullScreen && 'fixed inset-0 z-50 rounded-none')}>
       <CardHeader className="border-b bg-slate-50/80 pb-4">
-        <CardTitle className="text-lg">Trial balance</CardTitle>
-        <CardDescription>
-          Account range · period. Use Refresh above to reload ledger data.
-        </CardDescription>
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <CardTitle className="text-lg">Trial balance</CardTitle>
+            <CardDescription>
+              Account range · period · amounts in {currencyLabel}. Use Refresh above to reload ledger data.
+            </CardDescription>
+          </div>
+          <Button type="button" variant="outline" size="sm" className="h-8 shrink-0" onClick={() => setFullScreen((v) => !v)}>
+            {fullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            <span className="ml-1">{fullScreen ? 'Exit' : 'Full screen'}</span>
+          </Button>
+        </div>
       </CardHeader>
 
       <CardContent className="space-y-4 pt-4">
@@ -726,35 +757,17 @@ export default function TrialBalancePanel({
             if (canSearch) handleDisplay();
           }}
         >
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          <div className="space-y-1">
-            <label htmlFor="tb-from" className="text-xs font-medium text-slate-700">From account</label>
-            <LedgerAccountCombobox
-              accounts={accounts.filter((account) => account.isActive)}
-              value={accountIdForCode(fromCode)}
-              onValueChange={setFromAccountId}
-              isLebaneseCoa={isLebaneseCoa}
-              pcgClientAccounts={pcgClientAccounts}
-              accountingLanguage={accountingLanguage}
-              placeholder="Select start account…"
-              compactSelectedLabel
-              className="bg-white font-mono"
-            />
-          </div>
-          <div className="space-y-1">
-            <label htmlFor="tb-to" className="text-xs font-medium text-slate-700">To account</label>
-            <LedgerAccountCombobox
-              accounts={accounts.filter((account) => account.isActive)}
-              value={accountIdForCode(toCode)}
-              onValueChange={setToAccountId}
-              isLebaneseCoa={isLebaneseCoa}
-              pcgClientAccounts={pcgClientAccounts}
-              accountingLanguage={accountingLanguage}
-              placeholder="Select end account…"
-              compactSelectedLabel
-              className="bg-white font-mono"
-            />
-          </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+          <AccountRangePicker
+            accounts={accounts}
+            fromAccountId={accountIdForCode(fromCode)}
+            toAccountId={accountIdForCode(toCode)}
+            onFromAccountId={setFromAccountId}
+            onToAccountId={setToAccountId}
+            isLebaneseCoa={isLebaneseCoa}
+            pcgClientAccounts={pcgClientAccounts}
+            accountingLanguage={accountingLanguage}
+          />
           <div className="space-y-1">
             <label htmlFor="tb-start" className="text-xs font-medium text-slate-700">Period from</label>
             <Input
@@ -791,6 +804,7 @@ export default function TrialBalancePanel({
               onChange={(e) => setFiscalYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
             />
           </div>
+          <ReportCurrencyPicker value={currencyMode} onChange={setCurrencyMode} id="tb-currency" />
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -909,7 +923,7 @@ export default function TrialBalancePanel({
             <div className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs leading-relaxed text-slate-700">
               {footerText}
             </div>
-            <div className="max-h-[min(36rem,70vh)] overflow-y-auto overflow-x-hidden rounded-md border border-slate-200">
+            <div className={cn('overflow-y-auto overflow-x-hidden rounded-md border border-slate-200', fullScreen ? 'max-h-[calc(100vh-14rem)]' : 'max-h-[min(36rem,70vh)]')}>
               <table className="w-full table-fixed border-collapse">
                 <colgroup>
                   <col className="w-[3.5rem]" />
@@ -953,9 +967,9 @@ export default function TrialBalancePanel({
                     const isGroup = Boolean(treeNode?.isGroup || account.pcgKind === 'G');
                     const hasChildren = Boolean(treeNode?.hasChildren);
                     const isExpanded = treeNode ? expandedTbNodes.has(treeNode.id) : false;
-                    const start = formatLegacyAmount(signedNet(row.openingDebit, row.openingCredit), currencyCode);
-                    const movementBal = formatLegacyAmount(signedNet(row.periodDebit, row.periodCredit), currencyCode);
-                    const balance = formatLegacyAmount(signedNet(row.closingDebit, row.closingCredit), currencyCode);
+                    const start = formatLegacyAmount(signedNet(row.openingDebit, row.openingCredit), fmtAmt);
+                    const movementBal = formatLegacyAmount(signedNet(row.periodDebit, row.periodCredit), fmtAmt);
+                    const balance = formatLegacyAmount(signedNet(row.closingDebit, row.closingCredit), fmtAmt);
                     const name = treeNode?.name || accountLabel(account);
                     const rowKey = treeNode?.id || row.accountId;
                     return (
@@ -984,18 +998,18 @@ export default function TrialBalancePanel({
                         >
                           {name}
                         </td>
-                        {options.startingDebit ? <td className={TB_NUM_CELL}>{tbAmountCell(row.openingDebit, currencyCode)}</td> : null}
-                        {options.startingCredit ? <td className={TB_NUM_CELL}>{tbAmountCell(row.openingCredit, currencyCode)}</td> : null}
+                        {options.startingDebit ? <td className={TB_NUM_CELL}>{tbAmountCell(row.openingDebit, fmtAmt)}</td> : null}
+                        {options.startingCredit ? <td className={TB_NUM_CELL}>{tbAmountCell(row.openingCredit, fmtAmt)}</td> : null}
                         {options.startingBalanceLbp ? (
                           <td className={cn(TB_NUM_CELL, start.negative && 'text-red-700')}>{start.text}</td>
                         ) : null}
-                        {options.movementDebitLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.periodDebit, currencyCode)}</td> : null}
-                        {options.movementCreditLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.periodCredit, currencyCode)}</td> : null}
+                        {options.movementDebitLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.periodDebit, fmtAmt)}</td> : null}
+                        {options.movementCreditLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.periodCredit, fmtAmt)}</td> : null}
                         {options.movementBalanceLbp ? (
                           <td className={cn(TB_NUM_CELL, movementBal.negative && 'text-red-700')}>{movementBal.text}</td>
                         ) : null}
-                        {options.totalDebitLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.closingDebit, currencyCode)}</td> : null}
-                        {options.totalCreditLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.closingCredit, currencyCode)}</td> : null}
+                        {options.totalDebitLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.closingDebit, fmtAmt)}</td> : null}
+                        {options.totalCreditLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.closingCredit, fmtAmt)}</td> : null}
                         {options.totalBalanceLbp ? (
                           <td className={cn(TB_NUM_CELL, 'font-semibold', balance.negative && 'text-red-700')}>
                             {balance.text}
@@ -1017,39 +1031,39 @@ export default function TrialBalancePanel({
                     </td>
                     {options.startingDebit ? (
                       <td className={TB_NUM_CELL}>
-                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingDebit), 0), currencyCode)}
+                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingDebit), 0), fmtAmt)}
                       </td>
                     ) : null}
                     {options.startingCredit ? (
                       <td className={TB_NUM_CELL}>
-                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingCredit), 0), currencyCode)}
+                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingCredit), 0), fmtAmt)}
                       </td>
                     ) : null}
                     {options.startingBalanceLbp ? (
                       <td className={cn(TB_NUM_CELL, totals.starting < 0 && 'text-red-700')}>
-                        {formatLegacyAmount(totals.starting, currencyCode).text}
+                        {formatLegacyAmount(totals.starting, fmtAmt).text}
                       </td>
                     ) : null}
                     {options.movementDebitLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.movementDebit, currencyCode)}</td>
+                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.movementDebit, fmtAmt)}</td>
                     ) : null}
                     {options.movementCreditLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.movementCredit, currencyCode)}</td>
+                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.movementCredit, fmtAmt)}</td>
                     ) : null}
                     {options.movementBalanceLbp ? (
                       <td className={cn(TB_NUM_CELL, totals.movementDebit - totals.movementCredit < 0 && 'text-red-700')}>
-                        {formatLegacyAmount(totals.movementDebit - totals.movementCredit, currencyCode).text}
+                        {formatLegacyAmount(totals.movementDebit - totals.movementCredit, fmtAmt).text}
                       </td>
                     ) : null}
                     {options.totalDebitLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.totalDebit, currencyCode)}</td>
+                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.totalDebit, fmtAmt)}</td>
                     ) : null}
                     {options.totalCreditLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.totalCredit, currencyCode)}</td>
+                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.totalCredit, fmtAmt)}</td>
                     ) : null}
                     {options.totalBalanceLbp ? (
                       <td className={cn(TB_NUM_CELL, totals.balance < 0 && 'text-red-700')}>
-                        {formatLegacyAmount(totals.balance, currencyCode).text}
+                        {formatLegacyAmount(totals.balance, fmtAmt).text}
                       </td>
                     ) : null}
                     <td />

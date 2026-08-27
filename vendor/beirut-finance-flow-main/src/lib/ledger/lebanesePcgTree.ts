@@ -295,8 +295,9 @@ export function resolveLedgerAccountIdsForPcgNode(
       if (hit) ids.add(hit.id);
       return;
     }
+    // Groups like 5300 must still pick up Grabio operational codes (102 → 5300).
+    addForPcgCode(current.code);
     if (current.pcgKind === 'D' || current.pcgKind === 'C' || current.pcgKind === 'CD') {
-      addForPcgCode(current.code);
       return;
     }
     for (const child of current.children) walk(child);
