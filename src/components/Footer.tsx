@@ -6,6 +6,7 @@ import { resolveStoreShopLabel, resolveStoreShopUrl } from '@/lib/storeNavigatio
 import { isExternalUrl } from '@/lib/storeUrls';
 
 const PUBLIC_MARKETING_PATHS = new Set([
+  '/',
   '/home',
   '/features',
   '/pricing',
@@ -14,6 +15,8 @@ const PUBLIC_MARKETING_PATHS = new Set([
   '/blog',
   '/onboarding/package',
 ]);
+
+const PUBLIC_MARKETING_PREFIXES = ['/demo/', '/demoshop/', '/solutions/', '/blog/'];
 
 const ADMIN_SHELL_PREFIXES = ['/admin', '/team/dashboard'];
 
@@ -31,7 +34,7 @@ const Footer: React.FC = () => {
   const isMarketplace = location.pathname === '/search' || location.pathname === '/marketplace';
   const isPublicMarketing =
     PUBLIC_MARKETING_PATHS.has(location.pathname) ||
-    location.pathname.startsWith('/blog/');
+    PUBLIC_MARKETING_PREFIXES.some((prefix) => location.pathname.startsWith(prefix));
 
   const shopUrl = resolveStoreShopUrl({ pathname: location.pathname, items });
   const shopLabel = resolveStoreShopLabel(shopUrl);

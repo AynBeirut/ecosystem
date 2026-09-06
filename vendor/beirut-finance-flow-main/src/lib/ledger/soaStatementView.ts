@@ -5,6 +5,7 @@ import {
   type ReportCurrencyMode,
 } from '@/lib/ledger/formatLedgerAmount';
 import type { GeneralLedgerReportRow } from '@/types/generalLedger';
+import { sanitizeJournalMemoForDisplay } from '@/lib/ledger/ledgerHumanLabels';
 
 const ONES = [
   '',
@@ -93,7 +94,9 @@ export function soaLineDescription(row: GeneralLedgerReportRow): {
   serial: string;
   text: string;
 } {
-  const narrative = String(row.displayDescription || row.memo || row.party || '').trim();
+  const narrative = String(
+    row.displayDescription || sanitizeJournalMemoForDisplay(row.memo || '') || row.party || '',
+  ).trim();
   const typeCode = soaTypeCode(row);
   const serial = String(row.voucherNumber || '').trim();
   const parts = [narrative, typeCode && serial ? `${typeCode} - ${serial}` : serial || typeCode].filter(Boolean);

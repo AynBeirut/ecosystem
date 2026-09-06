@@ -25,8 +25,19 @@ Do not commit `.env.production`, credentials, or local backup folders.
 
 **GitHub secret scanning:** Firebase `apiKey` in `google-services.json` / `GoogleService-Info.plist` are **public client IDs** (required for mobile builds). In GitHub → Security → Secret scanning → mark as *used in tests* / resolved. Restrict keys in [Firebase Console → API keys](https://console.cloud.google.com/apis/credentials). Server keys (`FIREBASE_TOKEN`, `OPENAI_API_KEY`, etc.) stay in GitHub Secrets only.
 
+### Session 2026-09-05 — Discount GL + pre-audit deploy
+**Problem:** POS discounts lowered net only — no 7090 contra; audit tomorrow. **Fix:** gross revenue + Dr 7090/410 on POS GL + manual RV; backfilled 10 historical discounted orders; TB $157,625.90 balanced. **Deployed:** hosting + `onOrderCreated`/`onOrderStatusChanged`/`api` 2026-09-05 (`Accounting-BfDXx8YL.js`). **Gate:** `scripts/auditLittleHandsPreAudit.cjs` PASS. Handoff: `docs/handoff/littlehands-pre-audit-2026-09-05.md`.
+
+### Session 2026-09-04 — JV line UI (Path A CSS fix, build OK)
+**Problem:** JV Debit/Credit/Foreign misaligned. **Fix:** Path A — removed Ln column; equal 96px cols for Dr/Cr/Foreign; num cells block layout; delete moved to account row. **Build:** exit 0. **Not deployed** — hard refresh after deploy; sign-off screenshot on Little Hands JV.
+
+**Problem:** Lebanese TB showed all `0 LBP` for range 53001000001→70901000001. **Fix deployed hosting 2026-08-31 20:52.** **Verified:** Firestore 102 has period movement; `LITTLE_HANDS_INTEGRATION=1` integration test passes (102→53001000001 rollup, class 5 non-zero); live `Accounting-BzsPlioT.js` MD5 matches local dist. **UI:** hard refresh → Search → expand class **5** for `53001000001` cash line.
+
+### Session 2026-08-31 — TB Page 1 fixes (deployed)
+Trial Balance: account search prefix match (20→201 not 1120; 70→7010 not 1870); Lebanese default range 1→7; GL opens right slide sheet with voucher detail (no leave-page); fullscreen scroll fixed. **Live on hosting 2026-08-31.**
+
 ### Session 2026-08-27 — P&L AM form
-P&L tab now matches the AM print: INCOME / Total Class 7, C.O.S (B.I, Purchases Goods, E.I), Gross Profit, EXPENSES, Profit Before Tax, Others / Additions, Taxable / NET PROFIT, then Difference of Exchange footer. LBP column, 3 decimals, parentheses for losses. 65-account audit still waits on AM file. **Prod deploy requested 2026-08-27.**
+P&L tab now matches the AM print: INCOME / Total Class 7, C.O.S (B.I, Purchases Goods, E.I), Gross Profit, EXPENSES, Profit Before Tax, Others / Additions, Taxable / NET PROFIT, then Difference of Exchange footer. LBP column, 3 decimals, parentheses for losses. 65-account audit still waits on AM file. **Live on hosting 2026-08-27** (`bfac116`).
 
 ### Session 2026-08-27 — SOA print layout (AM sample)
 Statement of Account now matches the AM print: header Code/Name/Currency + From/To, B/F row, Date/Description/Dr/Cr/Balance with Db/Cr, totals, “Say Account Currency … Only”. Voucher serial stays clickable inside Description.

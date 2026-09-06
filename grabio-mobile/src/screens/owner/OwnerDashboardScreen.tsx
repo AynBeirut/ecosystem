@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl } from 'react-native';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
+import { View, Text, StyleSheet, ScrollView, ActivityIndicator, TouchableOpacity, FlatList, RefreshControl } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
 import { useNavigation } from '@react-navigation/native';
@@ -7,6 +8,22 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList } from '../../types';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 import { useMobileEntitlements } from '../../hooks/useMobileEntitlements';
+import TabletScreen from '../../components/TabletScreen';
+import { useTabletLayout } from '../../hooks/useTabletLayout';
+import { canAccessPurchasing, canAccessAccounting, canManageProducts, canViewClientBalances } from '../../lib/ownerAccess';
+import { loadFinishedGoodsStockMap, resolveDisplayStock } from '../../lib/inventoryStock';
+
+function parseFirestoreDate(value: unknown): Date {
+  if (!value) return new Date(0);
+  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  if (typeof value === 'string' || typeof value === 'number') {
+    const d = new Date(value);
+    return Number.isFinite(d.getTime()) ? d : new Date(0);
+  }
+  return new Date(0);
+}
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -25,7 +42,16 @@ export default function OwnerDashboardScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
   const { canUse, loading: entitlementsLoading } = useMobileEntitlements();
-  const invoiceManagerEnabled = !entitlementsLoading && canUse('invoice_manager');
+  const { gridColumns, isTablet } = useTabletLayout();
+  const actionMinWidth = isTablet ? '30%' : '45%';
+  const salesCrmEnabled = !entitlementsLoading && canUse('crm');
+  const isSalesTeam = user && ['sub_seller', 'sub_manager', 'crm_rep'].includes(user.userRole);
+  const isStoreAdmin = user?.userRole === 'owner';
+  const isSalesRepOnly = user?.userRole === 'sub_seller';
+  const showPurchasing = canAccessPurchasing(user?.userRole);
+  const showAccounting = canAccessAccounting(user?.userRole);
+  const showClientBalances = canViewClientBalances(user?.userRole, user?.subAccountRole);
+  const showProductAdmin = canManageProducts(user?.userRole);
   const [stats, setStats] = useState<Stats>({
     totalOrders: 0, pendingOrders: 0, newOrders: [], todayRevenue: 0,
     yesterdayRevenue: 0, todayCount: 0, currency: 'USD', lowStockItems: [],
@@ -55,12 +81,14 @@ export default function OwnerDashboardScreen() {
       }
     });
 
-    // Real-time orders
-    const unsubOrders = firestore()
+    // Recent orders for today's sales — one fetch, no live listener on dashboard
+    void firestore()
       .collection('orders')
       .where('storeId', '==', user.storeId)
-      .onSnapshot((snap) => {
-        if (!snap) return;
+      .orderBy('createdAt', 'desc')
+      .limit(80)
+      .get()
+      .then((snap) => {
         let pending = 0;
         let todayRev = 0;
         let todayCount = 0;
@@ -70,7 +98,7 @@ export default function OwnerDashboardScreen() {
 
         snap.docs.forEach((d) => {
           const data = d.data();
-          const createdAt = data.createdAt?.toDate?.() || new Date(0);
+          const createdAt = parseFirestoreDate(data.createdAt);
           const isToday = createdAt >= startOfToday;
           const isYesterday = createdAt >= startOfYesterday && createdAt < startOfToday;
 
@@ -82,27 +110,51 @@ export default function OwnerDashboardScreen() {
           if (isYesterday && data.status !== 'cancelled') yesterdayRev += data.total || 0;
         });
 
-        // Real-time low stock
-        firestore().collection('products')
-          .where('storeId', '==', user.storeId)
-          .where('inStock', '==', true)
-          .get()
-          .then((prodSnap) => {
-            const low: Stats['lowStockItems'] = [];
-            prodSnap.docs.forEach((p) => {
-              const d = p.data();
-              if (d.stock != null && d.stock > 0 && d.stock <= (d.lowStockThreshold || 10)) {
-                low.push({ id: p.id, name: d.name, stock: d.stock, unit: d.unit });
-              }
-            });
-            setStats({ totalOrders: snap.size, pendingOrders: pending, newOrders: newOrders.slice(0, 3),
-              todayRevenue: todayRev, yesterdayRevenue: yesterdayRev, todayCount, currency, lowStockItems: low.slice(0, 5) });
-            setLoading(false);
-            setRefreshing(false);
-          });
+        setStats((prev) => ({
+          ...prev,
+          totalOrders: snap.size,
+          pendingOrders: pending,
+          newOrders: newOrders.slice(0, 3),
+          todayRevenue: todayRev,
+          yesterdayRevenue: yesterdayRev,
+          todayCount,
+          currency,
+        }));
+        setLoading(false);
+        setRefreshing(false);
+      })
+      .catch(() => {
+        setLoading(false);
+        setRefreshing(false);
       });
 
-    return unsubOrders;
+    const unsubProducts = Promise.all([
+      firestore()
+        .collection('products')
+        .where('storeId', '==', user.storeId)
+        .where('inStock', '==', true)
+        .limit(40)
+        .get(),
+      loadFinishedGoodsStockMap(user.storeId),
+    ])
+      .then(([prodSnap, fgMap]) => {
+        if (!prodSnap) return;
+        const low: Stats['lowStockItems'] = [];
+        prodSnap.docs.forEach((p) => {
+          const d = p.data();
+          const stock = resolveDisplayStock(
+            { id: p.id, productType: d.productType, stock: d.stock },
+            fgMap,
+          );
+          if (stock != null && stock > 0 && stock <= (d.lowStockThreshold || 10)) {
+            low.push({ id: p.id, name: d.name, stock, unit: d.unit });
+          }
+        });
+        setStats((prev) => ({ ...prev, lowStockItems: low.slice(0, 5) }));
+      })
+      .catch(() => {});
+
+    return () => {};
   }, [user?.storeId, refreshKey]);
 
   const trend = stats.yesterdayRevenue > 0
@@ -112,10 +164,49 @@ export default function OwnerDashboardScreen() {
   if (loading) return <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />}>
-        {/* Widget 2: Today's Sales */}
+        <TabletScreen>
+          {salesCrmEnabled && (isStoreAdmin || isSalesTeam) && (
+            <TouchableOpacity
+              style={[styles.widget, styles.crmBanner, { borderLeftColor: COLORS.primary }]}
+              onPress={() => navigation.navigate('CrmMyClients')}
+            >
+              <Text style={styles.widgetTitle}>
+                {isStoreAdmin ? '📍 All CRM Clients' : '📍 My CRM Clients'}
+              </Text>
+              <Text style={styles.salesSub}>
+                {isStoreAdmin
+                  ? 'Full client list, visits, follow-ups — all reps'
+                  : 'Log visits, set follow-ups, view visit schedule'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        {/* Widget: Pending orders */}
+        {stats.pendingOrders > 0 ? (
+          <TouchableOpacity
+            style={[styles.widget, { borderLeftColor: COLORS.warning }]}
+            onPress={() => navigation.navigate('OwnerTab')}
+            activeOpacity={0.85}
+          >
+            <View style={styles.widgetHeader}>
+              <Text style={styles.widgetTitle}>⏳ Pending orders</Text>
+              <View style={[styles.badge, { backgroundColor: COLORS.warning }]}>
+                <Text style={styles.badgeText}>{stats.pendingOrders}</Text>
+              </View>
+            </View>
+            {stats.newOrders.length > 0 ? stats.newOrders.map((o) => (
+              <View key={o.id} style={styles.orderRow}>
+                <Text style={styles.orderCustomer}>{o.customerName}</Text>
+                <Text style={styles.orderTotal}>{o.currency} {o.total.toFixed(0)}</Text>
+              </View>
+            )) : (
+              <Text style={styles.noData}>Tap to review in Orders</Text>
+            )}
+          </TouchableOpacity>
+        ) : null}
+        {/* Widget: Today's Sales */}
         <View style={[styles.widget, { borderLeftColor: COLORS.success }]}>
           <Text style={styles.widgetTitle}>💰 Today's Sales</Text>
           <Text style={styles.salesAmount}>{stats.currency} {stats.todayRevenue.toFixed(0)}</Text>
@@ -145,16 +236,25 @@ export default function OwnerDashboardScreen() {
         {/* Widget 4: Quick Actions */}
         <Text style={[styles.widgetTitle, { marginBottom: 10, marginTop: 4 }]}>⚡ Quick Actions</Text>
         <View style={styles.actionsGrid}>
-          {invoiceManagerEnabled && (
+          {salesCrmEnabled && (isStoreAdmin || isSalesTeam) ? (
             <TouchableOpacity
-              style={[styles.actionBtn, { backgroundColor: '#ccfbf1', minWidth: '100%' }]}
-              onPress={() => navigation.navigate('InvoiceManager')}
+              style={[styles.actionBtn, { backgroundColor: '#059669', minWidth: '100%' }]}
+              onPress={() => navigation.navigate('CrmMyClients', { openAssignLocation: true })}
             >
-              <Text style={styles.actionIcon}>📄</Text>
-              <Text style={[styles.actionLabel, { color: '#0f766e' }]}>Invoice Manager</Text>
+              <Text style={styles.actionIcon}>📍</Text>
+              <Text style={[styles.actionLabel, { color: '#fff' }]}>Capture location → assign to client</Text>
+            </TouchableOpacity>
+          ) : null}
+          {salesCrmEnabled && isSalesTeam && !isStoreAdmin && (
+            <TouchableOpacity
+              style={[styles.actionBtn, { backgroundColor: '#d1fae5', minWidth: '100%' }]}
+              onPress={() => navigation.navigate('CrmMyClients')}
+            >
+              <Text style={styles.actionIcon}>📍</Text>
+              <Text style={[styles.actionLabel, { color: '#047857' }]}>My CRM Clients</Text>
             </TouchableOpacity>
           )}
-          <TouchableOpacity style={styles.actionBtn} onPress={() => navigation.navigate('OwnerProducts')}>
+          <TouchableOpacity style={[styles.actionBtn, { minWidth: actionMinWidth }]} onPress={() => navigation.navigate('OwnerProducts')}>
             <Text style={styles.actionIcon}>📋</Text>
             <Text style={styles.actionLabel}>Products</Text>
           </TouchableOpacity>
@@ -162,37 +262,54 @@ export default function OwnerDashboardScreen() {
             <Text style={styles.actionIcon}>➕</Text>
             <Text style={styles.actionLabel}>New Order</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#d1fae5' }]} onPress={() => navigation.navigate('AddEditProduct', {})}>
-            <Text style={styles.actionIcon}>📦</Text>
-            <Text style={[styles.actionLabel, { color: '#065f46' }]}>Add Product</Text>
-          </TouchableOpacity>
+          {showProductAdmin ? (
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#d1fae5' }]} onPress={() => navigation.navigate('AddEditProduct', {})}>
+              <Text style={styles.actionIcon}>📦</Text>
+              <Text style={[styles.actionLabel, { color: '#065f46' }]}>Add Product</Text>
+            </TouchableOpacity>
+          ) : null}
           <TouchableOpacity style={[styles.actionBtn, { backgroundColor: COLORS.primaryLight }]} onPress={() => navigation.navigate('Inventory')}>
             <Text style={styles.actionIcon}>🏭</Text>
             <Text style={[styles.actionLabel, { color: COLORS.secondary }]}>Inventory</Text>
           </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fef3c7' }]} onPress={() => navigation.navigate('Purchases')}>
-            <Text style={styles.actionIcon}>🛒</Text>
-            <Text style={[styles.actionLabel, { color: '#92400e' }]}>Purchases</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#ede9fe' }]} onPress={() => navigation.navigate('Suppliers')}>
-            <Text style={styles.actionIcon}>🤝</Text>
-            <Text style={[styles.actionLabel, { color: '#5b21b6' }]}>Suppliers</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fce7f3' }]} onPress={() => navigation.navigate('AccountStatement')}>
-            <Text style={styles.actionIcon}>📒</Text>
-            <Text style={[styles.actionLabel, { color: '#9d174d' }]}>Accounts</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#e0e7ff' }]} onPress={() => navigation.navigate('Expenses')}>
-            <Text style={styles.actionIcon}>💸</Text>
-            <Text style={[styles.actionLabel, { color: '#3730a3' }]}>Expenses</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#dcfce7' }]} onPress={() => navigation.navigate('Customers')}>
+          {showPurchasing ? (
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fef3c7' }]} onPress={() => navigation.navigate('Purchases')}>
+              <Text style={styles.actionIcon}>🛒</Text>
+              <Text style={[styles.actionLabel, { color: '#92400e' }]}>Purchases</Text>
+            </TouchableOpacity>
+          ) : null}
+          {showPurchasing ? (
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#ede9fe' }]} onPress={() => navigation.navigate('Suppliers')}>
+              <Text style={styles.actionIcon}>🤝</Text>
+              <Text style={[styles.actionLabel, { color: '#5b21b6' }]}>Suppliers</Text>
+            </TouchableOpacity>
+          ) : null}
+          {showAccounting ? (
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fce7f3' }]} onPress={() => navigation.navigate('AccountStatement')}>
+              <Text style={styles.actionIcon}>📒</Text>
+              <Text style={[styles.actionLabel, { color: '#9d174d' }]}>Accounts</Text>
+            </TouchableOpacity>
+          ) : null}
+          {showPurchasing ? (
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#e0e7ff' }]} onPress={() => navigation.navigate('Expenses')}>
+              <Text style={styles.actionIcon}>💸</Text>
+              <Text style={[styles.actionLabel, { color: '#3730a3' }]}>Expenses</Text>
+            </TouchableOpacity>
+          ) : null}
+          {showClientBalances ? (
+            <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#fff7ed', minWidth: actionMinWidth }]} onPress={() => navigation.navigate('ClientBalances')}>
+              <Text style={styles.actionIcon}>💰</Text>
+              <Text style={[styles.actionLabel, { color: '#c2410c' }]}>Client balances</Text>
+            </TouchableOpacity>
+          ) : null}
+          <TouchableOpacity style={[styles.actionBtn, { backgroundColor: '#dcfce7' }]} onPress={() => navigation.navigate(isSalesRepOnly ? 'CrmMyClients' : 'Customers')}>
             <Text style={styles.actionIcon}>👥</Text>
-            <Text style={[styles.actionLabel, { color: '#166534' }]}>Customers</Text>
+            <Text style={[styles.actionLabel, { color: '#166534' }]}>{isSalesRepOnly ? 'My CRM Clients' : 'Customers'}</Text>
           </TouchableOpacity>
         </View>
+        </TabletScreen>
       </ScrollView>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
@@ -200,6 +317,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 16, paddingBottom: 40 },
   widget: { backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 16, marginBottom: 14, borderLeftWidth: 4, ...SHADOW.sm },
+  crmBanner: { marginBottom: 14 },
   widgetHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   widgetTitle: { fontSize: 15, fontWeight: '700', color: COLORS.textPrimary },
   badge: { backgroundColor: COLORS.primary, paddingHorizontal: 8, paddingVertical: 3, borderRadius: RADIUS.full },
@@ -213,8 +331,8 @@ const styles = StyleSheet.create({
   salesAmount: { fontSize: 30, fontWeight: '800', color: COLORS.success, marginVertical: 4 },
   salesSub: { fontSize: 13, color: COLORS.textSecondary },
 
-  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 20 },
-  actionBtn: { flex: 1, minWidth: '45%', backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.lg, paddingVertical: 14, alignItems: 'center' },
+  actionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12, marginBottom: 20 },
+  actionBtn: { flex: 1, minWidth: '45%', backgroundColor: COLORS.primaryLight, borderRadius: RADIUS.lg, paddingVertical: 18, alignItems: 'center', minHeight: 88 },
   actionIcon: { fontSize: 22, marginBottom: 4 },
   actionLabel: { fontSize: 12, fontWeight: '600', color: COLORS.primary, textAlign: 'center' },
 });

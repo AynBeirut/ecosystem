@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, Switch, Image,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, Switch, Image,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
@@ -9,13 +9,17 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
+import { canManageProducts } from '../../lib/ownerAccess';
+import { applyDisplayStock, FinishedGoodsStockMap } from '../../lib/inventoryStock';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
 export default function OwnerProductsScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
+  const canEditProducts = canManageProducts(user?.userRole);
   const [products, setProducts] = useState<Product[]>([]);
+  const [fgStock, setFgStock] = useState<FinishedGoodsStockMap>({});
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -27,8 +31,29 @@ export default function OwnerProductsScreen() {
         setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
         setLoading(false);
       });
-    return unsub;
+    const unsubFg = firestore()
+      .collection('finishedGoodsInventory')
+      .where('storeId', '==', user.storeId)
+      .onSnapshot((snap) => {
+        const map: FinishedGoodsStockMap = {};
+        snap?.docs.forEach((doc) => {
+          const data = doc.data();
+          const key = String(data.productId || data.composedProductId || '').trim();
+          if (!key) return;
+          const balance =
+            typeof data.currentBalance === 'number'
+              ? data.currentBalance
+              : typeof data.currentStock === 'number'
+                ? data.currentStock
+                : undefined;
+          if (balance !== undefined) map[key] = balance;
+        });
+        setFgStock(map);
+      });
+    return () => { unsub(); unsubFg(); };
   }, [user?.storeId]);
+
+  const displayProducts = useMemo(() => applyDisplayStock(products, fgStock), [products, fgStock]);
 
   const toggleStock = async (product: Product) => {
     await firestore()
@@ -82,6 +107,7 @@ export default function OwnerProductsScreen() {
             value={item.inStock}
             onValueChange={() => toggleStock(item)}
             trackColor={{ true: COLORS.primary }}
+            disabled={!canEditProducts}
           />
         </View>
         {!item.inStock && <Text style={styles.outOfStock}>⚠️ Out of stock</Text>}
@@ -89,6 +115,7 @@ export default function OwnerProductsScreen() {
           <Text style={styles.lowStock}>📦 Low stock!</Text>
         )}
 
+        {canEditProducts ? (
         <View style={styles.actions}>
           {canQuickEdit ? (
             <>
@@ -113,12 +140,14 @@ export default function OwnerProductsScreen() {
             </TouchableOpacity>
           )}
         </View>
+        ) : null}
       </View>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
+      {canEditProducts ? (
       <View style={styles.header}>
         <TouchableOpacity
           style={styles.addBtn}
@@ -127,19 +156,20 @@ export default function OwnerProductsScreen() {
           <Text style={styles.addBtnText}>+ Add Product</Text>
         </TouchableOpacity>
       </View>
+      ) : null}
 
       {loading ? (
         <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
-          data={products}
+          data={displayProducts}
           keyExtractor={(p) => p.id}
           renderItem={renderProduct}
           contentContainerStyle={{ padding: 12 }}
           ListEmptyComponent={<Text style={styles.empty}>No products yet</Text>}
         />
       )}
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

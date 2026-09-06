@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildIncomeStatement } from '@/lib/ledger/incomeStatement';
-import { formatLebanesePlAmount } from '@/lib/ledger/lebaneseProfitLoss';
+import { convertLebanesePlAmount, formatLebanesePlAmount } from '@/lib/ledger/lebaneseProfitLoss';
 import type { JournalEntry, JournalLine, LedgerAccount } from '@/types/generalLedger';
 
 function account(partial: Partial<LedgerAccount> & Pick<LedgerAccount, 'id' | 'code' | 'type'>): LedgerAccount {
@@ -27,6 +27,13 @@ describe('Lebanese P&L form', () => {
   it('formats losses in parentheses with 3 decimals', () => {
     expect(formatLebanesePlAmount(216299982.41)).toBe('216,299,982.410');
     expect(formatLebanesePlAmount(-3046382.763)).toBe('(3,046,382.763)');
+  });
+
+  it('converts USD ledger amounts to LBP without rounding to zero', () => {
+    const sales = 1160.7;
+    expect(convertLebanesePlAmount(sales, 'USD', 'USD', 89500)).toBe(sales);
+    expect(convertLebanesePlAmount(sales, 'USD', 'LBP', 89500)).toBeCloseTo(103882650, 0);
+    expect(formatLebanesePlAmount(convertLebanesePlAmount(sales, 'USD', 'USD', 89500), 2)).toBe('1,160.70');
   });
 
   it('Total COS = B.I + Purchases − E.I and Class 7 − COS = Gross Profit', () => {

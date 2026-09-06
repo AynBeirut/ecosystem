@@ -1,10 +1,13 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, TextInput, Modal, ScrollView,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, TextInput, Modal, ScrollView, Keyboard,
+  Platform,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
+import { useResolvedStoreId } from '../../hooks/useResolvedStoreId';
 import { useAuth } from '../../context/AuthContext';
+import { canEditCustomers } from '../../lib/ownerAccess';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 interface Customer {
@@ -23,6 +26,8 @@ const EMPTY_FORM = { name: '', phone: '', email: '', address: '', city: '', note
 
 export default function CustomersScreen() {
   const { user } = useAuth();
+  const { storeId, loading: storeLoading } = useResolvedStoreId();
+  const canEdit = canEditCustomers(user?.userRole);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');
@@ -32,10 +37,10 @@ export default function CustomersScreen() {
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!user?.storeId) { setLoading(false); return; }
+    if (!storeId) { setLoading(false); return; }
     const unsub = firestore()
       .collection('customers')
-      .where('storeId', '==', user.storeId)
+      .where('storeId', '==', storeId)
       .onSnapshot((snap) => {
         if (!snap) { setLoading(false); return; }
         const data = snap.docs
@@ -45,7 +50,15 @@ export default function CustomersScreen() {
         setLoading(false);
       }, () => setLoading(false));
     return unsub;
-  }, [user?.storeId]);
+  }, [storeId]);
+
+  const closeForm = useCallback(() => {
+    Keyboard.dismiss();
+    setSaving(false);
+    setShowForm(false);
+    setEditing(null);
+    setForm(EMPTY_FORM);
+  }, []);
 
   const openAdd = () => {
     setEditing(null);
@@ -64,26 +77,42 @@ export default function CustomersScreen() {
       Alert.alert('Required', 'Customer name is required');
       return;
     }
+    if (!form.phone.trim()) {
+      Alert.alert('Required', 'Phone number is required');
+      return;
+    }
+    if (!form.address.trim()) {
+      Alert.alert('Required', 'Address is required');
+      return;
+    }
+    if (!storeId) {
+      Alert.alert('Error', 'Store not loaded yet. Pull back and try again.');
+      return;
+    }
     setSaving(true);
     try {
-      const data = {
+      const fields = {
         name: form.name.trim(),
         phone: form.phone.trim() || null,
         email: form.email.trim() || null,
         address: form.address.trim() || null,
         city: form.city.trim() || null,
         notes: form.notes.trim() || null,
-        storeId: user!.storeId,
         updatedAt: firestore.FieldValue.serverTimestamp(),
       };
       if (editing) {
-        await firestore().collection('customers').doc(editing.id).update(data);
+        await firestore().collection('customers').doc(editing.id).update(fields);
       } else {
-        await firestore().collection('customers').add({ ...data, createdAt: firestore.FieldValue.serverTimestamp() });
+        await firestore().collection('customers').add({
+          ...fields,
+          storeId,
+          createdAt: firestore.FieldValue.serverTimestamp(),
+        });
       }
-      setShowForm(false);
+      closeForm();
     } catch (err) {
-      Alert.alert('Error', err instanceof Error ? err.message : 'Unknown error');
+      const msg = err instanceof Error ? err.message : 'Could not save customer';
+      Alert.alert('Save failed', msg.includes('permission') ? 'You may not have permission to edit this customer.' : msg);
     } finally {
       setSaving(false);
     }
@@ -98,7 +127,7 @@ export default function CustomersScreen() {
     : customers;
 
   const renderCustomer = ({ item }: { item: Customer }) => (
-    <TouchableOpacity style={styles.card} onPress={() => openEdit(item)}>
+    <TouchableOpacity style={styles.card} onPress={() => { if (canEdit) openEdit(item); }} disabled={!canEdit}>
       <View style={styles.avatar}>
         <Text style={styles.avatarText}>{(item.name || '?')[0].toUpperCase()}</Text>
       </View>
@@ -108,12 +137,12 @@ export default function CustomersScreen() {
         {item.email ? <Text style={styles.meta}>✉️ {item.email}</Text> : null}
         {item.city ? <Text style={styles.meta}>📍 {item.city}</Text> : null}
       </View>
-      <Text style={styles.editIcon}>✎</Text>
+      {canEdit ? <Text style={styles.editIcon}>✎</Text> : null}
     </TouchableOpacity>
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       <TextInput
         style={styles.search}
         placeholder="Search customers…"
@@ -121,7 +150,7 @@ export default function CustomersScreen() {
         onChangeText={setSearch}
       />
 
-      {loading ? (
+      {loading || storeLoading ? (
         <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
       ) : (
         <FlatList
@@ -133,26 +162,40 @@ export default function CustomersScreen() {
         />
       )}
 
+      {canEdit ? (
       <TouchableOpacity style={styles.fab} onPress={openAdd}>
         <Text style={styles.fabText}>＋ Add Customer</Text>
       </TouchableOpacity>
+      ) : null}
 
       {/* Add / Edit Modal */}
-      <Modal visible={showForm} animationType="slide" presentationStyle="pageSheet">
-        <SafeAreaView style={{ flex: 1, backgroundColor: COLORS.background }}>
+      <Modal
+        visible={showForm}
+        animationType="slide"
+        presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : 'fullScreen'}
+        onRequestClose={closeForm}
+      >
+        <ScreenSafeArea style={{ flex: 1, backgroundColor: COLORS.background }}>
           <View style={styles.modalHeader}>
-            <TouchableOpacity onPress={() => setShowForm(false)}>
+            <TouchableOpacity onPress={closeForm} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
               <Text style={styles.modalCancel}>Cancel</Text>
             </TouchableOpacity>
             <Text style={styles.modalTitle}>{editing ? 'Edit Customer' : 'New Customer'}</Text>
-            <TouchableOpacity onPress={save} disabled={saving}>
-              <Text style={[styles.modalSave, saving && { opacity: 0.5 }]}>Save</Text>
+            <TouchableOpacity onPress={save} disabled={saving} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
+              {saving ? (
+                <ActivityIndicator size="small" color={COLORS.primary} />
+              ) : (
+                <Text style={styles.modalSave}>Save</Text>
+              )}
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.modalBody}>
             {(['name', 'phone', 'email', 'address', 'city', 'notes'] as const).map((field) => (
               <View key={field} style={{ marginBottom: 14 }}>
-                <Text style={styles.label}>{field.charAt(0).toUpperCase() + field.slice(1)}</Text>
+                <Text style={styles.label}>
+                  {field.charAt(0).toUpperCase() + field.slice(1)}
+                  {field === 'name' || field === 'phone' || field === 'address' ? ' *' : ''}
+                </Text>
                 <TextInput
                   style={styles.input}
                   value={form[field]}
@@ -166,9 +209,9 @@ export default function CustomersScreen() {
               </View>
             ))}
           </ScrollView>
-        </SafeAreaView>
+        </ScreenSafeArea>
       </Modal>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

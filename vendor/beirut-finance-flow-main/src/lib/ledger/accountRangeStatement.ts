@@ -3,6 +3,7 @@ import {
   buildGeneralLedgerRowsFromContext,
   createLedgerReportContext,
 } from '@/lib/ledger/ledgerReportContext';
+import { sanitizeJournalMemoForDisplay } from '@/lib/ledger/ledgerHumanLabels';
 import { splitOpeningByNormalBalance } from '@/lib/ledger/formatLedgerAmount';
 import type {
   AccountRangeStatementReport,
@@ -10,6 +11,7 @@ import type {
   JournalEntry,
   JournalLine,
   LedgerAccount,
+  LedgerDateBasis,
 } from '@/types/generalLedger';
 
 export const ACCOUNT_RANGE_STATEMENT_MAX_ACCOUNTS = 40;
@@ -59,7 +61,7 @@ export function buildAccountRangeStatement(
   accounts: LedgerAccount[],
   entries: JournalEntry[],
   lines: JournalLine[],
-  options: { fromCode: string; toCode: string; startDate: string; endDate: string },
+  options: { fromCode: string; toCode: string; startDate: string; endDate: string; dateBasis?: LedgerDateBasis },
 ): AccountRangeStatementReport {
   const validationError = validateAccountRangeStatement(
     accounts,
@@ -75,6 +77,7 @@ export function buildAccountRangeStatement(
   const ctx = createLedgerReportContext(entries, lines, {
     startDate: options.startDate,
     endDate: options.endDate,
+    dateBasis: options.dateBasis,
   });
 
   const sections: AccountRangeStatementSection[] = [];
@@ -123,7 +126,7 @@ export function accountRangeStatementToCsv(report: AccountRangeStatementReport):
       `${report.startDate},B/F,${section.openingDebit || ''},${section.openingCredit || ''},${section.openingBalance}`,
     );
     for (const row of section.rows) {
-      const desc = `${row.displayDescription || row.memo || ''} ${row.voucherType || ''} ${row.voucherNumber || row.entryId}`.replace(/,/g, ' ').trim();
+      const desc = `${row.displayDescription || sanitizeJournalMemoForDisplay(row.memo || '')} ${row.voucherType || ''} ${row.voucherNumber || ''}`.replace(/,/g, ' ').trim();
       chunks.push([row.date, desc, row.debit || '', row.credit || '', row.runningBalance].join(','));
     }
     chunks.push(`Total,,,${section.closingBalance}`);

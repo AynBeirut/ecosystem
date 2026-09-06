@@ -16,6 +16,7 @@ import {
   glPostPurchaseReceived,
 } from '../lib/ledger/platformGlBridge';
 import { resolveOrderCogsLines } from '../lib/ledger/resolveOrderCogs';
+import { isPayrollExpenseLike } from '../lib/ledger/payrollPosting';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
 import { resolveProductIconFromPayload, resolveStoredProductIcon } from '../lib/productIcon';
@@ -1389,9 +1390,11 @@ export async function syncPosExpenses(req: Request, res: Response): Promise<void
       date: string;
       category: string;
       description: string;
+      name: string;
       vendor: string;
       amount: number;
       paymentMethod: string;
+      linkedStaffId: string;
     }> = [];
     let count = 0;
     for (const e of expenses) {
@@ -1428,15 +1431,21 @@ export async function syncPosExpenses(req: Request, res: Response): Promise<void
         date,
         category,
         description,
+        name: description || String(e.name || '').trim(),
         vendor: String(e.vendor || '').trim(),
         amount,
         paymentMethod,
+        linkedStaffId: String(e.staffId || e.linkedStaffId || '').trim(),
       });
       count++;
     }
     await batch.commit();
 
     for (const expense of stagedExpenses) {
+      if (isPayrollExpenseLike(expense)) {
+        await markGlPostingPosted(expense.ref);
+        continue;
+      }
       try {
         await glPostExpensePaid(authResult.auth.storeId, {
           id: expense.docId,
@@ -1542,9 +1551,7 @@ export async function syncPosSalaries(req: Request, res: Response): Promise<void
     const stagedSalaries: Array<{
       ref: FirebaseFirestore.DocumentReference;
       docId: string;
-      netAmount: number;
-      paymentDate: string;
-      paymentMethod: string;
+      input: import('../lib/ledger/payrollPosting').PayrollPaymentInput;
     }> = [];
     let count = 0;
     for (const s of salaries) {
@@ -1583,20 +1590,32 @@ export async function syncPosSalaries(req: Request, res: Response): Promise<void
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
-      stagedSalaries.push({ ref: docRef, docId, netAmount, paymentDate, paymentMethod });
+      stagedSalaries.push({
+        ref: docRef,
+        docId,
+        input: {
+          id: docId,
+          staffId: staffId || docId,
+          staffName: resolvedStaffName,
+          paymentDate,
+          paymentMethod,
+          baseAmount: Number(s.baseAmount) || 0,
+          overtimeAmount: Number(s.overtimeAmount) || 0,
+          commissionAmount: Number(s.commissionAmount) || 0,
+          bonusAmount: Number(s.bonusAmount) || 0,
+          transportAmount: Number(s.transportAmount) || 0,
+          cnssAmount: Number(s.cnssAmount) || 0,
+          deductions: Number(s.deductions) || 0,
+          totalAmount: netAmount || amount,
+        },
+      });
       count++;
     }
     await batch.commit();
 
     for (const salary of stagedSalaries) {
       try {
-        await glPostPayrollPayment(
-          authResult.auth.storeId,
-          salary.docId,
-          salary.netAmount,
-          salary.paymentDate,
-          salary.paymentMethod,
-        );
+        await glPostPayrollPayment(authResult.auth.storeId, salary.input);
         await markGlPostingPosted(salary.ref);
       } catch (error) {
         await markGlPostingFailed(salary.ref, error);

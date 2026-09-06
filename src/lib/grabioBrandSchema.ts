@@ -20,6 +20,12 @@ export const GRABIO_NAP = {
   gbpManageUrl: 'https://business.google.com/',
 } as const;
 
+/** Official social profiles — keep in sync with GSC platform properties + footer. */
+export const GRABIO_SOCIAL = {
+  instagram: 'https://www.instagram.com/grabio.space',
+  facebook: 'https://www.facebook.com/grabio.space',
+} as const;
+
 export const GRABIO_ORG = {
   '@type': 'Organization' as const,
   '@id': 'https://grabio.space/#organization',
@@ -32,6 +38,8 @@ export const GRABIO_ORG = {
   foundingDate: '2022',
   areaServed: ['LB', 'AE', 'Global'],
   sameAs: [
+    GRABIO_SOCIAL.instagram,
+    GRABIO_SOCIAL.facebook,
     'https://www.linkedin.com/company/grabio',
     'https://play.google.com/store/apps/details?id=space.grabio.admin',
     GRABIO_NAP.mapsShortUrl,

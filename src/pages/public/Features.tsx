@@ -214,7 +214,7 @@ const Features: React.FC = () => {
                 Build your package
               </Link>
               <Link
-                to="/home#modules"
+                to="/features"
                 className="px-8 py-4 font-semibold text-teal-700 border border-teal-200 hover:bg-teal-50 rounded-xl transition-all"
               >
                 Explore on home

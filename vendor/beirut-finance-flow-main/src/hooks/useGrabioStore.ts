@@ -3,9 +3,11 @@ import { onAuthStateChanged, type User as FirebaseUser } from 'firebase/auth';
 import { getFinanceAuth, getFinanceAuthReady } from '@/integrations/firebase/client';
 import { canUseInvoiceModule } from '@/lib/grabio/entitlements';
 import { loadStoreProfile, resolveGrabioStore } from '@/lib/grabio/storeService';
+import { peekCachedGrabioStoreProfile } from '@/lib/grabio/storeProfileCache';
 import { syncSystemGuideFromProfile } from '@/lib/systemGuide';
 import type { GrabioStoreContext, GrabioStoreProfile } from '@/lib/grabio/types';
 import { setDefaultNumberFormat } from '@/lib/money/format';
+import { useFinanceEmbed } from '@/context/FinanceEmbedContext';
 
 export function useGrabioStore(): GrabioStoreContext & {
   firebaseUser: FirebaseUser | null;
@@ -13,12 +15,17 @@ export function useGrabioStore(): GrabioStoreContext & {
   invoiceModuleEnabled: boolean;
   reload: () => Promise<void>;
 } {
+  const { seedProfile, seedStoreId } = useFinanceEmbed();
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
   const [authLoading, setAuthLoading] = useState(true);
-  const [storeId, setStoreId] = useState('');
-  const [profile, setProfile] = useState<GrabioStoreProfile | null>(null);
+  const [storeId, setStoreId] = useState(() => seedStoreId ?? '');
+  const [profile, setProfile] = useState<GrabioStoreProfile | null>(() => {
+    if (seedProfile) return seedProfile;
+    if (seedStoreId) return peekCachedGrabioStoreProfile(seedStoreId);
+    return null;
+  });
   const [role, setRole] = useState<GrabioStoreContext['role']>('member');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(() => !seedProfile && !peekCachedGrabioStoreProfile(seedStoreId));
 
   const hydrateStore = useCallback(async (user: FirebaseUser) => {
     setLoading(true);
@@ -38,7 +45,7 @@ export function useGrabioStore(): GrabioStoreContext & {
     if (!firebaseUser || !storeId) return;
     setLoading(true);
     try {
-      const next = await loadStoreProfile(storeId);
+      const next = await loadStoreProfile(storeId, { fromServer: true });
       if (next) {
         setProfile(next);
         syncSystemGuideFromProfile(next.systemGuideEnabled);
@@ -48,6 +55,25 @@ export function useGrabioStore(): GrabioStoreContext & {
       setLoading(false);
     }
   }, [firebaseUser, storeId]);
+
+  useEffect(() => {
+    if (!seedProfile && !seedStoreId) return;
+    if (seedStoreId) setStoreId(seedStoreId);
+    if (seedProfile) {
+      setProfile(seedProfile);
+      syncSystemGuideFromProfile(seedProfile.systemGuideEnabled);
+      setDefaultNumberFormat(seedProfile.numberFormat);
+      setLoading(false);
+    } else if (seedStoreId) {
+      const cached = peekCachedGrabioStoreProfile(seedStoreId);
+      if (cached) {
+        setProfile(cached);
+        syncSystemGuideFromProfile(cached.systemGuideEnabled);
+        setDefaultNumberFormat(cached.numberFormat);
+        setLoading(false);
+      }
+    }
+  }, [seedProfile, seedStoreId]);
 
   useEffect(() => {
     let mounted = true;
@@ -87,14 +113,16 @@ export function useGrabioStore(): GrabioStoreContext & {
     return () => window.removeEventListener('grabio:store-profile-updated', onProfileUpdated);
   }, [reload]);
 
+  const effectiveProfile = profile ?? seedProfile ?? null;
+
   return {
     firebaseUser,
     authLoading,
-    storeId,
-    profile,
+    storeId: storeId || seedStoreId || '',
+    profile: effectiveProfile,
     role,
     loading,
-    invoiceModuleEnabled: canUseInvoiceModule(profile),
+    invoiceModuleEnabled: canUseInvoiceModule(effectiveProfile),
     reload,
   };
 }

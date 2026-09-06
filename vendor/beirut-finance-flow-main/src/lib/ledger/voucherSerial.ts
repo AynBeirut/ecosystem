@@ -66,6 +66,10 @@ export function voucherEventForType(voucherType: VoucherType): string {
       return 'receipt-voucher';
     case 'CV':
       return 'contra-voucher';
+    case 'CRN':
+      return 'credit-note';
+    case 'DRN':
+      return 'debit-note';
     default:
       return 'journal-voucher';
   }

@@ -4,8 +4,14 @@ export function parseOrderCreatedAt(value: unknown): number {
   if (!value) return 0;
   if (typeof value === 'number') return value;
   if (typeof value === 'string') return Date.parse(value) || 0;
-  if (typeof value === 'object' && value !== null && 'seconds' in value) {
-    return Number((value as { seconds: number }).seconds) * 1000;
+  if (typeof value === 'object' && value !== null) {
+    const sec =
+      'seconds' in value
+        ? Number((value as { seconds: number }).seconds)
+        : '_seconds' in value
+          ? Number((value as { _seconds: number })._seconds)
+          : NaN;
+    if (Number.isFinite(sec)) return sec * 1000;
   }
   if (typeof value === 'object' && value !== null && 'toDate' in value) {
     try {
@@ -25,12 +31,39 @@ export function todayDateString() {
   return `${y}-${m}-${d}`;
 }
 
-export function isOrderRelevantToday(order: { createdAt?: unknown; scheduledFor?: string }) {
+export function isOrderRelevantToday(order: { createdAt?: unknown; scheduledFor?: string; status?: string }) {
+  if (order.status === 'pending') return true;
   const startOfToday = new Date();
   startOfToday.setHours(0, 0, 0, 0);
   if (parseOrderCreatedAt(order.createdAt) >= startOfToday.getTime()) return true;
   if (!order.scheduledFor) return false;
   return order.scheduledFor.slice(0, 10) === todayDateString();
+}
+
+/** Milliseconds for customer-requested date/time (scheduledFor), or 0 if missing/invalid. */
+export function parseOrderScheduledFor(value?: string | null): number {
+  if (!value?.trim()) return 0;
+  const trimmed = value.trim();
+  const iso = trimmed.length === 16 ? `${trimmed}:00` : trimmed;
+  const normalized =
+    iso.includes('T') && !iso.includes('Z') && !/[+-]\d{2}:\d{2}$/.test(iso)
+      ? `${iso}+03:00`
+      : iso;
+  const t = Date.parse(normalized);
+  return Number.isFinite(t) ? t : 0;
+}
+
+/** Scheduled orders first (soonest customer date), then unscheduled by newest created. */
+export function compareOrdersByCustomerDate(
+  a: { createdAt?: unknown; scheduledFor?: string | null },
+  b: { createdAt?: unknown; scheduledFor?: string | null },
+): number {
+  const aSched = parseOrderScheduledFor(a.scheduledFor);
+  const bSched = parseOrderScheduledFor(b.scheduledFor);
+  if (aSched && bSched) return aSched - bSched;
+  if (aSched && !bSched) return -1;
+  if (!aSched && bSched) return 1;
+  return parseOrderCreatedAt(b.createdAt) - parseOrderCreatedAt(a.createdAt);
 }
 
 export function formatScheduledForDisplay(value?: string) {

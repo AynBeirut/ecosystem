@@ -54,7 +54,7 @@ export function internationalModeProfilePatch(): {
 }
 
 export function accountingModeLabel(mode: AccountingMode): string {
-  return mode === 'lebanese' ? 'Lebanese (PCG-style)' : 'International';
+  return mode === 'lebanese' ? 'PCG' : 'International';
 }
 
 export function supportsArabicEntry(language: AccountingLanguage | undefined): boolean {

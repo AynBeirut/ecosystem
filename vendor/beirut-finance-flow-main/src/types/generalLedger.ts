@@ -20,7 +20,9 @@ export type JournalSourceType =
   | 'adjustment'
   | 'depreciation';
 
-export type VoucherType = 'JV' | 'PV' | 'RV' | 'CV';
+export type VoucherType = 'JV' | 'PV' | 'RV' | 'CV' | 'CRN' | 'DRN';
+
+export type LedgerDateBasis = 'posting' | 'value';
 
 export type CheckStatus = 'issued' | 'cleared' | 'void';
 
@@ -34,6 +36,7 @@ export type SettlementAllocationInput = {
 export type PaymentVoucherMeta = {
   payee?: string;
   paymentRef?: string;
+  externalReference?: string;
   paidFromAccountId: string;
   paidToAccountId: string;
   supplierId?: string;
@@ -47,6 +50,7 @@ export type PaymentVoucherMeta = {
 export type ReceiptVoucherMeta = {
   payer?: string;
   receiptRef?: string;
+  externalReference?: string;
   receivedIntoAccountId: string;
   receivedFromAccountId: string;
   clientId?: string;
@@ -83,7 +87,7 @@ export interface PartyStatementRow {
 export interface PartyStatementReport {
   partyId?: string;
   partyName: string;
-  partyType: 'client' | 'supplier';
+  partyType: 'client' | 'supplier' | 'employee';
   startDate: string;
   endDate: string;
   openingBalance: number;
@@ -185,15 +189,32 @@ export type ContraVoucherMeta = {
   fromAccountId: string;
   toAccountId: string;
   transferRef?: string;
+  externalReference?: string;
 };
 
-export type JournalVoucherMeta = Record<string, never>;
+export type JournalVoucherMeta = {
+  externalReference?: string;
+};
+
+export type CreditNoteVoucherMeta = {
+  externalReference?: string;
+  clientId?: string;
+  partyName?: string;
+};
+
+export type DebitNoteVoucherMeta = {
+  externalReference?: string;
+  supplierId?: string;
+  partyName?: string;
+};
 
 export type VoucherMeta =
   | PaymentVoucherMeta
   | ReceiptVoucherMeta
   | ContraVoucherMeta
-  | JournalVoucherMeta;
+  | JournalVoucherMeta
+  | CreditNoteVoucherMeta
+  | DebitNoteVoucherMeta;
 
 export interface LedgerAccount {
   id: string;
@@ -218,7 +239,7 @@ export interface LedgerAccount {
   isPcgChart?: boolean;
   /** Auto-created AR/AP subaccount for a client or supplier. */
   partyId?: string;
-  partyType?: 'client' | 'supplier';
+  partyType?: 'client' | 'supplier' | 'employee';
   createdAt: string;
   updatedAt: string;
 }
@@ -265,6 +286,8 @@ export interface JournalLine {
   fxRate?: number;
   amountFx?: number;
   costCenterId?: string;
+  /** Matrix LEDFILE value date — defaults to voucher date when unset. */
+  valueDate?: string;
 }
 
 export interface JournalLineInput {
@@ -276,6 +299,7 @@ export interface JournalLineInput {
   fxRate?: number;
   amountFx?: number;
   costCenterId?: string;
+  valueDate?: string;
 }
 
 export interface PostJournalInput {
@@ -705,7 +729,7 @@ export interface PcgClientAccount {
   nameAr?: string;
   currency: 'LL' | 'USD';
   partyId?: string;
-  partyType?: 'client' | 'supplier';
+  partyType?: 'client' | 'supplier' | 'employee';
   createdAt: string;
   updatedAt: string;
 }

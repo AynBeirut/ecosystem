@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image,
-  SafeAreaView, ScrollView,
+  ScrollView,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,7 +33,7 @@ export default function FavoritesScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       <Text style={styles.header}>Favorites</Text>
 
       {/* Tabs */}
@@ -131,7 +132,7 @@ export default function FavoritesScreen() {
           )}
         />
       )}
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

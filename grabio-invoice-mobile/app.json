@@ -2,11 +2,14 @@
   "expo": {
     "name": "Grabio Invoice Manager",
     "slug": "grabio-invoice-mobile",
-    "version": "1.2.10",
+    "version": "1.2.13",
     "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
+    "autolinking": {
+      "exclude": ["expo-keep-awake"]
+    },
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
@@ -22,7 +25,7 @@
     },
     "scheme": "grabio-invoice",
     "android": {
-      "versionCode": 14,
+      "versionCode": 17,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#38B2AC"

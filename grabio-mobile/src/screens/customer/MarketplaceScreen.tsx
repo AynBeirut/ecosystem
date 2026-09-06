@@ -10,6 +10,7 @@ import { RootStackParamList, Store, Product } from '../../types';
 import { useCart } from '../../context/CartContext';
 import { useFavorites } from '../../context/FavoritesContext';
 import { useAuth } from '../../context/AuthContext';
+import { formatPrice, formatRating, toNumber } from '../../lib/formatCommerce';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -32,8 +33,10 @@ function buildWhatsAppUrl(product: Product, store: Store): string | null {
   if (!rawPhone) return null;
   const phone = rawPhone.replace(/\D/g, '');
   if (!phone) return null;
+  const price = toNumber(product.price);
+  if (price == null) return null;
   const currency = product.currency || store.mainCurrency || 'USD';
-  const msg = `Hi, I'd like to order from ${store.name}:\n- 1x ${product.name} — ${currency} ${product.price.toFixed(2)}\n\nTotal: ${currency} ${product.price.toFixed(2)}`;
+  const msg = `Hi, I'd like to order from ${store.name || 'Store'}:\n- 1x ${product.name || 'Item'} — ${currency} ${price.toFixed(2)}\n\nTotal: ${currency} ${price.toFixed(2)}`;
   return `https://wa.me/${phone}?text=${encodeURIComponent(msg)}`;
 }
 
@@ -57,7 +60,9 @@ export default function MarketplaceScreen() {
     const db = getFirestore();
     const unsubStores = onSnapshot(collection(db, 'storeProfiles'), (snap) => {
       if (!snap) { storesDone = true; checkDone(); return; }
-      const data = snap.docs.map((d) => ({ id: d.id, ...d.data() } as Store));
+      const data = snap.docs
+        .map((d) => ({ id: d.id, ...(d.data() || {}) } as Store))
+        .filter((s) => s.id && s.name);
       setStores(data);
       const map: Record<string, Store> = {};
       data.forEach((s) => { map[s.id] = s; });
@@ -70,7 +75,11 @@ export default function MarketplaceScreen() {
       query(collection(db, 'products'), where('inStock', '==', true)),
       (snap) => {
         if (!snap) { prodsDone = true; checkDone(); return; }
-        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
+        setProducts(
+          snap.docs
+            .map((d) => ({ id: d.id, ...(d.data() || {}) } as Product))
+            .filter((p) => p.id && p.name && p.storeId),
+        );
         prodsDone = true;
         checkDone();
       }
@@ -89,13 +98,18 @@ export default function MarketplaceScreen() {
   );
 
   const renderProduct = ({ item }: { item: Product }) => {
+    if (!item?.id) return null;
     const store = storeMap[item.storeId];
     const waUrl = store ? buildWhatsAppUrl(item, store) : null;
     const currency = item.currency || store?.mainCurrency || 'USD';
+    const priceLabel = formatPrice(item.price, currency);
     return (
       <TouchableOpacity
         style={styles.productCard}
-        onPress={() => navigation.navigate('StoreDetail', { storeId: item.storeId, storeName: store?.name || '' })}
+        onPress={() => {
+          if (!item.storeId) return;
+          navigation.navigate('StoreDetail', { storeId: item.storeId, storeName: store?.name || 'Store' });
+        }}
       >
         {(item.image || item.imageUrl) ? (
           <ProductImage uri={item.image || item.imageUrl!} style={styles.productImg} />
@@ -106,7 +120,7 @@ export default function MarketplaceScreen() {
         )}
         <Text style={styles.storeTag} numberOfLines={1}>🏪 {store?.name || ''}</Text>
         <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.productPrice}>{currency} {item.price.toFixed(2)}</Text>
+        <Text style={styles.productPrice}>{priceLabel}</Text>
         <View style={styles.productActions}>
           <TouchableOpacity
             style={styles.cartBtn}
@@ -127,35 +141,40 @@ export default function MarketplaceScreen() {
     );
   };
 
-  const renderStore = ({ item }: { item: Store }) => (
+  const renderStore = ({ item }: { item: Store }) => {
+    if (!item?.id) return null;
+    const ratingLabel = formatRating(item.rating);
+    const initial = (item.name || 'S').trim().charAt(0).toUpperCase();
+    return (
     <TouchableOpacity
       style={styles.storeCard}
-      onPress={() => navigation.navigate('StoreDetail', { storeId: item.id, storeName: item.name })}
+      onPress={() => navigation.navigate('StoreDetail', { storeId: item.id, storeName: item.name || 'Store' })}
     >
       {(item.logoUrl || item.logo) ? (
         <Image source={{ uri: (item.logoUrl || item.logo)! }} style={styles.logo} />
       ) : (
         <View style={[styles.logo, styles.logoPlaceholder]}>
-          <Text style={styles.logoText}>{item.name[0]}</Text>
+          <Text style={styles.logoText}>{initial}</Text>
         </View>
       )}
       <View style={styles.storeCardBody}>
-        <Text style={styles.storeName}>{item.name}</Text>
+        <Text style={styles.storeName}>{item.name || 'Store'}</Text>
         {item.description ? (
           <Text style={styles.storeDesc} numberOfLines={2}>{item.description}</Text>
         ) : null}
-        {item.rating ? (
-          <Text style={styles.storeRating}>⭐ {item.rating.toFixed(1)} ({item.ratingCount ?? 0})</Text>
+        {ratingLabel ? (
+          <Text style={styles.storeRating}>⭐ {ratingLabel} ({item.ratingCount ?? 0})</Text>
         ) : null}
       </View>
       <TouchableOpacity
         style={styles.heartBtn}
-        onPress={() => toggleStoreFavorite({ id: item.id, name: item.name, logoUrl: item.logoUrl, description: item.description })}
+        onPress={() => toggleStoreFavorite({ id: item.id, name: item.name || 'Store', logoUrl: item.logoUrl, description: item.description })}
       >
         <Text>{isStoreFavorited(item.id) ? '❤️' : '🤍'}</Text>
       </TouchableOpacity>
     </TouchableOpacity>
-  );
+    );
+  };
 
   return (
     <View style={styles.container}>

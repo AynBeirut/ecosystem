@@ -69,7 +69,7 @@ interface AccountingContextType {
 const AccountingContext = createContext<AccountingContextType | undefined>(undefined);
 
 export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { activeOrganizationId: storeId } = useAppContext();
+  const { activeOrganizationId: storeId, suppliers } = useAppContext();
   const hydratingRef = useRef(true);
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
 
@@ -180,7 +180,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
     updateCashBalance(bucket, -amount, 'expense_payment', `Expense: ${expense.name}`, expenseId);
 
     if (storeId) {
-      void glPostExpensePayment(storeId, expense, amount, paymentMethod);
+      void glPostExpensePayment(storeId, expense, amount, paymentMethod, suppliers);
     }
   };
 

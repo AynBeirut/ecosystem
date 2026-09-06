@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Menu, X } from 'lucide-react';
+import { ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
+import { PHASE1_PACKAGES } from '@/lib/marketingPackages';
 
 const NAV_LINKS = [
   { label: 'Solutions', href: '/solutions' },
@@ -15,6 +16,8 @@ const NAV_LINKS = [
 
 const PublicNav: React.FC = () => {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [industriesOpen, setIndustriesOpen] = useState(false);
+  const industriesRef = useRef<HTMLLIElement>(null);
   const location = useLocation();
   const { user, isLoading } = useAuth();
   const isSignedIn = !!user;
@@ -32,7 +35,30 @@ const PublicNav: React.FC = () => {
       ? location.pathname === '/'
       : location.pathname.startsWith(href);
 
+  const industriesActive =
+    location.pathname.startsWith('/demo') || location.pathname.startsWith('/demoshop');
+
   const closeMobile = () => setMobileOpen(false);
+
+  useEffect(() => {
+    setIndustriesOpen(false);
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    const onPointerDown = (event: MouseEvent) => {
+      if (!industriesRef.current?.contains(event.target as Node)) {
+        setIndustriesOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onPointerDown);
+    return () => document.removeEventListener('mousedown', onPointerDown);
+  }, []);
+
+  const navLinkClass = (active: boolean) =>
+    active
+      ? 'text-teal-800 bg-white border border-teal-200 shadow-sm'
+      : 'text-slate-600 hover:text-slate-900 hover:bg-white/80';
 
   return (
     <header className="sticky top-0 z-50 border-b border-slate-200/80 bg-[#f5f5f7]/90 backdrop-blur-md">
@@ -41,7 +67,7 @@ const PublicNav: React.FC = () => {
         aria-label="Main navigation"
       >
         <Link
-          to="/home"
+          to="/"
           className="flex items-center gap-2 font-bold text-xl text-gray-900 hover:text-teal-600 transition-colors shrink-0"
           aria-label="Grabio home"
         >
@@ -49,15 +75,37 @@ const PublicNav: React.FC = () => {
         </Link>
 
         <ul className="hidden md:flex items-center gap-1 list-none m-0 p-0">
+          <li ref={industriesRef} className="relative">
+            <button
+              type="button"
+              className={`inline-flex items-center gap-1 px-3 py-2 rounded-full text-sm font-medium transition-colors ${navLinkClass(industriesActive)}`}
+              aria-expanded={industriesOpen}
+              aria-haspopup="true"
+              onClick={() => setIndustriesOpen((v) => !v)}
+            >
+              Industries
+              <ChevronDown className={`h-4 w-4 transition-transform ${industriesOpen ? 'rotate-180' : ''}`} />
+            </button>
+            {industriesOpen && (
+              <div className="absolute left-0 top-full z-50 mt-2 min-w-[220px] rounded-2xl border border-slate-200 bg-white p-2 shadow-lg">
+                {PHASE1_PACKAGES.map((pkg) => (
+                  <Link
+                    key={pkg.slug}
+                    to={`/demo/${pkg.slug}`}
+                    className="block rounded-xl px-3 py-2.5 text-sm font-medium text-slate-700 hover:bg-teal-50 hover:text-teal-900"
+                    onClick={() => setIndustriesOpen(false)}
+                  >
+                    {pkg.label}
+                  </Link>
+                ))}
+              </div>
+            )}
+          </li>
           {NAV_LINKS.map((link) => (
             <li key={link.href}>
               <Link
                 to={link.href}
-                className={`px-3 py-2 rounded-full text-sm font-medium transition-colors ${
-                  isActive(link.href)
-                    ? 'text-teal-800 bg-white border border-teal-200 shadow-sm'
-                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
-                }`}
+                className={`px-3 py-2 rounded-full text-sm font-medium transition-colors ${navLinkClass(isActive(link.href))}`}
               >
                 {link.label}
               </Link>
@@ -113,6 +161,25 @@ const PublicNav: React.FC = () => {
       {mobileOpen && (
         <div className="md:hidden border-t border-gray-100 bg-white px-4 pb-4">
           <ul className="flex flex-col gap-1 pt-3 list-none m-0 p-0">
+            <li>
+              <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Industries</p>
+            </li>
+            {PHASE1_PACKAGES.map((pkg) => (
+              <li key={pkg.slug}>
+                <Link
+                  to={`/demo/${pkg.slug}`}
+                  onClick={closeMobile}
+                  className={`block px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    location.pathname === `/demo/${pkg.slug}` ||
+                    location.pathname === `/demoshop/${pkg.slug}`
+                      ? 'text-teal-600 bg-teal-50'
+                      : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                  }`}
+                >
+                  {pkg.label}
+                </Link>
+              </li>
+            ))}
             {NAV_LINKS.map((link) => (
               <li key={link.href}>
                 <Link

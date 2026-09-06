@@ -1,25 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import AccountingSideSheet from '@/components/AccountingSideSheet';
 import { useLedger } from '@/context/LedgerContext';
+import { useAppContext } from '@/context/AppContext';
 import { useFinanceShellState } from '@/context/FinanceShellStateContext';
 import { useGrabioStore } from '@/hooks/useGrabioStore';
+import { useReportExchangeRate } from '@/hooks/useReportExchangeRate';
 import AccountRangePicker from '@/components/AccountRangePicker';
 import SoaAccountDocument from '@/components/SoaAccountDocument';
+import VoucherDetailDialog from '@/components/VoucherDetailDialog';
 import {
   accountRangeStatementToCsv,
   buildAccountRangeStatement,
   countAccountsInStatementRange,
 } from '@/lib/ledger/accountRangeStatement';
-import { defaultOperationalAccountRange } from '@/lib/ledger/formatLedgerAmount';
-import type { AccountRangeStatementReport } from '@/types/generalLedger';
+import { normalizeAccountingLanguage } from '@/lib/grabio/accountingMode';
+import { loadPcgClientAccounts } from '@/lib/firestore/pcgClientAccountsFirestore';
+import type { AccountRangeStatementReport, JournalEntry, PcgClientAccount } from '@/types/generalLedger';
 import { downloadCsvText } from '@/lib/csvExport';
 import { toast } from 'sonner';
 
@@ -29,13 +26,20 @@ type Props = {
 };
 
 export default function QuickStatementDialog({ open, onOpenChange }: Props) {
+  const { activeOrganizationId } = useAppContext();
   const { accounts, entries, lines, loading } = useLedger();
   const { selectFinanceModule } = useFinanceShellState();
-  const { profile } = useGrabioStore();
-  const currency = profile?.mainCurrency || 'LBP';
+  const { profile, storeId: grabioStoreId } = useGrabioStore();
+  const { usdToLbp, storeLedgerCurrency } = useReportExchangeRate();
+  const financeStoreId = grabioStoreId || activeOrganizationId || '';
+  const currency = storeLedgerCurrency;
   const isLebaneseCoa = profile?.accountingMode === 'lebanese';
+  const accountingLanguage = normalizeAccountingLanguage(profile?.accountingLanguage, profile?.accountingMode);
 
   const active = useMemo(() => accounts.filter((a) => a.isActive), [accounts]);
+  const [pcgClientAccounts, setPcgClientAccounts] = useState<PcgClientAccount[]>([]);
+  const entryIdRef = useRef('');
+  const [selectedEntry, setSelectedEntry] = useState<JournalEntry | null>(null);
   const [fromCode, setFromCode] = useState('');
   const [toCode, setToCode] = useState('');
   const [startDate, setStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
@@ -62,11 +66,18 @@ export default function QuickStatementDialog({ open, onOpenChange }: Props) {
   }, [active, fromCode, toCode]);
 
   useEffect(() => {
-    if (!open || fromCode || toCode) return;
-    const range = defaultOperationalAccountRange(active);
-    setFromCode(range.fromCode);
-    setToCode(range.toCode);
-  }, [open, active, fromCode, toCode]);
+    if (!isLebaneseCoa || !financeStoreId) {
+      setPcgClientAccounts([]);
+      return;
+    }
+    let cancelled = false;
+    void loadPcgClientAccounts(financeStoreId).then((rows) => {
+      if (!cancelled) setPcgClientAccounts(rows);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [financeStoreId, isLebaneseCoa]);
 
   const resetPreview = () => {
     tokenRef.current += 1;
@@ -74,9 +85,25 @@ export default function QuickStatementDialog({ open, onOpenChange }: Props) {
     setReport(null);
     setError(null);
     setPageIndex(0);
+    entryIdRef.current = '';
+    setSelectedEntry(null);
+  };
+
+  const openEntry = (id: string) => {
+    const entry = entries.find((row) => row.id === id);
+    if (!entry) return;
+    entryIdRef.current = id;
+    setSelectedEntry(entry);
+  };
+
+  const closeEntry = () => {
+    entryIdRef.current = '';
+    setSelectedEntry(null);
   };
 
   const handleClose = (next: boolean) => {
+    // Radix closes the parent sheet when a child sheet opens — keep statement open.
+    if (!next && entryIdRef.current) return;
     if (!next) resetPreview();
     onOpenChange(next);
   };
@@ -133,90 +160,141 @@ export default function QuickStatementDialog({ open, onOpenChange }: Props) {
   const section = report?.sections[pageIndex] || null;
 
   return (
-    <Dialog open={open} onOpenChange={handleClose}>
-      <DialogContent className="legacy-erp-shell max-w-4xl gap-0 overflow-hidden border-slate-400 p-0 text-slate-900">
-        <DialogHeader className="legacy-erp-toolbar mb-0 rounded-none border-b px-3 py-2 text-left normal-case">
-          <DialogTitle className="text-sm font-semibold uppercase tracking-wide">Quick statement</DialogTitle>
-          <DialogDescription className="text-[11px] normal-case text-slate-600">
-            Same layout as the printed statement · one account per page
-          </DialogDescription>
-        </DialogHeader>
-
-        <div className="legacy-erp-body space-y-3 p-3">
-          <div className="grid grid-cols-2 gap-2">
-            <AccountRangePicker
-              accounts={active}
-              fromAccountId={accountIdForCode(fromCode)}
-              toAccountId={accountIdForCode(toCode)}
-              onFromAccountId={setFromAccountId}
-              onToAccountId={setToAccountId}
-              isLebaneseCoa={isLebaneseCoa}
-            />
-            <div>
-              <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-600">Period from</label>
-              <Input type="date" className="legacy-erp-input" value={startDate} onChange={(e) => { setStartDate(e.target.value); resetPreview(); }} />
-            </div>
-            <div>
-              <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-600">Period to</label>
-              <Input type="date" className="legacy-erp-input" value={endDate} onChange={(e) => { setEndDate(e.target.value); resetPreview(); }} />
-            </div>
+    <>
+      <AccountingSideSheet
+        open={open}
+        onOpenChange={handleClose}
+        title="Quick statement"
+        description="Same layout as the printed statement · one account per page"
+        className="sm:max-w-4xl"
+        bodyClassName="legacy-erp-body space-y-3 p-0 px-6"
+        footer={
+          <div className="legacy-erp-body flex flex-row flex-wrap gap-2 sm:justify-start">
+            <button
+              type="button"
+              className="legacy-erp-btn legacy-erp-btn--primary"
+              disabled={loading || computing || !fromCode.trim() || !toCode.trim()}
+              onClick={handleDisplay}
+            >
+              {computing ? 'Building…' : 'Display'}
+            </button>
+            {report ? (
+              <>
+                <button
+                  type="button"
+                  className="legacy-erp-btn"
+                  onClick={() =>
+                    downloadCsvText(
+                      `quick-soa-${report.fromCode}-${report.toCode}.csv`,
+                      accountRangeStatementToCsv(report),
+                    )
+                  }
+                >
+                  CSV
+                </button>
+                <button type="button" className="legacy-erp-btn" onClick={openFullStatement}>
+                  Full statement
+                </button>
+              </>
+            ) : null}
+            <button type="button" className="legacy-erp-btn ml-auto" onClick={() => handleClose(false)}>
+              Close
+            </button>
           </div>
-
-          {error ? <div className="legacy-erp-alert legacy-erp-alert--error">{error}</div> : null}
-          {matchedCount > 0 ? <p className="text-[11px] text-slate-600">{matchedCount} accounts in range</p> : null}
-
-          {report && section ? (
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-[11px]">
-                <span>
-                  {section.accountCode} — {section.accountName} ({pageIndex + 1}/{report.sections.length})
-                </span>
-                <span className="flex gap-1">
-                  <button type="button" className="legacy-erp-btn" disabled={pageIndex <= 0} onClick={() => setPageIndex((i) => i - 1)}>Prev</button>
-                  <button type="button" className="legacy-erp-btn" disabled={pageIndex >= report.sections.length - 1} onClick={() => setPageIndex((i) => i + 1)}>Next</button>
-                </span>
-              </div>
-              <div className="legacy-erp-soa-scroll max-h-80 overflow-auto bg-white p-2">
-                <SoaAccountDocument
-                  report={report}
-                  section={section}
-                  account={active.find((a) => a.id === section.accountId)}
-                  accountName={section.accountName}
-                  storeCurrency={currency}
-                  currencyMode={currency.toUpperCase() === 'USD' ? 'USD' : 'LBP'}
-                  usdToLbp={profile?.customExchangeRate}
-                  companyName={profile?.name || profile?.storeName}
-                  compact
-                />
-              </div>
-            </div>
-          ) : null}
+        }
+      >
+        <div className="grid grid-cols-2 gap-2">
+          <AccountRangePicker
+            accounts={active}
+            fromAccountId={accountIdForCode(fromCode)}
+            toAccountId={accountIdForCode(toCode)}
+            onFromAccountId={setFromAccountId}
+            onToAccountId={setToAccountId}
+            isLebaneseCoa={isLebaneseCoa}
+            pcgClientAccounts={pcgClientAccounts}
+            accountingLanguage={accountingLanguage}
+          />
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-600">Period from</label>
+            <Input
+              type="date"
+              className="legacy-erp-input"
+              value={startDate}
+              onChange={(e) => {
+                setStartDate(e.target.value);
+                resetPreview();
+              }}
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase text-slate-600">Period to</label>
+            <Input
+              type="date"
+              className="legacy-erp-input"
+              value={endDate}
+              onChange={(e) => {
+                setEndDate(e.target.value);
+                resetPreview();
+              }}
+            />
+          </div>
         </div>
 
-        <DialogFooter className="legacy-erp-body flex-row flex-wrap gap-2 border-t border-slate-400/60 px-3 py-2 sm:justify-start">
-          <button
-            type="button"
-            className="legacy-erp-btn legacy-erp-btn--primary"
-            disabled={loading || computing || !fromCode.trim() || !toCode.trim()}
-            onClick={handleDisplay}
-          >
-            {computing ? 'Building…' : 'Display'}
-          </button>
-          {report ? (
-            <>
-              <button type="button" className="legacy-erp-btn" onClick={() => downloadCsvText(`quick-soa-${report.fromCode}-${report.toCode}.csv`, accountRangeStatementToCsv(report))}>
-                CSV
-              </button>
-              <button type="button" className="legacy-erp-btn" onClick={openFullStatement}>
-                Full statement
-              </button>
-            </>
-          ) : null}
-          <button type="button" className="legacy-erp-btn ml-auto" onClick={() => handleClose(false)}>
-            Close
-          </button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+        {error ? <div className="legacy-erp-alert legacy-erp-alert--error">{error}</div> : null}
+        {matchedCount > 0 ? <p className="text-[11px] text-slate-600">{matchedCount} accounts in range</p> : null}
+
+        {report && section ? (
+          <div className="space-y-2">
+            <div className="flex items-center justify-between text-[11px]">
+              <span>
+                {section.accountCode} — {section.accountName} ({pageIndex + 1}/{report.sections.length})
+              </span>
+              <span className="flex gap-1">
+                <button
+                  type="button"
+                  className="legacy-erp-btn"
+                  disabled={pageIndex <= 0}
+                  onClick={() => setPageIndex((i) => i - 1)}
+                >
+                  Prev
+                </button>
+                <button
+                  type="button"
+                  className="legacy-erp-btn"
+                  disabled={pageIndex >= report.sections.length - 1}
+                  onClick={() => setPageIndex((i) => i + 1)}
+                >
+                  Next
+                </button>
+              </span>
+            </div>
+            <div className="legacy-erp-soa-scroll bg-white p-2">
+              <SoaAccountDocument
+                report={report}
+                section={section}
+                account={active.find((a) => a.id === section.accountId)}
+                accountName={section.accountName}
+                storeCurrency={currency}
+                currencyMode={currency.toUpperCase() === 'USD' ? 'USD' : 'LBP'}
+                usdToLbp={usdToLbp}
+                companyName={profile?.name || profile?.storeName}
+                onOpenEntry={openEntry}
+                compact
+              />
+            </div>
+          </div>
+        ) : null}
+      </AccountingSideSheet>
+
+      <VoucherDetailDialog
+        entry={selectedEntry}
+        lines={lines}
+        open={Boolean(selectedEntry)}
+        onOpenChange={(next) => !next && closeEntry()}
+        isLebaneseCoa={isLebaneseCoa}
+        pcgClientAccounts={pcgClientAccounts}
+        accountingLanguage={accountingLanguage}
+      />
+    </>
   );
 }

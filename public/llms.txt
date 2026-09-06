@@ -14,6 +14,15 @@
 - Phone / WhatsApp: +961 71 110 952 — https://wa.me/96171110952
 - Google Business Profile (Maps): https://maps.app.goo.gl/2RRAu3gfUNLZTw118
 - GBP listing (full): https://www.google.com/maps/place/VGMG%2BH8J+Grabio,+Beirut/data=!4m2!3m1!1s0x151f170026664769:0x935d324fcf443fa5!18m1!1e1
+- Instagram: https://www.instagram.com/grabio.space
+- Facebook: https://www.facebook.com/grabio.space
+
+## Industry demo landing pages (Phase 1 SEO)
+- https://grabio.space/demo/shop
+- https://grabio.space/demo/cafe
+- https://grabio.space/demo/restaurant
+- https://grabio.space/demo/manufacturing
+- https://grabio.space/demo/ecommerce
 
 ## What Grabio is (one paragraph)
 Grabio is not only an online store builder. It is an integrated business platform where operators run inventory, finance (chart of accounts, journal vouchers, GL, AP/AR aging, bank reconciliation, Lebanese PCG), Windows POS, Android admin app, Invoice Manager mobile app, white-label customer apps, Sales CRM, PSA projects, restaurant recipe deduction, factory BOM/production, and in-dashboard AI — from one account with real-time sync.
@@ -110,4 +119,4 @@ A: Foodics is F&B-focused POS. Grabio is a modular platform with restaurant prod
 - Individual Grabio marketplace stores — tenant storefronts, not the platform brand page
 
 ## Last updated
-2026-08-22
+2026-08-29

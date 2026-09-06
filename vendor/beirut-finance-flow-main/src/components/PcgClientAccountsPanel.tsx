@@ -3,14 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import {
   Select,
   SelectContent,
@@ -23,14 +16,13 @@ import { toast } from "sonner";
 import { getReadableError } from "@/lib/getReadableError";
 import type { LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
 import type { LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
-import { mapGrabioCodeToPcg } from "@/lib/ledger/grabioToPcgMap";
+import { mapPcgParentToPartyGrabio } from "@/lib/ledger/grabioToPcgMap";
 import {
   deletePcgClientAccount,
   loadPcgClientAccounts,
   replacePcgClientAccounts,
   savePcgClientAccount,
 } from "@/lib/firestore/pcgClientAccountsFirestore";
-import { sortLedgerAccountsByCode } from "@/lib/ledger/accountCodeSort";
 import {
   parsePcgClientAccountsCsv,
   pcgClientAccountsToCsv,
@@ -45,6 +37,8 @@ type Props = {
   onChange: (rows: PcgClientAccount[]) => void;
   prefillAccount?: LebanesePcgAccount | null;
   prefillKey?: number;
+  editTarget?: PcgClientAccount | null;
+  editTargetKey?: number;
 };
 
 type FormState = {
@@ -55,6 +49,8 @@ type FormState = {
   name: string;
   nameAr: string;
   currency: "LL" | "USD";
+  partyId?: string;
+  partyType?: PcgClientAccount["partyType"];
 };
 
 const emptyForm = (): FormState => ({
@@ -73,17 +69,14 @@ export default function PcgClientAccountsPanel({
   onChange,
   prefillAccount,
   prefillKey,
+  editTarget,
+  editTargetKey,
 }: Props) {
   const fileRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(emptyForm);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
-
-  const grabioOptions = useMemo(
-    () => sortLedgerAccountsByCode(activeLedgerAccounts.filter((a) => a.isActive)),
-    [activeLedgerAccounts],
-  );
 
   const refresh = async () => {
     const next = await loadPcgClientAccounts(storeId);
@@ -94,6 +87,22 @@ export default function PcgClientAccountsPanel({
   const openNew = () => {
     setForm(emptyForm());
     setSaveError("");
+    setOpen(true);
+  };
+
+  const openEdit = (row: PcgClientAccount) => {
+    setSaveError("");
+    setForm({
+      id: row.id,
+      clientCode: row.clientCode,
+      grabioOperationalCode: row.grabioOperationalCode,
+      parentPcgCode: row.parentPcgCode || "",
+      name: row.name || "",
+      nameAr: row.nameAr || "",
+      currency: row.currency,
+      partyId: row.partyId,
+      partyType: row.partyType,
+    });
     setOpen(true);
   };
 
@@ -110,26 +119,16 @@ export default function PcgClientAccountsPanel({
     setOpen(true);
   }, [prefillAccount, prefillKey]);
 
-  const openEdit = (row: PcgClientAccount) => {
-    setSaveError("");
-    setForm({
-      id: row.id,
-      clientCode: row.clientCode,
-      grabioOperationalCode: row.grabioOperationalCode,
-      parentPcgCode: row.parentPcgCode || "",
-      name: row.name || "",
-      nameAr: row.nameAr || "",
-      currency: row.currency,
-    });
-    setOpen(true);
-  };
+  useEffect(() => {
+    if (!editTarget || editTargetKey === undefined) return;
+    openEdit(editTarget);
+  }, [editTarget, editTargetKey]);
 
-  const onGrabioPick = (code: string) => {
-    const parent = mapGrabioCodeToPcg(code) || "";
+  const onParentPcgPick = (parentPcgCode: string) => {
     setForm((prev) => ({
       ...prev,
-      grabioOperationalCode: code,
-      parentPcgCode: prev.parentPcgCode || parent,
+      parentPcgCode,
+      grabioOperationalCode: mapPcgParentToPartyGrabio(parentPcgCode) || prev.grabioOperationalCode,
     }));
   };
 
@@ -141,8 +140,17 @@ export default function PcgClientAccountsPanel({
       toast.error(err);
       return;
     }
-    if (!form.grabioOperationalCode.trim()) {
-      const msg = "Select a Grabio posting account";
+    const parentPcgCode = form.parentPcgCode.trim();
+    if (!parentPcgCode) {
+      const msg = "Parent PCG is required (7010 clients · 6111 suppliers)";
+      setSaveError(msg);
+      toast.error(msg);
+      return;
+    }
+    const grabioOperationalCode =
+      mapPcgParentToPartyGrabio(parentPcgCode) || form.grabioOperationalCode.trim();
+    if (!grabioOperationalCode) {
+      const msg = "Unknown PCG parent — use 7010 for clients or 6111 for suppliers";
       setSaveError(msg);
       toast.error(msg);
       return;
@@ -158,11 +166,13 @@ export default function PcgClientAccountsPanel({
       await savePcgClientAccount(storeId, {
         id: form.id,
         clientCode: form.clientCode.trim(),
-        grabioOperationalCode: form.grabioOperationalCode.trim(),
-        parentPcgCode: form.parentPcgCode.trim() || mapGrabioCodeToPcg(form.grabioOperationalCode),
+        grabioOperationalCode,
+        parentPcgCode,
         name: form.name.trim() || undefined,
         nameAr: form.nameAr.trim() || undefined,
         currency: form.currency,
+        partyId: form.partyId,
+        partyType: form.partyType,
       });
       await refresh();
       toast.success(form.id ? "Client account updated" : "Client account added");
@@ -190,9 +200,7 @@ export default function PcgClientAccountsPanel({
   };
 
   const handleExportTemplate = () => {
-    const csv = pcgClientAccountsTemplateCsv(
-      grabioOptions.map((a) => ({ code: a.code, name: a.name, nameAr: a.nameAr })),
-    );
+    const csv = pcgClientAccountsTemplateCsv([]);
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
@@ -277,9 +285,9 @@ export default function PcgClientAccountsPanel({
             <TableHeader>
               <TableRow>
                 <TableHead>Account number</TableHead>
-                <TableHead className="w-[72px]">Grabio</TableHead>
                 <TableHead>Parent PCG</TableHead>
                 <TableHead>Name</TableHead>
+                <TableHead>Type</TableHead>
                 <TableHead>Cur</TableHead>
                 <TableHead className="w-[88px]" />
               </TableRow>
@@ -288,7 +296,6 @@ export default function PcgClientAccountsPanel({
               {rows.map((row) => (
                 <TableRow key={row.id}>
                   <TableCell className="font-mono text-xs tabular-nums">{row.clientCode}</TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">{row.grabioOperationalCode}</TableCell>
                   <TableCell className="font-mono text-xs">{row.parentPcgCode || "—"}</TableCell>
                   <TableCell>
                     <div>{row.name || "—"}</div>
@@ -298,6 +305,7 @@ export default function PcgClientAccountsPanel({
                       </div>
                     ) : null}
                   </TableCell>
+                  <TableCell className="text-xs capitalize">{row.partyType || "—"}</TableCell>
                   <TableCell className="text-xs">{row.currency}</TableCell>
                   <TableCell>
                     <div className="flex gap-1">
@@ -322,14 +330,23 @@ export default function PcgClientAccountsPanel({
         </div>
       )}
 
-      <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>{form.id ? "Edit working account" : "Add working account"}</DialogTitle>
-            <DialogDescription>
-              Add the account number the accountant wants to use under the selected Lebanese PCG parent.
-            </DialogDescription>
-          </DialogHeader>
+      <AccountingSideSheet
+        open={open}
+        onOpenChange={setOpen}
+        title={form.id ? "Edit working account" : "Add working account"}
+        description="Add the account number the accountant wants to use under the selected Lebanese PCG parent."
+        size="default"
+        footer={
+          <>
+            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+            <Button type="button" className="ml-2" onClick={() => void handleSave()} disabled={saving}>
+              {saving ? "Saving…" : "Save"}
+            </Button>
+          </>
+        }
+      >
           <div className="space-y-3">
             <div>
               <Label htmlFor="client-code">Account number</Label>
@@ -342,13 +359,25 @@ export default function PcgClientAccountsPanel({
               />
             </div>
             <div>
-              <Label htmlFor="parent-pcg">Parent PCG</Label>
+              <Label htmlFor="parent-pcg">Parent PCG class</Label>
+              <Select value={form.parentPcgCode || "__custom"} onValueChange={(v) => {
+                if (v === "__custom") return;
+                onParentPcgPick(v);
+              }}>
+                <SelectTrigger id="parent-pcg">
+                  <SelectValue placeholder="Select parent" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="7010">7010 — Clients (sales)</SelectItem>
+                  <SelectItem value="6111">6111 — Suppliers (purchases)</SelectItem>
+                  <SelectItem value="__custom" disabled>Or type a parent below</SelectItem>
+                </SelectContent>
+              </Select>
               <Input
-                id="parent-pcg"
-                className="font-mono"
+                className="mt-2 font-mono"
                 value={form.parentPcgCode}
-                onChange={(e) => setForm((p) => ({ ...p, parentPcgCode: e.target.value }))}
-                placeholder="5300"
+                onChange={(e) => onParentPcgPick(e.target.value)}
+                placeholder="7010 or 6111"
               />
             </div>
             <div>
@@ -383,44 +412,13 @@ export default function PcgClientAccountsPanel({
                 </SelectContent>
               </Select>
             </div>
-            <details className="rounded-md border p-3">
-              <summary className="cursor-pointer text-sm font-medium">Advanced posting link</summary>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Used by automation to connect this account number to the operational GL. Accountants normally do not
-                need to change this.
-              </p>
-              <div className="mt-3">
-                <Label>Posting account</Label>
-                <Select value={form.grabioOperationalCode} onValueChange={onGrabioPick}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select account" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {grabioOptions.map((a) => (
-                      <SelectItem key={a.id} value={a.code}>
-                        {a.code} — {a.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </details>
           </div>
           {saveError ? (
             <p className="text-sm text-destructive rounded-md border border-destructive/30 bg-destructive/5 px-3 py-2">
               {saveError}
             </p>
           ) : null}
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button type="button" onClick={() => void handleSave()} disabled={saving}>
-              {saving ? "Saving…" : "Save"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AccountingSideSheet>
     </div>
   );
 }

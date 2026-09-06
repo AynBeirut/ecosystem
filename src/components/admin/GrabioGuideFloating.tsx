@@ -55,7 +55,7 @@ const GrabioGuideFloating: React.FC = () => {
         type="button"
         onClick={() => setOpen((v) => !v)}
         className={cn(
-          'fixed z-[60] bottom-6 right-4 group',
+          'admin-shell-sally-fab fixed z-[60] bottom-6 right-4 group',
           'hover:scale-105 active:scale-95 transition-transform duration-200',
         )}
         aria-label={open ? 'Close Sally' : 'Chat with Sally'}

@@ -46,6 +46,7 @@ export type PostJournalInput = {
   currency?: string;
   voucherType?: 'JV' | 'PV' | 'RV' | 'CV';
   voucherNumber?: string;
+  voucherMeta?: Record<string, unknown>;
   lines: JournalLineInput[];
 };
 
@@ -53,9 +54,16 @@ export type LedgerAccount = {
   id: string;
   code: string;
   name: string;
+  type?: string;
+  normalBalance?: string;
+  parentCode?: string;
+  grabioOperationalCode?: string;
   isActive: boolean;
   openingBalance?: number;
   isPcgChart?: boolean;
+  partyId?: string;
+  partyType?: 'client' | 'supplier' | 'employee';
+  currency?: string;
 };
 
 export function buildSourceKey(sourceType: string, sourceId: string, event: string): string {
@@ -225,6 +233,7 @@ export async function postJournalEntry(
         ...entry,
         ...(input.voucherType ? { voucherType: input.voucherType } : {}),
         ...(voucherNumber ? { voucherNumber } : {}),
+        ...(input.voucherMeta ? { voucherMeta: input.voucherMeta } : {}),
       };
 
       tx.create(keyRef, {

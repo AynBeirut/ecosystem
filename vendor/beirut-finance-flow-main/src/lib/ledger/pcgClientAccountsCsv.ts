@@ -1,7 +1,8 @@
 import type { PcgClientAccount } from '@/types/generalLedger';
-import { mapGrabioCodeToPcg } from '@/lib/ledger/grabioToPcgMap';
+import { mapGrabioCodeToPcg, mapPcgParentToPartyGrabio } from '@/lib/ledger/grabioToPcgMap';
 
-const HEADER = 'ClientCode,Name,ArabicName,Currency,GrabioCode,ParentPcgCode';
+const HEADER = 'ClientCode,Name,ArabicName,Currency,ParentPcgCode';
+const LEGACY_HEADER = 'ClientCode,Name,ArabicName,Currency,GrabioCode,ParentPcgCode';
 
 function escapeCsv(value: string): string {
   if (/[",\n]/.test(value)) return `"${value.replace(/"/g, '""')}"`;
@@ -17,7 +18,6 @@ export function pcgClientAccountsToCsv(rows: PcgClientAccount[]): string {
         escapeCsv(row.name || ''),
         escapeCsv(row.nameAr || ''),
         escapeCsv(row.currency),
-        escapeCsv(row.grabioOperationalCode),
         escapeCsv(row.parentPcgCode || ''),
       ].join(','),
     );
@@ -69,7 +69,9 @@ export function parsePcgClientAccountsCsv(text: string): PcgClientAccountCsvRow[
     .filter(Boolean);
   if (!lines.length) return [];
 
-  const startIdx = lines[0].toLowerCase().includes('clientcode') ? 1 : 0;
+  const startIdx =
+    lines[0].toLowerCase().includes('clientcode') && lines[0].toLowerCase().includes('name') ? 1 : 0;
+  const legacy = lines[0].toLowerCase().includes('grabiocode');
   const rows: PcgClientAccountCsvRow[] = [];
 
   for (let i = startIdx; i < lines.length; i += 1) {
@@ -77,8 +79,18 @@ export function parsePcgClientAccountsCsv(text: string): PcgClientAccountCsvRow[
     const parts = parseCsvLine(lines[i]);
     if (parts.length < 2) continue;
     const clientCode = parts[0]?.trim();
-    const grabioOperationalCode = (parts[4] || parts[1] || '').trim();
-    if (!clientCode || !grabioOperationalCode) continue;
+    if (!clientCode) continue;
+
+    let parentPcgCode = '';
+    let grabioOperationalCode = '';
+    if (legacy) {
+      grabioOperationalCode = (parts[4] || '').trim();
+      parentPcgCode = parts[5]?.trim() || mapGrabioCodeToPcg(grabioOperationalCode) || '';
+    } else {
+      parentPcgCode = (parts[4] || parts[1] || '').trim();
+      grabioOperationalCode = mapPcgParentToPartyGrabio(parentPcgCode) || '';
+    }
+    if (!parentPcgCode || !grabioOperationalCode) continue;
 
     const currencyRaw = (parts[3] || 'LL').trim().toUpperCase();
     rows.push({
@@ -87,7 +99,7 @@ export function parsePcgClientAccountsCsv(text: string): PcgClientAccountCsvRow[
       nameAr: parts[2]?.trim() || undefined,
       currency: currencyRaw === 'USD' ? 'USD' : 'LL',
       grabioOperationalCode,
-      parentPcgCode: parts[5]?.trim() || mapGrabioCodeToPcg(grabioOperationalCode),
+      parentPcgCode,
     });
   }
 
@@ -95,22 +107,13 @@ export function parsePcgClientAccountsCsv(text: string): PcgClientAccountCsvRow[
 }
 
 export function pcgClientAccountsTemplateCsv(
-  accounts: Array<{ code: string; name: string; nameAr?: string }>,
+  _accounts: Array<{ code: string; name: string; nameAr?: string }>,
 ): string {
-  const lines = [HEADER, '# Fill ClientCode with your ERP codes; keep GrabioCode as-is'];
-  for (const account of accounts) {
-    const parent = mapGrabioCodeToPcg(account.code) || '';
-    lines.push(
-      [
-        escapeCsv(''),
-        escapeCsv(account.name),
-        escapeCsv(account.nameAr || ''),
-        escapeCsv('LL'),
-        escapeCsv(account.code),
-        escapeCsv(parent),
-      ].join(','),
-    );
-  }
+  const lines = [
+    HEADER,
+    '# ClientCode = your PCG working number · ParentPcgCode = 7010 (clients) or 6111 (suppliers)',
+    '# Example: 70101000001,Walk-in,,LL,7010',
+  ];
   return `${lines.join('\n')}\n`;
 }
 

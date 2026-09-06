@@ -1,6 +1,7 @@
 import * as admin from 'firebase-admin';
 import * as functions from 'firebase-functions/v2/scheduler';
 import { getFcmTokensForStoreOwner, sendFcmMulticast } from '../services/fcmTokens';
+import { isWithinWorkHours } from '../services/smartAssistantCopy';
 
 const db = admin.firestore();
 const DEFAULT_STORE_UTC_OFFSET = '+03:00';
@@ -59,6 +60,10 @@ export const checkScheduledOrderReminders = functions.onSchedule(
   },
   async () => {
     const now = new Date();
+    if (!isWithinWorkHours(now)) {
+      console.log('Scheduled order reminders skipped — outside work hours.');
+      return;
+    }
     const snap = await db
       .collection('orders')
       .where('status', 'in', ['pending', 'confirmed'])

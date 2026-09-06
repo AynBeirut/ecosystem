@@ -3,7 +3,7 @@ import { FileText, Plus, Search } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { cn, formatCurrency } from "@/lib/utils";
+import { journalEntryDisplayLabel } from "@/lib/ledger/ledgerHumanLabels";
 import { LEBANESE_PCG_CHART, type LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
 import { filterPcgChart, flattenPcgChart, kindLabel } from "@/lib/ledger/lebanesePcgTree";
 import {
@@ -15,6 +15,7 @@ import {
   displayGrabioCodeForLedgerRow,
 } from "@/lib/ledger/grabioToPcgMap";
 import { supportsArabicEntry, type AccountingLanguage } from "@/lib/grabio/accountingMode";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { JournalEntry, JournalLine, LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
 
@@ -313,7 +314,7 @@ export default function AccountantWorkspacePanel({
                         <td>Default</td>
                         <td className="text-center font-semibold">{dc}</td>
                         <td className="text-right">{amount ? formatCurrency(amount) : "—"}</td>
-                        <td>{entry.voucherNumber || entry.memo}</td>
+                        <td>{journalEntryDisplayLabel(entry)}</td>
                       </tr>
                     );
                   })}

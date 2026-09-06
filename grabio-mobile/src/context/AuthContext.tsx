@@ -10,18 +10,21 @@ import {
   getDoc,
   query,
   doc,
+  setDoc,
 } from '@react-native-firebase/firestore';
+import { isStoreTeamMember } from '../lib/storeProfileSync';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
-import { attachFcmTokenRefresh, registerPushNotifications } from '../lib/pushNotifications';
 
 interface AuthUser {
   uid: string;
   email: string | null;
   displayName: string | null;
+  teamMemberName?: string;
   isStoreOwner: boolean;
   storeId?: string;
   userRole: 'owner' | 'sub_seller' | 'sub_manager' | 'sub_delivery' | 'crm_rep' | 'buyer';
   subAccountRole?: 'sales' | 'delivery' | 'manager';
+  subAccountId?: string;
   crmRepId?: string;
 }
 
@@ -69,25 +72,50 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         let storeId: string | undefined = isStoreOwner ? storeSnap.docs[0].id : undefined;
         let userRole: AuthUser['userRole'] = 'buyer';
         let subAccountRole: AuthUser['subAccountRole'];
+        let subAccountId: string | undefined;
         let crmRepId: string | undefined;
+        let teamMemberName: string | undefined;
 
         if (isStoreOwner) {
           userRole = 'owner';
         } else {
-          // Check if sub-account user
           try {
             const userDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
             if (userDoc.exists()) {
               const userData = userDoc.data() as {
                 role?: string;
+                name?: string;
                 subAccountRole?: AuthUser['subAccountRole'];
                 subAccountId?: string;
                 storeId?: string;
+                activeStoreId?: string;
                 crmRepId?: string;
               };
-              if (userData.role === 'sub_account') {
-                subAccountRole = userData.subAccountRole;
-                storeId = userData.storeId || userData.subAccountId;
+              teamMemberName = String(userData.name || '').trim() || undefined;
+              if (userData.role === 'admin') {
+                storeId =
+                  (typeof userData.storeId === 'string' && userData.storeId.trim()) ||
+                  (typeof userData.activeStoreId === 'string' && userData.activeStoreId.trim()) ||
+                  undefined;
+                userRole = 'owner';
+              } else if (userData.role === 'sub_account') {
+                subAccountId = userData.subAccountId;
+                if (subAccountId) {
+                  const subDoc = await getDoc(doc(db, 'subAccounts', subAccountId));
+                  if (subDoc.exists()) {
+                    const sub = subDoc.data() as { storeId?: string; role?: string; name?: string };
+                    if (typeof sub.storeId === 'string' && sub.storeId.trim()) {
+                      storeId = sub.storeId.trim();
+                    }
+                    subAccountRole = (sub.role || userData.subAccountRole) as AuthUser['subAccountRole'];
+                    const subName = String(sub.name || '').trim();
+                    if (subName) teamMemberName = subName;
+                  }
+                }
+                if (!storeId && typeof userData.storeId === 'string' && userData.storeId.trim()) {
+                  storeId = userData.storeId.trim();
+                }
+                subAccountRole = subAccountRole || userData.subAccountRole;
                 if (subAccountRole === 'sales') userRole = 'sub_seller';
                 else if (subAccountRole === 'manager') userRole = 'sub_manager';
                 else if (subAccountRole === 'delivery') userRole = 'sub_delivery';
@@ -98,24 +126,57 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 crmRepId = userData.crmRepId;
               }
             }
+
+            if (userRole === 'buyer') {
+              const sellerDoc = await getDoc(doc(db, 'sellers', firebaseUser.uid));
+              if (sellerDoc.exists()) {
+                const sellerData = sellerDoc.data() as {
+                  role?: string;
+                  isSeller?: boolean;
+                  storeId?: string;
+                };
+                if (sellerData.role === 'admin' || sellerData.isSeller === true) {
+                  storeId = sellerData.storeId || storeId;
+                  userRole = 'owner';
+                }
+              }
+            }
           } catch {
             // Ignore sub-account lookup failures and continue as buyer
           }
+        }
+
+        if (userRole === 'owner' && !teamMemberName) {
+          try {
+            const ownerDoc = await getDoc(doc(db, 'users', firebaseUser.uid));
+            if (ownerDoc.exists()) {
+              const ownerData = ownerDoc.data() as { name?: string };
+              teamMemberName = String(ownerData.name || '').trim() || undefined;
+            }
+          } catch {
+            // optional
+          }
+        }
+        if (!teamMemberName && firebaseUser.email) {
+          teamMemberName = firebaseUser.email.split('@')[0];
         }
 
         setUser({
           uid: firebaseUser.uid,
           email: firebaseUser.email,
           displayName: firebaseUser.displayName,
+          teamMemberName,
           isStoreOwner,
           storeId,
           userRole,
           subAccountRole,
+          subAccountId,
           crmRepId,
         });
 
-        void registerPushNotifications(firebaseUser.uid, storeId);
-        attachFcmTokenRefresh(firebaseUser.uid, storeId);
+        if (isStoreTeamMember(userRole)) {
+          void setDoc(doc(db, 'users', firebaseUser.uid), { notifPref: 'all' }, { merge: true });
+        }
       } else {
         setUser(null);
         // Do NOT reset isGuest here — guest mode is set intentionally by the user

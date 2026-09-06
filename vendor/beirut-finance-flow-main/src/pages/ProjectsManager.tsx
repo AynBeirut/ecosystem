@@ -13,9 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { Plus, FolderOpen, Calendar, DollarSign, Trash2, FileText, AlertTriangle, RefreshCw } from "lucide-react";
-import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
-} from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import type { InvoiceDraftFromProject } from "@/context/AppContext";
 
 interface Project {
@@ -328,14 +326,21 @@ const ProjectsManager = () => {
           </TabsContent>
         </Tabs>
 
-        <Dialog open={!!draft} onOpenChange={(o) => !o && setDraft(null)}>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>Invoice draft from project: {draftProjectName}</DialogTitle>
-              <DialogDescription>
-                Review the prefilled time entries before creating the invoice.
-              </DialogDescription>
-            </DialogHeader>
+        <AccountingSideSheet
+          open={!!draft}
+          onOpenChange={(o) => !o && setDraft(null)}
+          title={draftProjectName ? `Invoice draft from project: ${draftProjectName}` : 'Invoice draft'}
+          description="Review the prefilled time entries before creating the invoice."
+          size="form"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setDraft(null)} disabled={creatingInvoice}>Cancel</Button>
+              <Button className="ml-2" onClick={handleConfirmCreateInvoice} disabled={creatingInvoice}>
+                {creatingInvoice ? "Creating..." : "Create Invoice"}
+              </Button>
+            </>
+          }
+        >
             {draft && (
               <div className="space-y-3">
                 <div className="text-sm">
@@ -365,14 +370,7 @@ const ProjectsManager = () => {
                 </div>
               </div>
             )}
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDraft(null)} disabled={creatingInvoice}>Cancel</Button>
-              <Button onClick={handleConfirmCreateInvoice} disabled={creatingInvoice}>
-                {creatingInvoice ? "Creating..." : "Create Invoice"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
       </div>
     </AppLayout>
   );

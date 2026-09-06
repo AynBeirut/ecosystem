@@ -7,6 +7,7 @@ import {
   autoPostOrderSaleRecognized,
   autoPostOrderSaleReversal,
   autoPostPayrollPayment,
+  postPayrollPaymentEntry,
   autoPostPurchaseReceived,
   autoPostProductionComplete,
   autoPostProductionReversal,
@@ -17,9 +18,10 @@ import {
   type ProductionReversalInput,
   type OrderCogsLine,
   type PlatformOrderInput,
+  type PayrollPaymentInput,
 } from './platformAutoPosting';
 
-export type { OrderCogsLine, PlatformOrderInput };
+export type { OrderCogsLine, PlatformOrderInput, PayrollPaymentInput };
 
 function wrapGl<T>(scope: string, fn: () => Promise<T>): Promise<T> {
   return fn().catch((err) => {
@@ -99,14 +101,25 @@ export async function glPostProductionReversal(
 
 export async function glPostPayrollPayment(
   storeId: string,
-  paymentId: string,
-  totalAmount: number,
-  paymentDate: string,
+  payment: PayrollPaymentInput | string,
+  totalAmount?: number,
+  paymentDate?: string,
   paymentMethod = 'bank',
 ): Promise<void> {
   await wrapGl('payroll', async () => {
     const accounts = await ensureDefaultChartOfAccounts(storeId);
-    await autoPostPayrollPayment(storeId, paymentId, totalAmount, paymentDate, paymentMethod, accounts);
+    if (typeof payment === 'string') {
+      await autoPostPayrollPayment(
+        storeId,
+        payment,
+        totalAmount || 0,
+        paymentDate || new Date().toISOString(),
+        paymentMethod,
+        accounts,
+      );
+      return;
+    }
+    await postPayrollPaymentEntry(storeId, payment, accounts);
   });
 }
 

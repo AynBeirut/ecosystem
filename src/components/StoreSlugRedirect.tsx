@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
-import { useLocation, useParams } from 'react-router-dom';
+import { useLocation, useParams, Navigate } from 'react-router-dom';
 import PublicPageFallback from '@/components/public/PublicPageFallback';
+import { PLATFORM_ROUTE_SLUGS } from '@/lib/platformHosts';
 import { buildStorePublicUrl } from '@/lib/storeUrls';
 
 /** Redirect legacy grabio.space/{slug} URLs to {slug}.grabio.space */
@@ -13,9 +14,11 @@ const StoreSlugRedirect: React.FC = () => {
     storeSlug?: string;
   }>();
 
+  const storeKey = slug || storeSlug;
+  const isReserved = Boolean(storeKey && PLATFORM_ROUTE_SLUGS.has(storeKey.toLowerCase()));
+
   useEffect(() => {
-    const storeKey = slug || storeSlug;
-    if (!storeKey) return;
+    if (isReserved || !storeKey) return;
 
     let path = '/';
     if (productSlug) path = `/product/${productSlug}`;
@@ -23,7 +26,11 @@ const StoreSlugRedirect: React.FC = () => {
     else if (location.pathname.includes('/products')) path = '/products';
 
     window.location.replace(buildStorePublicUrl(storeKey, path));
-  }, [slug, storeSlug, categorySlug, productSlug, location.pathname]);
+  }, [storeKey, isReserved, categorySlug, productSlug, location.pathname]);
+
+  if (isReserved) {
+    return <Navigate to="/" replace />;
+  }
 
   return <PublicPageFallback />;
 };

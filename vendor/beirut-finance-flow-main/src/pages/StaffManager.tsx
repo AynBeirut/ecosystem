@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -189,17 +189,22 @@ const StaffManager = () => {
             <p className="text-muted-foreground">Manage staff members and payments</p>
           </div>
           
-          <Dialog open={isAddStaffOpen} onOpenChange={setIsAddStaffOpen}>
-            <DialogTrigger asChild>
-              <Button>
-                <Plus className="mr-2 h-4 w-4" /> Add Staff
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add Staff Member</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleAddStaff} className="space-y-4">
+          <Button onClick={() => setIsAddStaffOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" /> Add Staff
+          </Button>
+          <AccountingSideSheet
+            open={isAddStaffOpen}
+            onOpenChange={setIsAddStaffOpen}
+            title="Add Staff Member"
+            size="default"
+            footer={
+              <>
+                <Button type="button" variant="outline" onClick={() => setIsAddStaffOpen(false)}>Cancel</Button>
+                <Button type="submit" form="add-staff-form" className="ml-2">Add Staff</Button>
+              </>
+            }
+          >
+              <form id="add-staff-form" onSubmit={handleAddStaff} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <Label htmlFor="name">Name *</Label>
@@ -278,16 +283,8 @@ const StaffManager = () => {
                     </div>
                   )}
                 </div>
-                
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit">Add Staff</Button>
-                </DialogFooter>
               </form>
-            </DialogContent>
-          </Dialog>
+          </AccountingSideSheet>
         </div>
 
         {/* Summary Cards */}
@@ -460,14 +457,22 @@ const StaffManager = () => {
           </TabsContent>
         </Tabs>
 
-        {/* Create Payment Dialog */}
-        <Dialog open={isPaymentOpen} onOpenChange={setIsPaymentOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create Payment for {selectedStaff?.name}</DialogTitle>
-            </DialogHeader>
+        <AccountingSideSheet
+          open={isPaymentOpen}
+          onOpenChange={setIsPaymentOpen}
+          title={selectedStaff ? `Create Payment for ${selectedStaff.name}` : 'Create Payment'}
+          size="default"
+          footer={
+            selectedStaff ? (
+              <>
+                <Button type="button" variant="outline" onClick={() => setIsPaymentOpen(false)}>Cancel</Button>
+                <Button type="submit" form="staff-payment-form" className="ml-2">Create Payment</Button>
+              </>
+            ) : undefined
+          }
+        >
             {selectedStaff && (
-              <form onSubmit={handleCreatePayment} className="space-y-4">
+              <form id="staff-payment-form" onSubmit={handleCreatePayment} className="space-y-4">
                 <div className="p-4 bg-muted rounded-lg">
                   <p className="font-medium">{selectedStaff.name} - {selectedStaff.role}</p>
                   <p className="text-sm text-muted-foreground">
@@ -546,17 +551,9 @@ const StaffManager = () => {
                     </Select>
                   </div>
                 </div>
-                
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit">Create Payment</Button>
-                </DialogFooter>
               </form>
             )}
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
       </div>
     </AppLayout>
   );

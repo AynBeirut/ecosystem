@@ -4,6 +4,7 @@ import {
   accountsInCodeRange,
   isAccountInCodeRange,
   isChartClass17Code,
+  normalizeRangeEndpoint,
 } from '@/lib/ledger/accountCodeRange';
 import type { LedgerAccount } from '@/types/generalLedger';
 
@@ -51,5 +52,10 @@ describe('accountCodeRange', () => {
     expect(isAccountInCodeRange('6011', '601', '609')).toBe(true);
     expect(isAccountInCodeRange('6099', '601', '609')).toBe(true);
     expect(isAccountInCodeRange('6100', '601', '609')).toBe(false);
+  });
+
+  it('normalizes comma-separated PCG parent codes to a single bound', () => {
+    expect(normalizeRangeEndpoint('53001000001, 53001000002', 'from')).toBe('53001000001');
+    expect(normalizeRangeEndpoint('53001000001, 53001000002', 'to')).toBe('53001000002');
   });
 });

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -200,17 +200,22 @@ const ExpenseManager = () => {
             <Button variant="outline" onClick={() => setOcrOpen(true)}>
               <ScanLine className="mr-2 h-4 w-4" /> Scan receipt
             </Button>
-            <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-              <DialogTrigger asChild>
-                <Button>
-                  <Plus className="mr-2 h-4 w-4" /> Add Expense
-                </Button>
-              </DialogTrigger>
-            <DialogContent className="max-w-lg">
-              <DialogHeader>
-                <DialogTitle>Create New Expense</DialogTitle>
-              </DialogHeader>
-              <form onSubmit={handleCreate} className="space-y-4">
+            <Button onClick={() => setIsCreateOpen(true)}>
+              <Plus className="mr-2 h-4 w-4" /> Add Expense
+            </Button>
+            <AccountingSideSheet
+              open={isCreateOpen}
+              onOpenChange={setIsCreateOpen}
+              title="Create New Expense"
+              size="default"
+              footer={
+                <>
+                  <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
+                  <Button type="submit" form="create-expense-form" className="ml-2">Create Expense</Button>
+                </>
+              }
+            >
+              <form id="create-expense-form" onSubmit={handleCreate} className="space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <Label htmlFor="name">Expense Name *</Label>
@@ -326,16 +331,8 @@ const ExpenseManager = () => {
                     />
                   </div>
                 </div>
-                
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button type="button" variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button type="submit">Create Expense</Button>
-                </DialogFooter>
               </form>
-            </DialogContent>
-          </Dialog>
+            </AccountingSideSheet>
           </div>
         </div>
 
@@ -476,12 +473,20 @@ const ExpenseManager = () => {
           </CardContent>
         </Card>
 
-        {/* Pay Dialog */}
-        <Dialog open={isPayOpen} onOpenChange={setIsPayOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Record Payment</DialogTitle>
-            </DialogHeader>
+        <AccountingSideSheet
+          open={isPayOpen}
+          onOpenChange={setIsPayOpen}
+          title="Record Payment"
+          size="default"
+          footer={
+            selectedExpense ? (
+              <>
+                <Button variant="outline" onClick={() => setIsPayOpen(false)}>Cancel</Button>
+                <Button className="ml-2" onClick={handlePay}>Confirm Payment</Button>
+              </>
+            ) : undefined
+          }
+        >
             {selectedExpense && (
               <div className="space-y-4">
                 <div className="p-4 bg-muted rounded-lg">
@@ -517,17 +522,9 @@ const ExpenseManager = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                
-                <DialogFooter>
-                  <DialogClose asChild>
-                    <Button variant="outline">Cancel</Button>
-                  </DialogClose>
-                  <Button onClick={handlePay}>Confirm Payment</Button>
-                </DialogFooter>
               </div>
             )}
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
       </div>
     </FinancePageShell>
   );

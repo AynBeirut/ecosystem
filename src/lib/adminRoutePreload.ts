@@ -29,7 +29,7 @@ const ROUTE_PRELOADERS: Record<string, Preloader> = {
   '/admin/cash-collection': () => import('@/pages/admin/AdminBankReconciliation'),
   '/admin/delivery-wallet': () => import('@/pages/admin/AdminDeliveryWallet'),
   '/admin/bank-reconciliation': () => import('@/pages/admin/AdminBankReconciliation'),
-  '/admin/crm/pipeline': () => import('@/pages/admin/crm/CrmPipeline'),
+  '/admin/crm/map': () => import('@/pages/admin/crm/CrmMap'),
   '/subscription': () => import('@/pages/admin/Subscription'),
 };
 
@@ -44,7 +44,7 @@ export function preloadAdminRoute(path: string): void {
       : normalized.startsWith('/admin/invoice-manager')
         ? ROUTE_PRELOADERS['/admin/invoice-manager']
         : normalized.startsWith('/admin/crm')
-          ? ROUTE_PRELOADERS['/admin/crm/pipeline']
+          ? ROUTE_PRELOADERS['/admin/crm/map']
           : undefined);
 
   if (!loader || preloaded.has(normalized)) return;

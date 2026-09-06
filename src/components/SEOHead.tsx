@@ -21,6 +21,19 @@ interface SEOHeadProps {
 const DEFAULT_DESCRIPTION = 'Grabio – Discover and shop from local stores in Lebanon. Browse products, place orders, and support local businesses.';
 const DEFAULT_IMAGE = 'https://grabio.space/og-image.png';
 const SITE_NAME = 'Grabio';
+const SITE_ORIGIN = 'https://grabio.space';
+
+function resolveCanonicalUrl(url?: string): string {
+  if (!url) {
+    if (typeof window !== 'undefined') {
+      return `${window.location.origin}${window.location.pathname}`;
+    }
+    return SITE_ORIGIN;
+  }
+  if (url.startsWith('http://') || url.startsWith('https://')) return url;
+  const path = url.startsWith('/') ? url : `/${url}`;
+  return `${SITE_ORIGIN}${path}`;
+}
 
 const SEOHead: React.FC<SEOHeadProps> = ({
   title,
@@ -40,7 +53,7 @@ const SEOHead: React.FC<SEOHeadProps> = ({
 }) => {
   const safeTitle = String(title || siteName || SITE_NAME);
   const fullTitle = safeTitle.includes(SITE_NAME) ? safeTitle : `${safeTitle} | ${SITE_NAME}`;
-  const canonicalUrl = url || (typeof window !== 'undefined' ? window.location.href : 'https://grabio.space');
+  const canonicalUrl = resolveCanonicalUrl(url);
   const robotsContent = `${robotsIndex ? 'index' : 'noindex'}, ${robotsFollow ? 'follow' : 'nofollow'}`;
 
   const fallbackSchema =

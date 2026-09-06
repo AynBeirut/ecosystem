@@ -1,13 +1,20 @@
 import { useEffect, useRef } from 'react';
 import firestore from '@react-native-firebase/firestore';
-import { showLocalPush } from '../lib/pushNotifications';
+import { useAuth } from '../context/AuthContext';
+import { showAssistantPush } from '../lib/pushNotifications';
+import {
+  buildOrderAlert,
+  isWithinWorkHours,
+  mapUserRoleToAssistant,
+} from '../lib/smartAssistantNotifications';
 
-/** Real-time order alerts while app is running — backup when FCM is delayed. */
+/** Real-time order alerts — personalized, work hours only. */
 export function useStoreOrderAlerts(storeId?: string) {
+  const { user } = useAuth();
   const primedRef = useRef(false);
 
   useEffect(() => {
-    if (!storeId) return;
+    if (!storeId || !user) return;
 
     const unsub = firestore()
       .collection('orders')
@@ -22,16 +29,23 @@ export function useStoreOrderAlerts(storeId?: string) {
           return;
         }
 
+        if (!isWithinWorkHours()) return;
+
+        const role = mapUserRoleToAssistant(user.userRole, user.subAccountRole);
+        const displayName = user.teamMemberName || user.displayName || user.email || 'there';
+
         snap.docChanges().forEach((change) => {
           if (change.type !== 'added') return;
           const data = change.doc.data();
           const name = String(data.customerName || 'Customer');
           const total = Number(data.total || 0).toFixed(2);
           const currency = String(data.currency || 'USD');
-          void showLocalPush('🛒 New order', `${name} · ${currency} ${total}`);
+          const totalLabel = `${currency} ${total}`;
+          const { title, body } = buildOrderAlert(displayName, name, totalLabel, role);
+          void showAssistantPush(title, body, { type: 'new_order', orderId: change.doc.id });
         });
       });
 
     return unsub;
-  }, [storeId]);
+  }, [storeId, user?.uid, user?.userRole, user?.subAccountRole, user?.teamMemberName, user?.displayName, user?.email]);
 }

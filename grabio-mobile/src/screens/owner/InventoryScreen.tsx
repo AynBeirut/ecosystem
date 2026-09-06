@@ -1,7 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, TextInput, Image, ScrollView, SectionList, RefreshControl,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, TextInput, Image, ScrollView, SectionList, RefreshControl,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useNavigation } from '@react-navigation/native';
@@ -9,6 +9,11 @@ import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Product } from '../../types';
 import { useAuth } from '../../context/AuthContext';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
+import { canAccessPurchasing, canManageProducts } from '../../lib/ownerAccess';
+import {
+  applyDisplayStock,
+  FinishedGoodsStockMap,
+} from '../../lib/inventoryStock';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
 
@@ -30,6 +35,7 @@ export default function InventoryScreen() {
   const { user } = useAuth();
   const navigation = useNavigation<Nav>();
   const [products, setProducts] = useState<Product[]>([]);
+  const [fgStock, setFgStock] = useState<FinishedGoodsStockMap>({});
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(true);
   const [loadingPurchases, setLoadingPurchases] = useState(true);
@@ -46,6 +52,8 @@ export default function InventoryScreen() {
   const [cost, setCost] = useState('');
   const [savingPurchase, setSavingPurchase] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const showPurchasing = canAccessPurchasing(user?.userRole);
+  const showProductAdmin = canManageProducts(user?.userRole);
 
   useEffect(() => {
     if (!user?.storeId) { setLoadingProducts(false); setLoadingPurchases(false); return; }
@@ -60,8 +68,30 @@ export default function InventoryScreen() {
         setLoadingProducts(false);
       });
 
-    return () => { unsubProd(); };
+    const unsubFg = firestore()
+      .collection('finishedGoodsInventory')
+      .where('storeId', '==', user.storeId)
+      .onSnapshot((snap) => {
+        const map: FinishedGoodsStockMap = {};
+        snap?.docs.forEach((doc) => {
+          const data = doc.data();
+          const key = String(data.productId || data.composedProductId || '').trim();
+          if (!key) return;
+          const balance =
+            typeof data.currentBalance === 'number'
+              ? data.currentBalance
+              : typeof data.currentStock === 'number'
+                ? data.currentStock
+                : undefined;
+          if (balance !== undefined) map[key] = balance;
+        });
+        setFgStock(map);
+      });
+
+    return () => { unsubProd(); unsubFg(); };
   }, [user?.storeId]);
+
+  const displayProducts = useMemo(() => applyDisplayStock(products, fgStock), [products, fgStock]);
 
   useEffect(() => {
     if (!user?.storeId) return;
@@ -200,28 +230,32 @@ export default function InventoryScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       <ScrollView contentContainerStyle={{ paddingBottom: 40 }} keyboardShouldPersistTaps="handled"
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); fetchPurchases(); setTimeout(() => setRefreshing(false), 1500); }} colors={[COLORS.primary]} />}>
         {/* Section: Stock */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>📦 Stock</Text>
+          {showProductAdmin ? (
           <TouchableOpacity
             style={styles.addBtn}
             onPress={() => navigation.navigate('AddEditProduct', {})}
           >
             <Text style={styles.addBtnText}>+ Add Product</Text>
           </TouchableOpacity>
+          ) : null}
         </View>
 
         {loadingProducts ? (
           <ActivityIndicator size="large" color={COLORS.primary} style={{ marginVertical: 20 }} />
-        ) : products.length === 0 ? (
+        ) : displayProducts.length === 0 ? (
           <Text style={styles.empty}>No products yet</Text>
         ) : (
-          products.map((p) => <View key={p.id}>{renderProduct({ item: p })}</View>)
+          displayProducts.map((p) => <View key={p.id}>{renderProduct({ item: p })}</View>)
         )}
 
+        {showPurchasing ? (
+          <>
         {/* Section: Purchases */}
         <View style={styles.sectionHeader}>
           <Text style={styles.sectionTitle}>🛒 Purchases</Text>
@@ -276,8 +310,10 @@ export default function InventoryScreen() {
             {showAllPurchases ? '← Show Today Only' : '📅 Load Last 30 Days'}
           </Text>
         </TouchableOpacity>
+          </>
+        ) : null}
       </ScrollView>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

@@ -16,6 +16,7 @@ import {
   autoPostProductionWipCompleteFlow,
   type ProductionReversalInput,
   autoPostPayrollPayment,
+  postPayrollPaymentEntry,
   autoPostCashCollectionDeposit,
   autoPostDeliveryWalletCodCollected,
   autoPostDeliveryWalletSettlement,
@@ -175,10 +176,30 @@ export async function glPostExpensePayment(
   expense: Expense,
   amount: number,
   paymentMethod: PaymentMethod,
+  suppliers: Array<{ id: string; name: string }> = [],
 ): Promise<void> {
   try {
     const accounts = await ensureDefaultChartOfAccounts(storeId);
-    await autoPostExpensePaid(storeId, expense, amount, paymentMethod, accounts);
+    let supplierId = expense.supplierId;
+    let vendorName = expense.vendorName || expense.name;
+    if (!supplierId && suppliers.length) {
+      const hay = `${expense.vendorName || ''} ${expense.name || ''} ${expense.description || ''}`.toLowerCase();
+      const match = suppliers.find((row) => {
+        const name = row.name.trim().toLowerCase();
+        return name.length > 2 && hay.includes(name);
+      });
+      if (match) {
+        supplierId = match.id;
+        vendorName = match.name;
+      }
+    }
+    await autoPostExpensePaid(
+      storeId,
+      supplierId ? { ...expense, supplierId, vendorName } : expense,
+      amount,
+      paymentMethod,
+      accounts,
+    );
   } catch (err) {
     logGlError('expense-paid', err);
   }
@@ -329,14 +350,25 @@ export async function glPostProductionReversal(
 
 export async function glPostPayrollPayment(
   storeId: string,
-  paymentId: string,
-  totalAmount: number,
-  paymentDate: string,
+  payment: import('@/lib/ledger/payrollPosting').PayrollPaymentInput | string,
+  totalAmount?: number,
+  paymentDate?: string,
   paymentMethod = 'bank',
 ): Promise<void> {
   try {
     const accounts = await ensureDefaultChartOfAccounts(storeId);
-    await autoPostPayrollPayment(storeId, paymentId, totalAmount, paymentDate, paymentMethod, accounts);
+    if (typeof payment === 'string') {
+      await autoPostPayrollPayment(
+        storeId,
+        payment,
+        totalAmount || 0,
+        paymentDate || new Date().toISOString(),
+        paymentMethod,
+        accounts,
+      );
+      return;
+    }
+    await postPayrollPaymentEntry(storeId, payment, accounts);
   } catch (err) {
     logGlError('payroll', err);
   }

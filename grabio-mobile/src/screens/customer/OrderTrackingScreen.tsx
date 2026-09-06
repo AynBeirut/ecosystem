@@ -3,10 +3,15 @@ import { View, Text, StyleSheet, ActivityIndicator, ScrollView } from 'react-nat
 import { getFirestore, doc, onSnapshot } from '@react-native-firebase/firestore';
 import { useRoute, RouteProp } from '@react-navigation/native';
 import { RootStackParamList, Order } from '../../types';
+import {
+  getTrackingSteps,
+  resolveTrackingStepIndex,
+  usesDirectOrderFlow,
+} from '../../lib/orderStatusFlow';
+import firestore from '@react-native-firebase/firestore';
 
 type Route = RouteProp<RootStackParamList, 'OrderTracking'>;
 
-const STATUS_STEPS = ['pending', 'confirmed', 'processing', 'ready', 'delivered'];
 const STATUS_LABELS: Record<string, string> = {
   pending: 'Order Placed',
   confirmed: 'Confirmed',
@@ -25,6 +30,7 @@ export default function OrderTrackingScreen() {
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [skipKitchenStatuses, setSkipKitchenStatuses] = useState(false);
 
   useEffect(() => {
     const db = getFirestore();
@@ -61,12 +67,29 @@ export default function OrderTrackingScreen() {
     };
   }, [params.orderId]);
 
+  useEffect(() => {
+    if (!order?.storeId) return;
+    void firestore()
+      .collection('storeProfiles')
+      .doc(order.storeId)
+      .get()
+      .then((snap) => {
+        setSkipKitchenStatuses(snap.data()?.deliverySettings?.skipKitchenStatuses === true);
+      })
+      .catch(() => setSkipKitchenStatuses(false));
+  }, [order?.storeId]);
+
   if (loading) return <ActivityIndicator size="large" color="#6366f1" style={{ marginTop: 40 }} />;
   if (error) return <View style={styles.center}><Text style={{ color: '#ef4444', textAlign: 'center', padding: 20 }}>⚠️ {error}</Text></View>;
   if (!order) return <View style={styles.center}><Text>Order not found</Text></View>;
 
+  const orderFlowSettings = { skipKitchenStatuses };
+  const statusSteps = getTrackingSteps(order.storeId, orderFlowSettings);
   const isTerminal = order.status === 'cancelled' || order.status === 'returned';
-  const currentStep = isTerminal ? -1 : STATUS_STEPS.indexOf(order.status);
+  const currentStep = isTerminal
+    ? -1
+    : resolveTrackingStepIndex(order.status, order.storeId, orderFlowSettings);
+  const directFlow = usesDirectOrderFlow(order.storeId, orderFlowSettings);
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={{ padding: 20 }}>
@@ -83,18 +106,18 @@ export default function OrderTrackingScreen() {
         </View>
       ) : (
         <View style={styles.steps}>
-          {STATUS_STEPS.map((step, idx) => (
+          {statusSteps.map((step, idx) => (
             <View key={step} style={styles.step}>
               <View style={[styles.stepDot, idx <= currentStep ? styles.stepDotActive : {}]}>
                 <Text style={styles.stepIcon}>
                   {idx <= currentStep ? STATUS_ICONS[step] : '○'}
                 </Text>
               </View>
-              {idx < STATUS_STEPS.length - 1 && (
+              {idx < statusSteps.length - 1 && (
                 <View style={[styles.stepLine, idx < currentStep ? styles.stepLineActive : {}]} />
               )}
               <Text style={[styles.stepLabel, idx <= currentStep ? styles.stepLabelActive : {}]}>
-                {STATUS_LABELS[step]}
+                {directFlow && step === 'confirmed' ? 'Confirmed' : STATUS_LABELS[step]}
               </Text>
             </View>
           ))}

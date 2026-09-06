@@ -1,3 +1,4 @@
+import ReportAmountCell from '@/components/ReportAmountCell';
 import type { AccountRangeStatementReport, AccountRangeStatementSection, LedgerAccount } from '@/types/generalLedger';
 import { normalizeLedgerCurrency, type ReportCurrencyMode } from '@/lib/ledger/formatLedgerAmount';
 import {
@@ -6,6 +7,7 @@ import {
   formatSoaDate,
   formatSoaPlainAmount,
   sayAccountCurrency,
+  soaBalanceSide,
   soaCurrencyCaption,
   soaDisplayCurrency,
   soaLineDescription,
@@ -18,6 +20,7 @@ type Props = {
   section: AccountRangeStatementSection;
   account?: LedgerAccount;
   accountName: string;
+  accountDisplayCode?: string;
   storeCurrency: string;
   currencyMode: ReportCurrencyMode;
   usdToLbp?: number;
@@ -31,6 +34,7 @@ export default function SoaAccountDocument({
   section,
   account,
   accountName,
+  accountDisplayCode,
   storeCurrency,
   currencyMode,
   usdToLbp,
@@ -38,13 +42,47 @@ export default function SoaAccountDocument({
   onOpenEntry,
   compact,
 }: Props) {
+  const isBoth = currencyMode === 'both';
   const displayCcy = soaDisplayCurrency(storeCurrency, currencyMode, account?.currency);
   const convert = (n: number) => convertSoaAmount(n, storeCurrency, currencyMode, usdToLbp);
   const num = (n: number) => formatSoaPlainAmount(convert(n), displayCcy);
-  const cell = (n: number) => (n ? num(n) : '');
-  const bal = (n: number) => formatSoaBalance(convert(n), displayCcy);
+  const cell = (n: number) => {
+    if (!n) return '';
+    if (isBoth) {
+      return (
+        <ReportAmountCell
+          amount={n}
+          storeCurrency={storeCurrency}
+          mode="both"
+          usdToLbp={usdToLbp}
+          empty=""
+        />
+      );
+    }
+    return num(n);
+  };
+  const balanceCell = (net: number) => {
+    if (!net) return formatSoaPlainAmount(0, displayCcy);
+    if (isBoth) {
+      const side = soaBalanceSide(net);
+      return (
+        <span className="inline-flex flex-col items-end leading-tight">
+          <ReportAmountCell
+            amount={Math.abs(net)}
+            storeCurrency={storeCurrency}
+            mode="both"
+            usdToLbp={usdToLbp}
+            empty=""
+          />
+          {side ? <span className="text-[10px] font-semibold">{side}</span> : null}
+        </span>
+      );
+    }
+    return formatSoaBalance(convert(net), displayCcy);
+  };
   const totals = soaSectionTotals(section);
   const nativeCcy = normalizeLedgerCurrency(account?.currency || storeCurrency);
+  const displayCode = accountDisplayCode || section.accountCode;
   const caption = currencyMode === 'both' || displayCcy !== nativeCcy
     ? soaCurrencyCaption(currencyMode)
     : 'In Account Currency';
@@ -55,18 +93,18 @@ export default function SoaAccountDocument({
         <div className="space-y-0.5">
           {companyName ? <p className="font-semibold uppercase tracking-wide">{companyName}</p> : null}
           <p>
-            <span className="font-semibold">Code:</span> <span className="font-mono">{section.accountCode}</span>
+            <span className="font-semibold">Code:</span> <span className="font-mono">{displayCode}</span>
           </p>
           <p>
             <span className="font-semibold">Name:</span> {accountName}
           </p>
           <p>
-            <span className="font-semibold">Currency:</span> {displayCcy}
+            <span className="font-semibold">Currency:</span> {isBoth ? 'USD + LBP' : displayCcy}
           </p>
         </div>
         <div className="text-right">
           <p className="text-base font-bold uppercase tracking-wide">Statement Of Account</p>
-          <p className="font-mono font-semibold">{section.accountCode}</p>
+          <p className="font-mono font-semibold">{displayCode}</p>
           <p className="text-[11px] italic">{caption}</p>
           <p className="mt-1">
             From : {formatSoaDate(report.startDate)} &nbsp; To : {formatSoaDate(report.endDate)}
@@ -90,7 +128,7 @@ export default function SoaAccountDocument({
             <td className="py-1 pr-2 font-semibold">B/F</td>
             <td className="py-1 text-right tabular-nums">{cell(section.openingDebit)}</td>
             <td className="py-1 text-right tabular-nums">{cell(section.openingCredit)}</td>
-            <td className="py-1 text-right tabular-nums font-medium">{bal(section.openingBalance)}</td>
+            <td className="py-1 text-right tabular-nums font-medium">{balanceCell(section.openingBalance)}</td>
           </tr>
           {section.rows.map((row, idx) => {
             const desc = soaLineDescription(row);
@@ -112,7 +150,7 @@ export default function SoaAccountDocument({
                 </td>
                 <td className="py-1 text-right tabular-nums">{cell(row.debit)}</td>
                 <td className="py-1 text-right tabular-nums">{cell(row.credit)}</td>
-                <td className="py-1 text-right tabular-nums">{bal(row.runningBalance)}</td>
+                <td className="py-1 text-right tabular-nums">{balanceCell(row.runningBalance)}</td>
               </tr>
             );
           })}
@@ -120,9 +158,9 @@ export default function SoaAccountDocument({
             <td className="py-2" colSpan={2}>
               Total
             </td>
-            <td className="py-2 text-right tabular-nums">{num(totals.totalDebit)}</td>
-            <td className="py-2 text-right tabular-nums">{num(totals.totalCredit)}</td>
-            <td className="py-2 text-right tabular-nums">{bal(section.closingBalance)}</td>
+            <td className="py-2 text-right tabular-nums">{cell(totals.totalDebit)}</td>
+            <td className="py-2 text-right tabular-nums">{cell(totals.totalCredit)}</td>
+            <td className="py-2 text-right tabular-nums">{balanceCell(section.closingBalance)}</td>
           </tr>
         </tbody>
       </table>

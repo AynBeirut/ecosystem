@@ -10,6 +10,7 @@ export type SeoEventName =
   | 'page_view'
   | 'unique_visit'
   | 'cta_click'
+  | 'demo_start'
   | 'click_whatsapp'
   | 'click_call'
   | 'lead_submit';
@@ -122,6 +123,22 @@ export function trackLeadSubmit(leadData: LeadData, userId?: string | null): voi
 
 export const trackCTAClick = (label: string, userId?: string | null): void =>
   trackSEOEvent('cta_click', { userId, label });
+
+/** Fires when visitor clicks "Try the demo" on a vertical landing page. */
+export function trackDemoStart(
+  vertical: { slug: string; demoStoreSlug: string; label: string },
+  userId?: string | null,
+): void {
+  trackSEOEvent('demo_start', {
+    userId,
+    label: `try_demo_${vertical.slug}`,
+    extra: {
+      vertical: vertical.slug,
+      demo_store: vertical.demoStoreSlug,
+      landing_path: `/demo/${vertical.slug}`,
+    },
+  });
+}
 
 export const trackWhatsAppClick = (userId?: string | null): void =>
   trackSEOEvent('click_whatsapp', { userId });

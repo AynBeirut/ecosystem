@@ -14,6 +14,7 @@ import AdminPanel from '@/components/admin/AdminPanel';
 import SwipeableLayout from '@/components/SwipeableLayout';
 import StockMovementReport from '@/components/admin/StockMovementReport';
 import { getDaysUntilExpiry } from '@/lib/expiryUtils';
+import { loadFinishedGoodsStockMap, resolveDisplayStock } from '@/lib/inventoryStock';
 
 const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
@@ -57,6 +58,12 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
         const serviceQuery = query(productsRef, where('storeId', '==', user.storeId), where('productType', '==', 'service'));
         const serviceSnap = await getDocs(serviceQuery);
         
+        // Finished Goods (load first — composed stock comes from here)
+        const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
+        const fgQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
+        const fgSnap = await getDocs(fgQuery);
+        const fgStockMap = await loadFinishedGoodsStockMap(user.storeId);
+
         // Composed Products
         const composedQuery = query(productsRef, where('storeId', '==', user.storeId), where('productType', '==', 'composed'));
         const composedSnap = await getDocs(composedQuery);
@@ -65,7 +72,8 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
         composedSnap.forEach(doc => {
           const data = doc.data();
           composedCount++;
-          composedValue += (data.stock || 0) * (data.finalCost || data.price || 0);
+          const stock = resolveDisplayStock({ id: doc.id, productType: 'composed', stock: data.stock }, fgStockMap) || 0;
+          composedValue += stock * (data.finalCost || data.price || 0);
         });
 
         // Raw Materials
@@ -81,11 +89,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
           if ((data.currentStock || 0) <= (data.reorderPoint || 0)) rawLowStock++;
         });
 
-        // Finished Goods
-        const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
-        const fgQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
-        const fgSnap = await getDocs(fgQuery);
-        
+        // Finished Goods totals
         let fgCount = 0, fgValue = 0, fgLowStock = 0;
         fgSnap.forEach(doc => {
           const data = doc.data();

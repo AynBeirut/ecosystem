@@ -4,10 +4,21 @@ import {
   defaultOperationalAccountRange,
   formatLedgerAmount,
   formatLedgerAmountForMode,
+  defaultReportCurrencyMode,
+  resolveStoreLedgerCurrency,
   splitOpeningByNormalBalance,
 } from '@/lib/ledger/formatLedgerAmount';
 
 describe('formatLedgerAmount', () => {
+  it('defaults missing mainCurrency to USD (matches GL posting)', () => {
+    expect(resolveStoreLedgerCurrency()).toBe('USD');
+    expect(resolveStoreLedgerCurrency(undefined)).toBe('USD');
+    expect(resolveStoreLedgerCurrency('LBP')).toBe('LBP');
+    expect(resolveStoreLedgerCurrency(undefined, { secondaryCurrency: 'LBP' })).toBe('USD');
+    expect(defaultReportCurrencyMode('USD')).toBe('USD');
+    expect(defaultReportCurrencyMode('LBP')).toBe('LBP');
+    expect(defaultReportCurrencyMode('USD', { dualCurrency: true })).toBe('both');
+  });
   it('labels LBP in full digits without compact K/M', () => {
     expect(formatLedgerAmount(89500000, 'LBP')).toBe('89,500,000 LBP');
     expect(formatLedgerAmount(89500000, 'LL')).toContain('LBP');
@@ -22,6 +33,8 @@ describe('formatLedgerAmount', () => {
     expect(convertLedgerAmount(2, 'USD', 'LBP', 89500)).toBe(179000);
     expect(convertLedgerAmount(179000, 'LBP', 'USD', 89500)).toBe(2);
     expect(convertLedgerAmount(100, 'LBP', 'USD')).toBeNull();
+    expect(formatLedgerAmountForMode(100, 'USD', 'LBP')).toBe('—');
+    expect(formatLedgerAmountForMode(100, 'USD', 'LBP', 89500)).toContain('LBP');
   });
 
   it('splits opening net into Dr/Cr', () => {

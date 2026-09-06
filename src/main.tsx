@@ -78,6 +78,15 @@ window.addEventListener(
       target.src.includes('/assets/')
     ) {
       hardRecoverFromStaleChunk();
+      return;
+    }
+
+    const source = String(event.filename || '');
+    const errMessage = String(
+      (event.error instanceof Error && event.error.message) || event.message || '',
+    );
+    if (source.includes('/assets/') && errMessage.includes('is not defined')) {
+      hardRecoverFromStaleChunk();
     }
   },
   true,

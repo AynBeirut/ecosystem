@@ -45,6 +45,10 @@ export type GrabioStoreProfile = {
   mainCurrency?: string;
   /** USD/LBP rate from Admin Profile (1 USD = X LBP). */
   customExchangeRate?: number;
+  /** Legacy alias kept in sync with customExchangeRate on Grabio Admin Profile. */
+  usdToLbpRate?: number;
+  exchangeRateMode?: 'manual' | 'auto';
+  exchangeRateLastAutoUpdatedAt?: string;
   /** Large-number display style: 'full' (89,500,000) or 'compact' (89.5M). */
   numberFormat?: 'full' | 'compact';
   secondaryCurrency?: string;

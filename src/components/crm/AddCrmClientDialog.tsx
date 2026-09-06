@@ -19,9 +19,10 @@ type Props = {
   reps: CrmRep[];
   defaultRepId?: string;
   onCreated: () => void;
+  userId?: string;
 };
 
-export default function AddCrmClientDialog({ open, onOpenChange, storeId, reps, defaultRepId, onCreated }: Props) {
+export default function AddCrmClientDialog({ open, onOpenChange, storeId, reps, defaultRepId, onCreated, userId }: Props) {
   const [name, setName] = useState('');
   const [customerCode, setCustomerCode] = useState('');
   const [customerType, setCustomerType] = useState('');
@@ -111,7 +112,13 @@ export default function AddCrmClientDialog({ open, onOpenChange, storeId, reps, 
             <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
           </div>
           <div className="sm:col-span-2 rounded-lg border border-teal-200/80 bg-teal-50/30 p-3">
-            <CrmLocationSelects value={locationSelection} onChange={setLocationSelection} />
+            <CrmLocationSelects
+              value={locationSelection}
+              onChange={setLocationSelection}
+              storeId={storeId}
+              userId={userId}
+              canManageAreas
+            />
           </div>
           <div className="sm:col-span-2">
             <CrmGpsInput value={gpsLocation} onChange={setGpsLocation} />

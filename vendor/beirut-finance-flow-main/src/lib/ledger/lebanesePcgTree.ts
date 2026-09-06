@@ -1,6 +1,6 @@
 import type { LebanesePcgAccount } from '@/lib/ledger/lebanesePcgChart.generated';
 import type { LedgerAccount, PcgClientAccount } from '@/types/generalLedger';
-import { mapPcgCodeToGrabioCodes } from '@/lib/ledger/grabioToPcgMap';
+import { mapPcgCodeToGrabioCodes, pcgWorkingCodeFromClientRow } from '@/lib/ledger/grabioToPcgMap';
 
 export type PcgTreeRow = LebanesePcgAccount & {
   depth: number;
@@ -160,18 +160,24 @@ export function buildPcgTree(
 
   function buildPcgNode(row: LebanesePcgAccount): PcgTreeNode {
     const pcgChildren = (childrenByParent.get(row.code) || []).map(buildPcgNode);
-    const clientChildren: PcgTreeNode[] = (clientByParent.get(row.code) || []).map((client) => ({
-      id: `client:${client.id}`,
-      kind: 'client' as const,
-      code: client.clientCode,
-      name: client.name || row.name,
-      nameAr: client.nameAr || row.nameAr,
-      pcgKind: row.kind,
-      currency: client.currency || row.currency,
-      children: [],
-      pcgAccount: row,
-      clientAccount: client,
-    }));
+    const clientChildren: PcgTreeNode[] = (clientByParent.get(row.code) || [])
+      .map((client) => {
+        const workingCode = pcgWorkingCodeFromClientRow(client);
+        if (!workingCode) return null;
+        return {
+          id: `client:${client.id}`,
+          kind: 'client' as const,
+          code: workingCode,
+          name: client.name || row.name,
+          nameAr: client.nameAr || row.nameAr,
+          pcgKind: row.kind,
+          currency: client.currency || row.currency,
+          children: [],
+          pcgAccount: row,
+          clientAccount: client,
+        };
+      })
+      .filter((node): node is PcgTreeNode => Boolean(node));
     return {
       id: `pcg:${row.code}`,
       kind: 'pcg',
@@ -267,6 +273,26 @@ export function filterPcgTree(nodes: PcgTreeNode[], query: string): PcgTreeNode[
   }
 
   return prune(nodes);
+}
+
+export function resolvePrimaryLedgerAccountForPcgNode(
+  node: PcgTreeNode,
+  ledgerAccounts: LedgerAccount[],
+): LedgerAccount | undefined {
+  const active = ledgerAccounts.filter((account) => account.isActive !== false);
+  const byId = new Map(active.map((account) => [account.id, account]));
+  const ids = resolveLedgerAccountIdsForPcgNode(node, ledgerAccounts);
+  const candidates = ids.map((id) => byId.get(id)).filter(Boolean) as LedgerAccount[];
+  const exactPcg = candidates.find((account) => account.isPcgChart && account.code === node.code);
+  if (exactPcg) return exactPcg;
+  const anyPcg = candidates.find((account) => account.isPcgChart);
+  if (anyPcg) return anyPcg;
+  return candidates[0];
+}
+
+/** PCG chart row (not a user working account) that can be edited in the tree. */
+export function pcgNodeCanEdit(node: PcgTreeNode): boolean {
+  return node.kind === 'pcg' && !node.id.startsWith('class:');
 }
 
 export function resolveLedgerAccountIdsForPcgNode(

@@ -83,6 +83,7 @@ import {
   syncPosRecipes,
   syncPosRefunds,
 } from './api/posSync';
+import { createAccountingPairingCode, pairExternalAccounting } from './api/accountingPairing';
 import {
   createStoreEvent,
   listStoreEvents,
@@ -176,6 +177,8 @@ app.get('/health', (req, res) => {
       '/supplier-returns/analytics',
       '/pos/pairing-code',
       '/pos/pair',
+      '/accounting/pairing-code',
+      '/accounting/pair',
       '/pos/generate-install-token',
       '/pos/auto-pair',
       '/pos/heartbeat',
@@ -313,6 +316,8 @@ app.post('/wordpress/access/redeem', redeemWordPressAccess);
 app.get('/wordpress/access/redeem', redeemWordPressAccess);
 app.post('/pos/pairing-code', createPosPairingCode);
 app.post('/pos/pair', pairPosDevice);
+app.post('/accounting/pairing-code', createAccountingPairingCode);
+app.post('/accounting/pair', pairExternalAccounting);
 app.post('/pos/generate-install-token', generatePosInstallToken);
 app.post('/pos/auto-pair', autoPairPosDevice);
 app.post('/pos/heartbeat', posHeartbeat);
@@ -934,6 +939,8 @@ export { fetchExchangeRates } from './scheduled/fetchExchangeRates';
 export { runRecurringVouchers } from './scheduled/runRecurringVouchers';
 export { autoCloseFiscalPeriods } from './scheduled/autoCloseFiscalPeriods';
 export { checkScheduledOrderReminders } from './scheduled/checkScheduledOrderReminders';
+export { checkCrmVisitReminders } from './scheduled/checkCrmVisitReminders';
+export { checkMorningWorkBriefing } from './scheduled/checkMorningWorkBriefing';
 // Export Firestore triggers: new order + order status / payment status change notifications
 export { onOrderCreated, onOrderStatusChanged } from './triggers/orderNotifications';
 export { onAccountPaymentCreated } from './triggers/accountPaymentSync';

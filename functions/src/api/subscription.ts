@@ -111,7 +111,7 @@ const PLAN_LIMITS: Record<SubscriptionTier, {
   },
 };
 
-const TRIAL_DURATION_MONTHS = 3;
+const TRIAL_DURATION_MONTHS = 1;
 const TRIAL_GRACE_DAYS = 15;
 
 function normalizeTier(tier?: string): SubscriptionTier {
@@ -206,6 +206,43 @@ function getErrorMessage(error: unknown): string {
   return 'Unknown error';
 }
 
+async function ensureStoreOwnerProvision(userId: string, email?: string): Promise<void> {
+  const now = new Date().toISOString();
+  const sellerRef = db.collection('sellers').doc(userId);
+  const usersRef = db.collection('users').doc(userId);
+  const sellerSnap = await sellerRef.get();
+  const batch = db.batch();
+
+  if (!sellerSnap.exists) {
+    batch.set(
+      sellerRef,
+      {
+        isSeller: true,
+        sellerSince: now,
+        role: 'admin',
+        userId,
+        storeId: userId,
+        updatedAt: now,
+      },
+      { merge: true },
+    );
+  }
+
+  batch.set(
+    usersRef,
+    {
+      ...(email ? { email } : {}),
+      storeId: userId,
+      role: 'admin',
+      activeStoreId: userId,
+      updatedAt: now,
+    },
+    { merge: true },
+  );
+
+  await batch.commit();
+}
+
 /**
  * Start trial subscription
  */
@@ -234,6 +271,7 @@ export async function startTrial(req: Request, res: Response) {
 
     const activationId = `TRIAL_${Date.now()}`;
     await activateTrial(userId, activationId, 'trial');
+    await ensureStoreOwnerProvision(userId, email);
 
     res.json({
       success: true,
@@ -368,7 +406,7 @@ export async function activateTrial(userId: string, paymentId: string, tier: str
       tier: normalizedTier,
       status: 'success',
       transactionId: paymentId,
-      description: 'Trial plan - up to 3 months, 20% revenue share'
+      description: 'Trial plan - 1 month free, 20% revenue share'
     }),
     pendingTrialPaymentId: admin.firestore.FieldValue.delete(),
     pendingTrialExternalId: admin.firestore.FieldValue.delete(),
@@ -465,6 +503,8 @@ export async function activateSubscription(
     pendingSubscriptionAmount: admin.firestore.FieldValue.delete(),
     updatedAt: new Date().toISOString()
   }, { merge: true });
+
+  await ensureStoreOwnerProvision(userId);
 
   console.log(`Subscription activated for user ${userId}: ${normalizedTier} ${billing}`);
 }

@@ -37,6 +37,19 @@ export function visitInRange(a: CrmActivity, fromMs: number, toMs: number): bool
   return t >= fromMs && t <= toMs;
 }
 
+export function filterActivitiesForDay(
+  activities: CrmActivity[],
+  day: Date,
+  clientIds?: Set<string>,
+): CrmActivity[] {
+  const dayStart = startOfDayMs(day);
+  const dayEnd = endOfDayMs(day);
+  return activities.filter((a) => {
+    if (clientIds && !clientIds.has(a.customerId)) return false;
+    return visitInRange(a, dayStart, dayEnd);
+  });
+}
+
 export type RepDailyMetrics = {
   rep: CrmRep;
   target: number;

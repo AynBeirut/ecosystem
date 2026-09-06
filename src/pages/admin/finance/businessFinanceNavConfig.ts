@@ -22,7 +22,7 @@ export const FINANCE_MODULE_OPTIONS = [
 ] as const;
 
 const ACCOUNTING_PRIMARY_LABELS: Record<(typeof ACCOUNTING_PRIMARY_TABS)[number], string> = {
-  vouchers: 'Vouchers (JV / PV / RV / CV)',
+  vouchers: 'Vouchers (JV / PV / RV / CRN / DRN / CV)',
   workspace: 'Workspace',
   'party-soa': 'Party statement',
 };

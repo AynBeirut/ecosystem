@@ -27,8 +27,8 @@ export interface SubAccount {
   role: SubAccountRole;
   permissions: SubAccountPermission[];
   status: 'active' | 'suspended' | 'inactive';
-  commissionRate?: number; // For sales role - percentage
-  kmRate?: number; // For delivery role - payment per km
+  assignedTerritory?: string | null;
+  dailyVisitTarget?: number | null;
   createdAt: string;
   createdBy: string;
   updatedAt: string;

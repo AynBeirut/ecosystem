@@ -20,7 +20,7 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import ShareSheet from "@/components/ShareSheet";
 import { useSystemGuide } from "@/hooks/useSystemGuide";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
@@ -819,14 +819,33 @@ const InvoiceManager = () => {
     </Card>
       </div>
 
-      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Invoice Preview</DialogTitle>
-            <DialogDescription>
-              Preview how your invoice will look to your clients
-            </DialogDescription>
-          </DialogHeader>
+      <AccountingSideSheet
+        open={isPreviewOpen}
+        onOpenChange={setIsPreviewOpen}
+        title="Invoice Preview"
+        description="Preview how your invoice will look to your clients"
+        size="form"
+        tall
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>
+              Close
+            </Button>
+            <Button
+              className="ml-2"
+              onClick={() => {
+                setIsPreviewOpen(false);
+                if (selectedInvoiceId) {
+                  handleSendInvoice(selectedInvoiceId);
+                }
+              }}
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </Button>
+          </>
+        }
+      >
 
           {previewInvoiceData && (
             <div className="p-4 border rounded-md overflow-y-auto max-h-[70vh] bg-white">
@@ -1071,29 +1090,7 @@ const InvoiceManager = () => {
 
 
 
-          <DialogFooter className="flex justify-between items-center">
-            <div>
-              <Button 
-                variant="outline" 
-                onClick={() => setIsPreviewOpen(false)}
-              >
-                Close
-              </Button>
-            </div>
-            <Button 
-              onClick={() => {
-                setIsPreviewOpen(false);
-                if (selectedInvoiceId) {
-                  handleSendInvoice(selectedInvoiceId);
-                }
-              }}
-            >
-              <Share2 className="mr-2 h-4 w-4" />
-              Share
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AccountingSideSheet>
 
       <ShareSheet
         open={isShareSheetOpen}

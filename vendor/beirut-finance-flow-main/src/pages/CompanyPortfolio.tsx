@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { FileUpload } from "@/components/FileUpload";
 import { useToast } from "@/hooks/use-toast";
 import { Image as ImageIcon, Plus, Trash, Upload, X, FileDown, Mail, Send } from "lucide-react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 
 const CompanyPortfolio = () => {
   const { user, portfolioItems, addPortfolioItem, logout } = useAppContext();
@@ -395,13 +395,32 @@ const CompanyPortfolio = () => {
           </div>
         </div>
 
-        {/* Portfolio Preview Dialog */}
-        <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Portfolio Preview</DialogTitle>
-            </DialogHeader>
-            
+        <AccountingSideSheet
+          open={previewOpen}
+          onOpenChange={setPreviewOpen}
+          title="Portfolio Preview"
+          size="form"
+          tall
+          footer={
+            <div className="flex flex-wrap gap-2 justify-end w-full">
+              <Button variant="outline" onClick={() => setPreviewOpen(false)}>Close Preview</Button>
+              <Button variant="outline" onClick={handleExportPortfolioAsPdf}>
+                <FileDown className="mr-2 h-4 w-4" />
+                Save as PDF
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setPreviewOpen(false);
+                  handleSendPortfolio(null);
+                }}
+              >
+                <Mail className="mr-2 h-4 w-4" />
+                Send by Email
+              </Button>
+            </div>
+          }
+        >
             <div className="space-y-8">
               {/* Company Information */}
               <div className="bg-white dark:bg-gray-800 p-6 rounded-lg shadow-sm">
@@ -485,49 +504,29 @@ const CompanyPortfolio = () => {
                   </div>
                 )}
               </div>
-              
-              <div className="flex flex-wrap gap-2 justify-end">
-                <Button 
-                  variant="outline"
-                  onClick={() => setPreviewOpen(false)}
-                >
-                  Close Preview
-                </Button>
-                
-                <Button 
-                  variant="outline"
-                  onClick={handleExportPortfolioAsPdf}
-                >
-                  <FileDown className="mr-2 h-4 w-4" />
-                  Save as PDF
-                </Button>
-                
-                <Button 
-                  variant="outline"
-                  onClick={() => {
-                    setPreviewOpen(false);
-                    handleSendPortfolio(null);
-                  }}
-                >
-                  <Mail className="mr-2 h-4 w-4" />
-                  Send by Email
-                </Button>
-              </div>
             </div>
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
 
-        {/* Send Portfolio Dialog */}
-        <Dialog open={isSendDialogOpen} onOpenChange={setIsSendDialogOpen}>
-          <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Send Portfolio</DialogTitle>
-              <DialogDescription>
-                Enter the recipient's email address to send your portfolio.
-              </DialogDescription>
-            </DialogHeader>
-            
-            <div className="space-y-4 py-4">
+        <AccountingSideSheet
+          open={isSendDialogOpen}
+          onOpenChange={setIsSendDialogOpen}
+          title="Send Portfolio"
+          description="Enter the recipient's email address to send your portfolio."
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>Cancel</Button>
+              <Button
+                className="ml-2 bg-indigo-600"
+                onClick={confirmSendPortfolio}
+                disabled={!recipientEmail}
+              >
+                <Send className="mr-2 h-4 w-4" />
+                Send Portfolio
+              </Button>
+            </>
+          }
+        >
+            <div className="space-y-4">
               <div>
                 <label className="text-sm font-medium mb-1 block">Recipient Email</label>
                 <Input
@@ -538,22 +537,7 @@ const CompanyPortfolio = () => {
                 />
               </div>
             </div>
-            
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setIsSendDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button 
-                onClick={confirmSendPortfolio}
-                className="bg-indigo-600"
-                disabled={!recipientEmail}
-              >
-                <Send className="mr-2 h-4 w-4" />
-                Send Portfolio
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
       </div>
     </AppLayout>
   );

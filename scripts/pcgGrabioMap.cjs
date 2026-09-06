@@ -106,4 +106,21 @@ function proposeClientPcgCode(parentPcgCode, usedCodes) {
   throw new Error(`No available client code under parent ${parentPcgCode}`);
 }
 
-module.exports = { GRABIO_TO_PCG_CODE, proposeClientPcgCode };
+function walkInClientPcgCode(parentPcgCode) {
+  const parent = normalizeParentForClientCode(parentPcgCode);
+  if (!parent) throw new Error('parentPcgCode required');
+  return `${parent}1000001`;
+}
+
+function proposePartyClientPcgCode(parentPcgCode, usedCodes) {
+  const reserved = new Set(usedCodes);
+  reserved.add(walkInClientPcgCode(parentPcgCode));
+  return proposeClientPcgCode(parentPcgCode, reserved);
+}
+
+module.exports = {
+  GRABIO_TO_PCG_CODE,
+  proposeClientPcgCode,
+  walkInClientPcgCode,
+  proposePartyClientPcgCode,
+};

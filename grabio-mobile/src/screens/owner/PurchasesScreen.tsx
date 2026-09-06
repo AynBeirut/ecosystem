@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, TextInput, RefreshControl, KeyboardAvoidingView, Platform,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, TextInput, RefreshControl, KeyboardAvoidingView, Platform,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -220,7 +220,7 @@ export default function PurchasesScreen() {
   const totalAmount = purchases.reduce((sum, p) => sum + (p.total ?? p.totalAmount ?? p.totalCost ?? 0), 0);
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -407,7 +407,7 @@ export default function PurchasesScreen() {
           </TouchableOpacity>
         </ScrollView>
       </KeyboardAvoidingView>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

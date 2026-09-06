@@ -34,7 +34,6 @@ export function PcgMappedAccountCell({
           {pcg.nameAr}
         </div>
       ) : null}
-      <div className="text-[10px] text-muted-foreground font-mono">Grabio {grabioCode}</div>
     </div>
   );
 }

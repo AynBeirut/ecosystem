@@ -171,6 +171,7 @@ export async function postJournalEntry(
       ...(line.transactionCurrency ? { transactionCurrency: line.transactionCurrency } : {}),
       ...(fxRate ? { fxRate } : {}),
       ...(amountFx ? { amountFx } : {}),
+      ...(line.valueDate ? { valueDate: line.valueDate.slice(0, 10) } : {}),
       lineOrder: index,
     }) as JournalLine;
   });

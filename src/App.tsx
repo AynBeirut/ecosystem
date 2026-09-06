@@ -66,8 +66,10 @@ import PublicPageFallback from "./components/public/PublicPageFallback";
 import AdminLayout from "./components/admin/AdminLayout";
 import EditorPreviewRoot, { isEditorEmbedFrame } from "./embed/EditorPreviewRoot";
 import BuilderSetupGate from "./components/builder/BuilderSetupGate";
-
-const ModularHome = lazy(() => import("./pages/public/ModularHome"));
+import ModularHome from "./pages/public/ModularHome";
+import HomeCanonicalRedirect from "./pages/public/HomeCanonicalRedirect";
+import DemoLegacyRedirect from "./pages/public/packages/DemoLegacyRedirect";
+const PackageLandingPage = lazy(() => import("./pages/public/packages/PackageLandingPage"));
 const Features = lazy(() => import("./pages/public/Features"));
 const Pricing = lazy(() => import("./pages/public/Pricing"));
 
@@ -260,7 +262,9 @@ function AppFooter() {
                         <Route path="/auth/gsc-callback" element={<GscCallback />} />
                         {/* Main app routes */}
                         <Route path="/" element={<ModularHome />} />
-                        <Route path="/home" element={<ModularHome />} />
+                        <Route path="/home" element={<HomeCanonicalRedirect />} />
+                        <Route path="/demo/:slug" element={<PackageLandingPage />} />
+                        <Route path="/demoshop/:slug" element={<DemoLegacyRedirect />} />
                         <Route path="/search" element={<Marketplace />} />
                         <Route path="/marketplace" element={<Navigate to="/search" replace />} />
                         <Route path="/store/:slug" element={<StoreDetail />}>

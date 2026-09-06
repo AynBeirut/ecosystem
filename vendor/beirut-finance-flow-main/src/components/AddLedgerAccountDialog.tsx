@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import AccountingSideSheet from '@/components/AccountingSideSheet';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -124,16 +117,25 @@ export default function AddLedgerAccountDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>Add ledger account</DialogTitle>
-          <DialogDescription>
-            {isLebaneseCoa
-              ? 'Creates a detail (D) account under the selected parent. Code is the next free sibling; override allowed on D only.'
-              : 'Creates a posting account. Auto code is the next free sibling under the parent.'}
-          </DialogDescription>
-        </DialogHeader>
+    <AccountingSideSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Add ledger account"
+      description={
+        isLebaneseCoa
+          ? 'Creates a detail (D) account under the selected parent. Code is the next free sibling; override allowed on D only.'
+          : 'Creates a posting account. Auto code is the next free sibling under the parent.'
+      }
+      size="default"
+      footer={
+        <>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button type="button" className="ml-2" disabled={saving} onClick={() => void submit()}>
+            {saving ? 'Saving…' : 'Create'}
+          </Button>
+        </>
+      }
+    >
         <div className="space-y-3">
           <div>
             <Label>Parent</Label>
@@ -186,13 +188,6 @@ export default function AddLedgerAccountDialog({
             />
           </div>
         </div>
-        <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
-          <Button type="button" disabled={saving} onClick={() => void submit()}>
-            {saving ? 'Saving…' : 'Create'}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </AccountingSideSheet>
   );
 }

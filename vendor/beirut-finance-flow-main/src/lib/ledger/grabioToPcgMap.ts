@@ -1,5 +1,6 @@
 import { supportsArabicEntry, type AccountingLanguage } from '@/lib/grabio/accountingMode';
 import { LEBANESE_PCG_CHART, type LebanesePcgAccount } from '@/lib/ledger/lebanesePcgChart.generated';
+import { isGrabioPartySuffixCode } from '@/lib/ledger/pcgClientCode';
 import type { PcgClientAccount } from '@/types/generalLedger';
 
 /** Grabio 3-digit operational code → PCG detail account (display / reports; posting unchanged). */
@@ -90,15 +91,64 @@ export function mapGrabioCodeToPcg(grabioCode: string): string | undefined {
   return GRABIO_TO_PCG_CODE[String(grabioCode || '').trim()];
 }
 
+/** Internal posting link for party subaccounts — not shown in PCG UI. */
+const PCG_PARENT_TO_PARTY_GRABIO: Record<string, string> = {
+  '7010': '401',
+  '6111': '501',
+};
+
+export function mapPcgParentToPartyGrabio(parentPcgCode: string): string | undefined {
+  const parent = String(parentPcgCode || '').trim();
+  if (PCG_PARENT_TO_PARTY_GRABIO[parent]) return PCG_PARENT_TO_PARTY_GRABIO[parent];
+  for (const [grabio, pcg] of Object.entries(GRABIO_TO_PCG_CODE)) {
+    if (pcg === parent) return grabio;
+  }
+  return undefined;
+}
+
 export function buildClientByGrabioMap(
   accounts: PcgClientAccount[],
 ): Map<string, PcgClientAccount> {
   const map = new Map<string, PcgClientAccount>();
   for (const row of accounts) {
+    if (row.partyId || row.partyType) continue;
     const key = String(row.grabioOperationalCode || '').trim();
-    if (key) map.set(key, row);
+    if (!key || !GRABIO_TO_PCG_CODE[key]) continue;
+    if (!map.has(key)) map.set(key, row);
   }
   return map;
+}
+
+export function buildClientByLedgerCodeMap(
+  accounts: PcgClientAccount[],
+): Map<string, PcgClientAccount> {
+  const map = new Map<string, PcgClientAccount>();
+  for (const row of accounts) {
+    const code = String(row.clientCode || '').trim();
+    if (code) map.set(code, row);
+  }
+  return map;
+}
+
+export function buildClientByPartyMap(
+  accounts: PcgClientAccount[],
+): Map<string, PcgClientAccount> {
+  const map = new Map<string, PcgClientAccount>();
+  for (const row of accounts) {
+    if (!row.partyType || !row.partyId) continue;
+    map.set(`${row.partyType}:${row.partyId}`, row);
+  }
+  return map;
+}
+
+/** PCG working number for display — rejects legacy Grabio suffix codes (1420001, 4010001). */
+export function pcgWorkingCodeFromClientRow(row: PcgClientAccount | undefined): string | undefined {
+  if (!row) return undefined;
+  const code = String(row.clientCode || '').trim();
+  if (!code) return undefined;
+  const grabio = String(row.grabioOperationalCode || '').trim();
+  if (grabio && isGrabioPartySuffixCode(code, grabio)) return undefined;
+  return code;
 }
 
 export function buildClientByParentPcgMap(
@@ -129,13 +179,15 @@ export function resolvePcgDisplay(
   grabioCode: string,
   fallbackName?: string,
   clientByGrabio?: ReadonlyMap<string, PcgClientAccount>,
+  clientByLedgerCode?: ReadonlyMap<string, PcgClientAccount>,
 ): PcgDisplayAccount | null {
   const code = String(grabioCode || '').trim();
-  const client = clientByGrabio?.get(code);
+  const fromLedger = clientByLedgerCode?.get(code);
+  const client = fromLedger || clientByGrabio?.get(code);
   const pcgCode = client?.clientCode || mapGrabioCodeToPcg(code);
   if (!pcgCode) return null;
 
-  const templateCode = client ? mapGrabioCodeToPcg(code) : pcgCode;
+  const templateCode = client && !fromLedger ? mapGrabioCodeToPcg(code) : pcgCode;
   const pcg = templateCode ? pcgByCode.get(templateCode) : pcgByCode.get(pcgCode);
   return {
     grabioCode: code,
@@ -154,18 +206,48 @@ export function mappedPcgCodes(): Set<string> {
 export function displayPcgCode(
   grabioCode: string,
   clientByGrabio?: ReadonlyMap<string, PcgClientAccount>,
+  clientByLedgerCode?: ReadonlyMap<string, PcgClientAccount>,
 ): string {
-  return resolvePcgDisplay(grabioCode, undefined, clientByGrabio)?.pcgCode ?? String(grabioCode || '').trim();
+  return (
+    resolvePcgDisplay(grabioCode, undefined, clientByGrabio, clientByLedgerCode)?.pcgCode ??
+    String(grabioCode || '').trim()
+  );
 }
 
 /** Left COA column: client working number when seeded, else template PCG or mapped client code. */
 export function displayPcgCodeForLedgerRow(
-  account: { code: string; isPcgChart?: boolean },
+  account: {
+    code: string;
+    isPcgChart?: boolean;
+    grabioOperationalCode?: string;
+    parentCode?: string;
+    partyType?: PcgClientAccount['partyType'];
+    partyId?: string;
+  },
   clientByGrabio?: ReadonlyMap<string, PcgClientAccount>,
   clientByParentPcg?: ReadonlyMap<string, PcgClientAccount[]>,
+  clientByLedgerCode?: ReadonlyMap<string, PcgClientAccount>,
+  clientByParty?: ReadonlyMap<string, PcgClientAccount>,
 ): string {
   if (!account.isPcgChart) {
-    return displayPcgCode(account.code, clientByGrabio);
+    const fromLedger = pcgWorkingCodeFromClientRow(clientByLedgerCode?.get(account.code));
+    if (fromLedger) return fromLedger;
+
+    if (account.partyType && account.partyId) {
+      const fromParty = pcgWorkingCodeFromClientRow(
+        clientByParty?.get(`${account.partyType}:${account.partyId}`),
+      );
+      if (fromParty) return fromParty;
+    }
+
+    const parentGrabio = String(account.grabioOperationalCode || account.parentCode || '').trim();
+    if (parentGrabio && isGrabioPartySuffixCode(account.code, parentGrabio)) {
+      const mapped = mapGrabioCodeToPcg(parentGrabio);
+      if (mapped) return mapped;
+    }
+
+    const grabioKey = parentGrabio || account.code;
+    return displayPcgCode(grabioKey, clientByGrabio, clientByLedgerCode);
   }
   const clients = clientByParentPcg?.get(account.code);
   if (clients?.length) {

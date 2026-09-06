@@ -67,7 +67,7 @@ const SUPPLEMENTAL = [
   { name: 'Frozen Banana', unit: 'kg', costPerUnit: 2.5, storageLocation: 'Freezer' },
   { name: 'Frozen Mixed Berries', unit: 'kg', costPerUnit: 10, storageLocation: 'Freezer' },
   { name: 'Pomegranate Sauce', unit: 'kg', costPerUnit: 8, storageLocation: 'Fridge' },
-  { name: 'Bicarbonate', unit: 'kg', costPerUnit: 5, storageLocation: 'Dry Storage' },
+  { name: 'Bicarbonate', unit: 'kg', costPerUnit: 1, storageLocation: 'Dry Storage' },
   { name: 'Lemon Zest', unit: 'kg', costPerUnit: 20, storageLocation: 'Fridge' },
   { name: 'Lemon Juice', unit: 'liter', costPerUnit: 6, storageLocation: 'Fridge' },
   { name: 'Boiled Fava Beans', unit: 'kg', costPerUnit: 4, storageLocation: 'Fridge' },

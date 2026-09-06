@@ -106,6 +106,8 @@ export interface StoreDeliverySettings {
   scheduledOrdersEnabled?: boolean;
   /** When true, new marketplace orders skip pending and start at confirmed. */
   autoAcceptOrders?: boolean;
+  /** When true, hide processing/ready — flow is pending → confirmed → delivered (NIPCO / B2B). */
+  skipKitchenStatuses?: boolean;
 }
 
 export interface MarketplaceIntegrationSetting {

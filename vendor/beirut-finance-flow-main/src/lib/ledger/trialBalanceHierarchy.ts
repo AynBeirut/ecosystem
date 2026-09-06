@@ -4,8 +4,7 @@ import {
   resolveLedgerAccountIdsForPcgNode,
   type PcgTreeNode,
 } from '@/lib/ledger/lebanesePcgTree';
-import { isAccountInCodeRange } from '@/lib/ledger/accountCodeRange';
-import { displayPcgCodeForLedgerRow } from '@/lib/ledger/grabioToPcgMap';
+import { isAccountInCodeRange, normalizeAccountRangeBounds } from '@/lib/ledger/accountCodeRange';
 import type {
   LedgerAccount,
   PcgClientAccount,
@@ -95,9 +94,9 @@ function filterPcgChartByAccountRange(
   chart: LebanesePcgAccount[],
   fromCode: string,
   toCode: string,
+  clientAccounts: PcgClientAccount[] = [],
 ): LebanesePcgAccount[] {
-  const from = fromCode.trim();
-  const to = toCode.trim();
+  const { from, to } = normalizeAccountRangeBounds(fromCode, toCode);
   if (!from || !to) return chart;
 
   const byCode = new Map(chart.map((row) => [row.code, row]));
@@ -107,10 +106,11 @@ function filterPcgChartByAccountRange(
     if (!code || hits.has(code)) return;
     hits.add(code);
     const row = byCode.get(code);
-    if (!row) return;
-    const classDigit = code.charAt(0);
-    if (classDigit >= '1' && classDigit <= '7') hits.add(classDigit);
-    if (row.parentCode && byCode.has(row.parentCode)) mark(row.parentCode);
+    if (row) {
+      const classDigit = code.charAt(0);
+      if (classDigit >= '1' && classDigit <= '7') hits.add(classDigit);
+      if (row.parentCode && byCode.has(row.parentCode)) mark(row.parentCode);
+    }
     for (let len = code.length - 1; len >= 1; len -= 1) {
       const prefix = code.slice(0, len);
       const parent = byCode.get(prefix);
@@ -122,6 +122,14 @@ function filterPcgChartByAccountRange(
     if (isAccountInCodeRange(row.code, from, to)) mark(row.code);
   }
 
+  for (const client of clientAccounts) {
+    const clientCode = String(client.clientCode || '').trim();
+    if (!clientCode || !isAccountInCodeRange(clientCode, from, to)) continue;
+    mark(clientCode);
+    const parent = String(client.parentPcgCode || '').trim();
+    if (parent) mark(parent);
+  }
+
   return chart.filter((row) => hits.has(row.code));
 }
 
@@ -130,24 +138,9 @@ function filterClientAccountsByRange(
   fromCode: string,
   toCode: string,
 ): PcgClientAccount[] {
-  const from = fromCode.trim();
-  const to = toCode.trim();
+  const { from, to } = normalizeAccountRangeBounds(fromCode, toCode);
   if (!from || !to) return clients;
   return clients.filter((row) => isAccountInCodeRange(String(row.clientCode || ''), from, to));
-}
-
-function ledgerPoolMatchesRange(
-  account: LedgerAccount,
-  fromCode: string,
-  toCode: string,
-  clientByGrabio: Map<string, PcgClientAccount>,
-  clientByParentPcg: Map<string, PcgClientAccount[]>,
-): boolean {
-  const displayCode = displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg);
-  return (
-    isAccountInCodeRange(displayCode, fromCode, toCode) ||
-    isAccountInCodeRange(account.code, fromCode, toCode)
-  );
 }
 
 function resolvePrimaryLedgerAccount(
@@ -270,11 +263,6 @@ export function buildLebaneseTrialBalanceTree(
     includeZeroBalance: boolean;
   },
 ): TrialBalanceTreeNode[] {
-  const clientByGrabio = new Map(
-    pcgClientAccounts
-      .filter((row) => row.grabioOperationalCode)
-      .map((row) => [String(row.grabioOperationalCode), row]),
-  );
   const clientByParentPcg = new Map<string, PcgClientAccount[]>();
   for (const row of pcgClientAccounts) {
     const parent = String(row.parentPcgCode || '').trim();
@@ -284,31 +272,22 @@ export function buildLebaneseTrialBalanceTree(
     clientByParentPcg.set(parent, list);
   }
 
-  const pool = accounts.filter((account) => {
-    if (options.hideInactiveAccounts && account.isActive === false) return false;
-    return ledgerPoolMatchesRange(account, fromCode, toCode, clientByGrabio, clientByParentPcg);
-  });
-  // Resolve Grabio operational rows against the full active chart so class 1–7
-  // headers roll up 102/601 even when the visible tree is PCG group codes.
   const resolvePool = accounts.filter((account) => {
     if (options.hideInactiveAccounts && account.isActive === false) return false;
     return true;
   });
 
-  const filteredChart = filterPcgChartByAccountRange(LEBANESE_PCG_CHART, fromCode, toCode);
+  const filteredChart = filterPcgChartByAccountRange(
+    LEBANESE_PCG_CHART,
+    fromCode,
+    toCode,
+    pcgClientAccounts,
+  );
   const filteredClients = filterClientAccountsByRange(pcgClientAccounts, fromCode, toCode);
   const roots = buildPcgTree(filteredChart, filteredClients);
 
-  const rangedIds = new Set(pool.map((account) => account.id));
-  const rangedRows = new Map<string, TrialBalanceExtendedRow>();
-  for (const [id, row] of rowByAccountId) {
-    if (rangedIds.has(id) || pool.some((account) => account.code === row.accountCode)) {
-      rangedRows.set(id, row);
-    }
-  }
-
   return roots
-    .map((node) => buildTreeNode(node, resolvePool, rangedRows, options.hideInactiveAccounts))
+    .map((node) => buildTreeNode(node, resolvePool, rowByAccountId, options.hideInactiveAccounts))
     .map((node) => (node ? pruneTreeNode(node, options.includeZeroBalance) : null))
     .filter((node): node is TrialBalanceTreeNode => Boolean(node));
 }

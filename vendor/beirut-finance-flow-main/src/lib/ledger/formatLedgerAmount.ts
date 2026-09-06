@@ -8,6 +8,25 @@ export function normalizeLedgerCurrency(code?: string): string {
   return c;
 }
 
+/** Ledger + report base currency — matches postingService when mainCurrency is unset. */
+export function resolveStoreLedgerCurrency(
+  mainCurrency?: string,
+  options?: { secondaryCurrency?: string },
+): string {
+  if (mainCurrency) return normalizeLedgerCurrency(mainCurrency);
+  const secondary = normalizeLedgerCurrency(options?.secondaryCurrency);
+  if (secondary === 'LBP') return 'USD';
+  return normalizeLedgerCurrency(undefined);
+}
+
+export function defaultReportCurrencyMode(
+  storeCurrency: string,
+  options?: { dualCurrency?: boolean },
+): ReportCurrencyMode {
+  if (options?.dualCurrency) return 'both';
+  return normalizeLedgerCurrency(storeCurrency) === 'USD' ? 'USD' : 'LBP';
+}
+
 /** Full grouped amount. LBP is always labeled LBP — never L£ / LE / compact K/M. */
 export function formatLedgerAmount(amount: number, currency?: string): string {
   const code = normalizeLedgerCurrency(currency);
@@ -40,17 +59,37 @@ export function formatLedgerAmountForMode(
   mode: ReportCurrencyMode,
   usdToLbp?: number,
 ): string {
+  const parts = splitLedgerAmountForMode(amount, storeCurrency, mode, usdToLbp);
+  if (parts.secondary) return `${parts.primary} (≈ ${parts.secondary})`;
+  return parts.primary;
+}
+
+export type SplitLedgerAmount = {
+  primary: string;
+  secondary?: string;
+};
+
+/** Primary + optional converted line for stacked table cells. */
+export function splitLedgerAmountForMode(
+  amount: number,
+  storeCurrency: string,
+  mode: ReportCurrencyMode,
+  usdToLbp?: number,
+): SplitLedgerAmount {
   const store = normalizeLedgerCurrency(storeCurrency);
   if (mode === 'both') {
     const other = store === 'LBP' ? 'USD' : 'LBP';
     const converted = convertLedgerAmount(amount, store, other, usdToLbp);
     const primary = formatLedgerAmount(amount, store);
-    if (converted == null) return primary;
-    return `${primary} (≈ ${formatLedgerAmount(converted, other)})`;
+    if (converted == null) return { primary };
+    return { primary, secondary: formatLedgerAmount(converted, other) };
   }
   const converted = convertLedgerAmount(amount, store, mode, usdToLbp);
-  if (converted == null) return formatLedgerAmount(amount, store);
-  return formatLedgerAmount(converted, mode);
+  if (converted == null) {
+    if (mode !== store) return { primary: '—' };
+    return { primary: formatLedgerAmount(amount, store) };
+  }
+  return { primary: formatLedgerAmount(converted, mode) };
 }
 
 export function splitOpeningByNormalBalance(

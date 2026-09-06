@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView,
-  ActivityIndicator, Alert, TextInput, Modal, ScrollView,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, TextInput, Modal, ScrollView,
 } from 'react-native';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
@@ -100,7 +100,7 @@ export default function SuppliersScreen() {
     : suppliers;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       {/* Search + Add */}
       <View style={styles.topBar}>
         <TextInput
@@ -177,7 +177,7 @@ export default function SuppliersScreen() {
           </ScrollView>
         </View>
       </Modal>
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

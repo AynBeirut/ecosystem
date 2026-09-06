@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onWordPressProvisioningRequestCreated = exports.onAccountPaymentCreated = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkScheduledOrderReminders = exports.autoCloseFiscalPeriods = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onWordPressProvisioningRequestCreated = exports.onAccountPaymentCreated = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkMorningWorkBriefing = exports.checkCrmVisitReminders = exports.checkScheduledOrderReminders = exports.autoCloseFiscalPeriods = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -97,6 +97,7 @@ const dropship_1 = require("./api/dropship");
 const financeSso_1 = require("./api/financeSso");
 const wordpressAccess_1 = require("./api/wordpressAccess");
 const posSync_1 = require("./api/posSync");
+const accountingPairing_1 = require("./api/accountingPairing");
 const storeEvents_1 = require("./api/storeEvents");
 const eventTickets_1 = require("./api/eventTickets");
 const eventReservations_1 = require("./api/eventReservations");
@@ -161,6 +162,8 @@ app.get('/health', (req, res) => {
             '/supplier-returns/analytics',
             '/pos/pairing-code',
             '/pos/pair',
+            '/accounting/pairing-code',
+            '/accounting/pair',
             '/pos/generate-install-token',
             '/pos/auto-pair',
             '/pos/heartbeat',
@@ -286,6 +289,8 @@ app.post('/wordpress/access/redeem', wordpressAccess_1.redeemWordPressAccess);
 app.get('/wordpress/access/redeem', wordpressAccess_1.redeemWordPressAccess);
 app.post('/pos/pairing-code', posSync_1.createPosPairingCode);
 app.post('/pos/pair', posSync_1.pairPosDevice);
+app.post('/accounting/pairing-code', accountingPairing_1.createAccountingPairingCode);
+app.post('/accounting/pair', accountingPairing_1.pairExternalAccounting);
 app.post('/pos/generate-install-token', posSync_1.generatePosInstallToken);
 app.post('/pos/auto-pair', posSync_1.autoPairPosDevice);
 app.post('/pos/heartbeat', posSync_1.posHeartbeat);
@@ -624,6 +629,8 @@ app.post('/checkout', async (req, res) => {
                 const deliveryNotes = [deliveryInfo?.notes, scheduleNote, guestNote, checkoutChannel === 'whatsapp' ? 'Placed via WhatsApp' : '']
                     .filter(Boolean)
                     .join(' · ');
+                const deliverySettings = orderData.storeProfile?.deliverySettings;
+                const initialStatus = deliverySettings?.autoAcceptOrders === true ? 'confirmed' : 'pending';
                 const orderRef = db.collection('orders').doc();
                 transaction.set(orderRef, {
                     storeId: orderData.storeId,
@@ -649,7 +656,7 @@ app.post('/checkout', async (req, res) => {
                     discountAmount: orderData.discountAmount,
                     discount: orderData.discountAmount,
                     total: orderData.total,
-                    status: 'pending',
+                    status: initialStatus,
                     deliveryMethod: orderDeliveryMethod,
                     deliveryAddress: resolvedDeliveryAddress,
                     deliveryCity: fulfillmentMethod === 'delivery' ? (deliveryInfo?.city || '') : '',
@@ -677,7 +684,7 @@ app.post('/checkout', async (req, res) => {
                     items: orderData.orderItems,
                     subtotal: orderData.subtotal,
                     total: orderData.total,
-                    status: 'pending',
+                    status: initialStatus,
                 });
             }
             // Update stock for all products
@@ -785,6 +792,10 @@ var autoCloseFiscalPeriods_1 = require("./scheduled/autoCloseFiscalPeriods");
 Object.defineProperty(exports, "autoCloseFiscalPeriods", { enumerable: true, get: function () { return autoCloseFiscalPeriods_1.autoCloseFiscalPeriods; } });
 var checkScheduledOrderReminders_1 = require("./scheduled/checkScheduledOrderReminders");
 Object.defineProperty(exports, "checkScheduledOrderReminders", { enumerable: true, get: function () { return checkScheduledOrderReminders_1.checkScheduledOrderReminders; } });
+var checkCrmVisitReminders_1 = require("./scheduled/checkCrmVisitReminders");
+Object.defineProperty(exports, "checkCrmVisitReminders", { enumerable: true, get: function () { return checkCrmVisitReminders_1.checkCrmVisitReminders; } });
+var checkMorningWorkBriefing_1 = require("./scheduled/checkMorningWorkBriefing");
+Object.defineProperty(exports, "checkMorningWorkBriefing", { enumerable: true, get: function () { return checkMorningWorkBriefing_1.checkMorningWorkBriefing; } });
 // Export Firestore triggers: new order + order status / payment status change notifications
 var orderNotifications_2 = require("./triggers/orderNotifications");
 Object.defineProperty(exports, "onOrderCreated", { enumerable: true, get: function () { return orderNotifications_2.onOrderCreated; } });

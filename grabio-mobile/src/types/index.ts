@@ -74,6 +74,14 @@ export type RootStackParamList = {
   Login: undefined;
   MainTabs: { screen?: keyof TabParamList } | undefined;
   CrmClientDetail: { clientId: string; clientName: string };
+  CrmClientForm: { clientId?: string };
+  CrmTeamMap: undefined;
+  CrmVisitRouteForm: { routeId?: string };
+  CrmVisitRouteDetail: { routeId: string; occurrenceDate: string };
+  CrmPerformance: undefined;
+  CrmStoreAreas: undefined;
+  CrmTasks: undefined;
+  CrmMyClients: { openAssignLocation?: boolean } | undefined;
   StoreDetail: { storeId: string; storeName: string };
   ProductDetail: { product: Product; storeName: string };
   Cart: undefined;
@@ -86,12 +94,14 @@ export type RootStackParamList = {
   AddEditProduct: { productId?: string };
   Inventory: undefined;
   Expenses: undefined;
-  CreateOrder: undefined;
+  CreateOrder: { customerId?: string; customerName?: string; customerPhone?: string } | undefined;
   Customers: undefined;
   Purchases: undefined;
   Suppliers: undefined;
   AccountStatement: undefined;
+  ClientBalances: undefined;
   InvoiceManager: { path?: string } | undefined;
+  SalesCrm: { path?: string } | undefined;
 };
 
 export type TabParamList = {
@@ -104,4 +114,5 @@ export type TabParamList = {
   OwnerCustomers: undefined;
   OwnerDashboard: undefined;
   CrmClients: undefined;
+  CrmTasks: undefined;
 };

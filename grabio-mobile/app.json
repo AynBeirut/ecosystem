@@ -2,8 +2,8 @@
   "expo": {
     "name": "Grabio",
     "slug": "grabio-mobile",
-    "version": "1.2.5",
-    "orientation": "portrait",
+    "version": "1.2.94",
+    "orientation": "default",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": false,
@@ -19,12 +19,12 @@
       "infoPlist": {
         "NSCameraUsageDescription": "Take product photos",
         "NSPhotoLibraryUsageDescription": "Upload product images",
-        "NSLocationWhenInUseUsageDescription": "Sales CRM records your location when logging field visits."
+        "NSLocationWhenInUseUsageDescription": "Company sales devices must share location while Grabio is open so admin and managers can see live team locations on the map."
       }
     },
     "scheme": "grabio",
     "android": {
-      "versionCode": 35,
+      "versionCode": 125,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#6366f1"

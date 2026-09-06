@@ -18,3 +18,43 @@ export function isPlatformHostname(hostname: string): boolean {
   if (FIREBASE_PREVIEW_CHANNEL.test(hostname)) return true;
   return false;
 }
+
+/** First-segment paths served by the platform app — never treat as store slugs. */
+export const PLATFORM_ROUTE_SLUGS = new Set([
+  'home',
+  'features',
+  'pricing',
+  'search',
+  'marketplace',
+  'login',
+  'signup',
+  'admin',
+  'contact',
+  'cart',
+  'favorites',
+  'blog',
+  'about',
+  'careers',
+  'solutions',
+  'demo',
+  'demoshop',
+  'privacy',
+  'freelancer',
+  'builder',
+  'team',
+  'store',
+  'product',
+  'orders',
+  'profile',
+  'upgrade',
+  'onboarding',
+  'payment',
+  'blocked',
+  'auth',
+  'invoice',
+  'pages',
+  'wordpress',
+  'use-cases',
+  'track-order',
+  'resources',
+]);

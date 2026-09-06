@@ -2570,7 +2570,7 @@ const AdminProfile: React.FC = () => {
                   <p className="text-xs text-muted-foreground mt-1">
                     {accountingModeLocked
                       ? 'Locked after your first posted journal entry.'
-                      : 'Choose before first GL activity. Lebanese mode seeds bilingual COA labels and defaults LBP display currency.'}
+                      : 'PCG = Lebanese chart only (7010, 6111, …). International = standard 3-digit chart. All staff on this store see the same mode — no mixing.'}
                   </p>
                 </div>
                 {supportsArabicEntry(normalizeAccountingLanguage(formData.accountingLanguage, normalizeAccountingMode(formData.accountingMode))) && (

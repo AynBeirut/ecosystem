@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createGlPresentationContext, presentGlEntry } from '@/lib/ledger/glEntryPresentation';
+import { createGlPresentationContext, presentGlEntry, resolveVoucherParty } from '@/lib/ledger/glEntryPresentation';
 import type { JournalEntry, JournalLine, LedgerAccount } from '@/types/generalLedger';
 
 const now = '2026-07-01T12:00:00.000Z';
@@ -121,5 +121,17 @@ describe('glEntryPresentation', () => {
     const p = presentGlEntry(e, entryLines[1], ctx, entryLines);
     expect(p.party).toBe('Shop rent March');
     expect(p.category).toBe('Rent');
+  });
+
+  it('resolves POS voucher party from linked order customer when meta is missing', () => {
+    const e = entry({
+      sourceType: 'order',
+      sourceId: 'ord-lh-1',
+      voucherNumber: 'RV-2026-01271',
+      memo: 'Order POS-1281',
+      event: 'sale-recognized',
+    });
+    const party = resolveVoucherParty(e, ctx, { clientName: 'Janette Alam' });
+    expect(party).toEqual({ kind: 'client', name: 'Janette Alam' });
   });
 });

@@ -31,7 +31,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import { resolveDisplayUnitCost } from "@/lib/grabio/platformUnitCost";
 
 const productSchema = z.object({
@@ -1076,39 +1076,41 @@ const Inventory = () => {
         </Tabs>
       </div>
 
-      {/* Delete Confirmation Dialog */}
-      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Item</DialogTitle>
-            <DialogDescription>
-              Are you sure you want to delete this item? This action cannot be undone.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button variant="destructive" onClick={confirmDelete}>
-              Delete
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-      
-      {/* Manufacture Dialog */}
-      <Dialog open={isManufactureDialogOpen} onOpenChange={setIsManufactureDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
+      <AccountingSideSheet
+        open={isDeleteDialogOpen}
+        onOpenChange={setIsDeleteDialogOpen}
+        title="Delete Item"
+        description="Are you sure you want to delete this item? This action cannot be undone."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" className="ml-2" onClick={confirmDelete}>Delete</Button>
+          </>
+        }
+      />
+
+      <AccountingSideSheet
+        open={isManufactureDialogOpen}
+        onOpenChange={setIsManufactureDialogOpen}
+        title={
+          productToManufacture ? (
+            <span className="flex items-center gap-2">
               <Factory className="h-5 w-5 text-purple-600" />
-              Manufacture {productToManufacture?.name}
-            </DialogTitle>
-            <DialogDescription>
-              This will consume raw materials and produce finished products.
-            </DialogDescription>
-          </DialogHeader>
-          
+              Manufacture {productToManufacture.name}
+            </span>
+          ) : 'Manufacture'
+        }
+        description="This will consume raw materials and produce finished products."
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsManufactureDialogOpen(false)}>Cancel</Button>
+            <Button className="ml-2 bg-purple-600 hover:bg-purple-700" onClick={handleManufacture}>
+              <Factory className="mr-2 h-4 w-4" />
+              Manufacture
+            </Button>
+          </>
+        }
+      >
           {productToManufacture && (
             <div className="space-y-4">
               <div className="p-4 bg-muted rounded-lg">
@@ -1141,18 +1143,7 @@ const Inventory = () => {
               </div>
             </div>
           )}
-          
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setIsManufactureDialogOpen(false)}>
-              Cancel
-            </Button>
-            <Button className="bg-purple-600 hover:bg-purple-700" onClick={handleManufacture}>
-              <Factory className="mr-2 h-4 w-4" />
-              Manufacture
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AccountingSideSheet>
     </AppLayout>
   );
 };

@@ -7,10 +7,11 @@ import {
   loadCrmActivities,
   loadCrmCustomers,
   loadCrmMap,
-  loadCrmPerformance,
-  loadCrmPipeline,
   loadCrmPage,
+  loadCrmPerformance,
   loadCrmReps,
+  loadCrmStoreAreas,
+  loadCrmTasks,
   preloadCrmPages,
   type CrmPageLoader,
 } from '@/pages/admin/crm/crmEmbeddedLoaders';
@@ -20,8 +21,9 @@ const CRM_TABS: { key: string; prefix: string; loader: CrmPageLoader }[] = [
   { key: 'customers', prefix: '/admin/crm/customers', loader: loadCrmCustomers },
   { key: 'activities', prefix: '/admin/crm/activities', loader: loadCrmActivities },
   { key: 'map', prefix: '/admin/crm/map', loader: loadCrmMap },
-  { key: 'pipeline', prefix: '/admin/crm/pipeline', loader: loadCrmPipeline },
   { key: 'reps', prefix: '/admin/crm/reps', loader: loadCrmReps },
+  { key: 'areas', prefix: '/admin/crm/areas', loader: loadCrmStoreAreas },
+  { key: 'tasks', prefix: '/admin/crm/tasks', loader: loadCrmTasks },
 ];
 
 function buildInitialPages(): Record<string, React.ComponentType> {

@@ -1,9 +1,8 @@
+@import '../vendor/beirut-finance-flow-main/src/legacy-erp.css';
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-@import '../vendor/beirut-finance-flow-main/src/legacy-erp.css';
 
 @layer base {
   :root {
@@ -198,6 +197,178 @@
 
   .public-segment-btn-active {
     @apply bg-teal-600 text-white shadow-sm;
+  }
+
+  .package-selector-grid {
+    @apply grid gap-4 md:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .package-card {
+    @apply relative flex gap-4 rounded-2xl border border-slate-200/80 bg-white p-5 shadow-sm transition-all hover:border-teal-300 hover:shadow-md;
+  }
+
+  .package-card-icon {
+    @apply flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-teal-700;
+  }
+
+  .package-card-cta {
+    @apply absolute right-4 top-4 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 text-slate-400 transition-colors group-hover:border-teal-300 group-hover:bg-teal-50 group-hover:text-teal-700;
+  }
+
+  /* ── Marketing home (premium) ── */
+  .marketing-home {
+    @apply min-h-screen flex flex-col;
+    background: linear-gradient(180deg, #eef1f5 0%, #f5f5f7 32%, #f5f5f7 100%);
+  }
+
+  .marketing-hero {
+    @apply relative overflow-hidden;
+    background: linear-gradient(152deg, #070d18 0%, #0f172a 42%, #0c4a4e 88%, #115e59 100%);
+  }
+
+  .marketing-hero::before {
+    content: '';
+    @apply pointer-events-none absolute inset-0;
+    background:
+      radial-gradient(ellipse 70% 55% at 85% 10%, rgba(45, 212, 191, 0.22), transparent 55%),
+      radial-gradient(ellipse 50% 40% at 10% 90%, rgba(56, 189, 248, 0.08), transparent 50%);
+  }
+
+  .marketing-hero::after {
+    content: '';
+    @apply pointer-events-none absolute inset-x-0 bottom-0 h-px;
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+  }
+
+  .marketing-hero-inner {
+    @apply relative mx-auto max-w-6xl px-4 py-14 sm:px-6 md:py-20 lg:py-24;
+  }
+
+  .marketing-hero-eyebrow {
+    @apply mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-teal-300/90;
+  }
+
+  .marketing-hero-title {
+    @apply max-w-4xl text-3xl font-semibold tracking-tight text-white md:text-5xl md:leading-[1.08] lg:text-[3.25rem];
+  }
+
+  .marketing-hero-lead {
+    @apply mt-5 max-w-2xl text-base leading-relaxed text-slate-300 md:text-xl md:leading-relaxed;
+  }
+
+  .marketing-hero-pills {
+    @apply mt-8 flex flex-wrap gap-2;
+  }
+
+  .marketing-hero-pill {
+    @apply rounded-full border border-white/10 bg-white/5 px-3.5 py-1.5 text-xs font-medium text-slate-200 backdrop-blur-sm transition hover:border-teal-400/40 hover:bg-white/10 hover:text-white;
+  }
+
+  .marketing-industries {
+    @apply relative z-10 pb-6 pt-10 md:pt-12;
+  }
+
+  .marketing-industries-inner {
+    @apply mx-auto max-w-7xl px-4 sm:px-6;
+  }
+
+  .marketing-section-head {
+    @apply relative z-10 mb-8 text-center md:mb-10;
+  }
+
+  .marketing-section-eyebrow {
+    @apply mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-teal-700;
+  }
+
+  .marketing-section-title {
+    @apply text-2xl font-semibold tracking-tight text-slate-900 md:text-3xl md:leading-tight;
+  }
+
+  .marketing-section-lead {
+    @apply mx-auto mt-3 max-w-2xl text-sm leading-relaxed text-slate-600 md:text-base;
+  }
+
+  .marketing-package-grid {
+    @apply mx-auto grid w-full max-w-6xl grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3;
+  }
+
+  .marketing-package-card {
+    @apply relative flex w-full flex-col gap-4 overflow-hidden rounded-2xl border border-white/80 bg-white p-5 shadow-[0_8px_30px_-12px_rgba(15,23,42,0.18)] transition duration-300 hover:-translate-y-0.5 hover:shadow-[0_20px_40px_-16px_rgba(15,23,42,0.22)];
+  }
+
+  .marketing-package-accent {
+    @apply absolute inset-x-0 top-0 h-1 opacity-90;
+  }
+
+  .marketing-package-icon {
+    @apply flex h-12 w-12 shrink-0 items-center justify-center rounded-xl text-white shadow-lg;
+  }
+
+  .marketing-package-icon--shop {
+    background: linear-gradient(135deg, #0d9488, #047857);
+    box-shadow: 0 10px 24px -10px rgba(13, 148, 136, 0.55);
+  }
+
+  .marketing-package-icon--cafe {
+    background: linear-gradient(135deg, #b45309, #92400e);
+    box-shadow: 0 10px 24px -10px rgba(180, 83, 9, 0.45);
+  }
+
+  .marketing-package-icon--restaurant {
+    background: linear-gradient(135deg, #be123c, #881337);
+    box-shadow: 0 10px 24px -10px rgba(190, 18, 60, 0.4);
+  }
+
+  .marketing-package-icon--manufacturing {
+    background: linear-gradient(135deg, #334155, #1e293b);
+    box-shadow: 0 10px 24px -10px rgba(51, 65, 85, 0.45);
+  }
+
+  .marketing-package-icon--ecommerce {
+    background: linear-gradient(135deg, #6d28d9, #4338ca);
+    box-shadow: 0 10px 24px -10px rgba(109, 40, 217, 0.4);
+  }
+
+  .marketing-package-icon--ngo {
+    background: linear-gradient(135deg, #0284c7, #1d4ed8);
+    box-shadow: 0 10px 24px -10px rgba(2, 132, 199, 0.45);
+  }
+
+  .marketing-package-icon--freelancer {
+    background: linear-gradient(135deg, #0891b2, #0f766e);
+    box-shadow: 0 10px 24px -10px rgba(8, 145, 178, 0.45);
+  }
+
+  .marketing-package-icon--publisher {
+    background: linear-gradient(135deg, #c026d3, #7e22ce);
+    box-shadow: 0 10px 24px -10px rgba(192, 38, 211, 0.4);
+  }
+
+  .marketing-package-icon--custom {
+    background: linear-gradient(135deg, #52525b, #27272a);
+    box-shadow: 0 10px 24px -10px rgba(39, 39, 42, 0.45);
+  }
+
+  .marketing-platform-band {
+    @apply rounded-3xl border border-slate-200/60 bg-white/90 p-6 shadow-[0_8px_32px_-16px_rgba(15,23,42,0.12)] backdrop-blur-sm md:p-8;
+  }
+
+  .marketing-capability-grid {
+    @apply grid grid-cols-2 gap-3 lg:grid-cols-4 lg:gap-4;
+  }
+
+  .marketing-capability-tile {
+    @apply flex flex-col items-center rounded-2xl border border-slate-100 bg-slate-50/50 px-4 py-5 text-center transition duration-300 hover:border-slate-200 hover:bg-white hover:shadow-sm;
+  }
+
+  .marketing-cta-band {
+    @apply rounded-3xl px-6 py-10 text-center md:px-10 md:py-12;
+    background: linear-gradient(135deg, #0f172a 0%, #134e4a 100%);
+    box-shadow: 0 20px 50px -24px rgba(15, 23, 42, 0.45);
+  }
+
+  .marketing-blog-card {
+    @apply block rounded-2xl border border-slate-100 bg-gradient-to-b from-white to-slate-50/80 p-5 transition duration-300 hover:-translate-y-0.5 hover:border-slate-200 hover:shadow-md;
   }
   
   .nav-link {
@@ -1015,6 +1186,71 @@
 
   .finance-module-shell {
     margin-top: -0.25rem;
+  }
+
+  /* True browser fullscreen — hide admin chrome; one scroll container (no fixed main). */
+  html.finance-browser-fullscreen {
+    overflow: hidden;
+  }
+
+  html.finance-browser-fullscreen body {
+    overflow: hidden;
+  }
+
+  html.finance-browser-fullscreen .admin-shell-sidebar,
+  html.finance-browser-fullscreen .admin-shell-mobile-bar,
+  html.finance-browser-fullscreen .admin-shell-footer,
+  html.finance-browser-fullscreen .admin-mobile-header,
+  html.finance-browser-fullscreen .admin-shell-sally-fab {
+    display: none !important;
+  }
+
+  html.finance-browser-fullscreen [data-admin-theme] {
+    height: 100dvh;
+    max-height: 100dvh;
+    overflow: hidden;
+  }
+
+  html.finance-browser-fullscreen main {
+    position: relative;
+    z-index: 0;
+    max-width: none;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.5rem 0.75rem;
+    flex: 1 1 auto;
+    min-height: 0;
+    overscroll-behavior: contain;
+  }
+
+  html.finance-browser-fullscreen main > div {
+    max-width: none;
+    min-height: min-content;
+  }
+
+  html.finance-browser-fullscreen .finance-module-shell {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+  }
+
+  html.finance-browser-fullscreen .finance-module-shell__body {
+    min-height: 0;
+    flex: 1 1 auto;
+    overflow: visible;
+  }
+
+  .finance-compact-nav__actions {
+    @apply ml-auto flex shrink-0 items-center gap-1.5;
+  }
+
+  .finance-compact-nav__fullscreen {
+    @apply inline-flex h-7 items-center gap-1 rounded-full border border-slate-600/50 bg-slate-800/60 px-2.5 text-[11px] font-semibold uppercase tracking-wide text-slate-200;
+    @apply transition-colors hover:bg-slate-700/80 hover:text-white;
+  }
+
+  [data-admin-theme="light"] .finance-compact-nav__fullscreen {
+    @apply border-slate-300 bg-white text-slate-700 hover:bg-slate-50;
   }
 
   .finance-compact-nav {

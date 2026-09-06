@@ -3,7 +3,7 @@ import React, { useState, useEffect } from 'react';
 import { toast } from '@/components/ui/sonner';
 import { User, UserRole, Store } from '@/types/product';
 import { auth, authReady } from '@/lib/firebase';
-import { markGoogleAuthPending, clearGoogleAuthPending, shouldUseGoogleRedirect } from '@/lib/googleAuth';
+import { markGoogleAuthPending, clearGoogleAuthPending, shouldUseGoogleRedirect, isGoogleAuthPending } from '@/lib/googleAuth';
 import {
   GoogleAuthProvider,
   signInWithEmailAndPassword,
@@ -36,6 +36,7 @@ import { resolveStoreIdForAuthUser } from '@/lib/storeUtils';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
 import { ensureSubAccountProfile } from '@/lib/subAccountAuth';
 import { hydrateFreelancerUser } from '@/lib/freelancerAuth';
+import { consumeMobileSsoToken } from '@/lib/mobileAppSso';
 
 async function hydrateAdminSellerUser(
   db: ReturnType<typeof getFirestore>,
@@ -409,6 +410,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (!mounted) return;
 
       try {
+        await consumeMobileSsoToken();
+      } catch {
+        /* non-fatal — WebView may open login */
+      }
+
+      try {
         const redirectResult = await getRedirectResult(auth);
         if (redirectResult?.user && mounted) {
           toast.success('Google sign-in successful');
@@ -608,27 +615,26 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     if (shouldUseGoogleRedirect()) {
       markGoogleAuthPending();
-      release();
       await signInWithRedirect(auth, provider);
       return;
     }
 
     try {
-      if (shouldUseGoogleRedirect()) {
-        markGoogleAuthPending();
-        await signInWithRedirect(auth, provider);
-        return;
-      }
       setIsLoading(true);
       await signInWithPopup(auth, provider);
       toast.success('Google sign-in successful');
     } catch (error) {
       const e = error as { code?: string; message?: string };
       console.error('Google login error:', e);
+      if (e.code === 'auth/popup-blocked' || e.code === 'auth/popup-closed-by-user') {
+        markGoogleAuthPending();
+        await signInWithRedirect(auth, provider);
+        return;
+      }
       clearGoogleAuthPending();
       toast.error(e?.message || 'An error occurred during Google login');
     } finally {
-      if (!shouldUseGoogleRedirect()) {
+      if (!shouldUseGoogleRedirect() && !isGoogleAuthPending()) {
         setIsLoading(false);
       }
     }

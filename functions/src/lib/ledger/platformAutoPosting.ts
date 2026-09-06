@@ -23,6 +23,32 @@ import {
   type PurchaseReceiveInput,
 } from './purchaseReceiveAmounts';
 import { resolveExpenseAccountCode } from './expenseAccountRouting';
+import {
+  formatExpenseJournalMemo,
+  formatOrderJournalMemo,
+  formatPurchaseJournalMemo,
+  resolveOrderClientName,
+} from './ledgerHumanLabels';
+import {
+  buildPayrollJournalLines,
+  formatPayrollJournalMemo,
+  isPayrollExpenseLike,
+  payrollCashOrBank,
+  payrollVoucherMeta,
+  type PayrollPaymentInput,
+} from './payrollPosting';
+import { findSupplierByVendorName, supplierDebitAccount } from './partySubaccountLedger';
+import {
+  buildSaleDiscountLines,
+  buildSaleDiscountReversalLines,
+  resolveOrderSaleAmounts,
+  resolveSalesDiscountAccount,
+  revenueCreditForSale,
+  revenueDebitForSaleReversal,
+  saleDiscountVoucherMeta,
+} from './salesDiscountPosting';
+
+export type { PayrollPaymentInput } from './payrollPosting';
 
 function getDb() {
   return admin.firestore();
@@ -48,8 +74,14 @@ export type PlatformOrderInput = {
   date: string;
   total: number;
   taxAmount?: number;
+  subtotal?: number;
+  discountAmount?: number;
   paymentMethod?: string;
   invoiceNumber?: string;
+  clientId?: string;
+  clientName?: string;
+  customerId?: string;
+  customerName?: string;
   cogsLines: OrderCogsLine[];
   isCashSale?: boolean;
   isCodDelivery?: boolean;
@@ -86,6 +118,7 @@ export type PlatformExpenseInput = {
   category?: string;
   description?: string;
   vendor?: string;
+  supplierId?: string;
   amount: number;
   paymentMethod?: string;
 };
@@ -101,6 +134,25 @@ function computeCogs(cogsLines: OrderCogsLine[]): number {
   );
 }
 
+function orderSaleDescriptions(order: PlatformOrderInput): { debit: string; credit: string } {
+  const client = resolveOrderClientName(order);
+  const suffix = client ? ` — ${client}` : '';
+  return {
+    debit: `Order sale${suffix}`,
+    credit: `Sales revenue${suffix}`,
+  };
+}
+
+function orderVoucherMeta(order: PlatformOrderInput): Record<string, string> | undefined {
+  const clientName = resolveOrderClientName(order);
+  const clientId = String(order.clientId || order.customerId || '').trim();
+  const amounts = resolveOrderSaleAmounts(order);
+  const meta: Record<string, string> = { ...saleDiscountVoucherMeta(amounts) };
+  if (clientId) meta.clientId = clientId;
+  if (clientName) meta.clientName = clientName;
+  return Object.keys(meta).length ? meta : undefined;
+}
+
 /** Dr Cash/AR/Delivery Wallet, Cr Revenue + Dr COGS / Cr FG — mirrors invoice sale recognition. */
 export async function autoPostOrderSaleRecognized(
   storeId: string,
@@ -108,13 +160,12 @@ export async function autoPostOrderSaleRecognized(
   accounts: LedgerAccount[],
   createdBy?: string,
 ): Promise<PostJournalResult | null> {
-  const grossAmount = round2(order.total);
+  const amounts = resolveOrderSaleAmounts(order);
+  const grossAmount = amounts.netTotal;
   if (grossAmount <= 0) return null;
-  const taxAmount = normalizeOrderTax(grossAmount, order.taxAmount);
-  const revenueAmount = round2(grossAmount - taxAmount);
 
   const revenue = accountByCode(accounts, GL_ACCOUNT_CODES.REVENUE);
-  const taxPayable = taxAmount > 0
+  const taxPayable = amounts.taxAmount > 0
     ? accountByCode(accounts, GL_ACCOUNT_CODES.TAX_PAYABLE)
     : null;
   const cogsAcct = accountByCode(accounts, GL_ACCOUNT_CODES.COGS);
@@ -128,12 +179,25 @@ export async function autoPostOrderSaleRecognized(
       ? accountByCode(accounts, cashOrBank(order.paymentMethod))
       : accountByCode(accounts, GL_ACCOUNT_CODES.AR);
 
-  const lines: JournalLineInput[] = [{ accountId: debitAcct.id, debit: grossAmount, credit: 0, description: 'Order sale' }];
-  if (revenueAmount > 0) {
-    lines.push({ accountId: revenue.id, debit: 0, credit: revenueAmount, description: 'Sales revenue' });
+  const saleLines = orderSaleDescriptions(order);
+  const lines: JournalLineInput[] = [
+    { accountId: debitAcct.id, debit: grossAmount, credit: 0, description: saleLines.debit },
+  ];
+  const revenueCredit = revenueCreditForSale(amounts);
+  if (revenueCredit > 0) {
+    lines.push({ accountId: revenue.id, debit: 0, credit: revenueCredit, description: saleLines.credit });
   }
-  if (taxPayable && taxAmount > 0) {
-    lines.push({ accountId: taxPayable.id, debit: 0, credit: taxAmount, description: 'Sales tax payable' });
+  if (taxPayable && amounts.taxAmount > 0) {
+    lines.push({
+      accountId: taxPayable.id,
+      debit: 0,
+      credit: amounts.taxAmount,
+      description: 'Sales tax payable',
+    });
+  }
+  if (amounts.discountAmount > 0) {
+    const discountAcct = resolveSalesDiscountAccount(accounts, accountByCode);
+    lines.push(...buildSaleDiscountLines(amounts, revenue.id, discountAcct.id));
   }
 
   const totalCogs = computeCogs(order.cogsLines);
@@ -154,12 +218,13 @@ export async function autoPostOrderSaleRecognized(
     {
       storeId,
       date: order.date,
-      memo: `Order ${order.invoiceNumber || order.id}`,
+      memo: formatOrderJournalMemo(order),
       sourceType: 'order',
       sourceId: order.id,
       event: 'sale-recognized',
       voucherType: 'RV',
       createdBy,
+      voucherMeta: orderVoucherMeta(order),
       lines,
     },
     accountsMap(accounts),
@@ -174,13 +239,12 @@ export async function autoPostOrderSaleReversal(
   reversalId: string,
   createdBy?: string,
 ): Promise<PostJournalResult | null> {
-  const total = round2(order.total);
+  const amounts = resolveOrderSaleAmounts(order);
+  const total = amounts.netTotal;
   if (total <= 0) return null;
-  const taxAmount = normalizeOrderTax(total, order.taxAmount);
-  const revenueAmount = round2(total - taxAmount);
 
   const revenue = accountByCode(accounts, GL_ACCOUNT_CODES.REVENUE);
-  const taxPayable = taxAmount > 0
+  const taxPayable = amounts.taxAmount > 0
     ? accountByCode(accounts, GL_ACCOUNT_CODES.TAX_PAYABLE)
     : null;
   const cogsAcct = accountByCode(accounts, GL_ACCOUNT_CODES.COGS);
@@ -194,12 +258,17 @@ export async function autoPostOrderSaleReversal(
       ? accountByCode(accounts, cashOrBank(order.paymentMethod))
       : accountByCode(accounts, GL_ACCOUNT_CODES.AR);
 
+  const revenueDebit = revenueDebitForSaleReversal(amounts);
   const lines: JournalLineInput[] = [];
-  if (revenueAmount > 0) {
-    lines.push({ accountId: revenue.id, debit: revenueAmount, credit: 0, description: 'Reverse order revenue' });
+  if (revenueDebit > 0) {
+    lines.push({ accountId: revenue.id, debit: revenueDebit, credit: 0, description: 'Reverse order revenue' });
   }
-  if (taxPayable && taxAmount > 0) {
-    lines.push({ accountId: taxPayable.id, debit: taxAmount, credit: 0, description: 'Reverse sales tax payable' });
+  if (taxPayable && amounts.taxAmount > 0) {
+    lines.push({ accountId: taxPayable.id, debit: amounts.taxAmount, credit: 0, description: 'Reverse sales tax payable' });
+  }
+  if (amounts.discountAmount > 0) {
+    const discountAcct = resolveSalesDiscountAccount(accounts, accountByCode);
+    lines.push(...buildSaleDiscountReversalLines(amounts, discountAcct.id));
   }
   lines.push({ accountId: debitAcct.id, debit: 0, credit: total, description: 'Reverse cash/AR' });
 
@@ -227,11 +296,12 @@ export async function autoPostOrderSaleReversal(
     {
       storeId,
       date: new Date().toISOString(),
-      memo: `Order ${order.invoiceNumber || order.id} — reversal`,
+      memo: `${formatOrderJournalMemo(order)} — reversal`,
       sourceType: 'order',
       sourceId: order.id,
       event: `reversal-${reversalId}`,
       createdBy,
+      voucherMeta: orderVoucherMeta(order),
       lines,
     },
     accountsMap(accounts),
@@ -314,7 +384,7 @@ export async function autoPostPurchaseReceived(
     {
       storeId,
       date: purchase.date,
-      memo: `Purchase ${purchase.id} — ${purchase.supplierName || ''}`.trim(),
+      memo: formatPurchaseJournalMemo({ supplierName: purchase.supplierName }),
       sourceType: 'purchase',
       sourceId: purchase.id,
       event: 'received',
@@ -334,27 +404,50 @@ export async function autoPostExpensePaid(
   const amount = round2(expense.amount);
   if (amount <= 0) return null;
 
-  const expenseAcct = accountByCode(
-    accounts,
-    resolveExpenseAccountCode({
-      category: expense.category,
-      vendor: expense.vendor,
-      description: expense.description,
-    }),
-  );
+  if (isPayrollExpenseLike(expense)) {
+    return null;
+  }
+
+  const fallbackCode = resolveExpenseAccountCode({
+    category: expense.category,
+    vendor: expense.vendor,
+    description: expense.description,
+  });
+  let supplierId = expense.supplierId;
+  let supplierName = expense.vendor;
+  if (!supplierId && expense.vendor) {
+    const match = await findSupplierByVendorName(storeId, expense.vendor);
+    if (match) {
+      supplierId = match.id;
+      supplierName = match.name;
+    }
+  }
+  const expenseAcct = supplierId
+    ? await supplierDebitAccount(storeId, supplierId, supplierName, accounts, fallbackCode)
+    : accountByCode(accounts, fallbackCode);
   const cashAcct = accountByCode(accounts, cashOrBank(expense.paymentMethod));
 
   return postJournalEntry(
     {
       storeId,
       date: expense.date,
-      memo: `Expense ${expense.id} — ${expense.description || expense.category || ''}`.trim(),
+      memo: formatExpenseJournalMemo({
+        description: expense.description,
+        category: expense.category,
+        vendor: expense.vendor,
+      }),
       sourceType: 'expense',
       sourceId: expense.id,
       event: 'paid',
       createdBy,
+      voucherMeta: supplierId ? { supplierId, supplierName } : undefined,
       lines: [
-        { accountId: expenseAcct.id, debit: amount, credit: 0, description: 'Expense paid' },
+        {
+          accountId: expenseAcct.id,
+          debit: amount,
+          credit: 0,
+          description: supplierId ? `Supplier · ${supplierName || 'Supplier'}` : 'Expense paid',
+        },
         { accountId: cashAcct.id, debit: 0, credit: amount, description: 'Cash/bank payment' },
       ],
     },
@@ -381,7 +474,7 @@ export async function autoPostProductionStart(
     {
       storeId,
       date,
-      memo: `Production batch ${batchId} started`,
+      memo: 'Production batch started',
       sourceType: 'production',
       sourceId: batchId,
       event: 'started',
@@ -425,7 +518,7 @@ export async function autoPostProductionVariance(
     {
       storeId,
       date,
-      memo: `Production batch ${batchId} material variance`,
+      memo: 'Production batch — material variance',
       sourceType: 'production',
       sourceId: batchId,
       event: 'variance',
@@ -455,7 +548,7 @@ export async function autoPostProductionCompleteWip(
     {
       storeId,
       date,
-      memo: `Production batch ${batchId} completed (WIP → FG)`,
+      memo: 'Production batch completed (WIP → FG)',
       sourceType: 'production',
       sourceId: batchId,
       event: 'complete',
@@ -521,7 +614,7 @@ export async function autoPostProductionComplete(
     {
       storeId,
       date,
-      memo: `Production batch ${batchId} completed (legacy)`,
+      memo: 'Production batch completed',
       sourceType: 'production',
       sourceId: batchId,
       event: 'complete-legacy',
@@ -563,7 +656,7 @@ export async function autoPostProductionReversal(
       {
         storeId,
         date,
-        memo: `Reverse production batch ${batchId} (legacy)`,
+        memo: 'Reverse production batch (legacy)',
         sourceType: 'production',
         sourceId: batchId,
         event: `reversal-${reversalId}-legacy`,
@@ -587,7 +680,7 @@ export async function autoPostProductionReversal(
       {
         storeId,
         date,
-        memo: `Reverse production complete ${batchId}`,
+        memo: 'Reverse production complete',
         sourceType: 'production',
         sourceId: batchId,
         event: `reversal-${reversalId}-complete`,
@@ -616,7 +709,7 @@ export async function autoPostProductionReversal(
       {
         storeId,
         date,
-        memo: `Reverse production variance ${batchId}`,
+        memo: 'Reverse production variance',
         sourceType: 'production',
         sourceId: batchId,
         event: `reversal-${reversalId}-variance`,
@@ -632,7 +725,7 @@ export async function autoPostProductionReversal(
       {
         storeId,
         date,
-        memo: `Reverse production start ${batchId}`,
+        memo: 'Reverse production start',
         sourceType: 'production',
         sourceId: batchId,
         event: `reversal-${reversalId}-started`,
@@ -655,26 +748,51 @@ export async function autoPostPayrollPayment(
   paymentMethod: string,
   accounts: LedgerAccount[],
   createdBy?: string,
+  details?: Partial<PayrollPaymentInput>,
 ): Promise<PostJournalResult | null> {
-  const amount = round2(totalAmount);
+  return postPayrollPaymentEntry(
+    storeId,
+    {
+      id: paymentId,
+      totalAmount,
+      paymentDate,
+      paymentMethod,
+      ...details,
+    },
+    accounts,
+    createdBy,
+  );
+}
+
+export async function postPayrollPaymentEntry(
+  storeId: string,
+  input: PayrollPaymentInput,
+  accounts: LedgerAccount[],
+  createdBy?: string,
+): Promise<PostJournalResult | null> {
+  const amount = round2(Number(input.totalAmount) || 0);
   if (amount <= 0) return null;
 
-  const payroll = accountByCode(accounts, GL_ACCOUNT_CODES.PAYROLL);
-  const cashAcct = accountByCode(accounts, cashOrBank(paymentMethod));
+  const cashAcct = accountByCode(accounts, payrollCashOrBank(input.paymentMethod));
+  const lines = await buildPayrollJournalLines(
+    storeId,
+    { ...input, totalAmount: amount },
+    accounts,
+    cashAcct.id,
+  );
+  if (!lines.length) return null;
 
   return postJournalEntry(
     {
       storeId,
-      date: paymentDate,
-      memo: `Payroll payment ${paymentId}`,
+      date: input.paymentDate,
+      memo: formatPayrollJournalMemo(input),
       sourceType: 'payroll',
-      sourceId: paymentId,
+      sourceId: input.id,
       event: 'paid',
       createdBy,
-      lines: [
-        { accountId: payroll.id, debit: amount, credit: 0 },
-        { accountId: cashAcct.id, debit: 0, credit: amount },
-      ],
+      voucherMeta: payrollVoucherMeta(input),
+      lines,
     },
     accountsMap(accounts),
   );
@@ -699,7 +817,7 @@ export async function autoPostCashCollectionDeposit(
     {
       storeId,
       date: collectionDate,
-      memo: `Cash collection deposit ${collectionId}`,
+      memo: 'Cash collection deposit',
       sourceType: 'cash_collection',
       sourceId: collectionId,
       event: 'deposited',
@@ -732,7 +850,7 @@ export async function autoPostDeliveryWalletCodCollected(
     {
       storeId,
       date: collectionDate,
-      memo: `COD collected — delivery order ${orderId}`,
+      memo: 'COD collected — delivery',
       sourceType: 'delivery_wallet',
       sourceId: orderId,
       event: 'cod-collected',
@@ -766,7 +884,7 @@ export async function autoPostDeliveryWalletSettlement(
     {
       storeId,
       date: settlementDate,
-      memo: `Delivery wallet settlement ${settlementId}`,
+      memo: 'Delivery wallet settlement',
       sourceType: 'delivery_wallet',
       sourceId: settlementId,
       event: 'settled',

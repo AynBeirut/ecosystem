@@ -7,6 +7,25 @@ export function accountCodeNumeric(code: string): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+/** PCG parent rows may show "53001000001, 53001000002" — pick one bound for range filters. */
+export function normalizeRangeEndpoint(code: string, edge: 'from' | 'to'): string {
+  const raw = String(code || '').trim();
+  if (!raw.includes(',')) return raw;
+  const parts = raw
+    .split(',')
+    .map((part) => part.trim())
+    .filter(Boolean);
+  if (parts.length === 0) return raw;
+  const sorted = [...parts].sort((a, b) => accountCodeNumeric(a) - accountCodeNumeric(b));
+  return edge === 'from' ? sorted[0] : sorted[sorted.length - 1];
+}
+
+export function normalizeAccountRangeBounds(fromCode: string, toCode: string): { from: string; to: string } {
+  const from = normalizeRangeEndpoint(fromCode, 'from');
+  const to = normalizeRangeEndpoint(toCode, 'to');
+  return { from, to };
+}
+
 /** PCG / standard COA classes 1–7 (assets through off-balance). */
 export function isChartClass17Code(code: string): boolean {
   const first = String(code || '').trim()[0];

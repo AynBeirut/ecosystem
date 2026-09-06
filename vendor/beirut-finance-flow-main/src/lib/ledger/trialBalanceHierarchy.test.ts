@@ -131,4 +131,58 @@ describe('trialBalanceHierarchy', () => {
     expect(class5?.row.periodDebit).toBe(400);
     expect(class6?.row.periodDebit).toBe(250);
   });
+
+  it('rolls operational cash into client working-number range', () => {
+    const cash = ledgerAccount({
+      id: 'op-102',
+      code: '102',
+      name: 'POS Cash Drawer',
+      type: 'asset',
+      normalBalance: 'debit',
+    });
+    const rowByAccountId = new Map([
+      [
+        cash.id,
+        {
+          ...emptyExtendedRow(cash),
+          periodDebit: 86_000,
+          periodCredit: 57_000,
+          closingDebit: 29_000,
+        },
+      ],
+    ]);
+    const clients = [
+      {
+        id: 'c1',
+        storeId: storeId,
+        clientCode: '53001000001',
+        grabioOperationalCode: '102',
+        parentPcgCode: '5300',
+        name: 'Cash LBP',
+        nameAr: '',
+        currency: 'LBP',
+        createdAt: '2026-01-01',
+        updatedAt: '2026-01-01',
+      },
+    ];
+
+    const roots = buildLebaneseTrialBalanceTree(
+      [cash],
+      rowByAccountId,
+      '53001000001, 53001000002',
+      '70901000001',
+      clients,
+      {
+        hideInactiveAccounts: true,
+        includeZeroBalance: true,
+      },
+    );
+
+    const class5 = roots.find((node) => node.code === '5');
+    const cashClient = roots
+      .flatMap((node) => [node, ...node.children.flatMap((child) => [child, ...child.children])])
+      .find((node) => node.code === '53001000001');
+    expect(class5?.row.periodDebit).toBe(86_000);
+    expect(cashClient?.row.periodDebit).toBe(86_000);
+  });
 });

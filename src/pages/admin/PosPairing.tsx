@@ -8,11 +8,12 @@ import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import ModuleGate from '@/components/ModuleGate';
 import { useToast } from '@/hooks/use-toast';
-import { Download, Monitor, RefreshCw, Smartphone } from 'lucide-react';
+import { Download, Link2, Monitor, RefreshCw, Smartphone } from 'lucide-react';
 import {
   generatePairingCode,
   POS_INSTALLER_URL,
 } from '@/lib/posApi';
+import { generateAccountingPairingCode } from '@/lib/accountingApi';
 
 type PosDevice = {
   id: string;
@@ -33,6 +34,9 @@ const PosPairing: React.FC = () => {
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [codeExpiresAt, setCodeExpiresAt] = useState<number | null>(null);
   const [generatingCode, setGeneratingCode] = useState(false);
+  const [accountingCode, setAccountingCode] = useState<string | null>(null);
+  const [accountingCodeExpiresAt, setAccountingCodeExpiresAt] = useState<number | null>(null);
+  const [generatingAccountingCode, setGeneratingAccountingCode] = useState(false);
 
   const loadDevices = useCallback(async () => {
     if (!storeId) return;
@@ -68,6 +72,17 @@ const PosPairing: React.FC = () => {
     return () => clearInterval(timer);
   }, [codeExpiresAt]);
 
+  useEffect(() => {
+    if (!accountingCodeExpiresAt) return;
+    const timer = setInterval(() => {
+      if (Date.now() >= accountingCodeExpiresAt) {
+        setAccountingCode(null);
+        setAccountingCodeExpiresAt(null);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [accountingCodeExpiresAt]);
+
   const handleGenerateCode = async () => {
     if (!storeId) return;
     setGeneratingCode(true);
@@ -87,9 +102,35 @@ const PosPairing: React.FC = () => {
     }
   };
 
+  const handleGenerateAccountingCode = async () => {
+    if (!storeId) return;
+    setGeneratingAccountingCode(true);
+    try {
+      const result = await generateAccountingPairingCode(storeId);
+      setAccountingCode(result.code);
+      setAccountingCodeExpiresAt(Date.now() + result.expiresInSeconds * 1000);
+      toast({
+        title: 'Accounting code ready',
+        description: 'This 8-digit code stays valid for 1 year.',
+      });
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: e instanceof Error ? e.message : 'Failed to generate accounting code',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingAccountingCode(false);
+    }
+  };
+
   const codeMinutesLeft = codeExpiresAt
     ? Math.max(0, Math.ceil((codeExpiresAt - Date.now()) / 60000))
     : 0;
+
+  const accountingExpiresLabel = accountingCodeExpiresAt
+    ? new Date(accountingCodeExpiresAt).toLocaleDateString()
+    : '';
   const hasPairingCode = Boolean(pairingCode && codeExpiresAt && Date.now() < codeExpiresAt);
   const connectedDevicesCount = devices.length;
 
@@ -256,6 +297,45 @@ const PosPairing: React.FC = () => {
                 </ul>
               </div>
             </div>
+          </CardContent>
+        </AdminPanel>
+
+        <AdminPanel className="overflow-hidden border-violet-200/80 bg-gradient-to-br from-violet-50 via-white to-indigo-50 shadow-[0_22px_55px_-32px_rgba(109,40,217,0.28)]">
+          <CardHeader className="border-b border-violet-100 bg-gradient-to-r from-violet-50 to-indigo-50">
+            <CardTitle className="flex items-center gap-3 text-lg text-slate-900">
+              <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-violet-500 to-indigo-600 text-white shadow-[0_10px_24px_-14px_rgba(109,40,217,0.75)]">
+                <Link2 className="h-5 w-5" />
+              </span>
+              External accounting system
+            </CardTitle>
+            <CardDescription className="text-slate-600">
+              Generate an 8-digit code to link Beirut Finance or another external accounting app to this store.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5 p-6">
+            <ol className="list-decimal list-inside space-y-1 text-sm text-slate-600">
+              <li>Generate the code below</li>
+              <li>Open external accounting → Settings → Connect to Grabio store</li>
+              <li>Enter the 8-digit code in external accounting (valid 1 year)</li>
+            </ol>
+            <Button
+              type="button"
+              onClick={handleGenerateAccountingCode}
+              disabled={generatingAccountingCode || !storeId}
+              size="lg"
+              className="admin-touch-target bg-gradient-to-r from-violet-500 to-indigo-600 text-white hover:from-violet-600 hover:to-indigo-700"
+            >
+              {generatingAccountingCode ? 'Generating…' : 'Generate 8-digit accounting code'}
+            </Button>
+            {accountingCode ? (
+              <div className="rounded-3xl border border-violet-200 bg-gradient-to-br from-slate-950 via-slate-900 to-violet-950 p-8 text-center">
+                <p className="text-xs font-semibold uppercase tracking-[0.35em] text-violet-100/70">Accounting code</p>
+                <p className="mt-5 text-5xl font-mono font-bold tracking-[0.35em] text-white sm:text-6xl">{accountingCode}</p>
+                <p className="mt-4 text-sm text-violet-100/80">
+                  {accountingExpiresLabel ? `Valid until ${accountingExpiresLabel}` : 'Valid for 1 year'}
+                </p>
+              </div>
+            ) : null}
           </CardContent>
         </AdminPanel>
 

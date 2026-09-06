@@ -11,19 +11,29 @@ import {
   countAccountsInStatementRange,
 } from '@/lib/ledger/accountRangeStatement';
 import { accountCodeNumeric } from '@/lib/ledger/accountCodeRange';
-import { buildClientByGrabioMap, resolvePcgDisplay } from '@/lib/ledger/grabioToPcgMap';
-import { defaultOperationalAccountRange, type ReportCurrencyMode } from '@/lib/ledger/formatLedgerAmount';
+import { buildClientByGrabioMap, buildClientByParentPcgMap, displayPcgCodeForLedgerRow, resolvePcgDisplay } from '@/lib/ledger/grabioToPcgMap';
+import { compareLedgerAccountSortKeys } from '@/lib/ledger/accountSearch';
+import { defaultReportCurrencyMode, type ReportCurrencyMode } from '@/lib/ledger/formatLedgerAmount';
 import type { AccountingLanguage } from '@/lib/grabio/accountingMode';
 import type {
   AccountRangeStatementReport,
   JournalEntry,
   JournalLine,
   LedgerAccount,
+  LedgerDateBasis,
   PcgClientAccount,
 } from '@/types/generalLedger';
 import { downloadCsvText } from '@/lib/csvExport';
 import { downloadXlsxFromCsv } from '@/lib/xlsxExport';
 import { toast } from 'sonner';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  legacyReportBodyClass,
+  legacyReportCardClass,
+  legacyReportHeaderClass,
+  legacyReportOmitTitleBand,
+  legacyReportInputClass,
+} from '@/components/legacyErpReportFrame';
 
 type Props = {
   accounts: LedgerAccount[];
@@ -39,10 +49,22 @@ type Props = {
   onOpenEntry?: (entryId: string) => void;
 };
 
-function statementAccounts(accounts: LedgerAccount[]) {
+function statementAccounts(
+  accounts: LedgerAccount[],
+  isLebaneseCoa?: boolean,
+  clientByGrabio?: ReturnType<typeof buildClientByGrabioMap>,
+  clientByParentPcg?: ReturnType<typeof buildClientByParentPcgMap>,
+) {
   return accounts
     .filter((a) => a.isActive)
-    .sort((a, b) => accountCodeNumeric(a.code) - accountCodeNumeric(b.code));
+    .map((account) => ({
+      account,
+      displayCode: isLebaneseCoa
+        ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg)
+        : account.code,
+    }))
+    .sort((a, b) => compareLedgerAccountSortKeys(a, b, Boolean(isLebaneseCoa)))
+    .map((row) => row.account);
 }
 
 export default function AccountRangeStatementPanel({
@@ -52,22 +74,34 @@ export default function AccountRangeStatementPanel({
   isLebaneseCoa,
   pcgClientAccounts = [],
   accountingLanguage,
-  currencyCode = 'LBP',
+  currencyCode = 'USD',
   usdToLbp,
   companyName,
   loading,
   onOpenEntry,
 }: Props) {
-  const selectable = useMemo(() => statementAccounts(accounts), [accounts]);
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
-  const [currencyMode, setCurrencyMode] = useState<ReportCurrencyMode>(
-    currencyCode.toUpperCase() === 'USD' ? 'USD' : 'LBP',
+  const clientByParentPcg = useMemo(
+    () => buildClientByParentPcgMap(pcgClientAccounts),
+    [pcgClientAccounts],
   );
+  const selectable = useMemo(
+    () => statementAccounts(accounts, isLebaneseCoa, clientByGrabio, clientByParentPcg),
+    [accounts, clientByGrabio, clientByParentPcg, isLebaneseCoa],
+  );
+  const [currencyMode, setCurrencyMode] = useState<ReportCurrencyMode>(() =>
+    defaultReportCurrencyMode(currencyCode, { dualCurrency: isLebaneseCoa }),
+  );
+
+  useEffect(() => {
+    if (isLebaneseCoa) setCurrencyMode('both');
+  }, [isLebaneseCoa]);
 
   const [fromCode, setFromCode] = useState('');
   const [toCode, setToCode] = useState('');
   const [startDate, setStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
   const [endDate, setEndDate] = useState(() => new Date().toISOString().slice(0, 10));
+  const [dateBasis, setDateBasis] = useState<LedgerDateBasis>('posting');
   const [report, setReport] = useState<AccountRangeStatementReport | null>(null);
   const [pageIndex, setPageIndex] = useState(0);
   const [rangeError, setRangeError] = useState<string | null>(null);
@@ -119,6 +153,7 @@ export default function AccountRangeStatementPanel({
             toCode: to,
             startDate: start,
             endDate: end,
+            dateBasis,
           });
           if (next.sections.length === 0) {
             promptError('No accounts in this range for the selected period.');
@@ -133,14 +168,6 @@ export default function AccountRangeStatementPanel({
       });
     });
   };
-
-  useEffect(() => {
-    if (fromCode.trim() || toCode.trim()) return;
-    const range = defaultOperationalAccountRange(selectable);
-    if (!range.fromCode) return;
-    setFromCode(range.fromCode);
-    setToCode(range.toCode);
-  }, [selectable, fromCode, toCode]);
 
   useEffect(() => {
     if (prefillDoneRef.current || loading || accounts.length === 0) return;
@@ -177,18 +204,25 @@ export default function AccountRangeStatementPanel({
     return account.name;
   };
 
+  const accountDisplayCode = (account: LedgerAccount) =>
+    isLebaneseCoa
+      ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg)
+      : account.code;
+
   const canSearch = Boolean(fromCode.trim() && toCode.trim() && !loading && !computing);
   const section = report?.sections[pageIndex] || null;
   const pageCount = report?.sections.length || 0;
   const sectionAccount = section ? accounts.find((a) => a.id === section.accountId) : undefined;
 
   return (
-    <Card className="overflow-hidden border-slate-200 bg-white shadow-sm print:border-0 print:shadow-none">
-      <CardHeader className="border-b bg-slate-50/80 pb-4 print:hidden">
-        <CardTitle className="text-lg">Statement of account</CardTitle>
-        <CardDescription>One account per page · B/F opening · running Db/Cr balance.</CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4 pt-4">
+    <Card className={legacyReportCardClass(isLebaneseCoa, 'overflow-hidden print:border-0 print:shadow-none')}>
+      {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+        <CardHeader className={legacyReportHeaderClass(isLebaneseCoa, 'pb-4 print:hidden')}>
+          <CardTitle className="text-lg">Statement of account</CardTitle>
+          <CardDescription>One account per page · B/F opening · running Db/Cr balance.</CardDescription>
+        </CardHeader>
+      ) : null}
+      <CardContent className={legacyReportBodyClass(isLebaneseCoa)}>
         <form
           className="space-y-3 print:hidden"
           onSubmit={(e) => {
@@ -215,7 +249,29 @@ export default function AccountRangeStatementPanel({
               <label className="text-xs font-medium text-slate-700">Period to</label>
               <Input type="date" className="bg-white" value={endDate} onChange={(e) => { setEndDate(e.target.value); setReport(null); }} />
             </div>
+            <div className="space-y-1">
+              <label className="text-xs font-medium text-slate-700">Date basis</label>
+              <Select value={dateBasis} onValueChange={(v) => { setDateBasis(v as LedgerDateBasis); setReport(null); }}>
+                <SelectTrigger className="bg-white">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="posting">Posting date</SelectItem>
+                  <SelectItem value="value">Value date (Matrix)</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
             <ReportCurrencyPicker value={currencyMode} onChange={setCurrencyMode} id="soa-currency" />
+            {(currencyMode === 'LBP' || currencyMode === 'both') && usdToLbp ? (
+              <p className="text-[11px] text-muted-foreground">
+                1 USD = {new Intl.NumberFormat('en-US').format(usdToLbp)} LBP
+              </p>
+            ) : null}
+            {(currencyMode === 'LBP' || currencyMode === 'both') && !usdToLbp ? (
+              <p className="text-[11px] text-amber-700">
+                USD↔LBP conversion needs a live rate (Admin Profile) or pick USD-only.
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             <Button type="submit" disabled={!canSearch} className="h-9 min-w-[7.5rem] bg-[#316ac5] font-semibold uppercase text-white hover:bg-[#2a5dad]">
@@ -258,6 +314,7 @@ export default function AccountRangeStatementPanel({
               section={section}
               account={sectionAccount}
               accountName={sectionAccount ? accountName(sectionAccount) : section.accountName}
+              accountDisplayCode={sectionAccount ? accountDisplayCode(sectionAccount) : section.accountCode}
               storeCurrency={currencyCode}
               currencyMode={currencyMode}
               usdToLbp={usdToLbp}

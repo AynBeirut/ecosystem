@@ -98,7 +98,19 @@ const AdminSalaries: React.FC = () => {
       const docRef = await addDoc(collection(db, 'salaryPayments'), paymentData);
       setPayments([{ id: docRef.id, ...paymentData }, ...payments]);
 
-      await glPostPayrollPayment(user.storeId, docRef.id, totalAmount, paymentData.paymentDate, 'bank');
+      const staffMember = staff.find((s) => s.id === newPayment.staffId);
+      await glPostPayrollPayment(user.storeId, {
+        id: docRef.id,
+        staffId: newPayment.staffId,
+        staffName: staffMember?.name || 'Employee',
+        paymentDate: paymentData.paymentDate,
+        paymentMethod: 'bank',
+        baseAmount: newPayment.baseSalary,
+        commissionAmount: newPayment.commissionAmount,
+        bonusAmount: newPayment.bonus,
+        deductions: newPayment.deductions,
+        totalAmount,
+      });
 
       await logAction(
         user.id,

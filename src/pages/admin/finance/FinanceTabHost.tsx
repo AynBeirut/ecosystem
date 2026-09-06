@@ -147,6 +147,8 @@ function FinanceTabHostInner({ activeModuleDef, moduleLoaderByKey }: FinanceTabH
   );
 }
 
-export default function FinanceTabHost(props: FinanceTabHostProps) {
+function FinanceTabHost(props: FinanceTabHostProps) {
   return <FinanceTabHostInner {...props} />;
 }
+
+export default React.memo(FinanceTabHost);

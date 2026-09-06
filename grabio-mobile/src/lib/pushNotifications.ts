@@ -1,4 +1,5 @@
 import { Platform, PermissionsAndroid } from 'react-native';
+import { requestAndroidPermission } from './androidPermissions';
 import * as Notifications from 'expo-notifications';
 import {
   getMessaging,
@@ -8,8 +9,13 @@ import {
   onTokenRefresh,
 } from '@react-native-firebase/messaging';
 import firestore from '@react-native-firebase/firestore';
+import { isWithinWorkHours } from './smartAssistantNotifications';
 
 export const ANDROID_CHANNEL_ID = 'grabio_alerts';
+export const ANDROID_CRM_CHANNEL_ID = 'grabio_crm_reminders';
+export const ANDROID_ASSISTANT_CHANNEL_ID = 'grabio_assistant';
+
+const activeCrmReminderIds = new Set<string>();
 
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
@@ -24,7 +30,7 @@ Notifications.setNotificationHandler({
 async function requestAndroidPostNotifications(): Promise<void> {
   if (Platform.OS !== 'android' || Platform.Version < 33) return;
   try {
-    await PermissionsAndroid.request(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
+    await requestAndroidPermission(PermissionsAndroid.PERMISSIONS.POST_NOTIFICATIONS);
   } catch {
     // best effort — still try FCM token
   }
@@ -40,14 +46,96 @@ export async function ensureAndroidNotificationChannel(): Promise<void> {
     enableVibrate: true,
     lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
   });
+  await Notifications.setNotificationChannelAsync(ANDROID_CRM_CHANNEL_ID, {
+    name: 'CRM visit reminders',
+    importance: Notifications.AndroidImportance.MAX,
+    sound: 'default',
+    vibrationPattern: [0, 400, 200, 400],
+    enableVibrate: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
+  await Notifications.setNotificationChannelAsync(ANDROID_ASSISTANT_CHANNEL_ID, {
+    name: 'Work assistant',
+    importance: Notifications.AndroidImportance.DEFAULT,
+    sound: 'default',
+    vibrationPattern: [0, 120],
+    enableVibrate: true,
+    lockscreenVisibility: Notifications.AndroidNotificationVisibility.PUBLIC,
+  });
 }
 
-export async function showLocalPush(title: string, body: string): Promise<void> {
+/** Gentle assistant push — only during work hours. Returns false if suppressed. */
+export async function showAssistantPush(
+  title: string,
+  body: string,
+  data?: Record<string, string>,
+): Promise<boolean> {
+  if (!isWithinWorkHours()) return false;
   await ensureAndroidNotificationChannel();
   await Notifications.scheduleNotificationAsync({
-    content: { title, body, sound: true, priority: Notifications.AndroidNotificationPriority.MAX },
+    content: {
+      title,
+      body,
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.DEFAULT,
+      data,
+    },
     trigger: null,
   });
+  return true;
+}
+
+export async function showLocalPush(title: string, body: string, data?: Record<string, string>): Promise<void> {
+  if (!isWithinWorkHours()) return;
+  await ensureAndroidNotificationChannel();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      sound: true,
+      priority: Notifications.AndroidNotificationPriority.MAX,
+      data,
+    },
+    trigger: null,
+  });
+}
+
+export async function showCrmReminderPush(
+  customerId: string,
+  title: string,
+  body: string,
+  followUpAt: string,
+): Promise<void> {
+  if (!isWithinWorkHours()) return;
+  if (activeCrmReminderIds.has(customerId)) return;
+  activeCrmReminderIds.add(customerId);
+  await ensureAndroidNotificationChannel();
+  await Notifications.scheduleNotificationAsync({
+    identifier: `crm_visit_${customerId}`,
+    content: {
+      title,
+      body,
+      sound: true,
+      sticky: true,
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+      data: {
+        type: 'crm_visit_reminder',
+        customerId,
+        followUpAt,
+      },
+    },
+    trigger: null,
+  });
+}
+
+export async function dismissCrmReminder(customerId: string): Promise<void> {
+  activeCrmReminderIds.delete(customerId);
+  try {
+    await Notifications.dismissNotificationAsync(`crm_visit_${customerId}`);
+    await Notifications.cancelScheduledNotificationAsync(`crm_visit_${customerId}`);
+  } catch {
+    // ignore
+  }
 }
 
 async function saveFcmToken(userId: string, token: string, storeId?: string): Promise<void> {
@@ -83,6 +171,11 @@ export async function registerPushNotifications(
 
   await ensureAndroidNotificationChannel();
   await requestAndroidPostNotifications();
+
+  const expoPerm = await Notifications.requestPermissionsAsync();
+  if (!expoPerm.granted && expoPerm.ios?.status !== Notifications.IosAuthorizationStatus.PROVISIONAL) {
+    // Continue — FCM may still work on some devices
+  }
 
   const msg = getMessaging();
   const authStatus = await requestPermission(msg);

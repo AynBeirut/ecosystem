@@ -11,9 +11,14 @@ export type MobileStoreProfile = {
 
 function hasCrmAddon(profile: MobileStoreProfile | null): boolean {
   if (!profile) return false;
-  const meta = profile.addOnsMeta;
+  const meta = profile.addOnsMeta as Record<string, unknown> | undefined;
   if (meta?.salesCrm === true) return true;
+  if (profile.enabledModules?.crm === true) return true;
   if (Array.isArray(profile.addOns) && profile.addOns.includes('salesCrm')) return true;
+  const addOns = profile.addOns;
+  if (addOns && typeof addOns === 'object' && !Array.isArray(addOns) && (addOns as Record<string, unknown>).salesCrm) {
+    return true;
+  }
   return false;
 }
 
@@ -64,6 +69,18 @@ function resolveMobileModules(profile: MobileStoreProfile | null): Record<string
 export function canUseMobileModule(profile: MobileStoreProfile | null, moduleId: string): boolean {
   if (moduleId === 'crm') return hasCrmAddon(profile);
   return Boolean(resolveMobileModules(profile)[moduleId]);
+}
+
+/** Sales CRM — addon or any store team role that uses field CRM. */
+export function canUseCrmMobile(
+  profile: MobileStoreProfile | null,
+  userRole?: string,
+): boolean {
+  if (hasCrmAddon(profile)) return true;
+  return userRole === 'owner'
+    || userRole === 'sub_seller'
+    || userRole === 'sub_manager'
+    || userRole === 'crm_rep';
 }
 
 /** Standalone Invoice Manager — Invoicing & Billing (core) or Invoice Manager add-on. */

@@ -34,7 +34,8 @@ Local builds / upload candidates:
 
 | versionCode | versionName | Artifact | Status |
 |-------------|-------------|----------|--------|
-| **14** | **1.2.10** | `release/invoice-1.2.10-14.aab` | **Current — upload this** (declares minSdk 21 to match TWA v5) |
+| **14** | **1.2.10** | `release/invoice-1.2.10-14.aab` | Play — crashes on launch (minSdk 21 + expo-keep-awake) |
+| **15** | **1.2.11** | `release/invoice-1.2.11-15.aab` | **Current — upload this** (keep-awake patch + desugaring) |
 | 13 | 1.2.9 | `release/invoice-1.2.9-13.aab` | discarded — Play 24+ device drop |
 | 12 | 1.2.8 | `release/invoice-1.2.8-12.aab` | discarded — Play device-catalog drop vs TWA |
 | 11 | 1.2.7 | `release/invoice-1.2.7-11.aab` | superseded |
@@ -42,7 +43,9 @@ Local builds / upload candidates:
 | 5 | 1.2.1 | `release/invoice-1.2.1-5.aab` | DO NOT upload (code already on Play) |
 | 4 | 1.2.0 | `release/invoice-1.2.0-4.aab` | DO NOT upload (code already on Play) |
 
-**Next Android release must be versionCode ≥ 15.**
+**Next Android release must be versionCode ≥ 16.**
+
+v1.2.10 (code 14) crashes on launch: `AbstractMethodError` in `expo-keep-awake` when minSdk is 21. v1.2.11 patches `KeepAwakePackage` and enables core library desugaring.
 
 Play device-catalog error on v12: TWA (minSdk 21, no GPS feature) vs native Expo (minSdk 24). v13 marks location/GPS/touchscreen as optional and unlocks orientation. Remaining drop is Android 5–6 only — proceed if Play still flags it. R8 mapping warning is safe (minify is off).
 

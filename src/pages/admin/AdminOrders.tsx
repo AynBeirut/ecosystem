@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
@@ -49,6 +49,7 @@ import { glPostOrderSaleRecognized, glPostOrderSaleReversal, type OrderCogsLine 
 import { orderGlInputFromOrder, resolveOrderCogsLines } from '@/lib/resolveOrderCogs';
 import { isPlatformOrderCod } from '@/lib/salesRules';
 import { syncCodOrderToDeliveryWallet } from '@/lib/deliveryWalletService';
+import { getOrderStatusValuesForStore, isActivePreDeliveryStatus } from '@/lib/orderStatusFlow';
 
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
@@ -306,14 +307,12 @@ const AdminOrders: React.FC = () => {
   const isRefundingOrderRef = useRef(false);
 
   const isOrderEligibleForSplitMerge = (order: Order & { id: string }) => {
-    const allowedStatuses = ['pending', 'confirmed', 'processing', 'ready'];
     const hasPayments = (order.paymentHistory?.length || 0) > 0 || Number(order.amountPaid || 0) > 0;
-    return allowedStatuses.includes(order.status || '') && !hasPayments;
+    return isActivePreDeliveryStatus(order.status || '', user?.storeId, storeProfile?.deliverySettings) && !hasPayments;
   };
 
   const isOrderEligibleForShippingWorkflow = (order: Order & { id: string }) => {
-    const status = String(order.status || '').toLowerCase();
-    return ['pending', 'confirmed', 'processing', 'ready'].includes(status);
+    return isActivePreDeliveryStatus(String(order.status || ''), user?.storeId, storeProfile?.deliverySettings);
   };
 
   const resolveStoreId = () => getActualStoreId(user) || user?.storeId || '';
@@ -3509,7 +3508,23 @@ const AdminOrders: React.FC = () => {
   const deliveryOptions = getDeliveryOptions();
   const selectedDeliveryOption = deliveryOptions.find((o) => o.value === newOrder.deliveryMethod);
   const filteredOrders = getFilteredOrders();
-  const activeOrderStatuses = ['pending', 'confirmed', 'processing', 'ready'];
+  const orderFlowSettings = storeProfile?.deliverySettings;
+  const visibleOrderStatuses = useMemo(() => {
+    const allowed = new Set(getOrderStatusValuesForStore(user?.storeId, orderFlowSettings));
+    return ORDER_STATUSES.filter((entry) => allowed.has(entry.value));
+  }, [user?.storeId, orderFlowSettings?.skipKitchenStatuses]);
+  const statusOptionsForOrder = (orderStatus?: string) => {
+    if (orderStatus && !visibleOrderStatuses.some((entry) => entry.value === orderStatus)) {
+      const legacy = ORDER_STATUSES.find((entry) => entry.value === orderStatus);
+      if (legacy) return [...visibleOrderStatuses, legacy];
+    }
+    return visibleOrderStatuses;
+  };
+  const activeOrderStatuses = useMemo(
+    () => getOrderStatusValuesForStore(user?.storeId, orderFlowSettings)
+      .filter((status) => !['delivered', 'returned', 'cancelled'].includes(status)),
+    [user?.storeId, orderFlowSettings?.skipKitchenStatuses],
+  );
   const activeOrdersCount = orders.filter((o) => activeOrderStatuses.includes(String(o.status || '').toLowerCase())).length;
   const countedRevenue = orders
     .filter((o) => isCountedSaleStatus(o.status))
@@ -4081,7 +4096,7 @@ const AdminOrders: React.FC = () => {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <AdminStatCard title="Total Orders" value={orders.length} icon={ShoppingCart} gradient="from-orange-400 to-orange-600" subtitle="All sales orders" />
-          <AdminStatCard title="Active" value={activeOrdersCount} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Pending through ready" />
+          <AdminStatCard title="Active" value={activeOrdersCount} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle={orderFlowSettings?.skipKitchenStatuses ? 'Pending through confirmed' : 'Pending through ready'} />
           <AdminStatCard title="Sales Revenue" value={money(countedRevenue)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Counted sale statuses" />
           <AdminStatCard title="Unpaid / Partial" value={unpaidOrdersCount} icon={AlertCircle} gradient="from-red-500 to-rose-700" subtitle="Needs payment follow-up" valueClassName={unpaidOrdersCount > 0 ? 'text-red-600' : undefined} />
         </div>
@@ -4108,7 +4123,7 @@ const AdminOrders: React.FC = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="all">All Statuses</SelectItem>
-              {ORDER_STATUSES.map((status) => (
+              {visibleOrderStatuses.map((status) => (
                 <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
               ))}
             </SelectContent>
@@ -4316,7 +4331,7 @@ const AdminOrders: React.FC = () => {
                         disabled={statusUpdatingOrderId === order.id}
                         onChange={(e) => void handleStatusChange(order.id, e.target.value)}
                       >
-                        {ORDER_STATUSES.map((status) => (
+                        {statusOptionsForOrder(order.status).map((status) => (
                           <option key={status.value} value={status.value}>
                             {status.label}
                           </option>

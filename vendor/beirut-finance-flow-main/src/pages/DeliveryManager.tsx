@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter, DialogClose } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
@@ -206,17 +206,21 @@ const DeliveryManager = () => {
           </div>
 
           <div className="flex gap-2">
-            <Dialog open={isAssignOpen} onOpenChange={setIsAssignOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline">
-                  <Package className="mr-2 h-4 w-4" /> Assign COD
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Assign COD order to delivery</DialogTitle>
-                </DialogHeader>
-                <form onSubmit={handleAssignOrder} className="space-y-4">
+            <Button variant="outline" onClick={() => setIsAssignOpen(true)}>
+              <Package className="mr-2 h-4 w-4" /> Assign COD
+            </Button>
+            <AccountingSideSheet
+              open={isAssignOpen}
+              onOpenChange={setIsAssignOpen}
+              title="Assign COD order to delivery"
+              footer={
+                <>
+                  <Button type="button" variant="outline" onClick={() => setIsAssignOpen(false)}>Cancel</Button>
+                  <Button type="submit" form="assign-cod-form" className="ml-2">Assign</Button>
+                </>
+              }
+            >
+                <form id="assign-cod-form" onSubmit={handleAssignOrder} className="space-y-4">
                   <div>
                     <Label>Invoice / COD order</Label>
                     <Select value={assignForm.invoiceId} onValueChange={(v) => setAssignForm((p) => ({ ...p, invoiceId: v }))}>
@@ -243,31 +247,27 @@ const DeliveryManager = () => {
                       </SelectContent>
                     </Select>
                   </div>
-                  <DialogFooter>
-                    <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                    <Button type="submit">Assign</Button>
-                  </DialogFooter>
                 </form>
-              </DialogContent>
-            </Dialog>
+            </AccountingSideSheet>
 
-            <Dialog open={isAddPersonOpen} onOpenChange={setIsAddPersonOpen}>
-              <DialogTrigger asChild>
-                <Button><Plus className="mr-2 h-4 w-4" /> Add courier</Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader><DialogTitle>Add delivery person</DialogTitle></DialogHeader>
-                <form onSubmit={handleAddPerson} className="space-y-4">
+            <Button onClick={() => setIsAddPersonOpen(true)}><Plus className="mr-2 h-4 w-4" /> Add courier</Button>
+            <AccountingSideSheet
+              open={isAddPersonOpen}
+              onOpenChange={setIsAddPersonOpen}
+              title="Add delivery person"
+              footer={
+                <>
+                  <Button type="button" variant="outline" onClick={() => setIsAddPersonOpen(false)}>Cancel</Button>
+                  <Button type="submit" form="add-person-form" className="ml-2">Add</Button>
+                </>
+              }
+            >
+                <form id="add-person-form" onSubmit={handleAddPerson} className="space-y-4">
                   <div><Label>Name *</Label><Input value={personForm.name} onChange={(e) => setPersonForm((p) => ({ ...p, name: e.target.value }))} /></div>
                   <div><Label>Phone *</Label><Input value={personForm.phone} onChange={(e) => setPersonForm((p) => ({ ...p, phone: e.target.value }))} /></div>
                   <div><Label>Email</Label><Input type="email" value={personForm.email} onChange={(e) => setPersonForm((p) => ({ ...p, email: e.target.value }))} /></div>
-                  <DialogFooter>
-                    <DialogClose asChild><Button type="button" variant="outline">Cancel</Button></DialogClose>
-                    <Button type="submit">Add</Button>
-                  </DialogFooter>
                 </form>
-              </DialogContent>
-            </Dialog>
+            </AccountingSideSheet>
           </div>
         </div>
 
@@ -432,11 +432,22 @@ const DeliveryManager = () => {
           </TabsContent>
         </Tabs>
 
-        <Dialog open={isSettleOpen} onOpenChange={setIsSettleOpen}>
-          <DialogContent className="max-w-lg">
-            <DialogHeader>
-              <DialogTitle>Settle wallet — {selectedPerson?.name}</DialogTitle>
-            </DialogHeader>
+        <AccountingSideSheet
+          open={isSettleOpen}
+          onOpenChange={setIsSettleOpen}
+          title={selectedPerson ? `Settle wallet — ${selectedPerson.name}` : 'Settle wallet'}
+          size="default"
+          footer={
+            selectedPerson ? (
+              <>
+                <Button variant="outline" onClick={() => setIsSettleOpen(false)}>Cancel</Button>
+                <Button className="ml-2" onClick={() => void handleSettle()} disabled={settleLoading || selectedOrders.length === 0}>
+                  {settleLoading ? "Settling…" : "Settle & post GL"}
+                </Button>
+              </>
+            ) : undefined
+          }
+        >
             {selectedPerson && (
               <div className="space-y-4">
                 <div className="p-4 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
@@ -488,17 +499,9 @@ const DeliveryManager = () => {
                   <p className="text-sm text-muted-foreground">Settlement total · posts to GL</p>
                   <p className="text-2xl font-bold text-green-600">{formatCurrency(settleTotal, "USD")}</p>
                 </div>
-
-                <DialogFooter>
-                  <DialogClose asChild><Button variant="outline">Cancel</Button></DialogClose>
-                  <Button onClick={() => void handleSettle()} disabled={settleLoading || selectedOrders.length === 0}>
-                    {settleLoading ? "Settling…" : "Settle & post GL"}
-                  </Button>
-                </DialogFooter>
               </div>
             )}
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
       </div>
     </AppLayout>
   );

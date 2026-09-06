@@ -27,9 +27,9 @@ import { exportToCSV } from '@/lib/exportUtils';
 import {
   fetchActivities,
   fetchCrmClients,
-  fetchCrmReps,
   type CrmClient,
 } from '@/lib/crmService';
+import { fetchCrmTeamReps } from '@/lib/crmAssignableAgents';
 import {
   CRM_ACTIVITY_TYPES,
   CRM_ACTIVITY_RESULTS,
@@ -49,7 +49,7 @@ const CrmActivities: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const storeId = getActualStoreId(user);
-  const [reps, setReps] = useState<Awaited<ReturnType<typeof fetchCrmReps>>>([]);
+  const [reps, setReps] = useState<Awaited<ReturnType<typeof fetchCrmTeamReps>>>([]);
   const [clients, setClients] = useState<CrmClient[]>([]);
   const [rawActivities, setRawActivities] = useState<CrmActivity[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ const CrmActivities: React.FC = () => {
     setLoading(true);
     try {
       const [repList, clientList, actList] = await Promise.all([
-        fetchCrmReps(storeId),
+        fetchCrmTeamReps(storeId),
         fetchCrmClients(storeId),
         fetchActivities(storeId, {
           repId: repFilter === 'all' ? undefined : repFilter,

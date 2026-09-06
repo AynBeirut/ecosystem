@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { Building2, Loader2, MapPin, Plus } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { Building2, Loader2, Map, MapPin, Plus, BarChart3, CheckSquare } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,12 +22,15 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCrmStore } from '@/hooks/useCrmStore';
+import { useAuth } from '@/context/useAuth';
 import AddCrmClientDialog from '@/components/crm/AddCrmClientDialog';
+import CrmUpcomingRoutesList from '@/components/crm/CrmUpcomingRoutesList';
 import CrmLocationFilters, {
   crmEmptyLocationFilter,
   crmMatchesLocationFilter,
 } from '@/components/crm/CrmLocationFilters';
 import { CRM_CUSTOMER_TYPE_LABELS } from '@/lib/crm';
+import { fetchVisitRoutes, type CrmVisitRoute } from '@/lib/crmVisitRouteService';
 import type { CrmCustomerType } from '@/types/crm';
 
 function formatDate(iso: string | null | undefined): string {
@@ -41,11 +44,18 @@ function formatDate(iso: string | null | undefined): string {
 
 const CrmCustomers: React.FC = () => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [addOpen, setAddOpen] = useState(false);
   const [locationFilter, setLocationFilter] = useState(crmEmptyLocationFilter());
   const [repFilter, setRepFilter] = useState('all');
   const [search, setSearch] = useState('');
+  const [visitRoutes, setVisitRoutes] = useState<CrmVisitRoute[]>([]);
   const { clients, reps, loading, storeId, reload } = useCrmStore({ crmOnly: false });
+
+  useEffect(() => {
+    if (!storeId) return;
+    void fetchVisitRoutes(storeId, { managerView: true }).then(setVisitRoutes).catch(() => setVisitRoutes([]));
+  }, [storeId]);
 
   const repName = useMemo(() => {
     const m = new Map(reps.map((r) => [r.id, r.name]));
@@ -86,8 +96,8 @@ const CrmCustomers: React.FC = () => {
         <div className="flex items-center gap-2">
           <Building2 className="h-6 w-6 text-primary" />
           <div>
-            <h2 className="text-xl font-semibold">Customers</h2>
-            <p className="text-sm text-muted-foreground">Location dropdowns appear when you click Add customer.</p>
+            <h2 className="text-xl font-semibold">Clients</h2>
+            <p className="text-sm text-muted-foreground">Your CRM customer list — same as the mobile app.</p>
           </div>
         </div>
         <Button onClick={() => setAddOpen(true)} disabled={!storeId}>
@@ -95,6 +105,23 @@ const CrmCustomers: React.FC = () => {
           Add customer
         </Button>
       </div>
+
+      <div className="flex flex-wrap gap-2">
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/admin/crm/map"><Map className="h-4 w-4 mr-1" />Map & Pipeline</Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/admin/crm/tasks"><CheckSquare className="h-4 w-4 mr-1" />Tasks</Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/admin/crm/areas"><MapPin className="h-4 w-4 mr-1" />Areas</Link>
+        </Button>
+        <Button variant="outline" size="sm" asChild>
+          <Link to="/admin/crm/dashboard"><BarChart3 className="h-4 w-4 mr-1" />Stats</Link>
+        </Button>
+      </div>
+
+      <CrmUpcomingRoutesList routes={visitRoutes} />
 
       <Card>
         <CardHeader className="pb-3">
@@ -205,6 +232,7 @@ const CrmCustomers: React.FC = () => {
           onOpenChange={setAddOpen}
           storeId={storeId}
           reps={reps}
+          userId={user?.id}
           onCreated={() => void reload()}
         />
       ) : null}

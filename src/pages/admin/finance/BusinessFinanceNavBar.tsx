@@ -1,6 +1,6 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useSyncExternalStore } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Maximize2, Minimize2 } from 'lucide-react';
 import {
   Select,
   SelectContent,
@@ -17,6 +17,11 @@ import {
   financeSubNavOptions,
 } from '@/pages/admin/finance/businessFinanceNavConfig';
 import type { BusinessFinanceModule } from '@/pages/admin/finance/businessFinanceModuleTabs';
+import {
+  isFinanceBrowserFullscreen,
+  subscribeFinanceBrowserFullscreen,
+  toggleFinanceBrowserFullscreen,
+} from '@/pages/admin/finance/financeBrowserFullscreen';
 import { useFinanceShellState } from '../../../../vendor/beirut-finance-flow-main/src/context/FinanceShellStateContext';
 
 type Props = {
@@ -32,6 +37,11 @@ export default function BusinessFinanceNavBar({
   storeName,
   onQuickStatement,
 }: Props) {
+  const fullScreen = useSyncExternalStore(
+    subscribeFinanceBrowserFullscreen,
+    isFinanceBrowserFullscreen,
+    () => false,
+  );
   const {
     reportsEmbedTab,
     settingsEmbedTab,
@@ -171,16 +181,29 @@ export default function BusinessFinanceNavBar({
         ) : null}
       </div>
 
-      {onQuickStatement ? (
+      <div className="finance-compact-nav__actions">
+        {onQuickStatement ? (
+          <button
+            type="button"
+            className="finance-compact-nav__quick-soa shrink-0"
+            onClick={onQuickStatement}
+            title="Quick statement of account"
+          >
+            Quick statement
+          </button>
+        ) : null}
         <button
-          type="button"
-          className="finance-compact-nav__quick-soa shrink-0"
-          onClick={onQuickStatement}
-          title="Quick statement of account"
-        >
-          Quick statement
-        </button>
-      ) : null}
+            type="button"
+            className="finance-compact-nav__fullscreen shrink-0"
+            onClick={() => void toggleFinanceBrowserFullscreen()}
+            title={fullScreen ? 'Exit full screen' : 'Full screen'}
+            aria-label={fullScreen ? 'Exit full screen' : 'Full screen'}
+            aria-pressed={fullScreen}
+          >
+            {fullScreen ? <Minimize2 className="h-3.5 w-3.5" aria-hidden /> : <Maximize2 className="h-3.5 w-3.5" aria-hidden />}
+            <span className="hidden sm:inline">{fullScreen ? 'Exit' : 'Full screen'}</span>
+          </button>
+      </div>
     </div>
   );
 }

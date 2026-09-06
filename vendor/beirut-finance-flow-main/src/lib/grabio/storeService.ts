@@ -9,6 +9,10 @@ import {
 import { getFinanceDb } from '@/integrations/firebase/client';
 import type { FinanceDocumentSettings, GrabioStoreProfile } from './types';
 import {
+  peekCachedGrabioStoreProfile,
+  setCachedGrabioStoreProfile,
+} from './storeProfileCache';
+import {
   mapFinanceInvoiceTemplateToGrabio,
   mapGrabioInvoiceTemplateToFinance,
 } from '@/lib/invoiceTemplateMap';
@@ -139,17 +143,40 @@ export async function updateFinanceDocumentSettings(
   });
 }
 
+function resolveRole(
+  uid: string,
+  storeId: string,
+  profile: GrabioStoreProfile,
+): ResolvedGrabioStore['role'] {
+  return profile.ownerId === uid || storeId === uid ? 'owner' : 'member';
+}
+
+async function refreshStoreProfileFromServer(storeId: string): Promise<GrabioStoreProfile | null> {
+  const ref = doc(getFinanceDb(), 'storeProfiles', storeId);
+  const snap = await getDocFromServer(ref).catch(() => getDoc(ref));
+  if (!snap.exists()) return null;
+  const profile = snap.data() as GrabioStoreProfile;
+  setCachedGrabioStoreProfile(storeId, profile);
+  return profile;
+}
+
 /** Resolve or bootstrap the Grabio store for a Firebase user. */
 export async function resolveGrabioStore(uid: string, email: string): Promise<ResolvedGrabioStore> {
   const storeId = await resolveStoreIdForUser(uid);
+  const cached = peekCachedGrabioStoreProfile(storeId);
+  if (cached) {
+    void refreshStoreProfileFromServer(storeId);
+    return { storeId, profile: cached, role: resolveRole(uid, storeId, cached) };
+  }
+
   const profileRef = doc(getFinanceDb(), 'storeProfiles', storeId);
-  const snap = await getDocFromServer(profileRef).catch(() => getDoc(profileRef));
+  const snap = await getDoc(profileRef);
 
   if (snap.exists()) {
     const profile = snap.data() as GrabioStoreProfile;
-    const role: ResolvedGrabioStore['role'] =
-      profile.ownerId === uid || storeId === uid ? 'owner' : 'member';
-    return { storeId, profile, role };
+    setCachedGrabioStoreProfile(storeId, profile);
+    void refreshStoreProfileFromServer(storeId);
+    return { storeId, profile, role: resolveRole(uid, storeId, profile) };
   }
 
   const profile = defaultFinanceStoreProfile(uid, email);
@@ -159,6 +186,7 @@ export async function resolveGrabioStore(uid: string, email: string): Promise<Re
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  setCachedGrabioStoreProfile(storeId, profile);
 
   return { storeId, profile, role: 'owner' };
 }
@@ -167,9 +195,17 @@ export async function loadStoreProfile(
   storeId: string,
   options?: { fromServer?: boolean },
 ): Promise<GrabioStoreProfile | null> {
+  if (!options?.fromServer) {
+    const cached = peekCachedGrabioStoreProfile(storeId);
+    if (cached) return cached;
+  }
+
   const ref = doc(getFinanceDb(), 'storeProfiles', storeId);
   const snap = options?.fromServer
     ? await getDocFromServer(ref).catch(() => getDoc(ref))
     : await getDoc(ref);
-  return snap.exists() ? (snap.data() as GrabioStoreProfile) : null;
+  if (!snap.exists()) return null;
+  const profile = snap.data() as GrabioStoreProfile;
+  setCachedGrabioStoreProfile(storeId, profile);
+  return profile;
 }

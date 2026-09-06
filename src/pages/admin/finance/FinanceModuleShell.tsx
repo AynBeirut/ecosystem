@@ -34,6 +34,10 @@ import {
 } from '@/pages/admin/finance/businessFinanceNavConfig';
 import { FinanceShellStateProvider } from '../../../../vendor/beirut-finance-flow-main/src/context/FinanceShellStateContext';
 import QuickStatementDialog from '../../../../vendor/beirut-finance-flow-main/src/components/QuickStatementDialog';
+import {
+  exitFinanceBrowserFullscreen,
+  getFullscreenElement,
+} from '@/pages/admin/finance/financeBrowserFullscreen';
 
 const REPORT_HUB_MODULES = new Set<BusinessFinanceModule>([
   'payables',
@@ -66,7 +70,7 @@ function readEmbedTabs(search: string): {
 const FinanceModuleShell: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { profile } = useStoreEntitlements();
+  const { profile, storeId } = useStoreEntitlements();
   const accent = profile?.templateColors?.primary ?? '#38B2AC';
   const storeName = useFinanceStoreLabel();
 
@@ -92,6 +96,14 @@ const FinanceModuleShell: React.FC = () => {
   const [financeReturnUrl, setFinanceReturnUrl] = useState<string | null>(null);
 
   const openQuickStatement = useCallback(() => setQuickStatementOpen(true), []);
+
+  useEffect(() => {
+    return () => {
+      if (getFullscreenElement()) {
+        void exitFinanceBrowserFullscreen();
+      }
+    };
+  }, []);
 
   useEffect(() => {
     wireFinanceFirebaseFromGrabio();
@@ -314,10 +326,12 @@ const FinanceModuleShell: React.FC = () => {
             storeName={storeName}
             onQuickStatement={openQuickStatement}
           />
-          <FinanceAppBridge>
-            <QuickStatementDialog open={quickStatementOpen} onOpenChange={setQuickStatementOpen} />
-            <FinanceTabHost activeModuleDef={activeModuleDef} moduleLoaderByKey={moduleLoaderByKey} />
-          </FinanceAppBridge>
+          <div className="finance-module-shell__body min-h-0 flex-1">
+            <FinanceAppBridge seedProfile={profile} seedStoreId={storeId}>
+              <QuickStatementDialog open={quickStatementOpen} onOpenChange={setQuickStatementOpen} />
+              <FinanceTabHost activeModuleDef={activeModuleDef} moduleLoaderByKey={moduleLoaderByKey} />
+            </FinanceAppBridge>
+          </div>
         </div>
       </FinanceShellStateProvider>
     </FinanceInvoiceModuleGate>

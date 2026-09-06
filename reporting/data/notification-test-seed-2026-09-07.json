@@ -1,0 +1,38 @@
+{
+  "storeId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+  "ownerEmail": "y.malek@nip-lb.com",
+  "seededAt": "2026-09-06T19:29:42.151Z",
+  "results": [
+    {
+      "kind": "scheduled_order",
+      "orderId": "VlMCt6oyh8ro2UN6kdFw",
+      "scheduledFor": "2026-09-07T10:00:00+03:00"
+    },
+    {
+      "kind": "scheduled_order_30m",
+      "orderId": "NOCrakXLBRrGe1NUDd2k",
+      "scheduledFor": "2026-09-07T09:35:00+03:00"
+    },
+    {
+      "kind": "crm_visit_reminder",
+      "customerId": "181zcc4hUziLLjpAUEQE",
+      "followUpAt": "2026-09-07T09:10:00+03:00"
+    },
+    {
+      "kind": "low_stock",
+      "productId": "2Eg1Igw4SPovwvtuZSnX"
+    },
+    {
+      "kind": "morning_briefing_reset",
+      "userId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+      "date": "2026-09-07"
+    },
+    {
+      "kind": "store_announcement_doc"
+    },
+    {
+      "kind": "crm_activity_doc",
+      "activityId": "a7Ejspz3yFGavr5OLSBp"
+    }
+  ]
+}

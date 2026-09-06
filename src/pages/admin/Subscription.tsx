@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useAuth } from '@/context/useAuth';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { StoreProfile } from '@/types/storeProfile';
@@ -54,7 +54,7 @@ type AddOnSelection = {
   extraStorageBlocks: number;
 };
 
-const TRIAL_DURATION_MONTHS = 3;
+const TRIAL_DURATION_MONTHS = 1;
 
 const PRICING = {
   starter: { monthly: 10, yearly: 100 },
@@ -90,7 +90,7 @@ const PLAN_FEATURES: Record<SubscriptionTier, {
   trial: {
     description: 'Pay As You Go - Free to start',
     monthlyLabel: '$0 upfront + 20% of sales',
-    yearlyLabel: 'Up to 3 months trial period',
+    yearlyLabel: '1 month free trial',
     badge: 'FREE TO START',
     limits: [
       'Products: 10 maximum',
@@ -256,9 +256,12 @@ function getSubscriptionApiBase(): string {
 }
 
 export default function Subscription() {
-  const { user } = useAuth();
+  const { user, upgradeToAdmin } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const presetParam = searchParams.get('preset') as StartingPackageKey | null;
+  const onboardingParam = searchParams.get('onboarding');
   const [profile, setProfile] = useState<StoreProfile | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -271,7 +274,11 @@ export default function Subscription() {
   const [planSelections, setPlanSelections] = useState<Record<PaidTier, AddOnSelection>>(getDefaultSelectionByTier('starter'));
   const [addOnExtraStorageBlocks, setAddOnExtraStorageBlocks] = useState(1);
   const [pendingPayment, setPendingPayment] = useState<{ tier: PaidTier; billing: Billing; addOns: Record<string, unknown>; label: string } | null>(null);
-  const [modularPreset, setModularPreset] = useState<StartingPackageKey | 'custom'>('pkg_shop');
+  const [modularPreset, setModularPreset] = useState<StartingPackageKey | 'custom'>(() => {
+    if (onboardingParam === 'custom') return 'custom';
+    if (presetParam && PRESET_LIST.some((p) => p.key === presetParam)) return presetParam;
+    return 'pkg_shop';
+  });
   const [modularBilling, setModularBilling] = useState<Billing>('monthly');
   const [modularSeats, setModularSeats] = useState(1);
   const [modularPos, setModularPos] = useState(0);
@@ -447,6 +454,17 @@ export default function Subscription() {
   }, [firebaseAuth, user, toast]);
 
   useEffect(() => {
+    if (onboardingParam === 'custom') {
+      setModularPreset('custom');
+      setSelectedModules(new Set());
+      return;
+    }
+    if (presetParam && PRESET_LIST.some((p) => p.key === presetParam)) {
+      handlePresetChange(presetParam);
+    }
+  }, [onboardingParam, presetParam]);
+
+  useEffect(() => {
     const fetchProfile = async () => {
       if (!user?.id) {
         setIsLoading(false);
@@ -507,11 +525,13 @@ export default function Subscription() {
       const data = await response.json();
 
       if (data.activated) {
+        await upgradeToAdmin();
         toast({
           title: 'Trial Started',
-          description: 'Trial is active for up to 3 months with pay-as-you-go revenue share.',
+          description: `Your 1-month free trial is active with pay-as-you-go revenue share.`,
         });
         await loadSubscriptionInfo();
+        navigate('/admin', { replace: true });
         return;
       }
       
@@ -1466,7 +1486,7 @@ export default function Subscription() {
                       <summary className="font-medium cursor-pointer">Learn more about Trial requirements</summary>
                       <div className="mt-3 space-y-2 text-gray-700">
                         <p><strong>What are operations?</strong> Invoices, purchases, recipes, and sales count toward your 30 monthly operations.</p>
-                        <p><strong>What happens after 3 months?</strong> You must upgrade. A 15-day grace period applies, then data deletion workflow starts.</p>
+                        <p><strong>What happens after 1 month?</strong> You must upgrade. A 15-day grace period applies, then data deletion workflow starts.</p>
                         <p><strong>Why card verification?</strong> Verification enables payment gateway activation; no upfront subscription charge is taken.</p>
                         <p><strong>How is 20% collected?</strong> Revenue share is deducted automatically from each paid sale before payout.</p>
                       </div>

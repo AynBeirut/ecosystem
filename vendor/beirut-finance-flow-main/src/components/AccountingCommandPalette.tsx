@@ -10,6 +10,7 @@ import {
   CommandSeparator,
 } from "@/components/ui/command";
 import type { JournalEntry, LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
+import { journalEntryDisplayLabel, sanitizeJournalMemoForDisplay } from "@/lib/ledger/ledgerHumanLabels";
 import { buildClientByGrabioMap, formatGlAccountReference } from "@/lib/ledger/grabioToPcgMap";
 
 export type AccountingPaletteTab = {
@@ -126,13 +127,13 @@ export default function AccountingCommandPalette({
               {recentVouchers.map((entry) => (
                 <CommandItem
                   key={entry.id}
-                  value={`voucher ${entry.voucherNumber || entry.id} ${entry.memo || ""} ${entry.voucherType || ""}`}
+                  value={`voucher ${entry.voucherNumber || entry.id} ${sanitizeJournalMemoForDisplay(entry.memo || "")} ${entry.voucherType || ""}`}
                   onSelect={() => run(() => onSelectEntry(entry.id))}
                 >
                   <span className="font-mono text-xs mr-2 shrink-0">
                     {entry.voucherNumber || entry.voucherType || "JE"}
                   </span>
-                  <span className="truncate">{entry.memo || entry.date.slice(0, 10)}</span>
+                  <span className="truncate">{sanitizeJournalMemoForDisplay(entry.memo || "") || entry.date.slice(0, 10)}</span>
                 </CommandItem>
               ))}
             </CommandGroup>

@@ -18,7 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { useNavigate } from "react-router-dom";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import ShareSheet from "@/components/ShareSheet";
 
 // Define schema for purchase order form (without items - handled separately)
@@ -592,14 +592,47 @@ const PurchaseOrders = () => {
     </Card>
       </div>
 
-      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Purchase Order Preview</DialogTitle>
-            <DialogDescription>
-              Preview how your purchase order will look.
-            </DialogDescription>
-          </DialogHeader>
+      <AccountingSideSheet
+        open={isPreviewOpen}
+        onOpenChange={setIsPreviewOpen}
+        title="Purchase Order Preview"
+        description="Preview how your purchase order will look."
+        size="form"
+        tall
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Close</Button>
+            <Button
+              variant="outline"
+              className="ml-2"
+              onClick={() => {
+                setIsPreviewOpen(false);
+                if (selectedPurchaseOrderId) handleSendPurchaseOrder(selectedPurchaseOrderId);
+              }}
+            >
+              <Mail className="mr-2 h-4 w-4" />
+              Share
+            </Button>
+            <Button
+              className="ml-2"
+              onClick={() => {
+                setIsPreviewOpen(false);
+                if (selectedPurchaseOrderId) {
+                  handleExportPurchaseOrder(selectedPurchaseOrderId);
+                } else {
+                  toast({
+                    title: "Info",
+                    description: "Save the purchase order first to export it as PDF",
+                  });
+                }
+              }}
+            >
+              <FileDown className="mr-2 h-4 w-4" />
+              Save as PDF
+            </Button>
+          </>
+        }
+      >
 
           {previewPurchaseOrderData && (
             <div className="p-4 border rounded-md overflow-y-auto max-h-[70vh] bg-white">
@@ -664,48 +697,7 @@ const PurchaseOrders = () => {
             </div>
           )}
 
-          <DialogFooter className="flex justify-between items-center">
-            <div>
-              <Button 
-                variant="outline" 
-                onClick={() => setIsPreviewOpen(false)}
-              >
-                Close
-              </Button>
-            </div>
-            <div className="flex gap-2">
-              <Button 
-                variant="outline"
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  if (selectedPurchaseOrderId) {
-                    handleSendPurchaseOrder(selectedPurchaseOrderId);
-                  }
-                }}
-              >
-                <Mail className="mr-2 h-4 w-4" />
-                Share
-              </Button>
-              <Button 
-                onClick={() => {
-                  setIsPreviewOpen(false);
-                  if (selectedPurchaseOrderId) {
-                    handleExportPurchaseOrder(selectedPurchaseOrderId);
-                  } else {
-                    toast({
-                      title: "Info",
-                      description: "Save the purchase order first to export it as PDF",
-                    });
-                  }
-                }}
-              >
-                <FileDown className="mr-2 h-4 w-4" />
-                Save as PDF
-              </Button>
-            </div>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AccountingSideSheet>
 
       <ShareSheet
         open={isShareSheetOpen}

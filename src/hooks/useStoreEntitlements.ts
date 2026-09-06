@@ -4,19 +4,27 @@ import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { resolveStoreEntitlements, type StoreEntitlements } from '@/lib/entitlements';
 import type { StoreProfile } from '@/types/storeProfile';
-
-const profileCache = new Map<string, StoreProfile>();
+import {
+  peekCachedGrabioStoreProfile,
+  setCachedGrabioStoreProfile,
+  clearCachedGrabioStoreProfile,
+} from '../../vendor/beirut-finance-flow-main/src/lib/grabio/storeProfileCache';
+import type { GrabioStoreProfile } from '../../vendor/beirut-finance-flow-main/src/lib/grabio/types';
 
 export function peekCachedStoreProfile(storeId: string | null): StoreProfile | null {
   if (!storeId) return null;
-  return profileCache.get(storeId) ?? null;
+  return peekCachedGrabioStoreProfile(storeId) as StoreProfile | null;
+}
+
+function cacheStoreProfile(storeId: string, profile: StoreProfile): void {
+  setCachedGrabioStoreProfile(storeId, profile as GrabioStoreProfile);
 }
 
 export function useStoreEntitlements() {
   const { user } = useAuth();
   const storeId = user ? getActualStoreId(user) : null;
   const [profile, setProfile] = useState<StoreProfile | null>(() => peekCachedStoreProfile(storeId));
-  const [loading, setLoading] = useState(() => Boolean(storeId && !profileCache.has(storeId)));
+  const [loading, setLoading] = useState(() => Boolean(storeId && !peekCachedStoreProfile(storeId)));
 
   const load = useCallback(async (options?: { silent?: boolean; fromServer?: boolean }) => {
     if (!storeId) {
@@ -32,9 +40,9 @@ export function useStoreEntitlements() {
         : await getDoc(ref);
       setProfile(snap.exists() ? (snap.data() as StoreProfile) : null);
       if (snap.exists()) {
-        profileCache.set(storeId, snap.data() as StoreProfile);
+        cacheStoreProfile(storeId, snap.data() as StoreProfile);
       } else {
-        profileCache.delete(storeId);
+        clearCachedGrabioStoreProfile(storeId);
       }
     } finally {
       if (!options?.silent) setLoading(false);
@@ -47,7 +55,7 @@ export function useStoreEntitlements() {
       setLoading(false);
       return;
     }
-    const cached = profileCache.get(storeId);
+    const cached = peekCachedStoreProfile(storeId);
     if (cached) {
       setProfile(cached);
       setLoading(false);

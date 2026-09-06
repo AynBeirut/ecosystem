@@ -13,6 +13,15 @@ import type { PaymentOrder, PurchaseOrder } from '@/context/AppContext';
 import { formatCurrency } from '@/lib/utils';
 import type { AccountingLanguage } from '@/lib/grabio/accountingMode';
 import { downloadCsvText } from '@/lib/csvExport';
+import {
+  legacyReportBodyClass,
+  legacyReportCardClass,
+  legacyReportHeaderClass,
+  legacyReportOmitTitleBand,
+  legacyReportTableClass,
+  legacyReportTableHeadClass,
+  legacyReportTableHeaderRowClass,
+} from '@/components/legacyErpReportFrame';
 
 type Props = {
   accounts: LedgerAccount[];
@@ -88,14 +97,18 @@ export default function PartyStatementPanel({
   }, [selectedAccount, entries, lines, settlements, startDate, endDate, partyName, selectedSupplier, purchaseLookup]);
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Party statement of account</CardTitle>
-        <CardDescription>
-          AP/AR control accounts (401x/201, 411x/110) combine all parties in one GL bucket. Pick a supplier below to filter their lines; otherwise every supplier appears together.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+    <Card className={legacyReportCardClass(isLebaneseCoa)}>
+      {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+        <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
+          <CardTitle>Party statement of account</CardTitle>
+          <CardDescription>
+            {isLebaneseCoa
+              ? 'AP/AR control accounts (6111, 7010) combine all parties in one GL bucket. Pick a supplier below to filter their lines; otherwise every supplier appears together.'
+              : 'AP/AR control accounts (201, 110) combine all parties in one GL bucket. Pick a supplier below to filter their lines; otherwise every supplier appears together.'}
+          </CardDescription>
+        </CardHeader>
+      ) : null}
+      <CardContent className={legacyReportBodyClass(isLebaneseCoa)}>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <div>
             <Label>Party account</Label>
@@ -176,18 +189,18 @@ export default function PartyStatementPanel({
               </Button>
             </div>
             <div className="rounded-md border max-h-96 overflow-auto">
-              <Table>
+              <Table className={legacyReportTableClass(isLebaneseCoa)}>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>Date</TableHead>
-                    <TableHead>Type</TableHead>
-                    <TableHead>Ref</TableHead>
-                    <TableHead>Supplier</TableHead>
-                    <TableHead>Description</TableHead>
-                    <TableHead className="text-right">Debit</TableHead>
-                    <TableHead className="text-right">Credit</TableHead>
-                    <TableHead className="text-right">Balance</TableHead>
-                    <TableHead>Matched</TableHead>
+                  <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Date</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Type</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Ref</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Supplier</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Description</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Debit</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Credit</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Balance</TableHead>
+                    <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Matched</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>

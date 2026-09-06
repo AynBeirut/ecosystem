@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, CheckCircle, X } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import PublicPageShell from '@/components/public/PublicPageShell';
 import { cn } from '@/lib/utils';
@@ -30,97 +30,6 @@ import { ORDERED_PRESET_LIST } from '@/lib/packagePresets';
 import { CORE_ENTRY_PACKAGES, INDUSTRY_PACKAGES } from '@/lib/modularPackageLimits';
 import { calculateModularPrice } from '@/lib/modularPricing';
 import { getStatusBadgeClass, getStatusLabel } from '@/lib/publicModulesContent';
-
-const PLANS = [
-  {
-    tier: 'trial' as const,
-    name: 'Trial',
-    monthly: null,
-    yearly: null,
-    description: 'Pay As You Go — Free to start',
-    badge: 'FREE TO START',
-    highlight: false,
-    cta: 'Start Free Trial',
-    features: [
-      'Up to 10 products',
-      'Simple products & services only',
-      '500 MB storage',
-      '30 operations/month',
-      'Core platform features',
-      '20% revenue share',
-    ],
-    restrictions: ['No custom domain', 'No manufacturing', 'Powered by Grabio footer'],
-  },
-  {
-    tier: 'starter' as const,
-    name: 'Starter',
-    monthly: 10,
-    yearly: 100,
-    description: 'Most chosen for growing stores',
-    badge: 'POPULAR',
-    highlight: true,
-    cta: 'Choose Starter',
-    features: [
-      'Up to 8 products',
-      'All product types',
-      '5 GB storage',
-      'Unlimited operations',
-      '0% revenue share',
-      'Discount codes & basic SEO',
-      'Email marketing (200/month)',
-    ],
-    restrictions: [],
-  },
-  {
-    tier: 'pro' as const,
-    name: 'Pro',
-    monthly: 20,
-    yearly: 200,
-    description: 'For advanced operations',
-    badge: undefined,
-    highlight: false,
-    cta: 'Choose Pro',
-    features: [
-      'Up to 20 products',
-      'Manufacturing included',
-      '10 GB storage',
-      'Advanced analytics',
-      'Email marketing (1,000/month)',
-      'Multi-location inventory',
-    ],
-    restrictions: [],
-  },
-  {
-    tier: 'business' as const,
-    name: 'Business',
-    monthly: 30,
-    yearly: 300,
-    description: 'Best value for scaling brands',
-    badge: 'BEST VALUE',
-    highlight: false,
-    cta: 'Choose Business',
-    features: [
-      'Up to 50 products',
-      'Multi-user (up to 10)',
-      '20 GB storage',
-      'Email marketing (5,000/month)',
-      'Meta shop & advanced SEO',
-      'Dedicated account manager',
-    ],
-    restrictions: [],
-  },
-];
-
-const COMPARISON_ROWS = [
-  { feature: 'Monthly Cost', trial: '$0 + 20%', starter: '$10', pro: '$20', business: '$30' },
-  { feature: 'Yearly Cost', trial: 'N/A', starter: '$100', pro: '$200', business: '$300' },
-  { feature: 'Products', trial: '10', starter: '8', pro: '20', business: '50' },
-  { feature: 'Storage', trial: '500 MB', starter: '5 GB', pro: '10 GB', business: '20 GB' },
-  { feature: 'Revenue Share', trial: '20%', starter: '0%', pro: '0%', business: '0%' },
-  { feature: 'Manufacturing', trial: 'No', starter: 'No', pro: 'Included', business: 'Included' },
-  { feature: 'Sales CRM add-on', trial: 'No', starter: '+$15', pro: '+$15', business: '+$15' },
-  { feature: 'Custom Domain add-on', trial: 'No', starter: '+$15', pro: '+$15', business: '+$15' },
-];
 
 const GROUP_LABELS: Record<PricingModule['group'], string> = {
   platform: 'Platform Features',
@@ -234,8 +143,8 @@ const Pricing: React.FC = () => {
 
   return (
     <PublicPageShell
-      title="Grabio Pricing — Build Your Modular Package"
-      description="Choose a base plan and toggle platform modules and add-ons. Core features included; extras billed separately. Same pricing logic as checkout."
+      title="Grabio Pricing — Modular Packages"
+      description="Industry presets from $5/mo, modular seats and add-ons. Toggle modules to preview your package before checkout."
       url="/pricing"
       keywords={[
         'Grabio pricing',
@@ -244,8 +153,8 @@ const Pricing: React.FC = () => {
         'small business platform cost',
       ]}
       eyebrow="Pricing"
-      heroTitle="Build your package"
-      heroDescription="Pick a base plan, then toggle what you need. Core platform features are included; extras are charged at checkout."
+      heroTitle="Modular packages"
+      heroDescription="Choose a preset for your industry, then toggle modules and add-ons. Same pricing logic as checkout."
       heroActions={
         <div className="public-segment">
           <button
@@ -370,77 +279,6 @@ const Pricing: React.FC = () => {
           )}
 
           <section className="max-w-7xl mx-auto px-4 sm:px-6 py-10">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2 text-center">Base plans</h2>
-            <p className="text-center text-gray-500 text-sm mb-8 max-w-2xl mx-auto">
-              Select a plan for your package estimate. Trial stays pay-as-you-go until you upgrade.
-            </p>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-12">
-              {PLANS.map((plan) => {
-                const isPaid = plan.tier !== 'trial';
-                const isSelected = isPaid && selectedTier === plan.tier;
-                return (
-                  <button
-                    key={plan.name}
-                    type="button"
-                    onClick={() => {
-                      if (isPaid) setSelectedTier(plan.tier);
-                    }}
-                    disabled={!isPaid}
-                    className={`rounded-2xl border p-6 flex flex-col relative text-left transition-all ${
-                      isSelected
-                        ? 'border-teal-500 ring-2 ring-teal-500/20 bg-gradient-to-b from-teal-50/50 to-white'
-                        : plan.highlight
-                          ? 'border-teal-200 bg-white hover:border-teal-400'
-                          : 'border-gray-200 bg-white'
-                    } ${!isPaid ? 'cursor-default' : 'cursor-pointer hover:shadow-md'}`}
-                  >
-                    {plan.badge && (
-                      <div className="absolute -top-3 left-1/2 -translate-x-1/2">
-                        <span
-                          className={`text-xs font-bold px-3 py-1 rounded-full ${
-                            plan.highlight ? 'bg-teal-600 text-white' : 'bg-gray-800 text-white'
-                          }`}
-                        >
-                          {plan.badge}
-                        </span>
-                      </div>
-                    )}
-                    <h3 className="text-lg font-bold text-gray-900">{plan.name}</h3>
-                    <p className="text-xs text-gray-500 mt-1 mb-4">{plan.description}</p>
-                    {plan.monthly === null ? (
-                      <p className="text-2xl font-extrabold text-gray-900 mb-4">Free + 20% sales</p>
-                    ) : (
-                      <p className="text-3xl font-extrabold text-gray-900 mb-4">
-                        ${billing === 'yearly' ? plan.yearly : plan.monthly}
-                        <span className="text-sm font-normal text-gray-500">
-                          /{billing === 'yearly' ? 'yr' : 'mo'}
-                        </span>
-                      </p>
-                    )}
-                    <ul className="space-y-2 text-sm text-gray-600 flex-1">
-                      {plan.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
-                          {f}
-                        </li>
-                      ))}
-                      {plan.restrictions.map((r) => (
-                        <li key={r} className="flex items-start gap-2 text-gray-400">
-                          <X className="h-4 w-4 mt-0.5 flex-shrink-0" />
-                          {r}
-                        </li>
-                      ))}
-                    </ul>
-                    {isSelected && (
-                      <p className="mt-4 text-xs font-bold text-teal-600 uppercase tracking-wide">
-                        Selected for estimate
-                      </p>
-                    )}
-                  </button>
-                );
-              })}
-            </div>
-
             <div className="grid lg:grid-cols-[1fr_320px] gap-8 items-start">
               <div className="space-y-8">
                 {(Object.keys(groupedModules) as PricingModule['group'][]).map((groupKey) => (
@@ -513,8 +351,19 @@ const Pricing: React.FC = () => {
                 </p>
 
                 <div className="mb-4 rounded-xl bg-white border border-gray-200 p-3">
-                  <p className="text-xs text-gray-500 mb-1">Base plan</p>
-                  <p className="font-semibold capitalize text-gray-900">{selectedTier}</p>
+                  <label htmlFor="estimate-tier" className="text-xs text-gray-500 mb-1 block">
+                    Estimate tier (add-ons)
+                  </label>
+                  <select
+                    id="estimate-tier"
+                    value={selectedTier}
+                    onChange={(e) => setSelectedTier(e.target.value as PaidTier)}
+                    className="w-full rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm font-semibold capitalize text-gray-900"
+                  >
+                    <option value="starter">Starter</option>
+                    <option value="pro">Pro</option>
+                    <option value="business">Business</option>
+                  </select>
                 </div>
 
                 <ul className="space-y-2 text-sm mb-4">
@@ -563,10 +412,10 @@ const Pricing: React.FC = () => {
                   <ArrowRight className="inline ml-1 h-3.5 w-3.5" />
                 </Link>
                 <Link
-                  to="/home#modules"
+                  to="/features"
                   className="block w-full text-center mt-2 text-xs text-teal-700 hover:text-teal-900 font-medium"
                 >
-                  Compare all modules on home →
+                  Compare all modules →
                 </Link>
               </aside>
             </div>
@@ -586,34 +435,6 @@ const Pricing: React.FC = () => {
                   </p>
                 </div>
               ))}
-            </div>
-          </section>
-
-          <section className="max-w-5xl mx-auto px-4 sm:px-6 pb-16">
-            <h2 className="text-2xl font-bold text-gray-900 mb-6 text-center">Plan comparison</h2>
-            <div className="overflow-x-auto rounded-2xl border border-gray-200">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-200">
-                    <th className="text-left px-6 py-4 font-semibold text-gray-700 w-2/5">Feature</th>
-                    <th className="px-4 py-4 text-center font-semibold text-gray-700">Trial</th>
-                    <th className="px-4 py-4 text-center font-semibold text-teal-600">Starter</th>
-                    <th className="px-4 py-4 text-center font-semibold text-gray-700">Pro</th>
-                    <th className="px-4 py-4 text-center font-semibold text-gray-700">Business</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {COMPARISON_ROWS.map((row, i) => (
-                    <tr key={row.feature} className={i % 2 === 0 ? 'bg-white' : 'bg-gray-50/50'}>
-                      <td className="px-6 py-3 text-gray-700">{row.feature}</td>
-                      <td className="px-4 py-3 text-center text-gray-600">{row.trial}</td>
-                      <td className="px-4 py-3 text-center font-medium text-teal-700">{row.starter}</td>
-                      <td className="px-4 py-3 text-center text-gray-600">{row.pro}</td>
-                      <td className="px-4 py-3 text-center text-gray-600">{row.business}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
             </div>
           </section>
 

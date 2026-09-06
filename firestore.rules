@@ -22,6 +22,76 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/crmReps/$(crmRepId())).data;
     }
 
+    function authSubAccountId() {
+      return userProfile().get('subAccountId', '');
+    }
+
+    /** Mobile + web CRM activity author (owner, admin, crm_rep, sales sub-account). */
+    function isMobileCrmRepIdForAuth(storeId, repId) {
+      return (repId == ('owner:' + storeId)
+          && (isStoreOwner(storeId) || isActiveStoreAdmin(storeId)))
+        || (isCrmRepUser()
+          && repId == crmRepId()
+          && crmRepData().storeId == storeId)
+        || (isActiveSubAccountForStore(storeId)
+          && (repId == ('sub:' + authSubAccountId()) || repId == ('user:' + request.auth.uid)))
+        || crmRepDocMatchesAuthUser(storeId, repId);
+    }
+
+    function canReadStoreCrmActivities(storeId) {
+      return isStoreAdmin(storeId)
+        || isActiveStoreAdmin(storeId)
+        || (isCrmRepUser() && crmRepData().storeId == storeId)
+        || (isActiveSubAccountForStore(storeId) && storeHasSalesCrm(storeId));
+    }
+
+    /** Sales manager sub-account — users.subAccountRole and/or subAccounts.role. */
+    function isSalesManagerForStore(storeId) {
+      return isActiveSubAccountForStore(storeId)
+        && (
+          userProfile().get('subAccountRole', '') == 'manager'
+          || (
+            authSubAccountId() != ''
+            && exists(/databases/$(database)/documents/subAccounts/$(authSubAccountId()))
+            && get(/databases/$(database)/documents/subAccounts/$(authSubAccountId())).data.get('role', '') == 'manager'
+          )
+        );
+    }
+
+    /** Field sales rep only — not owner/admin/manager. */
+    function isFieldSalesSubAccount(storeId) {
+      return isActiveSubAccountForStore(storeId)
+        && !isStoreAdmin(storeId)
+        && !isSalesManagerForStore(storeId)
+        && (
+          userProfile().get('subAccountRole', '') == 'sales'
+          || (
+            authSubAccountId() != ''
+            && exists(/databases/$(database)/documents/subAccounts/$(authSubAccountId()))
+            && get(/databases/$(database)/documents/subAccounts/$(authSubAccountId())).data.get('role', 'sales') == 'sales'
+          )
+        );
+    }
+
+    /** Route assigned via crmReps doc id matching signed-in sub-account email. */
+    function crmRepDocMatchesAuthUser(storeId, repId) {
+      return repId is string
+        && isActiveSubAccountForStore(storeId)
+        && exists(/databases/$(database)/documents/crmReps/$(repId))
+        && get(/databases/$(database)/documents/crmReps/$(repId)).data.storeId == storeId
+        && get(/databases/$(database)/documents/crmReps/$(repId)).data.get('email', '')
+           == userProfile().get('email', '');
+    }
+
+    function canReadVisitRoute(storeId, assignedRepId) {
+      return canReadStoreCrmActivities(storeId)
+        && (
+          !isFieldSalesSubAccount(storeId)
+          || isMobileCrmRepIdForAuth(storeId, assignedRepId)
+          || crmRepDocMatchesAuthUser(storeId, assignedRepId)
+        );
+    }
+
     function storeProfileExists(storeId) {
       return exists(/databases/$(database)/documents/storeProfiles/$(storeId));
     }
@@ -193,6 +263,41 @@ service cloud.firestore {
         && exists(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId))
         && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.storeId == storeId
         && get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.status == 'active';
+    }
+
+    /** Sales rep sub-account — can submit pending mobile POS orders for manager approval. */
+    function isSalesSubAccountForStore(storeId) {
+      return isActiveSubAccountForStore(storeId)
+        && (
+          get(/databases/$(database)/documents/subAccounts/$(get(/databases/$(database)/documents/users/$(request.auth.uid)).data.subAccountId)).data.role == 'sales'
+          || get(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('subAccountRole', '') == 'sales'
+        );
+    }
+
+    function isValidSalesMobileOrderSubmit() {
+      return request.resource.data.status == 'pending'
+        && request.resource.data.get('paymentStatus', 'unpaid') in ['unpaid', '']
+        && request.resource.data.get('amountPaid', 0) == 0
+        && request.resource.data.get('createdBy', '') == request.auth.uid
+        && request.resource.data.get('orderChannel', '') == 'mobile_pos';
+    }
+
+    function isValidManagerMobileOrderSubmit() {
+      return request.resource.data.status == 'confirmed'
+        && request.resource.data.get('orderChannel', '') == 'mobile_pos'
+        && request.resource.data.get('createdBy', '') == request.auth.uid;
+    }
+
+    function canCreateStoreOrder(storeId) {
+      return (isStoreAdmin(storeId)
+        && (
+          !request.resource.data.keys().hasAny(['orderChannel'])
+          || request.resource.data.get('orderChannel', '') != 'mobile_pos'
+          || isValidManagerMobileOrderSubmit()
+          || request.resource.data.status in ['pending', 'confirmed', 'delivered', 'processing', 'ready']
+        ))
+        || (isSalesSubAccountForStore(storeId) && isValidSalesMobileOrderSubmit())
+        || (isSalesManagerForStore(storeId) && isValidManagerMobileOrderSubmit());
     }
 
     /** Grabio users doc: admin actively switched to this store (multi-store owners). */
@@ -550,13 +655,13 @@ service cloud.firestore {
         && storeProfileExists(request.resource.data.storeId)
         && !isDemoStoreProfile(request.resource.data.storeId)
         && !isBlockedCommerceStatus(request.resource.data.storeId)
-        && isStoreAdmin(request.resource.data.storeId);
+        && canCreateStoreOrder(request.resource.data.storeId);
       allow update: if request.auth != null
         && resource.data.storeId is string
         && storeProfileExists(resource.data.storeId)
         && !isDemoStoreProfile(resource.data.storeId)
         && !isBlockedCommerceStatus(resource.data.storeId)
-        && isStoreAdmin(resource.data.storeId);
+        && (isStoreAdmin(resource.data.storeId) || isSalesManagerForStore(resource.data.storeId));
       allow get: if true;
       allow list: if request.auth != null;
       allow delete: if request.auth != null
@@ -869,6 +974,14 @@ service cloud.firestore {
           isStoreAdmin(request.resource.data.storeId) ||
           isActiveSubAccountForStore(request.resource.data.storeId)
         );
+      /** Mobile POS walk-in orders — same store gate as orders collection. */
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && storeProfileExists(request.resource.data.storeId)
+        && !isDemoStoreProfile(request.resource.data.storeId)
+        && !isBlockedCommerceStatus(request.resource.data.storeId)
+        && isActiveSubAccountForStore(request.resource.data.storeId)
+        && request.resource.data.keys().hasAll(['name']);
       allow delete: if request.auth != null
         && resource.data.storeId is string
         && isRealStore(resource.data.storeId)
@@ -890,7 +1003,9 @@ service cloud.firestore {
     match /crmReps/{repId} {
       allow read: if request.auth != null && (
         isStoreAdmin(resource.data.storeId) ||
-        (isCrmRepUser() && crmRepId() == repId)
+        (isCrmRepUser() && crmRepId() == repId) ||
+        isSalesManagerForStore(resource.data.storeId) ||
+        (isActiveSubAccountForStore(resource.data.storeId) && storeHasSalesCrm(resource.data.storeId))
       );
       allow create: if request.auth != null
         && request.resource.data.storeId is string
@@ -903,23 +1018,180 @@ service cloud.firestore {
         && isStoreAdmin(resource.data.storeId);
     }
 
+    // Sales CRM — live rep GPS (sales/manager; admin + manager read)
+    match /crmRepLocations/{userId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && (
+          isStoreAdmin(resource.data.storeId)
+          || isActiveStoreAdmin(resource.data.storeId)
+          || isSalesManagerForStore(resource.data.storeId)
+        );
+      allow create, update: if request.auth != null
+        && request.resource.data.userId == request.auth.uid
+        && userId == request.auth.uid
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && storeHasSalesCrm(request.resource.data.storeId)
+        && (
+          isActiveSubAccountForStore(request.resource.data.storeId)
+          || (isCrmRepUser() && crmRepData().storeId == request.resource.data.storeId)
+        );
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
+    }
+
+    // Sales CRM — activity logs (real stores only, immutable)
+    match /storeTasks/{taskId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && (
+          isStoreAdmin(resource.data.storeId)
+          || isActiveStoreAdmin(resource.data.storeId)
+          || isSalesManagerForStore(resource.data.storeId)
+          || resource.data.get('assignedToUserId', '') == request.auth.uid
+          || resource.data.get('createdBy', '') == request.auth.uid
+        );
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.title is string
+        && request.resource.data.title.size() > 0
+        && request.resource.data.assignedToUserId is string
+        && (
+          isStoreAdmin(request.resource.data.storeId)
+          || isActiveStoreAdmin(request.resource.data.storeId)
+          || isSalesManagerForStore(request.resource.data.storeId)
+          || request.resource.data.assignedToUserId == request.auth.uid
+        );
+      allow update: if request.auth != null
+        && resource.data.storeId is string
+        && (
+          isStoreAdmin(resource.data.storeId)
+          || isActiveStoreAdmin(resource.data.storeId)
+          || isSalesManagerForStore(resource.data.storeId)
+          || resource.data.get('assignedToUserId', '') == request.auth.uid
+          || resource.data.get('createdBy', '') == request.auth.uid
+        );
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && (
+          isStoreAdmin(resource.data.storeId)
+          || isActiveStoreAdmin(resource.data.storeId)
+          || resource.data.get('createdBy', '') == request.auth.uid
+        );
+    }
+
     // Sales CRM — activity logs (real stores only, immutable)
     match /crmActivities/{activityId} {
       allow read: if request.auth != null && (
-        isStoreAdmin(resource.data.storeId) ||
-        (isCrmRepUser() && crmRepData().storeId == resource.data.storeId)
+        canReadStoreCrmActivities(resource.data.storeId)
       );
       allow create: if request.auth != null
         && request.resource.data.storeId is string
         && isRealStore(request.resource.data.storeId)
         && storeHasSalesCrm(request.resource.data.storeId)
-        && (
-          isStoreOwner(request.resource.data.storeId) ||
-          (isCrmRepUser()
-            && request.resource.data.repId == crmRepId()
-            && crmRepData().storeId == request.resource.data.storeId)
-        );
+        && isMobileCrmRepIdForAuth(request.resource.data.storeId, request.resource.data.repId);
       allow update, delete: if false;
+    }
+
+    function isSellerLinkedStore(storeId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/sellers/$(request.auth.uid))
+        && get(/databases/$(database)/documents/sellers/$(request.auth.uid)).data.get('storeId', '') == storeId;
+    }
+
+    function canManageCrmStoreAreas(storeId) {
+      return isStoreAdmin(storeId)
+        || isActiveStoreAdmin(storeId)
+        || isSalesManagerForStore(storeId)
+        || isSellerLinkedStore(storeId);
+    }
+
+    // Sales CRM — store-specific custom areas (admin + sales manager create)
+    match /crmStoreAreas/{areaId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && storeHasSalesCrm(resource.data.storeId)
+        && (
+          isStoreAdmin(resource.data.storeId)
+          || isActiveStoreAdmin(resource.data.storeId)
+          || isSalesManagerForStore(resource.data.storeId)
+          || isActiveSubAccountForStore(resource.data.storeId)
+        );
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && storeHasSalesCrm(request.resource.data.storeId)
+        && request.resource.data.district is string
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && request.resource.data.createdBy == request.auth.uid
+        && (
+          canManageCrmStoreAreas(request.resource.data.storeId)
+        );
+      allow update: if request.auth != null
+        && resource.data.storeId is string
+        && request.resource.data.storeId == resource.data.storeId
+        && request.resource.data.district is string
+        && request.resource.data.name is string
+        && request.resource.data.name.size() > 0
+        && canManageCrmStoreAreas(resource.data.storeId);
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && canManageCrmStoreAreas(resource.data.storeId);
+    }
+
+    // Sales CRM — planned visit routes (manager creates; rep marks stops done)
+    match /crmVisitRoutes/{routeId} {
+      allow read: if request.auth != null
+        && resource.data.storeId is string
+        && storeHasSalesCrm(resource.data.storeId)
+        && (
+          isStoreAdmin(resource.data.storeId)
+          || isActiveStoreAdmin(resource.data.storeId)
+          || isSalesManagerForStore(resource.data.storeId)
+          || (isCrmRepUser() && crmRepData().storeId == resource.data.storeId)
+          || (isActiveSubAccountForStore(resource.data.storeId)
+            && (
+              resource.data.assignedRepId == ('sub:' + authSubAccountId())
+              || resource.data.assignedRepId == ('user:' + request.auth.uid)
+              || resource.data.get('assignedUserId', '') == request.auth.uid
+              || resource.data.get('createdBy', '') == request.auth.uid
+              || crmRepDocMatchesAuthUser(resource.data.storeId, resource.data.assignedRepId)
+            ))
+        );
+      allow create: if request.auth != null
+        && request.resource.data.storeId is string
+        && isRealStore(request.resource.data.storeId)
+        && storeHasSalesCrm(request.resource.data.storeId)
+        && (
+          isStoreAdmin(request.resource.data.storeId)
+          || isActiveStoreAdmin(request.resource.data.storeId)
+          || isSalesManagerForStore(request.resource.data.storeId)
+          || isMobileCrmRepIdForAuth(
+            request.resource.data.storeId,
+            request.resource.data.assignedRepId
+          )
+        );
+      allow update: if request.auth != null
+        && resource.data.storeId is string
+        && isRealStore(resource.data.storeId)
+        && storeHasSalesCrm(resource.data.storeId)
+        && (
+          isStoreAdmin(resource.data.storeId)
+          || isActiveStoreAdmin(resource.data.storeId)
+          || isSalesManagerForStore(resource.data.storeId)
+          || isMobileCrmRepIdForAuth(resource.data.storeId, resource.data.assignedRepId)
+          || (isActiveSubAccountForStore(resource.data.storeId)
+            && resource.data.get('assignedUserId', '') == request.auth.uid)
+        );
+      allow delete: if request.auth != null
+        && resource.data.storeId is string
+        && isStoreAdmin(resource.data.storeId);
     }
 
     // Recipes: real store owners only
@@ -1204,16 +1476,16 @@ service cloud.firestore {
         && isStoreAdmin(request.resource.data.storeId);
     }
 
-    // Account Payments: real store owners only
+    // Account Payments: store owner / active admin only (not sales manager sub-accounts)
     match /accountPayments/{paymentId} {
       allow read, delete: if request.auth != null
         && resource.data.storeId is string
         && isRealStore(resource.data.storeId)
-        && isStoreAdmin(resource.data.storeId);
+        && (isStoreOwner(resource.data.storeId) || isActiveStoreAdmin(resource.data.storeId));
       allow create, update: if request.auth != null
         && request.resource.data.storeId is string
         && isRealStore(request.resource.data.storeId)
-        && isStoreAdmin(request.resource.data.storeId);
+        && (isStoreOwner(request.resource.data.storeId) || isActiveStoreAdmin(request.resource.data.storeId));
     }
 
     // Finished goods — monthly service cost allocations (per store / month)

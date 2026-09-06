@@ -1,5 +1,7 @@
 import firestore from '@react-native-firebase/firestore';
 import type { Product } from '../types';
+import { readCache, writeCache } from './crmDataCache';
+import { applyDisplayStock, loadFinishedGoodsStockMap } from './inventoryStock';
 
 export function getProductSalePrice(data: Record<string, unknown>): number {
   const n = Number(data.sellingPrice ?? data.price ?? data.ownerReferencePrice ?? 0);
@@ -28,37 +30,43 @@ export function mapPosProduct(id: string, data: Record<string, unknown>): Produc
 
 /** All sellable store products — matches web V·POS (no inStock filter). */
 export async function loadPosProducts(storeId: string): Promise<Product[]> {
-  const snap = await firestore()
-    .collection('products')
-    .where('storeId', '==', storeId)
-    .get();
+  const [snap, fgMap] = await Promise.all([
+    firestore().collection('products').where('storeId', '==', storeId).get(),
+    loadFinishedGoodsStockMap(storeId),
+  ]);
   const rows = snap.docs
     .map((d) => mapPosProduct(d.id, d.data() as Record<string, unknown>))
     .filter(Boolean) as Product[];
-  rows.sort((a, b) => a.name.localeCompare(b.name));
+  const withStock = applyDisplayStock(rows, fgMap);
+  withStock.sort((a, b) => a.name.localeCompare(b.name));
+  return withStock;
+}
+
+export async function loadPosProductsCached(storeId: string, force = false): Promise<Product[]> {
+  const cacheKey = `pos:${storeId}`;
+  if (!force) {
+    const hit = readCache<Product[]>(cacheKey);
+    if (hit) return hit;
+  }
+  const rows = await loadPosProducts(storeId);
+  writeCache(cacheKey, rows);
   return rows;
 }
 
+/** One-shot load with 3 min cache — avoids heavy live product listener on POS tab. */
 export function subscribePosProducts(
   storeId: string,
   onData: (products: Product[]) => void,
   onError?: (err: Error) => void,
 ): () => void {
-  return firestore()
-    .collection('products')
-    .where('storeId', '==', storeId)
-    .onSnapshot(
-      (snap) => {
-        if (!snap) {
-          onData([]);
-          return;
-        }
-        const rows = snap.docs
-          .map((d) => mapPosProduct(d.id, d.data() as Record<string, unknown>))
-          .filter(Boolean) as Product[];
-        rows.sort((a, b) => a.name.localeCompare(b.name));
-        onData(rows);
-      },
-      (err) => onError?.(err),
-    );
+  let cancelled = false;
+  void loadPosProductsCached(storeId)
+    .then((rows) => {
+      if (!cancelled) onData(rows);
+    })
+    .catch((err) => onError?.(err instanceof Error ? err : new Error(String(err))));
+
+  return () => {
+    cancelled = true;
+  };
 }

@@ -129,7 +129,7 @@ const PackageOnboarding: React.FC = () => {
         modules: normalized,
       });
       toast.success('Your package is saved');
-      navigate('/admin/profile');
+      navigate('/subscription?onboarding=custom', { replace: true });
     } catch (err) {
       console.error(err);
       toast.error('Failed to save package');

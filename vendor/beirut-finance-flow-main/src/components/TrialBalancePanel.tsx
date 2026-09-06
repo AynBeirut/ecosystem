@@ -1,14 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ChevronDown, ChevronRight, Maximize2, Minimize2 } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import AccountRangePicker from '@/components/AccountRangePicker';
 import ReportCurrencyPicker from '@/components/ReportCurrencyPicker';
-import { accountCodeNumeric, accountsInCodeRange, isAccountInCodeRange } from '@/lib/ledger/accountCodeRange';
+import ReportAmountCell from '@/components/ReportAmountCell';
+import { accountCodeNumeric, accountsInCodeRange, isAccountInCodeRange, normalizeAccountRangeBounds, normalizeRangeEndpoint } from '@/lib/ledger/accountCodeRange';
 import {
   buildClientByGrabioMap,
   buildClientByParentPcgMap,
+  buildClientByLedgerCodeMap,
+  buildClientByPartyMap,
   displayPcgCodeForLedgerRow,
   formatPcgAccountLabel,
 } from '@/lib/ledger/grabioToPcgMap';
@@ -33,12 +36,21 @@ import type {
 } from '@/types/generalLedger';
 import { cn } from '@/lib/utils';
 import {
-  defaultOperationalAccountRange,
+  defaultReportCurrencyMode,
   formatLedgerAmountForMode,
   type ReportCurrencyMode,
 } from '@/lib/ledger/formatLedgerAmount';
 import { downloadCsvText } from '@/lib/csvExport';
 import { toast } from 'sonner';
+import type { OpenAccountActivityHandler } from '@/lib/accounting/accountingNavigation';
+import {
+  legacyReportBodyClass,
+  legacyReportCardClass,
+  legacyReportHeaderClass,
+  legacyReportOmitTitleBand,
+  legacyReportInputClass,
+  legacyReportTableClass,
+} from '@/components/legacyErpReportFrame';
 
 type Props = {
   accounts: LedgerAccount[];
@@ -48,11 +60,13 @@ type Props = {
   loading?: boolean;
   isLebaneseCoa?: boolean;
   pcgClientAccounts?: PcgClientAccount[];
+  pcgAccountsReady?: boolean;
   accountingLanguage?: AccountingLanguage;
   currencyCode?: string;
   usdToLbp?: number;
+  fxRateLoading?: boolean;
   onRefresh?: () => void;
-  onOpenGl?: (accountId: string) => void;
+  onOpenAccount?: OpenAccountActivityHandler;
 };
 
 type TbColumnKey =
@@ -172,15 +186,32 @@ function formatDisplayAccountCode(code: string): string {
   return raw.length > 12 ? `${raw.slice(0, 12)}…` : raw;
 }
 
-function tbAmountCell(value: number, format: (n: number) => string): string {
+function tbAmountCell(
+  value: number,
+  storeCurrency: string,
+  mode: ReportCurrencyMode,
+  usdToLbp: number | undefined,
+  format: (n: number) => string,
+): React.ReactNode {
   if (!value) return '—';
+  if (mode === 'both') {
+    return (
+      <ReportAmountCell
+        amount={value}
+        storeCurrency={storeCurrency}
+        mode={mode}
+        usdToLbp={usdToLbp}
+      />
+    );
+  }
   return format(value);
 }
 
-const TB_HEAD = 'px-1 py-1.5 text-[10px] font-semibold leading-tight text-white';
+const TB_HEAD = 'px-2 py-2 text-[10px] font-semibold leading-tight text-white whitespace-nowrap';
 const TB_NUM_HEAD = `${TB_HEAD} text-right`;
-const TB_CELL = 'px-1 py-1 align-top text-[11px]';
+const TB_CELL = 'px-2 py-1.5 align-top text-[11px]';
 const TB_NUM_CELL = `${TB_CELL} text-right tabular-nums whitespace-nowrap`;
+const TB_NUM_CELL_BOTH = `${TB_CELL} text-right tabular-nums whitespace-normal align-top`;
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -217,11 +248,36 @@ function displayCodeLevel(code: string, pcgKind?: string): 1 | 2 | 3 | 4 {
 }
 
 function tbRowClass(level: 1 | 2 | 3 | 4, isGroup: boolean): string {
-  if (level === 1) return 'bg-slate-200/80 font-bold text-red-900';
-  if (level === 2 && isGroup) return 'bg-white font-bold text-blue-900';
-  if (level === 3) return 'bg-sky-50';
-  if (level === 4) return 'bg-amber-50/60';
+  if (level === 1) return 'bg-slate-100 font-bold text-slate-900';
+  if (level === 2 && isGroup) return 'bg-white font-semibold text-slate-800';
+  if (level === 3) return 'bg-sky-50/70';
+  if (level === 4) return 'bg-amber-50/50';
   return '';
+}
+
+function accountRangeEndpoint(
+  account: LedgerAccount,
+  edge: 'from' | 'to',
+  isLebaneseCoa: boolean,
+  clientByGrabio: Map<string, PcgClientAccount>,
+  clientByParentPcg: Map<string, PcgClientAccount[]>,
+  clientByLedgerCode: Map<string, PcgClientAccount>,
+  clientByParty: Map<string, PcgClientAccount>,
+): string {
+  if (!isLebaneseCoa) return account.code;
+  if (account.isPcgChart) {
+    const clients = clientByParentPcg.get(account.code);
+    if (clients?.length) {
+      const sorted = [...clients].sort(
+        (a, b) => accountCodeNumeric(String(a.clientCode || '')) - accountCodeNumeric(String(b.clientCode || '')),
+      );
+      return String(sorted[edge === 'from' ? 0 : sorted.length - 1].clientCode || account.code);
+    }
+  }
+  return normalizeRangeEndpoint(
+    displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg, clientByLedgerCode, clientByParty),
+    edge,
+  );
 }
 
 function accountsInTrialBalanceRange(
@@ -231,10 +287,13 @@ function accountsInTrialBalanceRange(
   isLebaneseCoa: boolean,
   clientByGrabio: Map<string, PcgClientAccount>,
   clientByParentPcg: Map<string, PcgClientAccount[]>,
+  clientByLedgerCode: Map<string, PcgClientAccount>,
+  clientByParty: Map<string, PcgClientAccount>,
   hideInactiveAccounts = true,
 ): LedgerAccount[] {
-  const from = fromCode.trim();
-  const to = toCode.trim();
+  const { from: rangeFrom, to: rangeTo } = normalizeAccountRangeBounds(fromCode, toCode);
+  const from = rangeFrom.trim();
+  const to = rangeTo.trim();
   if (!from && !to) {
     return accounts.filter((account) => !hideInactiveAccounts || account.isActive);
   }
@@ -252,7 +311,13 @@ function accountsInTrialBalanceRange(
   return accounts
     .filter((account) => {
       if (hideInactiveAccounts && !account.isActive) return false;
-      const displayCode = displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg);
+      const displayCode = displayPcgCodeForLedgerRow(
+        account,
+        clientByGrabio,
+        clientByParentPcg,
+        clientByLedgerCode,
+        clientByParty,
+      );
       return isAccountInCodeRange(displayCode, lo, hi) || isAccountInCodeRange(account.code, lo, hi);
     })
     .sort((a, b) => accountCodeNumeric(a.code) - accountCodeNumeric(b.code));
@@ -267,6 +332,8 @@ function validateTrialBalanceInput(
   isLebaneseCoa: boolean,
   clientByGrabio: Map<string, PcgClientAccount>,
   clientByParentPcg: Map<string, PcgClientAccount[]>,
+  clientByLedgerCode: Map<string, PcgClientAccount>,
+  clientByParty: Map<string, PcgClientAccount>,
 ): string | null {
   const from = fromCode.trim();
   const to = toCode.trim();
@@ -282,6 +349,8 @@ function validateTrialBalanceInput(
     Boolean(isLebaneseCoa),
     clientByGrabio,
     clientByParentPcg,
+    clientByLedgerCode,
+    clientByParty,
   );
   if (matched.length === 0) {
     return `No active accounts in range ${from} → ${to}. Check codes (e.g. 601 → 701).`;
@@ -367,20 +436,24 @@ export default function TrialBalancePanel({
   loading,
   isLebaneseCoa,
   pcgClientAccounts = [],
+  pcgAccountsReady = true,
   accountingLanguage,
-  currencyCode = 'LBP',
+  currencyCode = 'USD',
   usdToLbp,
+  fxRateLoading = false,
   onRefresh,
-  onOpenGl,
+  onOpenAccount,
 }: Props) {
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
   const clientByParentPcg = useMemo(() => buildClientByParentPcgMap(pcgClientAccounts), [pcgClientAccounts]);
-  const [currencyMode, setCurrencyMode] = useState<ReportCurrencyMode>(
-    currencyCode.toUpperCase() === 'USD' ? 'USD' : 'LBP',
+  const clientByLedgerCode = useMemo(() => buildClientByLedgerCodeMap(pcgClientAccounts), [pcgClientAccounts]);
+  const clientByParty = useMemo(() => buildClientByPartyMap(pcgClientAccounts), [pcgClientAccounts]);
+  const [currencyMode, setCurrencyMode] = useState<ReportCurrencyMode>(() =>
+    defaultReportCurrencyMode(currencyCode, { dualCurrency: isLebaneseCoa }),
   );
-  const [fullScreen, setFullScreen] = useState(false);
   const fmtAmt = (n: number) => formatLedgerAmountForMode(n, currencyCode, currencyMode, usdToLbp);
   const currencyLabel = currencyMode === 'both' ? 'LBP + USD' : currencyMode;
+  const amountCellClass = currencyMode === 'both' ? TB_NUM_CELL_BOTH : TB_NUM_CELL;
 
   const [fromCode, setFromCode] = useState('');
   const [toCode, setToCode] = useState('');
@@ -407,12 +480,12 @@ export default function TrialBalancePanel({
   }, [asOfDate]);
 
   useEffect(() => {
-    if (fromCode.trim() || toCode.trim()) return;
-    const range = defaultOperationalAccountRange(accounts);
-    if (!range.fromCode || !range.toCode) return;
-    setFromCode(range.fromCode);
-    setToCode(range.toCode);
-  }, [accounts, fromCode, toCode]);
+    if (isLebaneseCoa) setCurrencyMode('both');
+  }, [isLebaneseCoa]);
+
+  const openAccountGl = (accountId: string) => {
+    onOpenAccount?.(accountId, undefined, endDate);
+  };
 
   const accountLabel = (account: LedgerAccount) => {
     if (isLebaneseCoa) return formatPcgAccountLabel(account, accountingLanguage, clientByGrabio);
@@ -420,12 +493,20 @@ export default function TrialBalancePanel({
   };
 
   const codeForRange = (account: LedgerAccount) => {
-    if (isLebaneseCoa) return displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg);
+    if (isLebaneseCoa) {
+      return displayPcgCodeForLedgerRow(
+        account,
+        clientByGrabio,
+        clientByParentPcg,
+        clientByLedgerCode,
+        clientByParty,
+      );
+    }
     return account.code;
   };
 
   const accountIdForCode = (code: string) => {
-    const trimmed = code.trim();
+    const trimmed = normalizeRangeEndpoint(code.trim(), 'from');
     if (!trimmed) return '';
     const match = accounts.find(
       (account) =>
@@ -437,18 +518,50 @@ export default function TrialBalancePanel({
 
   const setFromAccountId = (accountId: string) => {
     const account = accounts.find((a) => a.id === accountId);
-    setFromCode(account ? codeForRange(account) : '');
+    setFromCode(
+      account
+        ? accountRangeEndpoint(
+            account,
+            'from',
+            Boolean(isLebaneseCoa),
+            clientByGrabio,
+            clientByParentPcg,
+            clientByLedgerCode,
+            clientByParty,
+          )
+        : '',
+    );
     invalidateReport();
   };
 
   const setToAccountId = (accountId: string) => {
     const account = accounts.find((a) => a.id === accountId);
-    setToCode(account ? codeForRange(account) : '');
+    setToCode(
+      account
+        ? accountRangeEndpoint(
+            account,
+            'to',
+            Boolean(isLebaneseCoa),
+            clientByGrabio,
+            clientByParentPcg,
+            clientByLedgerCode,
+            clientByParty,
+          )
+        : '',
+    );
     invalidateReport();
   };
 
   const accountCodeLabel = (account: LedgerAccount) => {
-    if (isLebaneseCoa) return displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg);
+    if (isLebaneseCoa) {
+      return displayPcgCodeForLedgerRow(
+        account,
+        clientByGrabio,
+        clientByParentPcg,
+        clientByLedgerCode,
+        clientByParty,
+      );
+    }
     return account.code;
   };
 
@@ -464,6 +577,8 @@ export default function TrialBalancePanel({
       Boolean(isLebaneseCoa),
       clientByGrabio,
       clientByParentPcg,
+      clientByLedgerCode,
+      clientByParty,
       options.hideInactiveAccounts,
     );
 
@@ -517,6 +632,8 @@ export default function TrialBalancePanel({
     appliedTo,
     clientByGrabio,
     clientByParentPcg,
+    clientByLedgerCode,
+    clientByParty,
     fromCode,
     isLebaneseCoa,
     options.auxiliaryAccounts,
@@ -535,11 +652,12 @@ export default function TrialBalancePanel({
   const hierarchyRoots = useMemo(() => {
     if (!report || !isLebaneseCoa) return [];
     const byId = new Map(report.rows.map((row) => [row.accountId, row]));
+    const { from, to } = normalizeAccountRangeBounds(appliedFrom || fromCode, appliedTo || toCode);
     return buildLebaneseTrialBalanceTree(
       accounts,
       byId,
-      appliedFrom || fromCode,
-      appliedTo || toCode,
+      from,
+      to,
       pcgClientAccounts,
       {
         hideInactiveAccounts: options.hideInactiveAccounts,
@@ -650,8 +768,8 @@ export default function TrialBalancePanel({
       return;
     }
 
-    const from = fromCode.trim();
-    const to = toCode.trim();
+    const from = normalizeRangeEndpoint(fromCode.trim(), 'from');
+    const to = normalizeRangeEndpoint(toCode.trim(), 'to');
 
     const validationError = validateTrialBalanceInput(
       accounts,
@@ -662,6 +780,8 @@ export default function TrialBalancePanel({
       Boolean(isLebaneseCoa),
       clientByGrabio,
       clientByParentPcg,
+      clientByLedgerCode,
+      clientByParty,
     );
     if (validationError) {
       setSearchError(validationError);
@@ -700,7 +820,7 @@ export default function TrialBalancePanel({
     if (options.auxiliaryClassAccounts) filterParts.push('auxiliary class accounts');
     if (options.auxiliaryAccounts) filterParts.push('auxiliary');
     const closingText = options.excludeClosingBalance ? 'Exclude closing balance' : 'Include closing balance';
-    return `Accounts between ${from} and ${to}, Fiscal Year: ${year}, ${closingText} [ Filter : ${filterParts.join(' and ') || 'none' } ]`;
+    return `Accounts between ${from} and ${to}, Fiscal Year: ${year}, ${closingText} [ Filter : ${filterParts.join(' and ') || 'none' } ] · Double-click an account row to view movements`;
   }, [appliedFrom, appliedTo, endDate, fiscalYear, fromCode, options, startDate, toCode]);
 
   const exportCsv = () => {
@@ -724,32 +844,38 @@ export default function TrialBalancePanel({
       Boolean(isLebaneseCoa),
       clientByGrabio,
       clientByParentPcg,
+      clientByLedgerCode,
+      clientByParty,
       options.hideInactiveAccounts,
     ).length;
-  }, [accounts, clientByGrabio, clientByParentPcg, fromCode, options.hideInactiveAccounts, isLebaneseCoa, toCode]);
+  }, [
+    accounts,
+    clientByGrabio,
+    clientByParentPcg,
+    clientByLedgerCode,
+    clientByParty,
+    fromCode,
+    options.hideInactiveAccounts,
+    isLebaneseCoa,
+    toCode,
+  ]);
 
-  const colCount = 2 + visibleColumnCount(options) + 1;
+  const colCount = 3 + visibleColumnCount(options);
   const amountColCount = visibleColumnCount(options);
-  const canSearch = Boolean(fromCode.trim() && toCode.trim() && !loading && !computing);
+  const canSearch = Boolean(fromCode.trim() && toCode.trim() && !loading && !computing && (!isLebaneseCoa || pcgAccountsReady));
 
   return (
-    <Card className={cn('overflow-hidden border-slate-200 bg-white shadow-sm', fullScreen && 'fixed inset-0 z-50 rounded-none')}>
-      <CardHeader className="border-b bg-slate-50/80 pb-4">
-        <div className="flex items-start justify-between gap-2">
-          <div>
-            <CardTitle className="text-lg">Trial balance</CardTitle>
-            <CardDescription>
-              Account range · period · amounts in {currencyLabel}. Use Refresh above to reload ledger data.
-            </CardDescription>
-          </div>
-          <Button type="button" variant="outline" size="sm" className="h-8 shrink-0" onClick={() => setFullScreen((v) => !v)}>
-            {fullScreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
-            <span className="ml-1">{fullScreen ? 'Exit' : 'Full screen'}</span>
-          </Button>
-        </div>
-      </CardHeader>
+    <Card className={legacyReportCardClass(isLebaneseCoa)}>
+      {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+        <CardHeader className={legacyReportHeaderClass(isLebaneseCoa, 'pb-4')}>
+          <CardTitle className="text-lg">Trial balance</CardTitle>
+          <CardDescription>
+            Account range · period · amounts in {currencyLabel}. Use Refresh above to reload ledger data.
+          </CardDescription>
+        </CardHeader>
+      ) : null}
 
-      <CardContent className="space-y-4 pt-4">
+      <CardContent className={legacyReportBodyClass(isLebaneseCoa)}>
         <form
           className="space-y-3"
           onSubmit={(e) => {
@@ -773,7 +899,7 @@ export default function TrialBalancePanel({
             <Input
               id="tb-start"
               type="date"
-              className="bg-white"
+              className={legacyReportInputClass(isLebaneseCoa)}
               value={startDate}
               onChange={(e) => {
                 setStartDate(e.target.value);
@@ -787,7 +913,7 @@ export default function TrialBalancePanel({
             <Input
               id="tb-end"
               type="date"
-              className="bg-white"
+              className={legacyReportInputClass(isLebaneseCoa)}
               value={endDate}
               onChange={(e) => {
                 setEndDate(e.target.value);
@@ -799,12 +925,25 @@ export default function TrialBalancePanel({
             <label htmlFor="tb-fy" className="text-xs font-medium text-slate-700">Fiscal year</label>
             <Input
               id="tb-fy"
-              className="bg-white"
+              className={legacyReportInputClass(isLebaneseCoa)}
               value={fiscalYear}
               onChange={(e) => setFiscalYear(e.target.value.replace(/\D/g, '').slice(0, 4))}
             />
           </div>
-          <ReportCurrencyPicker value={currencyMode} onChange={setCurrencyMode} id="tb-currency" />
+          <div className="space-y-1">
+            <ReportCurrencyPicker value={currencyMode} onChange={setCurrencyMode} id="tb-currency" />
+            {(currencyMode === 'LBP' || currencyMode === 'both') && usdToLbp ? (
+              <p className="text-[11px] text-muted-foreground">
+                1 USD = {new Intl.NumberFormat('en-US').format(usdToLbp)} LBP
+              </p>
+            ) : null}
+            {(currencyMode === 'LBP' || currencyMode === 'both') && !usdToLbp && fxRateLoading ? (
+              <p className="text-[11px] text-amber-700">Loading exchange rate…</p>
+            ) : null}
+            {(currencyMode === 'LBP' || currencyMode === 'both') && !usdToLbp && !fxRateLoading ? (
+              <p className="text-[11px] text-amber-700">Could not load live USD→LBP rate. Check connection or set a manual rate in Admin Profile.</p>
+            ) : null}
+          </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -838,7 +977,11 @@ export default function TrialBalancePanel({
           {!loading && accounts.length > 0 && matchedPreview != null ? (
             <span className="text-xs text-muted-foreground">{matchedPreview} accounts in range</span>
           ) : null}
-          {loading ? <span className="text-xs text-muted-foreground">Loading ledger…</span> : null}
+          {loading || (isLebaneseCoa && !pcgAccountsReady) ? (
+            <span className="text-xs text-muted-foreground">
+              {isLebaneseCoa && !pcgAccountsReady ? 'Loading PCG working accounts…' : 'Loading ledger…'}
+            </span>
+          ) : null}
         </div>
         </form>
 
@@ -920,21 +1063,22 @@ export default function TrialBalancePanel({
 
         {report ? (
           <div className="space-y-3">
-            <div className="rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs leading-relaxed text-slate-700">
+            <div className="shrink-0 rounded-md border border-slate-200 bg-slate-100 px-3 py-2 text-xs leading-relaxed text-slate-700">
               {footerText}
             </div>
-            <div className={cn('overflow-y-auto overflow-x-hidden rounded-md border border-slate-200', fullScreen ? 'max-h-[calc(100vh-14rem)]' : 'max-h-[min(36rem,70vh)]')}>
-              <table className="w-full table-fixed border-collapse">
+            <div className="overflow-x-auto rounded-md border border-slate-200">
+              <table className={legacyReportTableClass(isLebaneseCoa, 'w-full min-w-[42rem] border-collapse text-[11px]')}>
                 <colgroup>
-                  <col className="w-[3.5rem]" />
-                  <col />
-                  {Array.from({ length: amountColCount }).map((_, index) => (
-                    <col key={index} className="w-[4.5rem]" />
-                  ))}
                   <col className="w-7" />
+                  <col className="w-[5.75rem]" />
+                  <col className="min-w-[8rem]" />
+                  {Array.from({ length: amountColCount }).map((_, index) => (
+                    <col key={index} className="w-[5rem]" />
+                  ))}
                 </colgroup>
                 <thead className="sticky top-0 z-10 bg-[#316ac5]">
                   <tr className="border-[#2a5dad]">
+                    <th className={TB_HEAD} aria-hidden />
                     <th className={TB_HEAD}>Acct</th>
                     <th className={TB_HEAD}>Name</th>
                     {options.startingDebit ? <th className={TB_NUM_HEAD}>St Dr</th> : null}
@@ -946,7 +1090,6 @@ export default function TrialBalancePanel({
                     {options.totalDebitLbp ? <th className={TB_NUM_HEAD}>Tot Dr</th> : null}
                     {options.totalCreditLbp ? <th className={TB_NUM_HEAD}>Tot Cr</th> : null}
                     {options.totalBalanceLbp ? <th className={TB_NUM_HEAD}>Bal</th> : null}
-                    <th className={TB_HEAD} />
                   </tr>
                 </thead>
                 <tbody>
@@ -972,71 +1115,75 @@ export default function TrialBalancePanel({
                     const balance = formatLegacyAmount(signedNet(row.closingDebit, row.closingCredit), fmtAmt);
                     const name = treeNode?.name || accountLabel(account);
                     const rowKey = treeNode?.id || row.accountId;
+                    const canDrill =
+                      !isGroup &&
+                      account.id &&
+                      onOpenAccount &&
+                      !account.id.startsWith('pcg:') &&
+                      !account.id.startsWith('class:');
                     return (
-                      <tr key={rowKey} className={cn('border-b', tbRowClass(level, isGroup))}>
-                        <td className={`${TB_CELL} font-mono text-[10px] leading-tight`} title={code}>
-                          <div className="flex items-start gap-0.5">
-                            {hasChildren ? (
-                              <button
-                                type="button"
-                                className="mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center rounded border border-slate-300 bg-white text-slate-600"
-                                aria-label={isExpanded ? 'Collapse account group' : 'Expand account group'}
-                                onClick={() => treeNode && toggleTbNode(treeNode.id)}
-                              >
-                                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-                              </button>
-                            ) : (
-                              <span className="inline-block h-4 w-4 shrink-0" />
-                            )}
-                            <span>{code}</span>
-                          </div>
+                      <tr
+                        key={rowKey}
+                        className={cn('border-b', tbRowClass(level, isGroup), canDrill && 'cursor-default')}
+                        title={canDrill ? 'Double-click to view account movements' : undefined}
+                        onDoubleClick={() => {
+                          if (canDrill) openAccountGl(account.id);
+                        }}
+                      >
+                        <td className={`${TB_CELL} w-7 p-1 text-center`}>
+                          {hasChildren ? (
+                            <button
+                              type="button"
+                              className="inline-flex h-5 w-5 items-center justify-center rounded border border-slate-300 bg-white text-slate-600"
+                              aria-label={isExpanded ? 'Collapse account group' : 'Expand account group'}
+                              onClick={() => treeNode && toggleTbNode(treeNode.id)}
+                            >
+                              {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+                            </button>
+                          ) : null}
                         </td>
                         <td
-                          className={`${TB_CELL} truncate text-[11px] leading-snug`}
-                          title={name}
-                          style={{ paddingLeft: `${8 + (treeNode?.depth || 0) * 14}px` }}
+                          className={cn(TB_CELL, 'font-mono text-[10px] whitespace-nowrap')}
+                          title={code}
+                          style={{ paddingLeft: `${8 + (treeNode?.depth || 0) * 10}px` }}
                         >
-                          {name}
+                          {code}
                         </td>
-                        {options.startingDebit ? <td className={TB_NUM_CELL}>{tbAmountCell(row.openingDebit, fmtAmt)}</td> : null}
-                        {options.startingCredit ? <td className={TB_NUM_CELL}>{tbAmountCell(row.openingCredit, fmtAmt)}</td> : null}
+                        <td className={cn(TB_CELL, 'max-w-[14rem]')} title={name}>
+                          <span className={cn('block truncate', canDrill && 'text-sky-900')}>{name}</span>
+                        </td>
+                        {options.startingDebit ? <td className={amountCellClass}>{tbAmountCell(row.openingDebit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td> : null}
+                        {options.startingCredit ? <td className={amountCellClass}>{tbAmountCell(row.openingCredit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td> : null}
                         {options.startingBalanceLbp ? (
                           <td className={cn(TB_NUM_CELL, start.negative && 'text-red-700')}>{start.text}</td>
                         ) : null}
-                        {options.movementDebitLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.periodDebit, fmtAmt)}</td> : null}
-                        {options.movementCreditLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.periodCredit, fmtAmt)}</td> : null}
+                        {options.movementDebitLbp ? <td className={amountCellClass}>{tbAmountCell(row.periodDebit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td> : null}
+                        {options.movementCreditLbp ? <td className={amountCellClass}>{tbAmountCell(row.periodCredit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td> : null}
                         {options.movementBalanceLbp ? (
                           <td className={cn(TB_NUM_CELL, movementBal.negative && 'text-red-700')}>{movementBal.text}</td>
                         ) : null}
-                        {options.totalDebitLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.closingDebit, fmtAmt)}</td> : null}
-                        {options.totalCreditLbp ? <td className={TB_NUM_CELL}>{tbAmountCell(row.closingCredit, fmtAmt)}</td> : null}
+                        {options.totalDebitLbp ? <td className={amountCellClass}>{tbAmountCell(row.closingDebit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td> : null}
+                        {options.totalCreditLbp ? <td className={amountCellClass}>{tbAmountCell(row.closingCredit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td> : null}
                         {options.totalBalanceLbp ? (
                           <td className={cn(TB_NUM_CELL, 'font-semibold', balance.negative && 'text-red-700')}>
                             {balance.text}
                           </td>
                         ) : null}
-                        <td className="px-0 py-1 text-center">
-                          {!isGroup && onOpenGl && account.id && !account.id.startsWith('pcg:') && !account.id.startsWith('class:') ? (
-                            <button type="button" className="text-[10px] text-[#2a5dad] hover:underline" onClick={() => onOpenGl(account.id)}>
-                              GL
-                            </button>
-                          ) : null}
-                        </td>
                       </tr>
                     );
                   })}
                   <tr className="bg-slate-100 font-semibold">
-                    <td colSpan={2} className={TB_CELL}>
+                    <td colSpan={3} className={TB_CELL}>
                       Totals
                     </td>
                     {options.startingDebit ? (
-                      <td className={TB_NUM_CELL}>
-                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingDebit), 0), fmtAmt)}
+                      <td className={amountCellClass}>
+                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingDebit), 0), currencyCode, currencyMode, usdToLbp, fmtAmt)}
                       </td>
                     ) : null}
                     {options.startingCredit ? (
-                      <td className={TB_NUM_CELL}>
-                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingCredit), 0), fmtAmt)}
+                      <td className={amountCellClass}>
+                        {tbAmountCell(displayRows.reduce((s, { account, row, treeNode }) => ((treeNode?.isGroup || account.pcgKind === 'G') ? s : s + row.openingCredit), 0), currencyCode, currencyMode, usdToLbp, fmtAmt)}
                       </td>
                     ) : null}
                     {options.startingBalanceLbp ? (
@@ -1045,10 +1192,10 @@ export default function TrialBalancePanel({
                       </td>
                     ) : null}
                     {options.movementDebitLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.movementDebit, fmtAmt)}</td>
+                      <td className={amountCellClass}>{tbAmountCell(totals.movementDebit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td>
                     ) : null}
                     {options.movementCreditLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.movementCredit, fmtAmt)}</td>
+                      <td className={amountCellClass}>{tbAmountCell(totals.movementCredit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td>
                     ) : null}
                     {options.movementBalanceLbp ? (
                       <td className={cn(TB_NUM_CELL, totals.movementDebit - totals.movementCredit < 0 && 'text-red-700')}>
@@ -1056,10 +1203,10 @@ export default function TrialBalancePanel({
                       </td>
                     ) : null}
                     {options.totalDebitLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.totalDebit, fmtAmt)}</td>
+                      <td className={amountCellClass}>{tbAmountCell(totals.totalDebit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td>
                     ) : null}
                     {options.totalCreditLbp ? (
-                      <td className={TB_NUM_CELL}>{tbAmountCell(totals.totalCredit, fmtAmt)}</td>
+                      <td className={amountCellClass}>{tbAmountCell(totals.totalCredit, currencyCode, currencyMode, usdToLbp, fmtAmt)}</td>
                     ) : null}
                     {options.totalBalanceLbp ? (
                       <td className={cn(TB_NUM_CELL, totals.balance < 0 && 'text-red-700')}>

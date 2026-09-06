@@ -53,14 +53,7 @@ import {
   loadFixedAssets,
 } from "@/lib/firestore/fixedAssetsFirestore";
 import type { FixedAsset } from "@/types/generalLedger";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import { Textarea } from "@/components/ui/textarea";
 import { useSystemGuide } from "@/hooks/useSystemGuide";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
@@ -71,23 +64,36 @@ import BankReconciliationPanel from "@/components/BankReconciliationPanel";
 import ReconciliationPanel from "@/components/ReconciliationPanel";
 import { getFinanceAuth } from "@/integrations/firebase/client";
 import { useGrabioStore } from "@/hooks/useGrabioStore";
+import { useReportExchangeRate } from "@/hooks/useReportExchangeRate";
 import {
   normalizeAccountingLanguage,
   supportsArabicEntry,
 } from "@/lib/grabio/accountingMode";
 import { updateLedgerAccountNames } from "@/lib/firestore/ledgerFirestore";
 import LebanesePcgCoaPanel from "@/components/LebanesePcgCoaPanel";
+import {
+  resolvePrimaryLedgerAccountForPcgNode,
+  type PcgTreeNode,
+} from "@/lib/ledger/lebanesePcgTree";
 import PcgClientAccountsPanel from "@/components/PcgClientAccountsPanel";
 import { PcgMappedCodeBadge } from "@/components/PcgMappedAccountCell";
-import { buildClientByGrabioMap, buildClientByParentPcgMap, resolvePcgDisplay, formatPcgAccountLabel, formatGlAccountReference, remapCashFlowLineLabel, displayPcgCode, displayPcgCodeForLedgerRow, displayGrabioCodeForLedgerRow } from "@/lib/ledger/grabioToPcgMap";
+import { buildClientByGrabioMap, buildClientByParentPcgMap, buildClientByLedgerCodeMap, buildClientByPartyMap, resolvePcgDisplay, formatPcgAccountLabel, formatGlAccountReference, remapCashFlowLineLabel, displayPcgCode, displayPcgCodeForLedgerRow, displayGrabioCodeForLedgerRow } from "@/lib/ledger/grabioToPcgMap";
+import { ensurePartySubaccount } from "@/lib/ledger/partySubaccount";
+import { mergeLedgerPartyRowsIntoPcgClients } from "@/lib/ledger/partySubaccountLedger";
+import { mergeEmployeeRowsIntoPcgClients } from "@/lib/ledger/employeeSubaccountLedger";
 import { loadPcgClientAccounts } from "@/lib/firestore/pcgClientAccountsFirestore";
 import { LEDGER_CHANGED_EVENT } from "@/lib/ledger/ledgerChanged";
 import type { PcgClientAccount } from "@/types/generalLedger";
 import type { LebanesePcgAccount } from "@/lib/ledger/lebanesePcgChart.generated";
 import AccountantWorkspacePanel from "@/components/AccountantWorkspacePanel";
 import LedgerActivityDialog from "@/components/LedgerActivityDialog";
+import AccountActivitySheet from "@/components/AccountActivitySheet";
 import { LedgerAccountCombobox } from "@/components/LedgerAccountCombobox";
 import VoucherDetailDialog from "@/components/VoucherDetailDialog";
+import type { GlVoucherSummary } from "@/components/GlVoucherSummaryStrip";
+import { createGlPresentationContext } from "@/lib/ledger/glEntryPresentation";
+import VoucherEditSheet from "@/components/VoucherEditSheet";
+import { AccountingPostedEditProvider } from "@/context/AccountingPostedEditContext";
 import AccountingQuickBar from "@/components/AccountingQuickBar";
 import AccountingCommandPalette from "@/components/AccountingCommandPalette";
 import FxRevaluationPanel from "@/components/FxRevaluationPanel";
@@ -98,8 +104,18 @@ import CheckRegisterPanel from "@/components/CheckRegisterPanel";
 import PartyStatementPanel from "@/components/PartyStatementPanel";
 import GeneralLedgerPanel from "@/components/GeneralLedgerPanel";
 import BulkVoucherImportPanel from "@/components/BulkVoucherImportPanel";
+import VatTransferPanel from "@/components/VatTransferPanel";
 import { loadSettlements, saveSettlementsForEntry } from "@/lib/firestore/settlementFirestore";
 import TrialBalancePanel from "@/components/TrialBalancePanel";
+import {
+  legacyReportBodyClass,
+  legacyReportCardClass,
+  legacyReportHeaderClass,
+  legacyReportOmitTitleBand,
+  legacyReportTableClass,
+  legacyReportTableHeadClass,
+  legacyReportTableHeaderRowClass,
+} from "@/components/legacyErpReportFrame";
 import { buildExtendedTrialBalance, extendedTrialBalanceToCsv } from "@/lib/ledger/trialBalanceExtended";
 import {
   buildR10SalaryWithholdingReport,
@@ -112,6 +128,7 @@ import { downloadXlsxFromCsv } from "@/lib/xlsxExport";
 import type { SettlementAllocationInput, VoucherLineSettlement } from "@/types/generalLedger";
 import type { LedgerActivityFocus } from "@/lib/ledger/ledgerActivity";
 import { consumeLedgerFocus } from "@/lib/ledger/ledgerActivity";
+import { consumeVoucherEditIntent } from "@/lib/ledger/voucherEditIntent";
 import { parseJournalDateInput, resolveFiscalQuarterForDate } from "@/lib/ledger/periodLockCore";
 import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
 import { useFinanceShellState } from "@/context/FinanceShellStateContext";
@@ -224,7 +241,7 @@ const ACCOUNTING_TAB_ROWS: AccountingTabDef[][] = [
 const Accounting = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { logout, invoices, purchaseOrders, paymentOrders, expenses, activeOrganizationId, recordInvoicePayment } = useAppContext();
+  const { logout, invoices, purchaseOrders, paymentOrders, expenses, clients, suppliers, activeOrganizationId, recordInvoicePayment } = useAppContext();
   const { embedded } = useFinanceEmbed();
   const { activeFinanceTab, reportsEmbedTab, settingsEmbedTab, openReport, openSetting, openQuickStatement, setFinanceReturnUrl } =
     useFinanceShellState();
@@ -238,14 +255,17 @@ const Accounting = () => {
     Boolean(settingsEmbedTab) &&
     (activeFinanceTab === 'tools' || activeFinanceTab === 'coa');
   const isHubEmbed = isReportsEmbed || isSettingsEmbed;
-  const { profile, storeId: grabioStoreId } = useGrabioStore();
+  const { profile, storeId: grabioStoreId, authLoading, loading: storeProfileLoading } = useGrabioStore();
+  const { usdToLbp, storeLedgerCurrency, loading: fxRateLoading } = useReportExchangeRate();
   const financeStoreId = grabioStoreId || activeOrganizationId || "";
+  const profileReady = profile !== null;
   const accountingLanguage = normalizeAccountingLanguage(
     profile?.accountingLanguage,
     profile?.accountingMode,
   );
   const arabicEntry = supportsArabicEntry(accountingLanguage);
-  const isLebaneseCoa = profile?.accountingMode === "lebanese";
+  const isLebaneseCoa = profileReady && profile?.accountingMode === "lebanese";
+  const embedProfilePending = embedded && (authLoading || storeProfileLoading || !profileReady);
   const { cashBalance } = useAccounting();
   const { enabled: systemGuideEnabled } = useSystemGuide();
   const {
@@ -366,17 +386,26 @@ const Accounting = () => {
   const [openingDate, setOpeningDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const [coaEditAccountId, setCoaEditAccountId] = useState("");
+  const [coaEditName, setCoaEditName] = useState("");
   const [coaEditNameAr, setCoaEditNameAr] = useState("");
   const [coaEditSaving, setCoaEditSaving] = useState(false);
   const [pcgClientAccounts, setPcgClientAccounts] = useState<PcgClientAccount[]>([]);
+  const [pcgAccountsReady, setPcgAccountsReady] = useState(false);
   const [pcgPrefillAccount, setPcgPrefillAccount] = useState<LebanesePcgAccount | null>(null);
   const [pcgPrefillKey, setPcgPrefillKey] = useState(0);
+  const [pcgEditTarget, setPcgEditTarget] = useState<PcgClientAccount | null>(null);
+  const [pcgEditKey, setPcgEditKey] = useState(0);
   const [coaWorkingOpen, setCoaWorkingOpen] = useState(false);
   const [coaAddOpen, setCoaAddOpen] = useState(false);
   const [voucherEditPrefill, setVoucherEditPrefill] = useState<{ entry: JournalEntry; lines: JournalLine[] } | null>(null);
+  const [voucherEditSheetOpen, setVoucherEditSheetOpen] = useState(false);
   const [glPresetAccountId, setGlPresetAccountId] = useState("");
   const [ledgerFocus, setLedgerFocus] = useState<LedgerActivityFocus | null>(null);
+  const [accountActivityId, setAccountActivityId] = useState<string | null>(null);
+  const [accountActivityOpen, setAccountActivityOpen] = useState(false);
+  const [accountActivityPeriodEnd, setAccountActivityPeriodEnd] = useState<string | undefined>();
   const [quickVoucherEntryId, setQuickVoucherEntryId] = useState("");
+  const [quickVoucherGlSummary, setQuickVoucherGlSummary] = useState<GlVoucherSummary | null>(null);
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [settlements, setSettlements] = useState<VoucherLineSettlement[]>([]);
   const [tbStartDate] = useState(() => `${new Date().getFullYear()}-01-01`);
@@ -388,8 +417,31 @@ const Accounting = () => {
     [],
   );
 
-  const openAccountActivity = useCallback((accountId: string, label: string) => {
-    setLedgerFocus({ kind: "account", accountId, label });
+  const glPresentation = useMemo(
+    () => createGlPresentationContext(purchaseOrders, paymentOrders, invoices, expenses, accounts),
+    [purchaseOrders, paymentOrders, invoices, expenses, accounts],
+  );
+
+  const openVoucherDetail = useCallback((entryId: string, glSummary?: GlVoucherSummary | null) => {
+    setQuickVoucherEntryId(entryId);
+    setQuickVoucherGlSummary(glSummary ?? null);
+  }, []);
+
+  const closeVoucherDetail = useCallback(() => {
+    setQuickVoucherEntryId("");
+    setQuickVoucherGlSummary(null);
+  }, []);
+
+  const openAccountActivity = useCallback((accountId: string, _label?: string, periodEnd?: string) => {
+    setAccountActivityId(accountId);
+    setAccountActivityPeriodEnd(periodEnd);
+    setAccountActivityOpen(true);
+  }, []);
+
+  const closeAccountActivity = useCallback(() => {
+    setAccountActivityOpen(false);
+    setAccountActivityId(null);
+    setAccountActivityPeriodEnd(undefined);
   }, []);
 
   const openAccountDrill = useCallback(
@@ -426,24 +478,51 @@ const Accounting = () => {
     [entries, quickVoucherEntryId],
   );
 
+  const activeLedgerAccounts = useMemo(
+    () => accounts.filter((account) => account.isActive),
+    [accounts],
+  );
+
+  const displayPcgClientAccounts = useMemo(
+    () =>
+      mergeEmployeeRowsIntoPcgClients(
+        activeLedgerAccounts,
+        mergeLedgerPartyRowsIntoPcgClients(activeLedgerAccounts, pcgClientAccounts),
+      ),
+    [activeLedgerAccounts, pcgClientAccounts],
+  );
+
   const clientByGrabio = useMemo(
-    () => buildClientByGrabioMap(pcgClientAccounts),
-    [pcgClientAccounts],
+    () => buildClientByGrabioMap(displayPcgClientAccounts),
+    [displayPcgClientAccounts],
   );
   const clientByParentPcg = useMemo(
-    () => buildClientByParentPcgMap(pcgClientAccounts),
-    [pcgClientAccounts],
+    () => buildClientByParentPcgMap(displayPcgClientAccounts),
+    [displayPcgClientAccounts],
+  );
+  const clientByLedgerCode = useMemo(
+    () => buildClientByLedgerCodeMap(displayPcgClientAccounts),
+    [displayPcgClientAccounts],
+  );
+  const clientByParty = useMemo(
+    () => buildClientByPartyMap(displayPcgClientAccounts),
+    [displayPcgClientAccounts],
   );
 
   useEffect(() => {
     if (!isLebaneseCoa || !financeStoreId) {
       setPcgClientAccounts([]);
+      setPcgAccountsReady(!isLebaneseCoa);
       return;
     }
     let cancelled = false;
+    setPcgAccountsReady(false);
     const load = () => {
       void loadPcgClientAccounts(financeStoreId).then((rows) => {
-        if (!cancelled) setPcgClientAccounts(rows);
+        if (!cancelled) {
+          setPcgClientAccounts(rows);
+          setPcgAccountsReady(true);
+        }
       });
     };
     load();
@@ -453,6 +532,26 @@ const Accounting = () => {
       window.removeEventListener(LEDGER_CHANGED_EVENT, load);
     };
   }, [isLebaneseCoa, financeStoreId]);
+
+  useEffect(() => {
+    if (!financeStoreId) return;
+    for (const client of clients) {
+      void ensurePartySubaccount({
+        storeId: financeStoreId,
+        kind: 'client',
+        partyId: client.id,
+        partyName: client.name,
+      });
+    }
+    for (const supplier of suppliers) {
+      void ensurePartySubaccount({
+        storeId: financeStoreId,
+        kind: 'supplier',
+        partyId: supplier.id,
+        partyName: supplier.name,
+      });
+    }
+  }, [clients, financeStoreId, suppliers]);
 
   useEffect(() => {
     if (!financeStoreId) {
@@ -519,8 +618,13 @@ const Accounting = () => {
 
   useEffect(() => {
     const parsed = consumeLedgerFocus();
-    if (parsed) setLedgerFocus(parsed);
-  }, []);
+    if (!parsed) return;
+    if (parsed.kind === "account") {
+      openAccountActivity(parsed.accountId, parsed.label);
+      return;
+    }
+    setLedgerFocus(parsed);
+  }, [openAccountActivity]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -541,6 +645,39 @@ const Accounting = () => {
       navigateFromQuickBar("coa");
     },
     [navigateFromQuickBar],
+  );
+
+  const openEditClientAccountFromPcg = useCallback(
+    (row: PcgClientAccount) => {
+      setPcgEditTarget(row);
+      setPcgEditKey((key) => key + 1);
+      setCoaWorkingOpen(true);
+      navigateFromQuickBar("coa");
+    },
+    [navigateFromQuickBar],
+  );
+
+  const openLedgerAccountEdit = useCallback((account: { id: string; name: string; nameAr?: string }) => {
+    setCoaEditAccountId(account.id);
+    setCoaEditName(account.name || "");
+    setCoaEditNameAr(account.nameAr || "");
+  }, []);
+
+  const openEditPcgAccountFromTree = useCallback(
+    (node: PcgTreeNode) => {
+      const ledger = resolvePrimaryLedgerAccountForPcgNode(node, accounts);
+      if (ledger) {
+        openLedgerAccountEdit(ledger);
+        return;
+      }
+      if (node.pcgAccount) {
+        openClientAccountFromPcg(node.pcgAccount);
+        toast.message("No ledger row yet — add a working account for this PCG line.");
+        return;
+      }
+      toast.error("Could not find a ledger account for this chart row.");
+    },
+    [accounts, openClientAccountFromPcg, openLedgerAccountEdit],
   );
 
   const [periodStartDate, setPeriodStartDate] = useState(() => {
@@ -628,9 +765,9 @@ const Accounting = () => {
         lines,
         reportPeriod.startDate,
         reportPeriod.endDate,
-        profile?.mainCurrency || 'LBP',
+        storeLedgerCurrency,
       ),
-    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate, profile?.mainCurrency],
+    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate, storeLedgerCurrency],
   );
 
   const lebanonCnss190AForm = useMemo(
@@ -641,9 +778,9 @@ const Accounting = () => {
         lines,
         reportPeriod.startDate,
         reportPeriod.endDate,
-        profile?.mainCurrency || 'LBP',
+        storeLedgerCurrency,
       ),
-    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate, profile?.mainCurrency],
+    [accounts, entries, lines, reportPeriod.startDate, reportPeriod.endDate, storeLedgerCurrency],
   );
 
   const r10Report = useMemo(
@@ -941,7 +1078,10 @@ const Accounting = () => {
           : `Posted ${result.voucherNumber || result.entryId}`,
       );
       await refreshLedger();
-      goToTab("vouchers");
+      if (voucherEditPrefill) {
+        setVoucherEditSheetOpen(false);
+        setVoucherEditPrefill(null);
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to post entry";
       toast.error(message);
@@ -975,22 +1115,38 @@ const Accounting = () => {
     }
   };
 
-  const beginEditPostedVoucher = (entry: JournalEntry) => {
+  const beginEditPostedVoucher = useCallback((entry: JournalEntry, options?: { onClose?: () => void }) => {
     if (entry.status !== "posted") {
       toast.error("Only posted vouchers can be edited.");
-      return;
+      return false;
     }
     if (isDateLocked(entry.date)) {
       toast.error("That period is closed — cannot reverse and repost this voucher.");
-      return;
+      return false;
     }
+    options?.onClose?.();
     setVoucherEditPrefill({
       entry,
       lines: lines.filter((line) => line.entryId === entry.id),
     });
     setQuickVoucherEntryId("");
-    goToTab("vouchers");
-  };
+    setQuickVoucherGlSummary(null);
+    setVoucherEditSheetOpen(true);
+    return true;
+  }, [isDateLocked, lines]);
+
+  useEffect(() => {
+    if (loading) return;
+    const intent = consumeVoucherEditIntent();
+    if (!intent) return;
+    const entry = entries.find((row) => row.id === intent.entryId);
+    if (!entry) {
+      toast.error("Could not load voucher for edit — refresh and try again.");
+      return;
+    }
+    if (intent.returnUrl) setFinanceReturnUrl(intent.returnUrl);
+    beginEditPostedVoucher(entry);
+  }, [loading, entries, beginEditPostedVoucher, setFinanceReturnUrl]);
 
   const handleOpeningBalance = async () => {
     if (!openingAccountId || !openingAmount) {
@@ -1065,7 +1221,18 @@ const Accounting = () => {
   const showQuickBar = isPrimaryView;
   const backLink = isDeepLinkView ? tabBackLink(activeTab) : null;
 
+  if (embedProfilePending) {
+    return (
+      <FinancePageShell onLogout={logout}>
+        <div className="flex min-h-[200px] items-center justify-center py-12" aria-busy="true" aria-label="Loading finance">
+          <RefreshCw className="h-6 w-6 animate-spin text-slate-400" />
+        </div>
+      </FinancePageShell>
+    );
+  }
+
   return (
+    <AccountingPostedEditProvider beginEdit={beginEditPostedVoucher}>
     <FinancePageShell onLogout={logout}>
       <div className={embedded ? 'space-y-3' : 'space-y-6'}>
         {!embedded && (
@@ -1173,15 +1340,21 @@ const Accounting = () => {
         />
         )}
 
-        <Dialog open={closeDialogOpen} onOpenChange={setCloseDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Close accounting period</DialogTitle>
-              <DialogDescription>
-                Fiscal quarters auto-close on the 30th: Q1 Jan 1–Mar 30 · Q2 Apr 1–Jun 30 · Q3 Jul 1–Sep 30 · Q4 Oct 1–Dec 30.
-                Manual close is optional — expired quarters lock automatically.
-              </DialogDescription>
-            </DialogHeader>
+        <AccountingSideSheet
+          open={closeDialogOpen}
+          onOpenChange={setCloseDialogOpen}
+          title="Close accounting period"
+          description="Fiscal quarters auto-close on the 30th: Q1 Jan 1–Mar 30 · Q2 Apr 1–Jun 30 · Q3 Jul 1–Sep 30 · Q4 Oct 1–Dec 30. Manual close is optional — expired quarters lock automatically."
+          size="default"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Cancel</Button>
+              <Button className="ml-2" onClick={() => void handleClosePeriod()} disabled={periodActionLoading}>
+                {periodActionLoading ? "Closing…" : "Close period"}
+              </Button>
+            </>
+          }
+        >
             <div className="space-y-4">
               <div>
                 <Label>Period type</Label>
@@ -1228,23 +1401,23 @@ const Accounting = () => {
                 <Textarea value={closeNote} onChange={(e) => setCloseNote(e.target.value)} placeholder="e.g. Month-end close approved" />
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setCloseDialogOpen(false)}>Cancel</Button>
-              <Button onClick={() => void handleClosePeriod()} disabled={periodActionLoading}>
-                {periodActionLoading ? "Closing…" : "Close period"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
 
-        <Dialog open={reopenDialogOpen} onOpenChange={setReopenDialogOpen}>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Reopen closed period</DialogTitle>
-              <DialogDescription>
-                Admin override — requires a reason. This is logged in the period audit trail.
-              </DialogDescription>
-            </DialogHeader>
+        <AccountingSideSheet
+          open={reopenDialogOpen}
+          onOpenChange={setReopenDialogOpen}
+          title="Reopen closed period"
+          description="Admin override — requires a reason. This is logged in the period audit trail."
+          size="default"
+          footer={
+            <>
+              <Button variant="outline" onClick={() => setReopenDialogOpen(false)}>Cancel</Button>
+              <Button className="ml-2" onClick={() => void handleReopenPeriod()} disabled={periodActionLoading || !reopenReason.trim()}>
+                {periodActionLoading ? "Reopening…" : "Reopen period"}
+              </Button>
+            </>
+          }
+        >
             <div className="space-y-4">
               <div>
                 <Label>Period</Label>
@@ -1262,14 +1435,7 @@ const Accounting = () => {
                 <Textarea value={reopenReason} onChange={(e) => setReopenReason(e.target.value)} placeholder="Why is this period being reopened?" />
               </div>
             </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setReopenDialogOpen(false)}>Cancel</Button>
-              <Button onClick={() => void handleReopenPeriod()} disabled={periodActionLoading || !reopenReason.trim()}>
-                {periodActionLoading ? "Reopening…" : "Reopen period"}
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+        </AccountingSideSheet>
 
         <Tabs value={activeTab} onValueChange={goToTab}>
           <div className="finance-accounting-tabs-shell hidden" aria-hidden />
@@ -1279,13 +1445,13 @@ const Accounting = () => {
               accounts={accounts}
               entries={entries}
               lines={lines}
-              pcgClientAccounts={pcgClientAccounts}
+              pcgClientAccounts={displayPcgClientAccounts}
               accountingLanguage={accountingLanguage}
               isLebaneseCoa={isLebaneseCoa}
               onAddClientAccount={openClientAccountFromPcg}
               onOpenVouchers={() => goToTab("vouchers")}
               onViewAccount={openAccountActivity}
-              onViewEntry={setQuickVoucherEntryId}
+              onViewEntry={(entryId) => openVoucherDetail(entryId)}
               systemGuideEnabled={systemGuideEnabled}
             />
           </TabsContent>
@@ -1324,12 +1490,15 @@ const Accounting = () => {
                   <CardContent>
                     <LebanesePcgCoaPanel
                       activeLedgerAccounts={accounts.filter((a) => a.isActive)}
-                      pcgClientAccounts={pcgClientAccounts}
+                      pcgClientAccounts={displayPcgClientAccounts}
                       entries={entries}
                       lines={lines}
                       asOfDate={asOfDate}
                       accountingLanguage={accountingLanguage}
                       onAddClientAccount={openClientAccountFromPcg}
+                      onEditClientAccount={openEditClientAccountFromPcg}
+                      onEditPcgAccount={openEditPcgAccountFromTree}
+                      onOpenEntry={openVoucherDetail}
                     />
                   </CardContent>
                 </Card>
@@ -1347,14 +1516,14 @@ const Accounting = () => {
                                 label="What working account numbers are"
                                 title="Client sub-accounts"
                                 content={[
-                                  "Your accountant's own codes under the PCG chart.",
-                                  "Reports show these numbers; balances post through linked Grabio accounts.",
+                                  "Your accountant's PCG working numbers under the chart.",
+                                  "Reports and vouchers use these PCG codes only.",
                                 ]}
                               />
                             </CardTitle>
                             <CardDescription className="mt-1">
-                              {pcgClientAccounts.length
-                                ? `${pcgClientAccounts.length} working account${pcgClientAccounts.length === 1 ? "" : "s"} — expand to edit or import`
+                              {displayPcgClientAccounts.length
+                                ? `${displayPcgClientAccounts.length} working account${displayPcgClientAccounts.length === 1 ? "" : "s"} — expand to edit or import`
                                 : "No working accounts yet — expand to add or import"}
                             </CardDescription>
                           </div>
@@ -1377,6 +1546,8 @@ const Accounting = () => {
                             onChange={setPcgClientAccounts}
                             prefillAccount={pcgPrefillAccount}
                             prefillKey={pcgPrefillKey}
+                            editTarget={pcgEditTarget}
+                            editTargetKey={pcgEditKey}
                           />
                         ) : (
                           <p className="text-sm text-muted-foreground">Select a store to manage client codes.</p>
@@ -1387,8 +1558,9 @@ const Accounting = () => {
                 </Collapsible>
               </div>
             ) : (
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Chart of Accounts
                   <SystemGuideInfo
@@ -1405,6 +1577,7 @@ const Accounting = () => {
                   {accounts.length ? `${accounts.length} accounts` : "Default SMB template will seed on first load."}
                 </CardDescription>
               </CardHeader>
+              ) : null}
               <CardContent>
                 <Button variant="outline" size="sm" className="mb-4 mr-2" onClick={() => void ensureCoa()}>
                   Initialize / Refresh COA
@@ -1412,16 +1585,16 @@ const Accounting = () => {
                 <Button size="sm" className="mb-4" onClick={() => setCoaAddOpen(true)}>
                   Add account
                 </Button>
-                <Table>
+                <Table className={legacyReportTableClass(isLebaneseCoa)}>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Code</TableHead>
-                      <TableHead>Name</TableHead>
-                      {arabicEntry ? <TableHead>Arabic name</TableHead> : null}
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Opening</TableHead>
-                      <TableHead className="w-[100px]">Actions</TableHead>
-                      {arabicEntry ? <TableHead className="w-[90px]" /> : null}
+                    <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Code</TableHead>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Name</TableHead>
+                      {arabicEntry ? <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Arabic name</TableHead> : null}
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Type</TableHead>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Opening</TableHead>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'w-[100px]')}>Actions</TableHead>
+                      {arabicEntry ? <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'w-[90px]')} /> : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1452,8 +1625,7 @@ const Accounting = () => {
                               variant="ghost"
                               size="sm"
                               onClick={() => {
-                                setCoaEditAccountId(a.id);
-                                setCoaEditNameAr(a.nameAr || "");
+                                openLedgerAccountEdit(a);
                               }}
                             >
                               Edit
@@ -1464,53 +1636,45 @@ const Accounting = () => {
                     ))}
                   </TableBody>
                 </Table>
-                <Dialog open={Boolean(coaEditAccountId)} onOpenChange={(open) => !open && setCoaEditAccountId("")}>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Arabic account label</DialogTitle>
-                      <DialogDescription>Persisted on the ledger account for bilingual reports and vouchers.</DialogDescription>
-                    </DialogHeader>
-                    <div>
-                      <Label htmlFor="coa-name-ar">Name (Arabic)</Label>
-                      <Input
-                        id="coa-name-ar"
-                        dir="rtl"
-                        value={coaEditNameAr}
-                        onChange={(e) => setCoaEditNameAr(e.target.value)}
-                        className="mt-1"
-                      />
-                    </div>
-                    <DialogFooter>
-                      <Button
-                        disabled={coaEditSaving || !coaEditAccountId || !activeOrganizationId}
-                        onClick={() => {
-                          if (!activeOrganizationId || !coaEditAccountId) return;
-                          setCoaEditSaving(true);
-                          void updateLedgerAccountNames(activeOrganizationId, coaEditAccountId, {
-                            nameAr: coaEditNameAr.trim() || undefined,
-                          })
-                            .then(() => {
-                              toast.success("Arabic label saved");
-                              setCoaEditAccountId("");
-                              return refreshLedger();
-                            })
-                            .catch((err) => toast.error(err instanceof Error ? err.message : "Save failed"))
-                            .finally(() => setCoaEditSaving(false));
-                        }}
-                      >
-                        Save
-                      </Button>
-                    </DialogFooter>
-                  </DialogContent>
-                </Dialog>
               </CardContent>
             </Card>
             )}
           </TabsContent>
 
           <TabsContent value="vouchers" className="mt-4">
-            <Card>
-              <CardHeader>
+            {isLebaneseCoa ? (
+              <VoucherEntryPanel
+                storeId={financeStoreId}
+                accounts={accounts}
+                accountingLanguage={accountingLanguage}
+                isLebaneseCoa={isLebaneseCoa}
+                pcgClientAccounts={displayPcgClientAccounts}
+                invoices={invoices}
+                purchaseOrders={purchaseOrders}
+                paymentOrders={paymentOrders}
+                settlements={settlements}
+                mainCurrency={profile?.mainCurrency}
+                fxRateDefault={usdToLbp}
+                posting={posting}
+                onPost={handlePostVoucher}
+                registerEntries={entries}
+                registerLines={lines}
+                systemGuideEnabled={systemGuideEnabled}
+                onRegisterPostDraft={(id) => void handlePostDraft(id)}
+                postingRegisterDraft={postingDraft}
+                onRegisterReverse={(id) => void handleReverseEntry(id)}
+                reversingRegister={reversing}
+                prefillEntry={voucherEditPrefill?.entry || null}
+                prefillLines={voucherEditPrefill?.lines || []}
+                onPrefillConsumed={() => setVoucherEditPrefill(null)}
+                onReversePosted={async (entryId) => {
+                  await reverseEntry(entryId);
+                }}
+                onOpenEntry={openVoucherDetail}
+              />
+            ) : (
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Vouchers (JV / PV / RV / CV)
                   <SystemGuideInfo
@@ -1531,13 +1695,13 @@ const Accounting = () => {
                   accounts={accounts}
                   accountingLanguage={accountingLanguage}
                   isLebaneseCoa={isLebaneseCoa}
-                  pcgClientAccounts={pcgClientAccounts}
+                  pcgClientAccounts={displayPcgClientAccounts}
                   invoices={invoices}
                   purchaseOrders={purchaseOrders}
                   paymentOrders={paymentOrders}
                   settlements={settlements}
                   mainCurrency={profile?.mainCurrency}
-                  fxRateDefault={profile?.customExchangeRate}
+                  fxRateDefault={usdToLbp}
                   posting={posting}
                   onPost={handlePostVoucher}
                   registerEntries={entries}
@@ -1553,9 +1717,11 @@ const Accounting = () => {
                   onReversePosted={async (entryId) => {
                     await reverseEntry(entryId);
                   }}
+                  onOpenEntry={openVoucherDetail}
                 />
               </CardContent>
             </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="vat-filing" className="mt-4">
@@ -1568,8 +1734,8 @@ const Accounting = () => {
                 systemGuideEnabled={systemGuideEnabled}
               />
             ) : (
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   <FileSpreadsheet className="h-5 w-5" />
                   VAT filing summary
@@ -1588,7 +1754,7 @@ const Accounting = () => {
                   Lebanon 11% accounts · read-only from the general ledger
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, "space-y-6")}>
                 <div className="flex flex-wrap items-end justify-end gap-4">
                   <Button type="button" variant="outline" size="sm" onClick={downloadVatCsv}>
                     Export CSV
@@ -1649,13 +1815,13 @@ const Accounting = () => {
                 {vatFiling.bySource.length > 0 && (
                   <div>
                     <h4 className="text-sm font-medium mb-2">By GL source (period)</h4>
-                    <Table>
+                    <Table className={legacyReportTableClass(isLebaneseCoa)}>
                       <TableHeader>
-                        <TableRow>
-                          <TableHead>Source</TableHead>
-                          <TableHead className="text-right">Output net</TableHead>
-                          <TableHead className="text-right">Input net</TableHead>
-                          <TableHead className="text-right">Entries</TableHead>
+                        <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                          <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Source</TableHead>
+                          <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Output net</TableHead>
+                          <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Input net</TableHead>
+                          <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Entries</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
@@ -1671,14 +1837,31 @@ const Accounting = () => {
                     </Table>
                   </div>
                 )}
+
+                <VatTransferPanel
+                  accounts={accounts}
+                  filing={vatFiling}
+                  systemGuideEnabled={systemGuideEnabled}
+                  posting={posting}
+                  onPost={(payload) =>
+                    handlePostVoucher({
+                      voucherType: "JV",
+                      date: payload.date,
+                      memo: payload.memo,
+                      lines: payload.lines,
+                      voucherMeta: { externalReference: `VAT-XFER-${vatFiling.endDate}` },
+                    })
+                  }
+                />
               </CardContent>
             </Card>
             )}
           </TabsContent>
 
           <TabsContent value="ar-aging" className="mt-4">
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Aged receivables
                   <SystemGuideInfo
@@ -1701,7 +1884,17 @@ const Accounting = () => {
                   )}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              ) : null}
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, "space-y-6")}>
+                {legacyReportOmitTitleBand(isLebaneseCoa) ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    {arAging.matched ? (
+                      <Badge className="bg-green-600">Matches GL 110</Badge>
+                    ) : (
+                      <Badge variant="destructive">GL variance {formatCurrency(arAging.variance)}</Badge>
+                    )}
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 flex-1">
                     {(Object.keys(AGED_RECEIVABLES_BUCKET_LABELS) as Array<keyof typeof AGED_RECEIVABLES_BUCKET_LABELS>).map((key) => (
@@ -1728,17 +1921,17 @@ const Accounting = () => {
                 {arAging.rows.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No open receivables on unpaid invoices.</p>
                 ) : (
-                  <Table>
+                  <Table className={legacyReportTableClass(isLebaneseCoa)}>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>Invoice</TableHead>
-                        <TableHead>Client</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Days</TableHead>
-                        <TableHead>Bucket</TableHead>
-                        <TableHead className="text-right">Outstanding</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-[110px]">Actions</TableHead>
+                      <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Invoice</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Client</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Date</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Days</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Bucket</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Outstanding</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Status</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'w-[110px]')}>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1771,8 +1964,9 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="ap-aging" className="mt-4">
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Aged payables
                   <SystemGuideInfo
@@ -1795,7 +1989,17 @@ const Accounting = () => {
                   )}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              ) : null}
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, "space-y-6")}>
+                {legacyReportOmitTitleBand(isLebaneseCoa) ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    {apAging.matched ? (
+                      <Badge className="bg-green-600">Matches GL 201</Badge>
+                    ) : (
+                      <Badge variant="destructive">GL variance {formatCurrency(apAging.variance)}</Badge>
+                    )}
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-center justify-between gap-4">
                   <div className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 flex-1">
                     {(Object.keys(AGED_PAYABLES_BUCKET_LABELS) as Array<keyof typeof AGED_PAYABLES_BUCKET_LABELS>).map((key) => (
@@ -1822,19 +2026,19 @@ const Accounting = () => {
                 {apAging.rows.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No open payables on sent/approved POs.</p>
                 ) : (
-                  <Table>
+                  <Table className={legacyReportTableClass(isLebaneseCoa)}>
                     <TableHeader>
-                      <TableRow>
-                        <TableHead>PO</TableHead>
-                        <TableHead>Supplier</TableHead>
-                        <TableHead>Date</TableHead>
-                        <TableHead className="text-right">Days</TableHead>
-                        <TableHead>Bucket</TableHead>
-                        <TableHead className="text-right">Gross</TableHead>
-                        <TableHead className="text-right">Paid</TableHead>
-                        <TableHead className="text-right">Outstanding</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-[110px]">Actions</TableHead>
+                      <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>PO</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Supplier</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Date</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Days</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Bucket</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Gross</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Paid</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Outstanding</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Status</TableHead>
+                        <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'w-[110px]')}>Actions</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -1869,8 +2073,9 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="cash-flow" className="mt-4">
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Cash flow statement
                   <SystemGuideInfo
@@ -1895,7 +2100,19 @@ const Accounting = () => {
                   )}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              ) : null}
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, "space-y-6")}>
+                {legacyReportOmitTitleBand(isLebaneseCoa) ? (
+                  <div className="flex flex-wrap items-center gap-2 text-sm">
+                    {cashFlow.reconciled ? (
+                      <Badge className="bg-green-600">Reconciles to cash GL</Badge>
+                    ) : (
+                      <Badge variant="destructive">
+                        Cash variance {formatCurrency(cashFlow.reconciliationVariance)}
+                      </Badge>
+                    )}
+                  </div>
+                ) : null}
                 <div className="flex flex-wrap items-end justify-end gap-4">
                   <Button type="button" variant="outline" size="sm" onClick={downloadCashFlowCsv}>
                     Export CSV
@@ -1954,11 +2171,11 @@ const Accounting = () => {
                   return (
                     <div key={section}>
                       <h4 className="text-sm font-medium mb-2 capitalize">{section} activities</h4>
-                      <Table>
+                      <Table className={legacyReportTableClass(isLebaneseCoa)}>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead>Line</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
+                          <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                            <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Line</TableHead>
+                            <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Amount</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -1985,8 +2202,9 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="depreciation" className="mt-4">
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Fixed assets &amp; depreciation
                   <SystemGuideInfo
@@ -2008,7 +2226,8 @@ const Accounting = () => {
                   by default
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              ) : null}
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, "space-y-6")}>
                 <div className="flex flex-wrap items-end justify-between gap-4">
                   <div className="flex flex-wrap gap-4">
                     <div>
@@ -2077,14 +2296,14 @@ const Accounting = () => {
                   </div>
                 ) : null}
 
-                <Table>
+                <Table className={legacyReportTableClass(isLebaneseCoa)}>
                   <TableHeader>
-                    <TableRow>
-                      <TableHead>Asset</TableHead>
-                      <TableHead>In service</TableHead>
-                      <TableHead className="text-right">Cost</TableHead>
-                      <TableHead className="text-right">Accum. depr.</TableHead>
-                      <TableHead>Status</TableHead>
+                    <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Asset</TableHead>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>In service</TableHead>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Cost</TableHead>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Accum. depr.</TableHead>
+                      <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Status</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -2116,16 +2335,27 @@ const Accounting = () => {
               </CardContent>
             </Card>
 
-            <Dialog open={assetDialogOpen} onOpenChange={setAssetDialogOpen}>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add fixed asset</DialogTitle>
-                  <DialogDescription>
-                    Straight-line depreciation · Dr {isLebaneseCoa ? displayPcgCode("710", clientByGrabio) : "710"} / Cr{" "}
-                    {isLebaneseCoa ? displayPcgCode("156", clientByGrabio) : "156"} when you post a month.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="grid gap-3 py-2">
+            <AccountingSideSheet
+              open={assetDialogOpen}
+              onOpenChange={setAssetDialogOpen}
+              title="Add fixed asset"
+              description={
+                <>
+                  Straight-line depreciation · Dr {isLebaneseCoa ? displayPcgCode("710", clientByGrabio) : "710"} / Cr{" "}
+                  {isLebaneseCoa ? displayPcgCode("156", clientByGrabio) : "156"} when you post a month.
+                </>
+              }
+              size="default"
+              footer={
+                <>
+                  <Button variant="outline" onClick={() => setAssetDialogOpen(false)}>
+                    Cancel
+                  </Button>
+                  <Button className="ml-2" onClick={() => void handleCreateFixedAsset()}>Save asset</Button>
+                </>
+              }
+            >
+                <div className="grid gap-3">
                   <div>
                     <Label>Name</Label>
                     <Input value={newAssetName} onChange={(e) => setNewAssetName(e.target.value)} placeholder="Kitchen oven" />
@@ -2143,14 +2373,7 @@ const Accounting = () => {
                     <Input type="date" value={newAssetInService} onChange={(e) => setNewAssetInService(e.target.value)} />
                   </div>
                 </div>
-                <DialogFooter>
-                  <Button variant="outline" onClick={() => setAssetDialogOpen(false)}>
-                    Cancel
-                  </Button>
-                  <Button onClick={() => void handleCreateFixedAsset()}>Save asset</Button>
-                </DialogFooter>
-              </DialogContent>
-            </Dialog>
+            </AccountingSideSheet>
           </TabsContent>
 
           <TabsContent value="trial-balance" className="mt-4">
@@ -2159,23 +2382,23 @@ const Accounting = () => {
               entries={entries}
               lines={lines}
               asOfDate={asOfDate}
-              loading={loading}
+              loading={loading || (isLebaneseCoa && !pcgAccountsReady)}
               isLebaneseCoa={isLebaneseCoa}
-              pcgClientAccounts={pcgClientAccounts}
+              pcgClientAccounts={displayPcgClientAccounts}
+              pcgAccountsReady={pcgAccountsReady}
               accountingLanguage={accountingLanguage}
-              currencyCode={profile?.mainCurrency || (isLebaneseCoa ? 'LBP' : 'USD')}
-              usdToLbp={profile?.customExchangeRate}
+              currencyCode={storeLedgerCurrency}
+              usdToLbp={usdToLbp}
+              fxRateLoading={fxRateLoading}
               onRefresh={() => void refreshLedger()}
-              onOpenGl={(accountId) => {
-                const account = accounts.find((row) => row.id === accountId);
-                openAccountActivity(accountId, account ? `${account.code} ${account.name}` : accountId);
-              }}
+              onOpenAccount={openAccountActivity}
             />
           </TabsContent>
 
           <TabsContent value="balance-sheet" className="mt-4">
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Balance Sheet
                   <SystemGuideInfo
@@ -2190,22 +2413,22 @@ const Accounting = () => {
                 </CardTitle>
                 <CardDescription className="flex flex-wrap items-center gap-2">
                   Assets = Liabilities + Equity (incl. current-year earnings) · as of {asOfDate}
-                  {periodLockBanner}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              ) : null}
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, "space-y-6")}>
                 {(["assets", "liabilities", "equity"] as const).map((key) => {
                   const section = balanceSheet[key];
                   return (
                     <div key={key}>
                       <h3 className="font-semibold mb-2">{section.title}</h3>
-                      <Table>
+                      <Table className={legacyReportTableClass(isLebaneseCoa)}>
                         <TableHeader>
-                          <TableRow>
-                            <TableHead className="w-28">Code</TableHead>
-                            <TableHead>Account</TableHead>
-                            <TableHead className="text-right">Amount</TableHead>
-                            <TableHead className="w-[100px]">Actions</TableHead>
+                          <TableRow className={legacyReportTableHeaderRowClass(isLebaneseCoa)}>
+                            <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'w-28')}>Code</TableHead>
+                            <TableHead className={legacyReportTableHeadClass(isLebaneseCoa)}>Account</TableHead>
+                            <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'text-right')}>Amount</TableHead>
+                            <TableHead className={legacyReportTableHeadClass(isLebaneseCoa, 'w-[100px]')}>Actions</TableHead>
                           </TableRow>
                         </TableHeader>
                         <TableBody>
@@ -2279,8 +2502,8 @@ const Accounting = () => {
           <TabsContent value="profit-loss" className="mt-4 space-y-4">
             <LebaneseProfitLossDocument
               report={incomeStatement}
-              storeCurrency={profile?.mainCurrency || (isLebaneseCoa ? "LBP" : "USD")}
-              usdToLbp={profile?.customExchangeRate}
+              storeCurrency={storeLedgerCurrency}
+              usdToLbp={usdToLbp}
               companyName={profile?.name || profile?.storeName}
               hasActivity={plHasActivity}
               systemGuideEnabled={systemGuideEnabled}
@@ -2313,7 +2536,7 @@ const Accounting = () => {
               lines={lines}
               asOfDate={asOfDate}
               mainCurrency={profile?.mainCurrency}
-              defaultPreviousRate={profile?.customExchangeRate}
+              defaultPreviousRate={usdToLbp}
               systemGuideEnabled={systemGuideEnabled}
               posting={posting}
               onPost={handleAdjustmentPost}
@@ -2329,7 +2552,7 @@ const Accounting = () => {
               purchaseOrders={purchaseOrders}
               paymentOrders={paymentOrders}
               isLebaneseCoa={isLebaneseCoa}
-              pcgClientAccounts={pcgClientAccounts}
+              pcgClientAccounts={displayPcgClientAccounts}
               accountingLanguage={accountingLanguage}
               initialPartyName={searchParams.get("partyName") || ""}
             />
@@ -2342,18 +2565,18 @@ const Accounting = () => {
               entries={entries}
               lines={lines}
               isLebaneseCoa={isLebaneseCoa}
-              pcgClientAccounts={pcgClientAccounts}
+              pcgClientAccounts={displayPcgClientAccounts}
               accountingLanguage={accountingLanguage}
               presetAccountId={glPresetAccountId}
               defaultStartDate={reportPeriod.startDate}
               defaultEndDate={reportPeriod.endDate}
-              storeCurrency={profile?.mainCurrency || (isLebaneseCoa ? 'LBP' : 'USD')}
+              storeCurrency={storeLedgerCurrency}
               purchaseOrders={purchaseOrders}
               paymentOrders={paymentOrders}
               invoices={invoices}
               expenses={expenses}
-              usdToLbp={profile?.customExchangeRate}
-              onOpenEntry={setQuickVoucherEntryId}
+              usdToLbp={usdToLbp}
+              onOpenEntry={(entryId, glSummary) => openVoucherDetail(entryId, glSummary)}
             />
           </TabsContent>
 
@@ -2377,14 +2600,14 @@ const Accounting = () => {
               </>
             ) : null}
             {!isLebaneseCoa ? (
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle>Lebanese tax reports</CardTitle>
                 <CardDescription>
                   R10 salary withholding · CNSS employer summary · as of {asOfDate}
                 </CardDescription>
               </CardHeader>
-              <CardContent className="space-y-6">
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, "space-y-6")}>
                 <div className="flex flex-wrap gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => downloadCsvText(`r10-${r10Report.periodLabel}.csv`, r10ReportToCsv(r10Report))}>
                     Export R10 CSV
@@ -2421,7 +2644,7 @@ const Accounting = () => {
               storeId={financeStoreId}
               accounts={accounts}
               isLebaneseCoa={isLebaneseCoa}
-              pcgClientAccounts={pcgClientAccounts}
+              pcgClientAccounts={displayPcgClientAccounts}
               accountingLanguage={accountingLanguage}
               systemGuideEnabled={systemGuideEnabled}
               onPostTemplate={async (p) => {
@@ -2441,7 +2664,7 @@ const Accounting = () => {
               lines={lines}
               storeId={financeStoreId}
               systemGuideEnabled={systemGuideEnabled}
-              onOpenEntry={setQuickVoucherEntryId}
+              onOpenEntry={(entryId, glSummary) => openVoucherDetail(entryId, glSummary)}
               onStatusUpdated={() => void refreshLedger()}
             />
           </TabsContent>
@@ -2460,8 +2683,9 @@ const Accounting = () => {
           </TabsContent>
 
           <TabsContent value="opening" className="mt-4">
-            <Card>
-              <CardHeader>
+            <Card className={legacyReportCardClass(isLebaneseCoa)}>
+              {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+              <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
                 <CardTitle className="flex items-center gap-2">
                   Opening Balances
                   <SystemGuideInfo
@@ -2476,6 +2700,7 @@ const Accounting = () => {
                 </CardTitle>
                 <CardDescription>Posts offset to Opening Balance Equity ({isLebaneseCoa ? displayPcgCode("303", clientByGrabio) : "303"}).</CardDescription>
               </CardHeader>
+              ) : null}
               <CardContent className="space-y-4 max-w-md">
                 <div>
                   <Label>Account</Label>
@@ -2484,7 +2709,7 @@ const Accounting = () => {
                     value={openingAccountId}
                     onValueChange={setOpeningAccountId}
                     isLebaneseCoa={isLebaneseCoa}
-                    pcgClientAccounts={pcgClientAccounts}
+                    pcgClientAccounts={displayPcgClientAccounts}
                     accountingLanguage={accountingLanguage}
                     filterAccounts={(account) => account.type !== "revenue" && account.type !== "expense"}
                     placeholder="Search asset, liability, or equity account…"
@@ -2535,7 +2760,7 @@ const Accounting = () => {
                 lines={lines}
                 systemGuideEnabled={systemGuideEnabled}
                 isLebaneseCoa={isLebaneseCoa}
-                pcgClientAccounts={pcgClientAccounts}
+                pcgClientAccounts={displayPcgClientAccounts}
                 accountingLanguage={accountingLanguage}
               />
             ) : (
@@ -2554,7 +2779,7 @@ const Accounting = () => {
           lines={lines}
           asOfDate={asOfDate}
           isLebaneseCoa={isLebaneseCoa}
-          pcgClientAccounts={pcgClientAccounts}
+          pcgClientAccounts={displayPcgClientAccounts}
           accountingLanguage={accountingLanguage}
           onOpenVouchersTab={() => {
             setLedgerFocus(null);
@@ -2564,16 +2789,132 @@ const Accounting = () => {
             setLedgerFocus(null);
             openAccountDrill(accountId);
           }}
+          onOpenEntry={openVoucherDetail}
+        />
+        <AccountActivitySheet
+          accountId={accountActivityId}
+          open={accountActivityOpen}
+          onOpenChange={(next) => {
+            if (!next) closeAccountActivity();
+            else setAccountActivityOpen(true);
+          }}
+          accounts={accounts}
+          entries={entries}
+          lines={lines}
+          asOfDate={asOfDate}
+          periodEnd={accountActivityPeriodEnd || asOfDate}
+          isLebaneseCoa={isLebaneseCoa}
+          pcgClientAccounts={displayPcgClientAccounts}
+          accountingLanguage={accountingLanguage}
+          glPresentation={glPresentation}
+          onOpenEntry={openVoucherDetail}
         />
         <VoucherDetailDialog
           entry={quickVoucherEntry}
           lines={lines}
           open={Boolean(quickVoucherEntry)}
-          onOpenChange={(open) => !open && setQuickVoucherEntryId("")}
+          onOpenChange={(open) => !open && closeVoucherDetail()}
+          glSummary={quickVoucherGlSummary}
           isLebaneseCoa={isLebaneseCoa}
-          pcgClientAccounts={pcgClientAccounts}
+          pcgClientAccounts={displayPcgClientAccounts}
           accountingLanguage={accountingLanguage}
-          onEdit={quickVoucherEntry ? () => beginEditPostedVoucher(quickVoucherEntry) : undefined}
+          invoices={invoices}
+          onEdit={
+            quickVoucherEntry
+              ? () => {
+                  beginEditPostedVoucher(quickVoucherEntry, { onClose: closeVoucherDetail });
+                }
+              : undefined
+          }
+        />
+        <AccountingSideSheet
+          open={Boolean(coaEditAccountId)}
+          onOpenChange={(open) => {
+            if (!open) {
+              setCoaEditAccountId("");
+              setCoaEditName("");
+              setCoaEditNameAr("");
+            }
+          }}
+          title="Edit account label"
+          description="English and Arabic names on the ledger account — used in reports and vouchers."
+          size="default"
+          footer={
+            <Button
+              disabled={coaEditSaving || !coaEditAccountId || !financeStoreId || !coaEditName.trim()}
+              onClick={() => {
+                if (!financeStoreId || !coaEditAccountId) return;
+                setCoaEditSaving(true);
+                void updateLedgerAccountNames(financeStoreId, coaEditAccountId, {
+                  name: coaEditName.trim(),
+                  nameAr: coaEditNameAr.trim() || undefined,
+                })
+                  .then(() => {
+                    toast.success("Account label saved");
+                    setCoaEditAccountId("");
+                    setCoaEditName("");
+                    setCoaEditNameAr("");
+                    return refreshLedger();
+                  })
+                  .catch((err) => toast.error(err instanceof Error ? err.message : "Save failed"))
+                  .finally(() => setCoaEditSaving(false));
+              }}
+            >
+              Save
+            </Button>
+          }
+        >
+          <div className="space-y-3">
+            <div>
+              <Label htmlFor="coa-name">Name (English)</Label>
+              <Input
+                id="coa-name"
+                value={coaEditName}
+                onChange={(e) => setCoaEditName(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+            <div>
+              <Label htmlFor="coa-name-ar">Name (Arabic)</Label>
+              <Input
+                id="coa-name-ar"
+                dir="rtl"
+                value={coaEditNameAr}
+                onChange={(e) => setCoaEditNameAr(e.target.value)}
+                className="mt-1"
+              />
+            </div>
+          </div>
+        </AccountingSideSheet>
+        <VoucherEditSheet
+          open={voucherEditSheetOpen}
+          onOpenChange={setVoucherEditSheetOpen}
+          storeId={financeStoreId}
+          accounts={accounts}
+          accountingLanguage={accountingLanguage}
+          isLebaneseCoa={isLebaneseCoa}
+          pcgClientAccounts={displayPcgClientAccounts}
+          invoices={invoices}
+          purchaseOrders={purchaseOrders}
+          paymentOrders={paymentOrders}
+          settlements={settlements}
+          mainCurrency={profile?.mainCurrency}
+          fxRateDefault={usdToLbp}
+          posting={posting}
+          onPost={handlePostVoucher}
+          registerEntries={entries}
+          registerLines={lines}
+          systemGuideEnabled={systemGuideEnabled}
+          onRegisterPostDraft={(id) => void handlePostDraft(id)}
+          postingRegisterDraft={postingDraft}
+          onRegisterReverse={(id) => void handleReverseEntry(id)}
+          reversingRegister={reversing}
+          prefillEntry={voucherEditPrefill?.entry || null}
+          prefillLines={voucherEditPrefill?.lines || []}
+          onPrefillConsumed={() => setVoucherEditPrefill(null)}
+          onReversePosted={async (entryId) => {
+            await reverseEntry(entryId);
+          }}
         />
         <AddLedgerAccountDialog
           open={coaAddOpen}
@@ -2581,7 +2922,7 @@ const Accounting = () => {
           storeId={financeStoreId}
           accounts={accounts}
           isLebaneseCoa={isLebaneseCoa}
-          pcgClientAccounts={pcgClientAccounts}
+          pcgClientAccounts={displayPcgClientAccounts}
           accountingLanguage={accountingLanguage}
           onCreated={() => refreshLedger()}
         />
@@ -2592,13 +2933,14 @@ const Accounting = () => {
           accounts={accounts}
           entries={entries}
           isLebaneseCoa={isLebaneseCoa}
-          pcgClientAccounts={pcgClientAccounts}
+          pcgClientAccounts={displayPcgClientAccounts}
           onSelectTab={goToTab}
           onSelectAccount={openAccountActivity}
-          onSelectEntry={setQuickVoucherEntryId}
+          onSelectEntry={(entryId) => openVoucherDetail(entryId)}
         />
       </div>
     </FinancePageShell>
+    </AccountingPostedEditProvider>
   );
 };
 

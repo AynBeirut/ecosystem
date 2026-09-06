@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Monitor, Download, KeyRound, RefreshCw, Smartphone } from 'lucide-react';
+import { Monitor, Download, KeyRound, RefreshCw, Smartphone, Link2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import MobileHeader from '@/components/MobileHeader';
 import BackButton from '@/components/BackButton';
@@ -16,6 +16,7 @@ import {
   generatePairingCode,
   POS_INSTALLER_URL,
 } from '@/lib/posApi';
+import { generateAccountingPairingCode } from '@/lib/accountingApi';
 
 type PosDevice = {
   id: string;
@@ -43,6 +44,10 @@ const AdminPos: React.FC = () => {
 
   const [installToken, setInstallToken] = useState<string | null>(null);
   const [generatingToken, setGeneratingToken] = useState(false);
+
+  const [accountingCode, setAccountingCode] = useState<string | null>(null);
+  const [accountingCodeExpiresAt, setAccountingCodeExpiresAt] = useState<number | null>(null);
+  const [generatingAccountingCode, setGeneratingAccountingCode] = useState(false);
 
   useEffect(() => {
     document.title = 'POS — Grabio';
@@ -92,6 +97,17 @@ const AdminPos: React.FC = () => {
     return () => clearInterval(timer);
   }, [codeExpiresAt]);
 
+  useEffect(() => {
+    if (!accountingCodeExpiresAt) return;
+    const timer = setInterval(() => {
+      if (Date.now() >= accountingCodeExpiresAt) {
+        setAccountingCode(null);
+        setAccountingCodeExpiresAt(null);
+      }
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [accountingCodeExpiresAt]);
+
   const handleGenerateCode = async () => {
     if (!storeId) return;
     setGeneratingCode(true);
@@ -131,9 +147,35 @@ const AdminPos: React.FC = () => {
     }
   };
 
+  const handleGenerateAccountingCode = async () => {
+    if (!storeId) return;
+    setGeneratingAccountingCode(true);
+    try {
+      const result = await generateAccountingPairingCode(storeId);
+      setAccountingCode(result.code);
+      setAccountingCodeExpiresAt(Date.now() + result.expiresInSeconds * 1000);
+      toast({
+        title: 'Accounting code ready',
+        description: 'This 8-digit code stays valid for 1 year.',
+      });
+    } catch (e) {
+      toast({
+        title: 'Error',
+        description: e instanceof Error ? e.message : 'Failed to generate accounting code',
+        variant: 'destructive',
+      });
+    } finally {
+      setGeneratingAccountingCode(false);
+    }
+  };
+
   const codeMinutesLeft = codeExpiresAt
     ? Math.max(0, Math.ceil((codeExpiresAt - Date.now()) / 60000))
     : 0;
+
+  const accountingExpiresLabel = accountingCodeExpiresAt
+    ? new Date(accountingCodeExpiresAt).toLocaleDateString()
+    : '';
 
   if (posEnabled === false) {
     return (
@@ -246,6 +288,36 @@ const AdminPos: React.FC = () => {
               <div className="text-center p-6 bg-muted rounded-lg">
                 <p className="text-4xl font-mono font-bold tracking-widest">{pairingCode}</p>
                 <p className="text-sm text-muted-foreground mt-2">Expires in ~{codeMinutesLeft} min</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Link2 className="h-5 w-5" />
+              External accounting system
+            </CardTitle>
+            <CardDescription>
+              Generate an 8-digit code to link Beirut Finance / external accounting to this store
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <ol className="list-decimal list-inside text-sm text-muted-foreground space-y-1">
+              <li>Generate the code below</li>
+              <li>Open your external accounting app → Settings → Connect to Grabio store</li>
+              <li>Enter the 8-digit code in external accounting (valid 1 year)</li>
+            </ol>
+            <Button onClick={handleGenerateAccountingCode} disabled={generatingAccountingCode}>
+              {generatingAccountingCode ? 'Generating…' : 'Generate 8-digit accounting code'}
+            </Button>
+            {accountingCode && (
+              <div className="text-center p-6 bg-muted rounded-lg">
+                <p className="text-4xl font-mono font-bold tracking-widest">{accountingCode}</p>
+                <p className="text-sm text-muted-foreground mt-2">
+                  {accountingExpiresLabel ? `Valid until ${accountingExpiresLabel}` : 'Valid for 1 year'}
+                </p>
               </div>
             )}
           </CardContent>

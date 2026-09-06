@@ -113,6 +113,16 @@
               target.src.indexOf('/assets/') >= 0
             ) {
               hardRecover(false);
+              return;
+            }
+
+            var source = String(event.filename || '');
+            var errMessage = String((event.error && event.error.message) || event.message || '');
+            if (
+              source.indexOf('/assets/') >= 0 &&
+              errMessage.indexOf('is not defined') >= 0
+            ) {
+              hardRecover(false);
             }
           },
           true,

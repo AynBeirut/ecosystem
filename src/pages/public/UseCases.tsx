@@ -1,10 +1,13 @@
 import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import AuthCTA from '@/components/public/AuthCTA';
+import UseCaseClientStoreCard from '@/components/marketing/UseCaseClientStoreCard';
 import { ShoppingBag, Coffee, Truck, Wrench, Factory, Building2, ArrowRight, CheckCircle } from 'lucide-react';
 import PublicPageShell from '@/components/public/PublicPageShell';
 import { cn } from '@/lib/utils';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
+import { getUseCaseClientStore } from '@/data/marketing/useCaseShowcases';
+import { packageLandingPath } from '@/lib/marketingPackages';
+import { MARKETING_PACKAGE_BY_SLUG } from '@/data/marketing/packageRegistry';
 
 const USE_CASES = [
   {
@@ -155,7 +158,7 @@ const UseCases: React.FC = () => {
       ]}
       eyebrow="Industries"
       heroTitle="Built for your industry"
-      heroDescription="Start with core platform features on your plan. Toggle optional modules, apps, and add-ons to match how your business works."
+      heroDescription="Real businesses on Grabio — visit live client stores by industry, then see the platform setup that fits."
       heroActions={
         <div className="public-subnav">
           {USE_CASES.map((uc) => (
@@ -202,6 +205,19 @@ const UseCases: React.FC = () => {
                     ))}
                   </div>
                   <div className="flex flex-col gap-2">
+                    {(() => {
+                      const client = getUseCaseClientStore(id);
+                      if (!client) return null;
+                      const pkgLabel = MARKETING_PACKAGE_BY_SLUG[client.packageSlug]?.label;
+                      return (
+                        <Link
+                          to={packageLandingPath(client.packageSlug)}
+                          className="inline-flex items-center gap-2 text-sm font-semibold text-teal-600 hover:text-teal-700"
+                        >
+                          Grabio for {pkgLabel} <ArrowRight className="h-3.5 w-3.5" />
+                        </Link>
+                      );
+                    })()}
                     <Link
                       to={featureLink}
                       className="inline-flex items-center gap-2 text-sm font-medium text-teal-600 hover:text-teal-700"
@@ -223,18 +239,21 @@ const UseCases: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6">
-                  <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
-                    Key capabilities for {title.toLowerCase()}
-                  </p>
-                  <ul className="space-y-3">
-                    {features.map((feature) => (
-                      <li key={feature} className="flex items-start gap-3 text-sm text-slate-700">
-                        <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
-                        {feature}
-                      </li>
-                    ))}
-                  </ul>
+                <div className="space-y-4">
+                  <UseCaseClientStoreCard useCaseId={id} />
+                  <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6">
+                    <p className="text-xs font-bold uppercase tracking-wider text-slate-400 mb-4">
+                      Key capabilities for {title.toLowerCase()}
+                    </p>
+                    <ul className="space-y-3">
+                      {features.map((feature) => (
+                        <li key={feature} className="flex items-start gap-3 text-sm text-slate-700">
+                          <CheckCircle className="h-4 w-4 text-teal-500 mt-0.5 flex-shrink-0" />
+                          {feature}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
                 </div>
               </div>
             </section>
@@ -244,9 +263,14 @@ const UseCases: React.FC = () => {
 
       <section className="public-panel text-center">
         <h2 className="text-2xl md:text-3xl font-bold text-slate-900 mb-3">Your industry. Your module stack.</h2>
-        <p className="text-slate-600 mb-6">Start free, pick a base plan, and toggle only the modules you need.</p>
+        <p className="text-slate-600 mb-6">Visit real client stores above, or explore industry packages.</p>
         <div className="flex flex-col sm:flex-row gap-3 justify-center">
-          <AuthCTA className="px-6 py-3 font-semibold bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors" />
+          <Link
+            to="/use-cases#food"
+            className="px-6 py-3 font-semibold bg-teal-600 text-white rounded-xl hover:bg-teal-700 transition-colors"
+          >
+            See client examples
+          </Link>
           <Link
             to="/features"
             className="px-6 py-3 font-semibold border border-slate-300 text-slate-700 rounded-xl hover:bg-white transition-colors"

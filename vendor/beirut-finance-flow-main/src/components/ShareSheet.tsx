@@ -1,5 +1,5 @@
 import { useState, useCallback } from "react";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import { useAppContext } from "@/context/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import { FileDown, Mail, Share2, Loader2 } from "lucide-react";
@@ -224,20 +224,23 @@ const ShareSheet = ({
   const mobile = isMobileDevice();
 
   return (
-    <Dialog open={open} onOpenChange={handleOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 rounded-t-2xl sm:rounded-2xl overflow-hidden">
-        <DialogHeader className="px-6 pt-6 pb-2">
-          <DialogTitle className="text-center text-lg">
-            Share {docLabel}
-            {clientName && (
-              <span className="block text-sm font-normal text-muted-foreground mt-0.5">
-                to {clientName}
-              </span>
-            )}
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="px-4 pb-6 pt-2 space-y-1">
+    <AccountingSideSheet
+      open={open}
+      onOpenChange={handleOpenChange}
+      title={
+        <>
+          Share {docLabel}
+          {clientName ? (
+            <span className="block text-sm font-normal text-muted-foreground mt-0.5">
+              to {clientName}
+            </span>
+          ) : null}
+        </>
+      }
+      size="default"
+      bodyClassName="px-4 pb-6 pt-2"
+    >
+        <div className="space-y-1">
           {/* Native Share — primary on mobile */}
           {mobile && canNativeShare() && (
             <button
@@ -307,8 +310,7 @@ const ShareSheet = ({
             </button>
           )}
         </div>
-      </DialogContent>
-    </Dialog>
+    </AccountingSideSheet>
   );
 };
 

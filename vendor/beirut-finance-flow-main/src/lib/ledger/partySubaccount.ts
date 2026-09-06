@@ -3,9 +3,11 @@ import { loadPcgClientAccounts, savePcgClientAccount } from '@/lib/firestore/pcg
 import { resolveStoreAccountingMode } from '@/lib/grabio/accountingMode';
 import { notifyLedgerChanged } from '@/lib/ledger/ledgerChanged';
 import { mapGrabioCodeToPcg } from '@/lib/ledger/grabioToPcgMap';
+import { proposeClientPcgCode, proposePartyClientPcgCode, walkInClientPcgCode } from '@/lib/ledger/pcgClientCode';
 import { nextSiblingAccountCode } from '@/lib/ledger/nextSiblingAccountCode';
 import {
   PARTY_SUFFIX_DIGITS,
+  WALK_IN_PARTY_ID,
   partyAccountTypeForParent,
   partyGrabioCode,
   partyParentCode,
@@ -22,6 +24,7 @@ export {
   PARTY_GRABIO_AP,
   PARTY_SUPPLIER_PARENT,
   PARTY_SUFFIX_DIGITS,
+  WALK_IN_PARTY_ID,
   partyAccountTypeForKind,
   partyAccountTypeForParent,
   partyGrabioCode,
@@ -63,14 +66,22 @@ export async function ensurePartySubaccount(input: {
   const parentCode = partyParentCode(input.kind, mode);
   const grabio = partyGrabioCode(input.kind);
   const parent = accounts.find((account) => account.code === parentCode);
-  const usedCodes = [
+  const usedCodes = new Set([
     ...accounts.map((account) => account.code),
     ...pcgRows.map((row) => row.clientCode),
-  ];
-  const code = nextSiblingAccountCode(parentCode, usedCodes, PARTY_SUFFIX_DIGITS);
-  const { type, normalBalance } = partyAccountTypeForParent(parentCode);
-  const name = input.partyName.trim() || (input.kind === 'client' ? 'Client' : 'Supplier');
+  ]);
   const parentPcgCode = mapGrabioCodeToPcg(parentCode) || parentCode;
+  const isWalkIn = input.partyId === WALK_IN_PARTY_ID;
+  const code =
+    mode === 'lebanese'
+      ? isWalkIn
+        ? walkInClientPcgCode(parentPcgCode)
+        : proposePartyClientPcgCode(parentPcgCode, usedCodes)
+      : nextSiblingAccountCode(parentCode, [...usedCodes], PARTY_SUFFIX_DIGITS);
+  const { type, normalBalance } = partyAccountTypeForParent(parentCode);
+  const name = isWalkIn
+    ? 'Walk-in'
+    : input.partyName.trim() || (input.kind === 'client' ? 'Client' : 'Supplier');
 
   await createLedgerAccount(storeId, {
     code,

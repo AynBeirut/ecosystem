@@ -4,8 +4,11 @@ export const loadCrmPerformance = () => import('./CrmPerformance');
 export const loadCrmCustomers = () => import('./CrmCustomers');
 export const loadCrmActivities = () => import('./CrmActivities');
 export const loadCrmMap = () => import('./CrmMap');
-export const loadCrmPipeline = () => import('./CrmPipeline');
+export const loadCrmVisitRouteForm = () => import('./CrmVisitRouteForm');
+export const loadCrmVisitRouteDetail = () => import('./CrmVisitRouteDetail');
 export const loadCrmReps = () => import('../AdminCrmReps');
+export const loadCrmStoreAreas = () => import('./CrmStoreAreas');
+export const loadCrmTasks = () => import('./CrmTasks');
 export const loadCrmClientProfile = () => import('./CrmClientProfile');
 
 export type CrmPageLoader = () => Promise<{ default: ComponentType }>;
@@ -15,8 +18,9 @@ export const CRM_PAGE_LOADERS: CrmPageLoader[] = [
   loadCrmCustomers,
   loadCrmActivities,
   loadCrmMap,
-  loadCrmPipeline,
   loadCrmReps,
+  loadCrmStoreAreas,
+  loadCrmTasks,
 ];
 
 const pageCache = new Map<CrmPageLoader, ComponentType>();

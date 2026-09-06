@@ -6,9 +6,12 @@ import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import VoucherDetailDialog from "@/components/VoucherDetailDialog";
+import { cn, formatCurrency } from "@/lib/utils";
 import type { JournalEntry, JournalLine, PcgClientAccount } from "@/types/generalLedger";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
-import { cn, formatCurrency } from "@/lib/utils";
+import { sanitizeJournalMemoForDisplay, journalEntryDisplayLabel } from "@/lib/ledger/ledgerHumanLabels";
+import type { OpenVoucherEntryHandler } from "@/lib/accounting/accountingNavigation";
+import { legacyReportTableHeadClass, legacyReportTableHeaderRowClass, legacyReportTableHeaderShellClass } from "@/components/legacyErpReportFrame";
 
 export type RegisterFilter =
   | "all"
@@ -16,6 +19,8 @@ export type RegisterFilter =
   | "pv"
   | "rv"
   | "cv"
+  | "crn"
+  | "drn"
   | "sales"
   | "purchase"
   | "returns"
@@ -36,6 +41,7 @@ type Props = {
   postingDraft?: boolean;
   onReverse?: (entryId: string) => void;
   reversing?: boolean;
+  onOpenEntry?: OpenVoucherEntryHandler;
 };
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
@@ -50,6 +56,8 @@ function entryTypeLabel(entry: JournalEntry): string {
   if (entry.voucherNumber?.startsWith("PV-")) return "PV";
   if (entry.voucherNumber?.startsWith("JV-")) return "JV";
   if (entry.voucherNumber?.startsWith("CV-")) return "CV";
+  if (entry.voucherNumber?.startsWith("CRN-")) return "CRN";
+  if (entry.voucherNumber?.startsWith("DRN-")) return "DRN";
   if (entry.sourceType === "order") return "Sale";
   if (entry.sourceType === "purchase") return "Purchase";
   return "System";
@@ -65,15 +73,21 @@ function entryVoucherNo(entry: JournalEntry): string {
 }
 
 function entryDescription(entry: JournalEntry): string {
-  const memo = entry.memo?.trim();
+  const memo = sanitizeJournalMemoForDisplay(entry.memo || '');
   const meta = voucherMeta(entry);
   if (entry.voucherType === "PV" && meta?.payee) return String(meta.payee);
   if (entry.voucherType === "RV" && meta?.payer) return String(meta.payer);
+  if (typeof meta?.supplierName === "string" && meta.supplierName.trim()) {
+    if (memo && !memo.toLowerCase().includes(String(meta.supplierName).toLowerCase())) {
+      return `${memo} · ${meta.supplierName}`;
+    }
+    return memo || String(meta.supplierName);
+  }
   if (entry.sourceType === "order" && memo) {
-    const stripped = memo.replace(/^Order\s+/i, "").trim();
+    const stripped = memo.replace(/^Order\s+/i, "").replace(/^Sale\s+/i, "").trim();
     return stripped ? `Sale · ${stripped}` : memo;
   }
-  return memo || "—";
+  return memo || journalEntryDisplayLabel(entry);
 }
 
 function entryReference(entry: JournalEntry): string {
@@ -92,6 +106,8 @@ function typeBadgeClass(type: string): string {
   if (type === "PV") return "bg-orange-50 text-orange-700 ring-orange-200";
   if (type === "JV") return "bg-blue-50 text-blue-700 ring-blue-200";
   if (type === "CV") return "bg-violet-50 text-violet-700 ring-violet-200";
+  if (type === "CRN") return "bg-rose-50 text-rose-700 ring-rose-200";
+  if (type === "DRN") return "bg-amber-50 text-amber-700 ring-amber-200";
   return "bg-slate-100 text-slate-700 ring-slate-200";
 }
 
@@ -101,6 +117,8 @@ function matchesFilter(entry: JournalEntry, filter: RegisterFilter) {
   if (filter === "pv") return entry.voucherType === "PV";
   if (filter === "rv") return entry.voucherType === "RV" || entry.voucherNumber?.startsWith("RV-");
   if (filter === "cv") return entry.voucherType === "CV";
+  if (filter === "crn") return entry.voucherType === "CRN";
+  if (filter === "drn") return entry.voucherType === "DRN";
   if (filter === "sales") {
     return entry.sourceType === "order" && (entry.event === "sale-recognized" || entry.event === "paid");
   }
@@ -122,6 +140,10 @@ function filterTitle(filter: RegisterFilter): string {
       return "Receipt vouchers (RV)";
     case "cv":
       return "Contra vouchers (CV)";
+    case "crn":
+      return "Credit notes (CRN)";
+    case "drn":
+      return "Debit notes (DRN)";
     case "sales":
       return "Sales invoices";
     case "purchase":
@@ -151,11 +173,25 @@ export default function VoucherRegisterPanel({
   postingDraft,
   onReverse,
   reversing,
+  onOpenEntry,
 }: Props) {
   const [open, setOpen] = useState(defaultOpen);
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<RegisterFilter>(initialFilter);
   const [selectedEntryId, setSelectedEntryId] = useState("");
+
+  const openEntryDetail = (entryId: string) => {
+    if (onOpenEntry) {
+      const entry = entries.find((row) => row.id === entryId);
+      onOpenEntry(entryId, entry ? {
+        typeLabel: entryTypeLabel(entry),
+        description: entryDescription(entry),
+        reference: entryReference(entry),
+      } : null);
+      return;
+    }
+    setSelectedEntryId(entryId);
+  };
 
   useEffect(() => {
     if (lockFilter) setFilter(initialFilter);
@@ -263,6 +299,8 @@ export default function VoucherRegisterPanel({
                     <SelectItem value="jv">JV — Journal</SelectItem>
                     <SelectItem value="pv">PV — Payment</SelectItem>
                     <SelectItem value="rv">RV — Receipt</SelectItem>
+                    <SelectItem value="crn">CRN — Credit note</SelectItem>
+                    <SelectItem value="drn">DRN — Debit note</SelectItem>
                     <SelectItem value="cv">CV — Contra</SelectItem>
                     <SelectItem value="sales">Sales invoices</SelectItem>
                     <SelectItem value="purchase">Purchases</SelectItem>
@@ -304,7 +342,7 @@ export default function VoucherRegisterPanel({
                         <TableRow key={entry.id}>
                           <TableCell className="py-2 text-xs">{entry.date.slice(0, 10)}</TableCell>
                           <TableCell className="py-2 text-xs">{entry.voucherType || "JV"}</TableCell>
-                          <TableCell className="py-2 text-xs">{entry.memo}</TableCell>
+                          <TableCell className="py-2 text-xs">{sanitizeJournalMemoForDisplay(entry.memo || "")}</TableCell>
                           <TableCell className="py-2 text-right">
                             {onPostDraft ? (
                               <Button
@@ -330,14 +368,14 @@ export default function VoucherRegisterPanel({
             <div className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
               <div className="max-h-[22rem] overflow-auto">
                 <Table>
-                  <TableHeader className="sticky top-0 z-10 bg-slate-800">
-                    <TableRow className="border-slate-700 hover:bg-slate-800">
-                      <TableHead className="h-10 whitespace-nowrap text-xs font-semibold text-white">Date</TableHead>
-                      <TableHead className="h-10 w-16 text-xs font-semibold text-white">Type</TableHead>
-                      <TableHead className="h-10 w-36 text-xs font-semibold text-white">Voucher no.</TableHead>
-                      <TableHead className="h-10 text-xs font-semibold text-white">Description</TableHead>
-                      <TableHead className="h-10 w-24 text-right text-xs font-semibold text-white">Amount</TableHead>
-                      <TableHead className="h-10 w-16 text-xs font-semibold text-white">Ref</TableHead>
+                  <TableHeader className={isLebaneseCoa ? legacyReportTableHeaderShellClass(isLebaneseCoa) : 'sticky top-0 z-10 bg-slate-800'}>
+                    <TableRow className={isLebaneseCoa ? legacyReportTableHeaderRowClass(isLebaneseCoa) : 'border-slate-700 hover:bg-slate-800'}>
+                      <TableHead className={cn(isLebaneseCoa ? legacyReportTableHeadClass(isLebaneseCoa, 'h-10 whitespace-nowrap') : 'h-10 whitespace-nowrap text-xs font-semibold text-white')}>Date</TableHead>
+                      <TableHead className={cn(isLebaneseCoa ? legacyReportTableHeadClass(isLebaneseCoa, 'h-10 w-16') : 'h-10 w-16 text-xs font-semibold text-white')}>Type</TableHead>
+                      <TableHead className={cn(isLebaneseCoa ? legacyReportTableHeadClass(isLebaneseCoa, 'h-10 w-36') : 'h-10 w-36 text-xs font-semibold text-white')}>Voucher no.</TableHead>
+                      <TableHead className={cn(isLebaneseCoa ? legacyReportTableHeadClass(isLebaneseCoa, 'h-10') : 'h-10 text-xs font-semibold text-white')}>Description</TableHead>
+                      <TableHead className={cn(isLebaneseCoa ? legacyReportTableHeadClass(isLebaneseCoa, 'h-10 w-24 text-right') : 'h-10 w-24 text-right text-xs font-semibold text-white')}>Amount</TableHead>
+                      <TableHead className={cn(isLebaneseCoa ? legacyReportTableHeadClass(isLebaneseCoa, 'h-10 w-16') : 'h-10 w-16 text-xs font-semibold text-white')}>Ref</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -352,7 +390,7 @@ export default function VoucherRegisterPanel({
                             index % 2 === 0 ? "bg-white" : "bg-slate-50/70",
                             "hover:bg-teal-50/60",
                           )}
-                          onClick={() => setSelectedEntryId(entry.id)}
+                          onClick={() => openEntryDetail(entry.id)}
                         >
                           <TableCell className="whitespace-nowrap py-2.5 text-xs tabular-nums text-slate-600">
                             {entry.date.slice(0, 10)}
@@ -402,6 +440,7 @@ export default function VoucherRegisterPanel({
         </CollapsibleContent>
       </div>
 
+      {!onOpenEntry ? (
       <VoucherDetailDialog
         entry={selectedEntry}
         lines={lines}
@@ -417,6 +456,7 @@ export default function VoucherRegisterPanel({
           setSelectedEntryId("");
         }}
       />
+      ) : null}
     </Collapsible>
   );
 }

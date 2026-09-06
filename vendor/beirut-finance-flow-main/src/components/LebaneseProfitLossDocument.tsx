@@ -1,11 +1,15 @@
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import SystemGuideInfo from '@/components/SystemGuideInfo';
+import { Card, CardContent } from '@/components/ui/card';
 import ReportCurrencyPicker from '@/components/ReportCurrencyPicker';
 import type { IncomeStatementReport, LedgerAccount } from '@/types/generalLedger';
 import type { ReportCurrencyMode } from '@/lib/ledger/formatLedgerAmount';
-import { convertLedgerAmount, formatLedgerAmount } from '@/lib/ledger/formatLedgerAmount';
+import {
+  convertLedgerAmount,
+  defaultReportCurrencyMode,
+  formatLedgerAmount,
+  resolveStoreLedgerCurrency,
+} from '@/lib/ledger/formatLedgerAmount';
 import {
   convertLebanesePlAmount,
   formatLebanesePlAmount,
@@ -37,49 +41,45 @@ export default function LebaneseProfitLossDocument({
   onExportCsv,
   onOpenAccount,
 }: Props) {
-  const [currencyMode, setCurrencyMode] = useState<ReportCurrencyMode>(
-    storeCurrency.toUpperCase() === 'USD' ? 'USD' : 'LBP',
+  const ledgerCurrency = resolveStoreLedgerCurrency(storeCurrency);
+  const [currencyMode, setCurrencyMode] = useState<ReportCurrencyMode>(() =>
+    defaultReportCurrencyMode(ledgerCurrency),
   );
   const form = report.lebaneseForm;
-  const columnCcy = lebanesePlColumnCurrency(storeCurrency, currencyMode);
+  const columnCcy = lebanesePlColumnCurrency(ledgerCurrency, currencyMode);
   const decimals = columnCcy === 'USD' ? 2 : 3;
   const body = form.lines.filter((l) => !l.footer);
   const footer = form.lines.filter((l) => l.footer);
 
   const display = (n: number) => {
-    const converted = convertLebanesePlAmount(n, storeCurrency, currencyMode === 'both' ? 'LBP' : currencyMode, usdToLbp);
+    const converted = convertLebanesePlAmount(n, ledgerCurrency, currencyMode === 'both' ? 'LBP' : currencyMode, usdToLbp);
     return formatLebanesePlAmount(converted, currencyMode === 'USD' ? 2 : decimals);
   };
 
   const usdHint = (n: number) => {
     if (currencyMode !== 'both') return '';
-    const usd = convertLedgerAmount(n, storeCurrency, 'USD', usdToLbp);
+    const usd = convertLedgerAmount(n, ledgerCurrency, 'USD', usdToLbp);
     if (usd == null) return '';
     return formatLedgerAmount(usd, 'USD');
   };
 
   return (
     <Card className="overflow-hidden border-slate-200 bg-white shadow-sm print:border-0 print:shadow-none">
-      <CardHeader className="print:hidden">
-        <CardTitle className="flex items-center gap-2">
-          Profit &amp; Loss
-          <SystemGuideInfo
-            enabled={!!systemGuideEnabled}
-            label="What P&L shows"
-            title="Profit & Loss"
-            content={[
-              'Lebanese AM form: Income (Class 7), C.O.S (B.I + Purchases − E.I), expenses, then difference of exchange.',
-              'Amounts are full digits. LBP uses 3 decimals; losses are in parentheses. Pick LBP / USD / both.',
-            ]}
-          />
-        </CardTitle>
-        <CardDescription>
-          {report.startDate} → {report.endDate}
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 pt-6">
         <div className="flex flex-wrap items-end justify-between gap-2 print:hidden">
-          <ReportCurrencyPicker value={currencyMode} onChange={setCurrencyMode} id="pl-currency" />
+          <div className="space-y-1">
+            <ReportCurrencyPicker value={currencyMode} onChange={setCurrencyMode} id="pl-currency" />
+            {currencyMode !== ledgerCurrency && currencyMode !== 'both' && usdToLbp ? (
+              <p className="text-[11px] text-muted-foreground">
+                1 USD = {new Intl.NumberFormat('en-US').format(usdToLbp)} LBP
+              </p>
+            ) : null}
+            {currencyMode !== ledgerCurrency && currencyMode !== 'both' && !usdToLbp ? (
+              <p className="text-[11px] text-amber-700">
+                Loading live USD→LBP rate… (or set a manual rate in Admin Profile).
+              </p>
+            ) : null}
+          </div>
           <div className="flex flex-wrap gap-2">
             <Button type="button" variant="outline" size="sm" onClick={() => window.print()}>
               Print

@@ -11,6 +11,7 @@ import { useAuth } from '@/context/useAuth';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, signInWithCustomToken, updateProfile } from 'firebase/auth';
 import { getSubAccountHomePath } from '@/lib/subAccountAccess';
+import { buildSubscriptionPath, consumeSignupIntent, markSignupIntent } from '@/lib/signupRouting';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 const Login: React.FC = () => {
@@ -27,6 +28,10 @@ const Login: React.FC = () => {
   const [searchParams] = useSearchParams();
   const defaultTab = searchParams.get('tab') === 'signup' ? 'signup' : 'signin';
   const [activeTab, setActiveTab] = useState(defaultTab);
+
+  useEffect(() => {
+    if (defaultTab === 'signup') markSignupIntent();
+  }, [defaultTab]);
 
   // DEV-only: `?customToken=…` for local E2E (custom token from Admin SDK)
   useEffect(() => {
@@ -53,16 +58,22 @@ const Login: React.FC = () => {
       if (redirectPath && redirectPath.startsWith('/') && !redirectPath.startsWith('/login')) {
         localStorage.removeItem('redirectAfterLogin');
         navigate(redirectPath, { replace: true });
+      } else if (
+        user.role === 'user' &&
+        (consumeSignupIntent() || searchParams.get('tab') === 'signup' || activeTab === 'signup')
+      ) {
+        navigate(buildSubscriptionPath(searchParams), { replace: true });
       } else if (user.role === 'freelancer') {
         navigate('/freelancer', { replace: true });
       } else if (user.role === 'crm_rep') {
         navigate('/team/crm', { replace: true });
       } else if (user.role === 'admin') {
-        const onboarding = searchParams.get('onboarding');
-        const preset = searchParams.get('preset');
-        if (onboarding || preset) {
-          const qs = preset ? `?preset=${preset}` : onboarding ? `?onboarding=${onboarding}` : '';
-          navigate(`/onboarding/package${qs}`, { replace: true });
+        const mobileShell =
+          localStorage.getItem('grabio-finance-play-app') === '1' ||
+          localStorage.getItem('grabio-admin-app-shell') === '1';
+        const shellNext = searchParams.get('next');
+        if (mobileShell && shellNext && shellNext.startsWith('/') && !shellNext.startsWith('/login')) {
+          navigate(shellNext, { replace: true });
         } else {
           navigate('/admin', { replace: true });
         }
@@ -71,7 +82,7 @@ const Login: React.FC = () => {
       } else {
         navigate('/search', { replace: true });
       }
-  }, [user, navigate, searchParams, location.state]);
+  }, [user, navigate, searchParams, location.state, activeTab]);
 
   const handleEmailLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,6 +108,7 @@ const Login: React.FC = () => {
     }
 
     setIsSubmitting(true);
+    markSignupIntent();
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, signupEmail, signupPassword);
       if (signupName.trim()) {
@@ -119,6 +131,9 @@ const Login: React.FC = () => {
   };
 
   const handleGoogleLogin = async () => {
+    if (activeTab === 'signup' || searchParams.get('tab') === 'signup') {
+      markSignupIntent();
+    }
     setIsSubmitting(true);
     try {
       await googleLogin();

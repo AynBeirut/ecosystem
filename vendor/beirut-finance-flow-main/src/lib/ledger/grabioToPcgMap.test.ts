@@ -95,6 +95,40 @@ describe('grabioToPcgMap', () => {
     expect(displayGrabioCodeForLedgerRow({ code: '5300', isPcgChart: true }, clientByParentPcg)).toBe('102');
   });
 
+  it('rejects legacy Grabio party suffix codes in COA display', () => {
+    const clientByGrabio = new Map<string, PcgClientAccount>();
+    const clientByParentPcg = buildClientByParentPcgMap([]);
+    const clientByLedgerCode = new Map<string, PcgClientAccount>([
+      [
+        '1420001',
+        {
+          id: 'x',
+          clientCode: '1420001',
+          grabioOperationalCode: '142',
+          parentPcgCode: '4281',
+          name: 'Tina Ibrahim — Pay',
+          currency: 'LL',
+          partyId: '13:pay',
+          partyType: 'employee',
+        },
+      ],
+    ]);
+    expect(
+      displayPcgCodeForLedgerRow(
+        {
+          code: '1420001',
+          grabioOperationalCode: '142',
+          parentCode: '142',
+          partyType: 'employee',
+          partyId: '13:pay',
+        },
+        clientByGrabio,
+        clientByParentPcg,
+        clientByLedgerCode,
+      ),
+    ).toBe('4281');
+  });
+
   it('covers every Grabio SMB seed code', () => {
     const seedCodes = [
       '101', '102', '103', '105', '106', '108', '110', '112', '120', '121', '122', '123', '125', '130', '135',

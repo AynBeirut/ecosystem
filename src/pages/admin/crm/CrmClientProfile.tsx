@@ -25,12 +25,12 @@ import { getActualStoreId } from '@/lib/storeUtils';
 import {
   fetchCrmClient,
   fetchActivities,
-  fetchCrmReps,
   updateCrmClientFields,
   removeFromCrm,
   logCrmActivity,
   type CrmClient,
 } from '@/lib/crmService';
+import { fetchCrmTeamReps } from '@/lib/crmAssignableAgents';
 import type { CrmActivity, CrmPipelineStage } from '@/types/crm';
 import { CRM_PIPELINE_STAGES } from '@/types/crm';
 import { CRM_PIPELINE_LABELS, CRM_ACTIVITY_TYPE_LABELS, CRM_ACTIVITY_RESULT_LABELS } from '@/lib/crm';
@@ -54,7 +54,7 @@ const CrmClientProfile: React.FC = () => {
   const storeId = getActualStoreId(user);
 
   const [client, setClient] = useState<CrmClient | null>(null);
-  const [reps, setReps] = useState<Awaited<ReturnType<typeof fetchCrmReps>>>([]);
+  const [reps, setReps] = useState<Awaited<ReturnType<typeof fetchCrmTeamReps>>>([]);
   const [activities, setActivities] = useState<CrmActivity[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -84,7 +84,7 @@ const CrmClientProfile: React.FC = () => {
     try {
       const [c, repList, acts] = await Promise.all([
         fetchCrmClient(clientId),
-        fetchCrmReps(storeId),
+        fetchCrmTeamReps(storeId),
         fetchActivities(storeId, { customerId: clientId }, 200),
       ]);
       setReps(repList);
@@ -256,7 +256,7 @@ const CrmClientProfile: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="ghost" size="sm" asChild>
-            <Link to="/admin/crm/pipeline" className="flex items-center gap-1">
+            <Link to="/admin/crm/map" className="flex items-center gap-1">
               <ArrowLeft className="h-4 w-4" />
               Pipeline
             </Link>
@@ -300,6 +300,9 @@ const CrmClientProfile: React.FC = () => {
               className="pt-1"
               value={locationSelection}
               onChange={setLocationSelection}
+              storeId={storeId}
+              userId={user?.id}
+              canManageAreas
             />
 
             <CrmGpsInput value={gpsLocation} onChange={setGpsLocation} />

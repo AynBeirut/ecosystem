@@ -10,6 +10,7 @@ import { useAppContext } from "@/context/AppContext";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Sun, Moon, LogOut, Mail } from "lucide-react";
+import GrabioStoreConnectCard from "@/components/GrabioStoreConnectCard";
 import DataImportDialog from "@/components/DataImportDialog";
 import SimImportDialog from "@/components/SimImportDialog";
 import { BRAND } from "@/lib/branding";
@@ -113,6 +114,7 @@ const Settings = () => {
           </TabsList>
           
           <TabsContent value="general" className="space-y-4 mt-6">
+            <GrabioStoreConnectCard />
             {!playStoreV1Nav && (
             <Card>
               <CardHeader>

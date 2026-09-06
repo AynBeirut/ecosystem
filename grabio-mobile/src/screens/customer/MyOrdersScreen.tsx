@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, SafeAreaView, TextInput, Alert } from 'react-native';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, ActivityIndicator, TextInput, Alert } from 'react-native';
 import { getFirestore, collection, query, where, onSnapshot, doc, getDoc } from '@react-native-firebase/firestore';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -124,15 +125,15 @@ export default function MyOrdersScreen() {
 
   if (loading) {
     return (
-      <SafeAreaView style={styles.container}>
+      <ScreenSafeArea style={styles.container}>
         <ActivityIndicator size="large" color="#38B2AC" style={{ marginTop: 40 }} />
-      </SafeAreaView>
+      </ScreenSafeArea>
     );
   }
 
   if (isGuest || !user) {
     return (
-      <SafeAreaView style={styles.container}>
+      <ScreenSafeArea style={styles.container}>
         <View style={styles.guestBox}>
           <Text style={styles.guestIcon}>📦</Text>
           <Text style={styles.guestTitle}>Track your order</Text>
@@ -157,12 +158,12 @@ export default function MyOrdersScreen() {
             <Text style={styles.signInLinkText}>Sign in to see all orders</Text>
           </TouchableOpacity>
         </View>
-      </SafeAreaView>
+      </ScreenSafeArea>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea style={styles.container}>
       <FlatList
         data={orders}
         keyExtractor={(o) => o.id}
@@ -170,7 +171,7 @@ export default function MyOrdersScreen() {
         contentContainerStyle={{ padding: 12 }}
         ListEmptyComponent={<Text style={styles.empty}>No orders yet</Text>}
       />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 

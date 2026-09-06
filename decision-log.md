@@ -3,6 +3,51 @@
 > **Canonical decision log:** `~/Documents/grabio-platform-docs/Decision-Log/`  
 > Mirror significant decisions there when closing a sprint.
 
+## 2026-09-04 — Business Finance UI/UX unification (vouchers P1)
+
+**Goal:** JV-quality UI, logic, and flow on all voucher types (JV/PV/RV/CRN/DRN/CV) and phased parity across `/admin/finance/*`.
+
+**Shipped (vouchers P1):**
+- Shared `sharedLinesEditorProps`: matrix footer, FX grid, flip box, auto-balance, preview gates on **all** types
+- Auto reference (`externalReference`) + duplicate guard on **PV/RV/CV** (was JV/CRN/DRN only)
+- CRN/DRN register filter; CV `mirrorPair`; Lebanese PV/RV/CV drop duplicate Reference field (header auto ref)
+- Shared pre-post validation: accounts on amount lines, USD/LBP bucket balance messages
+
+**Shipped (finance P2/P3 — 2026-09-04 evening):**
+- `legacyErpReportFrame.ts` helpers applied to TB/GL/SOA/Party panels + inline Accounting reports (BS, VAT, AR/AP aging, cash flow, COA, reconciliation, bank rec)
+- All Business Finance manager popups → `AccountingSideSheet` (Staff, Delivery, Projects, Inventory, Portfolio, DataImport, doc previews, allocation, reconciliation variance)
+- TDZ fix in `VoucherEntryPanel` (`effectiveVoucherRate` before `sharedLinesEditorProps`) — deployed
+
+**Intentionally unchanged:** `AccountingCommandPalette` stays `CommandDialog` (search UX).
+
+## 2026-09-04 — JV line UI agent handoff (failed)
+
+**Outcome:** JV line alignment not fixed after 24h. Agent removed from task.
+
+**Handoff:** `docs/handoff/voucher-jv-line-ui-2026-09-04.md`
+
+**Rule for next dev:** CSS/table fix only on line cells — no full layout redesign. Last git UI baseline: `bfac116` `VoucherEntryPanel` inline JV table.
+
+## 2026-09-01 — Matrix 8 = source of truth for Business Finance
+
+**Scope:** `/admin/finance/*` only (not POS, Invoice Manager, V·Buy, etc.).
+
+**Reference:** USB `Matrix8` + `matrix8-docs/architecture.md` (GLM ledger).
+
+**Phased parity (Matrix → Business Finance):**
+
+| Phase | Matrix capability | Status |
+|-------|-------------------|--------|
+| P1 | CRN/DRN vouchers, value date, duplicate reference guard (CV contra kept) | Shipped (code) |
+| P1 | SOA by value date; journal register filters (GL100P types) | Shipped (code) |
+| P2 | Generate VAT transfer GL entries (GL160P) | Shipped (code) |
+| P2 | Post closing + move balances to next year (GL110P) | Planned |
+| P3 | TB foreign + monthly; consolidated/principal SOA | Planned |
+| P3 | Forecast/budget; fixed-asset inventory; voucher attach/folder | Planned |
+| P3 | Modify account #; principal account; trustee rights | Planned |
+
+**Keep (Grabio extension, not Matrix):** CV contra stays available alongside Matrix voucher types.
+
 ## 2026-08-27 — Accounting AM fixes (locked defaults)
 
 - Currency label **LBP** (never L£/LE); report amounts **full** digits; picker LBP | USD | both.

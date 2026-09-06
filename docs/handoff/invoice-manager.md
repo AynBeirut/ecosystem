@@ -25,10 +25,10 @@ Native Android app (not TWA, not WebView). Invoices, estimates, receipts, client
 
 | Field | Value |
 |-------|--------|
-| Upload now | `grabio-invoice-mobile/release/invoice-1.2.10-14.aab` |
-| versionName / versionCode | **1.2.10 / 14** |
+| Upload now | `grabio-invoice-mobile/release/invoice-1.2.11-15.aab` |
+| versionName / versionCode | **1.2.11 / 15** |
 | minSdk | **21** (matches old TWA v5 so Play can save) |
-| Next code | **≥ 15** |
+| Next code | **≥ 16** |
 
 Play on v14: **warnings only** (new permissions vs TWA v5; no R8 mapping). R8 minify is off — ignore mapping warning. Save/roll out.
 

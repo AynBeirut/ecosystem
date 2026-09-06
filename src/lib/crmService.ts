@@ -56,6 +56,26 @@ export async function fetchCrmReps(storeId: string): Promise<CrmRep[]> {
     .sort((a, b) => a.name.localeCompare(b.name));
 }
 
+export type CrmRepLiveLocation = {
+  userId: string;
+  storeId: string;
+  repId: string;
+  repName: string;
+  role?: string;
+  lat: number;
+  lng: number;
+  accuracy?: number;
+  updatedAtIso?: string;
+};
+
+export async function fetchCrmRepLocations(storeId: string): Promise<CrmRepLiveLocation[]> {
+  const snap = await getDocs(query(collection(db(), 'crmRepLocations'), where('storeId', '==', storeId)));
+  return snap.docs
+    .map((d) => ({ userId: d.id, ...d.data() } as CrmRepLiveLocation))
+    .filter((r) => typeof r.lat === 'number' && typeof r.lng === 'number')
+    .sort((a, b) => (a.repName || '').localeCompare(b.repName || ''));
+}
+
 export async function fetchCrmClients(
   storeId: string,
   opts?: { repId?: string; crmOnly?: boolean },
@@ -64,7 +84,11 @@ export async function fetchCrmClients(
   if (opts?.repId) constraints.push(where('assignedRepId', '==', opts.repId));
   const snap = await getDocs(query(collection(db(), 'customers'), ...constraints));
   let list = snap.docs.map((d) => ({ id: d.id, ...d.data() } as CrmClient));
-  if (opts?.crmOnly) list = list.filter((c) => c.crmEnabled);
+  if (opts?.crmOnly) {
+    list = list.filter(
+      (c) => c.crmEnabled === true || Boolean(c.nextFollowUpAt) || Boolean(c.assignedRepId),
+    );
+  }
   return list.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
 }
 

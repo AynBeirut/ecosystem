@@ -50,6 +50,10 @@ export function orderGlInputFromOrder(
     paymentStatus?: string;
     amountPaid?: number;
     invoiceNumber?: string;
+    clientId?: string;
+    clientName?: string;
+    customerId?: string;
+    customerName?: string;
     createdAt?: unknown;
   },
   cogsLines: OrderCogsLine[],
@@ -69,6 +73,10 @@ export function orderGlInputFromOrder(
     taxAmount: round2(Number(order.taxAmount) || 0),
     paymentMethod: order.paymentMethod || 'cash',
     invoiceNumber: order.invoiceNumber || order.id,
+    clientId: order.clientId,
+    clientName: order.clientName || order.customerName,
+    customerId: order.customerId,
+    customerName: order.customerName || order.clientName,
     cogsLines,
     isCashSale: !isCod && true,
     isCodDelivery: isCod,

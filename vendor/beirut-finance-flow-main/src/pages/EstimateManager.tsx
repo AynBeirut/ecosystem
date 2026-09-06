@@ -18,7 +18,7 @@ import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import EstimateList from "@/components/EstimateList";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import ShareSheet from "@/components/ShareSheet";
 
 // Define schema for estimate form
@@ -718,14 +718,29 @@ const EstimateManager = () => {
     </Card>
       </div>
 
-      <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
-        <DialogContent className="sm:max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Estimate Preview</DialogTitle>
-            <DialogDescription>
-              Preview how your estimate will look to your clients
-            </DialogDescription>
-          </DialogHeader>
+      <AccountingSideSheet
+        open={isPreviewOpen}
+        onOpenChange={setIsPreviewOpen}
+        title="Estimate Preview"
+        description="Preview how your estimate will look to your clients"
+        size="form"
+        tall
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setIsPreviewOpen(false)}>Close</Button>
+            <Button
+              className="ml-2"
+              onClick={() => {
+                setIsPreviewOpen(false);
+                if (selectedEstimateId) handleSendEstimate(selectedEstimateId);
+              }}
+            >
+              <Share2 className="mr-2 h-4 w-4" />
+              Share
+            </Button>
+          </>
+        }
+      >
 
           {previewEstimateData && (
             <div className="p-4 border rounded-md overflow-y-auto max-h-[70vh] bg-white">
@@ -851,29 +866,7 @@ const EstimateManager = () => {
             </div>
           )}
 
-          <DialogFooter className="flex justify-between items-center">
-            <div>
-              <Button 
-                variant="outline" 
-                onClick={() => setIsPreviewOpen(false)}
-              >
-                Close
-              </Button>
-            </div>
-            <Button 
-              onClick={() => {
-                setIsPreviewOpen(false);
-                if (selectedEstimateId) {
-                  handleSendEstimate(selectedEstimateId);
-                }
-              }}
-            >
-              <Share2 className="mr-2 h-4 w-4" />
-              Share
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      </AccountingSideSheet>
 
       <ShareSheet
         open={isShareSheetOpen}

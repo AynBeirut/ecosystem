@@ -39,7 +39,15 @@ import {
   lockBankRecSession,
   updateBankRecSession,
 } from "@/lib/firestore/bankRecFirestore";
+import {
+  legacyReportBodyClass,
+  legacyReportCardClass,
+  legacyReportHeaderClass,
+  legacyReportOmitTitleBand,
+  legacyReportTableClass,
+} from '@/components/legacyErpReportFrame';
 import SystemGuideInfo from "@/components/SystemGuideInfo";
+import type { AccountingLanguage } from '@/lib/grabio/accountingMode';
 import { getFinanceAuth } from "@/integrations/firebase/client";
 import { buildClientByGrabioMap, displayPcgCode, formatPcgAccountLabel } from "@/lib/ledger/grabioToPcgMap";
 import { compareLedgerAccountCode } from "@/lib/ledger/accountCodeSort";
@@ -352,26 +360,28 @@ export default function BankReconciliationPanel({
 
   return (
     <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            Bank reconciliation
-            <SystemGuideInfo
-              enabled={systemGuideEnabled}
-              label="Scope"
-              title="Bank rec"
-              content={[
-                "Phase 1: statement capture + book side (accounts 105/106).",
-                "Phase 2: 1:1 matching — auto by exact amount within a date window, or manual link.",
-                "CSV: date, amount, description, ref — optional dr/cr or debit/credit columns.",
-              ]}
-            />
-          </CardTitle>
-          <CardDescription>
-            Period and account · statement lines · posted GL book side · match pairs (Phase 2).
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <Card className={legacyReportCardClass(isLebaneseCoa)}>
+        {!legacyReportOmitTitleBand(isLebaneseCoa) ? (
+          <CardHeader className={legacyReportHeaderClass(isLebaneseCoa)}>
+            <CardTitle className="flex items-center gap-2">
+              Bank reconciliation
+              <SystemGuideInfo
+                enabled={systemGuideEnabled}
+                label="Scope"
+                title="Bank rec"
+                content={[
+                  "Phase 1: statement capture + book side (accounts 105/106).",
+                  "Phase 2: 1:1 matching — auto by exact amount within a date window, or manual link.",
+                  "CSV: date, amount, description, ref — optional dr/cr or debit/credit columns.",
+                ]}
+              />
+            </CardTitle>
+            <CardDescription>
+              Period and account · statement lines · posted GL book side · match pairs (Phase 2).
+            </CardDescription>
+          </CardHeader>
+        ) : null}
+        <CardContent className={legacyReportBodyClass(isLebaneseCoa, 'space-y-4')}>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div>
               <Label>GL account</Label>
@@ -523,7 +533,7 @@ export default function BankReconciliationPanel({
                 {isLocked && " Session is locked — matching is read-only."}
               </CardDescription>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent className={legacyReportBodyClass(isLebaneseCoa, 'space-y-4')}>
               <div className="flex flex-wrap gap-2 items-end">
                 <div>
                   <Label>Date window (days)</Label>
@@ -632,7 +642,7 @@ export default function BankReconciliationPanel({
                 </div>
               </div>
               {matchPartition.matchedPairs.length > 0 && (
-                <Table>
+                <Table className={legacyReportTableClass(isLebaneseCoa)}>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Statement</TableHead>
@@ -681,7 +691,7 @@ export default function BankReconciliationPanel({
                 </CardDescription>
               </CardHeader>
               <CardContent className="max-h-[420px] overflow-auto">
-                <Table>
+                <Table className={legacyReportTableClass(isLebaneseCoa)}>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Date</TableHead>
@@ -725,7 +735,7 @@ export default function BankReconciliationPanel({
                 <CardTitle className="text-base">Bank statement lines</CardTitle>
                 <CardDescription>Manual entry or CSV import</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className={legacyReportBodyClass(isLebaneseCoa, 'space-y-4')}>
                 <div className="grid gap-2 sm:grid-cols-2">
                   <div>
                     <Label>Date</Label>
@@ -788,7 +798,7 @@ export default function BankReconciliationPanel({
                   </Button>
                 </div>
                 <div className="max-h-[280px] overflow-auto border rounded-md">
-                  <Table>
+                  <Table className={legacyReportTableClass(isLebaneseCoa)}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Date</TableHead>

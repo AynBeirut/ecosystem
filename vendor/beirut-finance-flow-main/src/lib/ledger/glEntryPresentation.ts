@@ -4,6 +4,14 @@ import {
   resolvePartyFromEntry,
   type PurchasePartyLookup,
 } from '@/lib/ledger/partyStatement';
+import {
+  journalEntryDisplayLabel,
+  journalEntryReferenceLabel,
+  parseOrderMemoClientName,
+  resolveOrderClientName,
+  sanitizeDisplayLabel,
+  sanitizeJournalMemoForDisplay,
+} from '@/lib/ledger/ledgerHumanLabels';
 
 export type InvoiceLookupRow = {
   invoiceNumber: string;
@@ -166,6 +174,8 @@ function typeLabel(entry: JournalEntry): string {
   if (entry.voucherNumber?.startsWith('PV-')) return 'PV';
   if (entry.voucherNumber?.startsWith('JV-')) return 'JV';
   if (entry.voucherNumber?.startsWith('CV-')) return 'CV';
+  if (entry.voucherNumber?.startsWith('CRN-')) return 'CRN';
+  if (entry.voucherNumber?.startsWith('DRN-')) return 'DRN';
   if (entry.sourceType === 'order') return 'Sale';
   if (entry.sourceType === 'purchase') return 'Purchase';
   if (entry.sourceType === 'purchase_payment') return 'PV';
@@ -204,11 +214,25 @@ function resolveOffsetCategory(
   return accountLabel(best);
 }
 
-function orderPresentation(entry: JournalEntry, ctx: GlPresentationContext): Omit<GlEntryPresentation, 'typeLabel' | 'voucherLabel'> {
+function orderPresentation(
+  entry: JournalEntry,
+  ctx: GlPresentationContext,
+  orderHints?: { clientId?: string; clientName?: string },
+): Omit<GlEntryPresentation, 'typeLabel' | 'voucherLabel'> {
   const inv = entry.sourceId ? ctx.invoiceLookup.get(entry.sourceId) : undefined;
-  const memoInv = entry.memo?.match(/^Order\s+(\S+)/i)?.[1];
-  const invoiceNumber = inv?.invoiceNumber || memoInv || entry.sourceId?.slice(0, 8) || '';
-  const clientName = inv?.clientName || (typeof meta(entry)?.payer === 'string' ? meta(entry)!.payer : '');
+  const memoInv = entry.memo?.match(/^Order\s+(\S+)/i)?.[1] || entry.memo?.match(/^Sale\s+(\S+)/i)?.[1];
+  const invoiceNumber = inv?.invoiceNumber || memoInv || '';
+  const m = meta(entry);
+  const clientName =
+    resolveOrderClientName({
+      clientId: typeof m?.clientId === 'string' ? m.clientId : undefined,
+      clientName: typeof m?.clientName === 'string' ? m.clientName : undefined,
+      customerId: typeof m?.customerId === 'string' ? m.customerId : undefined,
+      customerName: typeof m?.customerName === 'string' ? m.customerName : undefined,
+    }) ||
+    resolveOrderClientName(orderHints || {}) ||
+    resolveOrderClientName({ clientName: inv?.clientName }) ||
+    parseOrderMemoClientName(entry.memo || '');
   const paymentHint = inv?.paymentMethod ? humanizeCategory(inv.paymentMethod) : '';
   const isReversal = entry.event.includes('reversal') || /reversal/i.test(entry.memo || '');
 
@@ -237,7 +261,7 @@ function purchasePaymentPresentation(
     party: supplier || 'Supplier',
     category: detail?.itemsSummary || 'Supplier payment',
     description: 'Payment to supplier',
-    reference: poRef && !poRef.includes('/') ? poRef : entry.sourceId?.slice(0, 8) || '—',
+    reference: poRef && !poRef.includes('/') ? poRef : '—',
   };
 }
 
@@ -252,7 +276,6 @@ function accountPaymentPresentation(entry: JournalEntry): Omit<GlEntryPresentati
     description: 'Outgoing payment',
     reference:
       (typeof meta(entry)?.paymentRef === 'string' && meta(entry)!.paymentRef) ||
-      entry.sourceId?.slice(0, 8) ||
       '—',
   };
 }
@@ -274,14 +297,17 @@ function purchaseReceivePresentation(
 
 function expensePresentation(entry: JournalEntry, ctx: GlPresentationContext): Omit<GlEntryPresentation, 'typeLabel' | 'voucherLabel'> {
   const exp = entry.sourceId ? ctx.expenseLookup.get(entry.sourceId) : undefined;
-  const memo = (entry.memo || '').trim();
-  const memoTail = memo.match(/^Expense\s+\S+\s*[—–-]\s*(.+)$/i)?.[1]?.trim();
+  const memo = sanitizeJournalMemoForDisplay((entry.memo || '').trim());
+  const m = meta(entry);
+  const supplierName =
+    (typeof m?.supplierName === 'string' ? m.supplierName : '') ||
+    (typeof m?.payee === 'string' ? m.payee : '');
 
   return {
-    party: exp?.name || memoTail || '',
-    category: exp?.category || humanizeCategory(memoTail || '') || 'Operating expense',
-    description: exp?.name || memoTail || 'Expense',
-    reference: entry.sourceId?.slice(0, 10) || '—',
+    party: supplierName || exp?.name || memo || '',
+    category: exp?.category || humanizeCategory(memo || '') || 'Operating expense',
+    description: exp?.name || memo || 'Expense',
+    reference: journalEntryReferenceLabel(entry.sourceId),
   };
 }
 
@@ -291,7 +317,7 @@ export function presentGlEntry(
   ctx: GlPresentationContext,
   entryLines: JournalLine[] = [],
 ): GlEntryPresentation {
-  const memo = (entry.memo || '').trim();
+  const memo = sanitizeJournalMemoForDisplay((entry.memo || '').trim());
   const m = meta(entry);
   const offsetCategory = resolveOffsetCategory(entry, line, entryLines, ctx);
 
@@ -332,14 +358,78 @@ export function presentGlEntry(
   }
 
   if (!core.category && offsetCategory) core.category = offsetCategory;
+  if (!core.party && typeof m?.supplierName === 'string') core.party = m.supplierName;
+  if (!core.party && typeof m?.clientName === 'string') core.party = m.clientName;
+  if (!core.party && typeof m?.partyName === 'string') core.party = m.partyName;
   if (!core.party && typeof m?.payee === 'string') core.party = m.payee;
   if (!core.party && typeof m?.payer === 'string') core.party = m.payer;
 
+  const party = sanitizeDisplayLabel(core.party);
+  const category = sanitizeDisplayLabel(core.category) || core.category;
+  const description = sanitizeDisplayLabel(core.description) || core.description;
+  const reference =
+    core.reference && core.reference !== '—'
+      ? journalEntryReferenceLabel(core.reference, core.reference)
+      : core.reference;
+
   return {
     typeLabel: typeLabel(entry),
-    voucherLabel: entry.voucherNumber || entry.id.slice(0, 12),
+    voucherLabel: journalEntryDisplayLabel(entry),
     ...core,
+    party,
+    category,
+    description,
+    reference,
   };
+}
+
+export function resolveVoucherParty(
+  entry: JournalEntry,
+  ctx?: Pick<GlPresentationContext, 'invoiceLookup'>,
+  orderHints?: { clientId?: string; clientName?: string },
+): { kind: 'client' | 'supplier' | ''; name: string } {
+  const m = meta(entry);
+  if (m) {
+    if (typeof m.supplierName === 'string' && m.supplierName.trim()) {
+      return { kind: 'supplier', name: m.supplierName.trim() };
+    }
+    const metaClient = resolveOrderClientName({
+      clientId: typeof m.clientId === 'string' ? m.clientId : undefined,
+      clientName: typeof m.clientName === 'string' ? m.clientName : undefined,
+      customerId: typeof m.customerId === 'string' ? m.customerId : undefined,
+      customerName: typeof m.customerName === 'string' ? m.customerName : undefined,
+    });
+    if (metaClient) return { kind: 'client', name: metaClient };
+    if (typeof m.staffName === 'string' && m.staffName.trim()) {
+      return { kind: 'client', name: m.staffName.trim() };
+    }
+    if (typeof m.partyName === 'string' && m.partyName.trim()) {
+      const kind = m.supplierId ? 'supplier' : m.clientId ? 'client' : '';
+      return { kind: kind || '', name: m.partyName.trim() };
+    }
+    if (typeof m.payee === 'string' && m.payee.trim()) {
+      return { kind: 'supplier', name: m.payee.trim() };
+    }
+    if (typeof m.payer === 'string' && m.payer.trim()) {
+      return { kind: 'client', name: m.payer.trim() };
+    }
+  }
+
+  if (entry.sourceType === 'order') {
+    const fromOrder = resolveOrderClientName(orderHints || {});
+    if (fromOrder) return { kind: 'client', name: fromOrder };
+    const inv = entry.sourceId && ctx?.invoiceLookup ? ctx.invoiceLookup.get(entry.sourceId) : undefined;
+    const fromInvoice = resolveOrderClientName({ clientName: inv?.clientName });
+    if (fromInvoice) return { kind: 'client', name: fromInvoice };
+    const fromMemo = parseOrderMemoClientName(entry.memo || '');
+    if (fromMemo) return { kind: 'client', name: fromMemo };
+  }
+
+  return { kind: '', name: '' };
+}
+
+export function voucherPartyLabel(entry: JournalEntry): { kind: 'client' | 'supplier' | ''; name: string } {
+  return resolveVoucherParty(entry);
 }
 
 export function presentGlRowMemo(

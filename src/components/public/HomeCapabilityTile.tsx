@@ -8,9 +8,27 @@ type Props = {
   desc: string;
   Icon: LucideIcon;
   accent: ModuleAccent;
+  variant?: 'default' | 'marketing';
 };
 
-export default function HomeCapabilityTile({ title, desc, Icon, accent }: Props) {
+export default function HomeCapabilityTile({ title, desc, Icon, accent, variant = 'default' }: Props) {
+  if (variant === 'marketing') {
+    return (
+      <div className="marketing-capability-tile group">
+        <div
+          className={cn(
+            'mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br shadow-md transition-transform duration-300 group-hover:scale-105',
+            accent.gradient,
+          )}
+        >
+          <Icon className={cn('h-7 w-7', accent.iconClass)} strokeWidth={1.65} />
+        </div>
+        <p className="mb-1.5 text-sm font-semibold text-slate-900">{title}</p>
+        <p className="text-xs leading-relaxed text-slate-500">{desc}</p>
+      </div>
+    );
+  }
+
   return (
     <div
       className={cn(

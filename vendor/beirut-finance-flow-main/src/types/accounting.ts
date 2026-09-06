@@ -38,6 +38,8 @@ export interface Expense {
   attachmentUrl?: string;
   attachmentName?: string;
   linkedStaffId?: string; // For payroll expenses
+  supplierId?: string;
+  vendorName?: string;
   createdAt: string;
   updatedAt: string;
 }

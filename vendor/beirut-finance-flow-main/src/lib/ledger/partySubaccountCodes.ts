@@ -3,6 +3,12 @@ import type { LedgerAccountType, NormalBalance } from '@/types/generalLedger';
 
 export type PartyKind = 'client' | 'supplier';
 
+/** Stable CRM id for POS / anonymous walk-in sales (Lebanese PCG slot …000001). */
+export const WALK_IN_PARTY_ID = '__grabio_walk_in__';
+
+export const CLIENT_PCG_PARENT = '7010';
+export const SUPPLIER_PCG_PARENT = '6111';
+
 /** AM rule: numbered subaccounts under default sales / purchase posting parents. */
 export const PARTY_CLIENT_PARENT = GL_ACCOUNT_CODES.REVENUE; // 401
 export const PARTY_SUPPLIER_PARENT = GL_ACCOUNT_CODES.COGS; // 501

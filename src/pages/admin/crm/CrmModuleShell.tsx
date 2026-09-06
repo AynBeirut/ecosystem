@@ -13,23 +13,34 @@ import {
   loadCrmCustomers,
   loadCrmMap,
   loadCrmPerformance,
-  loadCrmPipeline,
   loadCrmReps,
+  loadCrmStoreAreas,
+  loadCrmTasks,
+  loadCrmVisitRouteDetail,
+  loadCrmVisitRouteForm,
   preloadCrmPages,
 } from '@/pages/admin/crm/crmEmbeddedLoaders';
 
 const CRM_NAV = [
-  { to: '/admin/crm/dashboard', label: 'Dashboard', preload: loadCrmPerformance },
-  { to: '/admin/crm/customers', label: 'Customers', preload: loadCrmCustomers },
+  { to: '/admin/crm/dashboard', label: 'Stats', preload: loadCrmPerformance },
+  { to: '/admin/crm/customers', label: 'Clients', preload: loadCrmCustomers },
+  { to: '/admin/crm/map', label: 'Map & Pipeline', preload: loadCrmMap },
   { to: '/admin/crm/activities', label: 'Visits', preload: loadCrmActivities },
-  { to: '/admin/crm/map', label: 'Map', preload: loadCrmMap },
-  { to: '/admin/crm/pipeline', label: 'Pipeline', preload: loadCrmPipeline },
   { to: '/admin/crm/reps', label: 'Reps', preload: loadCrmReps },
+  { to: '/admin/crm/areas', label: 'Areas', preload: loadCrmStoreAreas },
+  { to: '/admin/crm/tasks', label: 'Tasks', preload: loadCrmTasks },
 ] as const;
 
 const CrmModuleShell: React.FC = () => {
   const location = useLocation();
   const isClientProfile = /^\/admin\/crm\/clients\/[^/]+/.test(location.pathname);
+  const isVisitRouteForm =
+    location.pathname === '/admin/crm/visit-routes/new'
+    || /^\/admin\/crm\/visit-routes\/[^/]+\/edit$/.test(location.pathname);
+  const isVisitRouteDetail =
+    /^\/admin\/crm\/visit-routes\/[^/]+$/.test(location.pathname)
+    && !isVisitRouteForm
+    && location.pathname !== '/admin/crm/visit-routes/new';
 
   useEffect(() => {
     preloadCrmPages(CRM_PAGE_LOADERS);
@@ -37,6 +48,10 @@ const CrmModuleShell: React.FC = () => {
 
   if (location.pathname === '/admin/crm/performance') {
     return <Navigate to="/admin/crm/dashboard" replace />;
+  }
+
+  if (location.pathname === '/admin/crm/pipeline') {
+    return <Navigate to="/admin/crm/map" replace />;
   }
 
   return (
@@ -65,6 +80,10 @@ const CrmModuleShell: React.FC = () => {
         <CrmFirestoreIndexNotice />
         {isClientProfile ? (
           <CrmEmbeddedPage loader={loadCrmClientProfile} />
+        ) : isVisitRouteForm ? (
+          <CrmEmbeddedPage loader={loadCrmVisitRouteForm} />
+        ) : isVisitRouteDetail ? (
+          <CrmEmbeddedPage loader={loadCrmVisitRouteDetail} />
         ) : (
           <CrmTabHost />
         )}

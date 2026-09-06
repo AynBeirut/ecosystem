@@ -1,13 +1,6 @@
 import { useMemo, useState } from 'react';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import AccountingSideSheet from '@/components/AccountingSideSheet';
 import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/utils';
@@ -65,15 +58,33 @@ export default function InvoiceAllocationDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
-        <DialogHeader>
-          <DialogTitle>Apply payment to open items</DialogTitle>
-          <DialogDescription>
-            {partyLabel} · Payment {formatCurrency(paymentAmount)} · Allocate to invoices or purchase orders.
-          </DialogDescription>
-        </DialogHeader>
-        <Table>
+    <AccountingSideSheet
+      open={open}
+      onOpenChange={onOpenChange}
+      title="Apply payment to open items"
+      description={`${partyLabel} · Payment ${formatCurrency(paymentAmount)} · Allocate to invoices or purchase orders.`}
+      size="detail"
+      className="legacy-erp-preview-sheet bg-[#f7f6f2]"
+      bodyClassName="legacy-erp-preview-body"
+      footer={
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            onClick={() => {
+              if (onSkip) onSkip();
+              else onOpenChange(false);
+            }}
+          >
+            Skip — post without allocation
+          </Button>
+          <Button type="button" className="ml-2" onClick={handleConfirm} disabled={allocatedTotal > paymentAmount}>
+            Apply & post
+          </Button>
+        </>
+      }
+    >
+        <Table className="legacy-erp-grid w-full">
           <TableHeader>
             <TableRow>
               <TableHead>Date</TableHead>
@@ -121,22 +132,6 @@ export default function InvoiceAllocationDialog({
         <p className="text-sm text-muted-foreground">
           Allocated: {formatCurrency(allocatedTotal)} / {formatCurrency(paymentAmount)}
         </p>
-        <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() => {
-              if (onSkip) onSkip();
-              else onOpenChange(false);
-            }}
-          >
-            Skip — post without allocation
-          </Button>
-          <Button type="button" onClick={handleConfirm} disabled={allocatedTotal > paymentAmount}>
-            Apply & post
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    </AccountingSideSheet>
   );
 }

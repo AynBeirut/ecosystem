@@ -51,12 +51,40 @@
     @apply bg-[#316ac5] text-white;
   }
 
+  .legacy-erp-grid thead tr:hover {
+    background-color: #316ac5 !important;
+  }
+
   .dark .legacy-erp-grid thead tr {
     @apply bg-[#1e4a8a];
   }
 
+  .dark .legacy-erp-grid thead tr:hover {
+    background-color: #1e4a8a !important;
+  }
+
   .legacy-erp-grid th {
-    @apply border border-[#2a5dad] px-2 py-1.5 text-left font-semibold;
+    @apply border border-[#2a5dad] px-2 py-1.5 text-left font-semibold text-white;
+  }
+
+  /* shadcn TableHead adds text-muted-foreground — keep headers readable on blue band */
+  .legacy-erp-grid thead th {
+    color: #fff !important;
+    background-color: #316ac5;
+  }
+
+  .legacy-erp-grid thead tr:hover th {
+    color: #fff !important;
+    background-color: #316ac5 !important;
+  }
+
+  .dark .legacy-erp-grid thead th {
+    background-color: #1e4a8a;
+  }
+
+  .dark .legacy-erp-grid thead tr:hover th {
+    color: #fff !important;
+    background-color: #1e4a8a !important;
   }
 
   .legacy-erp-grid td {
@@ -448,6 +476,439 @@
 
   .voucher-register__section-title {
     @apply text-xs font-semibold uppercase tracking-wide text-slate-500;
+  }
+
+  .legacy-erp-hint {
+    @apply border border-slate-400/70 bg-[#e8e6dc] px-2 py-1 text-[11px] leading-snug text-slate-700;
+  }
+
+  .legacy-erp-voucher--classic {
+    @apply border-slate-300 bg-[#ece9d8] text-slate-900;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-body {
+    @apply bg-[#f7f6f2] p-2 text-slate-900;
+  }
+
+  .legacy-erp-voucher-title {
+    @apply border-b border-[#2a5dad] bg-[#e8eef8] py-1.5 text-center text-sm font-bold uppercase tracking-[0.18em] text-[#1e4a8a];
+  }
+
+  /* Beat shadcn TabsList/TabsTrigger (bg-muted, text-muted-foreground) inside voucher shell */
+  .legacy-erp-voucher--classic .legacy-erp-tabs {
+    @apply mb-2 flex h-auto w-full flex-wrap justify-stretch gap-0 rounded-none border border-[#2a5dad] p-0 shadow-none;
+    background-color: #316ac5 !important;
+    color: #fff !important;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-tab {
+    @apply h-8 min-w-[6.5rem] flex-1 rounded-none border-0 border-r border-[#2a5dad]/70 px-2 text-[11px] font-semibold uppercase tracking-wide shadow-none last:border-r-0;
+    color: #fff !important;
+    background-color: #3d76c8 !important;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-tab:hover {
+    background-color: #2a5dad !important;
+    color: #fff !important;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-tab[data-state='active'] {
+    background-color: #1e4a8a !important;
+    color: #fff !important;
+    box-shadow: none !important;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-tab[data-state='inactive'] {
+    color: #fff !important;
+    background-color: #3d76c8 !important;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-tab:focus-visible {
+    @apply outline-none ring-2 ring-inset ring-white/80;
+  }
+
+  .legacy-erp-jv-lines {
+    @apply w-full border-collapse text-[12px];
+    table-layout: fixed;
+  }
+
+  .legacy-erp-jv-lines thead {
+    @apply sticky top-0 z-10;
+  }
+
+  .legacy-erp-jv-lines thead tr {
+    @apply bg-[#316ac5] text-white;
+  }
+
+  .legacy-erp-jv-lines th {
+    @apply border border-[#2a5dad] px-2 py-1.5 text-[11px] font-semibold text-white;
+  }
+
+  .legacy-erp-jv-lines th.legacy-erp-jv-th--left {
+    @apply text-left;
+  }
+
+  .legacy-erp-jv-lines th.legacy-erp-jv-th--num {
+    @apply text-right;
+  }
+
+  .legacy-erp-jv-lines td {
+    @apply border border-[#b0b0b0] bg-white p-0 align-middle text-slate-900;
+    height: 32px;
+  }
+
+  .legacy-erp-jv-lines tbody tr.legacy-erp-jv-row--pair td,
+  .legacy-erp-jv-lines tbody tr.legacy-erp-jv-row--detached td {
+    @apply bg-white;
+  }
+
+  .legacy-erp-jv-lines tbody tr:hover td {
+    @apply bg-[#fff7cc];
+  }
+
+  .legacy-erp-jv-lines .legacy-erp-jv-field,
+  .legacy-erp-jv-lines input.legacy-erp-jv-field,
+  .legacy-erp-jv-lines button.legacy-erp-jv-field {
+    @apply m-0 box-border h-8 min-h-8 w-full min-w-0 max-w-none rounded-none border-0 bg-transparent px-2 text-[12px] text-slate-900 shadow-none outline-none;
+  }
+
+  .legacy-erp-jv-lines input.legacy-erp-jv-field {
+    display: block;
+  }
+
+  .legacy-erp-jv-lines button.legacy-erp-jv-field {
+    @apply flex items-center;
+  }
+
+  .legacy-erp-jv-lines .legacy-erp-jv-field:focus-visible,
+  .legacy-erp-jv-lines button.legacy-erp-jv-field:focus-visible {
+    @apply bg-white ring-2 ring-inset ring-[#316ac5];
+  }
+
+  .legacy-erp-jv-lines .legacy-erp-jv-amount {
+    @apply text-right font-mono tabular-nums;
+  }
+
+  .legacy-erp-jv-empty {
+    @apply block h-8 w-full px-2 text-right text-[11px] leading-8 text-slate-400;
+  }
+
+  .legacy-erp-jv-del {
+    @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-sm text-slate-400 hover:bg-red-50 hover:text-red-700 disabled:opacity-30;
+  }
+
+  .legacy-erp-jv-account-wrap {
+    @apply flex h-8 min-w-0 items-center gap-0 pr-6;
+  }
+
+  .legacy-erp-jv-account-wrap > :first-child {
+    @apply min-w-0 flex-1;
+  }
+
+  .legacy-erp-jv-account-wrap .legacy-erp-jv-del {
+    @apply absolute right-0.5 top-1/2 -translate-y-1/2;
+  }
+
+  .legacy-erp-jv-lines td.legacy-erp-jv-td--account {
+    @apply relative;
+  }
+
+  .legacy-erp-excel-sheet {
+    @apply border border-[#8c9bab] bg-white text-slate-900;
+  }
+
+  .legacy-erp-excel-scroll {
+    @apply overflow-x-auto;
+  }
+
+  .legacy-erp-excel-grid {
+    @apply w-full min-w-[52rem] border-collapse text-[12px];
+    table-layout: fixed;
+  }
+
+  .legacy-erp-excel-grid thead tr {
+    @apply bg-[#d4e4f7] text-slate-900;
+  }
+
+  .legacy-erp-excel-grid th {
+    @apply border border-[#8c9bab] px-2 py-1 text-center text-[11px] font-semibold text-slate-800;
+  }
+
+  .legacy-erp-excel-grid th.legacy-erp-excel-th--left {
+    @apply text-left;
+  }
+
+  .legacy-erp-excel-grid th.legacy-erp-excel-th--num {
+    @apply text-right;
+  }
+
+  .legacy-erp-excel-grid td {
+    @apply border border-[#b0b0b0] bg-white p-0 text-slate-900;
+    height: 32px;
+    vertical-align: middle;
+  }
+
+  .legacy-erp-excel-grid tbody tr:hover td {
+    @apply bg-[#fff7cc];
+  }
+
+  .legacy-erp-excel-grid tbody tr.legacy-erp-excel-row--pair td {
+    @apply bg-[#fafcff];
+  }
+
+  .legacy-erp-excel-grid tbody tr.legacy-erp-excel-row--detached td {
+    @apply bg-[#fff8e6];
+  }
+
+  .legacy-erp-excel-slot {
+    @apply flex h-8 w-full min-w-0 items-stretch;
+  }
+
+  .legacy-erp-excel-td--num .legacy-erp-excel-slot {
+    display: block;
+    width: 100%;
+    height: 32px;
+  }
+
+  .legacy-erp-excel-slot--account {
+    @apply relative items-center pr-7;
+  }
+
+  .legacy-erp-excel-row-del {
+    @apply absolute right-0.5 top-1/2 flex h-6 w-6 -translate-y-1/2 items-center justify-center text-slate-400 hover:text-red-700 disabled:opacity-30;
+  }
+
+  .legacy-erp-excel-empty {
+    @apply block w-full px-2 text-right text-[11px] text-slate-400;
+  }
+
+  .legacy-erp-excel-grid .legacy-erp-excel-amount,
+  .legacy-erp-excel-grid .legacy-erp-cell-input,
+  .legacy-erp-excel-grid .legacy-erp-cell-select,
+  .legacy-erp-excel-grid .legacy-erp-cell-combo button {
+    @apply m-0 box-border h-8 min-h-8 w-full min-w-0 max-w-none rounded-none border-0 bg-white px-2 text-[12px] text-slate-900 shadow-none outline-none;
+  }
+
+  .legacy-erp-excel-grid .legacy-erp-excel-td--num .legacy-erp-excel-amount,
+  .legacy-erp-excel-grid .legacy-erp-excel-td--num .legacy-erp-cell-input {
+    display: block;
+    width: 100%;
+    height: 32px;
+    min-height: 32px;
+    @apply text-right font-mono tabular-nums;
+  }
+
+  .legacy-erp-excel-grid .legacy-erp-excel-amount:focus-visible,
+  .legacy-erp-excel-grid .legacy-erp-cell-combo button:focus-visible {
+    @apply ring-2 ring-inset ring-[#316ac5];
+  }
+
+  .legacy-erp-excel-grid .legacy-erp-excel-amount:disabled {
+    @apply bg-white text-slate-600 opacity-100;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-mirror-banner {
+    @apply mb-1 border border-amber-400/80 bg-amber-50 px-2 py-1 text-[11px] text-amber-950;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-excel-totals {
+    @apply w-full border-collapse text-[11px];
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-excel-totals th {
+    @apply border border-[#8c9bab] bg-[#e8eef8] px-2 py-1 text-left font-semibold text-slate-700;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-excel-totals td {
+    @apply border border-[#b0b0b0] bg-white px-2 py-1 font-mono text-[12px] text-slate-900;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-excel-totals td.legacy-erp-excel-totals--ok {
+    @apply bg-green-50 font-semibold text-green-800;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-excel-totals td.legacy-erp-excel-totals--bad {
+    @apply bg-red-50 font-semibold text-red-800;
+  }
+
+  .legacy-erp-voucher-add-qty {
+    @apply h-7 w-11 rounded-sm border border-slate-400 bg-white px-1 text-center text-[11px] font-semibold tabular-nums text-slate-800 shadow-inner;
+  }
+
+  .legacy-erp-voucher-info-btn {
+    @apply flex h-7 w-7 shrink-0 items-center justify-center rounded-full border border-[#7ba3d4] bg-[#e8f0fc] text-[#316ac5] shadow-sm transition hover:bg-[#d4e4f7];
+  }
+
+  .legacy-erp-voucher-info-panel {
+    @apply flex min-w-0 flex-1 flex-col gap-1.5 rounded-md border border-[#c5d9f0] bg-[#f4f8ff] px-2.5 py-2;
+    font-family: ui-rounded, "Segoe UI", system-ui, sans-serif;
+  }
+
+  .legacy-erp-voucher-tip {
+    @apply m-0 text-[10px] leading-snug tracking-wide text-[#3d5a80];
+  }
+
+  .legacy-erp-voucher-tip--warn {
+    @apply mb-1 rounded-md border border-amber-300/80 bg-amber-50/90 px-2 py-1 text-[10px] text-amber-900;
+    font-family: ui-rounded, "Segoe UI", system-ui, sans-serif;
+  }
+
+  .legacy-erp-voucher-balance-chips {
+    @apply flex flex-wrap gap-1.5;
+  }
+
+  .legacy-erp-voucher-balance-chip {
+    @apply inline-flex flex-wrap items-center gap-x-1.5 gap-y-0.5 rounded-full border border-[#b8cfe8] bg-white/90 px-2.5 py-1 text-[10px] font-medium leading-tight text-[#2c5282];
+    font-family: ui-rounded, "Segoe UI", system-ui, sans-serif;
+  }
+
+  .legacy-erp-voucher-balance-chip--fx {
+    @apply border-[#c4b5fd] text-[#5b4b8a];
+  }
+
+  .legacy-erp-voucher-balance-label {
+    @apply text-[9px] font-bold uppercase tracking-wider text-[#316ac5];
+  }
+
+  .legacy-erp-voucher-balance-status {
+    @apply rounded-full px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide;
+  }
+
+  .legacy-erp-voucher-balance-status--ok {
+    @apply bg-emerald-100 text-emerald-800;
+  }
+
+  .legacy-erp-voucher-balance-status--bad {
+    @apply bg-rose-100 text-rose-800;
+  }
+
+  .legacy-erp-jv-row--active td {
+    @apply bg-[#fff7cc];
+  }
+
+  /* JV matrix footer — same shell as excel toolbar / TB (#e8e6dc, #8c9bab, #316ac5) */
+  .legacy-erp-jv-matrix-footer {
+    @apply border border-t-0 border-[#8c9bab] bg-[#e8e6dc] px-2 py-2;
+  }
+
+  .legacy-erp-jv-matrix-rates {
+    @apply mb-2 flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] font-semibold text-slate-800;
+  }
+
+  .legacy-erp-jv-matrix-rates__warn {
+    @apply text-[10px] font-semibold uppercase tracking-wide text-amber-900;
+  }
+
+  .legacy-erp-jv-matrix-grid {
+    display: grid;
+    gap: 1px;
+    background: #8c9bab;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  @media (min-width: 640px) {
+    .legacy-erp-jv-matrix-grid {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+  }
+
+  @media (min-width: 1024px) {
+    .legacy-erp-jv-matrix-grid {
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+    }
+  }
+
+  .legacy-erp-jv-matrix-cell {
+    @apply flex min-h-[2.75rem] flex-col justify-center bg-[#f7f6f2] px-2 py-1;
+  }
+
+  .legacy-erp-jv-matrix-label {
+    @apply text-[9px] font-bold uppercase tracking-wide text-[#316ac5];
+  }
+
+  .legacy-erp-jv-matrix-value {
+    @apply text-right font-mono text-[12px] font-semibold tabular-nums text-slate-900;
+  }
+
+  .legacy-erp-jv-matrix-cell--warn {
+    @apply bg-amber-50;
+  }
+
+  .legacy-erp-jv-matrix-cell--warn .legacy-erp-jv-matrix-value {
+    @apply text-amber-950;
+  }
+
+  .legacy-erp-jv-matrix-cell--active {
+    @apply bg-[#f7f6f2] ring-1 ring-inset ring-[#8c9bab];
+  }
+
+  button.legacy-erp-jv-matrix-cell--flip {
+    @apply w-full cursor-pointer border-0 bg-[#f7f6f2] text-left transition hover:bg-[#f0efe8] active:bg-[#e8e6dc];
+  }
+
+  button.legacy-erp-jv-matrix-cell--flip:focus-visible {
+    @apply outline-none ring-2 ring-inset ring-[#316ac5];
+  }
+
+  button.legacy-erp-jv-matrix-cell--flip-disabled {
+    @apply cursor-not-allowed opacity-60 hover:bg-[#f7f6f2];
+  }
+
+  .legacy-erp-jv-side-badge {
+    @apply inline-flex h-6 min-w-[2rem] items-center justify-center rounded-sm border border-[#8c9bab] bg-[#e8e6dc] px-1.5 text-[10px] font-bold uppercase tracking-wide text-slate-800;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-excel-toolbar {
+    @apply flex flex-wrap items-center gap-2 border border-[#8c9bab] border-t-0 bg-[#e8e6dc] px-2 py-2;
+  }
+
+  .legacy-erp-voucher--classic .legacy-erp-preview-submit {
+    @apply h-8 min-w-[8.5rem] border border-[#2a5dad] bg-[#316ac5] text-xs font-semibold uppercase tracking-wide text-white shadow hover:bg-[#2a5dad];
+  }
+
+  .dark .legacy-erp-voucher--classic .legacy-erp-excel-sheet,
+  .dark .legacy-erp-voucher--classic .legacy-erp-excel-grid td,
+  .dark .legacy-erp-voucher--classic .legacy-erp-excel-grid .legacy-erp-excel-amount {
+    @apply bg-white text-slate-900;
+  }
+
+  .dark .legacy-erp-voucher--classic .legacy-erp-excel-grid tbody tr:hover td {
+    @apply bg-[#fff7cc];
+  }
+
+  .legacy-erp-preview-submit {
+    @apply border-[#2a5dad] bg-[#316ac5] text-white hover:bg-[#2a5dad];
+  }
+
+  /* JV preview side sheet — always light/readable (portal sits outside finance-embed-theme) */
+  .legacy-erp-preview-sheet {
+    color-scheme: light;
+    @apply text-slate-900;
+    --background: 0 0% 100%;
+    --foreground: 222.2 84% 4.9%;
+    --muted-foreground: 215.4 16.3% 46.9%;
+  }
+
+  .legacy-erp-preview-sheet h2,
+  .legacy-erp-preview-body {
+    @apply text-slate-900;
+  }
+
+  .legacy-erp-preview-sheet .text-muted-foreground,
+  .legacy-erp-preview-body .text-muted-foreground {
+    @apply text-slate-600;
+  }
+
+  .legacy-erp-preview-body .legacy-erp-grid td {
+    @apply border-slate-300 bg-white text-slate-900;
+  }
+
+  .legacy-erp-preview-body .legacy-erp-grid tbody tr:hover td {
+    @apply bg-[#fff7cc] text-slate-900;
+  }
+
+  .legacy-erp-preview-body .legacy-erp-grid tbody tr.bg-muted\/40 td {
+    @apply bg-[#e8e6dc] font-semibold text-slate-900;
   }
 
   .voucher-register__drafts {

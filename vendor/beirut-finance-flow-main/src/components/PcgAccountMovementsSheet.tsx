@@ -2,14 +2,7 @@ import { useMemo, useState } from 'react';
 import { FileText } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Sheet,
-  SheetContent,
-  SheetDescription,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import AccountingSideSheet from '@/components/AccountingSideSheet';
 import { formatCurrency } from '@/lib/utils';
 import { buildBookLinesForAccount } from '@/lib/ledger/accountLedgerLines';
 import { buildTrialBalance } from '@/lib/ledger/trialBalance';
@@ -17,6 +10,8 @@ import { pcgClassSuffix, resolveLedgerAccountIdsForPcgNode, type PcgTreeNode } f
 import { supportsArabicEntry, type AccountingLanguage } from '@/lib/grabio/accountingMode';
 import type { AccountBookLine, JournalEntry, JournalLine, LedgerAccount, PcgClientAccount } from '@/types/generalLedger';
 import VoucherDetailDialog from '@/components/VoucherDetailDialog';
+import type { OpenVoucherEntryHandler } from '@/lib/accounting/accountingNavigation';
+import { legacyReportThClass, legacyReportTableClass } from '@/components/legacyErpReportFrame';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -31,6 +26,7 @@ type Props = {
   pcgClientAccounts?: PcgClientAccount[];
   accountingLanguage?: AccountingLanguage;
   isLebaneseCoa?: boolean;
+  onOpenEntry?: OpenVoucherEntryHandler;
 };
 
 export default function PcgAccountMovementsSheet({
@@ -44,6 +40,7 @@ export default function PcgAccountMovementsSheet({
   pcgClientAccounts = [],
   accountingLanguage,
   isLebaneseCoa = true,
+  onOpenEntry,
 }: Props) {
   const [selectedEntryId, setSelectedEntryId] = useState('');
   const arabicEntry = supportsArabicEntry(accountingLanguage);
@@ -93,6 +90,14 @@ export default function PcgAccountMovementsSheet({
     };
   }, [ledgerAccountIds, accounts, entries, lines, asOfDate, movementRows.length]);
 
+  const openMovementVoucher = (entryId: string) => {
+    if (onOpenEntry) {
+      onOpenEntry(entryId);
+      return;
+    }
+    setSelectedEntryId(entryId);
+  };
+
   const selectedEntry = useMemo(
     () => entries.find((entry) => entry.id === selectedEntryId) || null,
     [entries, selectedEntryId],
@@ -100,87 +105,98 @@ export default function PcgAccountMovementsSheet({
 
   const suffix = node ? pcgClassSuffix(node.code) : '';
 
+  if (!node) return null;
+
   return (
     <>
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent side="right" className="w-full sm:max-w-2xl overflow-y-auto">
-          {node ? (
-            <>
-              <SheetHeader>
-                <SheetTitle className="font-mono text-base">
-                  {node.code}
-                  {suffix ? <span className="ml-2 font-sans text-sm font-normal text-muted-foreground">{suffix}</span> : null}
-                </SheetTitle>
-                <SheetDescription className="space-y-1">
-                  <span className="block">{node.name}</span>
-                  {arabicEntry && node.nameAr ? (
-                    <span className="block text-right" dir="rtl">
-                      {node.nameAr}
-                    </span>
-                  ) : null}
-                </SheetDescription>
-              </SheetHeader>
+      <AccountingSideSheet
+        open={open}
+        onOpenChange={onOpenChange}
+        title={
+          <>
+            <span className="font-mono">{node.code}</span>
+            {suffix ? <span className="ml-2 font-sans text-sm font-normal text-muted-foreground">{suffix}</span> : null}
+          </>
+        }
+        description={
+          <>
+            <span className="block">{node.name}</span>
+            {arabicEntry && node.nameAr ? (
+              <span className="block text-right" dir="rtl">
+                {node.nameAr}
+              </span>
+            ) : null}
+          </>
+        }
+        size="detail"
+        tall
+      >
+        <div className="flex flex-wrap gap-3 text-sm">
+          <span>
+            Debit balance: <strong>{formatCurrency(balanceSummary.debit)}</strong>
+          </span>
+          <span>
+            Credit balance: <strong>{formatCurrency(balanceSummary.credit)}</strong>
+          </span>
+          <Badge variant="outline">As of {asOfDate}</Badge>
+          <Badge variant="outline">{balanceSummary.movementCount} movements</Badge>
+        </div>
 
-              <div className="mt-4 flex flex-wrap gap-3 text-sm">
-                <span>
-                  Debit balance: <strong>{formatCurrency(balanceSummary.debit)}</strong>
-                </span>
-                <span>
-                  Credit balance: <strong>{formatCurrency(balanceSummary.credit)}</strong>
-                </span>
-                <Badge variant="outline">As of {asOfDate}</Badge>
-                <Badge variant="outline">{balanceSummary.movementCount} movements</Badge>
-              </div>
+        {!ledgerAccountIds.length ? (
+          <p className="mt-6 text-sm text-muted-foreground">
+            No posting account linked yet for this chart row. Map or seed a ledger account to see voucher activity.
+          </p>
+        ) : (
+          <div className="mt-4 max-h-[min(60vh,520px)] overflow-y-auto overflow-x-hidden overscroll-contain rounded-md border">
+            <table className={legacyReportTableClass(isLebaneseCoa, 'w-full table-fixed border-collapse text-sm')}>
+              <colgroup>
+                <col className="w-[5rem]" />
+                <col className="w-[6.5rem]" />
+                <col />
+                <col className="w-[4.5rem]" />
+                <col className="w-[4.5rem]" />
+                <col className="w-[2.5rem]" />
+              </colgroup>
+              <thead>
+                <tr className={isLebaneseCoa ? 'border-[#2a5dad]' : 'border-b'}>
+                  <th className={legacyReportThClass(isLebaneseCoa, 'px-2 py-2')}>Date</th>
+                  <th className={legacyReportThClass(isLebaneseCoa, 'px-2 py-2')}>Voucher</th>
+                  <th className={legacyReportThClass(isLebaneseCoa, 'px-2 py-2')}>Description</th>
+                  <th className={legacyReportThClass(isLebaneseCoa, 'px-2 py-2 text-right')}>Debit</th>
+                  <th className={legacyReportThClass(isLebaneseCoa, 'px-2 py-2 text-right')}>Credit</th>
+                  <th className={legacyReportThClass(isLebaneseCoa, 'px-2 py-2')} />
+                </tr>
+              </thead>
+              <tbody>
+                {movementRows.length ? (
+                  movementRows.map((row) => (
+                    <tr key={row.lineId} className="border-b hover:bg-muted/40">
+                      <td className="truncate px-2 py-1.5 text-xs">{row.entryDate.slice(0, 10)}</td>
+                      <td className="truncate px-2 py-1.5 font-mono text-xs">{row.voucherNumber || '—'}</td>
+                      <td className="truncate px-2 py-1.5 text-xs" title={row.description || row.memo}>{row.description || row.memo || '—'}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs tabular-nums">{row.debit ? formatCurrency(row.debit) : '—'}</td>
+                      <td className="whitespace-nowrap px-2 py-1.5 text-right text-xs tabular-nums">{row.credit ? formatCurrency(row.credit) : '—'}</td>
+                      <td className="px-1 py-1.5">
+                        <Button type="button" variant="ghost" size="sm" onClick={() => openMovementVoucher(row.entryId)}>
+                          <FileText className="h-4 w-4" />
+                        </Button>
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td colSpan={6} className="px-2 py-8 text-center text-sm text-muted-foreground">
+                      No posted voucher lines for this account yet.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </AccountingSideSheet>
 
-              {!ledgerAccountIds.length ? (
-                <p className="mt-6 text-sm text-muted-foreground">
-                  No posting account linked yet for this chart row. Map or seed a ledger account to see voucher activity.
-                </p>
-              ) : (
-                <div className="mt-4 rounded-md border max-h-[min(60vh,520px)] overflow-auto">
-                  <Table>
-                    <TableHeader className="sticky top-0 bg-background z-10">
-                      <TableRow>
-                        <TableHead>Date</TableHead>
-                        <TableHead>Voucher</TableHead>
-                        <TableHead>Description</TableHead>
-                        <TableHead className="text-right">Debit</TableHead>
-                        <TableHead className="text-right">Credit</TableHead>
-                        <TableHead />
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {movementRows.length ? (
-                        movementRows.map((row) => (
-                          <TableRow key={row.lineId}>
-                            <TableCell>{row.entryDate}</TableCell>
-                            <TableCell className="font-mono text-xs">{row.voucherNumber || row.memo || '—'}</TableCell>
-                            <TableCell>{row.description || row.memo || '—'}</TableCell>
-                            <TableCell className="text-right">{row.debit ? formatCurrency(row.debit) : '—'}</TableCell>
-                            <TableCell className="text-right">{row.credit ? formatCurrency(row.credit) : '—'}</TableCell>
-                            <TableCell>
-                              <Button type="button" variant="ghost" size="sm" onClick={() => setSelectedEntryId(row.entryId)}>
-                                <FileText className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        ))
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={6} className="py-8 text-center text-sm text-muted-foreground">
-                            No posted voucher lines for this account yet.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
-                </div>
-              )}
-            </>
-          ) : null}
-        </SheetContent>
-      </Sheet>
-
+      {!onOpenEntry ? (
       <VoucherDetailDialog
         entry={selectedEntry}
         lines={lines}
@@ -190,6 +206,7 @@ export default function PcgAccountMovementsSheet({
         pcgClientAccounts={pcgClientAccounts}
         accountingLanguage={accountingLanguage}
       />
+      ) : null}
     </>
   );
 }

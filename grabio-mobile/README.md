@@ -1,6 +1,6 @@
 # Grabio Admin (Mobile)
 
-React Native / Expo admin app — POS, orders, inventory, CRM, WebView Invoice shell.
+React Native / Expo admin app — native POS, orders, inventory, CRM, team tasks.
 
 ## Identity
 
@@ -18,13 +18,11 @@ React Native / Expo admin app — POS, orders, inventory, CRM, WebView Invoice s
 
 | versionCode | versionName | Artifact | Status |
 |-------------|-------------|----------|--------|
-| **35** | **1.2.5** | `release/grabio-1.2.5-35.aab` | **Current — upload this** |
-| 34 | 1.2.4 | `release/grabio-1.2.4-34.aab` | shipped |
-| 33 | 1.2.3 | `release/grabio-admin-v1.2.3-build33.aab` | shipped |
-| 32 | 1.2.2 | `release/grabio-admin-v1.2.2-build32.aab` | shipped |
-| 31 | 1.2.1 | `release/grabio-admin-v1.2.1-build31.aab` | shipped |
+| **125** | **1.2.94** | `release/grabio-1.2.94-125.aab` | **Current — upload this** |
+| 124 | 1.2.93 | `release/grabio-1.2.93-124.aab` | shipped |
+| 35 | 1.2.5 | `release/grabio-1.2.5-35.aab` | legacy |
 
-**Next Android release must be versionCode ≥ 36.**
+**Next Android release must be versionCode ≥ 126.**
 
 Also set the same numbers in:
 - `app.json` → `expo.version` + `expo.android.versionCode`

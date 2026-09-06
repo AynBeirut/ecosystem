@@ -1,13 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import {
   View, Text, FlatList, TouchableOpacity, StyleSheet, Image,
-  ActivityIndicator, ScrollView, Linking,
+  ActivityIndicator, Linking,
 } from 'react-native';
 import { getFirestore, collection, doc, query, where, onSnapshot } from '@react-native-firebase/firestore';
 import { useNavigation, useRoute, RouteProp } from '@react-navigation/native';
 import { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { RootStackParamList, Product, Store } from '../../types';
 import { useCart } from '../../context/CartContext';
+import { formatPrice, formatRating, toNumber } from '../../lib/formatCommerce';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 
 type Nav = NativeStackNavigationProp<RootStackParamList>;
@@ -28,46 +29,83 @@ function ProductImage({ uri, style }: { uri: string; style: object }) {
 export default function StoreDetailScreen() {
   const { params } = useRoute<Route>();
   const navigation = useNavigation<Nav>();
+  const storeId = params?.storeId?.trim() || '';
+  const storeName = params?.storeName?.trim() || 'Store';
   const [store, setStore] = useState<Store | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const { addItem, itemCount } = useCart();
 
   useEffect(() => {
-    navigation.setOptions({ title: params.storeName });
+    navigation.setOptions({ title: storeName });
+    if (!storeId) {
+      setLoadError('Store not found.');
+      setLoading(false);
+      return;
+    }
 
     const db = getFirestore();
+    setLoading(true);
+    setLoadError(null);
 
-    const unsubStore = onSnapshot(doc(db, 'storeProfiles', params.storeId),
-      (d) => setStore({ id: d.id, ...d.data() } as Store));
+    const unsubStore = onSnapshot(
+      doc(db, 'storeProfiles', storeId),
+      (d) => {
+        if (!d.exists()) {
+          setStore(null);
+          return;
+        }
+        const data = d.data();
+        setStore({ id: d.id, ...(data || {}) } as Store);
+      },
+      () => setLoadError('Could not load store.'),
+    );
 
     const unsubProd = onSnapshot(
-      query(collection(db, 'products'),
-        where('storeId', '==', params.storeId),
-        where('inStock', '==', true)),
+      query(
+        collection(db, 'products'),
+        where('storeId', '==', storeId),
+        where('inStock', '==', true),
+      ),
       (snap) => {
-        setProducts(snap.docs.map((d) => ({ id: d.id, ...d.data() } as Product)));
+        const rows = snap.docs
+          .map((d) => ({ id: d.id, ...(d.data() || {}) } as Product))
+          .filter((p) => p.id && p.name);
+        setProducts(rows);
         setLoading(false);
-      });
+      },
+      () => {
+        setLoadError('Could not load products.');
+        setLoading(false);
+      },
+    );
 
-    return () => { unsubStore(); unsubProd(); };
-  }, [navigation, params.storeId, params.storeName]);
+    return () => {
+      unsubStore();
+      unsubProd();
+    };
+  }, [navigation, storeId, storeName]);
 
   const waPhone = (store?.whatsappBusiness || store?.whatsappNumber || '').replace(/\D/g, '');
+  const ratingLabel = formatRating(store?.rating);
 
   const buildWaUrl = (item: Product) => {
     if (!waPhone) return null;
+    const price = toNumber(item.price);
+    if (price == null) return null;
     const currency = item.currency || store?.mainCurrency || 'USD';
-    const msg = `Hi, I'd like to order from ${params.storeName}:\n- 1x ${item.name} \u2014 ${currency} ${item.price.toFixed(2)}\n\nTotal: ${currency} ${item.price.toFixed(2)}`;
+    const msg = `Hi, I'd like to order from ${storeName}:\n- 1x ${item.name || 'Item'} — ${currency} ${price.toFixed(2)}\n\nTotal: ${currency} ${price.toFixed(2)}`;
     return `https://wa.me/${waPhone}?text=${encodeURIComponent(msg)}`;
   };
 
   const renderProduct = ({ item }: { item: Product }) => {
     const waUrl = buildWaUrl(item);
+    const priceLabel = formatPrice(item.price, item.currency || store?.mainCurrency || 'USD');
     return (
       <TouchableOpacity
         style={styles.productCard}
-        onPress={() => navigation.navigate('ProductDetail', { product: item, storeName: params.storeName })}
+        onPress={() => navigation.navigate('ProductDetail', { product: item, storeName })}
       >
         {(item.image || item.imageUrl) ? (
           <ProductImage uri={item.image || item.imageUrl!} style={styles.productImg} />
@@ -76,43 +114,56 @@ export default function StoreDetailScreen() {
             <Text style={{ fontSize: 28 }}>🛍️</Text>
           </View>
         )}
-        <Text style={styles.productName} numberOfLines={2}>{item.name}</Text>
-        <Text style={styles.productPrice}>{(item.currency || 'USD')} {item.price.toFixed(2)}</Text>
+        <Text style={styles.productName} numberOfLines={2}>{item.name || 'Product'}</Text>
+        <Text style={styles.productPrice}>{priceLabel}</Text>
         <TouchableOpacity
           style={styles.addBtn}
-          onPress={() => { addItem(item, params.storeName); }}
+          onPress={() => {
+            addItem(item, storeName);
+          }}
         >
           <Text style={styles.addBtnText}>+ Add to Cart</Text>
         </TouchableOpacity>
-        {waUrl && (
+        {waUrl ? (
           <TouchableOpacity
             style={styles.waBtn}
             onPress={() => Linking.openURL(waUrl)}
           >
             <Text style={styles.waBtnText}>💬 Buy via WhatsApp</Text>
           </TouchableOpacity>
-        )}
+        ) : null}
       </TouchableOpacity>
     );
   };
 
+  if (!storeId) {
+    return (
+      <View style={styles.container}>
+        <Text style={styles.empty}>Store not found.</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
-      {store && (
+      {store ? (
         <View style={styles.storeHeader}>
           {store.logoUrl ? <Image source={{ uri: store.logoUrl }} style={styles.storeLogo} /> : null}
           <View style={{ flex: 1, marginLeft: store.logoUrl ? 12 : 0 }}>
-            <Text style={styles.storeName}>{store.name}</Text>
+            <Text style={styles.storeName}>{store.name || storeName}</Text>
             {store.description ? <Text style={styles.storeDesc}>{store.description}</Text> : null}
-            {store.rating ? <Text style={styles.rating}>⭐ {store.rating.toFixed(1)} ({store.ratingCount ?? 0})</Text> : null}
+            {ratingLabel ? (
+              <Text style={styles.rating}>⭐ {ratingLabel} ({store.ratingCount ?? 0})</Text>
+            ) : null}
           </View>
-          {itemCount > 0 && (
+          {itemCount > 0 ? (
             <TouchableOpacity onPress={() => navigation.navigate('Cart')}>
               <Text style={styles.cartBadge}>🛒 {itemCount}</Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
-      )}
+      ) : null}
+      {loadError ? <Text style={styles.error}>{loadError}</Text> : null}
       {loading ? (
         <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />
       ) : (
@@ -121,7 +172,7 @@ export default function StoreDetailScreen() {
           keyExtractor={(p) => p.id}
           renderItem={renderProduct}
           numColumns={2}
-          columnWrapperStyle={{ justifyContent: 'space-between' }}
+          columnWrapperStyle={products.length > 1 ? { justifyContent: 'space-between' } : undefined}
           contentContainerStyle={{ padding: 12 }}
           ListEmptyComponent={<Text style={styles.empty}>No products available</Text>}
         />
@@ -148,4 +199,5 @@ const styles = StyleSheet.create({
   waBtn: { backgroundColor: '#25D366', borderRadius: RADIUS.md, paddingVertical: 6, alignItems: 'center' },
   waBtnText: { color: '#fff', fontWeight: '700', fontSize: 12 },
   empty: { textAlign: 'center', marginTop: 40, color: COLORS.textMuted },
+  error: { textAlign: 'center', marginTop: 12, color: COLORS.error, paddingHorizontal: 16 },
 });

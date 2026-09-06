@@ -1,9 +1,6 @@
 import { useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog, DialogContent, DialogDescription, DialogFooter,
-  DialogHeader, DialogTitle, DialogTrigger,
-} from "@/components/ui/dialog";
+import AccountingSideSheet from "@/components/AccountingSideSheet";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -170,24 +167,34 @@ export default function DataImportDialog() {
   };
 
   return (
-    <Dialog
-      open={open}
-      onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}
-    >
-      <DialogTrigger asChild>
-        <Button>
-          <Upload className="mr-2 h-4 w-4" />
-          Import data
-        </Button>
-      </DialogTrigger>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Import data from CSV</DialogTitle>
-          <DialogDescription>
-            Upload a CSV file to add clients, suppliers, or products in bulk. Data is scoped to your organization.
-          </DialogDescription>
-        </DialogHeader>
-
+    <>
+      <Button onClick={() => setOpen(true)}>
+        <Upload className="mr-2 h-4 w-4" />
+        Import data
+      </Button>
+      <AccountingSideSheet
+        open={open}
+        onOpenChange={(o) => { setOpen(o); if (!o) reset(); }}
+        title="Import data from CSV"
+        description="Upload a CSV file to add clients, suppliers, or products in bulk. Data is scoped to your organization."
+        size="form"
+        tall
+        footer={
+          <>
+            <Button variant="outline" onClick={() => setOpen(false)} disabled={running}>
+              Close
+            </Button>
+            <Button
+              className="ml-2"
+              onClick={runImport}
+              disabled={running || !preview || preview.mapped.valid.length === 0}
+            >
+              {running && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Import {preview ? `${preview.mapped.valid.length} row(s)` : ""}
+            </Button>
+          </>
+        }
+      >
         <div className="space-y-4">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-2">
@@ -357,20 +364,7 @@ export default function DataImportDialog() {
             </div>
           )}
         </div>
-
-        <DialogFooter className="gap-2">
-          <Button variant="outline" onClick={() => setOpen(false)} disabled={running}>
-            Close
-          </Button>
-          <Button
-            onClick={runImport}
-            disabled={running || !preview || preview.mapped.valid.length === 0}
-          >
-            {running && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Import {preview ? `${preview.mapped.valid.length} row(s)` : ""}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </AccountingSideSheet>
+    </>
   );
 }

@@ -1,6 +1,8 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { Facebook, Instagram } from 'lucide-react';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
+import { GRABIO_SOCIAL } from '@/lib/grabioBrandSchema';
 
 const PublicFooter: React.FC = () => (
   <footer className="bg-gray-900 text-gray-400 mt-auto">
@@ -8,12 +10,32 @@ const PublicFooter: React.FC = () => (
       <div className="grid grid-cols-2 md:grid-cols-4 gap-8 mb-10">
         {/* Brand */}
         <div className="col-span-2 md:col-span-1">
-          <Link to="/home" className="text-white font-bold text-xl hover:text-teal-400 transition-colors">
+          <Link to="/" className="text-white font-bold text-xl hover:text-teal-400 transition-colors">
             Grabio
           </Link>
           <p className="mt-3 text-sm leading-relaxed">
             All-in-one business management platform for modern commerce. POS, inventory, invoicing, and marketplace in one place.
           </p>
+          <div className="mt-4 flex items-center gap-3">
+            <a
+              href={GRABIO_SOCIAL.instagram}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-400 hover:text-white transition-colors"
+              aria-label="Grabio on Instagram"
+            >
+              <Instagram className="h-5 w-5" aria-hidden />
+            </a>
+            <a
+              href={GRABIO_SOCIAL.facebook}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-400 hover:text-white transition-colors"
+              aria-label="Grabio on Facebook"
+            >
+              <Facebook className="h-5 w-5" aria-hidden />
+            </a>
+          </div>
         </div>
 
         {/* Product */}
