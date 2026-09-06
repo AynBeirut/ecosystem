@@ -1,0 +1,109 @@
+{
+  "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+  "source": "jinan-notebook-2026-08-28-31",
+  "days": [],
+  "additionalOrders": [
+    {
+      "date": "2026-08-28",
+      "importSource": "jinan-notebook-2026-08-28-sale-01",
+      "sales": [{ "label": "Foul x7", "amountUSD": 41 }]
+    },
+    {
+      "date": "2026-08-28",
+      "importSource": "jinan-notebook-2026-08-28-sale-02",
+      "sales": [{ "label": "Pizza dozen", "amountUSD": 58 }]
+    },
+    {
+      "date": "2026-08-28",
+      "importSource": "jinan-notebook-2026-08-28-sale-03",
+      "sales": [{ "label": "Cheese tray + Foul + Fatti", "amountUSD": 30 }]
+    },
+    {
+      "date": "2026-08-28",
+      "importSource": "jinan-notebook-2026-08-28-sale-04",
+      "sales": [{ "label": "Cake", "amountUSD": 35 }]
+    },
+    {
+      "date": "2026-08-28",
+      "importSource": "jinan-notebook-2026-08-28-sale-rice-mush",
+      "sales": [{ "label": "Rice and mushrooms x2", "amountUSD": 26 }]
+    },
+    {
+      "date": "2026-08-28",
+      "importSource": "jinan-notebook-2026-08-28-sale-salad",
+      "sales": [{ "label": "Salad x4", "amountUSD": 20 }]
+    },
+    {
+      "date": "2026-08-28",
+      "importSource": "jinan-notebook-2026-08-28-sale-05",
+      "sales": [{ "label": "Proposal event", "amountUSD": 200 }]
+    },
+    {
+      "date": "2026-08-29",
+      "importSource": "jinan-notebook-2026-08-29-sale-01",
+      "sales": [{ "label": "Arepa combo x2", "amountUSD": 20 }]
+    },
+    {
+      "date": "2026-08-29",
+      "importSource": "jinan-notebook-2026-08-29-sale-02",
+      "sales": [{ "label": "Fatti", "amountUSD": 8 }]
+    },
+    {
+      "date": "2026-08-29",
+      "importSource": "jinan-notebook-2026-08-29-sale-03",
+      "sales": [{ "label": "Arepa combo x2", "amountUSD": 20 }]
+    },
+    {
+      "date": "2026-08-29",
+      "importSource": "jinan-notebook-2026-08-29-sale-04",
+      "sales": [{ "label": "Pancake", "amountUSD": 10 }]
+    },
+    {
+      "date": "2026-08-29",
+      "importSource": "jinan-notebook-2026-08-29-sale-05",
+      "sales": [{ "label": "Fatti x2", "amountUSD": 16 }]
+    },
+    {
+      "date": "2026-08-29",
+      "importSource": "jinan-notebook-2026-08-29-sale-06",
+      "sales": [{ "label": "Milk seeds x2", "amountUSD": 4 }]
+    },
+    {
+      "date": "2026-08-29",
+      "importSource": "jinan-notebook-2026-08-29-sale-07",
+      "sales": [{ "label": "Ice cream", "amountUSD": 10 }]
+    },
+    {
+      "date": "2026-08-31",
+      "importSource": "jinan-notebook-2026-08-31-sale-01",
+      "sales": [{ "label": "Table x4 @ $20/person", "amountUSD": 80 }]
+    },
+    {
+      "date": "2026-08-31",
+      "importSource": "jinan-notebook-2026-08-31-sale-02",
+      "sales": [
+        { "label": "Arepa combo", "amountUSD": 10 },
+        { "label": "Arepa combo", "amountUSD": 10 },
+        { "label": "Arepa combo", "amountUSD": 10 }
+      ]
+    }
+  ],
+  "expenses": [
+    { "date": "2026-08-28", "label": "Employee", "amountUSD": 103, "category": "payroll", "importSource": "jinan-notebook-2026-08-28-exp-employee" },
+    { "date": "2026-08-28", "label": "Fuel", "amountUSD": 20, "category": "fuel", "importSource": "jinan-notebook-2026-08-28-exp-fuel" },
+    { "date": "2026-08-28", "label": "Veggies", "amountUSD": 41, "category": "office_supplies", "importSource": "jinan-notebook-2026-08-28-exp-veggies" },
+    { "date": "2026-08-28", "label": "Najjar", "amountUSD": 24, "category": "office_supplies", "importSource": "jinan-notebook-2026-08-28-exp-najjar" },
+    { "date": "2026-08-28", "label": "Personal", "amountUSD": 8, "category": "other", "importSource": "jinan-notebook-2026-08-28-exp-personal" },
+    { "date": "2026-08-29", "label": "Personal", "amountUSD": 5, "category": "other", "importSource": "jinan-notebook-2026-08-29-exp-personal" },
+    { "date": "2026-08-29", "label": "Transport", "amountUSD": 5, "category": "travel", "importSource": "jinan-notebook-2026-08-29-exp-transport" },
+    { "date": "2026-08-29", "label": "Avocado", "amountUSD": 10, "category": "office_supplies", "importSource": "jinan-notebook-2026-08-29-exp-avocado" },
+    { "date": "2026-08-29", "label": "Veggie", "amountUSD": 18, "category": "office_supplies", "importSource": "jinan-notebook-2026-08-29-exp-veggie" },
+    { "date": "2026-08-31", "label": "Olive oil x2", "amountUSD": 280, "category": "office_supplies", "importSource": "jinan-notebook-2026-08-31-exp-olive-oil" },
+    { "date": "2026-08-31", "label": "Fuel", "amountUSD": 20, "category": "fuel", "importSource": "jinan-notebook-2026-08-31-exp-fuel" },
+    { "date": "2026-08-31", "label": "Transport", "amountUSD": 10, "category": "travel", "importSource": "jinan-notebook-2026-08-31-exp-transport" },
+    { "date": "2026-08-31", "label": "Nuts", "amountUSD": 17, "category": "office_supplies", "importSource": "jinan-notebook-2026-08-31-exp-nuts" },
+    { "date": "2026-08-31", "label": "Veggie", "amountUSD": 6, "category": "office_supplies", "importSource": "jinan-notebook-2026-08-31-exp-veggie" },
+    { "date": "2026-08-31", "label": "Personal", "amountUSD": 5, "category": "other", "importSource": "jinan-notebook-2026-08-31-exp-personal" }
+  ],
+  "skippedNoPrice": []
+}

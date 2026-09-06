@@ -1,0 +1,14 @@
+{
+  "generatedAt": "2026-09-04T11:32:27.858Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "status": "passed",
+  "postedEntryId": "JE-1788521542474",
+  "voucherNumber": "JV-2026-00003",
+  "reversalEntryId": "JE-1788521546226",
+  "amountUsd": 1,
+  "fxRate": 89500,
+  "accounts": {
+    "debit": "610",
+    "credit": "102"
+  }
+}

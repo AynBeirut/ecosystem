@@ -1,0 +1,52 @@
+{
+  "generatedAt": "2026-09-04T12:19:34.277Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "classification": "TEST_NOT_CLIENT_DATA",
+  "documented": [
+    {
+      "voucherNumber": "JV-2026-00002",
+      "status": "posted",
+      "note": "Aug 31 test cleanup reversal of JV-00001 — historical test, already storno chain"
+    },
+    {
+      "voucherNumber": "JV-2026-00003",
+      "status": "reversed",
+      "note": "Agent live JV verify ($1) — already reversed"
+    },
+    {
+      "voucherNumber": "JV-2026-00004",
+      "status": "posted",
+      "note": "2026-09-04 session test — to reverse on --apply"
+    },
+    {
+      "voucherNumber": "JV-2026-00005",
+      "status": "posted",
+      "note": "2026-09-04 session test — to reverse on --apply"
+    },
+    {
+      "voucherNumber": "JV-2026-00006",
+      "status": "posted",
+      "note": "2026-09-04 session test — to reverse on --apply"
+    }
+  ],
+  "reversed": [
+    {
+      "voucherNumber": "JV-2026-00004",
+      "originalEntryId": "JE-1788521546226",
+      "reversalEntryId": "JE-1788524364273",
+      "idempotentReplay": false
+    },
+    {
+      "voucherNumber": "JV-2026-00005",
+      "originalEntryId": "JE-1788522150713",
+      "reversalEntryId": "JE-1788524368242",
+      "idempotentReplay": false
+    },
+    {
+      "voucherNumber": "JV-2026-00006",
+      "originalEntryId": "JE-1788523701631",
+      "reversalEntryId": "JE-1788524372435",
+      "idempotentReplay": false
+    }
+  ]
+}

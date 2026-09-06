@@ -1,0 +1,19 @@
+diff --git a/node_modules/expo-keep-awake/android/src/main/java/expo/modules/keepawake/KeepAwakePackage.kt b/node_modules/expo-keep-awake/android/src/main/java/expo/modules/keepawake/KeepAwakePackage.kt
+index 9016e4c..8f3c2a1 100644
+--- a/node_modules/expo-keep-awake/android/src/main/java/expo/modules/keepawake/KeepAwakePackage.kt
++++ b/node_modules/expo-keep-awake/android/src/main/java/expo/modules/keepawake/KeepAwakePackage.kt
+@@ -1,12 +1,11 @@
+ package expo.modules.keepawake
+ 
+ import android.content.Context
+-
++import expo.modules.core.BasePackage
+ import expo.modules.core.interfaces.InternalModule
+-import expo.modules.core.interfaces.Package
+ 
+-class KeepAwakePackage : Package {
++class KeepAwakePackage : BasePackage() {
+   override fun createInternalModules(context: Context): List<InternalModule> {
+     return listOf(ExpoKeepAwakeManager())
+   }
+ }

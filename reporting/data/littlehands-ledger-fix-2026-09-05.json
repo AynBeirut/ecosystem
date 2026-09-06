@@ -1,0 +1,164 @@
+{
+  "generatedAt": "2026-09-05T17:43:39.731Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "mode": "apply",
+  "voided": [
+    {
+      "voucherNumber": "JV-2026-00002",
+      "action": "void",
+      "entryId": "JE-1788197740537"
+    },
+    {
+      "voucherNumber": "JV-2026-00007",
+      "action": "void",
+      "entryId": "JE-1788524364273"
+    },
+    {
+      "voucherNumber": "JV-2026-00008",
+      "action": "void",
+      "entryId": "JE-1788524368242"
+    },
+    {
+      "voucherNumber": "JV-2026-00009",
+      "action": "void",
+      "entryId": "JE-1788524372435"
+    },
+    {
+      "voucherNumber": "JV-2026-00010",
+      "action": "void",
+      "entryId": "JE-1788524527958"
+    },
+    {
+      "voucherNumber": "PV-2026-00003",
+      "action": "void",
+      "entryId": "JE-1788197746044"
+    },
+    {
+      "voucherNumber": "PV-2026-00004",
+      "action": "void",
+      "entryId": "JE-1788197751506"
+    },
+    {
+      "voucherNumber": "RV-2026-01275",
+      "action": "void",
+      "entryId": "JE-1788197755515"
+    }
+  ],
+  "markedTest": [
+    {
+      "voucherNumber": "JV-2026-00001",
+      "entryId": "JE-1787833939432",
+      "status": "reversed"
+    },
+    {
+      "voucherNumber": "JV-2026-00003",
+      "entryId": "JE-1788521542474",
+      "status": "reversed"
+    },
+    {
+      "voucherNumber": "JV-2026-00004",
+      "entryId": "JE-1788521546226",
+      "status": "reversed"
+    },
+    {
+      "voucherNumber": "JV-2026-00005",
+      "entryId": "JE-1788522150713",
+      "status": "reversed"
+    },
+    {
+      "voucherNumber": "JV-2026-00006",
+      "entryId": "JE-1788523701631",
+      "status": "reversed"
+    },
+    {
+      "voucherNumber": "PV-2026-00001",
+      "entryId": "JE-1787834289997",
+      "status": "reversed"
+    },
+    {
+      "voucherNumber": "PV-2026-00002",
+      "entryId": "JE-1787834465025",
+      "status": "reversed"
+    },
+    {
+      "voucherNumber": "RV-2026-01272",
+      "entryId": "JE-1787834539172",
+      "status": "reversed"
+    }
+  ],
+  "inv001Fix": {
+    "entryId": "JE-1785607443682",
+    "patchLines": [
+      {
+        "lineId": "JE-1785607443682-L1",
+        "from": {
+          "accountId": "acct-5110",
+          "accountCode": "5110"
+        },
+        "to": {
+          "accountId": "acct-1000",
+          "accountCode": "102"
+        }
+      },
+      {
+        "lineId": "JE-1785607443682-L2",
+        "from": {
+          "accountId": "acct-7010",
+          "accountCode": "7010"
+        },
+        "to": {
+          "accountId": "acct-70101000001",
+          "accountCode": "70101000001"
+        }
+      }
+    ]
+  },
+  "revenueRemap": {
+    "lineCount": 1513,
+    "toWalkIn": 560,
+    "toNamedClient": 953,
+    "skipped": 0,
+    "samples": [
+      {
+        "voucher": "RV-2026-01073",
+        "amount": 28.87,
+        "toCode": "70101000001"
+      },
+      {
+        "voucher": "RV-2026-00772",
+        "amount": 20,
+        "toCode": "70101000297"
+      },
+      {
+        "voucher": "RV-2026-00811",
+        "amount": 18.62,
+        "toCode": "70101000241"
+      },
+      {
+        "voucher": "RV-2026-01058",
+        "amount": 30,
+        "toCode": "70101000368"
+      },
+      {
+        "voucher": "RV-2026-00759",
+        "amount": 5.12,
+        "toCode": "70101000001"
+      },
+      {
+        "voucher": "RV-2026-00361",
+        "amount": 20,
+        "toCode": "70101000073"
+      },
+      {
+        "voucher": "RV-2026-00057",
+        "amount": 3.28,
+        "toCode": "70101000424"
+      },
+      {
+        "voucher": "RV-2026-00885",
+        "amount": 11.5,
+        "toCode": "70101000001"
+      }
+    ]
+  }
+}

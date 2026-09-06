@@ -1,0 +1,172 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "mode": "apply",
+  "accountingMode": "lebanese",
+  "staffCount": 11,
+  "createdCount": 16,
+  "skippedCount": 0,
+  "created": [
+    {
+      "staffId": "13",
+      "staffName": "Tina Ibrahim",
+      "component": "pay",
+      "code": "1420001",
+      "name": "Tina Ibrahim — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "13:pay"
+    },
+    {
+      "staffId": "15",
+      "staffName": "Amal Malek",
+      "component": "pay",
+      "code": "1420002",
+      "name": "Amal Malek — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "15:pay"
+    },
+    {
+      "staffId": "16",
+      "staffName": "Marleine Sayegh",
+      "component": "pay",
+      "code": "1420003",
+      "name": "Marleine Sayegh — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "16:pay"
+    },
+    {
+      "staffId": "17",
+      "staffName": "Mhamad Natour",
+      "component": "pay",
+      "code": "1420004",
+      "name": "Mhamad Natour — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "17:pay"
+    },
+    {
+      "staffId": "18",
+      "staffName": "Thaer Delivery",
+      "component": "pay",
+      "code": "1420005",
+      "name": "Thaer Delivery — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "18:pay"
+    },
+    {
+      "staffId": "19",
+      "staffName": "Emochi Bonne",
+      "component": "pay",
+      "code": "1420006",
+      "name": "Emochi Bonne — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "19:pay"
+    },
+    {
+      "staffId": "20",
+      "staffName": "Enaam Daou",
+      "component": "bonus",
+      "code": "1420007",
+      "name": "Enaam Daou — Bonus",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "20:bonus"
+    },
+    {
+      "staffId": "20",
+      "staffName": "Enaam Daou",
+      "component": "pay",
+      "code": "1420008",
+      "name": "Enaam Daou — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "20:pay"
+    },
+    {
+      "staffId": "21",
+      "staffName": "Maria Ibrahim",
+      "component": "bonus",
+      "code": "1420009",
+      "name": "Maria Ibrahim — Bonus",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "21:bonus"
+    },
+    {
+      "staffId": "21",
+      "staffName": "Maria Ibrahim",
+      "component": "pay",
+      "code": "1420010",
+      "name": "Maria Ibrahim — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "21:pay"
+    },
+    {
+      "staffId": "23",
+      "staffName": "Wassim salemeh",
+      "component": "bonus",
+      "code": "1420011",
+      "name": "Wassim salemeh — Bonus",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "23:bonus"
+    },
+    {
+      "staffId": "23",
+      "staffName": "Wassim salemeh",
+      "component": "pay",
+      "code": "1420012",
+      "name": "Wassim salemeh — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "23:pay"
+    },
+    {
+      "staffId": "24",
+      "staffName": "Enaam Daou",
+      "component": "bonus",
+      "code": "1420013",
+      "name": "Enaam Daou — Bonus",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "24:bonus"
+    },
+    {
+      "staffId": "24",
+      "staffName": "Enaam Daou",
+      "component": "pay",
+      "code": "1420014",
+      "name": "Enaam Daou — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "24:pay"
+    },
+    {
+      "staffId": "25",
+      "staffName": "Enaam Daou",
+      "component": "bonus",
+      "code": "1420015",
+      "name": "Enaam Daou — Bonus",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "25:bonus"
+    },
+    {
+      "staffId": "25",
+      "staffName": "Enaam Daou",
+      "component": "pay",
+      "code": "1420016",
+      "name": "Enaam Daou — Pay",
+      "parentGrabio": "142",
+      "parentPcg": "4281",
+      "partyId": "25:pay"
+    }
+  ],
+  "skipped": [],
+  "generatedAt": "2026-08-31T16:26:23.932Z"
+}

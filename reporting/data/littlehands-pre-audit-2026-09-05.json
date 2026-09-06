@@ -1,0 +1,45 @@
+{
+  "generatedAt": "2026-09-05T18:20:17.892Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "checks": {
+    "accountingMode": {
+      "value": "lebanese",
+      "pass": true
+    },
+    "pcgClientAccounts": {
+      "count": 460,
+      "pass": true
+    },
+    "trialBalance": {
+      "postedEntries": 2244,
+      "debits": 157625.9,
+      "credits": 157625.9,
+      "pass": true
+    },
+    "bulk401": {
+      "netCredit": 0,
+      "pass": true
+    },
+    "testDataInPosted": {
+      "count": 0,
+      "pass": true
+    },
+    "discountAccount410": {
+      "exists": true,
+      "pass": true
+    },
+    "salesDiscountGl": {
+      "discountedOrders": 10,
+      "withDiscountLine": 10,
+      "gaps": 0,
+      "gapSample": [],
+      "pass": true
+    },
+    "balances": {
+      "cash102": 31435.98,
+      "revenueClass7Net": 74054.01,
+      "salesDiscountDebits": 779.6
+    }
+  },
+  "pass": true
+}

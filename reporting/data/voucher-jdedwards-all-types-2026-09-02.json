@@ -1,0 +1,20 @@
+{
+  "generatedAt": "2026-09-02T10:37:22.921Z",
+  "scope": "JD Edwards grid — all voucher types (unit)",
+  "store": "logic-only (no Firestore post)",
+  "types": [
+    "JV",
+    "PV",
+    "RV",
+    "CRN",
+    "DRN",
+    "CV"
+  ],
+  "vitest": {
+    "passed": 11,
+    "failed": 0,
+    "exitCode": 0
+  },
+  "status": "passed",
+  "outputTail": "\n> vite_react_shadcn_ts@0.0.0 test\n> vitest run voucherJdEdwardsAllTypes.test.ts\n\n1:37:20 PM [vite] warning: `optimizeDeps.esbuildOptions` option was specified by \"vite:react-swc\" plugin. This option is deprecated, please use `optimizeDeps.rolldownOptions` instead.\n`esbuild` option is set to false, but `oxc` option was not set to false. `esbuild: false` does not have effect any more. If you want to disable the default transformation, which is now handled by Oxc, please set `oxc: false` instead.\n\n RUN  v4.1.9 /home/anwar/Documents/grabio space/vendor/beirut-finance-flow-main\n\n[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`\n\n Test Files  1 passed (1)\n      Tests  11 passed (11)\n   Start at  13:37:20\n   Duration  1.96s (transform 559ms, setup 0ms, import 642ms, tests 34ms, environment 0ms)\n\n"
+}

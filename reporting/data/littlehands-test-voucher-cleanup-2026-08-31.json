@@ -1,0 +1,52 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "cleanedAt": "2026-08-31T17:35:57.151Z",
+  "targets": [
+    {
+      "id": "JE-1787833939432",
+      "date": "2026-08-27",
+      "memo": "Test",
+      "voucher": "JV-2026-00001"
+    },
+    {
+      "id": "JE-1787834289997",
+      "date": "2026-08-27",
+      "memo": "Test",
+      "voucher": "PV-2026-00001"
+    },
+    {
+      "id": "JE-1787834465025",
+      "date": "2026-08-27",
+      "memo": "Test",
+      "voucher": "PV-2026-00002"
+    },
+    {
+      "id": "JE-1787834539172",
+      "date": "2026-08-27",
+      "memo": "Test",
+      "voucher": "RV-2026-01272"
+    }
+  ],
+  "results": [
+    {
+      "originalEntryId": "JE-1787833939432",
+      "reversalEntryId": "JE-1788197740537",
+      "idempotentReplay": false
+    },
+    {
+      "originalEntryId": "JE-1787834289997",
+      "reversalEntryId": "JE-1788197746044",
+      "idempotentReplay": false
+    },
+    {
+      "originalEntryId": "JE-1787834465025",
+      "reversalEntryId": "JE-1788197751506",
+      "idempotentReplay": false
+    },
+    {
+      "originalEntryId": "JE-1787834539172",
+      "reversalEntryId": "JE-1788197755515",
+      "idempotentReplay": false
+    }
+  ]
+}
