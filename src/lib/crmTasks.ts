@@ -1,6 +1,6 @@
 /**
- * Store team tasks — shared Firestore collection `storeTasks`.
- * Mobile: grabio-mobile/src/lib/storeTaskService.ts
+ * CRM sales team tasks — Firestore `crmTasks` only (not invoice / NGO).
+ * Mobile: grabio-mobile/src/lib/crmTaskService.ts
  */
 import {
   addDoc,
@@ -17,6 +17,21 @@ import {
 export type StoreTaskStatus = 'todo' | 'in_progress' | 'done' | 'cancelled';
 export type StoreTaskPriority = 'low' | 'medium' | 'high' | 'urgent';
 export type StoreTaskFilter = 'all' | 'mine' | 'overdue' | 'today' | 'done' | 'feedback';
+export type TaskActivityType = 'call' | 'visit' | 'meeting';
+
+export const TASK_ACTIVITY_TYPES: TaskActivityType[] = ['call', 'visit', 'meeting'];
+
+export const TASK_ACTIVITY_TYPE_LABELS: Record<TaskActivityType, string> = {
+  call: 'Call',
+  visit: 'Visit',
+  meeting: 'Meeting',
+};
+
+export type TaskAssignee = {
+  userId: string;
+  name: string;
+  repId?: string | null;
+};
 
 export type StoreTask = {
   id: string;
@@ -28,6 +43,8 @@ export type StoreTask = {
   assignedToUserId: string;
   assignedToName: string;
   assignedToRepId?: string | null;
+  assignees?: TaskAssignee[];
+  taskType?: TaskActivityType | null;
   createdBy: string;
   createdByName: string;
   dueAt?: string | null;
@@ -42,13 +59,29 @@ export type StoreTaskInput = {
   title: string;
   description?: string;
   priority?: StoreTaskPriority;
-  assignedToUserId: string;
-  assignedToName: string;
-  assignedToRepId?: string | null;
+  assignees: TaskAssignee[];
+  taskType?: TaskActivityType | null;
   dueAt?: string | null;
 };
 
-const COL = 'storeTasks';
+export function nextStepTaskTitle(type: TaskActivityType, baseTitle: string): string {
+  const label = TASK_ACTIVITY_TYPE_LABELS[type];
+  const clean = baseTitle.replace(/^(Call|Visit|Meeting):\s*/i, '').trim();
+  return `${label}: ${clean}`;
+}
+
+export function formatTaskAssigneeNames(task: StoreTask): string {
+  if (task.assignees?.length) return task.assignees.map((a) => a.name).join(', ');
+  return task.assignedToName;
+}
+
+export function taskAssigneeUserIds(task: StoreTask): string[] {
+  if (task.assignees?.length) return task.assignees.map((a) => a.userId);
+  return task.assignedToUserId ? [task.assignedToUserId] : [];
+}
+
+const COL = 'crmTasks';
+const TASK_DOMAIN = 'crm';
 
 function startOfDayMs(d: Date): number {
   const x = new Date(d);
@@ -92,16 +125,21 @@ export async function createStoreTask(
   input: StoreTaskInput,
   creator: { uid: string; name: string },
 ): Promise<string> {
+  const assignees = input.assignees.filter((a) => a.userId);
+  const primary = assignees[0];
   const now = new Date().toISOString();
   const ref = await addDoc(collection(getFirestore(), COL), {
     storeId,
+    taskDomain: TASK_DOMAIN,
     title: input.title.trim(),
     description: input.description?.trim() || null,
     status: 'todo',
     priority: input.priority || 'medium',
-    assignedToUserId: input.assignedToUserId,
-    assignedToName: input.assignedToName,
-    assignedToRepId: input.assignedToRepId || null,
+    assignedToUserId: primary?.userId || creator.uid,
+    assignedToName: assignees.map((a) => a.name).join(', ') || primary?.name || creator.name,
+    assignedToRepId: primary?.repId || null,
+    assignees,
+    taskType: input.taskType || null,
     createdBy: creator.uid,
     createdByName: creator.name,
     dueAt: input.dueAt || null,
@@ -127,6 +165,8 @@ export async function updateStoreTask(
       | 'assignedToUserId'
       | 'assignedToName'
       | 'assignedToRepId'
+      | 'assignees'
+      | 'taskType'
       | 'completedAt'
       | 'completionFeedback'
       | 'feedbackAt'
@@ -150,7 +190,7 @@ export function filterStoreTasks(
 ): StoreTask[] {
   switch (filter) {
     case 'mine':
-      return tasks.filter((t) => t.assignedToUserId === userId);
+      return tasks.filter((t) => taskAssigneeUserIds(t).includes(userId));
     case 'overdue':
       return tasks.filter((t) => isTaskOverdue(t));
     case 'today':
@@ -166,8 +206,26 @@ export function filterStoreTasks(
   }
 }
 
+export function taskTypeRequiresDueDate(type?: TaskActivityType | null): boolean {
+  return type === 'call' || type === 'meeting';
+}
+
+export function formatTaskScheduledWhen(iso?: string | null): string {
+  if (!iso) return 'No date set';
+  return new Date(iso).toLocaleString('en-GB', {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+}
+
 export function formatTaskDueDate(task: StoreTask): string {
-  if (!task.dueAt) return 'No due date';
+  if (!task.dueAt) {
+    return taskTypeRequiresDueDate(task.taskType) ? 'Date required' : 'No due date';
+  }
   if (isTaskOverdue(task)) {
     return `Overdue · ${new Date(task.dueAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}`;
   }

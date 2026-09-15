@@ -1,0 +1,32 @@
+{
+  "generatedAt": "2026-09-15T23:45:00+03:00",
+  "handoff": "builder-fix-entitlements-venue-rbac-2026-09-15",
+  "formula": "allowed = subscriptionEntitlement AND storeVenueToggle AND userPermission",
+  "coreModule": "src/lib/featureAccessGate.ts",
+  "consumers": [
+    "src/lib/effectiveStoreContext.ts",
+    "src/hooks/useAdminNavigation.ts",
+    "src/components/ProtectedRoute.tsx",
+    "src/components/admin/VenueOpsSettingsPanel.tsx",
+    "src/lib/venueSetupReadiness.ts"
+  ],
+  "routePrefixesGated": [
+    "/admin/finance",
+    "/admin/invoice-manager",
+    "/admin/inventory",
+    "/admin/purchases",
+    "/admin/seo-*",
+    "/admin/theme-editor",
+    "/admin/templates",
+    "/admin/builder",
+    "/admin/crm",
+    "/admin/events"
+  ],
+  "subAccountsNextStep": "docs/architecture/sub-account-feature-permissions.md",
+  "mobile": "No venueOpsSettings in grabio-mobile — unchanged",
+  "tests": [
+    "src/__tests__/featureAccessGate.test.ts",
+    "src/__tests__/effectiveStoreContext.test.ts"
+  ],
+  "deployPush": "pending approval"
+}

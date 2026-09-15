@@ -41,22 +41,32 @@ import {
   taskFilterAgents,
   taskAssigneeFilterKey,
   webTaskUserRole,
-} from '@/lib/storeTaskPermissions';
+} from '@/lib/crmTaskPermissions';
 import {
   createStoreTask,
   deleteStoreTask,
   fetchStoreTasks,
   filterStoreTasks,
+  formatTaskAssigneeNames,
   formatTaskDueDate,
   isTaskDueToday,
   isTaskOverdue,
+  nextStepTaskTitle,
+  taskTypeRequiresDueDate,
+  formatTaskScheduledWhen,
+  TASK_ACTIVITY_TYPES,
+  TASK_ACTIVITY_TYPE_LABELS,
   TASK_PRIORITY_LABELS,
   TASK_STATUS_LABELS,
   updateStoreTask,
   type StoreTask,
   type StoreTaskFilter,
   type StoreTaskPriority,
-} from '@/lib/storeTasks';
+  type TaskActivityType,
+  type TaskAssignee,
+} from '@/lib/crmTasks';
+import { CRM_TASK_LABELS } from '@/lib/taskDomains';
+import CrmActivityTypeIcon from '@/components/crm/CrmActivityTypeIcon';
 import { useToast } from '@/hooks/use-toast';
 
 const FILTERS: Array<{ id: StoreTaskFilter; label: string }> = [
@@ -96,7 +106,11 @@ const CrmTasks: React.FC = () => {
   const [description, setDescription] = useState('');
   const [priority, setPriority] = useState<StoreTaskPriority>('medium');
   const [dueAt, setDueAt] = useState('');
-  const [assigneeId, setAssigneeId] = useState('');
+  const [assigneeIds, setAssigneeIds] = useState<string[]>([]);
+  const [taskType, setTaskType] = useState<TaskActivityType>('visit');
+  const [completeMode, setCompleteMode] = useState<'done' | 'next_step'>('done');
+  const [nextStepType, setNextStepType] = useState<TaskActivityType>('call');
+  const [nextStepAt, setNextStepAt] = useState('');
   const [saving, setSaving] = useState(false);
   const [feedbackTask, setFeedbackTask] = useState<StoreTask | null>(null);
   const [feedbackText, setFeedbackText] = useState('');
@@ -121,7 +135,7 @@ const CrmTasks: React.FC = () => {
       setTasks(filterTasksForViewer(taskList, userRole, subAccountRole, uid, agentList));
     } catch (e) {
       toast({
-        title: 'Failed to load tasks',
+        title: CRM_TASK_LABELS.loadFailed,
         description: e instanceof Error ? e.message : 'Unknown error',
         variant: 'destructive',
       });
@@ -165,14 +179,15 @@ const CrmTasks: React.FC = () => {
     setPriority('medium');
     setDueAt('');
     const self = assignable.find((a) => a.userId === uid) || assignable[0];
-    setAssigneeId(self?.userId || uid);
+    setAssigneeIds(self?.userId ? [self.userId] : uid ? [uid] : []);
+    setTaskType('visit');
     setFormOpen(false);
   };
 
   const openCreate = () => {
     resetForm();
     const self = assignable.find((a) => a.userId === uid) || assignable[0];
-    setAssigneeId(self?.userId || uid);
+    setAssigneeIds(self?.userId ? [self.userId] : uid ? [uid] : []);
     setFormOpen(true);
   };
 
@@ -182,34 +197,65 @@ const CrmTasks: React.FC = () => {
     setDescription(task.description || '');
     setPriority(task.priority);
     setDueAt(task.dueAt ? task.dueAt.slice(0, 16) : '');
-    setAssigneeId(task.assignedToUserId);
+    if (task.assignees?.length) {
+      setAssigneeIds(task.assignees.map((a) => a.userId));
+    } else {
+      setAssigneeIds(task.assignedToUserId ? [task.assignedToUserId] : []);
+    }
+    setTaskType(task.taskType || 'visit');
     setFormOpen(true);
+  };
+
+  const toggleAssignee = (userId: string) => {
+    setAssigneeIds((prev) =>
+      prev.includes(userId) ? prev.filter((id) => id !== userId) : [...prev, userId],
+    );
   };
 
   const saveTask = async () => {
     if (!storeId || !uid || !title.trim()) {
-      toast({ title: 'Task title is required', variant: 'destructive' });
+      toast({ title: CRM_TASK_LABELS.titleRequired, variant: 'destructive' });
       return;
     }
-    const member = assignable.find((a) => a.userId === assigneeId);
-    if (!member?.userId) {
-      toast({ title: 'Pick a valid assignee', variant: 'destructive' });
+    if (assigneeIds.length === 0) {
+      toast({ title: 'Pick at least one assignee', variant: 'destructive' });
+      return;
+    }
+    const selected: TaskAssignee[] = assigneeIds
+      .map((id) => {
+        const member = assignable.find((a) => a.userId === id);
+        if (!member?.userId) return null;
+        return { userId: member.userId, name: member.name, repId: member.id };
+      })
+      .filter(Boolean) as TaskAssignee[];
+    if (selected.length === 0) {
+      toast({ title: 'Pick valid assignees', variant: 'destructive' });
+      return;
+    }
+    if (taskTypeRequiresDueDate(taskType) && !dueAt) {
+      toast({
+        title: `${TASK_ACTIVITY_TYPE_LABELS[taskType]} needs a date & time`,
+        variant: 'destructive',
+      });
       return;
     }
     setSaving(true);
     try {
       const dueIso = dueAt ? new Date(dueAt).toISOString() : null;
+      const primary = selected[0];
       if (editing) {
         await updateStoreTask(editing.id, {
           title: title.trim(),
           description: description.trim() || null,
           priority,
           dueAt: dueIso,
-          assignedToUserId: member.userId,
-          assignedToName: member.name,
-          assignedToRepId: member.id,
+          assignedToUserId: primary.userId,
+          assignedToName: selected.map((a) => a.name).join(', '),
+          assignedToRepId: primary.repId || null,
+          assignees: selected,
+          taskType,
         });
-        toast({ title: 'Task updated' });
+        toast({ title: CRM_TASK_LABELS.updated });
       } else {
         await createStoreTask(
           storeId,
@@ -218,13 +264,12 @@ const CrmTasks: React.FC = () => {
             description: description.trim(),
             priority,
             dueAt: dueIso,
-            assignedToUserId: member.userId,
-            assignedToName: member.name,
-            assignedToRepId: member.id,
+            assignees: selected,
+            taskType,
           },
           { uid, name: userName },
         );
-        toast({ title: 'Task created' });
+        toast({ title: CRM_TASK_LABELS.created });
       }
       resetForm();
       await load();
@@ -242,22 +287,76 @@ const CrmTasks: React.FC = () => {
   const markDone = async (task: StoreTask) => {
     setFeedbackTask(task);
     setFeedbackText(task.completionFeedback || '');
+    setCompleteMode('done');
+    setNextStepType('call');
+    setNextStepAt('');
   };
 
   const submitFeedback = async () => {
-    if (!feedbackTask) return;
+    if (!feedbackTask || !storeId) return;
+    if (completeMode === 'next_step') {
+      if (!nextStepAt) {
+        toast({ title: 'Pick date/time for next step', variant: 'destructive' });
+        return;
+      }
+      if (taskTypeRequiresDueDate(nextStepType) && !nextStepAt) {
+        toast({
+          title: `${TASK_ACTIVITY_TYPE_LABELS[nextStepType]} needs a date & time`,
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
     setSaving(true);
     try {
       const now = new Date().toISOString();
-      await updateStoreTask(feedbackTask.id, {
-        status: 'done',
-        completedAt: now,
-        completionFeedback: feedbackText.trim() || null,
-        feedbackAt: feedbackText.trim() ? now : null,
-      });
+      const feedback = feedbackText.trim();
+      const assignees: TaskAssignee[] = feedbackTask.assignees?.length
+        ? feedbackTask.assignees
+        : [{
+            userId: feedbackTask.assignedToUserId,
+            name: feedbackTask.assignedToName,
+            repId: feedbackTask.assignedToRepId,
+          }];
+
+      if (completeMode === 'next_step') {
+        const dueIso = new Date(nextStepAt).toISOString();
+        const stepLabel = TASK_ACTIVITY_TYPE_LABELS[nextStepType];
+        const completionNote = feedback
+          ? `${feedback} · Next: ${stepLabel}`
+          : `Next: ${stepLabel}`;
+        await updateStoreTask(feedbackTask.id, {
+          status: 'done',
+          completedAt: now,
+          completionFeedback: completionNote,
+          feedbackAt: now,
+        });
+        await createStoreTask(
+          storeId,
+          {
+            title: nextStepTaskTitle(nextStepType, feedbackTask.title),
+            description: feedbackTask.description || undefined,
+            priority: feedbackTask.priority,
+            dueAt: dueIso,
+            assignees,
+            taskType: nextStepType,
+          },
+          { uid, name: userName },
+        );
+        toast({ title: `CRM task done — ${stepLabel} scheduled` });
+      } else {
+        await updateStoreTask(feedbackTask.id, {
+          status: 'done',
+          completedAt: now,
+          completionFeedback: feedback || null,
+          feedbackAt: feedback ? now : null,
+        });
+        toast({ title: CRM_TASK_LABELS.markedDone });
+      }
       setFeedbackTask(null);
       setFeedbackText('');
-      toast({ title: 'Task marked done' });
+      setCompleteMode('done');
+      setNextStepAt('');
       await load();
     } catch (e) {
       toast({
@@ -274,7 +373,7 @@ const CrmTasks: React.FC = () => {
     if (!window.confirm(`Delete task "${task.title}"?`)) return;
     try {
       await deleteStoreTask(task.id);
-      toast({ title: 'Task deleted' });
+      toast({ title: CRM_TASK_LABELS.deleted });
       await load();
     } catch (e) {
       toast({
@@ -289,14 +388,14 @@ const CrmTasks: React.FC = () => {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
-          <h2 className="text-xl font-semibold">Team tasks</h2>
+          <h2 className="text-xl font-semibold">{CRM_TASK_LABELS.heading}</h2>
           <p className="text-sm text-muted-foreground">
             {openCount} open · {overdueCount} overdue · {todayCount} due today
           </p>
         </div>
         <Button onClick={openCreate}>
           <Plus className="h-4 w-4 mr-1" />
-          New task
+          {CRM_TASK_LABELS.new}
         </Button>
       </div>
 
@@ -352,22 +451,23 @@ const CrmTasks: React.FC = () => {
       ) : displayed.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-muted-foreground">
-            No tasks match these filters.
+            {CRM_TASK_LABELS.emptyFiltered}
           </CardContent>
         </Card>
       ) : (
         <Card>
           <CardHeader className="pb-2">
-            <CardTitle className="text-base">Tasks ({displayed.length})</CardTitle>
+            <CardTitle className="text-base">{CRM_TASK_LABELS.list} ({displayed.length})</CardTitle>
             <CardDescription>
-              Admin sees all tasks · sales manager sees team tasks only (not admin tasks).
+              Admin sees all CRM tasks · sales manager sees team CRM tasks only (not admin tasks).
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0">
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Task</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead>{CRM_TASK_LABELS.singular}</TableHead>
                   <TableHead>Assignee</TableHead>
                   <TableHead>Due</TableHead>
                   <TableHead>Priority</TableHead>
@@ -378,6 +478,18 @@ const CrmTasks: React.FC = () => {
               <TableBody>
                 {displayed.map((task) => (
                   <TableRow key={task.id}>
+                    <TableCell>
+                      {task.taskType ? (
+                        <div className="space-y-1">
+                          <CrmActivityTypeIcon type={task.taskType} showLabel />
+                          {task.dueAt && (task.taskType === 'call' || task.taskType === 'meeting') ? (
+                            <p className="text-xs font-medium text-foreground">
+                              {formatTaskScheduledWhen(task.dueAt)}
+                            </p>
+                          ) : null}
+                        </div>
+                      ) : '—'}
+                    </TableCell>
                     <TableCell>
                       <div className="font-medium">{task.title}</div>
                       {task.description ? (
@@ -390,7 +502,7 @@ const CrmTasks: React.FC = () => {
                         <p className="text-xs text-green-700 mt-1">Feedback: {task.completionFeedback}</p>
                       ) : null}
                     </TableCell>
-                    <TableCell>{task.assignedToName}</TableCell>
+                    <TableCell>{formatTaskAssigneeNames(task)}</TableCell>
                     <TableCell className={isTaskOverdue(task) ? 'text-red-600 font-medium' : ''}>
                       {formatTaskDueDate(task)}
                     </TableCell>
@@ -433,7 +545,7 @@ const CrmTasks: React.FC = () => {
       <Dialog open={formOpen} onOpenChange={(o) => !o && resetForm()}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? 'Edit task' : 'New task'}</DialogTitle>
+            <DialogTitle>{editing ? CRM_TASK_LABELS.edit : CRM_TASK_LABELS.new}</DialogTitle>
             <DialogDescription>Assign to a sales team member.</DialogDescription>
           </DialogHeader>
           <div className="space-y-3">
@@ -458,22 +570,49 @@ const CrmTasks: React.FC = () => {
                 </Select>
               </div>
               <div>
-                <Label>Due date</Label>
+                <Label>
+                  Due date
+                  {taskTypeRequiresDueDate(taskType) ? ' *' : ''}
+                </Label>
                 <Input type="datetime-local" value={dueAt} onChange={(e) => setDueAt(e.target.value)} />
+                {taskTypeRequiresDueDate(taskType) ? (
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {TASK_ACTIVITY_TYPE_LABELS[taskType]} must have a scheduled date & time.
+                  </p>
+                ) : null}
               </div>
             </div>
             <div>
-              <Label>Assign to</Label>
-              <Select value={assigneeId} onValueChange={setAssigneeId}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  {assignable.map((a) => (
-                    <SelectItem key={a.userId!} value={a.userId!}>
-                      {a.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Task type</Label>
+              <div className="flex flex-wrap gap-2 mt-1">
+                {TASK_ACTIVITY_TYPES.map((t) => (
+                  <Button
+                    key={t}
+                    type="button"
+                    size="sm"
+                    variant={taskType === t ? 'default' : 'outline'}
+                    onClick={() => setTaskType(t)}
+                  >
+                    <CrmActivityTypeIcon type={t} className="mr-1" />
+                    {TASK_ACTIVITY_TYPE_LABELS[t]}
+                  </Button>
+                ))}
+              </div>
+            </div>
+            <div>
+              <Label>Assign to (one or more)</Label>
+              <div className="mt-2 space-y-2 rounded-md border p-3 max-h-48 overflow-y-auto">
+                {assignable.map((a) => (
+                  <label key={a.userId!} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={assigneeIds.includes(a.userId!)}
+                      onChange={() => toggleAssignee(a.userId!)}
+                    />
+                    <span>{a.name}</span>
+                  </label>
+                ))}
+              </div>
             </div>
           </div>
           <DialogFooter>
@@ -489,18 +628,72 @@ const CrmTasks: React.FC = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Complete task</DialogTitle>
-            <DialogDescription>Optional feedback for {feedbackTask?.title}</DialogDescription>
+            <DialogDescription>{feedbackTask?.title}</DialogDescription>
           </DialogHeader>
-          <Textarea
-            value={feedbackText}
-            onChange={(e) => setFeedbackText(e.target.value)}
-            placeholder="What was done?"
-            rows={4}
-          />
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                variant={completeMode === 'done' ? 'default' : 'outline'}
+                onClick={() => setCompleteMode('done')}
+              >
+                Mark as done
+              </Button>
+              <Button
+                type="button"
+                size="sm"
+                variant={completeMode === 'next_step' ? 'default' : 'outline'}
+                onClick={() => setCompleteMode('next_step')}
+              >
+                Schedule next step
+              </Button>
+            </div>
+            {completeMode === 'next_step' ? (
+              <>
+                <div>
+                  <Label>Next step</Label>
+                  <div className="flex flex-wrap gap-2 mt-1">
+                    {TASK_ACTIVITY_TYPES.map((t) => (
+                      <Button
+                        key={t}
+                        type="button"
+                        size="sm"
+                        variant={nextStepType === t ? 'default' : 'outline'}
+                        onClick={() => setNextStepType(t)}
+                      >
+                        <CrmActivityTypeIcon type={t} className="mr-1" />
+                        {TASK_ACTIVITY_TYPE_LABELS[t]}
+                      </Button>
+                    ))}
+                  </div>
+                </div>
+                <div>
+                  <Label>
+                    {TASK_ACTIVITY_TYPE_LABELS[nextStepType]} date & time *
+                  </Label>
+                  <Input
+                    type="datetime-local"
+                    value={nextStepAt}
+                    onChange={(e) => setNextStepAt(e.target.value)}
+                  />
+                </div>
+              </>
+            ) : null}
+            <div>
+              <Label>Notes {completeMode === 'done' ? '(optional)' : ''}</Label>
+              <Textarea
+                value={feedbackText}
+                onChange={(e) => setFeedbackText(e.target.value)}
+                placeholder={completeMode === 'next_step' ? 'What was discussed?' : 'What was done?'}
+                rows={3}
+              />
+            </div>
+          </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setFeedbackTask(null)}>Cancel</Button>
             <Button onClick={submitFeedback} disabled={saving}>
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Mark done'}
+              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : completeMode === 'next_step' ? 'Done & schedule' : 'Mark done'}
             </Button>
           </DialogFooter>
         </DialogContent>

@@ -9,6 +9,7 @@ import {
   getStatusBadgeClass,
   getStatusLabel,
 } from '@/lib/publicModulesContent';
+import { FEATURE_APP_PREVIEWS, featureAppPreviewPath } from '@/data/marketing/demoPreviewCatalog';
 
 type Props = {
   mod: PricingModule;
@@ -91,13 +92,24 @@ export default function FeatureModuleCard({ mod, items, index }: Props) {
         </ul>
 
         {!roadmap ? (
-          <Link
-            to="/pricing"
-            className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors"
-          >
-            View pricing
-            <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
-          </Link>
+          <div className="flex flex-wrap items-center gap-4">
+            {FEATURE_APP_PREVIEWS[mod.id] && (
+              <Link
+                to={featureAppPreviewPath(mod.id)}
+                className="inline-flex items-center gap-1.5 text-sm font-semibold text-slate-700 hover:text-teal-700 transition-colors"
+              >
+                Preview screens
+                <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+              </Link>
+            )}
+            <Link
+              to="/pricing"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold text-teal-600 hover:text-teal-700 transition-colors"
+            >
+              View pricing
+              <ArrowRight className="h-3.5 w-3.5 transition-transform group-hover:translate-x-0.5" />
+            </Link>
+          </div>
         ) : (
           <p className="text-xs font-medium text-slate-400">Roadmap — not yet in checkout</p>
         )}

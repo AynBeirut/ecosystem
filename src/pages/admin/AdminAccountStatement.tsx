@@ -16,6 +16,8 @@ import { fetchPlatformExpenses } from '@/lib/financeData';
 import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 import { formatMoney } from '@/lib/money/format';
 import { assertAccountPaymentAllowed } from '@/lib/accountPaymentGuard';
+import { buildPartyOperationalStatement } from '@/lib/partyOperationalStatement';
+import { resolvePeriodRange } from '@/lib/reportPeriodPresets';
 import { useSystemGuide } from '@/hooks/useSystemGuide';
 import SystemGuideInfo from '@/components/system-guide/SystemGuideInfo';
 import { cn } from '@/lib/utils';
@@ -55,6 +57,8 @@ interface CustomerBalance {
   totalPayments: number;
   balance: number;
 }
+
+type FinanceActivityRow = { date: string; amount: number; id: string };
 
 interface SupplierBalance {
   id: string;
@@ -196,6 +200,9 @@ const AdminAccountStatement: React.FC<{
   const [loading, setLoading] = useState(true);
   
   const [customers, setCustomers] = useState<CustomerBalance[]>([]);
+  const [financeReceiptsByClient, setFinanceReceiptsByClient] = useState<Map<string, FinanceActivityRow[]>>(new Map());
+  const [financeInvoicesByClient, setFinanceInvoicesByClient] = useState<Map<string, FinanceActivityRow[]>>(new Map());
+  const [financeExpensesBySupplier, setFinanceExpensesBySupplier] = useState<Map<string, FinanceActivityRow[]>>(new Map());
   const [suppliers, setSuppliers] = useState<SupplierBalance[]>([]);
   const [products, setProducts] = useState<ProductSummary[]>([]);
   const [purchases, setPurchases] = useState<PurchaseRecord[]>([]);
@@ -468,45 +475,124 @@ const AdminAccountStatement: React.FC<{
   const fetchCustomers = async () => {
     try {
       const db = getFirestore();
-      const ordersQuery = query(
-        collection(db, 'orders'),
-        where('storeId', '==', user?.storeId)
-      );
-      const ordersSnapshot = await getDocs(ordersQuery);
-      
+      const storeId = user?.storeId;
+      if (!storeId) return;
+
+      const [ordersSnapshot, customersSnapshot, receiptsSnapshot, invoicesSnapshot] = await Promise.all([
+        getDocs(query(collection(db, 'orders'), where('storeId', '==', storeId))),
+        getDocs(query(collection(db, 'customers'), where('storeId', '==', storeId))),
+        getDocs(collection(db, 'stores', storeId, 'financeReceipts')),
+        getDocs(collection(db, 'stores', storeId, 'financeInvoices')),
+      ]);
+
       const customerMap = new Map<string, CustomerBalance>();
-      
-      ordersSnapshot.forEach(doc => {
-        const order = doc.data();
+      const receiptsByClient = new Map<string, FinanceActivityRow[]>();
+      const invoicesByClient = new Map<string, FinanceActivityRow[]>();
+
+      customersSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        if (data.hideFromCustomerList === true) return;
+        customerMap.set(docSnap.id, {
+          id: docSnap.id,
+          name: String(data.name || docSnap.id),
+          totalPurchases: 0,
+          totalPayments: 0,
+          balance: 0,
+        });
+      });
+
+      receiptsSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const clientId = String(data.clientId || '');
+        const amount = toFiniteNumber(data.amount, 0);
+        if (!clientId || amount <= 0) return;
+        const rawDate = data.paymentDate || data.paidAt || data.createdAt;
+        const pending = String(rawDate || '').trim() === 'pending';
+        const date = pending ? '' : normalizeDateString(rawDate as string);
+        if (!date) return;
+        const row: FinanceActivityRow = { date, amount, id: docSnap.id };
+        const list = receiptsByClient.get(clientId) || [];
+        list.push(row);
+        receiptsByClient.set(clientId, list);
+        if (!customerMap.has(clientId)) {
+          customerMap.set(clientId, {
+            id: clientId,
+            name: String(data.clientName || clientId),
+            totalPurchases: 0,
+            totalPayments: 0,
+            balance: 0,
+          });
+        }
+      });
+
+      invoicesSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const clientId = String(data.clientId || '');
+        const amount = toFiniteNumber(data.total ?? data.amount, 0);
+        if (!clientId || amount <= 0) return;
+        const date = normalizeDateString(data.date || data.createdAt);
+        if (!date) return;
+        const row: FinanceActivityRow = { date, amount, id: docSnap.id };
+        const list = invoicesByClient.get(clientId) || [];
+        list.push(row);
+        invoicesByClient.set(clientId, list);
+        if (!customerMap.has(clientId)) {
+          customerMap.set(clientId, {
+            id: clientId,
+            name: String(data.clientName || clientId),
+            totalPurchases: 0,
+            totalPayments: 0,
+            balance: 0,
+          });
+        }
+      });
+
+      ordersSnapshot.forEach((docSnap) => {
+        const order = docSnap.data();
         if (!isCountedSaleStatus(order.status)) {
           return;
         }
         const customerId = order.customerId || 'Walk-in';
         const customerName = order.customerName || 'Walk-in Customer';
         const total = order.total || 0;
-        // Use the actual amount paid (handles partial payments and overpayments)
-        const paid = order.paymentStatus === 'paid'
-          ? Math.max(total, toFiniteNumber(order.amountPaid, 0))
-          : toFiniteNumber(order.amountPaid, 0);
-        
+        const paid =
+          order.paymentStatus === 'paid'
+            ? Math.max(total, toFiniteNumber(order.amountPaid, 0))
+            : toFiniteNumber(order.amountPaid, 0);
+
         if (!customerMap.has(customerId)) {
           customerMap.set(customerId, {
             id: customerId,
             name: customerName,
             totalPurchases: 0,
             totalPayments: 0,
-            balance: 0
+            balance: 0,
           });
         }
-        
+
         const customer = customerMap.get(customerId)!;
+        if (customer.name === customerId && customerName) {
+          customer.name = customerName;
+        }
         customer.totalPurchases += total;
         customer.totalPayments += paid;
         customer.balance = customer.totalPurchases - customer.totalPayments;
       });
-      
-      const customersList = Array.from(customerMap.values());
+
+      for (const [clientId, customer] of customerMap.entries()) {
+        const invoiced = (invoicesByClient.get(clientId) || []).reduce((sum, row) => sum + row.amount, 0);
+        const paid = (receiptsByClient.get(clientId) || []).reduce((sum, row) => sum + row.amount, 0);
+        if (invoiced > 0 || paid > 0) {
+          customer.totalPurchases += invoiced;
+          customer.totalPayments += paid;
+          customer.balance = customer.totalPurchases - customer.totalPayments;
+        }
+      }
+
+      const customersList = Array.from(customerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
       setCustomers(customersList);
+      setFinanceReceiptsByClient(receiptsByClient);
+      setFinanceInvoicesByClient(invoicesByClient);
       setCustomerBalances(customersList.reduce((sum, c) => sum + c.balance, 0));
     } catch (error) {
       console.error('Error fetching customers:', error);
@@ -516,74 +602,113 @@ const AdminAccountStatement: React.FC<{
   const fetchSuppliers = async () => {
     try {
       const db = getFirestore();
-      
-      // Fetch suppliers first
-      const suppliersQuery = query(
-        collection(db, 'suppliers'),
-        where('storeId', '==', user?.storeId)
-      );
-      const suppliersSnapshot = await getDocs(suppliersQuery);
+      const storeId = user?.storeId;
+      if (!storeId) return;
+
+      const [suppliersSnapshot, purchasesSnapshot, returnsSnapshot, supplierPaymentsSnapshot, financeExpSnapshot] =
+        await Promise.all([
+          getDocs(query(collection(db, 'suppliers'), where('storeId', '==', storeId))),
+          getDocs(query(collection(db, 'purchases'), where('storeId', '==', storeId))),
+          getDocs(
+            query(
+              collection(db, 'supplierReturns'),
+              where('storeId', '==', storeId),
+              where('status', '==', 'credited'),
+            ),
+          ),
+          getDocs(
+            query(
+              collection(db, 'accountPayments'),
+              where('storeId', '==', storeId),
+              where('accountType', '==', 'supplier'),
+              where('direction', '==', 'out'),
+            ),
+          ),
+          getDocs(collection(db, 'stores', storeId, 'financeExpenses')),
+        ]);
+
       const suppliersData = new Map<string, string>();
-      suppliersSnapshot.forEach(doc => {
-        const supplier = doc.data();
-        suppliersData.set(doc.id, supplier.name || 'Unknown Supplier');
-      });
-      
-      // Then fetch purchases
-      const purchasesQuery = query(
-        collection(db, 'purchases'),
-        where('storeId', '==', user?.storeId)
-      );
-      const purchasesSnapshot = await getDocs(purchasesQuery);
-      
-      // Fetch supplier returns
-      const returnsQuery = query(
-        collection(db, 'supplierReturns'),
-        where('storeId', '==', user?.storeId),
-        where('status', '==', 'credited')
-      );
-      const returnsSnapshot = await getDocs(returnsQuery);
-      
       const supplierMap = new Map<string, SupplierBalance>();
+      const expensesBySupplier = new Map<string, FinanceActivityRow[]>();
+
+      suppliersSnapshot.forEach((docSnap) => {
+        const supplier = docSnap.data();
+        suppliersData.set(docSnap.id, supplier.name || 'Unknown Supplier');
+        supplierMap.set(docSnap.id, {
+          id: docSnap.id,
+          name: supplier.name || 'Unknown Supplier',
+          totalPurchases: 0,
+          totalPayments: 0,
+          balance: 0,
+        });
+      });
+
+      financeExpSnapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const supplierId = String(data.supplierId || '');
+        const amount = toFiniteNumber(data.amount, 0);
+        if (!supplierId || amount <= 0) return;
+        const date = normalizeDateString(data.expenseDate || data.paidAt || data.startDate);
+        if (!date) return;
+        const row: FinanceActivityRow = { date, amount, id: docSnap.id };
+        const list = expensesBySupplier.get(supplierId) || [];
+        list.push(row);
+        expensesBySupplier.set(supplierId, list);
+        if (!supplierMap.has(supplierId)) {
+          supplierMap.set(supplierId, {
+            id: supplierId,
+            name: String(data.supplierName || suppliersData.get(supplierId) || supplierId),
+            totalPurchases: 0,
+            totalPayments: 0,
+            balance: 0,
+          });
+        }
+      });
+
       const validPurchaseIds = new Set<string>();
-      
-      purchasesSnapshot.forEach(doc => {
-        const purchase = doc.data();
-        validPurchaseIds.add(doc.id); // Track valid purchase IDs
+
+      purchasesSnapshot.forEach((docSnap) => {
+        const purchase = docSnap.data();
+        validPurchaseIds.add(docSnap.id);
         const supplierId = purchase.supplierId || 'unknown';
         const supplierName = suppliersData.get(supplierId) || purchase.supplierName || 'Unknown Supplier';
         const total = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
-        const paid = purchase.paymentStatus === 'paid'
-          ? Math.max(total, toFiniteNumber(purchase.amountPaid || purchase.paid, 0))
-          : toFiniteNumber(purchase.amountPaid || purchase.paid, 0);
-        
+        const paid =
+          purchase.paymentStatus === 'paid'
+            ? Math.max(total, toFiniteNumber(purchase.amountPaid || purchase.paid, 0))
+            : toFiniteNumber(purchase.amountPaid || purchase.paid, 0);
+
         if (!supplierMap.has(supplierId)) {
           supplierMap.set(supplierId, {
             id: supplierId,
             name: supplierName,
             totalPurchases: 0,
             totalPayments: 0,
-            balance: 0
+            balance: 0,
           });
         }
-        
+
         const supplier = supplierMap.get(supplierId)!;
         supplier.totalPurchases += total;
         supplier.totalPayments += paid;
         supplier.balance = supplier.totalPurchases - supplier.totalPayments;
       });
-      
-      // Add credited returns to supplier payments (only for returns linked to existing purchases)
-      returnsSnapshot.forEach(doc => {
-        const returnDoc = doc.data();
+
+      for (const [supplierId, rows] of expensesBySupplier.entries()) {
+        const supplier = supplierMap.get(supplierId);
+        if (!supplier) continue;
+        const total = rows.reduce((sum, row) => sum + row.amount, 0);
+        supplier.totalPurchases += total;
+        supplier.totalPayments += total;
+        supplier.balance = supplier.totalPurchases - supplier.totalPayments;
+      }
+
+      returnsSnapshot.forEach((docSnap) => {
+        const returnDoc = docSnap.data();
         const purchaseId = returnDoc.purchaseId || returnDoc.originalPurchaseId;
-        
-        // Only count returns that reference valid purchases
         if (!purchaseId || !validPurchaseIds.has(purchaseId)) return;
-        
         const supplierId = returnDoc.supplierId || 'unknown';
         const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
-        
         if (supplierMap.has(supplierId)) {
           const supplier = supplierMap.get(supplierId)!;
           supplier.totalPayments += creditAmount;
@@ -591,15 +716,8 @@ const AdminAccountStatement: React.FC<{
         }
       });
 
-      // Add standalone payments recorded via Account Statement payment page
-      const supplierPaymentsSnapshot = await getDocs(query(
-        collection(db, 'accountPayments'),
-        where('storeId', '==', user?.storeId),
-        where('accountType', '==', 'supplier'),
-        where('direction', '==', 'out')
-      ));
-      supplierPaymentsSnapshot.forEach(doc => {
-        const pmt = doc.data();
+      supplierPaymentsSnapshot.forEach((docSnap) => {
+        const pmt = docSnap.data();
         const supplierId = pmt.accountId || 'unknown';
         const amount = toFiniteNumber(pmt.amount, 0);
         if (amount <= 0) return;
@@ -610,7 +728,8 @@ const AdminAccountStatement: React.FC<{
         }
       });
 
-      setSuppliers(Array.from(supplierMap.values()));
+      setFinanceExpensesBySupplier(expensesBySupplier);
+      setSuppliers(Array.from(supplierMap.values()).sort((a, b) => a.name.localeCompare(b.name)));
     } catch (error) {
       console.error('Error fetching suppliers:', error);
     }
@@ -1379,7 +1498,11 @@ const AdminAccountStatement: React.FC<{
 
     const isIncoming = payment.direction === 'in';
     const methodLabel: Record<string, string> = {
-      cash: 'Cash', bank_transfer: 'Bank Transfer', cheque: 'Cheque', other: 'Other',
+      cash: 'Cash',
+      whish: 'Whish',
+      bank_transfer: 'Bank Transfer',
+      cheque: 'Cheque',
+      other: 'Other',
     };
 
     doc.setFontSize(11);
@@ -1473,264 +1596,42 @@ const AdminAccountStatement: React.FC<{
 
   const generateDetailedStatement = async (type: 'supplier' | 'customer', id: string, name: string) => {
     if (!user?.storeId) return;
-    
+
     try {
-      const db = getFirestore();
-      const transactions: DetailedTransaction[] = [];
-      let runningBalance = 0;
-      let phone = '';
-      
-      if (type === 'supplier') {
-        // Fetch all purchases for this supplier
-        const purchasesQuery = query(
-          collection(db, 'purchases'),
-          where('storeId', '==', user.storeId),
-          where('supplierId', '==', id)
-        );
-        const purchasesSnap = await getDocs(purchasesQuery);
-
-        // Fetch all returns for this supplier
-        const returnsQuery = query(
-          collection(db, 'supplierReturns'),
-          where('storeId', '==', user.storeId),
-          where('supplierId', '==', id),
-          where('status', '==', 'credited')
-        );
-        const returnsSnap = await getDocs(returnsQuery);
-
-        // Fetch standalone payments recorded via Account Statement payment page
-        const supplierPaymentsQuery = query(
-          collection(db, 'accountPayments'),
-          where('storeId', '==', user.storeId),
-          where('accountId', '==', id),
-          where('accountType', '==', 'supplier')
-        );
-        const supplierPaymentsSnap = await getDocs(supplierPaymentsQuery);
-
-        // Collect all transactions
-        const allTxns: StatementTxn[] = [];
-        
-        // First collect all valid purchase IDs
-        const validPurchaseIds = new Set<string>();
-        purchasesSnap.forEach(doc => {
-          validPurchaseIds.add(doc.id);
-        });
-        
-        purchasesSnap.forEach(doc => {
-          const purchase = doc.data();
-          const total = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
-          const subtotal = purchase.subtotal || total;
-          const vat = purchase.vat || (total - subtotal);
-          const paid = purchase.paymentStatus === 'paid'
-            ? Math.max(total, toFiniteNumber(purchase.amountPaid || purchase.paid, 0))
-            : toFiniteNumber(purchase.amountPaid || purchase.paid, 0);
-          const invoiceRef = purchase.invoiceNumber || doc.id.substring(0, 8);
-
-          allTxns.push({
-            date: purchase.date || purchase.createdAt || '',
-            type: 'purchase',
-            ref: invoiceRef,
-            description: `Pur.Inv.${invoiceRef}`,
-            debit: 0,
-            net: subtotal,
-            vat: vat,
-            credit: total,
-            data: purchase
-          });
-
-          if (paid > 0) {
-            allTxns.push({
-              date: purchase.paymentDate || purchase.paidAt || purchase.date || purchase.createdAt || '',
-              type: 'purchase_payment',
-              ref: `PAY-${invoiceRef}`.substring(0, 20),
-              description: `Payment - ${invoiceRef}`,
-              debit: paid,
-              net: 0,
-              vat: 0,
-              credit: 0,
-              data: purchase
-            });
-          }
-        });
-
-        // Standalone payments (accountPayments direction=out) appear as debit entries
-        supplierPaymentsSnap.forEach(doc => {
-          const pmt = doc.data();
-          if (pmt.direction !== 'out') return;
-          const amount = toFiniteNumber(pmt.amount, 0);
-          if (amount <= 0) return;
-          allTxns.push({
-            date: pmt.date || pmt.createdAt || '',
-            type: 'payment',
-            ref: pmt.reference || doc.id.substring(0, 8),
-            description: `Payment - ${pmt.method || 'cash'}`,
-            debit: amount,
-            net: 0,
-            vat: 0,
-            credit: 0,
-            data: pmt
-          });
-        });
-
-        returnsSnap.forEach(doc => {
-          const returnDoc = doc.data();
-          const purchaseId = returnDoc.purchaseId || returnDoc.originalPurchaseId;
-          
-          // Skip orphaned returns (returns without valid purchase references)
-          if (!purchaseId || !validPurchaseIds.has(purchaseId)) return;
-          
-          const creditAmount = returnDoc.creditIssued || returnDoc.totalClaimAmount || 0;
-          
-          allTxns.push({
-            date: returnDoc.date || returnDoc.createdAt || '',
-            type: 'return',
-            ref: returnDoc.returnNumber || doc.id.substring(0, 8),
-            description: `Return Credit`,
-            debit: 0,
-            net: 0,
-            vat: 0,
-            credit: creditAmount,
-            data: returnDoc
-          });
-        });
-        
-        // Sort by date
-        allTxns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        // Calculate running balance
-        allTxns.forEach(txn => {
-          runningBalance += txn.debit - txn.credit;
-          transactions.push({
-            date: toStatementDateLabel(txn.date),
-            ref: txn.ref,
-            description: txn.description,
-            debit: txn.debit,
-            netVat: txn.net || 0,
-            credit: txn.credit,
-            balance: runningBalance,
-            vatLL: txn.vat || 0,
-            sourceType: txn.type === 'order' ? 'order' : txn.type === 'payment' ? 'payment' : undefined,
-            sourceId: typeof txn.data === 'object' && txn.data && 'id' in txn.data
-              ? String((txn.data as { id?: string }).id || '')
-              : undefined,
-          });
-        });
-      } else if (type === 'customer') {
-        // Fetch all orders for this customer
-        const ordersQuery = query(
-          collection(db, 'orders'),
-          where('storeId', '==', user.storeId),
-          where('customerId', '==', id)
-        );
-        const ordersSnap = await getDocs(ordersQuery);
-        
-        // Fetch account payments for this customer (payments recorded outside of orders)
-        const acctPaymentsQuery = query(
-          collection(db, 'accountPayments'),
-          where('storeId', '==', user.storeId),
-          where('accountId', '==', id),
-          where('accountType', '==', 'customer')
-        );
-        const acctPaymentsSnap = await getDocs(acctPaymentsQuery);
-        
-        // Collect all transactions
-        const allTxns: StatementTxn[] = [];
-        
-        ordersSnap.forEach(doc => {
-          const order = doc.data();
-          
-          // Match account statement page rules: count only finalized sale statuses
-          if (!isCountedSaleStatus(String(order.status || ''))) {
-            return;
-          }
-
-          // Capture phone from the first available order
-          if (!phone) {
-            phone = order.customerPhone || order.deliveryPhone || order.phone || '';
-          }
-          
-          const total = order.totalAmount || order.total || 0;
-          const vat = order.taxAmount || order.vat || 0;
-          const net = total - vat; // Net = Total - VAT
-          
-          const orderDate = normalizeDateString(order.createdAt || order.date);
-          if (!orderDate) return;
-
-          allTxns.push({
-            date: orderDate,
-            type: 'order',
-            ref: order.invoiceNumber || order.orderNumber || doc.id.substring(0, 8),
-            description: `Sales Inv.${order.invoiceNumber || doc.id.substring(0, 6)}`,
-            debit: total,
-            net: net,
-            vat: vat,
-            credit: order.paymentStatus === 'paid' ? Math.max(total, toFiniteNumber(order.amountPaid, 0)) : toFiniteNumber(order.amountPaid, 0),
-            data: { ...order, id: doc.id }
-          });
-        });
-        
-        // Add account payments as separate credit/debit lines
-        acctPaymentsSnap.forEach(doc => {
-          const payment = doc.data();
-          if (payment.direction !== 'in') return;
-          const unapplied = getUnappliedPaymentAmount({
-            ...payment,
-            id: doc.id,
-          } as (typeof accountPayments)[number]);
-          if (unapplied <= BALANCE_EPSILON) return;
-          const amount = unapplied;
-          if (amount <= BALANCE_EPSILON) return;
-          const paymentDate = normalizeDateString(payment.date || payment.createdAt);
-          if (!paymentDate) return;
-          // Match customer page ledger: show only unapplied incoming payments as separate credit rows.
-          allTxns.push({
-            date: paymentDate,
-            type: 'payment',
-            ref: doc.id.substring(0, 8),
-            description: `Payment - ${payment.method || 'cash'}`,
-            debit: 0,
-            net: 0,
-            vat: 0,
-            credit: amount,
-            data: { ...payment, id: doc.id }
-          });
-        });
-        
-        // Sort by date
-        allTxns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        
-        // Calculate running balance
-        allTxns.forEach(txn => {
-          runningBalance += txn.debit - txn.credit;
-          transactions.push({
-            date: toStatementDateLabel(txn.date),
-            ref: txn.ref,
-            description: txn.description,
-            debit: txn.debit,
-            netVat: txn.net || 0,
-            credit: txn.credit,
-            balance: runningBalance,
-            vatLL: txn.vat || 0,
-            sourceType: txn.type === 'order' ? 'order' : txn.type === 'payment' ? 'payment' : undefined,
-            sourceId: typeof txn.data === 'object' && txn.data && 'id' in txn.data
-              ? String((txn.data as { id?: string }).id || '')
-              : undefined,
-          });
-        });
-      }
-      
-      setDetailedStatement({
-        accountNo: generateNumericAccountNo(id),
-        accountName: name,
-        currency: 'US',
-        asOfDate: new Date().toLocaleDateString('en-GB'),
-        phone,
-        attn: '',
-        openingBalance: 0,
-        transactions,
-        closingBalance: runningBalance
+      const report = await buildPartyOperationalStatement({
+        storeId: user.storeId,
+        partyType: type,
+        partyId: id,
+        partyName: name,
+        startDate: filterStartDate || undefined,
+        endDate: filterEndDate || undefined,
       });
-      
+
+      const transactions: DetailedTransaction[] = report.lines.map((line) => ({
+        date: line.date,
+        ref: line.invoiceRef,
+        description: line.description,
+        debit: line.charges,
+        netVat: 0,
+        credit: line.credits,
+        balance: line.lineTotal,
+        vatLL: 0,
+        sourceType: line.sourceType,
+        sourceId: line.sourceId,
+      }));
+
+      setDetailedStatement({
+        accountNo: report.accountNo,
+        accountName: report.partyName,
+        currency: report.currency === 'USD' ? 'US' : report.currency,
+        asOfDate: report.statementDate,
+        phone: report.billTo.phone || '',
+        attn: '',
+        openingBalance: report.openingBalance,
+        transactions,
+        closingBalance: report.closingBalance,
+      });
+
       setViewingDetailedStatement({ type, id, name });
     } catch (error) {
       console.error('Error generating detailed statement:', error);
@@ -3389,19 +3290,46 @@ const AdminAccountStatement: React.FC<{
   };
 
   const getSupplierMetrics = (supplier: SupplierBalance) => {
-    // fetchSuppliers already includes PO payments + standalone accountPayments.
-    // Do not add accountPayments again (was causing 2x standalone payments on the tab).
+    const financeExpenses = (financeExpensesBySupplier.get(supplier.id) || []).filter((row) =>
+      isDateInRange(row.date, filterStartDate, filterEndDate),
+    );
+    const supplierPurchases = purchases.filter(
+      (p) =>
+        (p.supplierId === supplier.id || p.supplier === supplier.name) &&
+        isDateInRange(p.date, filterStartDate, filterEndDate),
+    );
+    const financeSpend = financeExpenses.reduce((sum, row) => sum + row.amount, 0);
+    const purchaseTotal = supplierPurchases.reduce(
+      (sum, p) => sum + toFiniteNumber(p.amount ?? p.total, 0),
+      0,
+    );
+    const purchasePaid = supplierPurchases.reduce(
+      (sum, p) => sum + toFiniteNumber(p.amountPaid, 0),
+      0,
+    );
+
+    const usePeriod = Boolean(filterStartDate || filterEndDate);
+    const totalPurchases = usePeriod ? purchaseTotal + financeSpend : toFiniteNumber(supplier.totalPurchases, 0);
+    const totalPayments = usePeriod ? purchasePaid + financeSpend : toFiniteNumber(supplier.totalPayments, 0);
+
     return {
-      totalPurchases: toFiniteNumber(supplier.totalPurchases, 0),
-      totalPayments: toFiniteNumber(supplier.totalPayments, 0),
-      balance: toFiniteNumber(supplier.balance, 0),
-      invoicesCount: purchases.filter((p) => p.supplierId === supplier.id || p.supplier === supplier.name).length,
+      totalPurchases,
+      totalPayments,
+      balance: totalPurchases - totalPayments,
+      invoicesCount: supplierPurchases.length + financeExpenses.length,
+      hasActivity: supplierPurchases.length > 0 || financeExpenses.length > 0,
     };
   };
 
   const getCustomerMetrics = (customer: CustomerBalance) => {
     const invoices = inRangeCustomerSalesMap.get(customer.name) || [];
     const paymentsInRange = inRangeCustomerPaymentsMap.get(customer.id) || [];
+    const financeInvoices = (financeInvoicesByClient.get(customer.id) || []).filter((row) =>
+      isDateInRange(row.date, filterStartDate, filterEndDate),
+    );
+    const financeReceipts = (financeReceiptsByClient.get(customer.id) || []).filter((row) =>
+      isDateInRange(row.date, filterStartDate, filterEndDate),
+    );
 
     const invoicePaid = invoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.amountPaid, 0), 0);
     const allocatedFromPayments = paymentsInRange
@@ -3422,18 +3350,25 @@ const AdminAccountStatement: React.FC<{
       .filter((payment) => payment.unappliedAmount > BALANCE_EPSILON);
     const unappliedCredit = unappliedPayments.reduce((sum, payment) => sum + payment.unappliedAmount, 0);
 
-    const totalInvoiced = invoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.total, 0), 0);
-    const totalPaid = Math.max(invoicePaid, allocatedFromPayments) + unappliedCredit;
+    const orderInvoiced = invoices.reduce((sum, invoice) => sum + toFiniteNumber(invoice.total, 0), 0);
+    const financeInvoiced = financeInvoices.reduce((sum, row) => sum + row.amount, 0);
+    const financePaid = financeReceipts.reduce((sum, row) => sum + row.amount, 0);
+    const totalInvoiced = orderInvoiced + financeInvoiced;
+    const totalPaid = Math.max(invoicePaid, allocatedFromPayments) + unappliedCredit + financePaid;
     const balance = totalInvoiced - totalPaid;
 
     return {
       invoices,
       payments: unappliedPayments,
-      invoicesCount: invoices.length,
+      invoicesCount: invoices.length + financeInvoices.length,
       totalInvoiced,
       totalPaid,
       balance,
-      hasActivity: invoices.length > 0 || unappliedPayments.length > 0,
+      hasActivity:
+        invoices.length > 0 ||
+        unappliedPayments.length > 0 ||
+        financeInvoices.length > 0 ||
+        financeReceipts.length > 0,
     };
   };
 
@@ -3700,6 +3635,28 @@ const AdminAccountStatement: React.FC<{
                       className="border rounded px-2 py-1 text-sm"
                     />
                   </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { startDate, endDate } = resolvePeriodRange('month');
+                      setFilterStartDate(startDate);
+                      setFilterEndDate(endDate);
+                    }}
+                    className="px-3 py-1 text-sm rounded border border-gray-300 hover:bg-gray-50"
+                  >
+                    This month
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const { startDate, endDate } = resolvePeriodRange('year');
+                      setFilterStartDate(startDate);
+                      setFilterEndDate(endDate);
+                    }}
+                    className="px-3 py-1 text-sm rounded border border-gray-300 hover:bg-gray-50"
+                  >
+                    This year
+                  </button>
                   {(filterStartDate || filterEndDate) && (
                     <button
                       onClick={() => { setFilterStartDate(''); setFilterEndDate(''); }}
@@ -3831,6 +3788,7 @@ const AdminAccountStatement: React.FC<{
             const filteredSuppliers = suppliers.filter((supplier) => {
               if (supplierSearch && !supplier.name.toLowerCase().includes(supplierSearch.toLowerCase())) return false;
               const metrics = getSupplierMetrics(supplier);
+              if ((filterStartDate || filterEndDate) && !metrics.hasActivity) return false;
               if (supplierBalanceFilter === 'active') return metrics.balance > BALANCE_EPSILON;
               if (supplierBalanceFilter === 'zero') return isZeroBalance(metrics.balance);
               return true;
@@ -5128,6 +5086,7 @@ const AdminAccountStatement: React.FC<{
                   className="w-full border rounded px-3 py-2 text-sm"
                 >
                   <option value="cash">Cash</option>
+                  <option value="whish">Whish</option>
                   <option value="bank_transfer">Bank Transfer</option>
                   <option value="cheque">Cheque</option>
                   <option value="other">Other</option>
@@ -5198,6 +5157,13 @@ const AdminAccountStatement: React.FC<{
               {/* Statement Header */}
               <div className="mb-6">
                 <h3 className="text-lg font-bold">STATEMENT OF ACCOUNT AS AT {detailedStatement.asOfDate}</h3>
+                {(filterStartDate || filterEndDate) && (
+                  <p className="text-sm text-gray-600 mt-1">
+                    Period:{' '}
+                    {filterStartDate ? new Date(filterStartDate).toLocaleDateString('en-GB') : 'Beginning'} —{' '}
+                    {filterEndDate ? new Date(filterEndDate).toLocaleDateString('en-GB') : 'Present'}
+                  </p>
+                )}
               </div>
               
               {/* Account Details */}

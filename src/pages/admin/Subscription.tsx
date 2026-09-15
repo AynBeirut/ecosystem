@@ -33,7 +33,7 @@ import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { resolveStoreEntitlements } from '@/lib/entitlements';
 import { PRESET_LIST, ORDERED_PRESET_LIST } from '@/lib/packagePresets';
 import { calculateModularPrice, calculateCustomPrice, MODULE_PRICES } from '@/lib/modularPricing';
-import type { StartingPackageKey } from '@/lib/moduleManifest';
+import { MODULAR_SEAT_PRICING, type StartingPackageKey } from '@/lib/moduleManifest';
 import { MODULE_CATALOG, ADDON_PRICING, isRoadmapModule, tierMeetsMinimum } from '@/lib/pricingDisplay';
 import type { AddOnKey as PricingAddOnKey, PaidTier as PricingPaidTier } from '@/lib/pricingDisplay';
 import { getActualStoreId } from '@/lib/storeUtils';
@@ -61,10 +61,10 @@ const PRICING = {
   pro: { monthly: 20, yearly: 200 },
   business: { monthly: 30, yearly: 300 },
   addOns: {
-    domainPackage: { monthly: 15, yearly: 150 },
-    whatsappBusiness: { monthly: 10, yearly: 100 },
-    extraStoragePer5Gb: { monthly: 2, yearly: 24 },
-    salesCrm: { monthly: 15, yearly: 150 },
+    domainPackage: { monthly: 10, yearly: 100 },
+    whatsappBusiness: { monthly: 8, yearly: 80 },
+    extraStoragePer5Gb: { monthly: 2, yearly: 20 },
+    salesCrm: { monthly: 8, yearly: 80 },
   },
 };
 
@@ -128,6 +128,7 @@ const PLAN_FEATURES: Record<SubscriptionTier, {
     features: [
       'Everything in Trial',
       'Keep 100% of your revenue',
+      'Custom Domain Package available',
       'Discount codes and basic SEO tools',
       'Email marketing (200/month)',
       'Priority email support',
@@ -192,7 +193,7 @@ const COMPARISON_ROWS: Array<{ feature: string; values: Record<SubscriptionTier,
   { feature: 'Storage', values: { trial: '500MB', starter: '5GB', pro: '10GB', business: '20GB' } },
   { feature: 'Operations/month', values: { trial: '30', starter: '∞', pro: '∞', business: '∞' } },
   { feature: 'Revenue Share', values: { trial: '20%', starter: '0%', pro: '0%', business: '0%' } },
-  { feature: 'Custom Domain', values: { trial: 'No', starter: '+$15', pro: '+$15', business: '+$15' } },
+  { feature: 'Custom Domain', values: { trial: 'No', starter: 'Included', pro: 'Included', business: 'Included' } },
   { feature: 'Premium Themes', values: { trial: '3 basic', starter: '10', pro: '20', business: '30+' } },
   { feature: 'Manufacturing', values: { trial: 'No', starter: 'No', pro: 'Included', business: 'Included' } },
   { feature: 'Email Marketing', values: { trial: 'No', starter: '200/mo', pro: '1K/mo', business: '5K/mo' } },
@@ -869,7 +870,9 @@ export default function Subscription() {
                       const priceLabel =
                         mod.billing === 'core'
                           ? 'Core'
-                          : modPrice && modPrice.monthly > 0
+                          : modPrice?.oneTime
+                            ? `$${modPrice.oneTime} one-time`
+                            : modPrice?.monthly && modPrice.monthly > 0
                             ? `$${modPrice.monthly}/mo`
                             : 'Included';
                       return (
@@ -1028,8 +1031,11 @@ export default function Subscription() {
                   .map((mod) => {
                     const isActive = selectedModules.has(mod.id);
                     const modPrice = MODULE_PRICES[mod.id];
-                    const priceLabel = modPrice && modPrice[modularBilling] > 0
-                      ? `$${modPrice[modularBilling]}/${modularBilling === 'yearly' ? 'yr' : 'mo'}`
+                    const recurringPrice = modPrice?.[modularBilling] ?? 0;
+                    const priceLabel = modPrice?.oneTime
+                      ? `$${modPrice.oneTime} one-time`
+                      : recurringPrice > 0
+                      ? `$${recurringPrice}/${modularBilling === 'yearly' ? 'yr' : 'mo'}`
                       : 'Free';
                     return (
                       <div key={mod.id} className="col-span-1">
@@ -1073,7 +1079,9 @@ export default function Subscription() {
                               </button>
                             ))}
                             <span className="text-xs text-muted-foreground">
-                              {modularPos > 1 ? `+$${(modularPos - 1) * (modularBilling === 'yearly' ? 10 : 10)}/mo each` : '1st free'}
+                              {modularPos > 1
+                                ? `+$${(modularBilling === 'yearly' ? MODULAR_SEAT_PRICING.extraPosLocationYearlyUsd : MODULAR_SEAT_PRICING.extraPosLocationMonthlyUsd)}/${modularBilling === 'yearly' ? 'yr' : 'mo'} each`
+                                : '1st free'}
                             </span>
                           </div>
                         )}
@@ -1496,6 +1504,10 @@ export default function Subscription() {
                   {!isTrial && (
                     <div className="mb-4 border rounded-lg p-3 space-y-3">
                       <h4 className="text-sm font-semibold">Add-ons at checkout</h4>
+                      <p className="text-xs text-teal-700 bg-teal-50 border border-teal-100 rounded px-2 py-1.5">
+                        Add optional growth tools now. Custom domains are handled by the Custom Domain Package.
+                      </p>
+
                       {eligibleAddOns.includes('domainPackage') && (
                         <label className="flex items-center justify-between text-sm gap-2">
                           <div className="flex items-center gap-2">
@@ -1503,12 +1515,11 @@ export default function Subscription() {
                               checked={planSelections[paidTier].domainPackage}
                               onCheckedChange={(checked) => updatePlanSelection(paidTier, { domainPackage: Boolean(checked) })}
                             />
-                            <span>Domain + Hosting + 10 Themes</span>
+                            <span>Custom Domain Package</span>
                           </div>
-                          <span>$15/mo</span>
+                          <span>$10/mo</span>
                         </label>
                       )}
-
 
                       {eligibleAddOns.includes('salesCrm') && (
                         <label className="flex items-center justify-between text-sm gap-2">
@@ -1519,7 +1530,7 @@ export default function Subscription() {
                             />
                             <span>Sales CRM</span>
                           </div>
-                          <span>$15/mo</span>
+                          <span>$8/mo</span>
                         </label>
                       )}
 
@@ -1532,7 +1543,7 @@ export default function Subscription() {
                             />
                             <span>WhatsApp Business API <span className="text-xs text-amber-600">(Coming Soon)</span></span>
                           </div>
-                          <span>$10/mo</span>
+                          <span>$8/mo</span>
                         </label>
                       )}
 
@@ -1729,8 +1740,9 @@ export default function Subscription() {
                 </tr>
               </thead>
               <tbody>
-                <tr className="border-b"><td className="py-2 px-3">Sales CRM</td><td className="py-2 px-3">$15/mo · $150/yr</td></tr>
-                <tr className="border-b"><td className="py-2 px-3">WhatsApp Business API</td><td className="py-2 px-3">$10/mo · $100/yr</td></tr>
+                <tr className="border-b"><td className="py-2 px-3">Custom Domain Package</td><td className="py-2 px-3">$10/mo · $100/yr</td></tr>
+                <tr className="border-b"><td className="py-2 px-3">Sales CRM</td><td className="py-2 px-3">$8/mo · $80/yr</td></tr>
+                <tr className="border-b"><td className="py-2 px-3">WhatsApp Business API</td><td className="py-2 px-3">$8/mo · $80/yr</td></tr>
                 <tr className="border-b"><td className="py-2 px-3">AI Credits</td><td className="py-2 px-3 text-muted-foreground">Pay per use</td></tr>
                 <tr className="border-b"><td className="py-2 px-3">Meta Advanced</td><td className="py-2 px-3 text-muted-foreground">~$12/mo (coming soon)</td></tr>
                 <tr className="border-b"><td className="py-2 px-3">SEO Advanced</td><td className="py-2 px-3 text-muted-foreground">~$12/mo (coming soon)</td></tr>
@@ -1739,37 +1751,34 @@ export default function Subscription() {
             </table>
           </div>
           <div className="grid md:grid-cols-2 gap-6">
-            <div className="border-2 rounded-lg p-6 hover:border-primary transition-colors">
+            <div className="border-2 rounded-lg p-6 bg-teal-50/40 border-teal-200">
               <div className="flex items-start justify-between mb-2">
-                <h3 className="font-semibold text-lg">Custom Domain + Hosting + Premium Themes</h3>
-                <div className="flex gap-2">
-                  <Badge>MOST POPULAR</Badge>
-                  {activeAddOns.includes('domainPackage') && <Badge variant="default">Active</Badge>}
-                </div>
+                <h3 className="font-semibold text-lg">Custom Domain Package</h3>
+                {activeAddOns.includes('domainPackage') ? (
+                  <Badge variant="default">Active</Badge>
+                ) : null}
               </div>
-              <p className="text-sm text-gray-600 mb-1">Custom domain support, premium hosting, SSL, CDN, and 10 exclusive themes</p>
-              <p className="text-xs text-gray-500 mb-4">Value: worth $40+ for only $15/month (save up to $330 yearly)</p>
-              <div className="text-2xl font-bold mb-4">
-                ${PRICING.addOns.domainPackage.monthly}<span className="text-base text-gray-600">/month</span>
-              </div>
-              <div className="text-sm text-gray-600 mb-4">
-                or ${PRICING.addOns.domainPackage.yearly}/year <Badge variant="secondary" className="ml-1">Save $30</Badge>
-              </div>
-              <div className="space-y-2">
+              <p className="text-sm text-gray-600 mb-2">
+                Storefront domain mapping, SSL, and setup support for stores that need their own domain.
+              </p>
+              <p className="text-xs text-gray-500">
+                $10/mo or $100/yr. Connect the domain in Store Profile after the add-on is active.
+              </p>
+              <div className="space-y-2 mt-4">
                 <Button
                   onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'monthly', { domainPackage: true })}
                   disabled={processingPayment || !canManageAddOns}
                   variant="outline"
                   className="w-full"
                 >
-                  Add Monthly ($15/mo)
+                  Add Monthly ($10/mo)
                 </Button>
                 <Button
                   onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'yearly', { domainPackage: true })}
                   disabled={processingPayment || !canManageAddOns}
                   className="w-full"
                 >
-                  Add Yearly ($150/yr)
+                  Add Yearly ($100/yr)
                 </Button>
                 {!canManageAddOns && (
                   <p className="text-xs text-red-600 mt-2">* Requires active Starter, Pro, or Business subscription</p>
@@ -1793,7 +1802,7 @@ export default function Subscription() {
                 ${PRICING.addOns.whatsappBusiness.monthly}<span className="text-base text-gray-600">/month</span>
               </div>
               <div className="text-sm text-gray-600 mb-4">
-                or ${PRICING.addOns.whatsappBusiness.yearly}/year <Badge variant="secondary" className="ml-1">Save $20</Badge>
+                or ${PRICING.addOns.whatsappBusiness.yearly}/year <Badge variant="secondary" className="ml-1">Save $16</Badge>
               </div>
               <div className="space-y-2">
                 <Button
@@ -1802,14 +1811,14 @@ export default function Subscription() {
                   variant="outline"
                   className="w-full"
                 >
-                  Add Monthly ($10/mo)
+                Add Monthly ($8/mo)
                 </Button>
                 <Button
                   onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'yearly', { whatsappBusiness: true })}
                   disabled={processingPayment || !hasActiveSubscription}
                   className="w-full"
                 >
-                  Add Yearly ($100/yr)
+                  Add Yearly ($80/yr)
                 </Button>
                 {!hasActiveSubscription && (
                   <p className="text-xs text-red-600 mt-2">* Requires active subscription</p>
@@ -1832,7 +1841,7 @@ export default function Subscription() {
                 ${PRICING.addOns.salesCrm.monthly}<span className="text-base text-gray-600">/month</span>
               </div>
               <div className="text-sm text-gray-600 mb-4">
-                or ${PRICING.addOns.salesCrm.yearly}/year <Badge variant="secondary" className="ml-1">Save $30</Badge>
+                or ${PRICING.addOns.salesCrm.yearly}/year <Badge variant="secondary" className="ml-1">Save $16</Badge>
               </div>
               <div className="space-y-2">
                 <Button
@@ -1841,14 +1850,14 @@ export default function Subscription() {
                   variant="outline"
                   className="w-full"
                 >
-                  Add Monthly ($15/mo)
+                  Add Monthly ($8/mo)
                 </Button>
                 <Button
                   onClick={() => openPaymentDialog((activeTier as PaidTier) || 'starter', 'yearly', { salesCrm: true })}
                   disabled={processingPayment || !canManageAddOns}
                   className="w-full"
                 >
-                  Add Yearly ($150/yr)
+                  Add Yearly ($80/yr)
                 </Button>
                 {!canManageAddOns && (
                   <p className="text-xs text-red-600 mt-2">* Requires active Starter, Pro, or Business subscription</p>

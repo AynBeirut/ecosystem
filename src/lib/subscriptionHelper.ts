@@ -1,4 +1,5 @@
 import { StoreProfile } from '@/types/storeProfile';
+import { profileIncludesCustomDomain } from '@/lib/packageEntitlements';
 
 /**
  * Check if store has access to composed products/services
@@ -17,6 +18,10 @@ export const hasComposedAccess = (storeProfile: StoreProfile | null | undefined)
   // Trial cannot use composed products; Starter/Pro/Business can
   return tier !== 'trial';
 };
+
+export const hasCustomDomainAccess = (
+  storeProfile: StoreProfile | null | undefined,
+): boolean => profileIncludesCustomDomain(storeProfile);
 
 /**
  * Check if store has specific add-on

@@ -16,6 +16,30 @@ export interface StaffMember {
   salary: number; // Amount based on payment frequency
   baseSalary?: number; // alias for salary
   paymentFrequency: PaymentFrequency;
+  paymentType?: 'hourly' | 'monthly' | 'daily' | string;
+  hourlyRate?: number;
+  monthlySalary?: number;
+  payBasis?: string;
+  isActive?: boolean;
+  localId?: string;
+  staffName?: string;
+  position?: string;
+  department?: string;
+  importSource?: string;
+  usbTimesheetSummary?: {
+    totalPayUsd?: number;
+    shiftCount?: number;
+    periods?: Array<{
+      sheetName?: string;
+      dateFrom?: string;
+      dateTo?: string;
+      totalPayUsd?: number;
+      shiftCount?: number;
+      hourlyRateUsd?: number;
+      sourceFile?: string;
+    }>;
+    sourceFiles?: string[];
+  };
   commissionRate?: number; // percentage
   totalCommissionEarned?: number;
   createdAt: string;
@@ -49,11 +73,18 @@ export interface SalaryPayment {
   commissionAmount?: number; // alias for commission
   bonus: number;
   deductions: number;
+  transportAmount?: number;
+  hourlyRate?: number;
+  hoursWorked?: number;
+  dailyRate?: number;
+  daysWorked?: number;
   totalAmount: number;
   paymentMethod: string;
   reference?: string;
   notes?: string;
   signatureUrl?: string;
+  status?: 'paid' | 'pending' | 'void';
+  idempotencyKey?: string;
   storeId: string;
   createdAt: string;
 }

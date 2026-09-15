@@ -23,7 +23,10 @@ import StoreContentPanel from '@/components/builder/StoreContentPanel';
 import ThemePickerPanel from '@/components/builder/ThemePickerPanel';
 import BuilderPublishConfirmDialog from '@/components/builder/BuilderPublishConfirmDialog';
 import { EditorSidebarRail } from '@/components/builder/EditorSidebarRail';
+import FreelancerClientBackButton from '@/components/freelancer/FreelancerClientBackButton';
+import { useAuth } from '@/context/useAuth';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { isWebBuilderSubAccount } from '@/lib/webBuilderAccess';
 import { mergeSectionOrderFromProfile } from '@/lib/storeSectionDefaults';
 import {
   buildEditorPreviewSrc,
@@ -35,6 +38,12 @@ import {
   type EditorThemeDraft,
 } from '@/lib/editorPreviewBridge';
 import {
+  buildDemoEditorPreviewSrc,
+  loadDemoThemeProfile,
+  saveDemoThemeProfile,
+  uploadDemoMedia,
+} from '@/lib/demoThemeEditor';
+import {
   buildThemeProfilePatch,
   themeDisplayName,
   type StoreThemeId,
@@ -43,7 +52,7 @@ import {
   uploadGalleryImage,
   uploadStoreBannerImage,
 } from '@/lib/storeMediaUpload';
-import type { StoreSectionOrder, RatingDisplayType } from '@/types/storeProfile';
+import type { StoreSectionOrder, RatingDisplayType, StoreProfile } from '@/types/storeProfile';
 import {
   contentDraftFromProfile,
   contentDraftToFirestorePatch,
@@ -54,10 +63,22 @@ import {
 type DeviceMode = 'desktop' | 'mobile';
 type LeftPanelTab = 'themes' | 'sections' | 'content';
 
-const ThemeEditor: React.FC = () => {
+type ThemeEditorProps = {
+  /** Builder demo workspace — persist under builders/{uid}/demoStores/{demoId} */
+  demoId?: string;
+  onExit?: () => void;
+};
+
+const ThemeEditor: React.FC<ThemeEditorProps> = ({ demoId, onExit }) => {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const isWebBuilder = isWebBuilderSubAccount(user);
+  const demoMode = Boolean(demoId && user?.id);
+  const builderUid = user?.id;
   const { profile, storeId, loading, reload } = useStoreEntitlements();
+  const [demoProfile, setDemoProfile] = useState<Partial<StoreProfile> | null>(null);
+  const [demoLoading, setDemoLoading] = useState(Boolean(demoId));
   const [sectionOrder, setSectionOrder] = useState<StoreSectionOrder[]>([]);
   const [layoutDraft, setLayoutDraft] = useState<EditorLayoutDraft>(defaultEditorLayoutDraft());
   const [selectedId, setSelectedId] = useState<EditorSelectableId | null>('store_header');
@@ -73,6 +94,32 @@ const ThemeEditor: React.FC = () => {
   const [publishConfirmOpen, setPublishConfirmOpen] = useState(false);
   const previewStateRef = useRef({ sectionOrder, layout: layoutDraft, content: contentDraft, theme: themeDraft });
   const previewRevisionRef = useRef(0);
+
+  const activeProfile = demoMode ? demoProfile : profile;
+  const activeStoreId = demoMode ? demoId : storeId;
+  const profileLoading = demoMode ? demoLoading : loading;
+
+  useEffect(() => {
+    if (!demoMode || !builderUid || !demoId) return;
+    let cancelled = false;
+    setDemoLoading(true);
+    void loadDemoThemeProfile(builderUid, demoId)
+      .then((next) => {
+        if (!cancelled) setDemoProfile(next);
+      })
+      .finally(() => {
+        if (!cancelled) setDemoLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoMode, builderUid, demoId]);
+
+  const reloadDemoProfile = useCallback(async () => {
+    if (!builderUid || !demoId) return;
+    const next = await loadDemoThemeProfile(builderUid, demoId);
+    setDemoProfile(next);
+  }, [builderUid, demoId]);
 
   useEffect(() => {
     previewStateRef.current = { sectionOrder, layout: layoutDraft, content: contentDraft, theme: themeDraft };
@@ -95,20 +142,20 @@ const ThemeEditor: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    if (!profile || dirty) return;
-    const nextSections = mergeSectionOrderFromProfile(profile.sectionOrder);
-    const nextLayout = defaultEditorLayoutDraft(profile);
-    const nextContent = contentDraftFromProfile(profile);
+    if (!activeProfile || dirty) return;
+    const nextSections = mergeSectionOrderFromProfile(activeProfile.sectionOrder);
+    const nextLayout = defaultEditorLayoutDraft(activeProfile);
+    const nextContent = contentDraftFromProfile(activeProfile);
     const nextTheme: EditorThemeDraft = {
-      template: profile.template,
-      heroLayout: profile.heroLayout,
-      productDisplayType: profile.productDisplayType,
-      productCardAnimation: profile.productCardAnimation,
-      aboutLayout: profile.aboutLayout,
-      contactFormStyle: profile.contactFormStyle,
-      ratingDisplayType: profile.ratingDisplayType,
-      pageLayout: profile.pageLayout,
-      visualStyle: profile.visualStyle,
+      template: activeProfile.template,
+      heroLayout: activeProfile.heroLayout,
+      productDisplayType: activeProfile.productDisplayType,
+      productCardAnimation: activeProfile.productCardAnimation,
+      aboutLayout: activeProfile.aboutLayout,
+      contactFormStyle: activeProfile.contactFormStyle,
+      ratingDisplayType: activeProfile.ratingDisplayType,
+      pageLayout: activeProfile.pageLayout,
+      visualStyle: activeProfile.visualStyle,
     };
     setSectionOrder(nextSections);
     setLayoutDraft(nextLayout);
@@ -120,17 +167,18 @@ const ThemeEditor: React.FC = () => {
       content: nextContent,
       theme: nextTheme,
     };
-  }, [profile, dirty]);
+  }, [activeProfile, dirty]);
 
   const previewPath = useMemo(() => {
-    if (!storeId) return null;
-    return buildEditorPreviewSrc(storeId, profile?.slug || profile?.storeSlug, previewVersion);
-  }, [profile?.slug, profile?.storeSlug, storeId, previewVersion]);
+    if (!activeStoreId) return null;
+    if (demoMode) return buildDemoEditorPreviewSrc(activeStoreId, previewVersion);
+    return buildEditorPreviewSrc(activeStoreId, activeProfile?.slug || activeProfile?.storeSlug, previewVersion);
+  }, [activeProfile?.slug, activeProfile?.storeSlug, activeStoreId, demoMode, previewVersion]);
 
   const selectedSection = !selectedId || selectedId === 'store_header' || selectedId === 'navigation'
     ? null
     : sectionOrder.find((s) => s.id === selectedId) ?? null;
-  const activeThemeId = profile?.template as string | undefined;
+  const activeThemeId = activeProfile?.template as string | undefined;
 
   const handleSectionsChange = useCallback(
     (next: StoreSectionOrder[]) => {
@@ -190,7 +238,7 @@ const ThemeEditor: React.FC = () => {
         ...prev,
         ...patch,
         ...(patch.templateColors
-          ? { templateColors: mergeTemplateColors(profile?.templateColors ?? prev.templateColors, patch.templateColors) }
+          ? { templateColors: mergeTemplateColors(activeProfile?.templateColors ?? prev.templateColors, patch.templateColors) }
           : {}),
       };
       previewStateRef.current = { ...previewStateRef.current, content };
@@ -198,7 +246,7 @@ const ThemeEditor: React.FC = () => {
     });
     setDirty(true);
     pushPreviewToIframe();
-  }, [pushPreviewToIframe, profile?.templateColors]);
+  }, [pushPreviewToIframe, activeProfile?.templateColors]);
 
   const handleRatingDisplayChange = useCallback((v: RatingDisplayType) => {
     handleContentChange({ ratingDisplayType: v });
@@ -206,52 +254,71 @@ const ThemeEditor: React.FC = () => {
 
   const handleHeroBannerUpload = useCallback(
     async (file: File) => {
-      if (!storeId) return;
-      const url = await uploadStoreBannerImage(storeId, file);
+      if (!activeStoreId) return;
+      if (demoMode && builderUid && demoId) {
+        const url = await uploadDemoMedia(builderUid, demoId, 'background', file);
+        await saveDemoThemeProfile(builderUid, demoId, { storeBackgroundImage: url });
+        await reloadDemoProfile();
+        pushPreviewToIframe();
+        return;
+      }
+      const url = await uploadStoreBannerImage(activeStoreId, file);
       await setDoc(
-        doc(getFirestore(), 'storeProfiles', storeId),
+        doc(getFirestore(), 'storeProfiles', activeStoreId),
         { storeBackgroundImage: url, updatedAt: new Date().toISOString() },
         { merge: true },
       );
       await reload({ silent: true });
       pushPreviewToIframe();
     },
-    [storeId, reload, pushPreviewToIframe],
+    [activeStoreId, demoMode, builderUid, demoId, reload, reloadDemoProfile, pushPreviewToIframe],
   );
 
   const handleGalleryUpload = useCallback(
     async (file: File) => {
-      if (!storeId) return;
-      const url = await uploadGalleryImage(storeId, file);
-      const next = [...(profile?.galleryImages || []), url].slice(0, 24);
+      if (!activeStoreId) return;
+      if (demoMode && builderUid && demoId) {
+        const url = await uploadDemoMedia(builderUid, demoId, 'gallery', file);
+        const next = [...(activeProfile?.galleryImages || []), url].slice(0, 24);
+        await saveDemoThemeProfile(builderUid, demoId, { galleryImages: next });
+        await reloadDemoProfile();
+        pushPreviewToIframe();
+        return;
+      }
+      const url = await uploadGalleryImage(activeStoreId, file);
+      const next = [...(activeProfile?.galleryImages || []), url].slice(0, 24);
       await setDoc(
-        doc(getFirestore(), 'storeProfiles', storeId),
+        doc(getFirestore(), 'storeProfiles', activeStoreId),
         { galleryImages: next, updatedAt: new Date().toISOString() },
         { merge: true },
       );
       await reload({ silent: true });
       pushPreviewToIframe();
     },
-    [storeId, profile?.galleryImages, reload, pushPreviewToIframe],
+    [activeStoreId, activeProfile?.galleryImages, demoMode, builderUid, demoId, reload, reloadDemoProfile, pushPreviewToIframe],
   );
 
   const handleApplyTheme = async (themeId: StoreThemeId) => {
-    if (!storeId) return;
+    if (!activeStoreId) return;
     setSaving(true);
     try {
       const timestamp = new Date().toISOString();
       const patch = buildThemeProfilePatch(themeId, {
         includeDemoMedia: true,
-        hasExistingHero: Boolean(profile?.storeBackgroundImage),
+        hasExistingHero: Boolean(activeProfile?.storeBackgroundImage),
       });
-      await setDoc(
-        doc(getFirestore(), 'storeProfiles', storeId),
-        { ...patch, updatedAt: timestamp },
-        { merge: true },
-      );
+      if (demoMode && builderUid && demoId) {
+        await saveDemoThemeProfile(builderUid, demoId, { ...patch, updatedAt: timestamp });
+      } else {
+        await setDoc(
+          doc(getFirestore(), 'storeProfiles', activeStoreId),
+          { ...patch, updatedAt: timestamp },
+          { merge: true },
+        );
+      }
 
       const mergedColors = mergeTemplateColors(
-        profile?.templateColors,
+        activeProfile?.templateColors,
         patch.templateColors as StoreContentDraft['templateColors'],
       );
       const nextLayout: EditorLayoutDraft = {
@@ -282,7 +349,11 @@ const ThemeEditor: React.FC = () => {
       setThemeDraft(nextTheme);
       previewStateRef.current = { sectionOrder, layout: nextLayout, content: nextContent, theme: nextTheme };
       pushPreviewToIframe();
-      await reload({ silent: true });
+      if (demoMode) {
+        await reloadDemoProfile();
+      } else {
+        await reload({ silent: true });
+      }
       toast.success(`Theme applied: ${themeDisplayName(themeId)}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to apply theme');
@@ -292,25 +363,30 @@ const ThemeEditor: React.FC = () => {
   };
 
   const handleSave = async (publish = false) => {
-    if (!storeId) return;
+    if (!activeStoreId) return;
+    if (demoMode && publish) {
+      publish = false;
+    }
     setSaving(true);
     try {
       const timestamp = new Date().toISOString();
-      await setDoc(
-        doc(getFirestore(), 'storeProfiles', storeId),
-        {
-          sectionOrder,
-          menuStyle: layoutDraft.menuStyle,
-          storeCardStyle: layoutDraft.storeCardStyle,
-          ...contentDraftToFirestorePatch(contentDraft, profile?.templateColors),
-          ...(publish ? { status: 'online' } : {}),
-          updatedAt: timestamp,
-        },
-        { merge: true },
-      );
-      await reload({ silent: true });
+      const patch = {
+        sectionOrder,
+        menuStyle: layoutDraft.menuStyle,
+        storeCardStyle: layoutDraft.storeCardStyle,
+        ...contentDraftToFirestorePatch(contentDraft, activeProfile?.templateColors),
+        ...(publish ? { status: 'online' } : {}),
+        updatedAt: timestamp,
+      };
+      if (demoMode && builderUid && demoId) {
+        await saveDemoThemeProfile(builderUid, demoId, patch);
+        await reloadDemoProfile();
+      } else {
+        await setDoc(doc(getFirestore(), 'storeProfiles', activeStoreId), patch, { merge: true });
+        await reload({ silent: true });
+      }
       setDirty(false);
-      toast.success(publish ? 'Store published' : 'Layout saved');
+      toast.success(demoMode ? 'Demo layout saved' : publish ? 'Store published' : 'Layout saved');
       pushPreviewToIframe();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Save failed');
@@ -319,7 +395,7 @@ const ThemeEditor: React.FC = () => {
     }
   };
 
-  if (loading && !profile) {
+  if (profileLoading && !activeProfile) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f6f6f7]">
         <Loader2 className="h-8 w-8 animate-spin text-[#616161]" />
@@ -330,23 +406,37 @@ const ThemeEditor: React.FC = () => {
   return (
     <div className="fixed inset-0 z-[200] flex flex-col bg-[#f6f6f7] text-[#303030] overflow-hidden">
       <header className="shrink-0 flex items-center gap-3 px-3 py-2 bg-[#1a1a1a] text-white border-b border-black/20">
-        <Button
-          variant="ghost"
-          size="sm"
-          className="text-white hover:bg-white/10 gap-1.5"
-          onClick={() => navigate('/admin/dashboard')}
-        >
-          <ArrowLeft className="h-4 w-4" />
-          Exit
-        </Button>
+        {demoMode ? (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white/10 gap-1.5"
+            onClick={() => (onExit ? onExit() : navigate(`/builder/demo/${demoId}/edit?tab=classic`))}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to demo
+          </Button>
+        ) : isWebBuilder ? (
+          <FreelancerClientBackButton variant="header" />
+        ) : (
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-white hover:bg-white/10 gap-1.5"
+            onClick={() => navigate('/admin/dashboard')}
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Exit
+          </Button>
+        )}
         <div className="h-5 w-px bg-white/20" />
         <div className="flex items-center gap-2 min-w-0">
-          <span className="font-medium text-sm truncate">{profile?.name || 'Store'}</span>
+          <span className="font-medium text-sm truncate">{activeProfile?.name || 'Store'}</span>
           <Badge
             variant="secondary"
             className="bg-white/15 text-white border-0 text-[10px] uppercase tracking-wide"
           >
-            {profile?.status === 'online' ? 'Live' : 'Draft'}
+            {demoMode ? 'Demo' : activeProfile?.status === 'online' ? 'Live' : 'Draft'}
           </Badge>
           <span className="text-white/50 text-xs hidden sm:inline">·</span>
           <button
@@ -403,20 +493,22 @@ const ThemeEditor: React.FC = () => {
           <Save className="h-4 w-4 mr-1" />
           Save
         </Button>
-        <Button
-          size="sm"
-          className="bg-white text-[#303030] hover:bg-white/90"
-          disabled={saving}
-          onClick={() => setPublishConfirmOpen(true)}
-        >
-          Publish
-        </Button>
+        {!demoMode && (
+          <Button
+            size="sm"
+            className="bg-white text-[#303030] hover:bg-white/90"
+            disabled={saving}
+            onClick={() => setPublishConfirmOpen(true)}
+          >
+            Publish
+          </Button>
+        )}
       </header>
 
       <BuilderPublishConfirmDialog
-        open={publishConfirmOpen}
+        open={publishConfirmOpen && !demoMode}
         onOpenChange={setPublishConfirmOpen}
-        isLive={profile?.status === 'online'}
+        isLive={activeProfile?.status === 'online'}
         onConfirm={() => {
           setPublishConfirmOpen(false);
           void handleSave(true);

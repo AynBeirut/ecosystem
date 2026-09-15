@@ -60,10 +60,15 @@ import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { getGscToken, persistGscTokenToFirestore, resolveGscToken, clearGscTokenRemote, GSC_SCOPE, TOKEN_KEY } from '@/lib/seoTechnical';
 import { syncGscRankingsToKeywords } from '@/lib/seoKeywords';
+import {
+  MARKETING_SEO_INDEX_URLS,
+  submitGscSitemap,
+  submitMarketingUrlsForIndexing,
+} from '@/lib/seoIndexing';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
 
-const GSC_PROPERTY     = import.meta.env.VITE_GSC_PROPERTY as string || 'https://www.grabio.space/';
+const GSC_PROPERTY     = import.meta.env.VITE_GSC_PROPERTY as string || 'https://grabio.space/';
 const GOOGLE_CLIENT_ID = import.meta.env.VITE_GOOGLE_CLIENT_ID as string;
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -402,6 +407,8 @@ const AdminSEOAudit: React.FC = () => {
   const [fsStats, setFsStats]     = useState<FirestoreStats | null>(null);
   const [rankSyncMsg, setRankSyncMsg] = useState<string | null>(null);
   const [rankSyncing, setRankSyncing] = useState(false);
+  const [indexingSeo, setIndexingSeo] = useState(false);
+  const [indexingMsg, setIndexingMsg] = useState<string | null>(null);
 
   const loadData = useCallback(async (tok: string) => {
     setLoading(true);
@@ -508,6 +515,31 @@ const AdminSEOAudit: React.FC = () => {
     });
   };
 
+  const handleIndexMarketingUrls = async () => {
+    const authToken = token ?? (await resolveGscToken());
+    if (!authToken) return;
+    setIndexingSeo(true);
+    setIndexingMsg(null);
+    try {
+      const sitemapOk = await submitGscSitemap(authToken);
+      const results = await submitMarketingUrlsForIndexing(authToken);
+      const okCount = results.filter((r) => r.ok).length;
+      setIndexingMsg(
+        sitemapOk
+          ? `Sitemap submitted · Indexing API ${okCount}/${MARKETING_SEO_INDEX_URLS.length} URLs queued`
+          : `Indexing API ${okCount}/${MARKETING_SEO_INDEX_URLS.length} URLs` +
+            (okCount < MARKETING_SEO_INDEX_URLS.length ? ' — disconnect & reconnect GSC if 403' : ''),
+      );
+      if (okCount < MARKETING_SEO_INDEX_URLS.length) {
+        console.warn('[SEOAudit] indexing results', results);
+      }
+    } catch (err) {
+      setIndexingMsg(err instanceof Error ? err.message : 'Indexing request failed');
+    } finally {
+      setIndexingSeo(false);
+    }
+  };
+
   const handleKeywordRankSync = async () => {
     const authToken = token ?? (await resolveGscToken());
     if (!authToken) return;
@@ -551,6 +583,9 @@ const AdminSEOAudit: React.FC = () => {
                 <SelectItem value="180d">Last 6 months</SelectItem>
               </SelectContent>
             </Select>
+            <Button variant="outline" size="sm" onClick={() => void handleIndexMarketingUrls()} disabled={loading || indexingSeo}>
+              {indexingSeo ? 'Indexing…' : `Index ${MARKETING_SEO_INDEX_URLS.length} SEO URLs`}
+            </Button>
             <Button variant="outline" size="sm" onClick={() => void handleKeywordRankSync()} disabled={loading || rankSyncing}>
               {rankSyncing ? 'Updating ranks…' : 'Update keyword ranks'}
             </Button>
@@ -574,6 +609,9 @@ const AdminSEOAudit: React.FC = () => {
           <>
             {rankSyncMsg ? (
               <AdminPanel className="mb-4 border-teal-200 bg-teal-50 text-sm text-teal-900">{rankSyncMsg}</AdminPanel>
+            ) : null}
+            {indexingMsg ? (
+              <AdminPanel className="mb-4 border-teal-200 bg-teal-50 text-sm text-teal-900">{indexingMsg}</AdminPanel>
             ) : null}
             {/* Insight banner */}
             {!loading && totals.clicks > 0 && (

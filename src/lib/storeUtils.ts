@@ -1,4 +1,13 @@
-import { doc, getDoc, getFirestore } from 'firebase/firestore';
+import { doc, getDoc, getDocFromServer, getFirestore } from 'firebase/firestore';
+import { storeIdHintFromUserProfile } from '@/lib/tenantBinding';
+
+async function getDocPreferServer(ref: ReturnType<typeof doc>) {
+  try {
+    return await getDocFromServer(ref);
+  } catch {
+    return getDoc(ref);
+  }
+}
 
 /**
  * Get the actual store ID for the current user.
@@ -23,14 +32,27 @@ export async function resolveStoreIdForAuthUser(authUid: string): Promise<string
     }
   }
 
-  const userSnap = await getDoc(doc(db, 'users', authUid));
+  const userSnap = await getDocPreferServer(doc(db, 'users', authUid));
   if (userSnap.exists()) {
     const data = userSnap.data();
-    const active =
-      (typeof data?.activeStoreId === 'string' && data.activeStoreId.trim()) ||
-      (typeof data?.primaryStoreId === 'string' && data.primaryStoreId.trim()) ||
-      '';
-    if (active) return active;
+    const subAccountId =
+      (typeof data?.subAccountId === 'string' && data.subAccountId.trim()) || '';
+    if (subAccountId) {
+      const subSnap = await getDocPreferServer(doc(db, 'subAccounts', subAccountId));
+      if (subSnap.exists()) {
+        const subStoreId = subSnap.data()?.storeId;
+        if (typeof subStoreId === 'string' && subStoreId.trim()) {
+          return subStoreId.trim();
+        }
+      }
+    }
+    const storeIdField = storeIdHintFromUserProfile({
+      subAccountId: subAccountId || undefined,
+      storeId: data?.storeId as string | undefined,
+      primaryStoreId: data?.primaryStoreId as string | undefined,
+      activeStoreId: data?.activeStoreId as string | undefined,
+    });
+    if (storeIdField) return storeIdField;
   }
 
   return authUid;

@@ -7,6 +7,7 @@ import AdminPanel from '@/components/admin/AdminPanel';
 import ReportPeriodToolbar from '@/components/admin/ReportPeriodToolbar';
 import { useStockReportData } from '@/hooks/useStockReportData';
 import { useAuth } from '@/context/useAuth';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 import { exportToCSV } from '@/lib/exportUtils';
 import { normalizeDateRange, quarterBounds, currentVatQuarter } from '@/lib/reportPeriodPresets';
@@ -21,7 +22,7 @@ type PurchaseView = 'supplier' | 'product';
 export default function StockPurchasesReport() {
   const { user } = useAuth();
   const { money } = useStoreCurrency();
-  const { loading, purchases } = useStockReportData(user?.storeId);
+  const { loading, purchases } = useStockReportData(getActualStoreId(user));
   const [view, setView] = useState<PurchaseView>('supplier');
   const [startDate, setStartDate] = useState(() => {
     const y = new Date().getFullYear();

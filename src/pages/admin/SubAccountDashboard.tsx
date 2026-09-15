@@ -16,6 +16,7 @@ import {
   Clock
 } from 'lucide-react';
 import { getSubAccountHomePath, isManagerSubAccount } from '@/lib/subAccountAccess';
+import { getAccountingFreelancerClientDashboardPath, isAccountingFreelancerSubAccount, isWebBuilderSubAccount } from '@/lib/webBuilderAccess';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs } from 'firebase/firestore';
 
@@ -37,6 +38,14 @@ const SubAccountDashboard: React.FC = () => {
     }
     if (user && isManagerSubAccount(user)) {
       navigate('/admin/dashboard');
+      return;
+    }
+    if (user && user.role === 'sub_account' && user.subAccountRole === 'web_maintenance') {
+      navigate('/admin/dashboard');
+      return;
+    }
+    if (user && isAccountingFreelancerSubAccount(user)) {
+      navigate(getAccountingFreelancerClientDashboardPath(user.storeId));
       return;
     }
     if (!user || user.role !== 'sub_account') {
@@ -120,7 +129,9 @@ const SubAccountDashboard: React.FC = () => {
       case 'sales': return 'Sales Person';
       case 'cashier': return 'Cashier';
       case 'delivery': return 'Delivery Person';
-      case 'manager': return 'Manager';
+      case 'manager': return 'Store admin';
+      case 'web_maintenance': return 'Web builder';
+      case 'accounting': return 'Accounting freelancer';
       default: return 'Team Member';
     }
   };

@@ -28,7 +28,7 @@ const CRM_NAV = [
   { to: '/admin/crm/activities', label: 'Visits', preload: loadCrmActivities },
   { to: '/admin/crm/reps', label: 'Reps', preload: loadCrmReps },
   { to: '/admin/crm/areas', label: 'Areas', preload: loadCrmStoreAreas },
-  { to: '/admin/crm/tasks', label: 'Tasks', preload: loadCrmTasks },
+  { to: '/admin/crm/tasks', label: 'CRM tasks', preload: loadCrmTasks },
 ] as const;
 
 const CrmModuleShell: React.FC = () => {

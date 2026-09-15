@@ -14,7 +14,7 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
-import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign, Clock, AlertTriangle, ScanLine } from 'lucide-react';
+import { Trash2, Plus, Edit3, ShoppingCart, Minus, CheckCircle, XCircle, Download, Share2, Printer, Mail, MessageCircle, MoreVertical, DollarSign, Clock, AlertTriangle, ScanLine, Search } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { Purchase, PurchaseItem, Supplier, RawMaterial, PaymentRecord } from '@/types/inventory';
 import { StoreProfile } from '@/types/storeProfile';
@@ -22,6 +22,8 @@ import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
 import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
+import { allocatePurchaseOrderNumber } from '@/lib/documentSerial';
+import { purchaseDisplayRef } from '@/lib/purchaseDisplayRef';
 import { formatMoney as fmtMoney } from '@/lib/money/format';
 import { glPostPurchaseReceived } from '@/lib/platformGl';
 import { purchaseOrderForGlReceive } from '@/lib/purchaseGlInput';
@@ -36,6 +38,13 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { filterPurchasesForStore, filterSuppliersForStore } from '@/lib/littleHandsPurchasesVisibility';
+import {
+  type PurchaseDatePreset,
+  purchaseInPeriod,
+  resolvePurchasePeriodRange,
+} from '@/lib/purchaseDateFilter';
+import { purchaseMatchesSearch } from '@/lib/purchaseListSearch';
 
 const DIALOG_NATIVE_SELECT_CLASS =
   'flex h-11 w-full min-h-[44px] touch-manipulation rounded-md border border-input bg-background px-3 py-2 text-base sm:text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring appearance-auto';
@@ -116,6 +125,19 @@ const AdminPurchases: React.FC = () => {
   const [isCreatingPO, setIsCreatingPO] = useState(false);
   const [isReceivingPO, setIsReceivingPO] = useState(false);
   const [ocrOpen, setOcrOpen] = useState(false);
+  const [datePreset, setDatePreset] = useState<PurchaseDatePreset>('all');
+  const [customRangeStart, setCustomRangeStart] = useState('');
+  const [customRangeEnd, setCustomRangeEnd] = useState('');
+  const [purchaseSearch, setPurchaseSearch] = useState('');
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+  const [editDraft, setEditDraft] = useState({
+    supplierName: '',
+    orderDate: '',
+    amount: '',
+    notes: '',
+    paymentStatus: 'paid' as Purchase['paymentStatus'],
+    amountPaid: '',
+  });
   
   const [newPurchase, setNewPurchase] = useState({
     supplierId: '',
@@ -203,7 +225,11 @@ const AdminPurchases: React.FC = () => {
         } as Purchase),
       );
 
-      setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
+      const profileData = profileSnap.exists() ? (profileSnap.data() as StoreProfile) : null;
+      const visiblePurchases = filterPurchasesForStore(purchasesList, profileData);
+      setPurchases(
+        visiblePurchases.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()),
+      );
 
       // Fetch suppliers
       const suppliersRef = collection(db, 'suppliers');
@@ -213,7 +239,7 @@ const AdminPurchases: React.FC = () => {
         id: doc.id,
         ...doc.data()
       } as Supplier));
-      setSuppliers(suppliersList);
+      setSuppliers(filterSuppliersForStore(suppliersList, profileData));
 
       // Fetch raw materials
       const materialsRef = collection(db, 'rawMaterials');
@@ -240,36 +266,12 @@ const AdminPurchases: React.FC = () => {
     fetchData();
   }, [user?.storeId]);
 
-  const generatePONumber = async (): Promise<string> => {
+  const generatePONumber = async (documentDate?: string | Date | null): Promise<string> => {
     if (!user?.storeId) {
-      const date = new Date();
-      const year = date.getFullYear().toString().slice(-2);
-      const month = (date.getMonth() + 1).toString().padStart(2, '0');
-      const seq = (purchases.length + 1).toString().padStart(4, '0');
-      return `PO-${year}${month}-${seq}`;
+      throw new Error('Store required to allocate PO number');
     }
-    
-    const db = getFirestore();
-    const profileRef = doc(db, 'storeProfiles', user.storeId);
-    
-    // Fetch the latest store profile to ensure we have current data
-    const profileSnap = await getDoc(profileRef);
-    const currentProfile = profileSnap.exists() ? (profileSnap.data() as StoreProfile) : null;
-    
-    const prefix = currentProfile?.invoiceNumberPrefix || 'PO';
-    const lastNumber = currentProfile?.lastInvoiceNumber || 0;
-    const newNumber = lastNumber + 1;
-    const poNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
-    
-    // Update last invoice number in store profile
-    await updateDoc(profileRef, { lastInvoiceNumber: newNumber });
-    
-    // Update local state to keep UI in sync
-    if (currentProfile) {
-      setStoreProfile({ ...currentProfile, lastInvoiceNumber: newNumber });
-    }
-    
-    return poNumber;
+    const prefix = storeProfile?.purchaseOrderPrefix?.trim() || 'PO';
+    return allocatePurchaseOrderNumber(user.storeId, prefix, documentDate);
   };
 
   // Format currency with LBP conversion
@@ -409,7 +411,7 @@ const AdminPurchases: React.FC = () => {
     const storePhone = storeProfile?.phone || '';
     const storeEmail = storeProfile?.email || '';
     const storeTaxNumber = storeProfile?.taxNumber || '';
-    const poNum = purchase.invoiceNumber || purchase.poNumber || purchase.purchaseOrderNumber || purchase.id.slice(0, 8).toUpperCase();
+    const poNum = purchaseDisplayRef(purchase);
     const subtotalFromItems = purchase.items?.reduce((sum, item) => {
       const qty = parseNumberish(item.quantity);
       const price = resolveItemUnitPrice(item);
@@ -1401,7 +1403,7 @@ const AdminPurchases: React.FC = () => {
     try {
       const db = getFirestore();
       await enforceAndConsumeTrialOperation(db, user.storeId, 'purchase');
-      const invoiceNumber = await generatePONumber();
+      const invoiceNumber = await generatePONumber(data.orderDate);
 
       const normalizedItems: PurchaseItem[] = data.items.map((item) => {
         const quantity = Number(item.quantity) || 0;
@@ -1422,6 +1424,7 @@ const AdminPurchases: React.FC = () => {
       const subtotal = normalizedItems.reduce((sum, item) => sum + item.quantity * (item.unitPrice || item.unitCost), 0);
       const purchaseData = {
         poNumber: invoiceNumber,
+        purchaseOrderNumber: invoiceNumber,
         invoiceNumber,
         supplierId: data.supplierId,
         orderDate: data.orderDate ? new Date(data.orderDate).toISOString() : new Date().toISOString(),
@@ -1501,7 +1504,7 @@ const AdminPurchases: React.FC = () => {
     try {
       const db = getFirestore();
       await enforceAndConsumeTrialOperation(db, user.storeId, 'purchase');
-      const invoiceNumber = await generatePONumber();
+      const invoiceNumber = await generatePONumber(newPurchase.orderDate);
       
       // Ensure all numeric values are properly converted
       const normalizedItems = newPurchase.items.map(item => {
@@ -1520,6 +1523,7 @@ const AdminPurchases: React.FC = () => {
 
       const purchaseData = {
         poNumber: invoiceNumber,
+        purchaseOrderNumber: invoiceNumber,
         invoiceNumber,
         supplierId: newPurchase.supplierId,
         orderDate: newPurchase.orderDate ? new Date(newPurchase.orderDate).toISOString() : new Date().toISOString(),
@@ -1832,7 +1836,11 @@ const AdminPurchases: React.FC = () => {
         id: doc.id,
         ...doc.data()
       } as Purchase));
-      setPurchases(purchasesList.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime()));
+      setPurchases(
+        filterPurchasesForStore(purchasesList, storeProfile).sort(
+          (a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(),
+        ),
+      );
 
       const glPurchase = purchaseOrderForGlReceive({
         ...receivingPurchase,
@@ -2011,14 +2019,133 @@ const AdminPurchases: React.FC = () => {
     }
   };
 
+  const isCashBookPurchase = (purchase: Purchase) =>
+    Boolean(
+      purchase.importKey?.startsWith('lh-cashbook-')
+      || (purchase as Purchase & { source?: string }).source?.includes('littlehands-cash-book'),
+    );
+
+  const openEditPurchase = (purchase: Purchase) => {
+    const total = resolvePurchaseTotal(purchase);
+    const orderYmd = purchase.orderDate ? purchaseOnDateFromIso(purchase.orderDate) : localPurchaseYmd();
+    setEditDraft({
+      supplierName: purchase.supplierName || '',
+      orderDate: orderYmd,
+      amount: String(total),
+      notes: purchase.notes || '',
+      paymentStatus: purchase.paymentStatus || 'paid',
+      amountPaid: String(purchase.amountPaid ?? total),
+    });
+    setEditingPurchase(purchase);
+  };
+
+  const handleSaveEditPurchase = async () => {
+    if (!editingPurchase || !user?.storeId) return;
+    const amount = parseNumberish(editDraft.amount);
+    if (!editDraft.supplierName.trim() || amount <= 0) {
+      toast({ title: 'Error', description: 'Supplier name and amount required', variant: 'destructive' });
+      return;
+    }
+    setIsSavingEdit(true);
+    try {
+      const db = getFirestore();
+      const orderIso = editDraft.orderDate
+        ? new Date(`${editDraft.orderDate}T12:00:00`).toISOString()
+        : editingPurchase.orderDate;
+      const paid = parseNumberish(editDraft.amountPaid);
+      const items = Array.isArray(editingPurchase.items) && editingPurchase.items.length > 0
+        ? editingPurchase.items.map((item, idx) =>
+            idx === 0
+              ? {
+                  ...item,
+                  materialName: editDraft.supplierName.trim(),
+                  quantity: 1,
+                  unitPrice: amount,
+                  unitCost: amount,
+                  receivedQuantity: item.receivedQuantity ?? 1,
+                }
+              : item,
+          )
+        : [
+            {
+              materialName: editDraft.supplierName.trim(),
+              sku: 'CASHBOOK',
+              quantity: 1,
+              unitPrice: amount,
+              unitCost: amount,
+              receivedQuantity: 1,
+            } as PurchaseItem,
+          ];
+
+      const payload = {
+        supplierName: editDraft.supplierName.trim(),
+        orderDate: orderIso,
+        receivedDate: editingPurchase.receivedDate || orderIso,
+        notes: editDraft.notes,
+        items,
+        subtotal: amount,
+        total: amount,
+        totalAmount: amount,
+        totalCost: amount,
+        paymentStatus: editDraft.paymentStatus || 'paid',
+        amountPaid: paid,
+        updatedAt: new Date().toISOString(),
+      };
+
+      await updateDoc(doc(db, 'purchases', editingPurchase.id), payload);
+      setPurchases(
+        purchases.map((p) => (p.id === editingPurchase.id ? { ...p, ...payload } : p)),
+      );
+      await logAction(
+        user.id,
+        user.name,
+        user.role,
+        'update',
+        'purchase',
+        editingPurchase.id,
+        { oldValue: editingPurchase, newValue: payload },
+        user.storeId,
+      );
+      toast({ title: 'Saved', description: 'Purchase order updated' });
+      setEditingPurchase(null);
+    } catch (error) {
+      console.error('Error updating purchase:', error);
+      toast({ title: 'Error', description: 'Failed to update purchase', variant: 'destructive' });
+    } finally {
+      setIsSavingEdit(false);
+    }
+  };
+
+  function purchaseOnDateFromIso(iso: string): string {
+    const raw = String(iso || '');
+    if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+    const d = new Date(raw);
+    if (Number.isFinite(d.getTime())) {
+      const y = d.getFullYear();
+      const m = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      return `${y}-${m}-${day}`;
+    }
+    return '';
+  }
+
+  function localPurchaseYmd(): string {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+  }
+
   const handleDeletePurchase = async (purchaseId: string) => {
     const purchase = purchases.find(p => p.id === purchaseId);
-    if (purchase?.status === 'received') {
+    const cashBook = purchase ? isCashBookPurchase(purchase) : false;
+    if (purchase?.status === 'received' && !cashBook) {
       toast({ title: "Error", description: "Cannot delete received purchase orders", variant: "destructive" });
       return;
     }
 
-    if (!confirm('Are you sure you want to delete this purchase order?')) return;
+    const msg = cashBook
+      ? 'Remove this imported line from Purchases? (Expenses ledger is separate.)'
+      : 'Are you sure you want to delete this purchase order?';
+    if (!confirm(msg)) return;
 
     try {
       const db = getFirestore();
@@ -2042,7 +2169,11 @@ const AdminPurchases: React.FC = () => {
       toast({ title: "Success", description: "Purchase order deleted!" });
     } catch (error) {
       console.error('Error deleting purchase:', error);
-      toast({ title: "Error", description: "Failed to delete purchase order", variant: "destructive" });
+      const code = error && typeof error === 'object' && 'code' in error ? String((error as { code?: string }).code) : '';
+      const hint = code === 'permission-denied'
+        ? 'Firestore blocked delete (deploy rules if this persists).'
+        : 'Failed to delete purchase order';
+      toast({ title: "Error", description: hint, variant: "destructive" });
     }
   };
 
@@ -2077,15 +2208,29 @@ const AdminPurchases: React.FC = () => {
   );
 };
 
+  const purchaseDateRange = useMemo(
+    () => resolvePurchasePeriodRange(datePreset, customRangeStart, customRangeEnd),
+    [datePreset, customRangeStart, customRangeEnd],
+  );
+
+  const filteredPurchases = useMemo(() => {
+    const list = purchases.filter((p) => {
+      if (!purchaseInPeriod(p.orderDate, purchaseDateRange)) return false;
+      const supplier = suppliers.find((s) => s.id === p.supplierId);
+      return purchaseMatchesSearch(p, supplier?.name, purchaseSearch);
+    });
+    return list.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
+  }, [purchases, purchaseDateRange, purchaseSearch, suppliers]);
+
   const purchaseStats = useMemo(() => {
     const openStatuses = ['pending', 'confirmed'];
-    const openOrders = purchases.filter((p) => openStatuses.includes(String(p.status || '').toLowerCase())).length;
-    const totalValue = purchases.reduce((sum, p) => sum + Number(p.totalAmount || p.total || p.totalCost || 0), 0);
-    const amountDue = purchases
+    const openOrders = filteredPurchases.filter((p) => openStatuses.includes(String(p.status || '').toLowerCase())).length;
+    const totalValue = filteredPurchases.reduce((sum, p) => sum + resolvePurchaseTotal(p), 0);
+    const amountDue = filteredPurchases
       .filter((p) => p.status === 'received' && p.paymentStatus !== 'paid')
-      .reduce((sum, p) => sum + Math.max(0, Number(p.totalAmount || p.total || 0) - Number(p.amountPaid || 0)), 0);
-    return { total: purchases.length, openOrders, totalValue, amountDue };
-  }, [purchases]);
+      .reduce((sum, p) => sum + Math.max(0, resolvePurchaseTotal(p) - parseNumberish(p.amountPaid)), 0);
+    return { total: filteredPurchases.length, openOrders, totalValue, amountDue };
+  }, [filteredPurchases]);
 
   return (
     <AdminPageShell
@@ -2113,11 +2258,80 @@ const AdminPurchases: React.FC = () => {
       }
     >
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
-        <AdminStatCard title="Purchase Orders" value={purchaseStats.total} icon={ShoppingCart} gradient="from-teal-500 to-teal-700" subtitle="All POs on record" />
+        <AdminStatCard title="Purchase Orders" value={purchaseStats.total} icon={ShoppingCart} gradient="from-teal-500 to-teal-700" subtitle={datePreset === 'all' ? 'All POs on record' : 'In selected period'} />
         <AdminStatCard title="Open POs" value={purchaseStats.openOrders} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Pending or confirmed" />
         <AdminStatCard title="Total PO Value" value={money(purchaseStats.totalValue)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Sum of all orders" />
         <AdminStatCard title="Amount Due" value={money(purchaseStats.amountDue)} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 ? 'text-orange-600' : undefined} />
       </div>
+
+      <AdminPanel className="mb-4 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+        <CardContent className="py-4">
+          <Label htmlFor="purchase-list-search" className="text-sm font-medium text-muted-foreground mb-2 block">
+            Search purchases
+          </Label>
+          <div className="relative mb-3">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              id="purchase-list-search"
+              className="pl-9"
+              value={purchaseSearch}
+              onChange={(e) => setPurchaseSearch(e.target.value)}
+              placeholder="Supplier, item, notes, PO or CB number…"
+              aria-label="Search purchases"
+            />
+          </div>
+          <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+            <span className="text-sm font-medium text-muted-foreground">Order date</span>
+            <div className="flex flex-wrap gap-2">
+              {(
+                [
+                  ['all', 'All'],
+                  ['today', 'Today'],
+                  ['month', 'This month'],
+                  ['custom', 'Custom'],
+                ] as const
+              ).map(([key, label]) => (
+                <Button
+                  key={key}
+                  type="button"
+                  size="sm"
+                  variant={datePreset === key ? 'default' : 'outline'}
+                  className={datePreset === key ? 'bg-teal-600 hover:bg-teal-700' : ''}
+                  onClick={() => setDatePreset(key)}
+                >
+                  {label}
+                </Button>
+              ))}
+            </div>
+            {datePreset === 'custom' && (
+              <div className="flex flex-wrap items-center gap-2">
+                <Label htmlFor="po-filter-start" className="sr-only">From</Label>
+                <Input
+                  id="po-filter-start"
+                  type="date"
+                  className="w-auto"
+                  value={customRangeStart}
+                  onChange={(e) => setCustomRangeStart(e.target.value)}
+                />
+                <span className="text-sm text-muted-foreground">to</span>
+                <Label htmlFor="po-filter-end" className="sr-only">To</Label>
+                <Input
+                  id="po-filter-end"
+                  type="date"
+                  className="w-auto"
+                  value={customRangeEnd}
+                  onChange={(e) => setCustomRangeEnd(e.target.value)}
+                />
+              </div>
+            )}
+            {(datePreset !== 'all' || purchaseSearch.trim()) && (
+              <p className="text-xs text-muted-foreground w-full sm:w-auto sm:ml-auto">
+                Showing {filteredPurchases.length} of {purchases.length}
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </AdminPanel>
 
       <OcrReceiptFlow
         open={ocrOpen}
@@ -2558,9 +2772,19 @@ const AdminPurchases: React.FC = () => {
                 <p className="text-gray-500">No purchase orders yet. Create your first PO to get started.</p>
               </CardContent>
             </AdminPanel>
+          ) : filteredPurchases.length === 0 ? (
+            <AdminPanel>
+              <CardContent className="py-12 text-center">
+                <p className="text-gray-500">
+                  {purchaseSearch.trim() ? 'No purchases match your search.' : 'No purchase orders in this date range.'}
+                </p>
+              </CardContent>
+            </AdminPanel>
           ) : (
-            purchases.map((purchase) => {
+            filteredPurchases.map((purchase) => {
               const supplier = suppliers.find(s => s.id === purchase.supplierId);
+              const poRef = purchaseDisplayRef(purchase);
+              const isCashBookRef = poRef.startsWith('CB-');
 
               return (
                 <AdminPanel key={purchase.id}>
@@ -2568,15 +2792,29 @@ const AdminPurchases: React.FC = () => {
                     <div className="flex items-start justify-between">
                       <div>
                         <CardTitle className="flex items-center gap-2">
-                          {purchase.invoiceNumber || purchase.poNumber || `PO-${purchase.id.slice(0, 8)}`}
+                          <span title={isCashBookRef ? 'Cash book line ID — imported from Excel expenses (not a supplier bill #)' : undefined}>
+                            {poRef}
+                          </span>
                           {getStatusBadge(purchase.status)}
                           {getPaymentBadge(purchase)}
                         </CardTitle>
                         <CardDescription>
-                          Supplier: {supplier?.name || 'Unknown'} | Order Date: {new Date(purchase.orderDate).toLocaleDateString()}
+                          Supplier: {supplier?.name || purchase.supplierName || 'Unknown'} | Order Date: {new Date(purchase.orderDate).toLocaleDateString()}
+                          {isCashBookRef && (
+                            <span className="block text-xs mt-0.5">CB = cash book reference for this imported expense line</span>
+                          )}
                         </CardDescription>
                       </div>
-                      <div className="flex gap-2">
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditPurchase(purchase)}
+                          title="Edit purchase"
+                        >
+                          <Edit3 className="h-4 w-4 mr-1" />
+                          Edit
+                        </Button>
                         {purchase.status === 'draft' && (
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
@@ -2663,12 +2901,15 @@ const AdminPurchases: React.FC = () => {
                             Cancel
                           </Button>
                         )}
-                        {(purchase.status === 'returned' || purchase.status === 'cancelled') && (
+                        {(isCashBookPurchase(purchase)
+                          || purchase.status === 'returned'
+                          || purchase.status === 'cancelled'
+                          || purchase.status !== 'received') && (
                           <Button
                             variant="outline"
                             size="sm"
                             onClick={() => handleDeletePurchase(purchase.id)}
-                            title="Delete returned/cancelled purchase"
+                            title="Delete purchase"
                           >
                             <Trash2 className="h-4 w-4 mr-1" />
                             Delete
@@ -2779,6 +3020,98 @@ const AdminPurchases: React.FC = () => {
             })
           )}
         </div>
+
+        <Dialog
+          open={!!editingPurchase}
+          onOpenChange={(open) => {
+            if (!open) setEditingPurchase(null);
+          }}
+        >
+          <DialogContent className="sm:max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Edit purchase {editingPurchase ? purchaseDisplayRef(editingPurchase) : ''}</DialogTitle>
+              <DialogDescription>Update supplier, date, amount, and notes.</DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4">
+              <div>
+                <Label htmlFor="edit-supplier">Supplier / description</Label>
+                <Input
+                  id="edit-supplier"
+                  value={editDraft.supplierName}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, supplierName: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-order-date">Order date</Label>
+                <Input
+                  id="edit-order-date"
+                  type="date"
+                  value={editDraft.orderDate}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, orderDate: e.target.value }))}
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-amount">Amount</Label>
+                  <Input
+                    id="edit-amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={editDraft.amount}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, amount: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-payment-status">Payment</Label>
+                  <select
+                    id="edit-payment-status"
+                    className={DIALOG_NATIVE_SELECT_CLASS}
+                    value={editDraft.paymentStatus}
+                    onChange={(e) =>
+                      setEditDraft((d) => ({
+                        ...d,
+                        paymentStatus: e.target.value as Purchase['paymentStatus'],
+                      }))
+                    }
+                  >
+                    <option value="paid">Paid</option>
+                    <option value="partial">Partial</option>
+                    <option value="unpaid">Unpaid</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <Label htmlFor="edit-amount-paid">Amount paid</Label>
+                <Input
+                  id="edit-amount-paid"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editDraft.amountPaid}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, amountPaid: e.target.value }))}
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-notes">Notes</Label>
+                <Textarea
+                  id="edit-notes"
+                  rows={3}
+                  value={editDraft.notes}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, notes: e.target.value }))}
+                />
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setEditingPurchase(null)} disabled={isSavingEdit}>
+                Cancel
+              </Button>
+              <Button onClick={handleSaveEditPurchase} disabled={isSavingEdit}>
+                {isSavingEdit ? 'Saving…' : 'Save changes'}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
 
         {/* Receive Purchase Dialog */}
         {receivingPurchase && (

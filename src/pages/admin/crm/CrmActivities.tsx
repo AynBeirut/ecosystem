@@ -40,6 +40,7 @@ import {
   CRM_ACTIVITY_TYPE_LABELS,
   CRM_ACTIVITY_RESULT_LABELS,
 } from '@/lib/crm';
+import CrmActivityTypeIcon from '@/components/crm/CrmActivityTypeIcon';
 import type { CrmActivity } from '@/types/crm';
 import { useToast } from '@/hooks/use-toast';
 
@@ -263,6 +264,7 @@ const CrmActivities: React.FC = () => {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead>Type</TableHead>
                     <TableHead>Date</TableHead>
                     <TableHead>Rep</TableHead>
                     <TableHead>Customer</TableHead>
@@ -277,13 +279,16 @@ const CrmActivities: React.FC = () => {
                 <TableBody>
                   {activities.length === 0 ? (
                     <TableRow>
-                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">
+                      <TableCell colSpan={10} className="text-center text-muted-foreground py-8">
                         No visits match your filters.
                       </TableCell>
                     </TableRow>
                   ) : (
                     activities.map((a) => (
                       <TableRow key={a.id}>
+                        <TableCell>
+                          <CrmActivityTypeIcon type={a.type} showLabel />
+                        </TableCell>
                         <TableCell className="whitespace-nowrap text-sm">
                           {new Date(a.loggedAt).toLocaleDateString()}
                         </TableCell>

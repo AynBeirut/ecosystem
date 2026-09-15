@@ -8,6 +8,7 @@ export const RESTAURANT_PACKAGE: MarketingPackageContent = {
   tagline: 'Dining operations in one flow',
   presetKey: 'pkg_live_kitchen',
   demoStoreSlug: 'grabio-demo-restaurant',
+  comparisonPageSlug: 'grabio-vs-touchbistro-restaurant',
   metaTitle: 'Restaurant POS & Food Cost Software | Grabio',
   metaDescription:
     'Full-service restaurant POS with table service, kitchen tickets, live recipe costing, and delivery on one platform. Dine-in and aggregator orders share stock — try the demo.',

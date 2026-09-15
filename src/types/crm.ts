@@ -61,6 +61,8 @@ export interface CrmCustomerFields {
   dealCurrency?: string;
   lastActivityAt?: string | null;
   lastActivityResult?: CrmActivityResult | null;
+  lastActivityType?: CrmActivityType | null;
+  nextFollowUpType?: CrmActivityType | null;
   crmEnabled?: boolean;
 }
 

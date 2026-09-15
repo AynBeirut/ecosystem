@@ -20,10 +20,14 @@ import AdminPanel from '@/components/admin/AdminPanel';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Switch } from '@/components/ui/switch';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
+import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { isLowStockAlertsEnabled } from '@/lib/inventorySettings';
 
 const AdminRawMaterials: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const { profile } = useStoreEntitlements();
+  const lowStockAlertsEnabled = isLowStockAlertsEnabled(profile);
   const [materials, setMaterials] = useState<RawMaterial[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [isAddingMaterial, setIsAddingMaterial] = useState(false);
@@ -578,7 +582,7 @@ const AdminRawMaterials: React.FC = () => {
           </Dialog>
 
         {/* Low Stock Alert */}
-        {lowStockCount > 0 && (
+        {lowStockAlertsEnabled && lowStockCount > 0 && (
           <Alert variant="destructive" className="mb-6">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>

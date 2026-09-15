@@ -8,8 +8,8 @@ import { runPwaCleanupOnce } from './lib/pwaCleanup'
 runPwaCleanupOnce();
 
 /** After deploy, stale cached entry/chunks → dynamic import fails. Reload with cache-bust (see index.html). */
-const CHUNK_RELOAD_KEY = 'grabio_chunk_reload_v3';
-const MAX_CHUNK_RELOADS = 3;
+const CHUNK_RELOAD_KEY = 'grabio_chunk_reload_v4';
+const MAX_CHUNK_RELOADS = 8;
 
 function hardRecoverFromStaleChunk(force = false): void {
   let count = 0;
@@ -63,10 +63,11 @@ window.addEventListener('unhandledrejection', (event) => {
   const message = String(reason?.message ?? reason ?? '');
   if (
     message.includes('Failed to fetch dynamically imported module') ||
-    message.includes('Importing a module script failed')
+    message.includes('Importing a module script failed') ||
+    message.includes('error loading dynamically imported module')
   ) {
     event.preventDefault();
-    hardRecoverFromStaleChunk();
+    hardRecoverFromStaleChunk(true);
   }
 });
 window.addEventListener(

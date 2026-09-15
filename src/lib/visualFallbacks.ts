@@ -2,6 +2,15 @@
 
 const PLACEHOLDER_HOSTS = ['placehold.co', 'via.placeholder.com', 'dummyimage.com', 'picsum.photos'];
 
+/** Shop/marketplace logo — separate from A4 invoice `logo` on locked stores like NIPCO. */
+export function resolveMarketplaceStoreLogo(store?: {
+  logoUrl?: string;
+  logo?: string;
+} | null): string | undefined {
+  const url = store?.logoUrl?.trim() || store?.logo?.trim();
+  return url || undefined;
+}
+
 export function isPlaceholderImageUrl(url?: string): boolean {
   const value = url?.trim() || '';
   if (!value) return true;

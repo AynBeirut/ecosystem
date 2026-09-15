@@ -52,6 +52,7 @@ export const PRESET_LIST = Object.entries(PACKAGE_PRESETS).map(([key, value]) =>
 
 const PRESET_ORDER: StartingPackageKey[] = [
   'pkg_invoice',
+  'pkg_web_presence',
   'pkg_mini_shop',
   'pkg_business_backend',
   'pkg_shop',

@@ -7,6 +7,9 @@ import {
   type GrabioInvoiceTemplate,
 } from '@/lib/invoiceTemplateMap';
 import type { StoreProfile } from '@/types/storeProfile';
+import { assertNipcoInvoiceTemplateWritable } from '@/lib/nipcoInvoiceTemplateLock';
+
+/** A4 invoice branding — NIPCO store is locked; see nipcoInvoiceTemplateLock.ts */
 
 export type FinanceDocumentSettings = {
   documentLogo?: string;
@@ -59,6 +62,7 @@ export async function updateFinanceDocumentSettings(
   storeId: string,
   patch: Partial<FinanceDocumentSettings>,
 ): Promise<void> {
+  assertNipcoInvoiceTemplateWritable(storeId);
   const ref = doc(db, 'storeProfiles', storeId);
   const snap = await getDoc(ref);
   if (!snap.exists()) return;

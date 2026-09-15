@@ -10,6 +10,8 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useAuth } from '@/context/useAuth';
+import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { isSalesAllowedWhenOutOfStock } from '@/lib/inventorySettings';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -28,6 +30,7 @@ import {
 import DropshipSupplierFields from '@/components/admin/DropshipSupplierFields';
 import type { SupplierPlatform } from '@/types/product';
 import { getActualStoreId } from '@/lib/storeUtils';
+import { canViewProductCost, isWebBuilderSubAccount } from '@/lib/webBuilderAccess';
 import { Switch } from '@/components/ui/switch';
 import { Product, ProductType, ServiceBillingType } from '@/types/product';
 import { useToast } from '@/hooks/use-toast';
@@ -104,6 +107,18 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
   const [limitDialogOpen, setLimitDialogOpen] = useState(false);
   const [limitDialogMessage, setLimitDialogMessage] = useState('');
   const storeId = getActualStoreId(user);
+  const showProductCost = canViewProductCost(user);
+  const isWebBuilder = isWebBuilderSubAccount(user);
+  const stripBuilderCostFields = (payload: Record<string, unknown>) => {
+    if (!isWebBuilder) return payload;
+    const next = { ...payload };
+    delete next.costPrice;
+    delete next.serviceCost;
+    delete next.recipeId;
+    return next;
+  };
+  const { profile } = useStoreEntitlements();
+  const allowSalesWhenOutOfStock = isSalesAllowedWhenOutOfStock(profile);
   const catalogImagesAllowed = planLimits?.allowsCatalogImages !== false;
   const countableProductsCount = products.filter((product) =>
     isCatalogCountableProductData(product as unknown as Record<string, unknown>),
@@ -182,7 +197,7 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
     const numericStock = rawStock === '' ? 0 : Number(rawStock);
     return {
       stock: numericStock,
-      inStock: numericStock > 0,
+      inStock: allowSalesWhenOutOfStock ? true : numericStock > 0,
     };
   };
   // Load products from Firestore once auth token is ready for secured collections
@@ -247,7 +262,6 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
       }
 
       try {
-        // Fetch products
         const productsRef = collection(db, 'products');
         const q = query(productsRef, where('storeId', '==', storeId));
         const snapshot = await getDocs(q);
@@ -257,8 +271,20 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
           ...productDoc.data(),
         } as Product));
         setProducts(productsList);
+      } catch (error) {
+        console.error('[AdminProducts] Failed to load products:', error);
+        if (!cancelled) setProducts([]);
+      }
 
-        // Fetch finished goods stock for composed products
+      if (cancelled) return;
+
+      if (isWebBuilder) {
+        setFinishedGoodsStock({});
+        setRecipes([]);
+        return;
+      }
+
+      try {
         const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
         const fgQuery = query(finishedGoodsRef, where('storeId', '==', storeId));
         const fgSnapshot = await getDocs(fgQuery);
@@ -271,8 +297,12 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
           }
         });
         setFinishedGoodsStock(stockMap);
+      } catch (error) {
+        console.warn('[AdminProducts] Failed to load finished goods stock:', error);
+        if (!cancelled) setFinishedGoodsStock({});
+      }
 
-        // Fetch recipes for composed products
+      try {
         const recipesRef = collection(db, 'recipes');
         const recipesQuery = query(recipesRef, where('storeId', '==', storeId));
         const recipesSnapshot = await getDocs(recipesQuery);
@@ -283,12 +313,8 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
         }));
         setRecipes(recipesList);
       } catch (error) {
-        console.error('[AdminProducts] Failed to load products:', error);
-        if (!cancelled) {
-          setProducts([]);
-          setFinishedGoodsStock({});
-          setRecipes([]);
-        }
+        console.warn('[AdminProducts] Failed to load recipes:', error);
+        if (!cancelled) setRecipes([]);
       }
     };
 
@@ -296,7 +322,7 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
     return () => {
       cancelled = true;
     };
-  }, [firestoreReady, storeId, user?.id]);
+  }, [firestoreReady, isWebBuilder, storeId, user?.id]);
 
   useEffect(() => {
     if (!firestoreReady || !storeId) {
@@ -575,8 +601,10 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
         expiryAlertDays: newProduct.productType !== 'service' && newProduct.expiryTracking ? newProduct.expiryAlertDays : undefined,
         ...supplierFields,
       };
-      const cleanProductData = Object.fromEntries(
-        Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v])
+      const cleanProductData = stripBuilderCostFields(
+        Object.fromEntries(
+          Object.entries(productData).map(([k, v]) => [k, v === undefined ? null : v]),
+        ) as Record<string, unknown>,
       );
       const productRef = doc(collection(db, 'products'));
       await runTransaction(db, async (tx) => {
@@ -852,7 +880,11 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
         ...(hasDropshipLink
           ? {}
           : {
-              inStock: newProduct.productType === 'service' ? true : (editingProduct.stock ?? 0) > 0,
+              inStock: newProduct.productType === 'service'
+                ? true
+                : allowSalesWhenOutOfStock
+                  ? true
+                  : (editingProduct.stock ?? 0) > 0,
             }),
         rating: editingProduct.rating,
         productType: newProduct.productType,
@@ -876,8 +908,10 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
         expiryAlertDays: newProduct.productType !== 'service' && newProduct.expiryTracking ? newProduct.expiryAlertDays : undefined,
         ...supplierFields,
       };
-      const cleanUpdatedProduct = Object.fromEntries(
-        Object.entries(updatedProduct).map(([k, v]) => [k, v === undefined ? null : v])
+      const cleanUpdatedProduct = stripBuilderCostFields(
+        Object.fromEntries(
+          Object.entries(updatedProduct).map(([k, v]) => [k, v === undefined ? null : v]),
+        ) as Record<string, unknown>,
       );
   await updateDoc(doc(db, 'products', editingProduct.id), cleanUpdatedProduct);
 
@@ -895,7 +929,7 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
       }
       
       // Update composedProducts collection if this is a composed product
-      if (newProduct.productType === 'composed' && newProduct.recipeId) {
+      if (!isWebBuilder && newProduct.productType === 'composed' && newProduct.recipeId) {
         const composedRef = collection(db, 'composedProducts');
         const composedQuery = query(composedRef, 
           where('storeId', '==', storeId),
@@ -977,7 +1011,9 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
               <TableHead className="hidden md:table-cell">Category</TableHead>
               <TableHead className="hidden lg:table-cell">Type</TableHead>
               <TableHead className="text-right">Price</TableHead>
-              <TableHead className="text-right hidden sm:table-cell">Cost</TableHead>
+              {showProductCost ? (
+                <TableHead className="text-right hidden sm:table-cell">Cost</TableHead>
+              ) : null}
               <TableHead className="text-right">Stock</TableHead>
             </TableRow>
           </TableHeader>
@@ -999,11 +1035,13 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
                 <TableCell className="text-right tabular-nums font-medium">
                   {money(Number(product.price) || 0)}
                 </TableCell>
-                <TableCell className="text-right tabular-nums hidden sm:table-cell text-muted-foreground">
-                  {product.costPrice != null && product.costPrice > 0
-                    ? money(Number(product.costPrice))
-                    : '—'}
-                </TableCell>
+                {showProductCost ? (
+                  <TableCell className="text-right tabular-nums hidden sm:table-cell text-muted-foreground">
+                    {product.costPrice != null && product.costPrice > 0
+                      ? money(Number(product.costPrice))
+                      : '—'}
+                  </TableCell>
+                ) : null}
                 <TableCell className="text-right tabular-nums">{productStockQty(product)}</TableCell>
               </TableRow>
             ))}
@@ -1315,13 +1353,17 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="simple">Simple Item - Buy & Sell with Stock</SelectItem>
-                        <SelectItem value="service">Service - No Stock, Has Cost</SelectItem>
-                        <SelectItem value="composed">Composed Product - Use Recipes Page</SelectItem>
+                        {!isWebBuilder ? (
+                          <>
+                            <SelectItem value="service">Service - No Stock, Has Cost</SelectItem>
+                            <SelectItem value="composed">Composed Product - Use Recipes Page</SelectItem>
+                          </>
+                        ) : null}
                       </SelectContent>
                     </Select>
                   </div>
 
-                  {newProduct.productType === 'service' && (
+                  {newProduct.productType === 'service' && !isWebBuilder && (
                     <div className="space-y-3">
                       <div>
                         <Label htmlFor="serviceCost">Service Cost</Label>
@@ -1377,7 +1419,7 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
                     </div>
                   )}
 
-                  {newProduct.productType === 'composed' && (
+                  {newProduct.productType === 'composed' && !isWebBuilder && (
                     <div>
                       <Label htmlFor="recipeId">Recipe</Label>
                       {recipes.length > 0 ? (
@@ -1640,13 +1682,17 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="simple">Simple Item - Buy & Sell with Stock</SelectItem>
-                  <SelectItem value="service">Service - No Stock, Has Cost</SelectItem>
-                  <SelectItem value="composed">Composed Product - Use Recipes Page</SelectItem>
+                  {!isWebBuilder ? (
+                    <>
+                      <SelectItem value="service">Service - No Stock, Has Cost</SelectItem>
+                      <SelectItem value="composed">Composed Product - Use Recipes Page</SelectItem>
+                    </>
+                  ) : null}
                 </SelectContent>
               </Select>
             </div>
 
-            {newProduct.productType === 'service' && (
+            {newProduct.productType === 'service' && !isWebBuilder && (
               <div className="space-y-3">
                 <div>
                   <Label htmlFor="edit-serviceCost">Service Cost</Label>
@@ -1702,7 +1748,7 @@ const AdminProducts: React.FC<{ embedded?: boolean }> = ({ embedded = false }) =
               </div>
             )}
             
-            {newProduct.productType === 'composed' && (
+            {newProduct.productType === 'composed' && !isWebBuilder && (
               <div>
                 <Label htmlFor="edit-recipeId">Recipe</Label>
                 <Select 

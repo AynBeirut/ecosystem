@@ -26,6 +26,8 @@ import autoTable from 'jspdf-autotable';
 import { cleanTextForPDF } from '@/lib/arabicPDF';
 import { Switch } from '@/components/ui/switch';
 import { getDaysUntilExpiry, hasExpired, isExpiringSoon } from '@/lib/expiryUtils';
+import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { isLowStockAlertsEnabled, isProjectBasedInventory } from '@/lib/inventorySettings';
 
 type SyncChange = {
   productName: string;
@@ -53,6 +55,9 @@ const AdminFinishedGoods: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { profile } = useStoreEntitlements();
+  const lowStockAlertsEnabled = isLowStockAlertsEnabled(profile);
+  const projectBasedInventory = isProjectBasedInventory(profile);
   
   const [finishedGoods, setFinishedGoods] = useState<(FinishedGoodsItem & { id: string })[]>([]);
   const [filteredGoods, setFilteredGoods] = useState<(FinishedGoodsItem & { id: string })[]>([]);
@@ -547,7 +552,7 @@ const AdminFinishedGoods: React.FC = () => {
       
       const newBalance = adjustingItem.currentBalance + quantityChange;
       
-      if (newBalance < 0) {
+      if (newBalance < 0 && !projectBasedInventory) {
         toast({ title: "Error", description: "Adjustment would result in negative stock", variant: "destructive" });
         return;
       }
@@ -775,6 +780,7 @@ const AdminFinishedGoods: React.FC = () => {
   };
 
   const getLowStockCount = () => {
+    if (!lowStockAlertsEnabled) return 0;
     return finishedGoods.filter(item => item.reorderPoint && item.currentBalance < item.reorderPoint).length;
   };
 

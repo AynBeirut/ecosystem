@@ -13,6 +13,7 @@ const EXTRA_STORAGE_BLOCK_MB = 5120;
 
 export const CORE_ENTRY_PACKAGES: StartingPackageKey[] = [
   'pkg_invoice',
+  'pkg_web_presence',
   'pkg_mini_shop',
   'pkg_business_backend',
   'pkg_shop',
@@ -28,21 +29,23 @@ export const INDUSTRY_PACKAGES: StartingPackageKey[] = [
 export function presetLimitLines(key: StartingPackageKey): string[] {
   switch (key) {
     case 'pkg_invoice':
-      return ['500 MB storage', 'Invoices & PDFs', 'No product catalog'];
+      return ['1 GB storage', 'Invoices & PDFs', 'Admin app + POS + Invoice Manager included'];
+    case 'pkg_web_presence':
+      return ['1 GB storage', 'Landing page or blog', 'Custom domain package available'];
     case 'pkg_mini_shop':
-      return ['1 GB storage', '15 products', 'Small product images'];
+      return ['2 GB storage', '15 products', 'Small shop + included apps'];
     case 'pkg_business_backend':
-      return ['1 GB storage', '50 products', 'No product images'];
+      return ['5 GB storage', '50 products', 'Backend ops + included apps'];
     case 'pkg_shop':
-      return ['3 GB storage', '50 products (+10 per $10/mo)', 'Full storefront'];
+      return ['5 GB storage', '50 products (+10 per $10/mo)', 'Full storefront + included apps'];
     case 'pkg_live_kitchen':
-      return ['3 GB storage', '50 products (+10 per $10/mo)', 'Kitchen + POS'];
+      return ['5 GB storage', '50 products (+10 per $10/mo)', 'Kitchen + POS + included apps'];
     case 'pkg_factory_flow':
-      return ['3 GB storage', '50 products (+10 per $10/mo)', 'Manufacturing'];
+      return ['5 GB storage', '50 products (+10 per $10/mo)', 'Manufacturing + included apps'];
     case 'pkg_ngo':
-      return ['500 MB storage', 'Invoicing only', 'No catalog'];
+      return ['2 GB storage', 'Projects, donor reports, proposals', 'Admin app + POS + Invoice Manager included'];
     case 'pkg_freelancer':
-      return ['500 MB storage', 'Invoicing only', 'No catalog'];
+      return ['2 GB storage', 'Invoicing, expenses, proposals', 'Admin app + POS + Invoice Manager included'];
     default:
       return [];
   }
@@ -55,22 +58,27 @@ export function resolveModularAllowsCatalogImages(profile: StoreProfile): boolea
   if (profile.startingPackage === 'pkg_business_backend') {
     return false;
   }
+  if (profile.startingPackage && MODULAR_BASE_PRODUCT_LIMIT[profile.startingPackage] === 0) {
+    return false;
+  }
   return true;
 }
 
 export const MODULAR_STORAGE_MB: Record<StartingPackageKey, number> = {
-  pkg_invoice: 500,
-  pkg_mini_shop: 1024,
-  pkg_business_backend: 1024,
-  pkg_shop: 3072,
-  pkg_live_kitchen: 3072,
-  pkg_factory_flow: 3072,
-  pkg_ngo: 500,
-  pkg_freelancer: 500,
+  pkg_invoice: 1024,
+  pkg_web_presence: 1024,
+  pkg_mini_shop: 2048,
+  pkg_business_backend: 5120,
+  pkg_shop: 5120,
+  pkg_live_kitchen: 5120,
+  pkg_factory_flow: 5120,
+  pkg_ngo: 2048,
+  pkg_freelancer: 2048,
 };
 
 export const MODULAR_BASE_PRODUCT_LIMIT: Partial<Record<StartingPackageKey, number>> = {
   pkg_invoice: 0,
+  pkg_web_presence: 0,
   pkg_mini_shop: 15,
   pkg_business_backend: 50,
   pkg_shop: SHOP_BASE_PRODUCT_LIMIT,
@@ -101,7 +109,6 @@ export function estimateModularMonthlyUsd(profile: StoreProfile): number {
 
   const addOns = normalizeAddOnsFromProfile(profile.addOns ?? profile.addOnsMeta);
   const addOnKeys: string[] = [];
-  if (addOns.domainPackage) addOnKeys.push('domainPackage');
   if (addOns.whatsappBusiness) addOnKeys.push('whatsappBusiness');
   if (addOns.salesCrm) addOnKeys.push('salesCrm');
   if (addOns.extraStorageBlocks > 0) addOnKeys.push('extraStorage');

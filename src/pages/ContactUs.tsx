@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Mail, Phone, MapPin, Send, CheckCircle, ExternalLink } from 'lucide-react';
 import { GRABIO_NAP } from '@/lib/grabioBrandSchema';
+import SEOHead from '@/components/SEOHead';
 
 const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
@@ -51,6 +52,28 @@ const ContactUs: React.FC = () => {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      <SEOHead
+        title="Contact Grabio"
+        description="Contact Grabio for small business ERP, POS, inventory, ecommerce, restaurant, and manufacturing software support in Lebanon and MENA."
+        url="/contact"
+        structuredData={{
+          '@context': 'https://schema.org',
+          '@type': 'ContactPage',
+          name: 'Contact Grabio',
+          url: 'https://grabio.space/contact',
+          mainEntity: {
+            '@type': 'Organization',
+            name: GRABIO_NAP.name,
+            telephone: GRABIO_NAP.phoneDisplay,
+            email: GRABIO_NAP.email,
+            address: {
+              '@type': 'PostalAddress',
+              addressLocality: GRABIO_NAP.city,
+              addressCountry: 'LB',
+            },
+          },
+        }}
+      />
       <Header />
       <main className="container mx-auto px-4 py-10 max-w-5xl">
         <div className="text-center mb-10">

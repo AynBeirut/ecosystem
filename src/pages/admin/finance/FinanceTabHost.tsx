@@ -1,9 +1,19 @@
 import React, { useEffect, useState } from 'react';
 import AdminEmbedLoader from '@/components/admin/AdminEmbedLoader';
 import BusinessFinanceStockReportEmbed from '@/pages/admin/finance/BusinessFinanceStockReportEmbed';
+import OwnerClientPortfolioReport from '@/pages/admin/finance/OwnerClientPortfolioReport';
+import OwnerPersonalWalletReport from '@/pages/admin/finance/OwnerPersonalWalletReport';
+import OwnerServiceIncomeReport from '@/pages/admin/finance/OwnerServiceIncomeReport';
+import OwnerReceivablesReport from '@/pages/admin/finance/OwnerReceivablesReport';
+import OwnerStayhaLoansReport from '@/pages/admin/finance/OwnerStayhaLoansReport';
 import {
   isAccountingReportTab,
   isAccountingSettingsTab,
+  isClientPortfolioTab,
+  isOwnerReceivablesTab,
+  isPersonalWalletTab,
+  isServiceIncomeTab,
+  isStayhaLoansTab,
   isStockReportTab,
   type StockReportTab,
 } from '@/pages/admin/finance/businessFinanceTabs';
@@ -27,8 +37,19 @@ const REPORT_MODULES = new Set<BusinessFinanceModule>([
 ]);
 
 function needsAccountingEmbed(activeKey: string, embedTab: string | null): boolean {
+  // Stock module uses BusinessFinanceStockReportEmbed — never the accounting ERP bundle.
+  if (activeKey === 'stock') return false;
   if (REPORT_MODULES.has(activeKey as BusinessFinanceModule)) {
-    return Boolean(embedTab && (isAccountingReportTab(embedTab) || isStockReportTab(embedTab)));
+    return Boolean(
+      embedTab &&
+        isAccountingReportTab(embedTab) &&
+        !isStockReportTab(embedTab) &&
+        !isClientPortfolioTab(embedTab) &&
+        !isServiceIncomeTab(embedTab) &&
+        !isOwnerReceivablesTab(embedTab) &&
+        !isPersonalWalletTab(embedTab) &&
+        !isStayhaLoansTab(embedTab),
+    );
   }
   if (activeKey === 'tools' || activeKey === 'coa') {
     return Boolean(embedTab && isAccountingSettingsTab(embedTab));
@@ -45,9 +66,7 @@ function FinanceTabHostInner({ activeModuleDef, moduleLoaderByKey }: FinanceTabH
   const { activeFinanceTab: activeModule, reportsEmbedTab, settingsEmbedTab } = useFinanceShellState();
 
   const [Page, setPage] = useState<React.ComponentType | null>(null);
-  const [AccountingComp, setAccountingComp] = useState<React.ComponentType | null>(() =>
-    getCachedFinancePage(loadAccounting) ?? null,
-  );
+  const [AccountingComp, setAccountingComp] = useState<React.ComponentType | null>(null);
 
   const isHubModule =
     REPORT_MODULES.has(activeModule as BusinessFinanceModule) ||
@@ -102,9 +121,26 @@ function FinanceTabHostInner({ activeModuleDef, moduleLoaderByKey }: FinanceTabH
   const showAccountingEmbed = needsEmbed && Boolean(AccountingComp);
   const showStockEmbed =
     REPORT_MODULES.has(activeModule as BusinessFinanceModule) && embedTab && isStockReportTab(embedTab);
+  const showClientPortfolioEmbed =
+    activeModule === 'receivables' && embedTab && isClientPortfolioTab(embedTab);
+  const showServiceIncomeEmbed =
+    activeModule === 'receivables' && embedTab && isServiceIncomeTab(embedTab);
+  const showOwnerReceivablesEmbed =
+    activeModule === 'receivables' && embedTab && isOwnerReceivablesTab(embedTab);
+  const showPersonalWalletEmbed = activeModule === 'bank' && embedTab && isPersonalWalletTab(embedTab);
+  const showStayhaLoansEmbed = activeModule === 'payables' && embedTab && isStayhaLoansTab(embedTab);
   const showAccountingMain = activeModule === 'accounting' && Boolean(AccountingComp);
   const showAccountStatement = isAccountStatement && Boolean(Page);
-  const hasContent = showAccountingMain || showAccountingEmbed || showStockEmbed || showAccountStatement;
+  const hasContent =
+    showAccountingMain ||
+    showAccountingEmbed ||
+    showStockEmbed ||
+    showClientPortfolioEmbed ||
+    showServiceIncomeEmbed ||
+    showOwnerReceivablesEmbed ||
+    showPersonalWalletEmbed ||
+    showStayhaLoansEmbed ||
+    showAccountStatement;
 
   return (
     <div className="finance-tab-host relative min-h-[80px]">
@@ -129,6 +165,36 @@ function FinanceTabHostInner({ activeModuleDef, moduleLoaderByKey }: FinanceTabH
       {showStockEmbed ? (
         <div className="finance-embed-panel">
           <BusinessFinanceStockReportEmbed tab={embedTab as StockReportTab} />
+        </div>
+      ) : null}
+
+      {showClientPortfolioEmbed ? (
+        <div className="finance-embed-panel">
+          <OwnerClientPortfolioReport />
+        </div>
+      ) : null}
+
+      {showServiceIncomeEmbed ? (
+        <div className="finance-embed-panel">
+          <OwnerServiceIncomeReport />
+        </div>
+      ) : null}
+
+      {showOwnerReceivablesEmbed ? (
+        <div className="finance-embed-panel">
+          <OwnerReceivablesReport />
+        </div>
+      ) : null}
+
+      {showPersonalWalletEmbed ? (
+        <div className="finance-embed-panel">
+          <OwnerPersonalWalletReport />
+        </div>
+      ) : null}
+
+      {showStayhaLoansEmbed ? (
+        <div className="finance-embed-panel">
+          <OwnerStayhaLoansReport />
         </div>
       ) : null}
 

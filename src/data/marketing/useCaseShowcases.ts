@@ -41,8 +41,8 @@ export const USE_CASE_CLIENT_STORES: Record<string, UseCaseClientStore> = {
   },
   services: {
     packageSlug: 'ecommerce',
-    storeSlug: 'ayn-beirut',
-    storeName: 'Ayn Beirut',
+    storeSlug: 'grabio',
+    storeName: 'Grabio',
     clientNote: 'Services & online presence',
   },
 };

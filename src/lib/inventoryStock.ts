@@ -27,6 +27,28 @@ export function resolveDisplayStock(
   fgMap: FinishedGoodsStockMap,
 ): number | undefined {
   if (product.productType === 'service') return undefined;
+  if (product.productType === 'composed') {
+    return fgMap[product.id] !== undefined ? fgMap[product.id] : undefined;
+  }
   if (fgMap[product.id] !== undefined) return fgMap[product.id];
   return typeof product.stock === 'number' ? product.stock : undefined;
+}
+
+export function isLowStockProduct(
+  product: {
+    id: string;
+    productType?: string;
+    stock?: number;
+    inStock?: boolean;
+    lowStockThreshold?: number;
+  },
+  fgMap: FinishedGoodsStockMap,
+  alertsEnabled = true,
+): boolean {
+  if (!alertsEnabled) return false;
+  if (product.inStock === false) return false;
+  const stock = resolveDisplayStock(product, fgMap);
+  if (stock === undefined || stock < 0) return false;
+  const threshold = typeof product.lowStockThreshold === 'number' ? product.lowStockThreshold : 5;
+  return stock <= threshold;
 }

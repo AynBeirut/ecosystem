@@ -42,7 +42,7 @@ const TIMELINE = [
 
 const MODULE_HIGHLIGHTS = [
   { label: 'Platform', href: '/features#platform-features', desc: 'Invoicing, marketplace, CRM, inventory' },
-  { label: 'Apps', href: '/features#apps-features', desc: 'Admin Android live; POS in development' },
+  { label: 'Apps', href: '/features#apps-features', desc: 'Admin Android, POS, and Invoice Manager included' },
   { label: 'AI Tools', href: '/features#ai-features', desc: 'In-account content, email, proposals' },
 ];
 

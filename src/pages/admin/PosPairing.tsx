@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/button';
 import { CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
-import ModuleGate from '@/components/ModuleGate';
 import { useToast } from '@/hooks/use-toast';
 import { Download, Link2, Monitor, RefreshCw, Smartphone } from 'lucide-react';
 import {
@@ -135,8 +134,7 @@ const PosPairing: React.FC = () => {
   const connectedDevicesCount = devices.length;
 
   return (
-    <ModuleGate moduleId="pos">
-      <AdminPageShell
+    <AdminPageShell
         title="Grabio POS"
         description="Install the Windows app, then pair your terminal to this store."
         eyebrow="POS"
@@ -404,7 +402,6 @@ const PosPairing: React.FC = () => {
           </CardContent>
         </AdminPanel>
       </AdminPageShell>
-    </ModuleGate>
   );
 };
 

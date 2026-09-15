@@ -20,6 +20,7 @@ import {
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { getSubAccountHomePath, isManagerSubAccount } from '@/lib/subAccountAccess';
+import { isFreelancerClientSubAccount, resolveBuilderUserDashboardPath } from '@/lib/webBuilderAccess';
 import { isGrabioStoreSubdomain, type StoreMobileNavLink } from '@/lib/storeUrls';
 import StoreVisual from '@/components/StoreVisual';
 
@@ -144,8 +145,17 @@ const Header: React.FC<HeaderProps> = ({
           {/* Desktop Navigation */}
           <nav className="hidden md:flex items-center space-x-8">
             {user && (user.role === 'admin' || user.role === 'sub_account') && !useWhiteLabel && (
-              <Link to={user.role === 'admin' || isManagerSubAccount(user) ? '/admin/dashboard' : '/team/dashboard'} className={`${textColor} ${hoverColor}`}>
-                Dashboard
+              <Link
+                to={
+                  isFreelancerClientSubAccount(user)
+                    ? resolveBuilderUserDashboardPath(user)
+                    : user.role === 'admin' || isManagerSubAccount(user)
+                      ? '/admin/dashboard'
+                      : '/team/dashboard'
+                }
+                className={`${textColor} ${hoverColor}`}
+              >
+                {isFreelancerClientSubAccount(user) ? 'Your clients' : 'Dashboard'}
               </Link>
             )}
             {user && user.role === 'user' && !useWhiteLabel && (
@@ -217,11 +227,20 @@ const Header: React.FC<HeaderProps> = ({
                     
                     {/* Credits feature removed */}
                     
-                    {(user.role === 'admin' || user.role === 'sub_account') ? (
+                    {(user.role === 'admin' || user.role === 'sub_account' || user.role === 'freelancer') ? (
                       <DropdownMenuItem asChild>
-                        <Link to={user.role === 'admin' || isManagerSubAccount(user) ? '/admin/dashboard' : '/team/dashboard'} className="flex cursor-pointer items-center">
+                        <Link
+                          to={
+                            user.role === 'freelancer' || isFreelancerClientSubAccount(user)
+                              ? resolveBuilderUserDashboardPath(user)
+                              : user.role === 'admin' || isManagerSubAccount(user)
+                                ? '/admin/dashboard'
+                                : '/team/dashboard'
+                          }
+                          className="flex cursor-pointer items-center"
+                        >
                           <Store className="mr-2 h-4 w-4" />
-                          <span>Manage Store</span>
+                          <span>{user.role === 'freelancer' || isFreelancerClientSubAccount(user) ? 'Your clients' : 'Manage Store'}</span>
                         </Link>
                       </DropdownMenuItem>
                     ) : user.role === 'user' ? (
@@ -333,13 +352,19 @@ const Header: React.FC<HeaderProps> = ({
                 </Link>
               )}
               
-              {user && (user.role === 'admin' || user.role === 'sub_account') && (
+              {user && (user.role === 'admin' || user.role === 'sub_account' || user.role === 'freelancer') && (
                 <Link
-                  to={user.role === 'admin' || isManagerSubAccount(user) ? '/admin/dashboard' : '/team/dashboard'}
+                  to={
+                    user.role === 'freelancer' || isFreelancerClientSubAccount(user)
+                      ? resolveBuilderUserDashboardPath(user)
+                      : user.role === 'admin' || isManagerSubAccount(user)
+                        ? '/admin/dashboard'
+                        : '/team/dashboard'
+                  }
                   className={`px-2 py-1 ${textColor} ${hoverColor}`}
                   onClick={toggleMenu}
                 >
-                  Dashboard
+                  {user.role === 'freelancer' || isFreelancerClientSubAccount(user) ? 'Your clients' : 'Dashboard'}
                 </Link>
               )}
               

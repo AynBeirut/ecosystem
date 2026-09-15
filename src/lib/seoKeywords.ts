@@ -13,7 +13,7 @@ import {
 import { db } from '@/lib/firebase';
 import { GRABIO_SOLUTIONS } from '@/lib/grabioSolutions';
 
-const GSC_PROPERTY = (import.meta.env.VITE_GSC_PROPERTY as string | undefined) || 'https://www.grabio.space/';
+const GSC_PROPERTY = (import.meta.env.VITE_GSC_PROPERTY as string | undefined) || 'https://grabio.space/';
 const GSC_RANKINGS_DOC = 'seo_technical/gsc_keyword_rankings';
 
 export type SeoIntentStage = 'awareness' | 'consideration' | 'decision';

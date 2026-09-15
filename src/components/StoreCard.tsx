@@ -7,6 +7,7 @@ import { getFirestore, collection, query, where, getCountFromServer } from 'fire
 import { useAuth } from '@/context/useAuth';
 import { pushDebugLog } from '@/lib/debugLogger';
 import { cn } from '@/lib/utils';
+import { resolveMarketplaceStoreLogo } from '@/lib/visualFallbacks';
 
 interface StoreCardProps {
   store: Store;
@@ -36,7 +37,7 @@ const StoreCard: React.FC<StoreCardProps> = ({ store }) => {
         <div className="flex items-center justify-center bg-gradient-to-b from-neutral-50/80 to-white px-6 pb-2 pt-8">
           <StoreVisual
             name={store.name}
-            logo={store.logo}
+            logo={resolveMarketplaceStoreLogo(store)}
             variant="card"
             className="h-[72px] w-[72px] rounded-2xl object-cover shadow-sm transition-transform duration-300 group-hover:scale-[1.02]"
           />

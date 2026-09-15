@@ -86,6 +86,11 @@ export function businessFinanceModuleForReport(reportTab: string): BusinessFinan
   if (reportTab === 'sales' || reportTab === 'purchases' || reportTab === 'inventory' || reportTab === 'products') {
     return 'stock';
   }
+  if (reportTab === 'personal-wallet') return 'bank';
+  if (reportTab === 'stayha-loans') return 'payables';
+  if (reportTab === 'service-income' || reportTab === 'owner-receivables' || reportTab === 'client-portfolio') {
+    return 'receivables';
+  }
   if (reportTab === 'ap-aging') return 'payables';
   if (reportTab === 'ar-aging') return 'receivables';
   if (reportTab === 'bank-rec' || reportTab === 'cash-flow') return 'bank';

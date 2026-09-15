@@ -1,5 +1,6 @@
 import {
   collection,
+  deleteField,
   doc,
   getDoc,
   getDocs,
@@ -11,6 +12,8 @@ import {
 import { generateSlug } from '@/lib/slugify';
 import type { AccountingTestSandbox, FreelancerTrack, PlatformFreelancer } from '@/types/career';
 import type { SubAccount } from '@/types/subaccount';
+import type { User } from '@/types/product';
+import { hydrateFreelancerUser } from '@/lib/freelancerAuth';
 import { createBuilderAccount } from '@/lib/builderService';
 
 const db = getFirestore();
@@ -116,6 +119,103 @@ export async function syncFreelancerClientStoreIds(uid: string, email: string): 
     { merge: true },
   );
   return storeIds;
+}
+
+export type FreelancerClientActivation = {
+  subAccountId: string;
+  storeId: string;
+  storeName: string;
+  role: SubAccount['role'];
+  permissions: SubAccount['permissions'];
+  displayName: string;
+};
+
+/** Switch freelancer into sub_account context for one client store (admin/builder work). */
+export async function activateFreelancerClientStore(
+  uid: string,
+  email: string,
+  storeId: string,
+): Promise<FreelancerClientActivation> {
+  const clients = await listFreelancerClients(email);
+  const match = clients.find((client) => client.storeId === storeId);
+  if (!match) {
+    throw new Error('No client access for this store.');
+  }
+  if (match.status !== 'active') {
+    throw new Error('This client access is not active.');
+  }
+
+  const subSnap = await getDoc(doc(db, 'subAccounts', match.subAccountId));
+  if (!subSnap.exists()) {
+    throw new Error('Client access record not found.');
+  }
+  const sub = subSnap.data() as Omit<SubAccount, 'id'>;
+  const normalized = email.trim().toLowerCase();
+  const timestamp = nowIso();
+  await setDoc(
+    doc(db, 'users', uid),
+    {
+      email: normalized,
+      name: sub.name || normalized.split('@')[0],
+      role: 'sub_account',
+      storeId,
+      subAccountId: match.subAccountId,
+      subAccountRole: sub.role,
+      freelancerMode: true,
+      freelancerTrack: deleteField(),
+      updatedAt: timestamp,
+    },
+    { merge: true },
+  );
+  await setDoc(
+    doc(db, 'subAccounts', match.subAccountId),
+    { userId: uid, lastLogin: timestamp, updatedAt: timestamp },
+    { merge: true },
+  );
+
+  return {
+    subAccountId: match.subAccountId,
+    storeId,
+    storeName: match.storeName,
+    role: sub.role,
+    permissions: sub.permissions,
+    displayName: sub.name || normalized.split('@')[0],
+  };
+}
+
+export async function ensureFreelancerPortalSession(
+  uid: string,
+  currentUser: User,
+): Promise<User | null> {
+  const profile = await getPlatformFreelancer(uid);
+  if (!profile) return null;
+  localStorage.removeItem('subAccountInfo');
+  localStorage.removeItem('sellerInfo');
+  await restoreFreelancerSession(uid, profile);
+  return hydrateFreelancerUser(getFirestore(), uid, currentUser);
+}
+
+/** Return freelancer to portal identity after working on a client store. */
+export async function restoreFreelancerSession(
+  uid: string,
+  profile: PlatformFreelancer,
+): Promise<void> {
+  const timestamp = nowIso();
+  await setDoc(
+    doc(db, 'users', uid),
+    {
+      role: 'freelancer',
+      freelancerTrack: profile.track,
+      name: profile.displayName,
+      email: profile.email,
+      storeId: profile.clientStoreIds?.[0] || null,
+      subAccountId: null,
+      subAccountRole: null,
+      freelancerMode: false,
+      updatedAt: timestamp,
+    },
+    { merge: true },
+  );
 }
 
 export async function listAccountingSandboxes(uid: string): Promise<AccountingTestSandbox[]> {

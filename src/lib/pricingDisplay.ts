@@ -16,6 +16,7 @@ export type ModuleBillingKind =
   | 'tier'
   | 'addon'
   | 'included'
+  | 'one_time'
   | 'planned';
 
 export type PricingModule = {
@@ -27,6 +28,8 @@ export type PricingModule = {
   billing: ModuleBillingKind;
   /** Paid add-on key when billing === 'addon' */
   addOnKey?: AddOnKey;
+  /** One-time USD price when billing === 'one_time' */
+  oneTimeUsd?: number;
   /** Minimum paid tier when billing === 'tier' */
   minTier?: PaidTier;
   status: 'live' | 'beta' | 'planned' | 'coming_soon';
@@ -60,24 +63,24 @@ export const PLAN_ELIGIBLE_ADDONS: Record<SubscriptionTier, AddOnKey[]> = {
 export const TIER_ORDER: PaidTier[] = ['starter', 'pro', 'business'];
 
 export const MODULE_CATALOG: PricingModule[] = [
-  { id: 'invoicing', name: 'Invoicing & Billing', group: 'platform', icon: '📄', summary: 'Invoices, PDF/WhatsApp delivery, dual currency', billing: 'core', status: 'live' },
-  { id: 'marketplace', name: 'Online Marketplace', group: 'platform', icon: '🏪', summary: 'Storefront, catalog, orders, custom domain ready', billing: 'core', status: 'live' },
+  { id: 'invoicing', name: 'Invoicing & Billing', group: 'platform', icon: '📄', summary: 'Invoices, PDF/WhatsApp delivery, currency control', billing: 'core', status: 'live' },
+  { id: 'marketplace', name: 'Online Marketplace', group: 'platform', icon: '🏪', summary: 'Storefront, catalog, orders', billing: 'core', status: 'live' },
+  { id: 'domainPackage', name: 'Custom Domain Package', group: 'platform', icon: '🌐', summary: 'Storefront custom domain mapping', billing: 'addon', addOnKey: 'domainPackage', status: 'live' },
   { id: 'analytics', name: 'Analytics & Reports', group: 'platform', icon: '📊', summary: 'Revenue, inventory turnover, statements', billing: 'core', status: 'live' },
-  { id: 'payments', name: 'Payments & Finance', group: 'platform', icon: '💳', summary: 'OMT, Stripe, expenses, P&L', billing: 'core', status: 'live' },
-  { id: 'delivery', name: 'Delivery & Fulfillment', group: 'platform', icon: '🚚', summary: 'Delivery workflow, GPS, push alerts', billing: 'core', status: 'live' },
-  { id: 'stock', name: 'Inventory & Stock', group: 'platform', icon: '📦', summary: 'Real-time stock, expiry alerts, suppliers', billing: 'planned', status: 'live' },
+  { id: 'payments', name: 'Payments & Finance', group: 'platform', icon: '💳', summary: 'OMT, Stripe, expenses', billing: 'core', status: 'live' },
+  { id: 'delivery', name: 'Delivery & Fulfillment', group: 'platform', icon: '🚚', summary: 'GPS, staff, push alerts', billing: 'core', status: 'live' },
+  { id: 'stock', name: 'Inventory & Stock', group: 'platform', icon: '📦', summary: 'Stock, POs, suppliers', billing: 'planned', status: 'live' },
   { id: 'factory', name: 'Factory & Production', group: 'platform', icon: '🏭', summary: 'BOM, production runs, batch manufacturing', billing: 'tier', minTier: 'pro', status: 'live' },
   { id: 'restaurant', name: 'Restaurant Production', group: 'platform', icon: '🍽️', summary: 'Live recipe deduction on sale', billing: 'planned', status: 'beta' },
   { id: 'crm', name: 'Sales CRM', group: 'platform', icon: '🎯', summary: 'Pipeline, field reps, visit logging', billing: 'tier', minTier: 'starter', status: 'live' },
-  { id: 'domainPackage', name: 'Custom Domain Package', group: 'platform', icon: '🌐', summary: 'Your domain, hosting, premium themes', billing: 'addon', addOnKey: 'domainPackage', status: 'live' },
   { id: 'whatsappBusiness', name: 'WhatsApp Business', group: 'platform', icon: '💬', summary: 'WhatsApp notifications and messaging', billing: 'addon', addOnKey: 'whatsappBusiness', status: 'live' },
   { id: 'extraStorage', name: 'Extra Storage (5 GB)', group: 'platform', icon: '💾', summary: 'Additional storage block', billing: 'addon', addOnKey: 'extraStorage', status: 'live' },
   { id: 'team', name: 'Team & Sub-Accounts', group: 'platform', icon: '👥', summary: 'Staff roles and permissions', billing: 'tier', minTier: 'business', status: 'live' },
   { id: 'dropship', name: 'Dropship Sync', group: 'platform', icon: '🔗', summary: 'Shein supplier links and stock sync', billing: 'planned', status: 'live' },
   { id: 'services', name: 'Service Subscriptions', group: 'platform', icon: '🔄', summary: 'Monthly/yearly service billing cycles', billing: 'planned', status: 'beta' },
-  { id: 'projects', name: 'Projects (PSA)', group: 'platform', icon: '💼', summary: 'Agency projects and client portals', billing: 'tier', minTier: 'starter', status: 'live' },
+  { id: 'projects', name: 'Projects (PSA)', group: 'platform', icon: '💼', summary: 'Agency and NGO client/grant portals', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'builder', name: 'Web Builder', group: 'platform', icon: '🎨', summary: 'Store templates, branding, colors — powered by AI', billing: 'tier', minTier: 'starter', status: 'live' },
-  { id: 'ai_builder', name: 'AI Builder', group: 'platform', icon: '✨', summary: 'AI site and content generation', billing: 'tier', minTier: 'starter', status: 'live' },
+  { id: 'ai_builder', name: 'AI Builder', group: 'platform', icon: '✨', summary: 'AI site generation; white-label for media companies: book a meeting', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'blog_publisher', name: 'Blog Publisher', group: 'platform', icon: '📰', summary: 'Write and publish articles on your store page', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'timesheet_attendance', name: 'Timesheet & Attendance', group: 'platform', icon: '⏱️', summary: 'PIN, badge, or face-scan clock-in linked to payroll', billing: 'planned', status: 'planned' },
   { id: 'recruitment_ats', name: 'Recruitment Funnel (ATS)', group: 'platform', icon: '📋', summary: 'Job postings, resumes, interview stages, and hiring pipeline', billing: 'planned', status: 'planned' },
@@ -89,10 +92,10 @@ export const MODULE_CATALOG: PricingModule[] = [
   { id: 'legal_esign', name: 'Legal Docs & E-Signatures', group: 'platform', icon: '✍️', summary: 'Contracts, NDAs, and quotes with native digital signature', billing: 'planned', status: 'planned' },
   { id: 'plm_eco', name: 'Product Lifecycle (PLM)', group: 'platform', icon: '🔬', summary: 'Engineering change orders and blueprint version control', billing: 'planned', status: 'planned' },
   { id: 'admin_mobile', name: 'Grabio Admin App', group: 'apps', icon: '📱', summary: 'Android owner dashboard on Google Play', billing: 'included', status: 'live' },
-  { id: 'pos', name: 'Grabio POS', group: 'apps', icon: '🖥️', summary: 'Windows POS — download, install, sync with your store', billing: 'tier', minTier: 'starter', status: 'live' },
-  { id: 'invoice_manager', name: 'Invoice Manager App', group: 'apps', icon: '📱', summary: 'Standalone mobile billing app', billing: 'tier', minTier: 'starter', status: 'live' },
-  { id: 'whitelabel', name: 'White-Label Store App', group: 'apps', icon: '📲', summary: 'Branded customer commerce app', billing: 'tier', minTier: 'business', status: 'live' },
-  { id: 'ai_agent', name: 'AI Workflow Agent', group: 'ai', icon: '🤖', summary: 'In-dashboard AI assistant', billing: 'planned', status: 'beta' },
+  { id: 'pos', name: 'Grabio POS', group: 'apps', icon: '🖥️', summary: 'Windows desktop download and mobile POS with barcode, offline mode, multi-payment, receipts, dual-currency display', billing: 'tier', minTier: 'starter', status: 'live' },
+  { id: 'invoice_manager', name: 'Invoice Manager App', group: 'apps', icon: '📱', summary: 'Standalone mobile billing workflow app decoupled from the full web admin dashboard', billing: 'tier', minTier: 'starter', status: 'live' },
+  { id: 'whitelabel', name: 'White-Label Store App', group: 'apps', icon: '📲', summary: 'Branded buyer app, not monthly', billing: 'one_time', oneTimeUsd: 200, status: 'live' },
+  { id: 'ai_agent', name: 'AI Workflow Agent', group: 'ai', icon: '🤖', summary: 'Pay-As-You-Go multi-agent and multi-LLM engine', billing: 'planned', status: 'beta' },
   { id: 'content_creator', name: 'Content Creator', group: 'ai', icon: '✍️', summary: 'Product copy, social, blog drafts', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'market_strategy', name: 'Market Strategy', group: 'ai', icon: '📈', summary: 'Growth and positioning insights', billing: 'tier', minTier: 'starter', status: 'live' },
   { id: 'email_marketing', name: 'Email Marketing', group: 'ai', icon: '📧', summary: 'Campaigns — limits vary by plan tier', billing: 'tier', minTier: 'starter', status: 'beta' },
@@ -123,7 +126,7 @@ export function tierMeetsMinimum(selected: PaidTier, minTier: PaidTier): boolean
 export function normalizeAddOnsFromProfile(addOns: unknown): AddOnSelection {
   if (Array.isArray(addOns)) {
     return {
-      domainPackage: addOns.includes('domainPackage') || addOns.includes('customDomainHosting'),
+      domainPackage: addOns.includes('domainPackage') || addOns.includes('customDomain'),
       whatsappBusiness: addOns.includes('whatsappBusiness'),
       salesCrm: addOns.includes('salesCrm'),
       extraStorageBlocks: addOns.includes('extraStorage') || addOns.includes('storage') ? 1 : 0,
@@ -131,7 +134,7 @@ export function normalizeAddOnsFromProfile(addOns: unknown): AddOnSelection {
   }
   const value = (addOns && typeof addOns === 'object' ? addOns : {}) as Record<string, unknown>;
   return {
-    domainPackage: Boolean(value.domainPackage),
+    domainPackage: Boolean(value.domainPackage || value.customDomain),
     whatsappBusiness: Boolean(value.whatsappBusiness),
     salesCrm: Boolean(value.salesCrm),
     extraStorageBlocks: Math.max(0, Number(value.extraStorageBlocks) || 0),
@@ -153,10 +156,10 @@ export function selectionFromModules(
       }
     }
   });
+  if (modules.domainPackage) selection.domainPackage = true;
   if (modules.extraStorage) {
     selection.extraStorageBlocks = Math.max(selection.extraStorageBlocks, 1);
   }
-  if (modules.domainPackage) selection.domainPackage = true;
   if (modules.whatsappBusiness) selection.whatsappBusiness = true;
   return selection;
 }
@@ -183,6 +186,7 @@ export function modulesFromSelection(
       }
     }
   });
+  modules.domainPackage = addOns.domainPackage;
   return modules;
 }
 
@@ -241,13 +245,17 @@ export function getModulePriceLabel(
 ): string {
   if (mod.billing === 'core' || mod.billing === 'included') return 'Included';
   if (mod.billing === 'tier' && mod.minTier) {
+    const minimumLabel = mod.minTier === 'business' ? 'Business' : mod.minTier === 'pro' ? 'Pro' : 'Starter';
     return tierMeetsMinimum(tier, mod.minTier)
-      ? `Included on ${mod.minTier === 'business' ? 'Business' : 'Pro'}+`
-      : `Requires ${mod.minTier === 'business' ? 'Business' : 'Pro'}+ plan`;
+      ? `Included on ${minimumLabel}+`
+      : `Requires ${minimumLabel}+ plan`;
   }
   if (mod.billing === 'addon' && mod.addOnKey) {
     const price = ADDON_PRICING[mod.addOnKey][billing];
     return `+$${price}/${billing === 'yearly' ? 'yr' : 'mo'}`;
+  }
+  if (mod.billing === 'one_time') {
+    return mod.oneTimeUsd ? `$${mod.oneTimeUsd} one-time` : 'One-time quote';
   }
   if (mod.billing === 'planned') {
     if (mod.status === 'coming_soon') return 'Coming soon';

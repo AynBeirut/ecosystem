@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { ChevronDown, Menu, X } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
+import { resolveBuilderUserDashboardPath } from '@/lib/webBuilderAccess';
 import { PHASE1_PACKAGES } from '@/lib/marketingPackages';
 
 const NAV_LINKS = [
@@ -21,14 +22,7 @@ const PublicNav: React.FC = () => {
   const location = useLocation();
   const { user, isLoading } = useAuth();
   const isSignedIn = !!user;
-  const dashboardPath =
-    user?.role === 'freelancer'
-      ? '/freelancer'
-      : user?.role === 'crm_rep'
-      ? '/team/crm'
-      : user?.role === 'sub_account'
-        ? '/team/dashboard'
-        : '/admin/dashboard';
+  const dashboardPath = user ? resolveBuilderUserDashboardPath(user) : '/admin/dashboard';
 
   const isActive = (href: string) =>
     href === '/'
@@ -83,7 +77,7 @@ const PublicNav: React.FC = () => {
               aria-haspopup="true"
               onClick={() => setIndustriesOpen((v) => !v)}
             >
-              Industries
+              Venues
               <ChevronDown className={`h-4 w-4 transition-transform ${industriesOpen ? 'rotate-180' : ''}`} />
             </button>
             {industriesOpen && (
@@ -162,7 +156,7 @@ const PublicNav: React.FC = () => {
         <div className="md:hidden border-t border-gray-100 bg-white px-4 pb-4">
           <ul className="flex flex-col gap-1 pt-3 list-none m-0 p-0">
             <li>
-              <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Industries</p>
+              <p className="px-3 py-1 text-[10px] font-bold uppercase tracking-wide text-slate-400">Venues</p>
             </li>
             {PHASE1_PACKAGES.map((pkg) => (
               <li key={pkg.slug}>

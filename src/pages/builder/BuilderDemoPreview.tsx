@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { getDoc, doc, getFirestore } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { getDemoBranding, listDemoProducts } from '@/lib/builderService';
@@ -9,6 +9,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
+import BuilderWorkspaceNav from '@/components/builder/BuilderWorkspaceNav';
+import {
+  EDITOR_PREVIEW_READY,
+  EDITOR_PREVIEW_STATE,
+  isEditorPreviewActive,
+  type EditorPreviewStatePayload,
+} from '@/lib/editorPreviewBridge';
 
 const db = getFirestore();
 
@@ -24,11 +31,14 @@ const DEFAULT_COLORS: Required<StoreTemplateColors> = {
 
 const BuilderDemoPreview: React.FC = () => {
   const { demoId } = useParams<{ demoId: string }>();
+  const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { user } = useAuth();
   const builderUid = user?.id;
+  const editorPreview = isEditorPreviewActive(searchParams);
 
   const [branding, setBranding] = useState<(BuilderDemoBranding & { templateColors?: StoreTemplateColors }) | null>(null);
+  const [livePreview, setLivePreview] = useState<EditorPreviewStatePayload | null>(null);
   const [products, setProducts] = useState<BuilderDemoProduct[]>([]);
   const [demoName, setDemoName] = useState('');
   const [loading, setLoading] = useState(true);
@@ -58,11 +68,26 @@ const BuilderDemoPreview: React.FC = () => {
     void load();
   }, [builderUid, demoId, navigate]);
 
+  useEffect(() => {
+    if (!editorPreview) return;
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type === EDITOR_PREVIEW_STATE && event.data.payload) {
+        setLivePreview(event.data.payload as EditorPreviewStatePayload);
+      }
+    };
+    window.addEventListener('message', onMessage);
+    window.parent?.postMessage({ type: EDITOR_PREVIEW_READY }, '*');
+    return () => window.removeEventListener('message', onMessage);
+  }, [editorPreview]);
+
   const colors = useMemo(() => {
-    const raw = branding?.templateColors;
+    const raw = livePreview?.content?.templateColors || branding?.templateColors;
     if (!raw || typeof raw !== 'object') return DEFAULT_COLORS;
     return { ...DEFAULT_COLORS, ...raw };
-  }, [branding]);
+  }, [branding, livePreview?.content?.templateColors]);
+
+  const title = branding?.name || demoName || 'Demo Store';
+  const subtitle = livePreview?.content?.slogan || branding?.slogan || branding?.description || 'Demo storefront preview';
 
   if (loading) {
     return (
@@ -71,8 +96,6 @@ const BuilderDemoPreview: React.FC = () => {
       </div>
     );
   }
-
-  const title = branding?.name || demoName || 'Demo Store';
 
   return (
     <div className="min-h-screen" style={{ background: colors.background, color: colors.textColor }}>
@@ -90,22 +113,19 @@ const BuilderDemoPreview: React.FC = () => {
                 Demo preview — not live until transfer
               </Badge>
               <h1 className="text-3xl font-bold">{title}</h1>
-              {branding?.slogan ? <p className="text-white/90">{branding.slogan}</p> : null}
-              {branding?.description ? (
-                <p className="text-sm text-white/80 max-w-2xl">{branding.description}</p>
-              ) : null}
+              {subtitle ? <p className="text-white/90">{subtitle}</p> : null}
               <p className="text-xs text-white/70 font-mono">
                 template: {branding?.template || 'default'}
                 {branding?.slug ? ` · slug: ${branding.slug}` : ''}
               </p>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button variant="secondary" asChild>
-                <Link to={`/builder/demo/${demoId}/edit?tab=design`}>Back to editor</Link>
-              </Button>
-              <Button variant="outline" className="bg-white/10 border-white/30 text-white hover:bg-white/20" asChild>
-                <Link to="/builder">Dashboard</Link>
-              </Button>
+              {!editorPreview && (
+                <Button variant="secondary" asChild>
+                  <Link to={`/builder/demo/${demoId}/edit?tab=classic`}>Back to editor</Link>
+                </Button>
+              )}
+              <BuilderWorkspaceNav compact showDemoWorkspaceLink />
             </div>
           </div>
         </div>

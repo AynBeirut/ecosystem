@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useParams, Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { ArrowLeft, Loader2, ClipboardList, UserX } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -48,7 +48,11 @@ function normalizePhone(p: string | null | undefined): string {
 }
 
 const CrmClientProfile: React.FC = () => {
-  const { clientId } = useParams<{ clientId: string }>();
+  const location = useLocation();
+  const clientId = React.useMemo(() => {
+    const match = location.pathname.match(/\/admin\/crm\/clients\/([^/]+)/);
+    return match?.[1] ?? '';
+  }, [location.pathname]);
   const { user } = useAuth();
   const { toast } = useToast();
   const storeId = getActualStoreId(user);
@@ -89,7 +93,7 @@ const CrmClientProfile: React.FC = () => {
       ]);
       setReps(repList);
       setActivities(acts);
-      if (!c) {
+      if (!c || c.storeId !== storeId) {
         setClient(null);
         setOrders([]);
         return;

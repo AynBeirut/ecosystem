@@ -18,6 +18,7 @@ import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { logAction } from '@/lib/auditLog';
 import { getActualStoreId } from '@/lib/storeUtils';
+import { loadStoreCustomerOperationalStats } from '@/lib/customerCrmStats';
 
 const CUSTOMER_TIERS = [
   { value: 'bronze', label: 'Bronze', color: 'bg-orange-100 text-orange-800', minPercent: 0 },
@@ -47,6 +48,8 @@ type Customer = {
   lifetimeValue?: number;
   totalOrders?: number;
   lastOrderDate?: string | null;
+  hideFromCustomerList?: boolean;
+  contactPerson?: string;
   storeId?: string;
   createdAt?: string;
   createdBy?: string;
@@ -72,6 +75,8 @@ function normalizeCustomer(docId: string, data: Record<string, unknown>): Custom
     lifetimeValue: Number(data.lifetimeValue || 0),
     totalOrders: Number(data.totalOrders || 0),
     lastOrderDate: typeof data.lastOrderDate === 'string' ? data.lastOrderDate : null,
+    hideFromCustomerList: data.hideFromCustomerList === true,
+    contactPerson: typeof data.contactPerson === 'string' ? data.contactPerson : '',
     storeId: typeof data.storeId === 'string' ? data.storeId : '',
     createdAt: typeof data.createdAt === 'string' ? data.createdAt : '',
     createdBy: typeof data.createdBy === 'string' ? data.createdBy : '',
@@ -282,7 +287,17 @@ const AdminCustomers: React.FC = () => {
         const customersList: Customer[] = snapshot.docs.map((customerDoc) =>
           normalizeCustomer(customerDoc.id, customerDoc.data() as Record<string, unknown>),
         );
-        setCustomers(customersList);
+        const operationalStats = await loadStoreCustomerOperationalStats(storeId);
+        const enrichedCustomers = customersList.map((customer) => {
+          const stats = operationalStats.get(customer.id);
+          if (!stats) return customer;
+          return {
+            ...customer,
+            totalOrders: stats.totalOrders,
+            lifetimeValue: stats.lifetimeValue,
+          };
+        });
+        setCustomers(enrichedCustomers);
 
         const saSnap = await getDocs(
           query(collection(db, 'subAccounts'), where('storeId', '==', storeId), where('role', '==', 'sales')),
@@ -472,9 +487,12 @@ const AdminCustomers: React.FC = () => {
 
   const getFilteredCustomers = () => {
     const filtered = customers.filter(customer => {
+      if (customer.hideFromCustomerList) return false;
+      if (customer.name.trim().toLowerCase() === 'walk-in') return false;
       const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           customer.phone.includes(searchTerm);
+                           customer.phone.includes(searchTerm) ||
+                           (customer.contactPerson || '').toLowerCase().includes(searchTerm.toLowerCase());
       const tier = getCustomerTier(customer);
       const matchesTier = filterTier === 'all' || tier.value === filterTier;
       return matchesSearch && matchesTier;
@@ -604,7 +622,8 @@ const AdminCustomers: React.FC = () => {
                           </Badge>
                         </CardTitle>
                         <CardDescription>
-                          {customer.email} | {customer.phone || 'No phone'}
+                          {customer.contactPerson ? `Contact: ${customer.contactPerson} · ` : ''}
+                          {customer.email || 'No email'} | {customer.phone || 'No phone'}
                         </CardDescription>
                       </div>
                       <div className="flex items-center gap-2">

@@ -402,9 +402,9 @@ function resolveStoreTabFromLocation(
   const view = searchParams.get('view');
 
   if (path.endsWith('/products') || view === 'products') return 'products';
+  if (path.endsWith('/about') || view === 'about') return 'about';
   if (categorySlug || path.includes('/category/')) return 'products';
   if (view === 'contact') return 'contact';
-  if (view === 'about') return 'about';
   if (view === 'home') return 'home';
   if (view) return view;
 
@@ -493,9 +493,14 @@ const StoreDetail: React.FC = () => {
   }, [editorPreview]);
 
   const normalizedCategorySlug = String(categorySlug || '').trim().toLowerCase();
+  /** Admin "Hidden Online" (inStock false) — omit from public storefront; editor preview shows all. */
+  const visibleProducts = useMemo(
+    () => (editorPreview ? products : products.filter((product) => product.inStock !== false)),
+    [products, editorPreview],
+  );
   const productCategories = useMemo(
-    () => Array.from(new Set(products.map((product) => String(product.category || '').trim()).filter(Boolean))),
-    [products]
+    () => Array.from(new Set(visibleProducts.map((product) => String(product.category || '').trim()).filter(Boolean))),
+    [visibleProducts],
   );
   const selectedCategory = useMemo(
     () => categoryFromSlug(productCategories, normalizedCategorySlug),
@@ -503,10 +508,10 @@ const StoreDetail: React.FC = () => {
   );
   const filteredProducts = useMemo(() => {
     const scoped = selectedCategory
-      ? products.filter((product) => product.category === selectedCategory)
-      : products;
+      ? visibleProducts.filter((product) => product.category === selectedCategory)
+      : visibleProducts;
     return sortProductsInStockFirst(scoped);
-  }, [products, selectedCategory]);
+  }, [visibleProducts, selectedCategory]);
 
   const mobileNavLinks = useMemo(() => {
     if (!store?.slug) return undefined;
@@ -825,7 +830,7 @@ const StoreDetail: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         <Header
           storeName={store?.name}
-          storeLogo={store?.logo}
+          storeLogo={store?.logoUrl || store?.logo}
           storeSlug={store?.slug}
           primaryColor={store?.templateColors?.primary}
           subscriptionTier={store?.subscriptionTier}
@@ -861,7 +866,7 @@ const StoreDetail: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         <Header
           storeName={store?.name}
-          storeLogo={store?.logo}
+          storeLogo={store?.logoUrl || store?.logo}
           storeSlug={store?.slug}
           primaryColor={store?.templateColors?.primary}
           subscriptionTier={store?.subscriptionTier}
@@ -1086,7 +1091,8 @@ const StoreDetail: React.FC = () => {
 
   const displaySlogan = liveContent?.slogan ?? store.slogan;
   const displayDescription = liveContent?.description ?? store.description;
-  const displayLogo = liveContent?.logo ?? store.logo;
+  const displayLogo =
+    (liveContent?.logo?.trim() && liveContent.logo) || store.logoUrl || store.logo;
   const displayLogoPosition = liveContent?.logoPosition ?? store.logoPosition;
 
   // Merge backgroundImage + carouselImages into one unified banner list
@@ -1459,9 +1465,10 @@ const StoreDetail: React.FC = () => {
                     <CardContent className="p-4 flex flex-col flex-1">
                       <h3 className={`font-semibold mb-2 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.title}</h3>
                       <p className={`text-sm whitespace-pre-line ${currentTheme.mutedText} line-clamp-6 flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>{c.text}</p>
-                      {c.text.length > 200 && (
+                      {c.text.length > 200 && store.slug && (
                         <button
-                          onClick={() => setReadMoreContent({ title: c.title, text: c.text })}
+                          type="button"
+                          onClick={() => handleCategoryNavigate(buildStoreTabPath(store.slug!, 'about'))}
                           className={`mt-3 text-xs font-semibold underline ${aboutLayout === 'centered' ? 'self-center' : 'self-start'} ${currentTheme.link}`}
                         >
                           Read More
@@ -1873,7 +1880,7 @@ const StoreDetail: React.FC = () => {
       
       <main className={pageLayout === 'contained' ? 'container mx-auto px-4 py-6' : 'py-6'}>
         {/* Store Header */}
-        {showStoreHeaderChrome && (
+        {showStoreHeaderChrome && activePage !== 'about' && (
         <EditorRegionShell
           id="store_header"
           editorPreview={editorPreview}
@@ -2084,23 +2091,27 @@ const StoreDetail: React.FC = () => {
         {activePage === 'home' && (
           <div className="space-y-6">
             {groupSectionsIntoRows().map((row, rowIdx) => {
-              const effectiveRow = row.map(resolveEffectiveSection);
+              const rowItems = row
+                .map((section) => ({ section, content: renderSection(section.id) }))
+                .filter((item): item is { section: StoreSectionOrder; content: React.ReactNode } => Boolean(item.content));
+
+              if (rowItems.length === 0) return null;
+
+              const effectiveRow = rowItems.map((item) => resolveEffectiveSection(item.section));
               const allFullWidth = effectiveRow.every(s => (s.container || 'contained') === 'full-width');
               
               return (
                 <div key={rowIdx} className={allFullWidth ? 'w-full' : ''}>
                   <div
                     className={
-                      row.length === 1 
-                        ? getSectionContainerClasses(row[0])
-                        : row.length === 2 
+                      rowItems.length === 1 
+                        ? getSectionContainerClasses(rowItems[0].section)
+                        : rowItems.length === 2 
                         ? `grid grid-cols-1 md:grid-cols-2 gap-6 ${!allFullWidth ? 'max-w-7xl mx-auto px-4' : ''}`
                         : `grid grid-cols-1 md:grid-cols-3 gap-6 ${!allFullWidth ? 'max-w-7xl mx-auto px-4' : ''}`
                     }
                   >
-                    {row.map((section) => {
-                      const content = renderSection(section.id);
-                      if (!content) return null;
+                    {rowItems.map(({ section, content }) => {
                       const effective = resolveEffectiveSection(section);
                       const useInnerContainer =
                         effective.container === 'full-width' && section.id !== 'hero';
@@ -2126,23 +2137,42 @@ const StoreDetail: React.FC = () => {
           </div>
         )}
 
-        {/* About Us Page */}
+        {/* About Us — full page */}
         {activePage === 'about' && (
-          <div className="space-y-6">
-            <h2 className={`text-2xl font-bold ${currentTheme.sectionTitle}`}>About Us</h2>
-            <div className={aboutLayout === 'centered' ? 'space-y-4' : 'grid grid-cols-1 md:grid-cols-3 gap-6 items-stretch'}>
+          <div className="w-screen relative left-1/2 -translate-x-1/2 min-h-[calc(100vh-10rem)]">
+            <div className="container mx-auto px-4 md:px-8 max-w-7xl py-6 md:py-12 space-y-10 md:space-y-14">
+              <header className={`space-y-3 ${aboutLayout === 'centered' ? 'text-center' : ''}`}>
+                <h1 className={`text-3xl md:text-4xl font-bold ${currentTheme.sectionTitle}`}>About Us</h1>
+                {displaySlogan && (
+                  <p className={`text-base md:text-lg ${currentTheme.mutedText}`}>{displaySlogan}</p>
+                )}
+              </header>
               {[
                 { title: 'Who We Are', text: aboutUs },
                 { title: 'Mission', text: mission },
                 { title: 'Vision', text: vision },
               ].filter(c => c.text).map(c => (
-                <Card key={c.title} className={`${currentTheme.cardSoft} flex flex-col ${aboutLayout === 'centered' ? 'max-w-3xl mx-auto' :  ''}`} style={contentCardStyle}>
-                  <CardContent className="p-6 flex flex-col flex-1">
-                    <h3 className={`text-lg font-semibold mb-3 ${aboutLayout === 'centered' ? 'text-center' : ''}`} style={{ color: contentCardStyle.color }}>{c.title}</h3>
-                    <p className={`text-sm whitespace-pre-line leading-relaxed flex-1 ${aboutLayout === 'centered' ? 'text-center' : ''}`} style={{ color: contentCardStyle.color }}>{c.text}</p>
-                  </CardContent>
-                </Card>
+                <section
+                  key={c.title}
+                  className={`space-y-4 ${aboutLayout === 'centered' ? 'text-center' : ''}`}
+                >
+                  <h2 className={`text-xl md:text-2xl font-semibold ${currentTheme.sectionTitle}`}>{c.title}</h2>
+                  <div
+                    className={`rounded-xl p-6 md:p-8 ${currentTheme.cardSoft}`}
+                    style={contentCardStyle}
+                  >
+                    <p
+                      className={`text-base md:text-lg whitespace-pre-line leading-relaxed ${aboutLayout === 'centered' ? 'text-center' : ''}`}
+                      style={{ color: contentCardStyle.color }}
+                    >
+                      {c.text}
+                    </p>
+                  </div>
+                </section>
               ))}
+              {!aboutUs && !mission && !vision && (
+                <p className={currentTheme.mutedText}>About content has not been added yet.</p>
+              )}
             </div>
           </div>
         )}

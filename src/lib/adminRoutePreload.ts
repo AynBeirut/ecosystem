@@ -24,6 +24,7 @@ const ROUTE_PRELOADERS: Record<string, Preloader> = {
   '/admin/invoice-manager': () => import('@/pages/admin/invoice-manager/InvoiceManagerModuleShell'),
   '/admin/invoice-manager/invoices': () => import('@/pages/admin/invoice-manager/InvoiceManagerModuleShell'),
   '/admin/staff': () => import('@/pages/admin/AdminStaff'),
+  '/admin/staff-presence': () => import('@/pages/admin/AdminStaffPresence'),
   '/admin/sub-accounts': () => import('@/pages/admin/AdminSubAccounts'),
   '/admin/account-statement': () => import('@/pages/admin/AdminAccountStatement'),
   '/admin/cash-collection': () => import('@/pages/admin/AdminBankReconciliation'),

@@ -56,6 +56,14 @@ export default function VenueSetupReadinessPanel({ profile, entitlements }: Prop
               <div>
                 <p className="text-sm font-medium text-slate-800">{t.label}</p>
                 <p className="text-xs text-slate-500">{t.hint}</p>
+                {t.continuePath && t.status !== 'ready' && t.status !== 'deferred' ? (
+                  <Link
+                    to={t.continuePath}
+                    className="mt-1 inline-block text-xs font-medium text-teal-700 hover:underline"
+                  >
+                    Continue → {t.continueLabel ?? 'Open'}
+                  </Link>
+                ) : null}
               </div>
               <span
                 className={cn(

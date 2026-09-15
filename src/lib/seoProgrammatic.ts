@@ -95,7 +95,7 @@ export const DEFAULT_TEMPLATES: Omit<ProgTemplate, 'id'>[] = [
       'Grabio {category} software for {storeType} businesses in {city}, Lebanon — inventory, POS, and accounting in one cloud platform.',
     h1Pattern: '{category} software for {storeType} in {city}',
     bodyPattern:
-      '<p>{storeType} operators in {city} — including {area} — use Grabio for {category}, real-time stock, and financial reporting without juggling separate tools.</p><p>Start with modular plans from $5/month and scale into full ERP as you grow.</p>',
+      '<p>{storeType} operators in {city} — including {area} — often outgrow spreadsheets when sales, stock, purchasing, delivery, and finance stop matching at the end of the day. Grabio gives these teams one place to run {category}, POS activity, customer orders, invoicing, and reporting without stitching together separate apps.</p><p>The platform is built for practical small-business workflows: owners can start with modular plans, add storefront or restaurant/manufacturing tools when needed, and keep inventory and accounting connected as volume grows.</p><p>For teams comparing software in {city}, the important question is not only features. It is whether daily work stays visible from counter sale to stock movement to payment record.</p>',
     faqQuestionPattern: 'What is the best {category} tool for {storeType} in {city}?',
     faqAnswerPattern:
       'Grabio combines {category}, POS, and general ledger accounting for {storeType} in {city} with mobile admin apps and Lebanese PCG-ready finance modules.',
@@ -108,7 +108,7 @@ export const DEFAULT_TEMPLATES: Omit<ProgTemplate, 'id'>[] = [
       'Cloud {category} platform for businesses near {area} in {city}. Grabio syncs web, POS, and mobile admin for {storeType}.',
     h1Pattern: '{category} near {area}',
     bodyPattern:
-      '<p>Businesses near {area} in {city} choose Grabio when they need {category} tied to daily operations — not a standalone spreadsheet.</p>',
+      '<p>Businesses near {area} in {city} choose Grabio when they need {category} tied to daily operations instead of another standalone spreadsheet. A shop, restaurant, wholesale business, or manufacturing team can manage products, customers, orders, stock changes, invoices, and reporting from one account.</p><p>This matters when work happens in more than one place: a counter sale should update inventory, an online order should reserve stock, and a manager should see what changed without waiting for manual reconciliation.</p><p>Grabio is designed for {storeType} operators who want software that supports local workflows while still giving them room to grow into ecommerce, finance, delivery, and automation.</p>',
     faqQuestionPattern: 'Does Grabio support {category} for businesses in {area}?',
     faqAnswerPattern:
       'Yes. Grabio serves {storeType} near {area} with cloud {category}, multi-location stock, and integrated accounting.',
@@ -301,6 +301,27 @@ export type GenerateBatchOptions = {
   maxPages?: number;
 };
 
+export function stripHtml(html: string): string {
+  return html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+export function getProgPageQualityIssues(page: Pick<ProgGeneratedPage, 'title' | 'metaDescription' | 'h1' | 'bodyHtml' | 'faqHtml' | 'canonicalUrl'>): string[] {
+  const issues: string[] = [];
+  const bodyWords = stripHtml(page.bodyHtml).split(/\s+/).filter(Boolean).length;
+  const faqWords = stripHtml(page.faqHtml).split(/\s+/).filter(Boolean).length;
+  if (page.title.length < 30 || page.title.length > 65) issues.push('title length must be 30-65 characters');
+  if (page.metaDescription.length < 120 || page.metaDescription.length > 170) issues.push('meta description length must be 120-170 characters');
+  if (!page.h1 || page.h1.length < 20) issues.push('H1 is too short');
+  if (bodyWords < 120) issues.push('body copy must be at least 120 words');
+  if (faqWords < 20) issues.push('FAQ copy must be at least 20 words');
+  if (!page.canonicalUrl.startsWith('https://grabio.space/pages/')) issues.push('canonical URL must stay on /pages/');
+  return issues;
+}
+
+export function canPublishProgPage(page: Pick<ProgGeneratedPage, 'title' | 'metaDescription' | 'h1' | 'bodyHtml' | 'faqHtml' | 'canonicalUrl'>): boolean {
+  return getProgPageQualityIssues(page).length === 0;
+}
+
 export async function generatePageBatch(options: GenerateBatchOptions): Promise<number> {
   const templates = await listProgTemplates();
   const template = templates.find((t) => t.id === options.templateId);
@@ -321,7 +342,7 @@ export async function generatePageBatch(options: GenerateBatchOptions): Promise<
           storeType,
         };
         const built = buildGeneratedPage(template, vars);
-        const status: ProgPageStatus = settings.automationMode ? 'published' : 'queued';
+        const status: ProgPageStatus = settings.automationMode && canPublishProgPage(built) ? 'published' : 'queued';
         await saveGeneratedPage(built, status);
         count += 1;
       }
@@ -332,6 +353,15 @@ export async function generatePageBatch(options: GenerateBatchOptions): Promise<
 }
 
 export async function updatePageStatus(slug: string, status: ProgPageStatus): Promise<void> {
+  if (status === 'published') {
+    const current = await getDoc(doc(db, PAGES_COL, slug));
+    if (!current.exists()) throw new Error('Page not found');
+    const issues = getProgPageQualityIssues(mapPageDoc(current as QueryDocumentSnapshot));
+    if (issues.length > 0) {
+      throw new Error(`Programmatic page is not publishable: ${issues.join('; ')}`);
+    }
+  }
+
   await setDoc(
     doc(db, PAGES_COL, slug),
     {
@@ -376,7 +406,7 @@ export async function scanDeadProgPages(
 
 export function buildSitemapUrlList(pages: ProgGeneratedPage[]): string[] {
   return pages
-    .filter((p) => p.status === 'published')
+    .filter((p) => p.status === 'published' && canPublishProgPage(p))
     .map((p) => p.canonicalUrl || `https://grabio.space/pages/${p.slug}`);
 }
 

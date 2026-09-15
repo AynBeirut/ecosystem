@@ -18,6 +18,8 @@ import { logAction } from '@/lib/auditLog';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { isProjectBasedInventory } from '@/lib/inventorySettings';
 import * as XLSX from 'xlsx';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
@@ -163,6 +165,8 @@ const AdminProduction: React.FC = () => {
   const { user } = useAuth();
   const { toast } = useToast();
   const isMobile = useIsMobile();
+  const { profile } = useStoreEntitlements();
+  const projectBasedInventory = isProjectBasedInventory(profile);
   const [batches, setBatches] = useState<ProductionBatch[]>([]);
   const [products, setProducts] = useState<ComposedProduct[]>([]);
   const [recipes, setRecipes] = useState<Recipe[]>([]);
@@ -777,9 +781,9 @@ const AdminProduction: React.FC = () => {
         const rawMaterialDoc = await getDoc(doc(db, 'rawMaterials', rawMaterialId));
         if (!rawMaterialDoc.exists()) return null;
         return { id: rawMaterialDoc.id, ...rawMaterialDoc.data() } as RawMaterial;
-      });
+      }, { skipStockCheck: projectBasedInventory });
 
-      if (resolved.insufficientStock) {
+      if (!projectBasedInventory && resolved.insufficientStock) {
         toast({
           title: 'Insufficient Stock',
           description: `Not enough ${resolved.insufficientStock.materialName}. Need: ${resolved.insufficientStock.need}, Available: ${resolved.insufficientStock.available}`,

@@ -1,3 +1,4 @@
+
 export interface StorePage {
   id: string;
   name: string;
@@ -80,6 +81,46 @@ export interface DeliveryPartnerSetting {
   type: 'shipping' | 'local';
   active: boolean;
 }
+
+export type GrabioBillingChannel = 'online' | 'manual' | 'whish';
+
+export type GrabioOpsSubscription = {
+  packageKind?: 'preset' | 'custom_quotation';
+  presetKey?: string;
+  customLabel?: string;
+  quotedMonthlyUsd?: number;
+  quotedYearlyUsd?: number;
+  quotationNotes?: string;
+  quotedAt?: string;
+  billingChannel?: GrabioBillingChannel;
+  opsNotes?: string;
+  lastOpsUpdateAt?: string;
+  lastOpsUpdateBy?: string;
+  freeGrantPeriod?: '1_month' | '1_year';
+};
+
+export type StoreInventorySettings = {
+  /** Buy materials per open project — no held stock. Disables low-stock alerts and stock blocks on sales/production. */
+  projectBasedInventory?: boolean;
+  /** Explicit override; ignored when projectBasedInventory is true. */
+  lowStockAlertsEnabled?: boolean;
+  /** Allow POS and admin sales when stock is zero. Low-stock alerts stay on unless project-based. */
+  allowSalesWhenOutOfStock?: boolean;
+};
+
+/** Fine-dining / live_kitchen admin IA — opt-in via restaurantFirstNavEnabled (existing tenants unchanged). */
+import type { VenueSetupIntakeMeta } from '@/types/venueSetup';
+
+export type VenueOpsSettings = {
+  /** When true, apply restaurant-first nav grouping and defaults below. */
+  restaurantFirstNavEnabled?: boolean;
+  enableFullInventory?: boolean;
+  enableBusinessFinance?: boolean;
+  enableCrmPipeline?: boolean;
+  enableReservationsHub?: boolean;
+  enableStorefrontBuilder?: boolean;
+  enableSeoOps?: boolean;
+};
 
 export interface StoreDeliverySettings {
   standardDelivery: boolean;
@@ -259,6 +300,8 @@ export interface StoreProfile {
   instagram: string;
   twitter: string;
   logo: string;
+  /** Marketplace / storefront logo (Storage URL). Preferred over legacy base64 `logo`. */
+  logoUrl?: string;
   /** A4 invoice / PDF branding — edited in Business Finance → Settings → Documents. */
   financeDocumentSettings?: FinanceDocumentSettings;
   status: 'online' | 'offline'; // Store visibility status
@@ -339,6 +382,8 @@ export interface StoreProfile {
   // Invoice configuration
   invoiceNumberPrefix?: string; // Default: "INV"
   lastInvoiceNumber?: number; // Last used invoice number
+  /** Purchase order human number prefix (default PO). Separate from sales invoice prefix. */
+  purchaseOrderPrefix?: string;
   invoiceTemplate?: 'modern' | 'classic' | 'vibrant'; // Invoice design template
   template?: 'default' | 'modern' | 'minimalist' | 'minimal' | 'classic' | 'classic_ecom' | 'fashion_boutique' | 'food_restaurant' | 'tech_electronics' | 'vibrant' | 'professional' | 'artistic'; // Storefront template
   storeBackgroundImage?: string;
@@ -378,6 +423,17 @@ export interface StoreProfile {
   priceMultiplier?: number; // Default price multiplier for composed products (default: 2.5)
   // Delivery configuration
   deliverySettings?: StoreDeliverySettings;
+  /** Per-store inventory behaviour — project-based vs warehouse stock. */
+  inventorySettings?: StoreInventorySettings;
+  /** Venue / restaurant-first admin navigation (Slice C). */
+  venueOpsSettings?: VenueOpsSettings;
+  /** Future Excel/workflow intake queue (Slice D) — items added only from approved imports. */
+  venueSetupIntake?: VenueSetupIntakeMeta;
+  /** Grabio platform ops — custom quotation / manual billing metadata. */
+  grabioOpsSubscription?: GrabioOpsSubscription;
+  accountPackageLabel?: string;
+  accountLabel?: string;
+  isTestAccount?: boolean;
   // Marketplace and dropshipping integrations
   marketplaceIntegrations?: MarketplaceIntegrationSetting[];
   dropshippingPartners?: DropshippingPartnerSetting[];

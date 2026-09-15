@@ -22,7 +22,7 @@ import {
 } from '@/lib/seoTechnical';
 
 const CANONICAL_DOC = 'seo_technical/canonical_health';
-const GSC_PROPERTY = import.meta.env.VITE_GSC_PROPERTY as string || 'https://www.grabio.space/';
+const GSC_PROPERTY = import.meta.env.VITE_GSC_PROPERTY as string || 'https://grabio.space/';
 const GA4_ID = (import.meta.env.VITE_GA4_ID as string | undefined) || 'G-YSSWDNYTSW';
 
 export type CanonicalHealthSnapshot = {

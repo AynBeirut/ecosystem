@@ -11,6 +11,7 @@ export type BusinessWorkflow =
 
 export type StartingPackageKey =
   | 'pkg_invoice'
+  | 'pkg_web_presence'
   | 'pkg_mini_shop'
   | 'pkg_business_backend'
   | 'pkg_shop'
@@ -44,56 +45,63 @@ export const PACKAGE_PRESETS: Record<
   pkg_invoice: {
     label: 'Invoice Manager',
     workflow: 'freelancer',
-    defaultModules: ['invoicing', 'invoice_manager', 'admin_mobile'],
+    defaultModules: ['invoicing', 'invoice_manager', 'admin_mobile', 'pos'],
     monthlyUsd: 5,
     yearlyUsd: 50,
+  },
+  pkg_web_presence: {
+    label: 'Website & Blog',
+    workflow: 'shop',
+    defaultModules: ['marketplace', 'builder', 'blog_publisher', 'admin_mobile', 'pos', 'invoice_manager'],
+    monthlyUsd: 10,
+    yearlyUsd: 100,
   },
   pkg_mini_shop: {
     label: 'Mini Shop',
     workflow: 'shop',
-    defaultModules: ['invoicing', 'marketplace', 'payments', 'stock', 'admin_mobile'],
+    defaultModules: ['invoicing', 'marketplace', 'payments', 'stock', 'admin_mobile', 'pos', 'invoice_manager'],
     monthlyUsd: 10,
     yearlyUsd: 100,
   },
   pkg_business_backend: {
     label: 'Business Backend',
     workflow: 'shop',
-    defaultModules: ['invoicing', 'analytics', 'payments', 'delivery', 'stock', 'admin_mobile'],
+    defaultModules: [...CORE_MODULE_IDS, 'stock', 'admin_mobile', 'pos', 'invoice_manager'],
     monthlyUsd: 19,
     yearlyUsd: 190,
   },
   pkg_shop: {
     label: 'Shop',
     workflow: 'shop',
-    defaultModules: [...CORE_MODULE_IDS, 'stock'],
+    defaultModules: [...CORE_MODULE_IDS, 'stock', 'admin_mobile', 'pos', 'invoice_manager'],
     monthlyUsd: 27,
     yearlyUsd: 270,
   },
   pkg_live_kitchen: {
     label: 'Live Kitchen',
     workflow: 'live_kitchen',
-    defaultModules: [...CORE_MODULE_IDS, 'stock', 'restaurant', 'pos'],
+    defaultModules: [...CORE_MODULE_IDS, 'stock', 'restaurant', 'pos', 'admin_mobile', 'invoice_manager'],
     monthlyUsd: 27,
     yearlyUsd: 270,
   },
   pkg_factory_flow: {
     label: 'Factory Flow',
     workflow: 'factory',
-    defaultModules: [...CORE_MODULE_IDS, 'stock', 'factory'],
+    defaultModules: [...CORE_MODULE_IDS, 'stock', 'factory', 'pos', 'admin_mobile', 'invoice_manager'],
     monthlyUsd: 27,
     yearlyUsd: 270,
   },
   pkg_ngo: {
     label: 'NGO',
     workflow: 'ngo',
-    defaultModules: ['invoicing', 'invoice_manager'],
+    defaultModules: ['invoicing', 'invoice_manager', 'analytics', 'payments', 'proposal_writer', 'projects', 'admin_mobile', 'pos'],
     monthlyUsd: 22,
     yearlyUsd: 220,
   },
   pkg_freelancer: {
     label: 'Freelancer',
     workflow: 'freelancer',
-    defaultModules: ['invoicing', 'invoice_manager'],
+    defaultModules: ['invoicing', 'invoice_manager', 'analytics', 'payments', 'proposal_writer', 'admin_mobile', 'pos'],
     monthlyUsd: 22,
     yearlyUsd: 220,
   },
@@ -121,3 +129,17 @@ export function modulesRecordFromList(ids: ModuleId[]): Record<string, boolean> 
 export function presetToEnabledModules(preset: StartingPackageKey): Record<string, boolean> {
   return modulesRecordFromList(PACKAGE_PRESETS[preset].defaultModules);
 }
+
+export type { ProductStratum } from '@/lib/productClassification';
+export {
+  getModuleProductStratum,
+  getPackageProductStratum,
+  getWorkflowProductStratum,
+  isActiveCoreWorkflow,
+  isConnectedHighEndModule,
+  isDeferredPackage,
+  isOptionalMaturityModule,
+  PACKAGE_PRODUCT_STRATUM,
+  PRODUCT_STRATUM_LABELS,
+  WORKFLOW_PRODUCT_STRATUM,
+} from '@/lib/productClassification';

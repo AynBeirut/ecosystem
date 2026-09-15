@@ -5,11 +5,11 @@ import { RESTAURANT_PACKAGE } from './content/restaurant';
 import { MANUFACTURING_PACKAGE } from './content/manufacturing';
 import { ECOMMERCE_PACKAGE } from './content/ecommerce';
 
-/** Phase 1 ship order — shop → café → restaurant → manufacturing → e-commerce */
+/** Public nav order — venue-first, then maintained verticals. */
 export const PHASE1_PACKAGES: MarketingPackageContent[] = [
-  SHOP_PACKAGE,
-  CAFE_PACKAGE,
   RESTAURANT_PACKAGE,
+  CAFE_PACKAGE,
+  SHOP_PACKAGE,
   MANUFACTURING_PACKAGE,
   ECOMMERCE_PACKAGE,
 ];

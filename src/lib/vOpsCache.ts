@@ -72,13 +72,26 @@ export function isStoreMarkedNotTrial(storeId: string): boolean {
 /** Module-level route gate cache — ProtectedRoute remounts on every admin path. */
 const gateSubAllowed = new Set<string>();
 const gateIpAllowed = new Set<string>();
+const GATE_SUB_SS = `${SS_PREFIX}gate:sub:`;
 
 export function gateSubscriptionAllowed(storeId: string): boolean {
-  return Boolean(storeId && gateSubAllowed.has(storeId));
+  if (!storeId) return false;
+  if (gateSubAllowed.has(storeId)) return true;
+  try {
+    return sessionStorage.getItem(`${GATE_SUB_SS}${storeId}`) === '1';
+  } catch {
+    return false;
+  }
 }
 
 export function markGateSubscriptionAllowed(storeId: string): void {
-  if (storeId) gateSubAllowed.add(storeId);
+  if (!storeId) return;
+  gateSubAllowed.add(storeId);
+  try {
+    sessionStorage.setItem(`${GATE_SUB_SS}${storeId}`, '1');
+  } catch {
+    // private mode — in-memory set still works for this tab
+  }
 }
 
 export function gateIpAllowedFor(storeId: string): boolean {

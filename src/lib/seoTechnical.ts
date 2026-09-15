@@ -69,8 +69,10 @@ export type GscInspectionRow = {
   indexingState: string;
 };
 
-const GSC_PROPERTY = import.meta.env.VITE_GSC_PROPERTY as string || 'https://www.grabio.space/';
-const GSC_SCOPE = 'https://www.googleapis.com/auth/webmasters.readonly';
+const GSC_PROPERTY = import.meta.env.VITE_GSC_PROPERTY as string || 'https://grabio.space/';
+/** Read GSC + submit sitemap + Indexing API for marketing URLs (admin SEO audit). */
+export const GSC_SCOPE =
+  'https://www.googleapis.com/auth/webmasters.readonly https://www.googleapis.com/auth/webmasters https://www.googleapis.com/auth/indexing';
 const TOKEN_KEY = 'grabio_gsc_token';
 const PSI_KEY = import.meta.env.VITE_PAGESPEED_API_KEY as string | undefined;
 
@@ -359,4 +361,4 @@ export function computeTechnicalHealthScore(
   return score;
 }
 
-export { GSC_SCOPE, TOKEN_KEY, PSI_KEY };
+export { TOKEN_KEY, PSI_KEY };

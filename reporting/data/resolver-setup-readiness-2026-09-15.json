@@ -1,0 +1,35 @@
+{
+  "generatedAt": "2026-09-15T23:30:00+03:00",
+  "scope": "builder-finish-resolver-setup-readiness-2026-09-15",
+  "resolver": {
+    "module": "src/lib/effectiveStoreContext.ts",
+    "functions": [
+      "resolveEffectiveStoreContext",
+      "resolveEffectiveModuleCapabilities",
+      "resolveEffectiveRolePolicy",
+      "canShowAdminCrmNav",
+      "canShowAdminSeoNav"
+    ],
+    "environmentImplemented": ["web_admin"],
+    "legacyDefault": "restaurantFirstNavEnabled false → venueOpsNav legacy mode",
+    "liveKitchenDefault": "restaurantFirstNavEnabled true → inventory/finance nav off until toggles"
+  },
+  "setupReadiness": {
+    "tracks": "src/lib/venueSetupReadiness.ts",
+    "opsPanel": "VenueSetupReadinessPanel on AdminGrabioPlatform",
+    "clientToggles": "VenueOpsSettingsPanel on AdminProfile",
+    "continueLinks": true
+  },
+  "tests": [
+    "src/__tests__/effectiveStoreContext.test.ts",
+    "src/__tests__/venueOpsNav.test.ts",
+    "src/__tests__/venueSetupReadiness.test.ts",
+    "src/__tests__/venueOpsSettingsUi.test.ts"
+  ],
+  "humanVerificationPending": [
+    "Web: toggle restaurant-first on live_kitchen store; sidebar matches toggles",
+    "Ops: Grabio Platform client picker shows readiness + continue links",
+    "Mobile 1.3.9 (140) tenant binding — separate from web resolver slice"
+  ],
+  "deployPush": "pending explicit approval per handoff"
+}

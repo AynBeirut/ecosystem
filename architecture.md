@@ -89,6 +89,7 @@ Canonical structure map: `~/Documents/grabio-platform-docs/Architecture/Packages
 - `storeProfiles/{storeId}` keeps store-owned public/admin settings and existing profile fields.
 - Store-scoped settings may be grouped under typed objects such as `orderSettings`, `paymentSettings`, `reservationSettings`, `roleSettings`, `inventorySettings`, and `financeDocumentSettings`.
 - Web admin, public marketplace, mobile apps, POS, and Cloud Functions must resolve the same effective settings for the same store.
+- **Web admin resolver (2026-09-15):** `src/lib/effectiveStoreContext.ts` — profile + entitlements + role + `venueOpsSettings`; see `docs/architecture/effective-store-context.md`.
 - Package gates decide whether a feature is available; tenant settings decide whether an available feature is enabled and how it behaves.
 - Defaults must be explicit and product-safe so older stores keep stable behavior when a new option is added.
 

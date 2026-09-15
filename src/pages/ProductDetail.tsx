@@ -29,8 +29,16 @@ import { generateSlug } from '@/lib/slugify';
 import ClampedText from '@/components/ClampedText';
 import ProductVisual from '@/components/ProductVisual';
 import { resolveStoreShopUrl } from '@/lib/storeNavigation';
-import { buildStoreMobileNavLinks, buildStoreRelativePath, buildStoreRootPath, buildStoreTabPath, isExternalUrl, isStoreBrandedHost, redirectToStoreSubdomain, storeSlugFromHostname } from '@/lib/storeUrls';
+import { buildStoreMobileNavLinks, buildStorePublicUrl, buildStoreRelativePath, buildStoreRootPath, buildStoreTabPath, isExternalUrl, isStoreBrandedHost, redirectToStoreSubdomain, storeSlugFromHostname } from '@/lib/storeUrls';
 import { getStoreContactPageLabel } from '@/lib/storeContactPage';
+
+type FbqFunction = ((...args: unknown[]) => void) & {
+  callMethod?: (...args: unknown[]) => void;
+  queue: unknown[][];
+  push: FbqFunction;
+  loaded: boolean;
+  version: string;
+};
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
@@ -152,7 +160,7 @@ const ProductDetail: React.FC = () => {
         }
         
         // Calculate stock for composed products
-        let finalProduct: Product = { id: productId, ...productData } as Product;
+        const finalProduct: Product = { id: productId, ...productData } as Product;
         if (finalProduct.productType === 'composed' && finalProduct.recipeId && productData.storeId) {
           if (ECOSYSTEM_FLAGS.publicProductStockApi) {
             try {
@@ -227,9 +235,13 @@ const ProductDetail: React.FC = () => {
       return;
     }
 
-    const fbq: any = function (...args: any[]) {
-      fbq.callMethod ? fbq.callMethod(...args) : fbq.queue.push(args);
-    };
+    const fbq = ((...args: unknown[]) => {
+      if (fbq.callMethod) {
+        fbq.callMethod(...args);
+        return;
+      }
+      fbq.queue.push(args);
+    }) as FbqFunction;
     fbq.push = fbq;
     fbq.loaded = true;
     fbq.version = '2.0';
@@ -467,14 +479,24 @@ const ProductDetail: React.FC = () => {
     }
   };
 
+  const productSeo = product?.seoSettings;
+  const productSeoDescription =
+    productSeo?.metaDescription || store?.seoSettings?.metaDescription || product?.description || '';
+  const productSeoImage = productSeo?.ogImage || store?.seoSettings?.ogImage || product?.image;
+  const productCanonicalUrl = productSeo?.canonicalUrl || store?.seoSettings?.canonicalBaseUrl || (product
+    ? store?.slug
+      ? buildStorePublicUrl(store.slug, `/product/${product.slug || product.id}`)
+      : `https://grabio.space/product/id/${product.id}`
+    : undefined);
+
   const productStructuredData: Array<Record<string, unknown>> = product
     ? [
         {
           '@context': 'https://schema.org',
           '@type': 'Product',
           name: product.name,
-          description: store?.seoSettings?.metaDescription || product.description || '',
-          image: store?.seoSettings?.ogImage || product.image,
+          description: productSeoDescription,
+          image: productSeoImage,
           sku: product.sku || undefined,
           category: product.category,
           brand: store?.name ? { '@type': 'Brand', name: store.name } : undefined,
@@ -514,7 +536,7 @@ const ProductDetail: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         <Header
           storeName={store?.name}
-          storeLogo={store?.logo}
+          storeLogo={store?.logoUrl || store?.logo}
           storeSlug={store?.slug}
           logoPosition={store?.logoPosition}
           primaryColor={store?.templateColors?.primary}
@@ -551,7 +573,7 @@ const ProductDetail: React.FC = () => {
       <div className="min-h-screen bg-gray-50">
         <Header
           storeName={store?.name}
-          storeLogo={store?.logo}
+          storeLogo={store?.logoUrl || store?.logo}
           storeSlug={store?.slug}
           logoPosition={store?.logoPosition}
           primaryColor={store?.templateColors?.primary}
@@ -583,26 +605,23 @@ const ProductDetail: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50">
       <SEOHead
-        title={product.name}
-        description={store?.seoSettings?.metaDescription || product.description || `Buy ${product.name} from ${store?.name || 'a local store'} on Grabio`}
-        image={store?.seoSettings?.ogImage || product.image}
-        url={store?.seoSettings?.canonicalBaseUrl || (store?.slug
-          ? buildStorePublicUrl(store.slug, `/product/${product.slug || product.id}`)
-          : `https://grabio.space/product/id/${product.id}`
-        )}
+        title={productSeo?.metaTitle || product.name}
+        description={productSeoDescription || `Buy ${product.name} from ${store?.name || 'a local store'} on Grabio`}
+        image={productSeoImage}
+        url={productCanonicalUrl}
         type="product"
         price={product.price}
         currency={store ? undefined : 'USD'}
-        keywords={store?.seoSettings?.keywords}
-        robotsIndex={store?.seoSettings?.robotsIndex ?? true}
-        robotsFollow={store?.seoSettings?.robotsFollow ?? true}
+        keywords={productSeo?.keywords || store?.seoSettings?.keywords}
+        robotsIndex={(store?.seoSettings?.robotsIndex ?? true) && (productSeo?.robotsIndex ?? true)}
+        robotsFollow={(store?.seoSettings?.robotsFollow ?? true) && (productSeo?.robotsFollow ?? true)}
         twitterHandle={store?.seoSettings?.twitterHandle}
         facebookAppId={store?.metaIntegrationSettings?.facebookAppId}
         structuredData={productStructuredData}
       />
       <Header
         storeName={store?.name}
-        storeLogo={store?.logo}
+        storeLogo={store?.logoUrl || store?.logo}
         storeSlug={store?.slug}
         logoPosition={store?.logoPosition}
         primaryColor={store?.templateColors?.primary}
@@ -894,7 +913,7 @@ const ProductDetail: React.FC = () => {
       {typeof window !== 'undefined' && isStoreBrandedHost(window.location.hostname) && store && (
         <StoreBrandedFooter
           storeName={store.name}
-          logo={store.logo}
+          logo={store.logoUrl || store.logo}
           contactEmail={store.contactInfo?.email}
           contactPhone={store.contactInfo?.phone}
           primaryColor={store.templateColors?.primary}

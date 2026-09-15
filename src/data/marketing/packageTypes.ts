@@ -32,6 +32,8 @@ export type MarketingPackageContent = {
   /** Per-page display labels for module chips (underlying module id unchanged) */
   moduleLabelOverrides?: Record<string, string>;
   moduleStripTitle: string;
+  /** Plain link to `/compare/...` — not a second CTA button */
+  comparisonPageSlug?: string;
   faqs: { question: string; answer: string }[];
 };
 

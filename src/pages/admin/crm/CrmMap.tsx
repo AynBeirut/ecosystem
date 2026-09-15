@@ -45,6 +45,7 @@ import {
   type RepeatFilter,
 } from '@/lib/crmMapUtils';
 import { cn } from '@/lib/utils';
+import CrmActivityTypeIcon from '@/components/crm/CrmActivityTypeIcon';
 import { useToast } from '@/hooks/use-toast';
 
 const REPEAT_OPTIONS: RepeatFilter[] = ['all', 'due', 'overdue'];
@@ -559,6 +560,11 @@ const CrmMap: React.FC = () => {
                             className="h-2.5 w-2.5 rounded-full shrink-0"
                             style={{ backgroundColor: statusColor(mapStatus) }}
                           />
+                          {c.nextFollowUpType || c.lastActivityType ? (
+                            <CrmActivityTypeIcon type={c.nextFollowUpType || c.lastActivityType} />
+                          ) : c.nextFollowUpAt ? (
+                            <CrmActivityTypeIcon type="visit" />
+                          ) : null}
                           <span className="font-medium">{c.name || 'Unnamed'}</span>
                           <Badge variant="outline" className="text-[10px] ml-auto">
                             {PIPELINE_LABELS[c.pipelineStage || 'new_lead'] || c.pipelineStage}

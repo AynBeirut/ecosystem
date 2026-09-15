@@ -17,6 +17,10 @@ import {
 } from '@/lib/vOpsCache';
 import AdminEmbedLoader from '@/components/admin/AdminEmbedLoader';
 import FinanceModuleLoadingShell from '@/pages/admin/finance/FinanceModuleLoadingShell';
+import { canAccessFreelancerPortal, getAccountingFreelancerClientDashboardPath, getWebBuilderClientDashboardPath, isAccountingFreelancerAllowedPath, isAccountingFreelancerSubAccount, isWebBuilderAllowedPath, isWebBuilderSubAccount } from '@/lib/webBuilderAccess';
+import { isManagerSubAccount } from '@/lib/subAccountAccess';
+import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { getAdminPathFeatureDenial, type FeatureAccessDenial } from '@/lib/featureAccessGate';
 
 
 const ProtectedRoute: React.FC<{ 
@@ -37,11 +41,20 @@ const ProtectedRoute: React.FC<{
   const ipAllowedRef = useRef(false);
   const lastKnownUserRef = useRef(user);
   const authRecoveryUntilRef = useRef(0);
+  const { profile, entitlements } = useStoreEntitlements();
+
+  const featureDenial: FeatureAccessDenial | null = useMemo(() => {
+    if (!user) return null;
+    if (!location.pathname.startsWith('/admin')) return null;
+    if (isWebBuilderSubAccount(user) || isAccountingFreelancerSubAccount(user)) return null;
+    return getAdminPathFeatureDenial(location.pathname, profile, entitlements, user);
+  }, [user, location.pathname, profile, entitlements]);
 
   const isBuilderAuthGracePath = useMemo(
     () =>
       location.pathname.startsWith('/admin/theme-editor') ||
-      location.pathname.startsWith('/admin/templates'),
+      location.pathname.startsWith('/admin/templates') ||
+      location.pathname.startsWith('/admin/builder'),
     [location.pathname],
   );
 
@@ -226,17 +239,26 @@ const ProtectedRoute: React.FC<{
   const requiresSubscriptionCheck = useMemo(() => {
     if (!user) return false;
     if (user.role !== 'admin' && user.role !== 'sub_account') return false;
+    // Team members inherit the owner store subscription — avoid remount spinner loops.
+    if (user.role === 'sub_account') return false;
     const path = location.pathname;
     if (path === '/subscription' || path.startsWith('/subscription/')) return false;
     if (path.startsWith('/admin/builder') || path.startsWith('/admin/theme-editor')) return false;
+    if (path.startsWith('/admin/dashboard')) return false;
+    if (isWebBuilderSubAccount(user) && isWebBuilderAllowedPath(path)) return false;
+    if (isAccountingFreelancerSubAccount(user) && isAccountingFreelancerAllowedPath(path)) return false;
     return path.startsWith('/admin') || path.startsWith('/team');
   }, [user, location.pathname]);
 
   useEffect(() => {
-    if (!user || !requiresSubscriptionCheck) {
+    if (!user) {
       setSubscriptionState('idle');
       setSubscriptionMessage('');
       subscriptionAllowedRef.current = false;
+      return;
+    }
+
+    if (!requiresSubscriptionCheck) {
       return;
     }
 
@@ -303,7 +325,7 @@ const ProtectedRoute: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [user, requiresSubscriptionCheck, navigate, location]);
+  }, [user?.id, user?.role, user?.storeId, requiresSubscriptionCheck, navigate]);
 
   // Wait for auth state to finish loading before making redirect decisions
   if (isLoading) {
@@ -406,6 +428,13 @@ const ProtectedRoute: React.FC<{
         }
         return <Navigate to="/" replace />;
       }
+    } else if (allowedRoles.includes('freelancer')) {
+      if (!canAccessFreelancerPortal(user)) {
+        if (user.role === 'user') {
+          return <Navigate to="/subscription" replace state={{ from: location }} />;
+        }
+        return <Navigate to="/" replace />;
+      }
     } else if (allowedRoles.includes('crm_rep')) {
       if (user.role !== 'crm_rep') {
         return <Navigate to="/" replace />;
@@ -418,14 +447,66 @@ const ProtectedRoute: React.FC<{
     }
   }
 
-  // Check permission-based access for sub-accounts
-  if (requiredPermission && user.role === 'sub_account') {
-    if (!user.permissions || !user.permissions.includes(requiredPermission)) {
-      return <Navigate to="/admin" replace />;
+  // Web builders on client stores — storefront + catalog only (no finance/cost routes)
+  if (
+    isWebBuilderSubAccount(user) &&
+    (location.pathname.startsWith('/admin') || location.pathname.startsWith('/team')) &&
+    !isWebBuilderAllowedPath(location.pathname)
+  ) {
+    return <Navigate to={getWebBuilderClientDashboardPath(getActualStoreId(user))} replace />;
+  }
+
+  // Accounting freelancers on client stores — finance routes only
+  if (
+    isAccountingFreelancerSubAccount(user) &&
+    (location.pathname.startsWith('/admin') || location.pathname.startsWith('/team')) &&
+    !isAccountingFreelancerAllowedPath(location.pathname)
+  ) {
+    return <Navigate to={getAccountingFreelancerClientDashboardPath(getActualStoreId(user))} replace />;
+  }
+
+  if (featureDenial) {
+    const title =
+      featureDenial.reason === 'not_entitled'
+        ? 'Module not on your subscription'
+        : featureDenial.reason === 'store_toggle'
+          ? 'Module hidden for this venue'
+          : 'You do not have access';
+    const body =
+      featureDenial.reason === 'not_entitled'
+        ? 'Upgrade or add this module on your Grabio subscription. Venue layout toggles cannot unlock unpaid modules.'
+        : featureDenial.reason === 'store_toggle'
+          ? 'Turn it on under Store Profile → Venue operations layout (when your package includes it).'
+          : 'Ask your store admin to adjust sub-account permissions on the Sub-Accounts page.';
+    return (
+      <div className="min-h-[50vh] flex items-center justify-center px-4">
+        <div className="max-w-lg w-full border rounded-lg p-6 space-y-3 bg-white">
+          <h2 className="text-lg font-semibold">{title}</h2>
+          <p className="text-sm text-gray-600">{body}</p>
+          <div className="flex gap-2 flex-wrap">
+            {featureDenial.reason === 'not_entitled' ? (
+              <Link to="/subscription" className="inline-flex items-center px-3 py-2 rounded-md bg-primary text-primary-foreground text-sm">
+                View plans
+              </Link>
+            ) : null}
+            <Link to="/admin/dashboard" className="inline-flex items-center px-3 py-2 rounded-md border text-sm">
+              Dashboard
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Check permission-based access for sub-accounts (Manager = full store admin access)
+  if (requiredPermission && user.role === 'sub_account' && !isManagerSubAccount(user)) {
+    const perms = user.permissions ?? [];
+    if (!perms.includes(requiredPermission)) {
+      return <Navigate to="/admin/dashboard" replace />;
     }
   }
 
-  if (requiredModule && ECOSYSTEM_FLAGS.enforceModuleGates) {
+  if (requiredModule && ECOSYSTEM_FLAGS.enforceModuleGates && user.role !== 'sub_account') {
     return (
       <ModuleGate moduleId={requiredModule}>
         {children}

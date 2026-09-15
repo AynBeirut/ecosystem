@@ -4,7 +4,7 @@ export const MODULE_GROUP_META = {
   platform: {
     title: 'Platform Features',
     description:
-      'Web admin modules inside your account — core billing and commerce, optional inventory and CRM, plus planned builders and CMS.',
+      'Web admin modules inside your account — core billing and commerce, inventory, CRM, domains, builders, CMS, and operations.',
   },
   apps: {
     title: 'Mobile & Desktop Apps',
@@ -14,7 +14,7 @@ export const MODULE_GROUP_META = {
   ai: {
     title: 'AI & Growth Tools',
     description:
-      'Built inside your account — content, campaigns, proposals, and insights without extra apps.',
+      'Pay-As-You-Go multi-agent tools built inside your account, powered by a multi-LLM backend.',
   },
 } as const;
 
@@ -28,10 +28,14 @@ export const MODULE_FEATURE_ITEMS: Record<string, string[]> = {
   ],
   marketplace: [
     'Dedicated storefront and catalog',
-    'Custom domain support',
     'Order tracking and reviews',
     'Announcements and promotions',
     'Marketplace-to-inventory sync',
+  ],
+  domainPackage: [
+    'Storefront custom domain mapping',
+    'SSL setup support',
+    'Connect from Store Profile after activation',
   ],
   analytics: [
     'Revenue by product, staff, and period',
@@ -102,7 +106,7 @@ export const MODULE_FEATURE_ITEMS: Record<string, string[]> = {
   ],
   projects: [
     'Client project spaces',
-    'Monthly/yearly contracts',
+    'Grant and donor reporting for NGOs',
     'AI proposal generation',
     'Client portal reporting',
   ],
@@ -120,11 +124,6 @@ export const MODULE_FEATURE_ITEMS: Record<string, string[]> = {
     'Tenant blog posts and categories',
     'SEO-friendly public routes',
     'Per-store CMS publishing',
-  ],
-  domainPackage: [
-    'Custom domain connection',
-    'Hosting and premium themes',
-    'Available on Starter and above',
   ],
   whatsappBusiness: [
     'WhatsApp Business integration',
@@ -154,11 +153,12 @@ export const MODULE_FEATURE_ITEMS: Record<string, string[]> = {
   whitelabel: [
     'Per-tenant customer commerce app',
     'Branded storefront for buyers',
+    '$200 one-time build',
   ],
   ai_agent: [
     'Floating in-dashboard assistant',
     'Store Q&A and daily task guidance',
-    'Prepaid AI credits',
+    'Pay-As-You-Go multi-agent credits',
   ],
   content_creator: [
     'Product descriptions and announcements',
@@ -252,7 +252,7 @@ export const PLATFORM_CAPABILITIES = [
   { title: 'Dual Currency', desc: 'USD plus local (LBP) rates' },
   { title: 'Push Alerts', desc: 'Orders, expiry, low stock' },
   { title: 'AI Growth Tools', desc: 'In-account content and campaigns' },
-  { title: 'White-Label', desc: 'Custom domains and templates' },
+  { title: 'White-Label', desc: 'Branded buyer app option' },
 ];
 
 export function getModulesByGroup(group: PricingModule['group']): PricingModule[] {
@@ -280,6 +280,7 @@ export function getBillingLabel(mod: PricingModule, tier: PaidTier = 'starter'):
   }
   if (mod.billing === 'core') return 'Always included';
   if (mod.billing === 'included') return 'Included with account';
+  if (mod.billing === 'one_time') return mod.oneTimeUsd ? `$${mod.oneTimeUsd} one-time` : 'One-time quote';
   if (mod.billing === 'planned') {
     return 'Optional — billing TBA';
   }

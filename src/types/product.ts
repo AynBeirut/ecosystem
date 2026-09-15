@@ -56,6 +56,15 @@ export type Product = {
   supplierLastSyncAt?: string;
   supplierLastSyncStatus?: SupplierSyncStatus;
   supplierLastSyncMessage?: string;
+  seoSettings?: {
+    metaTitle?: string;
+    metaDescription?: string;
+    keywords?: string[];
+    canonicalUrl?: string;
+    robotsIndex?: boolean;
+    robotsFollow?: boolean;
+    ogImage?: string;
+  };
 };
 
 export type Store = {
@@ -64,6 +73,8 @@ export type Store = {
   slug?: string; // URL-friendly store identifier
   description: string;
   logo: string;
+  /** Public shop/marketplace logo URL (preferred over legacy `logo` base64). */
+  logoUrl?: string;
   location: string;
   website?: string;
   socialLinks?: {

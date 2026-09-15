@@ -11,7 +11,7 @@ import { listProgPages, pingPlatformSitemap, type PlatformSitemapPingResult } fr
 import { refreshCanonicalHealth } from '@/lib/seoCanonicalHealth';
 
 const PHASE2_DOC = 'seo_technical/gsc_phase2';
-const GSC_PROPERTY = import.meta.env.VITE_GSC_PROPERTY as string || 'https://www.grabio.space/';
+const GSC_PROPERTY = import.meta.env.VITE_GSC_PROPERTY as string || 'https://grabio.space/';
 const SITEMAP_URL = 'https://grabio.space/sitemap.xml';
 
 export type GscPhase2Snapshot = {

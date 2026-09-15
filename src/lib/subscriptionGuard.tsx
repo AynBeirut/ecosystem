@@ -1,6 +1,6 @@
 import { StoreProfile } from '../types/storeProfile';
 
-const ALWAYS_ALLOWED_OWNER_EMAILS = new Set(['mooveelectro@gmail.com']);
+const ALWAYS_ALLOWED_OWNER_EMAILS = new Set(['anwar.abouhassan@gmail.com']);
 
 function hasAlwaysAllowedOwnerEmail(storeProfile: StoreProfile): boolean {
   const email = String(storeProfile.email || '').trim().toLowerCase();

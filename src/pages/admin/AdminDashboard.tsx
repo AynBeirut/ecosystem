@@ -36,9 +36,11 @@ import {
   Activity,
   Swords,
   Bot,
+  Briefcase,
   MapPin,
   Layers,
   Link2,
+  Receipt,
 } from 'lucide-react';
 import SallyIconBadge, { SallyNavIcon } from '@/components/admin/SallyIconBadge';
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
@@ -55,7 +57,7 @@ import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { canUseInvoiceManagerApp } from '@/lib/entitlements';
 import { INVOICE_MANAGER_EMBED_URL } from '@/lib/invoiceApp';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
-import { canAccessBusinessTools } from '@/lib/subAccountAccess';
+import { canAccessBusinessTools, hasStoreAdminAccess, isManagerSubAccount } from '@/lib/subAccountAccess';
 import { cn } from '@/lib/utils';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 import { adminDashboardStatTileClass, adminDashboardStatTileInteractiveClass, adminDashboardSurfaceClass, adminDashboardSectionLabelClass, adminDashboardListItemClass, adminDashboardStatLabelClass, adminDashboardStatValueClass, adminDashboardHeadingClass, adminOutlineButtonClass } from '@/lib/adminStyles';
@@ -82,9 +84,25 @@ type QuickActionStoragePayload = {
 };
 
 const MAX_QUICK_ACTIONS = 12;
+
+/** Always show on dashboard when Invoice Manager is enabled (saved prefs cannot hide). */
+const FINANCE_PINNED_QUICK_ACTION_IDS = ['expenses', 'v-expense'] as const;
+
+function withFinancePinnedQuickActions(
+  ids: string[],
+  visibleIds: string[],
+  pinFinance: boolean,
+): string[] {
+  if (!pinFinance) return ids.slice(0, MAX_QUICK_ACTIONS);
+  const pinned = FINANCE_PINNED_QUICK_ACTION_IDS.filter((id) => visibleIds.includes(id));
+  const rest = ids.filter((id) => !pinned.includes(id as (typeof FINANCE_PINNED_QUICK_ACTION_IDS)[number]));
+  return [...pinned, ...rest].slice(0, MAX_QUICK_ACTIONS);
+}
+
 const DEFAULT_QUICK_ACTION_IDS = [
   'sally',
   'invoice-manager',
+  'grabio-platform',
   'customers',
   'sales-crm',
   'orders',
@@ -123,6 +141,7 @@ const QUICK_ACTION_GRADIENTS: Record<string, string> = {
   products: 'from-teal-500 to-teal-700',
   purchases: 'from-sky-500 to-blue-700',
   expenses: 'from-rose-500 to-red-700',
+  'v-expense': 'from-amber-500 to-orange-600',
   customers: 'from-indigo-500 to-indigo-700',
   'sales-crm': 'from-emerald-500 to-teal-700',
   payments: 'from-amber-500 to-orange-600',
@@ -130,6 +149,7 @@ const QUICK_ACTION_GRADIENTS: Record<string, string> = {
   'cash-collection': 'from-green-500 to-emerald-700',
   'delivery-wallet': 'from-amber-500 to-orange-600',
   'invoice-manager': 'from-teal-500 to-cyan-700',
+  'grabio-platform': 'from-violet-500 to-purple-700',
   finance: 'from-cyan-500 to-blue-700',
   staff: 'from-pink-500 to-rose-700',
   'sub-accounts': 'from-fuchsia-500 to-purple-700',
@@ -173,6 +193,11 @@ const STAT_TILES = {
 
 const AdminDashboard: React.FC = () => {
   const { user } = useAuth();
+  const dashboardHeadline = useMemo(() => {
+    if (isManagerSubAccount(user)) return 'Store admin dashboard';
+    if (user?.role === 'sub_account') return 'Seller dashboard';
+    return 'Admin dashboard';
+  }, [user]);
   const { money, currency: baseCurrency } = useStoreCurrency();
   const navigate = useNavigate();
   const location = useLocation();
@@ -262,21 +287,22 @@ const AdminDashboard: React.FC = () => {
   // appears based on viewport size even while auth is resolving.
   const isMobile = useIsMobile();
   
+  const storeAdminAccess = hasStoreAdminAccess(user);
+
   // Permission checks for sub-accounts
-  const canViewInventory = user?.role === 'admin' || user?.permissions?.includes('view_inventory');
-  const canManageInventory = user?.role === 'admin' || user?.permissions?.includes('manage_inventory');
-  const canViewReports = user?.role === 'admin' || user?.permissions?.includes('view_reports');
-  const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
-  const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
+  const canViewInventory = storeAdminAccess || user?.permissions?.includes('view_inventory');
+  const canManageInventory = storeAdminAccess || user?.permissions?.includes('manage_inventory');
+  const canViewReports = storeAdminAccess || user?.permissions?.includes('view_reports');
+  const canManageDeliveries = storeAdminAccess || user?.permissions?.includes('manage_deliveries');
+  const canProcessPayments = storeAdminAccess || user?.permissions?.includes('process_payments');
   const { canUse: canUseModule, profile } = useStoreEntitlements();
   const canUseBusinessTools = canAccessBusinessTools(user);
-  /** Phase 1 field sales — always show for store owners; ModuleGate handles entitlement on routes. */
-  const crmEnabled = user?.role === 'admin';
+  const crmEnabled = storeAdminAccess;
   const invoiceManagerEnabled = canUseBusinessTools && canUseInvoiceManagerApp(profile);
   const financeSuiteVisible = canUseBusinessTools && !invoiceManagerEnabled;
   const moduleVisible = (moduleId: string) =>
     !ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule(moduleId);
-  const builderVisible = user?.role === 'admin' && moduleVisible('builder');
+  const builderVisible = storeAdminAccess && moduleVisible('builder');
 
   const quickActionStorageKey = useMemo(() => {
     if (!user?.id) return 'dashboardQuickActions:guest';
@@ -297,11 +323,11 @@ const AdminDashboard: React.FC = () => {
       to: '/admin/inventory',
       label: 'Inventory',
       icon: Package,
-      visible: user?.role === 'admin' && canViewInventory,
+      visible: canViewInventory,
     },
     { id: 'products', to: '/admin/products', label: 'Products', icon: Package, visible: canViewInventory },
     { id: 'orders', to: '/admin/orders', label: 'Orders', icon: Clock, visible: true },
-    { id: 'purchases', to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: user?.role === 'admin' && canManageInventory },
+    { id: 'purchases', to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: storeAdminAccess && canManageInventory },
     {
       id: 'expenses',
       to: '/admin/invoice-manager/expenses',
@@ -309,13 +335,20 @@ const AdminDashboard: React.FC = () => {
       icon: DollarSign,
       visible: invoiceManagerEnabled || canUseBusinessTools,
     },
+    {
+      id: 'v-expense',
+      to: '/admin/v-expense',
+      label: 'Quick expense',
+      icon: CreditCard,
+      visible: invoiceManagerEnabled && storeAdminAccess,
+    },
     { id: 'customers', to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
     {
       id: 'sally',
       to: '/admin/ai-agent',
       label: 'Sally',
       icon: SallyNavIcon,
-      visible: user?.role === 'admin',
+      visible: storeAdminAccess,
     },
     {
       id: 'sales-crm',
@@ -331,31 +364,39 @@ const AdminDashboard: React.FC = () => {
       label: 'Business Finance',
       icon: Landmark,
     },
+    {
+      id: 'grabio-platform',
+      to: '/admin/grabio-platform',
+      label: 'Grabio Clients',
+      icon: Briefcase,
+      visible: storeAdminAccess,
+    },
     { id: 'account-statement', to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: canUseBusinessTools },
     { id: 'cash-collection', to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: canUseBusinessTools },
     { id: 'delivery-wallet', to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
     { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
+    { id: 'staff-presence', to: '/admin/staff-presence', label: 'Daily Presence', icon: Users, visible: canUseBusinessTools },
     { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },
-    { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' && moduleVisible('team') },
-    { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
+    { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: storeAdminAccess && moduleVisible('team') },
+    { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: storeAdminAccess },
     { id: 'classic-template', to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
     { id: 'theme-editor', to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: builderVisible },
     { id: 'wordpress-builder', to: '/admin/builder', label: 'WordPress', icon: Globe, visible: builderVisible },
     { id: 'marketing', to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
-    { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
-    { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
-    { id: 'seo-keywords', to: '/admin/seo-keywords', label: 'SEO Keywords', icon: Search, visible: user?.role === 'admin' },
-    { id: 'seo-technical', to: '/admin/seo-technical', label: 'SEO Technical', icon: Activity, visible: user?.role === 'admin' },
-    { id: 'seo-content', to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: user?.role === 'admin' },
-    { id: 'seo-competitors', to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Swords, visible: user?.role === 'admin' },
-    { id: 'seo-aeo', to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: user?.role === 'admin' },
-    { id: 'seo-geo', to: '/admin/seo-geo', label: 'SEO GEO', icon: MapPin, visible: user?.role === 'admin' },
-    { id: 'seo-programmatic', to: '/admin/seo-programmatic', label: 'SEO Programmatic', icon: Layers, visible: user?.role === 'admin' },
-    { id: 'seo-links', to: '/admin/seo-links', label: 'SEO Links', icon: Link2, visible: user?.role === 'admin' },
-    { id: 'service-renewals', to: '/admin/service-renewals', label: 'Service Renewals', icon: Clock, visible: user?.role === 'admin' && moduleVisible('services') },
-    { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' && moduleVisible('dropship') },
-    { id: 'product-reviews', to: '/admin/product-reviews', label: 'Product Reviews', icon: Star, visible: user?.role === 'admin' },
-    { id: 'notification-logs', to: '/admin/order-notifications', label: 'Notification Logs', icon: Bell, visible: user?.role === 'admin' },
+    { id: 'seo-analytics', to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: storeAdminAccess },
+    { id: 'seo-audit', to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: storeAdminAccess },
+    { id: 'seo-keywords', to: '/admin/seo-keywords', label: 'SEO Keywords', icon: Search, visible: storeAdminAccess },
+    { id: 'seo-technical', to: '/admin/seo-technical', label: 'SEO Technical', icon: Activity, visible: storeAdminAccess },
+    { id: 'seo-content', to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: storeAdminAccess },
+    { id: 'seo-competitors', to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Swords, visible: storeAdminAccess },
+    { id: 'seo-aeo', to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: storeAdminAccess },
+    { id: 'seo-geo', to: '/admin/seo-geo', label: 'SEO GEO', icon: MapPin, visible: storeAdminAccess },
+    { id: 'seo-programmatic', to: '/admin/seo-programmatic', label: 'SEO Programmatic', icon: Layers, visible: storeAdminAccess },
+    { id: 'seo-links', to: '/admin/seo-links', label: 'SEO Links', icon: Link2, visible: storeAdminAccess },
+    { id: 'service-renewals', to: '/admin/service-renewals', label: 'Service Renewals', icon: Clock, visible: storeAdminAccess && moduleVisible('services') },
+    { id: 'marketplace-sync', to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: storeAdminAccess && moduleVisible('dropship') },
+    { id: 'product-reviews', to: '/admin/product-reviews', label: 'Product Reviews', icon: Star, visible: storeAdminAccess },
+    { id: 'notification-logs', to: '/admin/order-notifications', label: 'Notification Logs', icon: Bell, visible: storeAdminAccess },
     { id: 'store-logs', to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: canUseBusinessTools },
     { id: 'delivery', to: '/admin/delivery', label: 'Delivery', icon: Package, visible: canManageDeliveries },
     { id: 'announcements', to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
@@ -469,17 +510,23 @@ const AdminDashboard: React.FC = () => {
         ? (localCustomActions.length > 0 ? localCustomActions : serverCustomActions)
         : (serverCustomActions.length > 0 ? serverCustomActions : localCustomActions);
       const customIds = mergedCustomActions.map((item) => item.id);
-      const sanitizedIds = preferredIds
-        .filter((id) => visibleIds.includes(id) || customIds.includes(id))
-        .slice(0, MAX_QUICK_ACTIONS);
+      const sanitizedIds = withFinancePinnedQuickActions(
+        preferredIds.filter((id) => visibleIds.includes(id) || customIds.includes(id)),
+        visibleIds,
+        invoiceManagerEnabled && storeAdminAccess,
+      );
 
       setCustomQuickActions(mergedCustomActions);
-      setSelectedQuickActionIds(sanitizedIds.length > 0 ? sanitizedIds : defaultQuickActionIds);
+      setSelectedQuickActionIds(
+        sanitizedIds.length > 0
+          ? sanitizedIds
+          : withFinancePinnedQuickActions(defaultQuickActionIds, visibleIds, invoiceManagerEnabled && storeAdminAccess),
+      );
       setQuickActionsLoaded(true);
     };
 
     void loadQuickActionPreferences();
-  }, [defaultQuickActionIds, firestoreReady, quickActionPreferenceRef, quickActionStorageKey, visibleQuickActionItems]);
+  }, [defaultQuickActionIds, firestoreReady, invoiceManagerEnabled, quickActionPreferenceRef, quickActionStorageKey, storeAdminAccess, visibleQuickActionItems]);
 
   useEffect(() => {
     if (!quickActionsLoaded) return;
@@ -523,6 +570,13 @@ const AdminDashboard: React.FC = () => {
   };
 
   const handleRemoveQuickAction = (actionId: string) => {
+    if (
+      invoiceManagerEnabled &&
+      storeAdminAccess &&
+      (FINANCE_PINNED_QUICK_ACTION_IDS as readonly string[]).includes(actionId)
+    ) {
+      return;
+    }
     setSelectedQuickActionIds((prev) => prev.filter((id) => id !== actionId));
     setCustomQuickActions((prev) => prev.filter((item) => item.id !== actionId));
   };
@@ -563,10 +617,16 @@ const AdminDashboard: React.FC = () => {
         id: 'daily_stock',
         title: 'Stock & Catalog',
         items: [
-          { to: '/admin/inventory', label: 'Inventory Overview', icon: Package, visible: user?.role === 'admin' && canViewInventory },
+          { to: '/admin/inventory', label: 'Inventory Overview', icon: Package, visible: canViewInventory },
           { to: '/admin/products', label: 'Products', icon: Package, visible: canViewInventory },
-          { to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: user?.role === 'admin' && canManageInventory },
+          { to: '/admin/purchases', label: 'Purchases', icon: ShoppingCart, visible: storeAdminAccess && canManageInventory },
           { to: '/admin/delivery', label: 'Delivery', icon: Clock, visible: canManageDeliveries },
+          {
+            to: '/admin/invoice-manager/expenses',
+            label: 'Expenses',
+            icon: Receipt,
+            visible: canUseBusinessTools || canViewInventory,
+          },
         ],
       },
       {
@@ -591,20 +651,20 @@ const AdminDashboard: React.FC = () => {
         id: 'setup_profile',
         title: 'Profile & Store Setup',
         items: [
-          { to: '/admin/profile', label: 'Store Profile', icon: User, visible: user?.role === 'admin' },
-          { to: '/admin/payments', label: 'Payment Settings', icon: CreditCard, visible: user?.role === 'admin' && canProcessPayments },
+          { to: '/admin/profile', label: 'Store Profile', icon: User, visible: storeAdminAccess },
+          { to: '/admin/payments', label: 'Payment Settings', icon: CreditCard, visible: storeAdminAccess && canProcessPayments },
           { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
-          { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: user?.role === 'admin' },
-          { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: user?.role === 'admin' },
-          { to: '/admin/seo-keywords', label: 'SEO Keywords', icon: Search, visible: user?.role === 'admin' },
-          { to: '/admin/seo-technical', label: 'SEO Technical', icon: Activity, visible: user?.role === 'admin' },
-          { to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: user?.role === 'admin' },
-          { to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Swords, visible: user?.role === 'admin' },
-          { to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: user?.role === 'admin' },
-          { to: '/admin/seo-geo', label: 'SEO GEO', icon: MapPin, visible: user?.role === 'admin' },
-          { to: '/admin/seo-programmatic', label: 'SEO Programmatic', icon: Layers, visible: user?.role === 'admin' },
-          { to: '/admin/seo-links', label: 'SEO Links', icon: Link2, visible: user?.role === 'admin' },
+          { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: storeAdminAccess },
+          { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: storeAdminAccess },
+          { to: '/admin/seo-keywords', label: 'SEO Keywords', icon: Search, visible: storeAdminAccess },
+          { to: '/admin/seo-technical', label: 'SEO Technical', icon: Activity, visible: storeAdminAccess },
+          { to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: storeAdminAccess },
+          { to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Swords, visible: storeAdminAccess },
+          { to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: storeAdminAccess },
+          { to: '/admin/seo-geo', label: 'SEO GEO', icon: MapPin, visible: storeAdminAccess },
+          { to: '/admin/seo-programmatic', label: 'SEO Programmatic', icon: Layers, visible: storeAdminAccess },
+          { to: '/admin/seo-links', label: 'SEO Links', icon: Link2, visible: storeAdminAccess },
         ],
       },
       {
@@ -631,8 +691,9 @@ const AdminDashboard: React.FC = () => {
           { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: canUseBusinessTools },
           { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
           { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },
-          { to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: user?.role === 'admin' },
-          { to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: user?.role === 'admin' },
+          { to: '/admin/staff-presence', label: 'Daily Presence', icon: Users, visible: canUseBusinessTools },
+          { to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: storeAdminAccess },
+          { to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: storeAdminAccess },
           { to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: canUseBusinessTools },
         ],
       },
@@ -641,8 +702,8 @@ const AdminDashboard: React.FC = () => {
 
   // Set document title based on user role
   useEffect(() => {
-    document.title = user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard';
-  }, [user?.role]);
+    document.title = dashboardHeadline.replace(/\b\w/g, (c) => c.toUpperCase());
+  }, [dashboardHeadline]);
 
   // Request FCM push notification permission and save token for store owners
   useEffect(() => {
@@ -853,7 +914,7 @@ const AdminDashboard: React.FC = () => {
               <div className="min-w-0">
                 <p className="inline-flex items-center gap-2 text-[9px] font-semibold uppercase tracking-[0.18em] text-teal-300/90 mb-1">
                   <span className="h-px w-4 bg-teal-400/50" />
-                  {user?.role === 'sub_account' ? 'Seller Dashboard' : 'Admin Dashboard'}
+                  {dashboardHeadline.replace(/\b\w/g, (c) => c.toUpperCase())}
                   <span className="h-px w-4 bg-teal-400/50" />
                 </p>
                 <h1 className="text-xl md:text-2xl font-bold tracking-tight leading-tight">{storeName}</h1>
@@ -883,7 +944,7 @@ const AdminDashboard: React.FC = () => {
           </section>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
-            <Link to="/admin/inventory" className="h-full group">
+            <Link to={canViewInventory ? '/admin/products' : '/admin/dashboard'} className="h-full group">
               <Card className={cn('h-full min-h-[120px] p-4 overflow-hidden', adminDashboardStatTileClass, adminDashboardStatTileInteractiveClass)}>
                 <CardContent className="h-full flex items-center gap-4 p-0">
                   <div className={`h-11 w-11 shrink-0 rounded-xl bg-gradient-to-br ${STAT_TILES.products.gradient} text-white flex items-center justify-center shadow-[inset_0_1px_0_rgba(255,255,255,0.25),0_8px_16px_-6px_rgba(15,23,42,0.45)] ${STAT_TILES.products.glow} transition-shadow`}>
@@ -1241,6 +1302,7 @@ const AdminDashboard: React.FC = () => {
               </Card>
             </div>
           </div>
+
     </div>
   );
 }

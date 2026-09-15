@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   Briefcase,
@@ -15,35 +15,70 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/context/useAuth';
 import { useBuilderAccount } from '@/hooks/useBuilderAccount';
-import { BUILDER_MAX_DEMO_SLOTS } from '@/lib/builderConstants';
-import { createDemoStore } from '@/lib/builderService';
+import {
+  BUILDER_DEMO_BUILD_METHODS,
+  BUILDER_MAX_DEMO_SLOTS,
+  buildMethodToWorkspaceTab,
+} from '@/lib/builderConstants';
+import { createDemoStore, deleteDemoStore } from '@/lib/builderService';
+import type { BuilderDemoBuildMethod } from '@/types/builder';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   ACCOUNTING_MAX_SANDBOXES,
+  activateFreelancerClientStore,
   createAccountingSandbox,
+  ensureFreelancerPortalSession,
   getPlatformFreelancer,
   listAccountingSandboxes,
   listFreelancerClients,
   syncFreelancerClientStoreIds,
   type FreelancerClient,
 } from '@/lib/freelancerService';
+import { formatSubAccountRoleLabel } from '@/types/subaccount';
+import { getFreelancerClientDashboardPath } from '@/lib/webBuilderAccess';
 import type { PlatformFreelancer } from '@/types/career';
 import type { AccountingTestSandbox } from '@/types/career';
+import type { UserRole } from '@/types/product';
 import { toast } from 'sonner';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
 const FreelancerPortal: React.FC = () => {
-  const { user } = useAuth();
+  const { user, setUser } = useAuth();
   const navigate = useNavigate();
   const uid = user?.id;
   const [profile, setProfile] = useState<PlatformFreelancer | null>(null);
   const [clients, setClients] = useState<FreelancerClient[]>([]);
   const [sandboxes, setSandboxes] = useState<AccountingTestSandbox[]>([]);
   const [loading, setLoading] = useState(true);
+  const [openingStoreId, setOpeningStoreId] = useState<string | null>(null);
   const [newDemoName, setNewDemoName] = useState('');
   const [newSandboxName, setNewSandboxName] = useState('');
   const [newSandboxFocus, setNewSandboxFocus] = useState('');
   const [creatingDemo, setCreatingDemo] = useState(false);
+  const [createDemoOpen, setCreateDemoOpen] = useState(false);
+  const [newBuildMethod, setNewBuildMethod] = useState<BuilderDemoBuildMethod>('theme_editor');
+  const [deleteDemoId, setDeleteDemoId] = useState<string | null>(null);
+  const [deletingDemo, setDeletingDemo] = useState(false);
   const [creatingSandbox, setCreatingSandbox] = useState(false);
+  const openingClientRef = useRef(false);
+  const portalLoadedRef = useRef(false);
 
   const { account, demos, refresh: refreshBuilder } = useBuilderAccount(
     profile?.track === 'designer_builder' ? uid : undefined,
@@ -59,19 +94,34 @@ const FreelancerPortal: React.FC = () => {
       setLoading(false);
       return;
     }
+    if (openingClientRef.current) return;
 
     void (async () => {
       setLoading(true);
       try {
+        let activeUser = user;
+        const returningFromClientStore =
+          user.role === 'sub_account' &&
+          (user.subAccountRole === 'web_maintenance' || user.subAccountRole === 'accounting');
+
+        if (returningFromClientStore) {
+          const restored = await ensureFreelancerPortalSession(uid, user);
+          if (restored) {
+            activeUser = restored;
+            setUser(restored);
+          }
+        }
+        portalLoadedRef.current = true;
+
         const freelancer = await getPlatformFreelancer(uid);
         if (!freelancer) {
           navigate('/onboarding/freelancer', { replace: true });
           return;
         }
         setProfile(freelancer);
-        const clientList = await listFreelancerClients(user.email);
+        const clientList = await listFreelancerClients(activeUser.email || user.email);
         setClients(clientList);
-        await syncFreelancerClientStoreIds(uid, user.email);
+        await syncFreelancerClientStoreIds(uid, activeUser.email || user.email);
         if (freelancer.track === 'accounting') {
           setSandboxes(await listAccountingSandboxes(uid));
         }
@@ -82,21 +132,73 @@ const FreelancerPortal: React.FC = () => {
         setLoading(false);
       }
     })();
-  }, [navigate, uid, user?.email]);
+  }, [navigate, setUser, uid, user?.email, user?.id, user?.role, user?.subAccountRole]);
+
+  const handleOpenClient = async (client: FreelancerClient) => {
+    if (!uid || !user?.email) return;
+    openingClientRef.current = true;
+    setOpeningStoreId(client.storeId);
+    try {
+      const activation = await activateFreelancerClientStore(uid, user.email, client.storeId);
+      const subAccountInfo = {
+        role: 'sub_account' as const,
+        subAccountRole: activation.role,
+        permissions: activation.permissions,
+        storeId: activation.storeId,
+        subAccountId: activation.subAccountId,
+      };
+      localStorage.removeItem('sellerInfo');
+      localStorage.setItem('subAccountInfo', JSON.stringify(subAccountInfo));
+      setUser({
+        ...user,
+        name: activation.displayName,
+        role: 'sub_account' as UserRole,
+        storeId: activation.storeId,
+        subAccountRole: activation.role,
+        permissions: activation.permissions,
+        subAccountId: activation.subAccountId,
+      });
+      navigate(getFreelancerClientDashboardPath(
+        { role: 'sub_account', subAccountRole: activation.role },
+        activation.storeId,
+      ));
+    } catch (err) {
+      openingClientRef.current = false;
+      toast.error(err instanceof Error ? err.message : 'Could not open client store');
+    } finally {
+      setOpeningStoreId(null);
+    }
+  };
 
   const handleCreateDemo = async () => {
     if (!uid) return;
     setCreatingDemo(true);
     try {
-      const demoId = await createDemoStore(uid, newDemoName);
+      const demoId = await createDemoStore(uid, newDemoName, newBuildMethod);
       setNewDemoName('');
+      setCreateDemoOpen(false);
       await refreshBuilder();
       toast.success('Demo website created');
-      navigate(`/builder/demo/${demoId}/edit?tab=design`);
+      navigate(`/builder/demo/${demoId}/edit?tab=${buildMethodToWorkspaceTab(newBuildMethod)}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not create demo');
     } finally {
       setCreatingDemo(false);
+    }
+  };
+
+  const handleDeleteDemo = async () => {
+    if (!uid || !deleteDemoId) return;
+    setDeletingDemo(true);
+    try {
+      await deleteDemoStore(uid, deleteDemoId);
+      setDeleteDemoId(null);
+      await refreshBuilder();
+      toast.success('Demo deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete demo');
+    } finally {
+      setDeletingDemo(false);
     }
   };
 
@@ -141,7 +243,7 @@ const FreelancerPortal: React.FC = () => {
           <div className="flex flex-wrap gap-2">
             {profile.track === 'designer_builder' && (
               <Button asChild variant="outline">
-                <Link to="/builder">Builder workspace</Link>
+                <Link to="/builder">Demo workspace</Link>
               </Button>
             )}
             <Button asChild variant="outline">
@@ -167,7 +269,10 @@ const FreelancerPortal: React.FC = () => {
               <p className="text-sm text-slate-600">
                 No clients yet. Ask a store owner to add{' '}
                 <span className="font-medium text-slate-900">{profile.email}</span> as sub-account (
-                {profile.track === 'designer_builder' ? 'web maintenance' : 'accounting'} role).
+                {formatSubAccountRoleLabel(
+                  profile.track === 'designer_builder' ? 'web_maintenance' : 'accounting',
+                )}{' '}
+                role).
               </p>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2">
@@ -178,22 +283,21 @@ const FreelancerPortal: React.FC = () => {
                   >
                     <div>
                       <p className="font-semibold text-slate-900">{client.storeName}</p>
-                      <p className="text-xs text-slate-500 mt-1">Role: {client.role}</p>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Role: {formatSubAccountRoleLabel(client.role)}
+                      </p>
                       <Badge variant="secondary" className="mt-2 capitalize">
                         {client.status}
                       </Badge>
                     </div>
-                    <Button asChild size="sm" variant="outline">
-                      <Link
-                        to={
-                          client.role === 'accounting'
-                            ? `/admin/finance?storeId=${client.storeId}`
-                            : `/admin/dashboard?storeId=${client.storeId}`
-                        }
-                      >
-                        <ExternalLink className="h-3.5 w-3.5 mr-1" />
-                        Open
-                      </Link>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      disabled={openingStoreId === client.storeId}
+                      onClick={() => void handleOpenClient(client)}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5 mr-1" />
+                      {openingStoreId === client.storeId ? 'Opening…' : 'Open'}
                     </Button>
                   </div>
                 ))}
@@ -221,8 +325,8 @@ const FreelancerPortal: React.FC = () => {
                   onChange={(e) => setNewDemoName(e.target.value)}
                 />
                 <Button
-                  onClick={handleCreateDemo}
-                  disabled={creatingDemo || activeDemos.length >= BUILDER_MAX_DEMO_SLOTS}
+                  onClick={() => setCreateDemoOpen(true)}
+                  disabled={creatingDemo || !newDemoName.trim() || activeDemos.length >= BUILDER_MAX_DEMO_SLOTS}
                   className="bg-violet-600 hover:bg-violet-700 shrink-0"
                 >
                   <Plus className="h-4 w-4 mr-1" />
@@ -236,10 +340,15 @@ const FreelancerPortal: React.FC = () => {
                     <p className="text-xs text-slate-500 mt-1 capitalize">{demo.status}</p>
                     <div className="mt-3 flex flex-wrap gap-2">
                       <Button asChild size="sm" variant="outline">
-                        <Link to={`/builder/demo/${demo.id}/edit`}>Edit</Link>
+                        <Link to={`/builder/demo/${demo.id}/edit?tab=${buildMethodToWorkspaceTab(demo.buildMethod)}`}>
+                          Edit
+                        </Link>
                       </Button>
                       <Button asChild size="sm" variant="outline">
                         <Link to={`/builder/demo/${demo.id}/preview`}>Preview</Link>
+                      </Button>
+                      <Button size="sm" variant="destructive" onClick={() => setDeleteDemoId(demo.id)}>
+                        Delete
                       </Button>
                     </div>
                   </div>
@@ -314,6 +423,69 @@ const FreelancerPortal: React.FC = () => {
           </Card>
         )}
       </main>
+      <Dialog open={createDemoOpen} onOpenChange={setCreateDemoOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create demo website</DialogTitle>
+            <DialogDescription>
+              Choose how you want to build <strong>{newDemoName.trim() || 'this demo'}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {BUILDER_DEMO_BUILD_METHODS.map((method) => (
+              <button
+                key={method.id}
+                type="button"
+                onClick={() => setNewBuildMethod(method.id)}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  newBuildMethod === method.id
+                    ? 'border-violet-600 bg-violet-50'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <p className="font-medium text-slate-900">{method.label}</p>
+                <p className="text-sm text-slate-600">{method.description}</p>
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateDemoOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              disabled={creatingDemo || !newDemoName.trim()}
+              onClick={() => void handleCreateDemo()}
+              className="bg-violet-600 hover:bg-violet-700"
+            >
+              {creatingDemo ? 'Creating…' : 'Create demo'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleteDemoId)} onOpenChange={(open) => !open && setDeleteDemoId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete demo website?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the demo from your freelancer workspace list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingDemo}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletingDemo}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteDemo();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingDemo ? 'Deleting…' : 'Delete demo'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
       <div className="pb-8 flex justify-center">
         <PoweredByEmoove />
       </div>

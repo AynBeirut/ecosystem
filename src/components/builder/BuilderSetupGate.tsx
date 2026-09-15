@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { doc, getFirestore, setDoc } from 'firebase/firestore';
+import { getAuth } from 'firebase/auth';
 import { ArrowLeft, ArrowRight, Check, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 import AdminPageShell from '@/components/admin/AdminPageShell';
@@ -13,7 +13,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 import { useAuth } from '@/context/useAuth';
 import { BUILD_METHOD_LABELS, type BuildMethod, isGrabioEditorMethod } from '@/lib/buildMethod';
-import { createWordPressProvisioningRequest } from '@/lib/wordpressProvisioningService';
+import { createWordPressProvisioningRequest, getWordPressProvisioningRequest } from '@/lib/wordpressProvisioningService';
+import WordPressProvisioningWait from '@/components/builder/WordPressProvisioningWait';
 import {
   BUILDER_WIZARD_STEPS,
   BUSINESS_INTENT_OPTIONS,
@@ -332,8 +333,32 @@ const BuilderSetupGate: React.FC<BuilderSetupGateProps> = ({ targetMethod, child
     }
   };
 
+  const submitWordPressRequest = async (input: {
+    businessName: string;
+    contactEmail: string;
+    preferredDomain: string;
+    notes?: string;
+  }) => {
+    const ownerUid = getAuth().currentUser?.uid || user?.id || '';
+    if (!storeId || !ownerUid) {
+      toast.error(!storeId ? 'Store not found — open the client store first' : 'Sign in again to continue');
+      return null;
+    }
+    const requestId = await createWordPressProvisioningRequest(storeId, ownerUid, input);
+    await persistProfile({
+      builderWizard: buildBuilderWizardPatch({
+        step: 'wordpress-request',
+        siteIntent,
+        businessIntent,
+        buildMethod: 'wordpress',
+        wordpressRequestId: requestId,
+      }),
+    });
+    setWordpressSubmitted(true);
+    return requestId;
+  };
+
   const handleWordPressSubmit = async () => {
-    if (!storeId || !user?.uid) return;
     if (!wordpressForm.businessName.trim()) {
       toast.error('Business name is required');
       return;
@@ -348,25 +373,39 @@ const BuilderSetupGate: React.FC<BuilderSetupGateProps> = ({ targetMethod, child
     }
     setSaving(true);
     try {
-      const requestId = await createWordPressProvisioningRequest(storeId, user.uid, {
+      await submitWordPressRequest({
         businessName: wordpressForm.businessName,
         contactEmail: wordpressForm.contactEmail,
         preferredDomain: wordpressForm.preferredDomain,
         notes: wordpressForm.notes,
       });
-      await persistProfile({
-        builderWizard: buildBuilderWizardPatch({
-          step: 'wordpress-request',
-          siteIntent,
-          businessIntent,
-          buildMethod: 'wordpress',
-          wordpressRequestId: requestId,
-        }),
-      });
-      setWordpressSubmitted(true);
-      toast.success('Environment request submitted — we will contact you soon');
+      toast.success('Environment request submitted — provisioning started');
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Failed to submit request');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleWordPressRetry = async () => {
+    const failedRequestId = profile?.builderWizard?.wordpressRequestId;
+    if (!failedRequestId) return;
+    setSaving(true);
+    try {
+      const existing = await getWordPressProvisioningRequest(failedRequestId);
+      if (!existing) {
+        toast.error('Could not load the failed request');
+        return;
+      }
+      await submitWordPressRequest({
+        businessName: existing.businessName,
+        contactEmail: existing.contactEmail,
+        preferredDomain: existing.preferredDomain || wordpressForm.preferredDomain,
+        notes: existing.notes,
+      });
+      toast.success('Retry started — provisioning again');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to retry request');
     } finally {
       setSaving(false);
     }
@@ -385,27 +424,31 @@ const BuilderSetupGate: React.FC<BuilderSetupGateProps> = ({ targetMethod, child
   }
 
   if (setupComplete && targetMethod === 'wordpress') {
+    const requestId = profile?.builderWizard?.wordpressRequestId;
     return (
       <ModuleGate moduleId="builder">
         <AdminPageShell
           title={copy.title}
-          description="Your WordPress environment request is in progress."
+          description="Your WordPress environment is being provisioned on the VPS."
           eyebrow={copy.eyebrow}
           backTo={copy.backTo}
           className="max-w-4xl"
         >
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Request received</CardTitle>
-              <CardDescription>
-                We will provision WordPress on your domain and email you login details. Track status in{' '}
-                <Link to="/admin/wordpress-queue" className="text-primary underline">
-                  WordPress queue
-                </Link>
-                .
-              </CardDescription>
-            </CardHeader>
-          </Card>
+          {requestId ? (
+            <WordPressProvisioningWait
+              requestId={requestId}
+              contactEmail={wordpressForm.contactEmail || user?.email}
+              onRetry={handleWordPressRetry}
+              retrying={saving}
+            />
+          ) : (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Request received</CardTitle>
+                <CardDescription>We could not find your provisioning request id.</CardDescription>
+              </CardHeader>
+            </Card>
+          )}
         </AdminPageShell>
       </ModuleGate>
     );
@@ -509,11 +552,20 @@ const BuilderSetupGate: React.FC<BuilderSetupGateProps> = ({ targetMethod, child
           </div>
         )}
 
-        {effectiveStep === 'wordpress-request' && targetMethod === 'wordpress' && (
+        {effectiveStep === 'wordpress-request' && targetMethod === 'wordpress' && wordpressSubmitted && profile?.builderWizard?.wordpressRequestId ? (
+          <WordPressProvisioningWait
+            requestId={profile.builderWizard.wordpressRequestId}
+            contactEmail={wordpressForm.contactEmail || user?.email}
+            onRetry={handleWordPressRetry}
+            retrying={saving}
+          />
+        ) : effectiveStep === 'wordpress-request' && targetMethod === 'wordpress' && (
           <div className="space-y-4">
             <h2 className="text-lg font-semibold">Enter your domain</h2>
             <p className="text-sm text-muted-foreground">
-              We create the WordPress environment on your domain — hosting, SSL, and initial setup included.
+              We create WordPress on your domain — hosting, SSL, and initial setup included. After
+              install, you point DNS and click <strong>Test DNS</strong>. We email credentials only
+              after DNS passes (within 5 minutes).
             </p>
             <div className="grid gap-4">
               <div>

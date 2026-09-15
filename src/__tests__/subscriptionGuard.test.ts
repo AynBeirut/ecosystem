@@ -3,9 +3,9 @@ import { checkSubscriptionAccess } from '@/lib/subscriptionGuard';
 import type { StoreProfile } from '@/types/storeProfile';
 
 describe('checkSubscriptionAccess', () => {
-  it('allows access for the legacy owner email override even when blocked', () => {
+  it('allows access for the primary owner email override even when blocked', () => {
     const profile = {
-      email: 'mooveelectro@gmail.com',
+      email: 'anwar.abouhassan@gmail.com',
       subscriptionStatus: 'blocked',
     } as StoreProfile;
 

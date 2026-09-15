@@ -55,7 +55,7 @@ const Marketplace: React.FC = () => {
       setLoading(true);
       try {
         const [storesList, productsList] = await Promise.all([
-          cachedPublicRead('marketplace:storeProfiles', async () => {
+          cachedPublicRead('marketplace:storeProfiles:v2', async () => {
             const db = getFirestore();
             const snapshot = await getDocs(collection(db, 'storeProfiles'));
             return snapshot.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() } as Store));

@@ -13,6 +13,9 @@ import { preloadVOpsCatalogs } from '@/lib/vOpsCatalog';
 import { doc, getDoc, getFirestore, updateDoc } from 'firebase/firestore';
 import AdminThemeToggle from '@/components/admin/AdminThemeToggle';
 import GrabioGuideFloating from '@/components/admin/GrabioGuideFloating';
+import FreelancerClientBackButton from '@/components/freelancer/FreelancerClientBackButton';
+import { isAccountingFreelancerSubAccount, isFreelancerClientSubAccount, isWebBuilderSubAccount } from '@/lib/webBuilderAccess';
+import { hasStoreAdminAccess } from '@/lib/subAccountAccess';
 import { AdminThemeProvider, useAdminTheme } from '@/hooks/useAdminTheme';
 import { cn } from '@/lib/utils';
 
@@ -78,6 +81,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/invoice-manager': 'Invoice Manager',
   '/admin/invoice-manager/invoices': 'Invoice Manager',
   '/admin/staff': 'Staff',
+  '/admin/staff-presence': 'Daily Presence',
   '/admin/sub-accounts': 'Sub-Accounts',
   '/admin/account-statement': 'Account Statement',
   '/admin/cash-collection': 'Cash Collection',
@@ -241,6 +245,8 @@ function AdminLayoutShell() {
     isRouteActive,
     dashboardLabel,
     canViewInventory,
+    canManageInventory,
+    canUseGrabioPos,
     StoreIcon,
     Settings2,
   } = useAdminNavigation();
@@ -255,10 +261,13 @@ function AdminLayoutShell() {
   const skipInitialCollapse = useRef(true);
   const { theme } = useAdminTheme();
   const pageTitle = resolvePageTitle(location.pathname, dashboardLabel);
+  const isWebBuilder = isWebBuilderSubAccount(user);
+  const isAccountingFreelancer = isAccountingFreelancerSubAccount(user);
+  const isFreelancerClient = isFreelancerClientSubAccount(user);
+  const storeAdminAccess = hasStoreAdminAccess(user);
 
-  const canViewOrders = user?.role === 'admin' || user?.permissions?.includes('view_orders');
-  const canViewCustomers = user?.role === 'admin' || user?.permissions?.includes('view_customers');
-  const canManageInventory = user?.role === 'admin' || user?.permissions?.includes('manage_inventory');
+  const canViewOrders = storeAdminAccess || user?.permissions?.includes('view_orders');
+  const canViewCustomers = storeAdminAccess || user?.permissions?.includes('view_customers');
 
   const dailyOpsLinks = useMemo(
     () =>
@@ -266,13 +275,15 @@ function AdminLayoutShell() {
         [
           { to: '/admin/v-pos', label: 'V·POS', visible: Boolean(canViewOrders) },
           { to: '/admin/v-purchase', label: 'V·Buy', visible: Boolean(canManageInventory) },
-          { to: '/admin/v-expense', label: 'V·Exp', visible: user?.role === 'admin' },
+          { to: '/admin/v-expense', label: 'V·Exp', visible: storeAdminAccess },
           { to: '/admin/orders', label: 'Orders', visible: Boolean(canViewOrders) },
           { to: '/admin/scheduled-orders', label: 'Scheduled', icon: Clock, visible: Boolean(canViewOrders) },
           { to: '/admin/customers', label: 'Customers', visible: Boolean(canViewCustomers) },
+          { to: '/admin/inventory', label: 'Inventory', visible: Boolean(canViewInventory) },
+          { to: '/admin/pos', label: 'Grabio POS', visible: Boolean(canUseGrabioPos) },
         ] as Array<{ to: string; label: string; visible: boolean; icon?: LucideIcon }>
       ).filter((link) => link.visible),
-    [canManageInventory, canViewCustomers, canViewOrders, user?.role],
+    [canManageInventory, canUseGrabioPos, canViewCustomers, canViewInventory, canViewOrders, storeAdminAccess],
   );
 
   // Warm V·OPS route chunks + catalogs while Daily Ops is visible.
@@ -452,7 +463,7 @@ function AdminLayoutShell() {
               </div>
             </div>
           )}
-          {storeStatus && user?.role === 'admin' && (
+          {storeStatus && storeAdminAccess && (
             <button
               type="button"
               onClick={handleStatusToggle}
@@ -463,6 +474,7 @@ function AdminLayoutShell() {
             </button>
           )}
           <AdminThemeToggle variant="compact" className="admin-theme-toggle" />
+          {isFreelancerClient ? <FreelancerClientBackButton variant="compact" className="w-full justify-center" /> : null}
           <AdminUserStrip variant="mobile" />
         </div>
       </div>
@@ -517,20 +529,25 @@ function AdminLayoutShell() {
           <nav className="flex-1 min-h-0 overflow-y-auto py-4 px-2">
             {sidebarExpanded ? (
             <div className="space-y-5 px-1">
-              <Link
-                to="/admin/dashboard"
-                onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
-                onClick={collapseSidebar}
-                className={`flex items-center px-3 py-2.5 rounded-xl border transition ${
-                  isRouteActive('/admin/dashboard')
-                    ? 'bg-teal-500/15 text-teal-300 border-teal-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
-                    : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
-                }`}
-              >
-                <StoreIcon className="h-4 w-4 mr-3 shrink-0" />
-                <span className="text-sm font-medium">Dashboard Home</span>
-              </Link>
+              {isFreelancerClient ? (
+                <FreelancerClientBackButton variant="sidebar" onNavigate={collapseSidebar} />
+              ) : (
+                <Link
+                  to="/admin/dashboard"
+                  onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
+                  onClick={collapseSidebar}
+                  className={`flex items-center px-3 py-2.5 rounded-xl border transition ${
+                    isRouteActive('/admin/dashboard')
+                      ? 'bg-teal-500/15 text-teal-300 border-teal-500/25 shadow-[inset_0_1px_0_rgba(255,255,255,0.06)]'
+                      : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+                  }`}
+                >
+                  <StoreIcon className="h-4 w-4 mr-3 shrink-0" />
+                  <span className="text-sm font-medium">Dashboard Home</span>
+                </Link>
+              )}
 
+              {!isFreelancerClient ? (
               <section>
                 <div className="admin-shell-section-label px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em]">
                   Daily Operations
@@ -568,11 +585,12 @@ function AdminLayoutShell() {
                   ))}
                 </div>
               </section>
+              ) : null}
 
               <section>
                 <div className="admin-shell-section-label flex items-center gap-2 px-3 pb-2 text-[10px] font-semibold uppercase tracking-[0.18em]">
                   <Settings2 className="h-3.5 w-3.5" />
-                  <span>Setup & Settings</span>
+                  <span>{isWebBuilder ? 'Builder Tools' : isAccountingFreelancer ? 'Finance Tools' : 'Setup & Settings'}</span>
                 </div>
                 <div className="space-y-1.5">
                   {menuGroups.setup.map((group) => (
@@ -638,20 +656,24 @@ function AdminLayoutShell() {
             </div>
             ) : (
             <div className="space-y-1">
-              <Link
-                to="/admin/dashboard"
-                title="Dashboard Home"
-                onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
-                onClick={collapseSidebar}
-                className={cn(
-                  'flex items-center justify-center rounded-lg py-2.5 transition',
-                  isRouteActive('/admin/dashboard')
-                    ? 'bg-teal-500/15 text-teal-300'
-                    : 'text-slate-400 hover:bg-white/5 hover:text-slate-200',
-                )}
-              >
-                <StoreIcon className="h-4 w-4 shrink-0 opacity-90" />
-              </Link>
+              {isFreelancerClient ? (
+                <FreelancerClientBackButton variant="sidebar-collapsed" onNavigate={collapseSidebar} />
+              ) : (
+                <Link
+                  to="/admin/dashboard"
+                  title="Dashboard Home"
+                  onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
+                  onClick={collapseSidebar}
+                  className={cn(
+                    'flex items-center justify-center rounded-lg py-2.5 transition',
+                    isRouteActive('/admin/dashboard')
+                      ? 'bg-teal-500/15 text-teal-300'
+                      : 'text-slate-400 hover:bg-white/5 hover:text-slate-200',
+                  )}
+                >
+                  <StoreIcon className="h-4 w-4 shrink-0 opacity-90" />
+                </Link>
+              )}
               {flatSidebarItems.map((item) =>
                 renderSidebarNavItem(
                   item,

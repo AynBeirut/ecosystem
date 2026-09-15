@@ -8,6 +8,7 @@ export const ECOMMERCE_PACKAGE: MarketingPackageContent = {
   tagline: 'Launch online. Operate from one place.',
   presetKey: 'pkg_shop',
   demoStoreSlug: 'grabio-demo-ecommerce',
+  comparisonPageSlug: 'grabio-vs-shopify-ecommerce',
   metaTitle: 'E-commerce Platform with Inventory & Fulfillment | Grabio',
   metaDescription:
     'Launch a branded online store with catalog, payments, and warehouse fulfillment on one platform. Stock and orders stay in sync from checkout to ship — try the demo.',

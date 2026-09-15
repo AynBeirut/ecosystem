@@ -5,7 +5,7 @@ import { CardContent, CardDescription, CardHeader, CardTitle } from '@/component
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2, Factory, ChefHat, Clock, Activity, ShieldAlert, CheckCircle2 } from 'lucide-react';
+import { Package, Wrench, Layers, ShoppingCart, AlertTriangle, DollarSign, TrendingUp, Undo2, Factory, ChefHat, Clock, Activity, ShieldAlert, CheckCircle2, Receipt } from 'lucide-react';
 import { getFirestore, collection, query, where, getDocs } from 'firebase/firestore';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminNavCard from '@/components/admin/AdminNavCard';
@@ -15,10 +15,20 @@ import SwipeableLayout from '@/components/SwipeableLayout';
 import StockMovementReport from '@/components/admin/StockMovementReport';
 import { getDaysUntilExpiry } from '@/lib/expiryUtils';
 import { loadFinishedGoodsStockMap, resolveDisplayStock } from '@/lib/inventoryStock';
+import { isLowStockAlertsEnabled } from '@/lib/inventorySettings';
+import { getActualStoreId } from '@/lib/storeUtils';
+import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
+import { canAccessBusinessTools, canViewStoreInventory } from '@/lib/subAccountAccess';
+import InventorySettingsPanel from '@/components/admin/InventorySettingsPanel';
 
 const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const { profile } = useStoreEntitlements();
+  const lowStockAlertsEnabled = isLowStockAlertsEnabled(profile);
+  const canUseBusinessTools = canAccessBusinessTools(user);
+  /** Stock & Catalog — always show expense entry for store admins / inventory managers (not gated on invoice module). */
+  const showExpenseShortcuts = canUseBusinessTools || canViewStoreInventory(user);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
     simpleProducts: { count: 0, totalValue: 0, lowStock: 0 },
@@ -34,16 +44,21 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
   }>({ expired: 0, expiringSoon: 0, items: [] });
 
   useEffect(() => {
+    const storeId = user ? getActualStoreId(user) : null;
+
     const fetchInventoryStats = async () => {
-      if (!user?.storeId) return;
-      
+      if (!storeId) {
+        setLoading(false);
+        return;
+      }
+
       const db = getFirestore();
       setLoading(true);
 
       try {
         // Simple Products
         const productsRef = collection(db, 'products');
-        const simpleQuery = query(productsRef, where('storeId', '==', user.storeId), where('productType', '==', 'simple'));
+        const simpleQuery = query(productsRef, where('storeId', '==', storeId), where('productType', '==', 'simple'));
         const simpleSnap = await getDocs(simpleQuery);
         
         let simpleCount = 0, simpleValue = 0, simpleLowStock = 0;
@@ -55,17 +70,17 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
         });
 
         // Services
-        const serviceQuery = query(productsRef, where('storeId', '==', user.storeId), where('productType', '==', 'service'));
+        const serviceQuery = query(productsRef, where('storeId', '==', storeId), where('productType', '==', 'service'));
         const serviceSnap = await getDocs(serviceQuery);
         
         // Finished Goods (load first — composed stock comes from here)
         const finishedGoodsRef = collection(db, 'finishedGoodsInventory');
-        const fgQuery = query(finishedGoodsRef, where('storeId', '==', user.storeId));
+        const fgQuery = query(finishedGoodsRef, where('storeId', '==', storeId));
         const fgSnap = await getDocs(fgQuery);
-        const fgStockMap = await loadFinishedGoodsStockMap(user.storeId);
+        const fgStockMap = await loadFinishedGoodsStockMap(storeId);
 
         // Composed Products
-        const composedQuery = query(productsRef, where('storeId', '==', user.storeId), where('productType', '==', 'composed'));
+        const composedQuery = query(productsRef, where('storeId', '==', storeId), where('productType', '==', 'composed'));
         const composedSnap = await getDocs(composedQuery);
         
         let composedCount = 0, composedValue = 0;
@@ -78,7 +93,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
 
         // Raw Materials
         const rawMaterialsRef = collection(db, 'rawMaterials');
-        const rawQuery = query(rawMaterialsRef, where('storeId', '==', user.storeId));
+        const rawQuery = query(rawMaterialsRef, where('storeId', '==', storeId));
         const rawSnap = await getDocs(rawQuery);
         
         let rawCount = 0, rawValue = 0, rawLowStock = 0;
@@ -161,7 +176,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
     };
 
     fetchInventoryStats();
-  }, [user?.storeId]);
+  }, [user]);
 
   const totalInventoryValue = stats.simpleProducts.totalValue + stats.composedProducts.totalValue + stats.rawMaterials.totalValue + stats.finishedGoods.totalValue;
   const totalLowStock = stats.simpleProducts.lowStock + stats.rawMaterials.lowStock + stats.finishedGoods.lowStock;
@@ -173,11 +188,23 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
 
   const inventoryBody = (
     <div className="min-w-0">
+        <InventorySettingsPanel />
         {!embedded && (
-        <div className="hidden md:grid md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
+        <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <AdminNavCard title="Products" description="Manage all product types: Simple items, Services, and Composed products" icon={Package} gradient="from-teal-500 to-teal-700" onClick={() => navigate('/admin/products')} />
           <AdminNavCard title="Suppliers" description="Manage suppliers and vendor relationships" icon={TrendingUp} gradient="from-violet-500 to-purple-700" onClick={() => navigate('/admin/suppliers')} />
           <AdminNavCard title="Purchases" description="Create purchase orders for raw materials and finished products" icon={ShoppingCart} gradient="from-sky-500 to-blue-700" onClick={() => navigate('/admin/purchases')} />
+          {showExpenseShortcuts && (
+            <>
+              <AdminNavCard
+                title="Expenses"
+                description="Operating expenses (payroll & supplier buys are in Staff / Purchases)"
+                icon={Receipt}
+                gradient="from-rose-500 to-red-700"
+                onClick={() => navigate('/admin/invoice-manager/expenses')}
+              />
+            </>
+          )}
           <AdminNavCard title="Supplier Returns" description="Return defective or incorrect items to suppliers" icon={Undo2} gradient="from-orange-400 to-orange-600" onClick={() => navigate('/admin/supplier-returns')} />
           <AdminNavCard title="Sales Returns" description="Process customer returns and refunds" icon={Undo2} gradient="from-red-400 to-rose-600" onClick={() => navigate('/admin/sales-returns')} />
           <AdminNavCard title="Recipes" description="Create and manage recipes for composed products" icon={ChefHat} gradient="from-pink-500 to-rose-700" onClick={() => navigate('/admin/recipes')} />
@@ -191,7 +218,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
           <AdminStatCard title="Total Value" value={`$${totalInventoryValue.toFixed(2)}`} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Across all inventory" />
           <AdminStatCard title="Simple Products" value={stats.simpleProducts.count} icon={Package} gradient="from-teal-500 to-teal-700" subtitle={`$${stats.simpleProducts.totalValue.toFixed(2)} value`} />
           <AdminStatCard title="Services" value={stats.services.count} icon={Wrench} gradient="from-cyan-500 to-blue-700" subtitle="Active services" />
-          <AdminStatCard title="Low Stock" value={totalLowStock} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Items need reordering" valueClassName="text-orange-600" />
+          <AdminStatCard title="Low Stock" value={lowStockAlertsEnabled ? totalLowStock : 0} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle={lowStockAlertsEnabled ? 'Items need reordering' : 'Alerts off (project-based)'} valueClassName="text-orange-600" />
           <AdminStatCard
             title="Expiry Alerts"
             value={expiryStats.expired + expiryStats.expiringSoon}
@@ -220,8 +247,8 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="rounded-lg border border-orange-200 bg-orange-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Reorder Queue</p>
-                  <p className="mt-1 text-2xl font-bold text-orange-800">{totalLowStock}</p>
-                  <p className="text-xs text-orange-700">Low stock items pending purchase</p>
+                  <p className="mt-1 text-2xl font-bold text-orange-800">{lowStockAlertsEnabled ? totalLowStock : 0}</p>
+                  <p className="text-xs text-orange-700">{lowStockAlertsEnabled ? 'Low stock items pending purchase' : 'Project-based mode — alerts off'}</p>
                 </div>
                 <div className="rounded-lg border border-red-200 bg-red-50 p-3">
                   <p className="text-xs font-semibold uppercase tracking-wide text-red-700">Expiry Risk</p>
@@ -238,7 +265,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
               <div className="mt-4 rounded-lg border bg-muted/30 p-3">
                 <p className="text-sm font-medium mb-2">Priority Actions</p>
                 <div className="space-y-2 text-sm">
-                  {totalLowStock > 0 && (
+                  {lowStockAlertsEnabled && totalLowStock > 0 && (
                     <div className="flex flex-col gap-2 rounded-md border bg-white p-2 sm:flex-row sm:items-center sm:justify-between">
                       <span className="flex items-center gap-2 text-orange-700"><AlertTriangle className="h-4 w-4 shrink-0" /> Restock low-stock items</span>
                       <Button size="sm" variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => navigate('/admin/purchases')}>Create PO</Button>
@@ -250,7 +277,7 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
                       <Button size="sm" variant="outline" className="w-full sm:w-auto shrink-0" onClick={() => navigate('/admin/finished-goods')}>Open Expiry View</Button>
                     </div>
                   )}
-                  {totalLowStock === 0 && (expiryStats.expired + expiryStats.expiringSoon) === 0 && (
+                  {(lowStockAlertsEnabled ? totalLowStock : 0) === 0 && (expiryStats.expired + expiryStats.expiringSoon) === 0 && (
                     <div className="flex items-center gap-2 rounded-md border bg-white p-2 text-emerald-700">
                       <CheckCircle2 className="h-4 w-4" /> No urgent inventory actions right now.
                     </div>

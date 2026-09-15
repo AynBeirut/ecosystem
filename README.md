@@ -38,7 +38,7 @@ Do not commit `.env.production`, credentials, or local backup folders.
 ### Session 2026-09-15 — Product center (locked tiers)
 **Active core:** live_kitchen / venue ops / CRM. **Optional maturity:** accounting + inventory + recipe/production. **High-end connected:** builder/template/SEO. **Maintained:** shop + factory (not dropped). **Deferred:** NGO/freelancer/mini shop. Details: `architecture.md`, `decision-log.md`.
 
-**Execution:** Slices A–D + marketing pivot + Store Profile venue ops + ops readiness on Grabio Platform. **Mobile 1.3.9 (140)** built; Anwar device adb install OK — functional verify **pending**. Closure: `reporting/data/plan-closure-2026-09-15.json` · Play: `docs/handoff/play-upload-1.3.9-140.md`. Handoff: `docs/handoff/builder-start-main-structure-fine-dining-2026-09-15.md`.
+**Execution:** Slices A–D + marketing pivot + Store Profile venue ops + ops readiness on Grabio Platform. **Resolver slice:** `effectiveStoreContext.ts` + readiness continue links — `reporting/data/resolver-setup-readiness-2026-09-15.json`. **Mobile 1.3.9 (140)** built; links smoke-tested OK; sidebar/toggle verify **pending**. Play: `docs/handoff/play-upload-1.3.9-140.md`. Handoff: `docs/handoff/builder-finish-resolver-setup-readiness-2026-09-15.md`.
 
 ### Session 2026-09-14 — Platform + POS fix backlog (manager mobile)
 **Root cause:** Play mobile **1.3.5** `ownerAccess.ts` owner-only; web uses `hasStoreAdminAccess()`. **Not** Firestore/cache. **Client fix:** Play update ≥140, no sideload. **POS:** Windows POS local RBAC ≠ Firebase subAccounts. **Full list:** `reporting/data/platform-pos-discovered-fixes-2026-09-14.md`.

@@ -20,6 +20,7 @@ import { ProductionBatch } from '@/types/production';
 import { Order } from '@/types/order';
 import { exportToCSV, exportToPDF } from '@/lib/exportUtils';
 import { fetchFinanceExpenses } from '@/lib/financeData';
+import { purchaseDisplayRef } from '@/lib/purchaseDisplayRef';
 
 const AdminReports: React.FC = () => {
   const { user } = useAuth();
@@ -666,7 +667,7 @@ const AdminReports: React.FC = () => {
                       return (
                         <div key={purchase.id} className="flex justify-between items-center p-3 bg-red-50 rounded">
                           <div>
-                            <p className="font-medium">{purchase.invoiceNumber || purchase.poNumber || `PO-${purchase.id.slice(0, 8)}`}</p>
+                            <p className="font-medium">{purchaseDisplayRef(purchase)}</p>
                             <p className="text-xs text-gray-500">
                               {purchase.supplierName} • {new Date(purchase.orderDate || purchase.createdAt).toLocaleDateString()}
                             </p>

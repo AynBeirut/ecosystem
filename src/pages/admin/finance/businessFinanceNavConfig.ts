@@ -67,6 +67,7 @@ export function accountingSubNavOptions(): FinanceNavOption[] {
 
 export function payablesSubNavOptions(): FinanceNavOption[] {
   return [
+    { value: 'stayha-loans', label: 'Stayha loans (owner)' },
     { value: 'ap-aging', label: REPORT_LABELS['ap-aging'] },
     { value: 'party-soa', label: 'Supplier statement' },
     { value: 'reconciliation', label: 'AP reconciliation' },
@@ -75,6 +76,9 @@ export function payablesSubNavOptions(): FinanceNavOption[] {
 
 export function receivablesSubNavOptions(): FinanceNavOption[] {
   return [
+    { value: 'client-portfolio', label: 'Client portfolio' },
+    { value: 'owner-receivables', label: 'Owner receivables' },
+    { value: 'service-income', label: 'Service income (Whish)' },
     { value: 'ar-aging', label: REPORT_LABELS['ar-aging'] },
     { value: 'party-soa', label: 'Customer statement' },
   ];
@@ -82,6 +86,7 @@ export function receivablesSubNavOptions(): FinanceNavOption[] {
 
 export function bankSubNavOptions(): FinanceNavOption[] {
   return [
+    { value: 'personal-wallet', label: 'Personal wallet (owner)' },
     { value: 'bank-rec', label: REPORT_LABELS['bank-rec'] },
     { value: 'cash-flow', label: REPORT_LABELS['cash-flow'] },
     { value: 'reconciliation', label: REPORT_LABELS.reconciliation },
@@ -138,6 +143,9 @@ export function financeSubNavLabel(module: string, value: string | null): string
 export function defaultFinanceSubNavValue(module: string): string | null {
   if (module === 'coa') return 'coa';
   if (module === 'stock') return 'inventory';
+  if (module === 'receivables') return 'client-portfolio';
+  if (module === 'payables') return 'stayha-loans';
+  if (module === 'bank') return 'personal-wallet';
   const options = financeSubNavOptions(module);
   return options[0]?.value ?? null;
 }

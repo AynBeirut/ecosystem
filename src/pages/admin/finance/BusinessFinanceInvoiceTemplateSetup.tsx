@@ -14,6 +14,10 @@ import {
   readFinanceDocumentSettings,
   updateFinanceDocumentSettings,
 } from '@/lib/financeDocumentSettings';
+import {
+  isNipcoProductionStore,
+  NIPCO_TEMPLATE_LOCK_MESSAGE,
+} from '@/lib/nipcoInvoiceTemplateLock';
 
 const TEMPLATE_OPTIONS: { value: FinanceInvoiceTemplate; label: string }[] = [
   { value: 'modern', label: 'Modern (Blue/Teal)' },
@@ -52,8 +56,18 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
     reader.readAsDataURL(file);
   };
 
+  const nipcoLocked = isNipcoProductionStore(storeId);
+
   const handleSave = async () => {
     if (!storeId) return;
+    if (nipcoLocked) {
+      toast({
+        title: 'Template locked',
+        description: NIPCO_TEMPLATE_LOCK_MESSAGE,
+        variant: 'destructive',
+      });
+      return;
+    }
     setSaving(true);
     try {
       await updateFinanceDocumentSettings(storeId, {
@@ -93,6 +107,13 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
         </p>
       </div>
 
+      {nipcoLocked ? (
+        <div className="rounded-md border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+          <p className="font-medium">Production template locked</p>
+          <p className="mt-1">{NIPCO_TEMPLATE_LOCK_MESSAGE}</p>
+        </div>
+      ) : null}
+
       <div className="grid gap-4 md:grid-cols-2">
         <div className="space-y-2 md:col-span-2">
           <Label htmlFor="documentLogo">Document logo (A4 invoices &amp; PDFs)</Label>
@@ -114,6 +135,7 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
               accept="image/png,image/jpeg,image/webp,image/svg+xml"
               onChange={handleLogoChange}
               className="max-w-sm"
+              disabled={nipcoLocked}
             />
           </div>
         </div>
@@ -125,6 +147,7 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
             value={companyName}
             onChange={(e) => setCompanyName(e.target.value)}
             placeholder={profile?.name || 'Leave blank to use store name'}
+            disabled={nipcoLocked}
           />
         </div>
 
@@ -135,6 +158,7 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
             value={taxId}
             onChange={(e) => setTaxId(e.target.value)}
             placeholder={profile?.taxNumber || 'Leave blank to use store tax number'}
+            disabled={nipcoLocked}
           />
         </div>
 
@@ -146,6 +170,7 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
             onChange={(e) => setAddress(e.target.value)}
             placeholder={profile?.location || 'Leave blank to use store address'}
             rows={2}
+            disabled={nipcoLocked}
           />
         </div>
 
@@ -156,6 +181,7 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
             value={invoiceTemplate}
             onChange={(e) => setInvoiceTemplate(e.target.value as FinanceInvoiceTemplate)}
             className="flex h-10 w-full max-w-md rounded-md border border-input bg-background px-3 py-2 text-sm"
+            disabled={nipcoLocked}
           >
             {TEMPLATE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>
@@ -170,7 +196,7 @@ export default function BusinessFinanceInvoiceTemplateSetup() {
       </div>
 
       <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={() => void handleSave()} disabled={saving || !storeId}>
+        <Button type="button" onClick={() => void handleSave()} disabled={saving || !storeId || nipcoLocked}>
           {saving ? 'Saving…' : 'Save document settings'}
         </Button>
       </div>

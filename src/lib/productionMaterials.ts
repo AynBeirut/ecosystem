@@ -60,7 +60,9 @@ export async function resolveProductionMaterials(
   recipe: RecipeLike,
   batchQuantity: number,
   loadRawMaterial: (rawMaterialId: string) => Promise<RawMaterial | null>,
+  options?: { skipStockCheck?: boolean },
 ): Promise<ResolveProductionMaterialsResult> {
+  const skipStockCheck = options?.skipStockCheck === true;
   const recipeOutputQty = Number(recipe.outputQuantity || recipe.yieldQuantity || 1);
   const safeRecipeOutputQty = recipeOutputQty > 0 ? recipeOutputQty : 1;
   const ingredients = Array.isArray(recipe.ingredients)
@@ -88,7 +90,7 @@ export async function resolveProductionMaterials(
       zeroCostMaterials.push(rawMaterial.name);
     }
 
-    if (currentStock < totalPlanned) {
+    if (!skipStockCheck && currentStock < totalPlanned) {
       return {
         lines,
         totalCost: 0,

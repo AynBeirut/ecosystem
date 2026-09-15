@@ -97,6 +97,16 @@ function generateNumericAccountNo(id: string): string {
   return Math.abs(hash).toString().padStart(10, '0');
 }
 
+function sanitizePublicReceiptNote(note: unknown, amount: number): string {
+  const cleaned = String(note || '')
+    .replace(/\s*—\s*WhatsApp date pending/gi, '')
+    .replace(/\s*—\s*Jobran WhatsApp/gi, '')
+    .replace(/\s*\(date pending\)/gi, '')
+    .trim();
+  if (cleaned) return cleaned;
+  return `Payment — $${amount.toFixed(2)}`;
+}
+
 function getUnappliedPaymentAmount(payment: AccountPaymentDoc): number {
   const total = toFiniteNumber(payment.amount, 0);
   if (total <= 0) return 0;
@@ -159,6 +169,17 @@ function mapTxnToLine(
   };
 }
 
+function supplierPurchaseDescription(
+  partyName: string,
+  purchase: Record<string, unknown>,
+  invoiceRef: string,
+): string {
+  const note = String(purchase.notes || purchase.description || '').trim();
+  const cleaned = note.replace(/\.\s*Owner owes[^.]*\.?/i, '').trim();
+  if (cleaned) return `${partyName} — ${cleaned}`;
+  return `${partyName} — Purchase ${invoiceRef}`;
+}
+
 async function loadBillTo(
   partyType: PartyType,
   partyId: string,
@@ -196,8 +217,11 @@ export async function buildPartyOperationalStatement(params: {
   partyId: string;
   partyName?: string;
   currency?: string;
+  /** YYYY-MM-DD inclusive — filters statement lines and computes opening balance. */
+  startDate?: string;
+  endDate?: string;
 }): Promise<PartyStatementReport> {
-  const { storeId, partyType, partyId } = params;
+  const { storeId, partyType, partyId, startDate, endDate } = params;
   const db = getFirestore();
   const billTo = (await loadBillTo(partyType, partyId)) || {
     name: params.partyName || 'Unknown',
@@ -208,6 +232,7 @@ export async function buildPartyOperationalStatement(params: {
   const allTxns: StatementTxn[] = [];
   let phone = billTo.phone || '';
   let paymentTerms = '';
+  let nextPaymentDueFromMeta: string | null = null;
 
   if (partyType === 'supplier') {
     const supplierSnap = await getDoc(doc(db, 'suppliers', partyId));
@@ -215,7 +240,7 @@ export async function buildPartyOperationalStatement(params: {
       paymentTerms = String(supplierSnap.data().paymentTerms || 'net_30');
     }
 
-    const [purchasesSnap, returnsSnap, paymentsSnap] = await Promise.all([
+    const [purchasesSnap, returnsSnap, paymentsSnap, financeExpSnap] = await Promise.all([
       getDocs(
         query(
           collection(db, 'purchases'),
@@ -239,6 +264,12 @@ export async function buildPartyOperationalStatement(params: {
           where('accountType', '==', 'supplier'),
         ),
       ),
+      getDocs(
+        query(
+          collection(db, 'stores', storeId, 'financeExpenses'),
+          where('supplierId', '==', partyId),
+        ),
+      ),
     ]);
 
     const validPurchaseIds = new Set(purchasesSnap.docs.map((d) => d.id));
@@ -257,7 +288,7 @@ export async function buildPartyOperationalStatement(params: {
         date: purchase.date || purchase.createdAt || '',
         type: 'purchase',
         ref: invoiceRef,
-        description: `Pur.Inv.${invoiceRef}`,
+        description: supplierPurchaseDescription(partyName, purchase, invoiceRef),
         debit: 0,
         credit: total,
         data: { ...purchase, id: purchaseDoc.id, net: subtotal },
@@ -268,7 +299,7 @@ export async function buildPartyOperationalStatement(params: {
           date: purchase.paymentDate || purchase.paidAt || purchase.date || purchase.createdAt || '',
           type: 'purchase_payment',
           ref: `PAY-${invoiceRef}`.substring(0, 20),
-          description: `Payment - ${invoiceRef}`,
+          description: `${partyName} — Payment ${invoiceRef}`,
           debit: paid,
           credit: 0,
           data: purchase,
@@ -307,13 +338,45 @@ export async function buildPartyOperationalStatement(params: {
         data: { ...returnData, id: returnDoc.id },
       });
     });
+
+    financeExpSnap.forEach((expDoc) => {
+      const exp = expDoc.data();
+      const amount = toFiniteNumber(exp.amount, 0);
+      if (amount <= 0) return;
+      const expDate = normalizeDateString(exp.expenseDate || exp.paidAt || exp.startDate);
+      if (!expDate) return;
+      const ref = String(exp.voucherNumber || expDoc.id.replace(/^whish_/, '').substring(0, 16));
+      const label = String(exp.name || exp.description || exp.notes || 'Subscription').trim();
+      allTxns.push({
+        date: expDate,
+        type: 'purchase',
+        ref,
+        description: `${partyName} — ${label}`,
+        debit: 0,
+        credit: amount,
+        data: { ...exp, id: expDoc.id },
+      });
+      allTxns.push({
+        date: expDate,
+        type: 'purchase_payment',
+        ref: `PAY-${ref}`.substring(0, 20),
+        description: `${partyName} — Paid via ${exp.paymentMethod || 'card'}`,
+        debit: amount,
+        credit: 0,
+        data: { ...exp, id: expDoc.id },
+      });
+    });
   } else {
     const customerSnap = await getDoc(doc(db, 'customers', partyId));
-    if (customerSnap.exists()) {
-      paymentTerms = String(customerSnap.data().paymentTerms || 'net_30');
+    const customerData = customerSnap.exists() ? customerSnap.data() : null;
+    const accountStatementMeta = (customerData?.accountStatementMeta ?? {}) as Record<string, unknown>;
+
+    if (customerData) {
+      paymentTerms = String(customerData.paymentTerms || 'net_30');
+      nextPaymentDueFromMeta = normalizeDateString(accountStatementMeta.nextPaymentDue as string | undefined);
     }
 
-    const [ordersSnap, paymentsSnap] = await Promise.all([
+    const [ordersSnap, paymentsSnap, financeInvSnap, financeRcptSnap] = await Promise.all([
       getDocs(
         query(
           collection(db, 'orders'),
@@ -327,6 +390,18 @@ export async function buildPartyOperationalStatement(params: {
           where('storeId', '==', storeId),
           where('accountId', '==', partyId),
           where('accountType', '==', 'customer'),
+        ),
+      ),
+      getDocs(
+        query(
+          collection(db, 'stores', storeId, 'financeInvoices'),
+          where('clientId', '==', partyId),
+        ),
+      ),
+      getDocs(
+        query(
+          collection(db, 'stores', storeId, 'financeReceipts'),
+          where('clientId', '==', partyId),
         ),
       ),
     ]);
@@ -373,6 +448,52 @@ export async function buildPartyOperationalStatement(params: {
         data: { ...payment, id: paymentDoc.id },
       });
     });
+
+    financeInvSnap.forEach((invDoc) => {
+      const inv = invDoc.data();
+      const total = toFiniteNumber(inv.total ?? inv.amount, 0);
+      if (total <= 0) return;
+      const invDate =
+        normalizeDateString(inv.date || inv.createdAt) ||
+        normalizeDateString(accountStatementMeta.contractDate as string | undefined);
+      if (!invDate) return;
+      const invoiceRef = String(inv.invoiceNumber || invDoc.id.substring(0, 8));
+      const lineDesc =
+        Array.isArray(inv.lineItems) && inv.lineItems[0]?.description
+          ? String(inv.lineItems[0].description)
+          : String(inv.notes || `Finance Inv.${invoiceRef}`);
+      allTxns.push({
+        date: invDate,
+        type: 'order',
+        ref: invoiceRef,
+        description: lineDesc.substring(0, 80),
+        debit: total,
+        credit: 0,
+        data: { ...inv, id: invDoc.id },
+      });
+    });
+
+    financeRcptSnap.forEach((rcptDoc) => {
+      const rcpt = rcptDoc.data();
+      const amount = toFiniteNumber(rcpt.amount, 0);
+      if (amount <= 0) return;
+      const rawDate = rcpt.paymentDate || rcpt.paidAt || rcpt.createdAt;
+      const pendingDate = String(rawDate || '').trim() === 'pending' || rcpt.pendingOwnerDate === true;
+      let paymentDate = pendingDate
+        ? normalizeDateString(accountStatementMeta.contractDate as string | undefined)
+        : normalizeDateString(rawDate || rcpt.createdAt);
+      if (!paymentDate) return;
+      const note = sanitizePublicReceiptNote(rcpt.notes || rcpt.paymentMethod, amount);
+      allTxns.push({
+        date: paymentDate,
+        type: 'payment',
+        ref: rcptDoc.id.replace(/^rcpt-/, 'RCPT-').substring(0, 12).toUpperCase(),
+        description: `Payment — ${note}`,
+        debit: 0,
+        credit: amount,
+        data: { ...rcpt, id: rcptDoc.id },
+      });
+    });
   }
 
   if (phone && !billTo.phone) {
@@ -381,12 +502,27 @@ export async function buildPartyOperationalStatement(params: {
 
   allTxns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  let openingBalance = 0;
+  const periodTxns: StatementTxn[] = [];
+  for (const txn of allTxns) {
+    const txnDate = normalizeDateString(txn.date);
+    if (!txnDate) continue;
+    if (startDate && txnDate < startDate) {
+      openingBalance += txn.debit - txn.credit;
+      continue;
+    }
+    if (endDate && txnDate > endDate) {
+      continue;
+    }
+    periodTxns.push(txn);
+  }
+
   const lines: PartyStatementLine[] = [];
-  let runningBalance = 0;
+  let runningBalance = openingBalance;
   let totalCharges = 0;
   let totalCredits = 0;
 
-  allTxns.forEach((txn) => {
+  periodTxns.forEach((txn) => {
     const mapped = mapTxnToLine(txn, runningBalance, partyType);
     runningBalance = mapped.balance;
     totalCharges += mapped.line.charges;
@@ -397,6 +533,11 @@ export async function buildPartyOperationalStatement(params: {
   const now = new Date();
   const statementNumber = `${partyType === 'customer' ? 'CS' : 'SS'}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${partyId.slice(0, 6).toUpperCase()}`;
 
+  let paymentDueDate = paymentDueDateFromTerms(paymentTerms, now);
+  if (partyType === 'customer' && nextPaymentDueFromMeta) {
+    paymentDueDate = new Date(nextPaymentDueFromMeta).toLocaleDateString('en-GB');
+  }
+
   return {
     partyType,
     partyId,
@@ -405,11 +546,11 @@ export async function buildPartyOperationalStatement(params: {
     billTo,
     statementDate: now.toLocaleDateString('en-GB'),
     statementNumber,
-    openingBalance: 0,
+    openingBalance,
     closingBalance: runningBalance,
     totalCharges,
     totalCredits,
-    paymentDueDate: paymentDueDateFromTerms(paymentTerms, now),
+    paymentDueDate,
     currency: params.currency || 'USD',
     lines,
   };

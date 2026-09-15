@@ -8,6 +8,7 @@ export const MANUFACTURING_PACKAGE: MarketingPackageContent = {
   tagline: 'Production tied to sales and stock',
   presetKey: 'pkg_factory_flow',
   demoStoreSlug: 'grabio-demo-manufacturing',
+  comparisonPageSlug: 'grabio-vs-katana-manufacturing',
   metaTitle: 'Manufacturing Software with BOM & Production Tracking | Grabio',
   metaDescription:
     'Small-business manufacturing software — sales orders trigger production runs, bills of materials consume raw materials automatically, and finished goods ship from live stock. Try the demo.',

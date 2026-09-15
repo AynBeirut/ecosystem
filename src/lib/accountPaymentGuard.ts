@@ -8,6 +8,33 @@ import {
 
 const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
+/** Service-income clients — standalone payments, not POS duplicates. Keep in sync with ownerServiceIncome.ts */
+const SERVICE_INCOME_CLIENT_IDS = new Set([
+  'cli-youssif-malek-electrical',
+  'cli-wissam-web-app',
+  'cli-ali-webi-borej-hajal',
+]);
+
+/** Project receivable clients — invoice payments, not POS duplicates. Keep in sync with ownerReceivables.ts */
+const OWNER_RECEIVABLE_CLIENT_IDS = new Set([
+  'client-stayha-solar',
+  'client-borj-el-hajal',
+]);
+
+/** Service / Whish / bank payments are not POS cash duplicates — allow standalone receipts. */
+function isStandaloneServicePayment(input: AccountPaymentGuardInput): boolean {
+  if (SERVICE_INCOME_CLIENT_IDS.has(input.accountId)) return true;
+  if (OWNER_RECEIVABLE_CLIENT_IDS.has(input.accountId)) return true;
+  const method = String(input.method || '').toLowerCase();
+  return (
+    method === 'whish'
+    || method === 'bank_transfer'
+    || method === 'bank'
+    || method === 'cheque'
+    || method === 'other'
+  );
+}
+
 export type AccountPaymentGuardInput = {
   storeId: string;
   accountId: string;
@@ -61,6 +88,10 @@ export async function assertAccountPaymentAllowed(
   }
 
   if (input.accountType !== 'customer' || input.direction !== 'in') {
+    return { allowed: true };
+  }
+
+  if (isStandaloneServicePayment(input)) {
     return { allowed: true };
   }
 

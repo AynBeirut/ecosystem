@@ -32,6 +32,8 @@ export type CrmClient = Customer & {
   lastVisitDate?: string | null;
   pipelineStage?: CrmPipelineStage;
   assignedRepId?: string | null;
+  lastActivityType?: import('@/types/crm').CrmActivityType | null;
+  nextFollowUpType?: import('@/types/crm').CrmActivityType | null;
   crmEnabled?: boolean;
 };
 
@@ -247,10 +249,14 @@ export async function logCrmActivity(input: {
   const customerUpdate: Record<string, unknown> = {
     lastActivityAt: input.loggedAt,
     lastActivityResult: input.result,
+    lastActivityType: input.type,
     crmEnabled: true,
     updatedAt: new Date().toISOString(),
   };
-  if (input.followUpAt) customerUpdate.nextFollowUpAt = input.followUpAt;
+  if (input.followUpAt) {
+    customerUpdate.nextFollowUpAt = input.followUpAt;
+    customerUpdate.nextFollowUpType = input.type;
+  }
   if (input.advancePipeline !== false && stageAfter) {
     customerUpdate.pipelineStage = stageAfter;
   }

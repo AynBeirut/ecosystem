@@ -32,7 +32,23 @@ import { useAuth } from '@/context/useAuth';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { canUseInvoiceManagerApp } from '@/lib/entitlements';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
-import { canAccessBusinessTools, isManagerSubAccount } from '@/lib/subAccountAccess';
+import {
+  canAccessBusinessTools,
+  canAccessGrabioPos,
+  canManageStoreInventory,
+  canViewStoreInventory,
+  isManagerSubAccount,
+  hasStoreAdminAccess,
+} from '@/lib/subAccountAccess';
+import { isAccountingFreelancerSubAccount, isWebBuilderSubAccount } from '@/lib/webBuilderAccess';
+import {
+  canShowAdminBuilderNav,
+  canShowAdminCrmNav,
+  canShowAdminFinanceNav,
+  canShowAdminInventoryNav,
+  canShowAdminSeoNav,
+  resolveEffectiveStoreContext,
+} from '@/lib/effectiveStoreContext';
 
 export type AdminNavItem = {
   to: string;
@@ -52,9 +68,11 @@ export type AdminNavGroup = {
 const DEFAULT_OPEN_GROUPS: Record<string, boolean> = {
   daily_stock: true,
   daily_sales: true,
+  venue_operations: true,
   setup_profile: false,
   setup_seo: false,
   setup_template: false,
+  setup_grow: false,
   setup_system: false,
 };
 
@@ -87,6 +105,7 @@ const BUSINESS_TOOLS_ROUTES = [
   '/admin/cash-collection',
   '/admin/delivery-wallet',
   '/admin/staff',
+  '/admin/staff-presence',
   '/admin/sub-accounts',
   '/admin/marketplace',
   '/admin/audit-logs',
@@ -99,10 +118,11 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
       pathname.startsWith('/admin/inventory') ||
       pathname.startsWith('/admin/products') ||
       pathname.startsWith('/admin/purchases') ||
-      pathname.startsWith('/admin/delivery')
+      pathname.startsWith('/admin/delivery') ||
+      pathname.startsWith('/admin/invoice-manager/expenses')
     );
   }
-  if (groupId === 'daily_sales') {
+  if (groupId === 'daily_sales' || groupId === 'venue_operations') {
     return (
       pathname.startsWith('/admin/orders') ||
       pathname.startsWith('/admin/v-pos') ||
@@ -122,6 +142,12 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
   if (groupId === 'setup_seo') {
     return SEO_OPS_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   }
+  if (groupId === 'setup_grow') {
+    return (
+      TEMPLATE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
+      || SEO_OPS_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`))
+    );
+  }
   if (groupId === 'setup_template') {
     return TEMPLATE_ROUTES.some((route) => pathname === route || pathname.startsWith(`${route}/`));
   }
@@ -137,9 +163,45 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
 export function useAdminNavigation() {
   const { user } = useAuth();
   const location = useLocation();
-  const { canUse: canUseModule, profile } = useStoreEntitlements();
+  const { canUse: canUseModule, profile, entitlements } = useStoreEntitlements();
+  const effectiveCtx = useMemo(
+    () =>
+      resolveEffectiveStoreContext({
+        profile,
+        entitlements,
+        user,
+        environment: 'web_admin',
+      }),
+    [profile, entitlements, user],
+  );
+  const venueNav = effectiveCtx.nav;
   const [openMenuGroups, setOpenMenuGroups] = useState<Record<string, boolean>>(DEFAULT_OPEN_GROUPS);
-  const isAdmin = user?.role === 'admin';
+  const isManager = isManagerSubAccount(user);
+  const storeAdminAccess = hasStoreAdminAccess(user);
+
+  const canViewInventory = canViewStoreInventory(user);
+  const canManageInventory = canManageStoreInventory(user);
+  const canUseGrabioPos = canAccessGrabioPos(user);
+  const canViewReports = storeAdminAccess || user?.permissions?.includes('view_reports');
+  const canManageDeliveries = storeAdminAccess || user?.permissions?.includes('manage_deliveries');
+  const canProcessPayments = storeAdminAccess || user?.permissions?.includes('process_payments');
+  const canViewOrders = storeAdminAccess || user?.permissions?.includes('view_orders');
+  const canViewCustomers = storeAdminAccess || user?.permissions?.includes('view_customers');
+  const isCashier = user?.role === 'sub_account' && user?.subAccountRole === 'cashier';
+  const isWebBuilder = isWebBuilderSubAccount(user);
+  const isAccountingFreelancer = isAccountingFreelancerSubAccount(user);
+  const canUseBusinessTools = canAccessBusinessTools(user);
+  const showStockExpenseNav = canUseBusinessTools || canViewInventory;
+  /** Phase 1 field sales — store owner + manager; ModuleGate handles entitlement on routes. */
+  const crmEnabled = canShowAdminCrmNav(effectiveCtx, storeAdminAccess);
+  const showFinanceNav = canShowAdminFinanceNav(effectiveCtx);
+  const showInventoryNav = canShowAdminInventoryNav(effectiveCtx);
+  const showBuilderNav = canShowAdminBuilderNav(effectiveCtx) || isWebBuilder;
+  const showReservationsNav = effectiveCtx.modulesVisible.reservations;
+  const invoiceManagerEnabled =
+    showFinanceNav && canUseBusinessTools && canUseInvoiceManagerApp(profile);
+  /** Legacy Finance Suite hub — hide when Invoice Manager + Business Finance are available. */
+  const financeSuiteVisible = showFinanceNav && canUseBusinessTools && !invoiceManagerEnabled;
 
   useEffect(() => {
     const pathname = location.pathname;
@@ -152,23 +214,6 @@ export function useAdminNavigation() {
       return next;
     });
   }, [location.pathname]);
-
-  const canViewInventory = user?.role === 'admin' || user?.permissions?.includes('view_inventory');
-  const canManageInventory = user?.role === 'admin' || user?.permissions?.includes('manage_inventory');
-  const canViewReports = user?.role === 'admin' || user?.permissions?.includes('view_reports');
-  const canManageDeliveries = user?.role === 'admin' || user?.permissions?.includes('manage_deliveries');
-  const canProcessPayments = user?.role === 'admin' || user?.permissions?.includes('process_payments');
-  const canViewOrders = user?.role === 'admin' || user?.permissions?.includes('view_orders');
-  const canViewCustomers = user?.role === 'admin' || user?.permissions?.includes('view_customers');
-  const isCashier = user?.role === 'sub_account' && user?.subAccountRole === 'cashier';
-  const isManager = isManagerSubAccount(user);
-  const canUseBusinessTools = canAccessBusinessTools(user);
-  /** Phase 1 field sales — always show for store owners; ModuleGate handles entitlement on routes. */
-  const crmEnabled = user?.role === 'admin';
-  const invoiceManagerEnabled = canUseBusinessTools && canUseInvoiceManagerApp(profile);
-  /** Legacy Finance Suite hub — hide when Invoice Manager + Business Finance are available. */
-  const financeSuiteVisible = canUseBusinessTools && !invoiceManagerEnabled;
-  const builderVisible = user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('builder'));
 
   const isRouteActive = (route: string) => {
     if (route === '/admin/templates' || route === '/admin/theme-editor' || route === '/admin/builder') {
@@ -187,59 +232,179 @@ export function useAdminNavigation() {
   };
 
   const menuGroups = useMemo(() => {
-    const daily: AdminNavGroup[] = [
-      {
-        id: 'daily_stock',
-        title: 'Stock & Catalog',
-        items: [
-          {
-            to: '/admin/inventory',
-            label: 'Inventory Overview',
-            icon: Package,
-            visible: Boolean(isAdmin && canViewInventory),
-          },
-          {
-            to: '/admin/products',
-            label: 'Products',
-            icon: Package,
-            visible: Boolean(canViewInventory),
-          },
-          {
-            to: '/admin/purchases',
-            label: 'Purchases',
-            icon: ShoppingCart,
-            visible: Boolean(isAdmin && canManageInventory),
-          },
-          { to: '/admin/delivery', label: 'Delivery', icon: Clock, visible: Boolean(canManageDeliveries) },
-        ],
-      },
-      {
-        id: 'daily_sales',
-        title: 'Sales & Customers',
-        items: [
-          { to: '/admin/v-pos', label: 'V·POS', icon: ShoppingCart, visible: Boolean(canViewOrders) },
-          { to: '/admin/v-purchase', label: 'V·Purchase', icon: ShoppingCart, visible: Boolean(isAdmin && canManageInventory) },
-          { to: '/admin/v-expense', label: 'V·Expense', icon: CreditCard, visible: isAdmin },
-          { to: '/admin/orders', label: 'Orders', icon: Package, visible: Boolean(canViewOrders) },
-          { to: '/admin/scheduled-orders', label: 'Scheduled Orders', icon: Clock, visible: Boolean(canViewOrders) },
-          {
-            to: '/admin/pos',
-            label: 'Grabio POS',
-            icon: Monitor,
-            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('pos')),
-          },
-          {
-            to: '/admin/events',
-            label: 'Store Events',
-            icon: CalendarDays,
-            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('pos')),
-          },
-          { to: '/admin/customers', label: 'Customers', icon: Users, visible: Boolean(canViewCustomers) },
-          { to: '/admin/crm/dashboard', label: 'Sales CRM', icon: LayoutGrid, visible: crmEnabled },
-          { to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: Boolean(canProcessPayments) },
-          { to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: Boolean(canViewReports) },
-        ],
-      },
+    if (isAccountingFreelancer) {
+      const financeSetup: AdminNavGroup[] = [
+        {
+          id: 'client_finance',
+          title: 'Client Finance',
+          items: [
+            {
+              to: '/admin/finance/accounting',
+              label: 'Business Finance',
+              icon: Landmark,
+              visible: true,
+            },
+            {
+              to: '/admin/invoice-manager/invoices',
+              label: 'Invoice Manager',
+              icon: Receipt,
+              visible: true,
+            },
+            {
+              to: '/admin/invoice-manager/expenses',
+              label: 'Expenses',
+              icon: DollarSign,
+              visible: true,
+            },
+            {
+              to: '/admin/finance/reports',
+              label: 'Reports',
+              icon: BarChart,
+              visible: canViewReports,
+            },
+          ],
+        },
+      ];
+      return { daily: [], setup: financeSetup };
+    }
+
+    if (isWebBuilder) {
+      const builderSetup: AdminNavGroup[] = [
+        {
+          id: 'setup_template',
+          title: 'Storefront Builder',
+          items: [
+            { to: '/admin/dashboard', label: 'Client dashboard', icon: StoreIcon, visible: true },
+            { to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: true },
+            { to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: true },
+            { to: '/admin/builder', label: 'WordPress', icon: Globe, visible: true },
+          ],
+        },
+        {
+          id: 'daily_stock',
+          title: 'Catalog',
+          items: [
+            { to: '/admin/products', label: 'Products', icon: Package, visible: true },
+            { to: '/admin/blog', label: 'Blog Posts', icon: FileText, visible: true },
+            { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
+          ],
+        },
+      ];
+      return { daily: [], setup: builderSetup };
+    }
+
+    const stockGroup: AdminNavGroup = {
+      id: 'daily_stock',
+      title: venueNav.stockGroupTitle,
+      items: [
+        {
+          to: '/admin/inventory',
+          label: 'Inventory Overview',
+          icon: Package,
+          visible: showInventoryNav && Boolean(canViewInventory),
+        },
+        {
+          to: '/admin/products',
+          label: 'Products',
+          icon: Package,
+          visible: showInventoryNav && Boolean(canViewInventory),
+        },
+        {
+          to: '/admin/purchases',
+          label: 'Purchases',
+          icon: ShoppingCart,
+          visible: showInventoryNav && Boolean(canManageInventory),
+        },
+        {
+          to: '/admin/delivery',
+          label: 'Delivery',
+          icon: Clock,
+          visible: showInventoryNav && Boolean(canManageDeliveries),
+        },
+        {
+          to: '/admin/invoice-manager/expenses',
+          label: 'Expenses',
+          icon: Receipt,
+          visible: showFinanceNav && Boolean(showStockExpenseNav),
+        },
+      ],
+    };
+
+    const operationsGroup: AdminNavGroup = {
+      id: venueNav.useOperationsFirstLayout ? 'venue_operations' : 'daily_sales',
+      title: venueNav.operationsGroupTitle,
+      items: [
+        { to: '/admin/v-pos', label: 'V·POS', icon: ShoppingCart, visible: Boolean(canViewOrders) },
+        {
+          to: '/admin/v-purchase',
+          label: 'V·Purchase',
+          icon: ShoppingCart,
+          visible: showInventoryNav && Boolean(canManageInventory),
+        },
+        {
+          to: '/admin/v-expense',
+          label: 'V·Expense',
+          icon: CreditCard,
+          visible: showFinanceNav,
+        },
+        { to: '/admin/orders', label: 'Orders', icon: Package, visible: Boolean(canViewOrders) },
+        {
+          to: '/admin/scheduled-orders',
+          label: 'Scheduled Orders',
+          icon: Clock,
+          visible: Boolean(canViewOrders),
+        },
+        {
+          to: '/admin/pos',
+          label: 'Grabio POS',
+          icon: Monitor,
+          visible: canUseGrabioPos && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('pos')),
+        },
+        {
+          to: '/admin/events',
+          label: venueNav.showReservationsNav ? 'Reservations' : 'Store Events',
+          icon: CalendarDays,
+          visible:
+            showReservationsNav
+            && canUseGrabioPos
+            && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('pos')),
+        },
+        {
+          to: '/admin/customers',
+          label: venueNav.useOperationsFirstLayout ? 'Guests' : 'Customers',
+          icon: Users,
+          visible: Boolean(canViewCustomers),
+        },
+        { to: '/admin/crm/dashboard', label: 'Sales CRM', icon: LayoutGrid, visible: crmEnabled },
+        { to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: Boolean(canProcessPayments) },
+        { to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: Boolean(canViewReports) },
+      ],
+    };
+
+    const daily: AdminNavGroup[] = venueNav.useOperationsFirstLayout
+      ? [
+          operationsGroup,
+          ...(showInventoryNav ? [stockGroup] : []),
+        ]
+      : [stockGroup, operationsGroup];
+
+    const seoOpsVisible = canShowAdminSeoNav(effectiveCtx, storeAdminAccess);
+    const templateItems: AdminNavItem[] = [
+      { to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: showBuilderNav },
+      { to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: showBuilderNav },
+      { to: '/admin/builder', label: 'WordPress', icon: Globe, visible: showBuilderNav },
+    ];
+    const seoItems: AdminNavItem[] = [
+      { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: seoOpsVisible },
+      { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: seoOpsVisible },
+      { to: '/admin/seo-keywords', label: 'SEO Keywords', icon: BarChart, visible: seoOpsVisible },
+      { to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: seoOpsVisible },
+      { to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Monitor, visible: seoOpsVisible },
+      { to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: seoOpsVisible },
+      { to: '/admin/seo-geo', label: 'SEO GEO', icon: Globe, visible: seoOpsVisible },
+      { to: '/admin/seo-programmatic', label: 'Programmatic SEO', icon: LayoutGrid, visible: seoOpsVisible },
+      { to: '/admin/seo-links', label: 'SEO Links', icon: Globe, visible: seoOpsVisible },
+      { to: '/admin/seo-technical', label: 'SEO Technical', icon: Settings2, visible: seoOpsVisible },
     ];
 
     const setup: AdminNavGroup[] = [
@@ -247,80 +412,118 @@ export function useAdminNavigation() {
         id: 'setup_profile',
         title: 'Profile & Store Setup',
         items: [
-          { to: '/admin/profile', label: 'Store Profile', icon: User, visible: isAdmin },
+          { to: '/admin/profile', label: 'Store Profile', icon: User, visible: storeAdminAccess },
           {
             to: '/admin/payments',
             label: 'Payment Settings',
             icon: CreditCard,
-            visible: isAdmin && Boolean(canProcessPayments),
+            visible: storeAdminAccess && Boolean(canProcessPayments),
           },
           {
             to: '/admin/announcements',
             label: 'Announcements',
             icon: Megaphone,
-            visible: isAdmin || user?.role === 'sub_account',
+            visible: storeAdminAccess || user?.role === 'sub_account',
           },
-          { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: isAdmin && Boolean(canViewReports) },
+          { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: storeAdminAccess && Boolean(canViewReports) },
         ],
       },
-      {
-        id: 'setup_seo',
-        title: 'SEO Ops',
-        items: [
-          { to: '/admin/seo-analytics', label: 'SEO Analytics', icon: TrendingUp, visible: isAdmin },
-          { to: '/admin/seo-audit', label: 'SEO Audit (GSC)', icon: Globe, visible: isAdmin },
-          { to: '/admin/seo-keywords', label: 'SEO Keywords', icon: BarChart, visible: isAdmin },
-          { to: '/admin/seo-content', label: 'SEO Content', icon: FileText, visible: isAdmin },
-          { to: '/admin/seo-competitors', label: 'SEO Competitors', icon: Monitor, visible: isAdmin },
-          { to: '/admin/seo-aeo', label: 'SEO AEO', icon: Bot, visible: isAdmin },
-          { to: '/admin/seo-geo', label: 'SEO GEO', icon: Globe, visible: isAdmin },
-          { to: '/admin/seo-programmatic', label: 'Programmatic SEO', icon: LayoutGrid, visible: isAdmin },
-          { to: '/admin/seo-links', label: 'SEO Links', icon: Globe, visible: isAdmin },
-          { to: '/admin/seo-technical', label: 'SEO Technical', icon: Settings2, visible: isAdmin },
-        ],
-      },
-      {
-        id: 'setup_template',
-        title: 'Template',
-        items: [
-          { to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
-          { to: '/admin/theme-editor', label: 'Theme Editor', icon: Paintbrush, visible: builderVisible },
-          { to: '/admin/builder', label: 'WordPress', icon: Globe, visible: builderVisible },
-        ],
-      },
+      ...(venueNav.mode === 'restaurant_first'
+        ? [
+            {
+              id: 'setup_grow',
+              title: 'Grow',
+              items: [...templateItems, ...seoItems],
+            } satisfies AdminNavGroup,
+          ]
+        : [
+            {
+              id: 'setup_seo',
+              title: 'SEO Ops',
+              items: seoItems.map((item) => ({
+                ...item,
+                visible: seoOpsVisible,
+              })),
+            },
+            {
+              id: 'setup_template',
+              title: 'Template',
+              items: templateItems.map((item) => ({
+                ...item,
+                visible: showBuilderNav,
+              })),
+            },
+          ]),
       {
         id: 'setup_system',
-        title: 'Business Tools',
+        title: showFinanceNav ? 'Business Tools' : 'Team & system',
         items: [
-          { to: '/admin/finance/accounting', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
-          { to: '/admin/finance/accounting', label: 'Business Finance', icon: Landmark, visible: invoiceManagerEnabled },
+          {
+            to: '/admin/finance/accounting',
+            label: 'Finance Suite',
+            icon: DollarSign,
+            visible: financeSuiteVisible,
+          },
+          {
+            to: '/admin/finance/accounting',
+            label: 'Business Finance',
+            icon: Landmark,
+            visible: invoiceManagerEnabled,
+          },
           {
             to: '/admin/invoice-manager/invoices',
             label: 'Invoice Manager',
             icon: Receipt,
             visible: invoiceManagerEnabled,
           },
-          { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: canUseBusinessTools },
-          { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
-          { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },
+          {
+            to: '/admin/cash-collection',
+            label: 'Cash Collection',
+            icon: DollarSign,
+            visible: showFinanceNav && canUseBusinessTools,
+          },
+          {
+            to: '/admin/delivery-wallet',
+            label: 'Delivery Wallets',
+            icon: Wallet,
+            visible: showFinanceNav && canUseBusinessTools,
+          },
+          {
+            to: '/admin/staff',
+            label: 'Staff (Payroll)',
+            icon: Users,
+            visible: showFinanceNav && canUseBusinessTools,
+          },
+          {
+            to: '/admin/staff-presence',
+            label: 'Daily Presence',
+            icon: CalendarDays,
+            visible: canUseBusinessTools,
+          },
+          {
+            to: '/admin/salaries',
+            label: 'Salary Payments',
+            icon: DollarSign,
+            visible: showFinanceNav && canUseBusinessTools,
+          },
           {
             to: '/admin/sub-accounts',
             label: 'Sub-Accounts',
             icon: Users,
-            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('team')),
+            visible: storeAdminAccess && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('team')),
           },
           {
             to: '/admin/marketplace',
             label: 'Marketplace Sync',
             icon: Globe,
-            visible: user?.role === 'admin' && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('dropship')),
+            visible: storeAdminAccess && (!ECOSYSTEM_FLAGS.enforceModuleGates || canUseModule('dropship')),
           },
           { to: '/admin/audit-logs', label: 'Store Logs', icon: FileText, visible: canUseBusinessTools },
           {
             to: '/admin/ai-agent',
             label: 'Sally',
             icon: SallyNavIcon as typeof Bot,
-            visible: user?.role === 'admin',
+            visible: storeAdminAccess,
           },
         ],
       },
@@ -331,6 +534,7 @@ export function useAdminNavigation() {
     canManageDeliveries,
     canManageInventory,
     canProcessPayments,
+    canUseGrabioPos,
     canUseModule,
     canViewCustomers,
     canViewInventory,
@@ -339,17 +543,28 @@ export function useAdminNavigation() {
     crmEnabled,
     invoiceManagerEnabled,
     financeSuiteVisible,
-    builderVisible,
-    isAdmin,
+    showBuilderNav,
+    showFinanceNav,
+    showInventoryNav,
+    storeAdminAccess,
+    isWebBuilder,
+    isAccountingFreelancer,
     user?.role,
     user?.subAccountRole,
     canUseBusinessTools,
+    effectiveCtx,
+    venueNav,
+    user,
   ]);
 
-  const dashboardLabel = isCashier
+  const dashboardLabel = isWebBuilder
+    ? 'Builder Workspace'
+    : isAccountingFreelancer
+      ? 'Finance Workspace'
+    : isCashier
     ? 'Cashier Dashboard'
     : isManager
-      ? 'Manager Dashboard'
+      ? 'Store admin dashboard'
     : user?.role === 'sub_account'
       ? 'Seller Dashboard'
       : 'Admin Dashboard';
@@ -362,8 +577,11 @@ export function useAdminNavigation() {
     isRouteActive,
     dashboardLabel,
     crmEnabled,
+    venueNav,
     canProcessPayments,
     canViewInventory,
+    canManageInventory,
+    canUseGrabioPos,
     StoreIcon,
     Settings2,
   };

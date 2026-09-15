@@ -11,7 +11,12 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Badge } from '@/components/ui/badge';
 import { Trash2, Plus, Edit3, UserPlus, AlertCircle, Mail, Phone, Shield, ChevronDown, ChevronUp, TrendingUp, Users, X } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { SubAccount, SubAccountRole, ROLE_PERMISSIONS } from '@/types/subaccount';
+import {
+  SubAccount,
+  SubAccountRole,
+  ROLE_PERMISSIONS,
+  formatSubAccountRoleLabel,
+} from '@/types/subaccount';
 import { logAction } from '@/lib/auditLog';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
@@ -484,7 +489,7 @@ const AdminSubAccounts: React.FC = () => {
                       <CardTitle className="flex items-center gap-3">
                         {account.name}
                         <Badge className={getRoleBadgeColor(account.role)}>
-                          {account.role}
+                          {formatSubAccountRoleLabel(account.role)}
                         </Badge>
                         <Badge className={getStatusBadgeColor(account.status)}>
                           {account.status}

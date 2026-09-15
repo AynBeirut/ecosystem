@@ -14,7 +14,8 @@ const PublicFooter: React.FC = () => (
             Grabio
           </Link>
           <p className="mt-3 text-sm leading-relaxed">
-            All-in-one business management platform for modern commerce. POS, inventory, invoicing, and marketplace in one place.
+            Fine dining and venue operations software — floor, kitchen, guests, and POS in one place. Optional inventory,
+            finance, and storefront tools when you grow.
           </p>
           <div className="mt-4 flex items-center gap-3">
             <a
@@ -83,7 +84,7 @@ const PublicFooter: React.FC = () => (
           <PoweredByEmoove variant="muted" className="text-gray-500 hover:text-gray-300" />
           <span className="hidden sm:inline text-gray-700">·</span>
           <span>
-            Built for small businesses that need serious tools.{' '}
+            Built for restaurants and venues that need calm, serious tools.{' '}
             <a href="mailto:support@grabio.space" className="hover:text-white transition-colors">
               support@grabio.space
             </a>

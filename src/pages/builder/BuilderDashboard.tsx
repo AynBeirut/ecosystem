@@ -13,14 +13,32 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 import { useAuth } from '@/context/useAuth';
 import { useBuilderAccount } from '@/hooks/useBuilderAccount';
 import {
   createDemoStore,
+  deleteDemoStore,
   transferDemoStore,
   updateDemoBranding,
 } from '@/lib/builderService';
-import { BUILDER_BUSINESS_TYPES, BUILDER_MAX_DEMO_SLOTS } from '@/lib/builderConstants';
+import {
+  BUILDER_BUSINESS_TYPES,
+  BUILDER_DEMO_BUILD_METHODS,
+  BUILDER_MAX_DEMO_SLOTS,
+  buildMethodToWorkspaceTab,
+} from '@/lib/builderConstants';
+import type { BuilderDemoBuildMethod } from '@/types/builder';
+import BuilderWorkspaceNav from '@/components/builder/BuilderWorkspaceNav';
 import { toast } from 'sonner';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
@@ -31,7 +49,11 @@ const BuilderDashboard: React.FC = () => {
   const { account, demos, loading, refresh } = useBuilderAccount(builderUid);
 
   const [newDemoName, setNewDemoName] = useState('');
+  const [newBuildMethod, setNewBuildMethod] = useState<BuilderDemoBuildMethod>('theme_editor');
+  const [createOpen, setCreateOpen] = useState(false);
   const [creatingDemo, setCreatingDemo] = useState(false);
+  const [deleteDemoId, setDeleteDemoId] = useState<string | null>(null);
+  const [deletingDemo, setDeletingDemo] = useState(false);
   const [selectedDemoId, setSelectedDemoId] = useState<string | null>(null);
   const [transferOpen, setTransferOpen] = useState(false);
   const [transferClientUid, setTransferClientUid] = useState('');
@@ -56,7 +78,7 @@ const BuilderDashboard: React.FC = () => {
 
   const businessLabel = BUILDER_BUSINESS_TYPES.find((t) => t.id === account?.businessType)?.label;
 
-  const openDemoEditor = (demoId: string, tab: 'design' | 'products' = 'design') => {
+  const openDemoEditor = (demoId: string, tab: 'classic' | 'theme-editor' | 'wordpress' | 'products' = 'classic') => {
     navigate(`/builder/demo/${demoId}/edit?tab=${tab}`);
   };
 
@@ -64,15 +86,34 @@ const BuilderDashboard: React.FC = () => {
     if (!builderUid) return;
     setCreatingDemo(true);
     try {
-      const demoId = await createDemoStore(builderUid, newDemoName);
+      const demoId = await createDemoStore(builderUid, newDemoName, newBuildMethod);
       setNewDemoName('');
+      setCreateOpen(false);
       await refresh();
       toast.success('Demo store created');
-      openDemoEditor(demoId, 'design');
+      openDemoEditor(demoId, buildMethodToWorkspaceTab(newBuildMethod));
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Could not create demo');
     } finally {
       setCreatingDemo(false);
+    }
+  };
+
+  const handleDeleteDemo = async () => {
+    if (!builderUid || !deleteDemoId) return;
+    setDeletingDemo(true);
+    try {
+      await deleteDemoStore(builderUid, deleteDemoId);
+      if (selectedDemoId === deleteDemoId) {
+        setSelectedDemoId(null);
+      }
+      setDeleteDemoId(null);
+      await refresh();
+      toast.success('Demo deleted');
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not delete demo');
+    } finally {
+      setDeletingDemo(false);
     }
   };
 
@@ -152,9 +193,7 @@ const BuilderDashboard: React.FC = () => {
               {activeDemos.length}/{BUILDER_MAX_DEMO_SLOTS} demo slots used
             </p>
           </div>
-          <Button variant="outline" asChild>
-            <Link to="/">Home</Link>
-          </Button>
+          <BuilderWorkspaceNav />
         </div>
 
         <Card>
@@ -167,18 +206,23 @@ const BuilderDashboard: React.FC = () => {
               placeholder="Demo store name"
               value={newDemoName}
               onChange={(e) => setNewDemoName(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && newDemoName.trim()) {
+                  setCreateOpen(true);
+                }
+              }}
             />
             <Button
               disabled={creatingDemo || !newDemoName.trim() || activeDemos.length >= BUILDER_MAX_DEMO_SLOTS}
-              onClick={() => void handleCreateDemo()}
+              onClick={() => setCreateOpen(true)}
             >
-              {creatingDemo ? 'Creating…' : 'Create demo'}
+              Create demo
             </Button>
           </CardContent>
         </Card>
 
         <div className="grid gap-4">
-          {demos.length === 0 && (
+          {activeDemos.length === 0 && (
             <Card>
               <CardContent className="py-8 text-center text-slate-600">
                 No demo stores yet. Create one above to start.
@@ -186,7 +230,7 @@ const BuilderDashboard: React.FC = () => {
             </Card>
           )}
 
-          {demos.map((demo) => (
+          {activeDemos.map((demo) => (
             <Card key={demo.id}>
               <CardHeader className="flex flex-row items-start justify-between gap-4">
                 <div>
@@ -201,19 +245,47 @@ const BuilderDashboard: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
-                      onClick={() => openDemoEditor(demo.id, 'design')}
+                      onClick={() => openDemoEditor(demo.id, buildMethodToWorkspaceTab(demo.buildMethod))}
                     >
-                      Edit design & templates
+                      Open workspace
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDemoEditor(demo.id, 'classic')}
+                    >
+                      Classic templates
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDemoEditor(demo.id, 'theme-editor')}
+                    >
+                      Theme editor
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => openDemoEditor(demo.id, 'wordpress')}
+                    >
+                      WordPress
                     </Button>
                     <Button
                       variant="outline"
                       size="sm"
                       onClick={() => openDemoEditor(demo.id, 'products')}
                     >
-                      Edit products
+                      Products
                     </Button>
                     <Button size="sm" onClick={() => void openTransfer(demo.id)}>
                       Transfer to real store
+                    </Button>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      onClick={() => setDeleteDemoId(demo.id)}
+                    >
+                      Delete
                     </Button>
                   </>
                 )}
@@ -236,11 +308,17 @@ const BuilderDashboard: React.FC = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              <Button variant="outline" onClick={() => openDemoEditor(selectedDemoId, 'design')}>
-                Open template tabs
+              <Button variant="outline" onClick={() => openDemoEditor(selectedDemoId, 'classic')}>
+                Classic templates
+              </Button>
+              <Button variant="outline" onClick={() => openDemoEditor(selectedDemoId, 'theme-editor')}>
+                Theme editor
+              </Button>
+              <Button variant="outline" onClick={() => openDemoEditor(selectedDemoId, 'wordpress')}>
+                WordPress
               </Button>
               <Button variant="outline" onClick={() => openDemoEditor(selectedDemoId, 'products')}>
-                Open product list
+                Products
               </Button>
             </CardContent>
           </Card>
@@ -280,6 +358,67 @@ const BuilderDashboard: React.FC = () => {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create demo store</DialogTitle>
+            <DialogDescription>
+              Choose how you want to build <strong>{newDemoName.trim() || 'this demo'}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {BUILDER_DEMO_BUILD_METHODS.map((method) => (
+              <button
+                key={method.id}
+                type="button"
+                onClick={() => setNewBuildMethod(method.id)}
+                className={`rounded-lg border p-3 text-left transition-colors ${
+                  newBuildMethod === method.id
+                    ? 'border-teal-600 bg-teal-50'
+                    : 'border-slate-200 hover:border-slate-300'
+                }`}
+              >
+                <p className="font-medium text-slate-900">{method.label}</p>
+                <p className="text-sm text-slate-600">{method.description}</p>
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>
+              Cancel
+            </Button>
+            <Button disabled={creatingDemo || !newDemoName.trim()} onClick={() => void handleCreateDemo()}>
+              {creatingDemo ? 'Creating…' : 'Create demo'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <AlertDialog open={Boolean(deleteDemoId)} onOpenChange={(open) => !open && setDeleteDemoId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete demo store?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This removes the demo from your workspace. Products and branding under this demo path are kept in
+              Firestore but hidden from the dashboard.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deletingDemo}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={deletingDemo}
+              onClick={(e) => {
+                e.preventDefault();
+                void handleDeleteDemo();
+              }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletingDemo ? 'Deleting…' : 'Delete demo'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

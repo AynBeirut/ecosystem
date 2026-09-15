@@ -40,12 +40,20 @@ export function buildStoreCategoryPath(storeSlug: string, category?: string | nu
   return `${base}/category/${generateSlug(category)}`;
 }
 
+/** Relative router path for About Us tab. */
+export function buildStoreAboutPath(storeSlug: string): string {
+  const root = buildStoreRootPath(storeSlug);
+  if (root === '/') return '/about';
+  return `${root}/about`;
+}
+
 /** Store tab paths for home / products / contact / about (storefront nav). */
 export function buildStoreTabPath(
   storeSlug: string,
   tab: 'home' | 'products' | 'contact' | 'about',
 ): string {
   if (tab === 'products') return buildStoreProductsPath(storeSlug);
+  if (tab === 'about') return buildStoreAboutPath(storeSlug);
   const root = buildStoreRootPath(storeSlug);
   const query = tab === 'home' ? 'view=home' : `view=${tab}`;
   if (root === '/') return `/?${query}`;

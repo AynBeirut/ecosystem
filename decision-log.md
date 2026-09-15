@@ -3,6 +3,22 @@
 > **Canonical decision log:** `~/Documents/grabio-platform-docs/Decision-Log/`  
 > Mirror significant decisions there when closing a sprint.
 
+## 2026-09-15 — Entitlement ∧ venue toggle ∧ RBAC
+
+**Decision:** `featureAccessGate.ts` enforces billing before venue layout toggles and sub-account permissions. Nav + `ProtectedRoute` use triple gate. Evidence: `reporting/data/entitlements-venue-rbac-gate-2026-09-15.json`. Sub-account UI expansion: `docs/architecture/sub-account-feature-permissions.md`.
+
+## 2026-09-15 — Effective store context resolver (web admin)
+
+**Decision:** Centralize web admin nav/module visibility in `resolveEffectiveStoreContext` (profile + entitlements + role + `venueOpsSettings`). Legacy stores unchanged until `restaurantFirstNavEnabled`. Setup readiness tracks include continue links; evidence `reporting/data/resolver-setup-readiness-2026-09-15.json`. Mobile/Functions mirror deferred.
+
+## 2026-09-15 — Fine-dining GTM + venue ops UI (session closure)
+
+**Marketing:** Public homepage/pricing speak Live Kitchen / Guest CRM first; retail block moved down; full ERP module list hidden on `/pricing` (roadmap + factory/NGO deferred).
+
+**Admin:** `VenueOpsSettingsPanel` on `/admin/profile` (Live Kitchen only) → `venueOpsSettings`. Ops-only `VenueSetupReadinessPanel` on `/admin/grabio-platform`.
+
+**Mobile:** **1.3.9 (140)** built — tenant bind + mismatch guard + manager `hasStoreAdminAccess`. AAB at `grabio-mobile/release/grabio-1.3.9-140.aab`. Anwar adb install OK; functional verify + Play upload **pending** (`docs/handoff/play-upload-1.3.9-140.md`). Evidence: `reporting/data/plan-closure-2026-09-15.json`.
+
 ## 2026-09-14 — Manager mobile permissions vs web (Play gap + POS RBAC split)
 
 **Finding:** Web manager sub-accounts use `hasStoreAdminAccess()` (`subAccountAccess.ts`). **Play mobile 1.3.5** still ships `ownerAccess.ts` with **owner-only** checks — managers see limited back-office; **not** a Firestore/cache issue.

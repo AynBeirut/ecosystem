@@ -8,6 +8,9 @@ import {
   getMarketingPackage,
   PACKAGE_INDUSTRY_SUBNAV,
 } from '@/lib/marketingPackages';
+import { getComparisonPage } from '@/data/marketing/comparisonPages';
+import { verticalAppPreviewPath } from '@/data/marketing/demoPreviewCatalog';
+import { verticalDemoOsPath } from '@/data/marketing/demoOsCatalog';
 import { buildSolutionSchema } from '@/lib/grabioBrandSchema';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
 
@@ -24,6 +27,8 @@ const PackageLandingPage: React.FC = () => {
   if (!pkg) {
     return <Navigate to="/#industries" replace />;
   }
+
+  const comparison = pkg.comparisonPageSlug ? getComparisonPage(pkg.comparisonPageSlug) : undefined;
 
   const pageUrl = `https://grabio.space/demo/${pkg.slug}`;
   const structuredData = buildSolutionSchema({
@@ -96,6 +101,27 @@ const PackageLandingPage: React.FC = () => {
       />
 
       <section className="public-panel">
+        <h2 className="text-xl font-bold text-slate-900 mb-2">Preview the admin screens</h2>
+        <p className="text-sm text-slate-600 mb-4">
+          Walk through POS, inventory, and reports in a read-only tour — no account required to browse.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <Link
+            to={verticalDemoOsPath(pkg.slug, 'dashboard')}
+            className="inline-flex items-center gap-2 rounded-xl bg-teal-600 px-4 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-teal-700"
+          >
+            Full admin tour
+          </Link>
+          <Link
+            to={verticalAppPreviewPath(pkg.slug)}
+            className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-4 py-2.5 text-sm font-semibold text-teal-800 transition-colors hover:bg-teal-100"
+          >
+            Quick screen preview
+          </Link>
+        </div>
+      </section>
+
+      <section className="public-panel">
         <h2 className="text-xl font-bold text-slate-900 mb-4">FAQ</h2>
         <dl className="space-y-4 m-0">
           {pkg.faqs.map((faq) => (
@@ -117,6 +143,14 @@ const PackageLandingPage: React.FC = () => {
           <Link to="/pricing" className="text-sm font-medium text-slate-600 hover:text-teal-700">
             View pricing
           </Link>
+          {comparison && (
+            <Link
+              to={`/compare/${comparison.slug}`}
+              className="text-sm font-medium text-slate-600 hover:text-teal-700"
+            >
+              Compare Grabio vs {comparison.competitorName}
+            </Link>
+          )}
         </div>
       </section>
     </PublicPageShell>

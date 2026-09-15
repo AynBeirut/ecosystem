@@ -1,6 +1,10 @@
 /** Cloud Functions API base URL (same rules as Subscription page). */
 export function getApiBaseUrl(): string {
-  const explicitApiUrl = String(import.meta.env.VITE_FIREBASE_FUNCTION_URL || '').trim();
+  const explicitApiUrl = String(
+    import.meta.env.VITE_API_BASE ||
+      import.meta.env.VITE_FIREBASE_FUNCTION_URL ||
+      '',
+  ).trim();
   const fallbackApiUrl = 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
 
   if (!explicitApiUrl) {
@@ -12,5 +16,5 @@ export function getApiBaseUrl(): string {
     return fallbackApiUrl;
   }
 
-  return explicitApiUrl;
+  return explicitApiUrl.replace(/\/$/, '');
 }

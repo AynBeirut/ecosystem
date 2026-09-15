@@ -3,6 +3,7 @@ import { MODULAR_SEAT_PRICING, PACKAGE_PRESETS } from '@/lib/moduleManifest';
 import { ADDON_PRICING, type AddOnKey } from '@/lib/pricingDisplay';
 
 export type ModularBillingCycle = 'monthly' | 'yearly';
+export type ModulePrice = { monthly?: number; yearly?: number; oneTime?: number };
 
 /**
  * Per-module à-la-carte prices for Custom mode.
@@ -13,7 +14,7 @@ export type ModularBillingCycle = 'monthly' | 'yearly';
  * Target: core 6-module shop ≈ $21/mo — competitive with Odoo Standard ($24.90/user).
  * POS price covers the first location; extra locations use MODULAR_SEAT_PRICING.
  */
-export const MODULE_PRICES: Record<string, { monthly: number; yearly: number }> = {
+export const MODULE_PRICES: Record<string, ModulePrice> = {
   // Core platform
   invoicing:          { monthly: 5, yearly: 50 },
   marketplace:        { monthly: 4, yearly: 40 },
@@ -45,7 +46,7 @@ export const MODULE_PRICES: Record<string, { monthly: number; yearly: number }> 
   campaign_writer:    { monthly: 4, yearly: 40 },
   builder:            { monthly: 6, yearly: 60 },
   blog_publisher:     { monthly: 3, yearly: 30 },
-  whitelabel:         { monthly: 8, yearly: 80 },
+  whitelabel:         { oneTime: 200 },
 };
 
 export type CustomPriceBreakdown = {
@@ -77,7 +78,8 @@ export function calculateCustomPrice(input: {
 
   const modulesUsd = input.moduleIds.reduce((sum, id) => {
     const price = MODULE_PRICES[id];
-    return sum + (price ? price[billing] : 0);
+    if (!price) return sum;
+    return sum + (price[billing] ?? 0) + (price.oneTime ?? 0);
   }, 0);
 
   const extraSeatsUsd = extraSeats * seatRate;

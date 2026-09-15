@@ -1,89 +1,119 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AlertTriangle, CheckCircle2, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Loader2, ShieldCheck } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import PublicPageShell from '@/components/public/PublicPageShell';
+import { getApiBaseUrl } from '@/lib/apiBase';
 
 type RedeemResponse = {
   success: boolean;
   error?: string;
-  hosting?: {
+  requiresConfirmation?: boolean;
+  wordpress?: {
     domain: string;
-    panelUrl: string;
+    adminUrl: string;
     username: string;
     password: string;
   };
-  ftp?: {
-    host: string;
-    username: string;
-    password: string;
+  dns?: {
+    target: string;
   };
 };
 
 const WordPressAccess: React.FC = () => {
   const [searchParams] = useSearchParams();
   const token = useMemo(() => searchParams.get('token')?.trim() || '', [searchParams]);
-  const [loading, setLoading] = useState(Boolean(token));
+  const [loading, setLoading] = useState(false);
+  const [revealed, setRevealed] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<RedeemResponse | null>(null);
 
-  useEffect(() => {
+  const revealCredentials = async () => {
     if (!token) {
-      setLoading(false);
       setError('Missing access token. Open the secure link from your email.');
       return;
     }
 
-    const API_BASE =
-      (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE?.replace(/\/$/, '') || '/api';
-
-    void (async () => {
-      setLoading(true);
-      setError(null);
+    setLoading(true);
+    setError(null);
+    try {
+      const response = await fetch(`${getApiBaseUrl()}/wordpress/access/redeem`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
+      });
+      const raw = await response.text();
+      let payload: RedeemResponse;
       try {
-        const response = await fetch(
-          `${API_BASE}/wordpress/access/redeem?token=${encodeURIComponent(token)}`,
-        );
-        const payload = (await response.json()) as RedeemResponse;
-        if (!response.ok || !payload.success) {
-          throw new Error(payload.error || 'Unable to load credentials');
-        }
-        setData(payload);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to load credentials');
-      } finally {
-        setLoading(false);
+        payload = JSON.parse(raw) as RedeemResponse;
+      } catch {
+        throw new Error('Secure access service unavailable — try again in a minute');
       }
-    })();
-  }, [token]);
+      if (!response.ok || !payload.success) {
+        throw new Error(payload.error || 'Unable to load credentials');
+      }
+      setData(payload);
+      setRevealed(true);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to load credentials');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <PublicPageShell
       title="WordPress access"
-      description="Secure one-time access to your WordPress hosting credentials."
+      description="Secure one-time access to your WordPress admin credentials."
       url="/wordpress/access"
-      eyebrow="WordPress hosting"
-      heroTitle="Your hosting credentials"
-      heroSubtitle="This page works once. Save these details in your password manager."
+      eyebrow="WordPress"
+      heroTitle="Your WordPress login"
+      heroSubtitle="This link works once. Click reveal, then save the details in your password manager."
     >
       <div className="mx-auto max-w-2xl">
-        {loading && (
-          <div className="flex items-center justify-center gap-2 py-16 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin" />
-            Loading secure credentials…
+        {!token && (
+          <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 flex gap-3">
+            <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
+            <div>
+              <p className="font-medium text-destructive">Access unavailable</p>
+              <p className="text-sm text-muted-foreground mt-1">
+                Missing access token. Open the secure link from your email.
+              </p>
+            </div>
           </div>
         )}
 
-        {!loading && error && (
+        {token && !revealed && !error && (
+          <div className="rounded-xl border p-6 space-y-4 text-center">
+            <ShieldCheck className="h-10 w-10 text-primary mx-auto" />
+            <p className="text-sm text-muted-foreground">
+              For security, credentials are not loaded automatically. Email scanners cannot consume
+              this link — you must click reveal.
+            </p>
+            <Button onClick={() => void revealCredentials()} disabled={loading} className="gap-2">
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : null}
+              Reveal credentials
+            </Button>
+          </div>
+        )}
+
+        {error && (
           <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-6 flex gap-3">
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div>
               <p className="font-medium text-destructive">Access unavailable</p>
               <p className="text-sm text-muted-foreground mt-1">{error}</p>
+              {/already been used|expired|invalid/i.test(error) && (
+                <p className="text-sm text-muted-foreground mt-2">
+                  Ask your builder to click <strong>Try again</strong> in WordPress setup for a new
+                  secure email link.
+                </p>
+              )}
             </div>
           </div>
         )}
 
-        {!loading && data?.hosting && data.ftp && (
+        {revealed && data?.wordpress && (
           <div className="space-y-6">
             <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 flex gap-3">
               <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
@@ -93,19 +123,23 @@ const WordPressAccess: React.FC = () => {
             </div>
 
             <section className="rounded-xl border p-5 space-y-3">
-              <h2 className="font-semibold">Webuzo hosting panel</h2>
-              <CredentialRow label="Domain" value={data.hosting.domain} />
-              <CredentialRow label="Panel URL" value={data.hosting.panelUrl} />
-              <CredentialRow label="Username" value={data.hosting.username} />
-              <CredentialRow label="Password" value={data.hosting.password} secret />
+              <h2 className="font-semibold">WordPress admin</h2>
+              <CredentialRow label="Site" value={data.wordpress.domain} />
+              <CredentialRow label="Admin URL" value={data.wordpress.adminUrl} />
+              <CredentialRow label="Username" value={data.wordpress.username} />
+              <CredentialRow label="Password" value={data.wordpress.password} secret />
             </section>
 
-            <section className="rounded-xl border p-5 space-y-3">
-              <h2 className="font-semibold">FTP access</h2>
-              <CredentialRow label="Host" value={data.ftp.host} />
-              <CredentialRow label="Username" value={data.ftp.username} />
-              <CredentialRow label="Password" value={data.ftp.password} secret />
-            </section>
+            {data.dns?.target && (
+              <section className="rounded-xl border p-5 space-y-3">
+                <h2 className="font-semibold">Step 1 — DNS (do this before sign-in)</h2>
+                <p className="text-sm text-muted-foreground">
+                  Point @ and www A records to this IP at your registrar. The WordPress admin URL
+                  will not open until DNS is live.
+                </p>
+                <CredentialRow label="A record value" value={data.dns.target} />
+              </section>
+            )}
           </div>
         )}
       </div>

@@ -38,6 +38,7 @@ const devLog = (...args: unknown[]) => {
   if (import.meta.env.DEV) console.log(...args);
 };
 import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
+import { isProjectBasedInventory, isSalesAllowedWhenOutOfStock } from '@/lib/inventorySettings';
 import {
   decideRefundRestoreQuantity,
   resolveFinishedGoodsStockUnitType,
@@ -166,6 +167,7 @@ const AdminOrders: React.FC = () => {
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [salesStaff, setSalesStaff] = useState<StaffMember[]>([]);
   const [storeProfile, setStoreProfile] = useState<StoreProfile | null>(null);
+  const allowSalesWhenOutOfStock = isSalesAllowedWhenOutOfStock(storeProfile);
     const [fulfillmentLocations, setFulfillmentLocations] = useState<FulfillmentLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -411,7 +413,7 @@ const AdminOrders: React.FC = () => {
     const currentStock = Number(productData.stock || 0);
     const safeCurrentStock = Number.isFinite(currentStock) ? currentStock : 0;
     const newStock = mode === 'consume'
-      ? Math.max(0, safeCurrentStock - quantity)
+      ? (allowSalesWhenOutOfStock ? safeCurrentStock - quantity : Math.max(0, safeCurrentStock - quantity))
       : safeCurrentStock + quantity;
 
     const nowIso = new Date().toISOString();
@@ -430,7 +432,7 @@ const AdminOrders: React.FC = () => {
 
     await updateDoc(productRef, {
       stock: newStock,
-      inStock: newStock > 0,
+      inStock: allowSalesWhenOutOfStock ? true : newStock > 0,
       stockTransactions: [...transactions, stockTransaction],
       updatedAt: nowIso,
     });
@@ -1546,7 +1548,11 @@ const AdminOrders: React.FC = () => {
               await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
                 const qty = item.quantity;
                 const cost = (fgData.costPrice as number) || 0;
-                const newBalance = round3(Math.max(0, ((fgData.currentBalance as number) || 0) - qty));
+                const newBalance = round3(
+                  allowSalesWhenOutOfStock
+                    ? ((fgData.currentBalance as number) || 0) - qty
+                    : Math.max(0, ((fgData.currentBalance as number) || 0) - qty),
+                );
                 return {
                   currentBalance: newBalance,
                   quantitySold: round3(((fgData.quantitySold as number) || 0) + qty),

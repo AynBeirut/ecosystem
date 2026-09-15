@@ -37,6 +37,7 @@ export const PLATFORM_ROUTE_SLUGS = new Set([
   'careers',
   'solutions',
   'demo',
+  'compare',
   'demoshop',
   'privacy',
   'freelancer',

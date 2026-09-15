@@ -29,30 +29,64 @@ export type AuthContextType = {
 
 import { AuthContext } from './AuthContextValue';
 
-import { getFirestore, collection, doc, setDoc, getDoc, getDocs, deleteDoc, getCountFromServer } from 'firebase/firestore';
+import { getFirestore, collection, doc, setDoc, getDoc, getDocFromServer, getDocs, deleteDoc, getCountFromServer } from 'firebase/firestore';
 import { useCallback } from 'react';
 import { resolveCrmRepUser, persistCrmRepSession, clearCrmRepSession } from '@/lib/crmAuth';
 import { resolveStoreIdForAuthUser } from '@/lib/storeUtils';
 import { waitForAuthToken } from '@/lib/waitForAuthToken';
 import { ensureSubAccountProfile } from '@/lib/subAccountAuth';
-import { hydrateFreelancerUser } from '@/lib/freelancerAuth';
+import { hydrateFreelancerUser, shouldHydrateFreelancerPortalUser } from '@/lib/freelancerAuth';
+import { readFreelancerClientSessionFromStorage } from '@/types/subaccount';
 import { consumeMobileSsoToken } from '@/lib/mobileAppSso';
+import { resolveAdminDisplayName, resolveStoreOwnerDisplayName } from '@/lib/storeOwnerDisplay';
+
+async function getUserDocPreferServer(db: ReturnType<typeof getFirestore>, uid: string) {
+  const ref = doc(db, 'users', uid);
+  try {
+    return await getDocFromServer(ref);
+  } catch {
+    return getDoc(ref);
+  }
+}
+
+async function getSubAccountDocPreferServer(db: ReturnType<typeof getFirestore>, subAccountId: string) {
+  const ref = doc(db, 'subAccounts', subAccountId);
+  try {
+    return await getDocFromServer(ref);
+  } catch {
+    return getDoc(ref);
+  }
+}
 
 async function hydrateAdminSellerUser(
   db: ReturnType<typeof getFirestore>,
   uid: string,
   baseUser: User,
-  hints?: { storeId?: string; sellerData?: Record<string, unknown> },
+  hints?: { storeId?: string; sellerData?: Record<string, unknown>; userProfileName?: string },
 ): Promise<User> {
   const storeId =
     (typeof hints?.storeId === 'string' && hints.storeId.trim()) ||
     (typeof hints?.sellerData?.storeId === 'string' && String(hints.sellerData.storeId).trim()) ||
     uid;
+  const displayName = resolveAdminDisplayName({
+    userProfileName: hints?.userProfileName || baseUser.name,
+    sellerName: typeof hints?.sellerData?.name === 'string' ? hints.sellerData.name : undefined,
+    firebaseDisplayName: baseUser.name,
+    email: baseUser.email,
+  });
+  let resolvedName = displayName;
+  try {
+    const ownerName = await resolveStoreOwnerDisplayName(storeId);
+    if (ownerName && ownerName !== 'Store owner') resolvedName = ownerName;
+  } catch {
+    // keep displayName
+  }
   const sellerPayload = {
     isSeller: true,
     role: 'admin' as UserRole,
     storeId,
     userId: uid,
+    name: resolvedName,
     ...(hints?.sellerData || {}),
   };
   await setDoc(doc(db, 'sellers', uid), sellerPayload, { merge: true });
@@ -60,7 +94,7 @@ async function hydrateAdminSellerUser(
     doc(db, 'users', uid),
     {
       email: baseUser.email || '',
-      name: baseUser.name,
+      name: resolvedName,
       role: 'admin',
       storeId,
       activeStoreId: storeId,
@@ -77,6 +111,7 @@ async function hydrateAdminSellerUser(
     ...baseUser,
     id: uid,
     ...sellerPayload,
+    name: resolvedName,
     role: 'admin',
     storeId,
     isSeller: true,
@@ -105,6 +140,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Restore seller/admin session from localStorage immediately so builder routes
     // don't flash /login while Firebase persistence + Firestore hydration finish.
     useEffect(() => {
+      const activeClientSession = readFreelancerClientSessionFromStorage();
+      if (activeClientSession) {
+        const uid = auth.currentUser?.uid || '';
+        setUser((prev) => {
+          if (
+            prev?.role === 'sub_account' &&
+            prev.subAccountRole === activeClientSession.subAccountRole &&
+            prev.id
+          ) {
+            return prev;
+          }
+          const base: User =
+            prev ??
+            ({
+              id: uid,
+              name: activeClientSession.subAccountRole === 'accounting' ? 'Accounting freelancer' : 'Web builder',
+              email: '',
+              role: 'sub_account',
+              avatar:
+                'https://ui-avatars.com/api/?name=Builder&background=38B2AC&color=fff',
+              dailyAdsWatched: 0,
+              lastAdWatchDate: new Date().toISOString().split('T')[0],
+            } satisfies User);
+          return {
+            ...base,
+            id: uid || base.id,
+            role: 'sub_account',
+            storeId: activeClientSession.storeId,
+            subAccountRole: activeClientSession.subAccountRole,
+            permissions: activeClientSession.permissions,
+            subAccountId: activeClientSession.subAccountId,
+          };
+        });
+        return;
+      }
+
+      const savedSubAccountInfo = localStorage.getItem('subAccountInfo');
+      if (savedSubAccountInfo) {
+        try {
+          const subAccountData = JSON.parse(savedSubAccountInfo) as Record<string, unknown>;
+          const uid = auth.currentUser?.uid || '';
+          // Do not hydrate storeId from stale localStorage — wait for server tenant bind in resolveFirebaseUser.
+          setUser((prev) => {
+            if (prev?.role === 'sub_account' && prev.id && prev.storeId) return prev;
+            const base: User =
+              prev ??
+              ({
+                id: uid,
+                name: 'Team member',
+                email: '',
+                role: 'sub_account',
+                avatar:
+                  'https://ui-avatars.com/api/?name=Team&background=38B2AC&color=fff',
+                dailyAdsWatched: 0,
+                lastAdWatchDate: new Date().toISOString().split('T')[0],
+              } satisfies User);
+            return {
+              ...base,
+              id: uid || base.id,
+              role: 'sub_account',
+              subAccountId:
+                (typeof subAccountData.subAccountId === 'string' && subAccountData.subAccountId) ||
+                base.subAccountId,
+              subAccountRole:
+                (subAccountData.subAccountRole as User['subAccountRole']) || base.subAccountRole,
+              permissions: Array.isArray(subAccountData.permissions)
+                ? (subAccountData.permissions as string[])
+                : base.permissions,
+            };
+          });
+        } catch (e) {
+          console.error('Failed to parse subAccountInfo from localStorage', e);
+        }
+        return;
+      }
+
       const savedSellerInfo = localStorage.getItem('sellerInfo');
       if (savedSellerInfo) {
         try {
@@ -126,7 +237,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 id: uid,
                 name:
                   (typeof sellerData.name === 'string' && sellerData.name.trim()) ||
-                  'Store admin',
+                  auth.currentUser?.displayName ||
+                  (auth.currentUser?.email?.split('@')[0]) ||
+                  'Store owner',
                 email: '',
                 role: 'admin',
                 avatar:
@@ -151,42 +264,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
         return;
       }
-
-      const savedSubAccountInfo = localStorage.getItem('subAccountInfo');
-      if (!savedSubAccountInfo) return;
-      try {
-        const subAccountData = JSON.parse(savedSubAccountInfo) as Record<string, unknown>;
-        const uid = auth.currentUser?.uid || '';
-        setUser((prev) => {
-          if (prev?.role === 'sub_account' && prev.id) return prev;
-          const base: User =
-            prev ??
-            ({
-              id: uid,
-              name: 'Team member',
-              email: '',
-              role: 'sub_account',
-              avatar:
-                'https://ui-avatars.com/api/?name=Team&background=38B2AC&color=fff',
-              dailyAdsWatched: 0,
-              lastAdWatchDate: new Date().toISOString().split('T')[0],
-            } satisfies User);
-          return {
-            ...base,
-            ...subAccountData,
-            id: uid || base.id,
-            role: 'sub_account',
-            storeId:
-              (typeof subAccountData.storeId === 'string' && subAccountData.storeId) ||
-              base.storeId,
-            permissions: Array.isArray(subAccountData.permissions)
-              ? (subAccountData.permissions as string[])
-              : base.permissions,
-          };
-        });
-      } catch (e) {
-        console.error('Failed to parse subAccountInfo from localStorage', e);
-      }
     }, []);
 
 
@@ -209,26 +286,48 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const userProfileRef = doc(db, 'users', uid);
-    const userProfileSnap = await getDoc(userProfileRef);
+    const userProfileSnap = await getUserDocPreferServer(db, uid);
+    const platformFreelancerSnap = await getDoc(doc(db, 'platformFreelancers', uid));
+    const isPlatformBuilder = platformFreelancerSnap.exists();
 
     if (userProfileSnap.exists()) {
       const userProfile = userProfileSnap.data();
+      const activeClientSession = readFreelancerClientSessionFromStorage();
+      const subAccountId =
+        (typeof userProfile.subAccountId === 'string' && userProfile.subAccountId) ||
+        activeClientSession?.subAccountId ||
+        null;
+      const shouldLoadClientSubAccount = Boolean(
+        subAccountId &&
+          userProfile.role !== 'freelancer' &&
+          (
+            userProfile.role === 'sub_account' ||
+            userProfile.freelancerMode === true ||
+            activeClientSession
+          ),
+      );
 
-      if (userProfile.role === 'freelancer' || userProfile.freelancerTrack) {
-        const freelancerUser = await hydrateFreelancerUser(db, uid, baseUser);
-        if (freelancerUser) {
-          setUser(freelancerUser);
-          await loadFollows(uid);
-          return;
-        }
-      }
-
-      if (userProfile.role === 'sub_account' && userProfile.subAccountId) {
-        const subAccountRef = doc(db, 'subAccounts', userProfile.subAccountId);
-        const subAccountSnap = await getDoc(subAccountRef);
+      if (shouldLoadClientSubAccount && subAccountId) {
+        const subAccountRef = doc(db, 'subAccounts', subAccountId);
+        const subAccountSnap = await getSubAccountDocPreferServer(db, subAccountId);
 
         if (subAccountSnap.exists()) {
           const subAccountData = subAccountSnap.data();
+
+          await setDoc(subAccountRef, { userId: uid, lastLogin: new Date().toISOString() }, { merge: true });
+
+          await setDoc(
+            userProfileRef,
+            {
+              role: 'sub_account',
+              subAccountRole: subAccountData.role,
+              storeId: subAccountData.storeId,
+              activeStoreId: subAccountData.storeId,
+              subAccountId,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true },
+          );
 
           baseUser = {
             ...baseUser,
@@ -238,7 +337,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             storeId: subAccountData.storeId,
             subAccountRole: subAccountData.role,
             permissions: subAccountData.permissions,
-            subAccountId: userProfile.subAccountId,
+            subAccountId,
           };
 
           localStorage.removeItem('sellerInfo');
@@ -249,11 +348,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               subAccountRole: subAccountData.role,
               permissions: subAccountData.permissions,
               storeId: subAccountData.storeId,
-              subAccountId: userProfile.subAccountId,
+              subAccountId,
             }),
           );
 
           setUser(baseUser);
+          await loadFollows(uid);
+          return;
+        }
+      }
+
+      if (shouldHydrateFreelancerPortalUser(userProfile)) {
+        const freelancerUser = await hydrateFreelancerUser(db, uid, baseUser);
+        if (freelancerUser) {
+          setUser(freelancerUser);
           await loadFollows(uid);
           return;
         }
@@ -265,6 +373,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const adminUser = await hydrateAdminSellerUser(db, uid, baseUser, {
           storeId: typeof userProfile.storeId === 'string' ? userProfile.storeId : undefined,
           sellerData,
+          userProfileName: typeof userProfile.name === 'string' ? userProfile.name : undefined,
         });
         setUser(adminUser);
         await loadFollows(uid);
@@ -273,7 +382,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Legacy store owners: users/{uid} may exist (dashboard prefs) without role — sellers doc is source of truth.
       const legacySellerSnap = await getDoc(doc(db, 'sellers', uid));
-      if (legacySellerSnap.exists()) {
+      if (legacySellerSnap.exists() && !isPlatformBuilder) {
         const legacySeller = legacySellerSnap.data();
         if (legacySeller?.role === 'admin' || legacySeller?.isSeller === true) {
           const adminUser = await hydrateAdminSellerUser(db, uid, baseUser, {
@@ -325,7 +434,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const sellerRef = doc(db, 'sellers', uid);
     const sellerSnap = await getDoc(sellerRef);
-    if (sellerSnap.exists()) {
+    if (sellerSnap.exists() && !isPlatformBuilder) {
       const sellerData = sellerSnap.data();
       const storeId = sellerData.storeId || uid;
       if (sellerData.role === 'admin' || sellerData.isSeller === true) {
@@ -500,16 +609,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (userProfileSnap.exists()) {
         const userProfile = userProfileSnap.data();
 
-        if (userProfile.role === 'freelancer' || userProfile.freelancerTrack) {
-          const freelancerUser = await hydrateFreelancerUser(db, uid, baseUser as User);
-          if (freelancerUser) {
-            setUser(freelancerUser);
-            toast.success(`Welcome back, ${freelancerUser.name}!`);
-            setIsLoading(false);
-            return;
-          }
-        }
-        
         // If this is a sub-account, load their profile and permissions
         if (userProfile.role === 'sub_account' && userProfile.subAccountId) {
           const subAccountRef = doc(db, 'subAccounts', userProfile.subAccountId);
@@ -518,8 +617,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           if (subAccountSnap.exists()) {
             const subAccountData = subAccountSnap.data();
             
-            // Update last login
-            await setDoc(subAccountRef, { lastLogin: new Date().toISOString() }, { merge: true });
+            // Update last login + keep userId on sub-account for task assignment
+            await setDoc(subAccountRef, { userId: uid, lastLogin: new Date().toISOString() }, { merge: true });
+
+            await setDoc(
+              userProfileRef,
+              {
+                subAccountRole: subAccountData.role,
+                storeId: subAccountData.storeId,
+                activeStoreId: subAccountData.storeId,
+                subAccountId: userProfile.subAccountId,
+                updatedAt: new Date().toISOString(),
+              },
+              { merge: true },
+            );
             
             baseUser = {
               ...baseUser,
@@ -543,6 +654,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             
             setUser(baseUser as User);
             toast.success(`Welcome back, ${subAccountData.name}!`);
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        if (shouldHydrateFreelancerPortalUser(userProfile)) {
+          const freelancerUser = await hydrateFreelancerUser(db, uid, baseUser as User);
+          if (freelancerUser) {
+            setUser(freelancerUser);
+            toast.success(`Welcome back, ${freelancerUser.name}!`);
             setIsLoading(false);
             return;
           }

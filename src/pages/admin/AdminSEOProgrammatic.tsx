@@ -175,9 +175,11 @@ const AdminSEOProgrammatic: React.FC = () => {
         areas: [...selectedAreas],
         categories: [...selectedCategories],
         storeTypes: [...selectedStoreTypes],
-        maxPages: 24,
+        maxPages: 20,
       });
-      setMessage(`Generated ${count} page(s)${settings?.automationMode ? ' (auto-published)' : ' (queued)'}.`);
+      setMessage(
+        `Generated ${count} page(s)${settings?.automationMode ? ' (publishable pages auto-published; weak pages stay queued)' : ' (queued)'}.`,
+      );
       await load();
     } catch (err) {
       setMessage(err instanceof Error ? err.message : 'Generate failed');

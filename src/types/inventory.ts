@@ -26,6 +26,10 @@ export interface Supplier {
   storeId: string;
   createdAt: string;
   updatedAt: string;
+  source?: string;
+  importSource?: string;
+  isSourceOfTruth?: boolean;
+  archivedForPurchasesUi?: boolean;
 }
 
 export interface RawMaterial {
@@ -189,6 +193,12 @@ export interface Purchase {
   storeId: string;
   createdAt: string;
   updatedAt: string;
+  source?: string;
+  importKey?: string;
+  isSourceOfTruth?: boolean;
+  archivedForPurchasesUi?: boolean;
+  organizedCategory?: string;
+  purchasesPageEligible?: boolean;
 }
 
 export interface FulfillmentLocation {

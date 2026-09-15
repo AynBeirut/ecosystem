@@ -1,5 +1,6 @@
-import { collection, doc, getDoc, getDocs, setDoc, query, where, limit, type Firestore } from 'firebase/firestore';
+import { doc, getDoc, setDoc, type Firestore } from 'firebase/firestore';
 import type { User, UserRole } from '@/types/product';
+import { resolveSubAccountBinding, storeIdHintFromUserProfile } from '@/lib/tenantBinding';
 
 type SubAccountAuthResult = {
   user: User;
@@ -19,10 +20,6 @@ type EnsureSubAccountProfileParams = {
   displayName?: string | null;
   defaultUser: User;
 };
-
-function normalizeEmail(email: string): string {
-  return email.trim().toLowerCase();
-}
 
 function buildSubAccountResult(
   params: EnsureSubAccountProfileParams,
@@ -60,20 +57,6 @@ function buildSubAccountResult(
   };
 }
 
-async function findSubAccountByEmail(db: Firestore, email: string) {
-  const normalizedEmail = normalizeEmail(email);
-  try {
-    const byEmail = await getDocs(
-      query(collection(db, 'subAccounts'), where('email', '==', normalizedEmail), limit(1)),
-    );
-    if (!byEmail.empty) return byEmail.docs[0];
-  } catch {
-    // Rules may deny email lookup until the user is linked — fall through.
-  }
-
-  return null;
-}
-
 export async function ensureSubAccountProfile(
   params: EnsureSubAccountProfileParams,
 ): Promise<SubAccountAuthResult | null> {
@@ -99,21 +82,61 @@ export async function ensureSubAccountProfile(
       return null;
     }
     if (userProfile?.role === 'sub_account' && userProfile?.subAccountId) {
-      const subAccountRef = doc(params.db, 'subAccounts', userProfile.subAccountId);
-      const subAccountSnap = await getDoc(subAccountRef);
-      if (subAccountSnap.exists()) {
-        return buildSubAccountResult(params, userProfile.subAccountId, subAccountSnap.data() as Record<string, unknown>);
+      const binding = await resolveSubAccountBinding(params.db, {
+        subAccountId: String(userProfile.subAccountId),
+        email: params.email,
+        storeIdHint: storeIdHintFromUserProfile({
+          subAccountId: String(userProfile.subAccountId),
+          storeId: userProfile.storeId as string | undefined,
+          primaryStoreId: userProfile.primaryStoreId as string | undefined,
+          activeStoreId: userProfile.activeStoreId as string | undefined,
+        }),
+      });
+      if (binding) {
+        const roleFromSub = binding.subAccountRole;
+        const storeId = binding.storeId;
+        const needsPatch =
+          userProfile.subAccountRole !== roleFromSub ||
+          userProfile.storeId !== storeId ||
+          userProfile.activeStoreId !== storeId;
+        if (needsPatch) {
+          await setDoc(
+            userProfileRef,
+            {
+              subAccountRole: roleFromSub,
+              storeId,
+              activeStoreId: storeId,
+              updatedAt: new Date().toISOString(),
+            },
+            { merge: true },
+          );
+        }
+        return buildSubAccountResult(params, binding.subAccountId, {
+          name: binding.name,
+          storeId: binding.storeId,
+          role: binding.subAccountRole,
+          permissions: binding.permissions,
+        });
       }
     }
   }
 
-  const matchingSubAccount = await findSubAccountByEmail(params.db, params.email);
-  if (!matchingSubAccount) return null;
+  const profileData = userProfileSnap.exists() ? userProfileSnap.data() : {};
+  const storeHint = storeIdHintFromUserProfile({
+    subAccountId: profileData?.subAccountId as string | undefined,
+    storeId: profileData?.storeId as string | undefined,
+    primaryStoreId: profileData?.primaryStoreId as string | undefined,
+    activeStoreId: profileData?.activeStoreId as string | undefined,
+  });
 
-  const subAccountData = matchingSubAccount.data() as Record<string, unknown>;
-  const subAccountId = matchingSubAccount.id;
-  const resolvedName = String(subAccountData?.name || params.displayName || params.defaultUser.name || 'Sub-account');
-  const resolvedStoreId = String(subAccountData?.storeId || params.defaultUser.storeId || '');
+  const binding = await resolveSubAccountBinding(params.db, {
+    subAccountId: profileData?.subAccountId as string | undefined,
+    email: params.email,
+    storeIdHint: storeHint,
+  });
+  if (!binding) return null;
+
+  const resolvedName = String(binding.name || params.displayName || params.defaultUser.name || 'Sub-account');
 
   await setDoc(
     userProfileRef,
@@ -121,13 +144,26 @@ export async function ensureSubAccountProfile(
       email: params.email || '',
       name: resolvedName,
       role: 'sub_account',
-      storeId: resolvedStoreId,
-      subAccountId,
-      createdAt: subAccountData?.createdAt || new Date().toISOString(),
+      storeId: binding.storeId,
+      activeStoreId: binding.storeId,
+      subAccountId: binding.subAccountId,
+      subAccountRole: binding.subAccountRole,
+      createdAt: profileData?.createdAt || new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     },
     { merge: true },
   );
 
-  return buildSubAccountResult(params, subAccountId, subAccountData);
+  await setDoc(
+    doc(params.db, 'subAccounts', binding.subAccountId),
+    { userId: params.uid, updatedAt: new Date().toISOString() },
+    { merge: true },
+  );
+
+  return buildSubAccountResult(params, binding.subAccountId, {
+    name: binding.name,
+    storeId: binding.storeId,
+    role: binding.subAccountRole,
+    permissions: binding.permissions,
+  });
 }

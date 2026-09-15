@@ -18,6 +18,7 @@ import {
   isAccountingPrimaryTab,
   isAccountingReportTab,
   isAccountingSettingsTab,
+  isOwnerNativeFinanceTab,
   isStockReportTab,
 } from '@/pages/admin/finance/businessFinanceTabs';
 import {
@@ -107,9 +108,13 @@ const FinanceModuleShell: React.FC = () => {
 
   useEffect(() => {
     wireFinanceFirebaseFromGrabio();
+    const module = businessFinanceModuleFromPath(location.pathname);
+    const { report } = readEmbedTabs(location.search);
+    const nativeStockOnly = module === 'stock' && Boolean(report && isStockReportTab(report));
+    if (nativeStockOnly) return;
     void loadFinancePage(loadAccounting);
     preloadFinancePages(FINANCE_PAGE_LOADERS);
-  }, []);
+  }, [location.pathname, location.search]);
 
   const navigateModule = useCallback(
     (module: BusinessFinanceModule, search = '', options?: { replace?: boolean }) => {
@@ -192,7 +197,7 @@ const FinanceModuleShell: React.FC = () => {
         openSetting(defaultSub);
         return;
       }
-      if (defaultSub && isFinanceReportSubNavValue(defaultSub)) {
+      if (defaultSub && (isFinanceReportSubNavValue(defaultSub) || isOwnerNativeFinanceTab(defaultSub))) {
         openReport(defaultSub);
         return;
       }
@@ -236,11 +241,11 @@ const FinanceModuleShell: React.FC = () => {
     setActiveModule(module);
 
     const report = params.get('report');
-    if (report && (isAccountingReportTab(report) || isStockReportTab(report))) {
+    if (report && (isAccountingReportTab(report) || isStockReportTab(report) || isOwnerNativeFinanceTab(report))) {
       setReportsEmbedTab(report);
     } else if (REPORT_HUB_MODULES.has(module)) {
       const defaultReport = defaultFinanceSubNavValue(module);
-      if (defaultReport && isFinanceReportSubNavValue(defaultReport)) {
+      if (defaultReport && (isFinanceReportSubNavValue(defaultReport) || isOwnerNativeFinanceTab(defaultReport))) {
         setReportsEmbedTab(defaultReport);
         navigateModule(module, `?report=${encodeURIComponent(defaultReport)}`);
         return;
@@ -296,6 +301,15 @@ const FinanceModuleShell: React.FC = () => {
     [],
   );
 
+  const isNativeStockHub = useMemo(
+    () => activeModule === 'stock' && Boolean(reportsEmbedTab && isStockReportTab(reportsEmbedTab)),
+    [activeModule, reportsEmbedTab],
+  );
+
+  const financeTabHost = (
+    <FinanceTabHost activeModuleDef={activeModuleDef} moduleLoaderByKey={moduleLoaderByKey} />
+  );
+
   return (
     <FinanceInvoiceModuleGate variant="finance">
       <FinanceShellStateProvider
@@ -327,10 +341,21 @@ const FinanceModuleShell: React.FC = () => {
             onQuickStatement={openQuickStatement}
           />
           <div className="finance-module-shell__body min-h-0 flex-1">
-            <FinanceAppBridge seedProfile={profile} seedStoreId={storeId}>
-              <QuickStatementDialog open={quickStatementOpen} onOpenChange={setQuickStatementOpen} />
-              <FinanceTabHost activeModuleDef={activeModuleDef} moduleLoaderByKey={moduleLoaderByKey} />
-            </FinanceAppBridge>
+            {isNativeStockHub ? (
+              <>
+                {financeTabHost}
+                {quickStatementOpen ? (
+                  <FinanceAppBridge seedProfile={profile} seedStoreId={storeId}>
+                    <QuickStatementDialog open={quickStatementOpen} onOpenChange={setQuickStatementOpen} />
+                  </FinanceAppBridge>
+                ) : null}
+              </>
+            ) : (
+              <FinanceAppBridge seedProfile={profile} seedStoreId={storeId}>
+                <QuickStatementDialog open={quickStatementOpen} onOpenChange={setQuickStatementOpen} />
+                {financeTabHost}
+              </FinanceAppBridge>
+            )}
           </div>
         </div>
       </FinanceShellStateProvider>

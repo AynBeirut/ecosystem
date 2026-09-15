@@ -17,6 +17,7 @@ import type {
   BuilderAccount,
   BuilderBusinessType,
   BuilderDemoBranding,
+  BuilderDemoBuildMethod,
   BuilderDemoProduct,
   BuilderDemoStore,
   BuilderTransferResult,
@@ -71,7 +72,19 @@ export async function countActiveDemoStores(builderUid: string): Promise<number>
   return demos.filter((d) => isActiveDemoStatus(d.status)).length;
 }
 
-export async function createDemoStore(builderUid: string, name: string): Promise<string> {
+export async function getDemoStore(
+  builderUid: string,
+  demoId: string,
+): Promise<BuilderDemoStore | null> {
+  const snap = await getDoc(doc(db, 'builders', builderUid, 'demoStores', demoId));
+  return snap.exists() ? { id: snap.id, ...(snap.data() as Omit<BuilderDemoStore, 'id'>) } : null;
+}
+
+export async function createDemoStore(
+  builderUid: string,
+  name: string,
+  buildMethod: BuilderDemoBuildMethod = 'classic',
+): Promise<string> {
   const trimmed = name.trim();
   if (!trimmed) {
     throw new Error('Demo store name is required');
@@ -89,6 +102,7 @@ export async function createDemoStore(builderUid: string, name: string): Promise
   await setDoc(demoRef, {
     name: trimmed,
     status: 'draft',
+    buildMethod,
     previewTokenHash: '',
     createdAt: timestamp,
     updatedAt: timestamp,
@@ -171,6 +185,25 @@ export async function addDemoProduct(
     updatedAt: nowIso(),
   });
   return productRef.id;
+}
+
+export async function deleteDemoStore(builderUid: string, demoId: string): Promise<void> {
+  const demoRef = doc(db, 'builders', builderUid, 'demoStores', demoId);
+  const demoSnap = await getDoc(demoRef);
+  if (!demoSnap.exists()) {
+    throw new Error('Demo store not found');
+  }
+  const demo = demoSnap.data() as BuilderDemoStore;
+  if (demo.status === 'converted') {
+    throw new Error('Converted demos cannot be deleted');
+  }
+  if (demo.status === 'deleted') {
+    return;
+  }
+  await updateDoc(demoRef, {
+    status: 'deleted',
+    updatedAt: nowIso(),
+  });
 }
 
 async function resolveTargetStoreId(clientUid: string): Promise<string> {

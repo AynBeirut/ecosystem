@@ -10,7 +10,8 @@ import { toast } from '@/components/ui/sonner';
 import { useAuth } from '@/context/useAuth';
 import { auth } from '@/lib/firebase';
 import { createUserWithEmailAndPassword, signInWithCustomToken, updateProfile } from 'firebase/auth';
-import { getSubAccountHomePath } from '@/lib/subAccountAccess';
+import { getSubAccountHomePath, getPlatformBuilderHomePath } from '@/lib/subAccountAccess';
+import { isFreelancerClientSubAccount } from '@/lib/webBuilderAccess';
 import { buildSubscriptionPath, consumeSignupIntent, markSignupIntent } from '@/lib/signupRouting';
 import PoweredByEmoove from '@/components/PoweredByEmoove';
 
@@ -78,7 +79,11 @@ const Login: React.FC = () => {
           navigate('/admin', { replace: true });
         }
       } else if (user.role === 'sub_account') {
-        navigate(getSubAccountHomePath(user), { replace: true });
+        if (isFreelancerClientSubAccount(user)) {
+          navigate(getPlatformBuilderHomePath(user), { replace: true });
+        } else {
+          navigate(getSubAccountHomePath(user), { replace: true });
+        }
       } else {
         navigate('/search', { replace: true });
       }

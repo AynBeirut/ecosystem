@@ -1,6 +1,7 @@
 import type { CrmAssignableAgent } from '@/lib/crmAssignableAgents';
 import { agentsForFilterChips } from '@/lib/crmAssignableAgents';
-import type { StoreTask } from '@/lib/storeTasks';
+import type { StoreTask } from '@/lib/crmTasks';
+import { taskAssigneeUserIds } from '@/lib/crmTasks';
 
 export function webTaskUserRole(user: {
   role?: string;
@@ -53,6 +54,11 @@ export function assigneeKeysForAgent(agent: CrmAssignableAgent): string[] {
 
 export function taskMatchesAgent(task: StoreTask, agent: CrmAssignableAgent): boolean {
   const keys = assigneeKeysForAgent(agent);
+  if (task.assignees?.length) {
+    return task.assignees.some(
+      (a) => keys.includes(a.userId) || (a.repId && keys.includes(a.repId)),
+    );
+  }
   if (keys.includes(task.assignedToUserId)) return true;
   if (task.assignedToRepId && keys.includes(task.assignedToRepId)) return true;
   return false;
@@ -172,7 +178,7 @@ export function filterTasksForViewer(
 
   return tasks.filter(
     (t) =>
-      selfKeys.has(t.assignedToUserId) ||
+      taskAssigneeUserIds(t).some((id) => selfKeys.has(id)) ||
       (t.assignedToRepId && selfKeys.has(t.assignedToRepId)),
   );
 }
@@ -187,6 +193,9 @@ export function canViewTaskFeedback(
   const feedback = String(task.completionFeedback || '').trim();
   if (!feedback || !selfUserId) return false;
   if (isStoreTaskAdmin(userRole)) return true;
+  if (task.assignees?.length) {
+    return task.assignees.some((a) => a.userId === selfUserId);
+  }
   if (task.assignedToUserId === selfUserId) return true;
   if (isSalesTaskManager(userRole, subAccountRole)) {
     if (isTaskAssignedToOwner(task, agents, selfUserId)) return false;

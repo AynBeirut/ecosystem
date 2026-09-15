@@ -45,7 +45,7 @@ export function useStoreEntitlements() {
         clearCachedGrabioStoreProfile(storeId);
       }
     } finally {
-      if (!options?.silent) setLoading(false);
+      setLoading(false);
     }
   }, [storeId]);
 
@@ -59,8 +59,11 @@ export function useStoreEntitlements() {
     if (cached) {
       setProfile(cached);
       setLoading(false);
+      void load({ silent: true });
+      return;
     }
-    void load({ silent: Boolean(cached) });
+    setLoading(true);
+    void load({ silent: false });
   }, [load, storeId]);
 
   useEffect(() => {

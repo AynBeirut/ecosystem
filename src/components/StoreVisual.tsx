@@ -46,7 +46,7 @@ export default function StoreVisual({
     <img
       src={logo}
       alt={name}
-      className={className}
+      className={`bg-white object-cover ${className}`}
       onError={() => setBroken(true)}
     />
   );

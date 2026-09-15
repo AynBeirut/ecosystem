@@ -9,7 +9,8 @@ import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 import AdminPanel from '@/components/admin/AdminPanel';
 import type { VenueOpsSettings } from '@/types/storeProfile';
 import { canConfigureVenueOpsSettings, mergeVenueOpsSettingsPatch } from '@/lib/venueOpsSettingsUi';
-import { getEffectiveVenueOpsSettings, resolveVenueOpsNavFlags } from '@/lib/venueOpsNav';
+import { resolveEffectiveStoreContext } from '@/lib/effectiveStoreContext';
+import { isVenueToggleEntitled } from '@/lib/featureAccessGate';
 
 type ToggleKey = keyof Omit<VenueOpsSettings, never>;
 
@@ -47,14 +48,18 @@ const MODULE_TOGGLES: { key: ToggleKey; label: string; hint: string }[] = [
 ];
 
 const VenueOpsSettingsPanel: React.FC = () => {
-  const { profile, storeId, reload } = useStoreEntitlements();
+  const { profile, storeId, reload, entitlements } = useStoreEntitlements();
   const { toast } = useToast();
   const [savingKey, setSavingKey] = useState<string | null>(null);
 
   const visible = canConfigureVenueOpsSettings(profile);
   const settings = profile?.venueOpsSettings ?? {};
-  const navFlags = useMemo(() => resolveVenueOpsNavFlags(profile), [profile]);
-  const effective = useMemo(() => getEffectiveVenueOpsSettings(profile), [profile]);
+  const effectiveCtx = useMemo(
+    () => resolveEffectiveStoreContext({ profile, entitlements, environment: 'web_admin' }),
+    [profile, entitlements],
+  );
+  const navFlags = effectiveCtx.nav;
+  const effective = effectiveCtx.venueOpsSettings;
 
   const save = async (patch: Partial<VenueOpsSettings>, savingId: string) => {
     if (!storeId) return;
@@ -136,7 +141,8 @@ const VenueOpsSettingsPanel: React.FC = () => {
           <div className="space-y-2 rounded-lg border bg-white/60 p-4">
             <p className="text-sm font-medium text-slate-900">Show in sidebar</p>
             <p className="text-xs text-muted-foreground mb-3">
-              Turn modules on as the venue grows. Off = hidden from the restaurant menu (data is not deleted).
+              Controls sidebar visibility only — your subscription must include each module. Off = hidden (data is not
+              deleted).
             </p>
             {MODULE_TOGGLES.map(({ key, label, hint }) => (
               <div
@@ -146,13 +152,16 @@ const VenueOpsSettingsPanel: React.FC = () => {
                 <div>
                   <Label htmlFor={`venue-ops-${key}`} className="text-sm font-medium">{label}</Label>
                   <p className="text-xs text-muted-foreground">{hint}</p>
+                  {!isVenueToggleEntitled(key, entitlements) ? (
+                    <p className="text-xs font-medium text-amber-800">Not on subscription — upgrade to enable.</p>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   {savingKey === key && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
                   <Switch
                     id={`venue-ops-${key}`}
-                    checked={Boolean(effective?.[key])}
-                    disabled={!storeId || savingKey !== null}
+                    checked={Boolean(effective?.[key]) && isVenueToggleEntitled(key, entitlements)}
+                    disabled={!storeId || savingKey !== null || !isVenueToggleEntitled(key, entitlements)}
                     onCheckedChange={(checked) => void save({ [key]: checked }, key)}
                   />
                 </div>

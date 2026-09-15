@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { Building2, Loader2, Map, MapPin, Plus, BarChart3, CheckSquare } from 'lucide-react';
+import { Building2, Loader2, Map as MapIcon, MapPin, Plus, BarChart3, CheckSquare } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -25,6 +25,7 @@ import { useCrmStore } from '@/hooks/useCrmStore';
 import { useAuth } from '@/context/useAuth';
 import AddCrmClientDialog from '@/components/crm/AddCrmClientDialog';
 import CrmUpcomingRoutesList from '@/components/crm/CrmUpcomingRoutesList';
+import CrmActivityTypeIcon from '@/components/crm/CrmActivityTypeIcon';
 import CrmLocationFilters, {
   crmEmptyLocationFilter,
   crmMatchesLocationFilter,
@@ -108,10 +109,10 @@ const CrmCustomers: React.FC = () => {
 
       <div className="flex flex-wrap gap-2">
         <Button variant="outline" size="sm" asChild>
-          <Link to="/admin/crm/map"><Map className="h-4 w-4 mr-1" />Map & Pipeline</Link>
+          <Link to="/admin/crm/map"><MapIcon className="h-4 w-4 mr-1" />Map & Pipeline</Link>
         </Button>
         <Button variant="outline" size="sm" asChild>
-          <Link to="/admin/crm/tasks"><CheckSquare className="h-4 w-4 mr-1" />Tasks</Link>
+          <Link to="/admin/crm/tasks"><CheckSquare className="h-4 w-4 mr-1" />CRM tasks</Link>
         </Button>
         <Button variant="outline" size="sm" asChild>
           <Link to="/admin/crm/areas"><MapPin className="h-4 w-4 mr-1" />Areas</Link>
@@ -176,6 +177,7 @@ const CrmCustomers: React.FC = () => {
                   <TableHead>GPS</TableHead>
                   <TableHead>Type</TableHead>
                   <TableHead>Rep</TableHead>
+                  <TableHead>Activity</TableHead>
                   <TableHead>Last visit</TableHead>
                   <TableHead>Status</TableHead>
                 </TableRow>
@@ -183,7 +185,7 @@ const CrmCustomers: React.FC = () => {
               <TableBody>
                 {filtered.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={11} className="text-center text-muted-foreground py-8">
+                    <TableCell colSpan={12} className="text-center text-muted-foreground py-8">
                       No customers match filters.
                     </TableCell>
                   </TableRow>
@@ -211,6 +213,19 @@ const CrmCustomers: React.FC = () => {
                           : '—'}
                       </TableCell>
                       <TableCell>{repName(c.assignedRepId)}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {c.lastActivityType ? (
+                            <CrmActivityTypeIcon type={c.lastActivityType} />
+                          ) : null}
+                          {c.nextFollowUpAt && c.nextFollowUpType ? (
+                            <CrmActivityTypeIcon type={c.nextFollowUpType} />
+                          ) : c.nextFollowUpAt ? (
+                            <CrmActivityTypeIcon type="visit" />
+                          ) : null}
+                          {!c.lastActivityType && !c.nextFollowUpAt ? '—' : null}
+                        </div>
+                      </TableCell>
                       <TableCell>{formatDate(c.lastVisitDate || c.lastActivityAt)}</TableCell>
                       <TableCell>
                         <Badge variant={c.status === 'inactive' ? 'secondary' : 'default'}>

@@ -1,17 +1,28 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { LayoutGrid, Package, Palette } from 'lucide-react';
+import { Globe, LayoutGrid, Package, Palette, Paintbrush } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import AdminTemplates from '@/pages/admin/AdminTemplates';
+import ThemeEditor from '@/pages/admin/ThemeEditor';
+import BuilderDemoWordPress from '@/components/builder/BuilderDemoWordPress';
+import BuilderWorkspaceNav from '@/components/builder/BuilderWorkspaceNav';
 import { useAuth } from '@/context/useAuth';
-import { addDemoProduct, listDemoProducts } from '@/lib/builderService';
+import { addDemoProduct, getDemoStore, listDemoProducts } from '@/lib/builderService';
+import { buildMethodToWorkspaceTab } from '@/lib/builderConstants';
 import type { BuilderDemoProduct } from '@/types/builder';
 import { toast } from 'sonner';
 
-type WorkspaceTab = 'design' | 'products';
+type WorkspaceTab = 'classic' | 'theme-editor' | 'wordpress' | 'products';
+
+const TAB_CONFIG: Array<{ id: WorkspaceTab; label: string; icon: React.ComponentType<{ className?: string }> }> = [
+  { id: 'classic', label: 'Classic templates', icon: Palette },
+  { id: 'theme-editor', label: 'Theme editor', icon: Paintbrush },
+  { id: 'wordpress', label: 'WordPress', icon: Globe },
+  { id: 'products', label: 'Products', icon: Package },
+];
 
 const BuilderDemoEdit: React.FC = () => {
   const { demoId } = useParams<{ demoId: string }>();
@@ -20,7 +31,25 @@ const BuilderDemoEdit: React.FC = () => {
   const { user } = useAuth();
   const builderUid = user?.id;
 
-  const tab = (searchParams.get('tab') as WorkspaceTab) || 'design';
+  const rawTab = searchParams.get('tab');
+  const tab: WorkspaceTab =
+    rawTab === 'theme-editor' || rawTab === 'wordpress' || rawTab === 'products' || rawTab === 'classic'
+      ? rawTab
+      : rawTab === 'design'
+        ? 'classic'
+        : 'classic';
+
+  useEffect(() => {
+    if (!builderUid || !demoId || rawTab) return;
+    void getDemoStore(builderUid, demoId).then((demo) => {
+      if (!demo || demo.status === 'deleted') {
+        navigate('/builder', { replace: true });
+        return;
+      }
+      setSearchParams({ tab: buildMethodToWorkspaceTab(demo.buildMethod) }, { replace: true });
+    });
+  }, [builderUid, demoId, rawTab, navigate, setSearchParams]);
+
   const setTab = (next: WorkspaceTab) => {
     setSearchParams({ tab: next }, { replace: true });
   };
@@ -52,8 +81,10 @@ const BuilderDemoEdit: React.FC = () => {
   }, [builderUid, demoId, navigate]);
 
   useEffect(() => {
-    void loadProducts();
-  }, [loadProducts]);
+    if (tab === 'products') {
+      void loadProducts();
+    }
+  }, [tab, loadProducts]);
 
   const handleAddProduct = async () => {
     if (!builderUid || !demoId) return;
@@ -77,60 +108,60 @@ const BuilderDemoEdit: React.FC = () => {
     return null;
   }
 
+  if (tab === 'theme-editor') {
+    return (
+      <ThemeEditor
+        demoId={demoId}
+        onExit={() => setTab('classic')}
+      />
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#eef2f7]">
       <div className="border-b bg-white/90 backdrop-blur sticky top-0 z-20">
         <div className="container mx-auto max-w-6xl px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <p className="text-xs font-medium text-teal-700">Demo store editor</p>
+            <p className="text-xs font-medium text-teal-700">Demo workspace</p>
             <p className="font-mono text-sm text-slate-700">{demoId}</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
             <Button variant="secondary" size="sm" asChild>
               <Link to={`/builder/demo/${demoId}/preview`} target="_blank" rel="noopener noreferrer">
                 Preview demo
               </Link>
             </Button>
-            <Button variant="outline" size="sm" asChild>
-              <Link to="/builder">Back to dashboard</Link>
-            </Button>
+            <BuilderWorkspaceNav compact showDemoWorkspaceLink />
           </div>
         </div>
         <div className="container mx-auto max-w-6xl px-4 pb-3">
           <div className="flex gap-1 p-1 bg-muted rounded-xl overflow-x-auto">
-            <button
-              type="button"
-              onClick={() => setTab('design')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm whitespace-nowrap transition-all flex-1 justify-center ${
-                tab === 'design'
-                  ? 'bg-background shadow text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Palette className="h-4 w-4" />
-              Design & templates
-            </button>
-            <button
-              type="button"
-              onClick={() => setTab('products')}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm whitespace-nowrap transition-all flex-1 justify-center ${
-                tab === 'products'
-                  ? 'bg-background shadow text-foreground'
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-            >
-              <Package className="h-4 w-4" />
-              Products
-              {products.length > 0 && (
-                <Badge variant="secondary" className="ml-1">{products.length}</Badge>
-              )}
-            </button>
+            {TAB_CONFIG.map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setTab(id)}
+                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg font-medium text-sm whitespace-nowrap transition-all ${
+                  tab === id
+                    ? 'bg-background shadow text-foreground'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                {label}
+                {id === 'products' && products.length > 0 && (
+                  <Badge variant="secondary" className="ml-1">{products.length}</Badge>
+                )}
+              </button>
+            ))}
           </div>
         </div>
       </div>
 
-      {tab === 'design' ? (
+      {tab === 'classic' ? (
         <AdminTemplates demoId={demoId} />
+      ) : tab === 'wordpress' ? (
+        <BuilderDemoWordPress builderUid={builderUid} demoId={demoId} />
       ) : (
         <div className="container mx-auto max-w-5xl px-4 py-6 space-y-6">
           <Card>

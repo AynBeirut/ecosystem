@@ -8,15 +8,17 @@ import AdminPanel from '@/components/admin/AdminPanel';
 import ReportPeriodToolbar from '@/components/admin/ReportPeriodToolbar';
 import { useStockReportData } from '@/hooks/useStockReportData';
 import { useAuth } from '@/context/useAuth';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 import { exportToCSV } from '@/lib/exportUtils';
 import { normalizeDateRange, quarterBounds, currentVatQuarter } from '@/lib/reportPeriodPresets';
+import AllowOutOfStockSalesToggle from '@/components/admin/AllowOutOfStockSalesToggle';
 import { buildStockMovements } from '@/lib/stockListReports';
 
 export default function StockMovementReport() {
   const { user } = useAuth();
   const { money } = useStoreCurrency();
-  const { loading, sales, purchases } = useStockReportData(user?.storeId);
+  const { loading, sales, purchases } = useStockReportData(getActualStoreId(user));
   const [startDate, setStartDate] = useState(() => {
     const y = new Date().getFullYear();
     return quarterBounds(y, currentVatQuarter()).startDate;
@@ -83,9 +85,12 @@ export default function StockMovementReport() {
               Line-level stock in/out from sales and purchases — use From / To dates (Q1–Q4 for VAT quarters).
             </p>
           </div>
-          <Button type="button" size="sm" variant="outline" onClick={exportCsv}>
-            <Download className="h-4 w-4 mr-1" /> Export CSV
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            <AllowOutOfStockSalesToggle compact />
+            <Button type="button" size="sm" variant="outline" onClick={exportCsv}>
+              <Download className="h-4 w-4 mr-1" /> Export CSV
+            </Button>
+          </div>
         </div>
 
         <ReportPeriodToolbar

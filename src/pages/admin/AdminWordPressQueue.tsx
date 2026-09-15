@@ -28,13 +28,14 @@ import type {
 const STATUS_LABELS: Record<WordPressProvisioningStatus, string> = {
   pending: 'Pending',
   in_progress: 'In progress',
+  awaiting_dns: 'Awaiting DNS',
   completed: 'Completed',
   failed: 'Failed',
   cancelled: 'Cancelled',
 };
 
 const AdminWordPressQueue: React.FC = () => {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
   const storeId = getActualStoreId(user);
   const [loading, setLoading] = useState(true);
   const [isOps, setIsOps] = useState(false);
@@ -43,10 +44,14 @@ const AdminWordPressQueue: React.FC = () => {
   const [savingId, setSavingId] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!user?.uid) return;
+    if (authLoading) return;
+    if (!user?.id) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     try {
-      const ops = await isGrabioOpsUser(user.uid);
+      const ops = await isGrabioOpsUser(user.id);
       setIsOps(ops);
       if (ops) {
         setRequests(await listAllWordPressRequests());
@@ -60,7 +65,7 @@ const AdminWordPressQueue: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [user?.uid, storeId]);
+  }, [authLoading, user?.id, storeId]);
 
   useEffect(() => {
     void load();
@@ -131,19 +136,18 @@ const AdminWordPressQueue: React.FC = () => {
                   </span>
                 </div>
                 {req.notes && <p className="text-sm">{req.notes}</p>}
-                {(req.webuzoUsername || req.hostingDomain || req.ftpUsername) && (
+                {(req.hostingDomain || req.wpAdminUrl || req.wpUsername) && (
                   <div className="text-sm space-y-1 rounded-lg bg-muted/40 p-3">
-                    {req.hostingDomain && <p>Hosting domain: {req.hostingDomain}</p>}
-                    {req.webuzoUsername && <p>Webuzo user: {req.webuzoUsername}</p>}
-                    {req.ftpUsername && <p>FTP user: {req.ftpUsername}</p>}
-                    {req.panelUrl && (
+                    {req.hostingDomain && <p>Domain: {req.hostingDomain}</p>}
+                    {req.wpAdminUrl && (
                       <p>
-                        Panel:{' '}
-                        <a href={req.panelUrl} className="text-primary underline" target="_blank" rel="noreferrer">
-                          {req.panelUrl}
+                        WP admin:{' '}
+                        <a href={req.wpAdminUrl} className="text-primary underline" target="_blank" rel="noreferrer">
+                          {req.wpAdminUrl}
                         </a>
                       </p>
                     )}
+                    {req.wpUsername && <p>WP user: {req.wpUsername}</p>}
                     {req.accessEmailSentAt && (
                       <p className="text-xs text-muted-foreground">
                         Access email sent {new Date(req.accessEmailSentAt).toLocaleString()}

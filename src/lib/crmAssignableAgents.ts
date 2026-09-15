@@ -8,6 +8,7 @@ import {
   where,
   getFirestore,
 } from 'firebase/firestore';
+import { resolveStoreOwnerDisplayName } from '@/lib/storeOwnerDisplay';
 
 export type CrmAssignableAgent = {
   id: string;
@@ -18,18 +19,6 @@ export type CrmAssignableAgent = {
   assignedTerritory?: string | null;
   dailyVisitTarget?: number | null;
 };
-
-async function resolveStoreOwnerDisplayName(storeId: string): Promise<string> {
-  try {
-    const snap = await getDoc(doc(getFirestore(), 'storeProfiles', storeId));
-    if (!snap.exists()) return 'Store owner';
-    const data = snap.data();
-    const name = typeof data.storeName === 'string' ? data.storeName.trim() : '';
-    return name || 'Store owner';
-  } catch {
-    return 'Store owner';
-  }
-}
 
 /** Same agent list as mobile — owner, CRM reps, sales sub-accounts. */
 export async function fetchCrmAssignableAgents(storeId: string): Promise<CrmAssignableAgent[]> {
@@ -76,10 +65,12 @@ export async function fetchCrmAssignableAgents(storeId: string): Promise<CrmAssi
     const ownerId = `owner:${storeId}`;
     const profile = profileSnap?.data() || {};
     const ownerName = await resolveStoreOwnerDisplayName(storeId);
+    const ownerUid = typeof profile.ownerId === 'string' ? profile.ownerId : '';
     agents.push({
       id: ownerId,
       name: ownerName,
       email: typeof profile.email === 'string' ? profile.email : undefined,
+      userId: ownerUid || undefined,
       role: 'owner',
     });
     seen.add(ownerId);
@@ -106,10 +97,10 @@ export async function fetchCrmAssignableAgents(storeId: string): Promise<CrmAssi
       const id = `sub:${d.id}`;
       if (seen.has(id)) return;
       const isManager = rawRole === 'manager';
-      const baseName = String(data.name || (isManager ? 'Sales manager' : 'Sales')).trim();
+      const baseName = String(data.name || (isManager ? 'Manager' : 'Sales')).trim();
       agents.push({
         id,
-        name: isManager ? `${baseName} (Sales manager)` : baseName,
+        name: baseName,
         email: data.email,
         userId:
           userIdBySubAccount.get(d.id) ||
@@ -156,16 +147,54 @@ function mapSubAccountToAgent(subDocId: string, data: Record<string, unknown>): 
   const rawRole = String(data.role || 'sales').toLowerCase();
   if (rawRole === 'delivery') return null;
   const isManager = rawRole === 'manager';
-  const baseName = String(data.name || (isManager ? 'Sales manager' : 'Sales')).trim();
+  const baseName = String(data.name || (isManager ? 'Manager' : 'Sales')).trim();
   return {
     id: `sub:${subDocId}`,
-    name: isManager ? `${baseName} (Sales manager)` : baseName,
+    name: baseName,
     email: typeof data.email === 'string' ? data.email : undefined,
     userId: typeof data.userId === 'string' ? data.userId : undefined,
     role: isManager ? 'manager' : 'sales',
     assignedTerritory: typeof data.assignedTerritory === 'string' ? data.assignedTerritory : null,
     dailyVisitTarget: typeof data.dailyVisitTarget === 'number' ? data.dailyVisitTarget : null,
   };
+}
+
+export async function enrichAgentsWithUserIds(
+  storeId: string,
+  agents: CrmAssignableAgent[],
+): Promise<CrmAssignableAgent[]> {
+  const needsLookup = agents.some((a) => !a.userId);
+  if (!needsLookup) return agents;
+
+  const db = getFirestore();
+  try {
+    const usersSnap = await getDocs(query(collection(db, 'users'), where('storeId', '==', storeId)));
+    const byEmail = new Map<string, string>();
+    const bySubId = new Map<string, string>();
+    usersSnap.docs.forEach((d) => {
+      const data = d.data();
+      const email = String(data.email || '').trim().toLowerCase();
+      if (email) byEmail.set(email, d.id);
+      const subId = data.subAccountId;
+      if (typeof subId === 'string' && subId) bySubId.set(subId, d.id);
+    });
+
+    return agents.map((agent) => {
+      if (agent.userId) return agent;
+      if (agent.email) {
+        const uid = byEmail.get(agent.email.trim().toLowerCase());
+        if (uid) return { ...agent, userId: uid };
+      }
+      if (agent.id.startsWith('sub:')) {
+        const uid = bySubId.get(agent.id.slice('sub:'.length));
+        if (uid) return { ...agent, userId: uid };
+      }
+      return agent;
+    });
+  } catch (e) {
+    console.warn('[crmAssignableAgents] enrichAgentsWithUserIds failed', e);
+    return agents;
+  }
 }
 
 export async function fetchTeamFilterAgents(storeId: string): Promise<CrmAssignableAgent[]> {
@@ -212,7 +241,7 @@ export async function fetchTeamFilterAgents(storeId: string): Promise<CrmAssigna
   if (extra.length > 0) {
     agents = [...agents, ...extra].sort((a, b) => a.name.localeCompare(b.name));
   }
-  return agents;
+  return enrichAgentsWithUserIds(storeId, agents);
 }
 
 /** Map mobile-style assignable agents to CrmRep rows for web dropdowns + performance cards. */

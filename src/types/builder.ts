@@ -2,6 +2,8 @@ export type BuilderBusinessType = 'designer' | 'media_company';
 
 export type DemoStoreStatus = 'draft' | 'preview' | 'invited' | 'converted' | 'deleted';
 
+export type BuilderDemoBuildMethod = 'classic' | 'theme_editor' | 'wordpress';
+
 export type BuilderAccount = {
   businessType: BuilderBusinessType;
   demoSlotCount: number;
@@ -18,6 +20,8 @@ export type BuilderDemoStore = {
   previewExpiresAt?: string;
   transferredStoreId?: string;
   convertedAt?: string;
+  wordpressRequestId?: string;
+  buildMethod?: BuilderDemoBuildMethod;
   createdAt: string;
   updatedAt: string;
 };
@@ -29,6 +33,12 @@ export type BuilderDemoBranding = {
   description?: string;
   slogan?: string;
   logo?: string;
+  templateColors?: Record<string, string>;
+  sectionOrder?: unknown[];
+  menuStyle?: string;
+  storeCardStyle?: string;
+  storeBackgroundImage?: string;
+  galleryImages?: string[];
 };
 
 export type BuilderDemoProduct = {

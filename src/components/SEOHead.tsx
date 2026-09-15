@@ -18,7 +18,8 @@ interface SEOHeadProps {
   structuredData?: Record<string, unknown> | Array<Record<string, unknown>>;
 }
 
-const DEFAULT_DESCRIPTION = 'Grabio – Discover and shop from local stores in Lebanon. Browse products, place orders, and support local businesses.';
+const DEFAULT_DESCRIPTION =
+  'Grabio — small business ERP, POS, inventory, invoicing, and industry workflows on one platform. Built by emoove.';
 const DEFAULT_IMAGE = 'https://grabio.space/og-image.png';
 const SITE_NAME = 'Grabio';
 const SITE_ORIGIN = 'https://grabio.space';

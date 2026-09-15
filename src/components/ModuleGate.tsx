@@ -1,9 +1,12 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
+import { hasStoreAdminAccess } from '@/lib/subAccountAccess';
 import { useModuleEntitlement } from '@/hooks/useModuleEntitlement';
+import { canUseModule } from '@/lib/entitlements';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { MODULE_CATALOG } from '@/lib/pricingDisplay';
+import { peekCachedStoreProfile } from '@/hooks/useStoreEntitlements';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 
@@ -22,14 +25,22 @@ function moduleDisplayName(moduleId: string): string {
  */
 const ModuleGate: React.FC<ModuleGateProps> = ({ moduleId, children }) => {
   const { user } = useAuth();
-  const { enabled, loading } = useModuleEntitlement(moduleId);
+  const { enabled, loading, storeId } = useModuleEntitlement(moduleId);
   const enforce = ECOSYSTEM_FLAGS.enforceModuleGates;
+  const cachedEnabled = storeId
+    ? canUseModule(peekCachedStoreProfile(storeId), moduleId)
+    : false;
 
   if (!enforce) {
     return <>{children}</>;
   }
 
-  if (loading) {
+  if (enabled || cachedEnabled) {
+    return <>{children}</>;
+  }
+
+  // Sub-accounts inherit the store owner's modules; permission checks gate access.
+  if (loading && user?.role !== 'sub_account') {
     return (
       <div className="container mx-auto px-4 py-12 flex justify-center">
         <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary" />
@@ -37,11 +48,7 @@ const ModuleGate: React.FC<ModuleGateProps> = ({ moduleId, children }) => {
     );
   }
 
-  if (enabled) {
-    return <>{children}</>;
-  }
-
-  const isOwner = user?.role === 'admin';
+  const isOwner = hasStoreAdminAccess(user);
   const label = moduleDisplayName(moduleId);
 
   return (

@@ -8,15 +8,20 @@ export const SHOP_PACKAGE: MarketingPackageContent = {
   tagline: 'Retail that stays in sync',
   presetKey: 'pkg_shop',
   demoStoreSlug: 'grabio-demo-shop',
+  metaTitle: 'Retail POS & Inventory Software for Shops | Grabio',
   metaDescription:
-    'Grabio for retail and wholesale — unified POS, inventory, invoicing, marketplace storefront, and payments from one platform.',
+    'Retail POS and inventory software for shops — counter sales, wholesale invoicing, and online orders on one stock ledger. Try the interactive demo.',
+  comparisonPageSlug: 'grabio-vs-square-retail',
   heroTitle: 'Run your shop without juggling spreadsheets',
   heroDescription:
     'Sell in-store and online from one stock count. Every sale updates inventory, invoices, and reports automatically.',
   keywords: [
     'retail POS software',
+    'retail ERP software',
     'shop inventory management',
-    'wholesale business platform',
+    'POS and inventory system',
+    'integrated retail operations software',
+    'wholesale invoicing software',
     'Grabio shop',
   ],
   pains: [
