@@ -32,9 +32,9 @@ const STATIC_ROUTES = [
   },
   {
     path: '/pricing',
-    title: 'Grabio Pricing | Modular Business Software Plans',
+    title: 'Live Kitchen & Restaurant Pricing | Grabio',
     description:
-      'Compare Grabio modular plans for POS, inventory, invoicing, ecommerce, restaurant, manufacturing, accounting, and business automation.',
+      'Live Kitchen plans from $27/mo — floor POS, recipes, guest CRM, delivery, and optional inventory. Estimate add-ons before signup.',
   },
   {
     path: '/solutions',
