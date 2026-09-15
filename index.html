@@ -8,14 +8,18 @@
       #root { min-height: 100vh; }
     </style>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Grabio — Modular Business Platform</title>
-    <meta name="description" content="Grabio — modular business platform for commerce, operations, and growth." />
+    <title>Fine Dining &amp; Restaurant Operations Software | Grabio</title>
+    <meta name="description" content="Grabio helps fine dining and full-service venues run floor service, reservations, guest CRM, kitchen flow, and POS on one platform." />
     <meta name="theme-color" content="#38B2AC" />
     <meta name="google-site-verification" content="M4C5HUFGk8LfYuUSQlZeL5kES8i4HwgH5fufQn59hs0" />
     <meta name="grabio-build" content="__GRABIO_BUILD_ID__" />
     <script>
       (function () {
         var h = location.hostname;
+        if (h === 'www.grabio.space') {
+          location.replace('https://grabio.space' + location.pathname + location.search + location.hash);
+          return;
+        }
         if (h !== 'localhost' && h !== '127.0.0.1') {
           var link = document.createElement('link');
           link.rel = 'manifest';
@@ -28,8 +32,8 @@
         }
 
         var BUILD_KEY = 'grabio_build_id';
-        var RELOAD_KEY = 'grabio_chunk_reload_v3';
-        var MAX_RELOADS = 3;
+        var RELOAD_KEY = 'grabio_chunk_reload_v4';
+        var MAX_RELOADS = 8;
         var buildMeta = document.querySelector('meta[name="grabio-build"]');
         var buildId = buildMeta && buildMeta.getAttribute('content');
         if (buildId && buildId !== '__GRABIO_BUILD_ID__') {
@@ -95,10 +99,11 @@
           var message = String((reason && reason.message) || reason || '');
           if (
             message.indexOf('Failed to fetch dynamically imported module') >= 0 ||
-            message.indexOf('Importing a module script failed') >= 0
+            message.indexOf('Importing a module script failed') >= 0 ||
+            message.indexOf('error loading dynamically imported module') >= 0
           ) {
             event.preventDefault();
-            hardRecover(false);
+            hardRecover(true);
           }
         });
 

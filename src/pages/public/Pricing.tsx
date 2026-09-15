@@ -27,18 +27,21 @@ import {
 } from '@/lib/pricingDisplay';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
 import { ORDERED_PRESET_LIST } from '@/lib/packagePresets';
-import { CORE_ENTRY_PACKAGES, INDUSTRY_PACKAGES } from '@/lib/modularPackageLimits';
+import { CORE_ENTRY_PACKAGES } from '@/lib/modularPackageLimits';
 import { calculateModularPrice } from '@/lib/modularPricing';
 import { getStatusBadgeClass, getStatusLabel } from '@/lib/publicModulesContent';
+import { getPublicPricingModulesByGroup, PUBLIC_PRICING_INDUSTRY_PRESETS } from '@/lib/publicVenuePricing';
+import { getModuleIcon } from '@/lib/moduleIcons';
 
 const GROUP_LABELS: Record<PricingModule['group'], string> = {
-  platform: 'Platform Features',
-  apps: 'Mobile & Desktop Apps',
-  ai: 'AI & Growth Tools',
+  platform: 'Venue operations',
+  apps: 'Apps for owners & floor',
+  ai: 'AI for guest-facing growth',
 };
 
 function isToggleDisabled(mod: PricingModule, tier: PaidTier): boolean {
   if (isRoadmapModule(mod)) return true;
+  if (mod.billing === 'one_time') return true;
   if (mod.billing === 'core' || mod.billing === 'included') return true;
   if (mod.billing === 'tier' && mod.minTier && tierMeetsMinimum(tier, mod.minTier)) return true;
   return false;
@@ -129,22 +132,14 @@ const Pricing: React.FC = () => {
     }
   };
 
-  const groupedModules = useMemo(() => {
-    const groups: Record<PricingModule['group'], PricingModule[]> = {
-      platform: [],
-      apps: [],
-      ai: [],
-    };
-    MODULE_CATALOG.forEach((mod) => groups[mod.group].push(mod));
-    return groups;
-  }, []);
+  const groupedModules = useMemo(() => getPublicPricingModulesByGroup(), []);
 
   const manageHref = user ? '/admin/subscription' : '/login?tab=signup';
 
   return (
     <PublicPageShell
-      title="Grabio Pricing — Modular Packages"
-      description="Industry presets from $5/mo, modular seats and add-ons. Toggle modules to preview your package before checkout."
+      title="Live Kitchen & Restaurant Pricing | Grabio"
+      description="Live Kitchen plans from $27/mo — floor POS, recipes, guest CRM, delivery, and optional inventory. Estimate add-ons before signup."
       url="/pricing"
       keywords={[
         'Grabio pricing',
@@ -152,9 +147,9 @@ const Pricing: React.FC = () => {
         'Sales CRM add-on',
         'small business platform cost',
       ]}
-      eyebrow="Pricing"
-      heroTitle="Modular packages"
-      heroDescription="Choose a preset for your industry, then toggle modules and add-ons. Same pricing logic as checkout."
+      eyebrow="Live Kitchen pricing"
+      heroTitle="Plans for fine dining & full-service venues"
+      heroDescription="Start with the Live Kitchen preset, then adjust venue modules and add-ons. Same logic as checkout in your dashboard."
       heroActions={
         <div className="public-segment">
           <button
@@ -222,9 +217,11 @@ const Pricing: React.FC = () => {
                     );
                   })}
                 </div>
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">Industry workflows</h3>
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {ORDERED_PRESET_LIST.filter((p) => INDUSTRY_PACKAGES.includes(p.key)).map((p) => {
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-gray-500 mb-3">Venue &amp; related workflows</h3>
+                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {ORDERED_PRESET_LIST.filter((p) =>
+                    (PUBLIC_PRICING_INDUSTRY_PRESETS as readonly string[]).includes(p.key),
+                  ).map((p) => {
                     const price = calculateModularPrice({
                       preset: p.key,
                       seatCount: 1,
@@ -286,11 +283,11 @@ const Pricing: React.FC = () => {
                     <h3 className="text-lg font-bold text-gray-900 mb-1">{GROUP_LABELS[groupKey]}</h3>
                     <p className="text-sm text-gray-500 mb-4">
                       {groupKey === 'platform' &&
-                        'Web admin modules — core included on all paid plans; extras billed separately.'}
+                        'What restaurants and cafés turn on first — core items included on paid Live Kitchen plans.'}
                       {groupKey === 'apps' &&
-                        'Native apps — Admin Android included with your account; others in development.'}
+                        'Owner Android app, POS, and mobile billing — included with venue packages.'}
                       {groupKey === 'ai' &&
-                        'In-account AI tools — email limits vary by plan; full AI billing alignment coming.'}
+                        'Optional copy and campaigns for menus, promos, and guest comms.'}
                     </p>
                     <div className="space-y-3">
                       {groupedModules[groupKey].map((mod) => {
@@ -303,6 +300,8 @@ const Pricing: React.FC = () => {
                           mod.addOnKey !== 'extraStorage' &&
                           !PLAN_ELIGIBLE_ADDONS[selectedTier].includes(mod.addOnKey);
 
+                        const { Icon, accent } = getModuleIcon(mod.id);
+
                         return (
                           <div
                             key={mod.id}
@@ -310,9 +309,12 @@ const Pricing: React.FC = () => {
                               on ? 'border-teal-200 bg-teal-50/30' : 'border-gray-200 bg-white'
                             }`}
                           >
-                            <span className="text-2xl leading-none" aria-hidden>
-                              {mod.icon}
-                            </span>
+                            <div
+                              className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br shadow-sm ${accent.gradient}`}
+                              aria-hidden
+                            >
+                              <Icon className={`h-5 w-5 ${accent.iconClass}`} strokeWidth={1.75} />
+                            </div>
                             <div className="flex-1 min-w-0">
                               <div className="flex flex-wrap items-center gap-2">
                                 <p className="font-semibold text-gray-900">{mod.name}</p>
@@ -400,8 +402,7 @@ const Pricing: React.FC = () => {
                 </div>
 
                 <p className="text-[11px] text-gray-400 mb-4 leading-relaxed">
-                  Modules marked &quot;In development&quot; or &quot;billing TBA&quot; are shown for planning only —
-                  not added to total until billing goes live.
+                  In-development roadmap items stay on Features. Factory, dropship, and NGO PSA presets are available via signup — not listed here.
                 </p>
 
                 <Link
@@ -415,7 +416,7 @@ const Pricing: React.FC = () => {
                   to="/features"
                   className="block w-full text-center mt-2 text-xs text-teal-700 hover:text-teal-900 font-medium"
                 >
-                  Compare all modules →
+                  Full platform catalog →
                 </Link>
               </aside>
             </div>
@@ -444,15 +445,15 @@ const Pricing: React.FC = () => {
                 {[
                   {
                     q: 'How does modular pricing work?',
-                    a: 'Every store gets core platform features on a base plan. Optional modules and add-ons (like Sales CRM or custom domain) are extra charges — toggle them on this page to preview your total before checkout.',
+                    a: 'Pick a starting package or build a custom module list. Optional extras like Custom Domain Package, Sales CRM, WhatsApp Business, and extra storage can be added on top.',
                   },
                   {
                     q: 'What is the Trial plan?',
                     a: 'Trial is free to start with 20% revenue share for up to 3 months. Upgrade to a paid plan for 0% revenue share and access to paid add-ons.',
                   },
                   {
-                    q: 'Can I get CRM and PSA together?',
-                    a: 'Sales CRM is a live billed add-on ($15/mo). Projects (PSA) is in development — you can select it here to plan your stack; billing will be added when the module launches.',
+                    q: 'Is Guest CRM included?',
+                    a: 'Guest CRM (pipeline module) is included on Starter and above. Use it for hosts, regulars, and follow-ups — not a separate field-sales SKU.',
                   },
                   {
                     q: 'Does this page charge my card?',

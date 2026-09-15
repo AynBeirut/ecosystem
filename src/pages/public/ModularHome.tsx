@@ -7,11 +7,11 @@ import SEOHead from '@/components/SEOHead';
 import HomeHero from '@/components/marketing/HomeHero';
 import PackageSelectorGrid from '@/components/marketing/PackageSelectorGrid';
 import AuthCTA from '@/components/public/AuthCTA';
-import HomeCapabilityTile from '@/components/public/HomeCapabilityTile';
+import HomeVenueHighlights from '@/components/marketing/HomeVenueHighlights';
+import HomePlatformExtras from '@/components/marketing/HomePlatformExtras';
+import HomeMaintainedWorkflows from '@/components/marketing/HomeMaintainedWorkflows';
 import { useAuth } from '@/context/useAuth';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
-import { PLATFORM_CAPABILITIES } from '@/lib/publicModulesContent';
-import { getPlatformCapabilityIcon } from '@/lib/moduleIcons';
 import { BLOG_POSTS } from '@/data/blog-posts';
 
 const ModularHome: React.FC = () => {
@@ -33,14 +33,17 @@ const ModularHome: React.FC = () => {
   return (
     <>
       <SEOHead
-        title="Grabio — Run your shop, kitchen, or online store from one place"
-        description="Sales, stock, and money in sync. Modular platform for retail, cafés, restaurants, manufacturing, and e-commerce — by emoove."
+        title="Fine Dining & Restaurant Operations Software | Grabio"
+        description="Grabio helps fine dining and full-service venues run floor service, reservations, guest CRM, kitchen flow, and POS on one platform — optional inventory and finance when you need them."
         url="/"
         keywords={[
-          'business management platform',
-          'modular POS inventory',
-          'Grabio',
-          'retail restaurant ecommerce software',
+          'fine dining restaurant software',
+          'restaurant POS and reservations',
+          'restaurant CRM and guest management',
+          'live kitchen operations software',
+          'restaurant food cost software',
+          'venue operations platform',
+          'Grabio restaurant',
         ]}
       />
 
@@ -52,35 +55,14 @@ const ModularHome: React.FC = () => {
           <PackageSelectorGrid />
 
           <div className="mx-auto max-w-6xl space-y-8 px-4 pb-14 pt-10 sm:px-6 md:pb-16">
-            <section className="marketing-platform-band">
-              <div className="marketing-section-head mb-6 md:mb-8">
-                <p className="marketing-section-eyebrow">Platform</p>
-                <h2 className="marketing-section-title">One sign-in, shared data</h2>
-                <p className="marketing-section-lead">
-                  POS, inventory, invoices, and analytics on the same ledger — activate only what you need.
-                </p>
-              </div>
-              <div className="marketing-capability-grid">
-                {PLATFORM_CAPABILITIES.map(({ title, desc }) => {
-                  const { Icon, accent } = getPlatformCapabilityIcon(title);
-                  return (
-                    <HomeCapabilityTile
-                      key={title}
-                      title={title}
-                      desc={desc}
-                      Icon={Icon}
-                      accent={accent}
-                      variant="marketing"
-                    />
-                  );
-                })}
-              </div>
-            </section>
+            <HomeVenueHighlights />
+
+            <HomePlatformExtras />
 
             <section className="marketing-platform-band">
               <div className="marketing-section-head mb-6">
                 <p className="marketing-section-eyebrow">Resources</p>
-                <h2 className="marketing-section-title">For business owners</h2>
+                <h2 className="marketing-section-title">Guides for restaurant operators</h2>
               </div>
               <div className="grid gap-4 md:grid-cols-3">
                 {recentPosts.map((post) => (
@@ -97,10 +79,12 @@ const ModularHome: React.FC = () => {
               </div>
             </section>
 
+            <HomeMaintainedWorkflows />
+
             <section className="marketing-cta-band">
               <h2 className="text-xl font-semibold tracking-tight text-white md:text-2xl">Ready when you are</h2>
               <p className="mx-auto mt-3 max-w-lg text-sm leading-relaxed text-slate-300 md:text-base">
-                Pick an industry above to explore, or start your own workspace.
+                Explore the fine dining demo or start a Live Kitchen workspace.
               </p>
               <div className="mt-7 flex min-h-[44px] flex-col justify-center gap-3 sm:flex-row">
                 {isLoading ? (

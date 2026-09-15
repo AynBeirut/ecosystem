@@ -18,7 +18,10 @@ React Native / Expo admin app — native POS, orders, inventory, CRM, team tasks
 
 | versionCode | versionName | Artifact | Status |
 |-------------|-------------|----------|--------|
-| **125** | **1.2.94** | `release/grabio-1.2.94-125.aab` | **Current — upload this** |
+| **140** | **1.3.9** | `release/grabio-1.3.9-140.aab` | **Built — tenant bind + mismatch guard; upload to Play** |
+| **137** | **1.3.6** | `release/grabio-1.3.6-137.aab` | shipped (emoji icons) |
+| 135 | 1.3.4 | sideload only | was on Anwar phone 2026-09-09 |
+| 125 | 1.2.94 | `release/grabio-1.2.94-125.aab` | shipped |
 | 124 | 1.2.93 | `release/grabio-1.2.93-124.aab` | shipped |
 | 35 | 1.2.5 | `release/grabio-1.2.5-35.aab` | legacy |
 

@@ -5,6 +5,7 @@ import { getAuth, multiFactor, TotpMultiFactorGenerator, type MultiFactorInfo, t
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId, resolveStoreIdForAuthUser } from '@/lib/storeUtils';
+import { isNipcoProductionStore } from '@/lib/nipcoInvoiceTemplateLock';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -16,11 +17,14 @@ import { Badge } from '@/components/ui/badge';
 import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil, ImagePlus, Palette, GripVertical, ChevronUp, ChevronDown, Globe, QrCode, Copy } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
+import VenueOpsSettingsPanel from '@/components/admin/VenueOpsSettingsPanel';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting, AiModelPricingSetting } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
 import { buildStorePublicUrl, buildStoreQrCodeUrl, buildStoreQrTargetUrl } from '@/lib/storeUrls';
-import { getSubscriptionTierName, hasComposedAccess } from '@/lib/subscriptionHelper';
+import { prepareStoreLogoFile, readFilePreview } from '@/lib/storeLogoImage';
+import { uploadStoreLogo } from '@/lib/storeMediaUpload';
+import { getSubscriptionTierName, hasComposedAccess, hasCustomDomainAccess } from '@/lib/subscriptionHelper';
 import { SUPPORTED_CURRENCIES, normalizeCurrencyCode } from '@/lib/money/currencies';
 import { formatMoney } from '@/lib/money/format';
 import { writeSystemGuidePreference } from '@/lib/systemGuide';
@@ -34,6 +38,7 @@ import {
   normalizeAccountingMode,
   supportsArabicEntry,
 } from '@/lib/accountingMode';
+import { resolveAccountingModeLocked } from '@/lib/accountingModeLock';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
@@ -125,6 +130,7 @@ function buildProfileSavePayload(
     proEmail: data.proEmail,
     website: data.website,
     logo: data.logo,
+    logoUrl: data.logoUrl,
     description: data.description,
     invoiceNumberPrefix: data.invoiceNumberPrefix,
     lastInvoiceNumber: data.lastInvoiceNumber,
@@ -357,11 +363,11 @@ const AdminProfile: React.FC = () => {
         normalizeAccountingMode(data.accountingMode),
       ),
     });
-    setLogoPreview(data.logo || '');
+    setLogoPreview(data.logoUrl || data.logo || '');
   };
 
   const loadProfileFromFirestore = async (authUid: string, fromServer = false) => {
-    const actualStoreId = await resolveStoreIdForAuthUser(authUid);
+    const actualStoreId = getActualStoreId(user) || await resolveStoreIdForAuthUser(authUid);
     setProfileStoreId(actualStoreId);
     const profileRef = doc(db, 'storeProfiles', actualStoreId);
     const profileSnap = fromServer
@@ -1072,16 +1078,22 @@ const AdminProfile: React.FC = () => {
 
   const handleLogoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      setLogoFile(file);
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const result = e.target?.result as string;
-        setLogoPreview(result);
-        setFormData(prev => ({ ...prev, logo: result }));
-      };
-      reader.readAsDataURL(file);
-    }
+    if (!file) return;
+    void (async () => {
+      try {
+        const processed = await prepareStoreLogoFile(file);
+        const preview = await readFilePreview(processed);
+        setLogoFile(processed);
+        setLogoPreview(preview);
+        setFormData((prev) => ({ ...prev, logo: preview, logoUrl: prev.logoUrl }));
+      } catch (err) {
+        toast({
+          title: 'Logo upload failed',
+          description: err instanceof Error ? err.message : 'Could not process image',
+          variant: 'destructive',
+        });
+      }
+    })();
   };
 
   // Banner / carousel image helpers
@@ -1306,7 +1318,7 @@ const AdminProfile: React.FC = () => {
     setIsSaving(true);
     if (user?.id) {
       try {
-        const actualStoreId = await resolveStoreIdForAuthUser(user.id);
+        const actualStoreId = getActualStoreId(user) || await resolveStoreIdForAuthUser(user.id);
         setProfileStoreId(actualStoreId);
         if (!actualStoreId) {
           throw new Error('Missing store id');
@@ -1317,63 +1329,75 @@ const AdminProfile: React.FC = () => {
           setFormData((prev) => ({ ...prev, slug: nextSlug }));
         }
 
-        const payload = buildProfileSavePayload({ ...formData, slug: nextSlug }, actualStoreId, user.id);
-        if (!payload.slug && payload.name) {
-          payload.slug = await generateUniqueSlug(String(payload.name), 'storeProfiles', actualStoreId);
-        }
         const profileRef = doc(db, 'storeProfiles', actualStoreId);
-        const existingSnap = await getDoc(profileRef);
+        const existingSnap = await getDocFromServer(profileRef);
         const existingProfile = existingSnap.exists()
           ? (existingSnap.data() as StoreProfile)
           : null;
+        const canonicalOwnerId = String(existingProfile?.ownerId || actualStoreId);
+        const payload = buildProfileSavePayload(
+          { ...formData, slug: nextSlug },
+          actualStoreId,
+          canonicalOwnerId,
+        );
+        if (!payload.slug && payload.name) {
+          payload.slug = await generateUniqueSlug(String(payload.name), 'storeProfiles', actualStoreId);
+        }
         const nextAccountingMode = normalizeAccountingMode(formData.accountingMode);
         const prevAccountingMode = normalizeAccountingMode(existingProfile?.accountingMode);
-        if (nextAccountingMode !== prevAccountingMode && accountingModeLocked) {
+        const modeLocked = await resolveAccountingModeLocked(db, actualStoreId, existingProfile ?? undefined);
+        if (nextAccountingMode !== prevAccountingMode && modeLocked) {
           throw new Error(
             'Accounting mode cannot be changed after the first posted journal entry. Contact support for migration.',
           );
         }
         const existingFinance = (existingProfile as StoreProfile & { financeDocumentSettings?: Record<string, unknown> })?.financeDocumentSettings ?? {};
+        const nipcoTemplateLocked = isNipcoProductionStore(actualStoreId);
         const ecosystemPatch = consumePackageDraftForStore(existingProfile);
-        const displayName = String(formData.name || '').trim();
-        const mergedFinance = stripUndefinedDeep({
-          ...existingFinance,
-        });
+        const displayName = String(formData.name || formData.storeName || '').trim();
+        const mergedFinance = nipcoTemplateLocked
+          ? existingFinance
+          : stripUndefinedDeep({
+              ...existingFinance,
+            });
 
-        // 1) Small identity write first (reliable for invoices/PDFs)
-        const identityPatch: Record<string, unknown> = {
-          ownerId: user.id,
+        const savePatch: Record<string, unknown> = {
+          ...payload,
+          ...ecosystemPatch,
+          ownerId: canonicalOwnerId,
           name: displayName,
           storeName: displayName,
-          location: formData.location || '',
-          email: formData.email || '',
-          phone: formData.phone || '',
-          website: formData.website || '',
-          proEmail: formData.proEmail || '',
-          taxNumber: formData.taxNumber || '',
-          mainCurrency: normalizeCurrencyCode(formData.mainCurrency),
-          numberFormat: formData.numberFormat === 'compact' ? 'compact' : 'full',
-          accountingMode: nextAccountingMode,
-          accountingLanguage: normalizeAccountingLanguage(formData.accountingLanguage, nextAccountingMode),
-          invoiceNumberPrefix: formData.invoiceNumberPrefix || '',
-          lastInvoiceNumber: formData.lastInvoiceNumber ?? 0,
           financeDocumentSettings: mergedFinance,
         };
-        if (logoFile && formData.logo) {
-          identityPatch.logo = formData.logo;
+        if (!modeLocked) {
+          savePatch.accountingMode = nextAccountingMode;
+          savePatch.accountingLanguage = normalizeAccountingLanguage(
+            formData.accountingLanguage,
+            nextAccountingMode,
+          );
         }
-        // Strip undefined BEFORE adding the serverTimestamp sentinel (stripper must not recurse into FieldValue).
-        await updateDoc(profileRef, { ...stripUndefinedDeep(identityPatch), updatedAt: serverTimestamp() });
-
-        // 2) Full profile merge (skip logo unless newly uploaded)
-        const fullPayload = { ...payload, ...ecosystemPatch, financeDocumentSettings: mergedFinance };
-        if (!logoFile) {
-          delete fullPayload.logo;
+        if (logoFile && !nipcoTemplateLocked) {
+          const logoStorageUrl = await uploadStoreLogo(actualStoreId, logoFile);
+          savePatch.logoUrl = logoStorageUrl;
+          savePatch.logo = '';
+        } else {
+          delete savePatch.logo;
         }
-        await setDoc(profileRef, { ...stripUndefinedDeep(fullPayload), updatedAt: serverTimestamp() }, { merge: true });
-        // Persist storeId in sellers collection and localStorage
-        const sellerRef = doc(db, 'sellers', user.id);
-        await setDoc(sellerRef, { storeId: actualStoreId }, { merge: true });
+        if (nipcoTemplateLocked && existingProfile) {
+          savePatch.taxNumber = existingProfile.taxNumber || '';
+          if (existingProfile.template) {
+            savePatch.template = existingProfile.template;
+          }
+        }
+        await setDoc(
+          profileRef,
+          { ...stripUndefinedDeep(savePatch), updatedAt: serverTimestamp() },
+          { merge: true },
+        );
+        if (user.id === actualStoreId || user.role === 'admin') {
+          const sellerRef = doc(db, 'sellers', user.id);
+          await setDoc(sellerRef, { storeId: actualStoreId }, { merge: true });
+        }
         // Update localStorage
         const savedSellerInfo = localStorage.getItem('sellerInfo');
   const sellerInfo = savedSellerInfo ? JSON.parse(savedSellerInfo) : {};
@@ -1400,9 +1424,13 @@ const AdminProfile: React.FC = () => {
         });
       } catch (err) {
         console.error('[AdminProfile] save failed', err);
+        const permissionDenied =
+          err && typeof err === 'object' && 'code' in err && (err as { code?: string }).code === 'permission-denied';
         toast({
           title: "Error",
-          description: err instanceof Error ? err.message : "Failed to update store profile.",
+          description: permissionDenied
+            ? 'Permission denied — sign in as the store owner or a store manager, then save again. Accounting mode cannot change after posting.'
+            : err instanceof Error ? err.message : "Failed to update store profile.",
           variant: "destructive"
         });
       }
@@ -1468,6 +1496,8 @@ const AdminProfile: React.FC = () => {
             </div>
           </CardContent>
         </AdminPanel>
+
+        <VenueOpsSettingsPanel />
 
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Business identity (invoices & documents) */}
@@ -2963,6 +2993,7 @@ const AdminProfile: React.FC = () => {
           </ProfileCollapsibleSection>
 
           {/* Custom Domain */}
+          {hasCustomDomainAccess(formData as StoreProfile) ? (
           <ProfileCollapsibleSection
             id="custom-domain"
             title={<span className="flex items-center gap-2"><Globe className="h-5 w-5" />Custom Domain</span>}
@@ -3097,6 +3128,22 @@ const AdminProfile: React.FC = () => {
               )}
             </CardContent>
           </ProfileCollapsibleSection>
+          ) : (
+          <ProfileCollapsibleSection
+            id="custom-domain"
+            title={<span className="flex items-center gap-2"><Globe className="h-5 w-5" />Custom Domain</span>}
+            description="Requires Custom Domain Package or an eligible website package"
+            open={isProfileSectionOpen('custom-domain')}
+            onOpenChange={(open) => setProfileSectionOpen('custom-domain', open)}
+          >
+            <CardContent className="pt-0">
+              <p className="text-sm text-muted-foreground">
+                Your plan does not currently include custom domain access.
+                Add the <strong>Custom Domain Package</strong> from Subscription, or use an eligible website package that already includes domain access.
+              </p>
+            </CardContent>
+          </ProfileCollapsibleSection>
+          )}
 
           {/* Admin MFA */}
           <ProfileCollapsibleSection

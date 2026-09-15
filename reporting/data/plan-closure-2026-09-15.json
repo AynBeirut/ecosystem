@@ -1,0 +1,66 @@
+{
+  "date": "2026-09-15",
+  "plan": "fine-dining pivot + structure slices + mobile 140",
+  "items": [
+    {
+      "id": "marketing_home_pricing",
+      "status": "done",
+      "evidence": "Hosting deployed earlier session; venue-first homepage, filtered /pricing, CRM row"
+    },
+    {
+      "id": "store_profile_venue_ops_ui",
+      "status": "done",
+      "evidence": "reporting/data/store-profile-venue-ops-ui-2026-09-15.json",
+      "path": "/admin/profile"
+    },
+    {
+      "id": "ops_venue_setup_readiness",
+      "status": "done",
+      "evidence": "reporting/data/venue-setup-readiness-ops-ui-2026-09-15.json",
+      "path": "/admin/grabio-platform client editor"
+    },
+    {
+      "id": "mobile_1.3.9_140_build",
+      "status": "done",
+      "artifact": "grabio-mobile/release/grabio-1.3.9-140.apk",
+      "aab": "grabio-mobile/release/grabio-1.3.9-140.aab"
+    },
+    {
+      "id": "mobile_anwar_device_install",
+      "status": "done",
+      "note": "adb install Success 2026-09-15; Anwar did not run functional verify before leaving"
+    },
+    {
+      "id": "pilot_verify_store_sidebar",
+      "status": "pending_anwar",
+      "steps": [
+        "Phone: Grabio build 140 + correct store after login",
+        "Web Live Kitchen: /admin/profile Venue operations layout toggle + sidebar refresh"
+      ]
+    },
+    {
+      "id": "play_closed_testing_upload",
+      "status": "pending_anwar",
+      "file": "grabio-mobile/release/grabio-1.3.9-140.aab",
+      "opt_in": "https://play.google.com/apps/testing/space.grabio.app",
+      "handoff": "docs/handoff/play-upload-1.3.9-140.md"
+    },
+    {
+      "id": "hosting_apk_download",
+      "status": "blocked",
+      "target": "https://grabio.space/mobile-download/grabio-admin-latest.apk",
+      "retry": "npm run build && firebase deploy --only hosting",
+      "note": "Firebase finalize API failed 2026-09-15 evening; local file staged in public/mobile-download/"
+    },
+    {
+      "id": "git_dual_push",
+      "status": "pending",
+      "note": "Commit fine-dining session sources (exclude .env.production, APK binaries); push ecosystem + backup"
+    },
+    {
+      "id": "reservations_hub_product",
+      "status": "open",
+      "note": "Events vs storefront tables — decision when Anwar returns"
+    }
+  ]
+}

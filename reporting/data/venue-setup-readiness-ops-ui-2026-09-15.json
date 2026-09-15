@@ -1,0 +1,7 @@
+{
+  "date": "2026-09-15",
+  "feature": "venue_setup_readiness_ops_only",
+  "surface": "/admin/grabio-platform — client editor when Live Kitchen store selected",
+  "notOn": "/admin/dashboard (client-facing)",
+  "evidence": "VenueSetupReadinessPanel wired in AdminGrabioPlatform.tsx"
+}

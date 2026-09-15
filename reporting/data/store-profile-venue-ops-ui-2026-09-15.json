@@ -1,0 +1,21 @@
+{
+  "date": "2026-09-15",
+  "feature": "store_profile_venue_ops_settings_ui",
+  "surfaces": [
+    "src/components/admin/VenueOpsSettingsPanel.tsx",
+    "src/pages/admin/AdminProfile.tsx",
+    "src/lib/venueOpsSettingsUi.ts"
+  ],
+  "visibility": "Live Kitchen workflow or pkg_live_kitchen only",
+  "fields": [
+    "venueOpsSettings.restaurantFirstNavEnabled",
+    "venueOpsSettings.enableCrmPipeline",
+    "venueOpsSettings.enableReservationsHub",
+    "venueOpsSettings.enableFullInventory",
+    "venueOpsSettings.enableBusinessFinance",
+    "venueOpsSettings.enableStorefrontBuilder",
+    "venueOpsSettings.enableSeoOps"
+  ],
+  "clientPath": "/admin/profile — Venue operations layout panel",
+  "note": "No Firestore manual edits required for pilot restaurant-first nav."
+}

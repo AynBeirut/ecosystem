@@ -4,6 +4,12 @@
 
 > **Docs:** Canonical platform documentation is in the Obsidian vault `~/Documents/grabio-platform-docs/` (architecture, backlog, deploy protocol, gotchas). Code-repo `backlog.md` is legacy.
 
+**Developer landing map:** `~/Documents/grabio-platform-docs/Architecture/Developer-Landing-Map.md`.
+
+**Product pivot:** Grabio is now focused on fine-dining restaurant daily operations plus CRM. Canonical map: `~/Documents/grabio-platform-docs/Architecture/Fine-Dining-Platform-Map.md`.
+
+**No-risk runbook for 2026-09-11 accounting setup:** `~/Documents/grabio-platform-docs/Runbooks/Client-Accounting-Setup-No-Risk.md`.
+
 ## Git — dual push (required)
 
 **Every code or doc update must be pushed to both GitHub accounts** (primary + backup). Never leave one mirror behind.
@@ -23,7 +29,141 @@ git push origin main && gh auth switch -u a-nooor && git push backup main && gh 
 
 Do not commit `.env.production`, credentials, or local backup folders.
 
+**GCP session (agents):** Before any `gcloud`/Indexing/GSC work, set project **`market-flow-7b074`** (default `gcloud` config often points at `gj-real-estate-346907`). Full checklist: [`docs/deployment/GCP-SESSION.md`](docs/deployment/GCP-SESSION.md).
+
+### Session 2026-09-13 — Little Hands production data (cash book)
+**SOT:** `Final Data Expenses/*.xlsx` → `littlehands-cash-book-organized-2026-09-13.json` (classifier fix: payroll/social before POS vendor map). **Firestore:** `financeExpenses` **761** lines · Purchases UI **512** supplier lines only (payroll/social/insurance not on Purchases). **Gate:** `reporting/data/littlehands-production-data-gate-2026-09-13.json`.
+**USB local mirror:** `reporting/data/littlehands-usb-staging/Final-Data-Expenses/` (9 workbooks) · fresh export `littlehands-cash-expenses-export-2026-09-13.json` (**$57,601.66**). **Payroll:** master *Monthly Sales & Expenses* col **D** = **$31,665** (`littlehands-payroll-cashbook-vs-master-2026-09-13.json`); cash-book wage lines classified **$11,756** — not the same bucket as col D.
+
+### Session 2026-09-15 — Product center (locked tiers)
+**Active core:** live_kitchen / venue ops / CRM. **Optional maturity:** accounting + inventory + recipe/production. **High-end connected:** builder/template/SEO. **Maintained:** shop + factory (not dropped). **Deferred:** NGO/freelancer/mini shop. Details: `architecture.md`, `decision-log.md`.
+
+**Execution:** Slices A–D + marketing pivot + Store Profile venue ops + ops readiness on Grabio Platform. **Mobile 1.3.9 (140)** built; Anwar device adb install OK — functional verify **pending**. Closure: `reporting/data/plan-closure-2026-09-15.json` · Play: `docs/handoff/play-upload-1.3.9-140.md`. Handoff: `docs/handoff/builder-start-main-structure-fine-dining-2026-09-15.md`.
+
+### Session 2026-09-14 — Platform + POS fix backlog (manager mobile)
+**Root cause:** Play mobile **1.3.5** `ownerAccess.ts` owner-only; web uses `hasStoreAdminAccess()`. **Not** Firestore/cache. **Client fix:** Play update ≥140, no sideload. **POS:** Windows POS local RBAC ≠ Firebase subAccounts. **Full list:** `reporting/data/platform-pos-discovered-fixes-2026-09-14.md`.
+**Builder execution prompt (current):** `docs/handoff/builder-start-main-structure-fine-dining-2026-09-15.md` (supersedes `builder-main-structure-fix-prompt-2026-09-14.md`).
+
+### Session 2026-09-13 — HANDOFF (verify on Anwar device/browser)
+**Agent:** Stock & Catalog sidebar now has Expenses + Quick expense (`AdminDashboard`, `useAdminNavigation`); hosting deployed `hosting:production`; mobile APK **1.3.9 (140)** + `tenantMismatchGuard` sign-out on wrong store. **Anwar must verify** before closing. Handoff: [`reporting/data/HANDOFF-littlehands-expense-tiles-tenant-2026-09-13.md`](reporting/data/HANDOFF-littlehands-expense-tiles-tenant-2026-09-13.md).
+
+### Session 2026-09-13 — Little Hands tenant + Stock expense tiles (agent attempt — not accepted)
+**Problem:** Web Stock & Catalog missing Expenses / Quick expense tiles; mobile `manager@grabio.space` still showed NIPCO after cache clear.
+**Fix:** `AdminInventory` expense tiles for all store admins/inventory managers (no invoice module gate); web `AuthContext` + `storeUtils` server-first tenant bind (`users.subAccountId` → `subAccounts`, `storeId` before `activeStoreId`); mobile server-first subAccount + login re-bind. **Evidence:** `reporting/data/littlehands-tenant-auth-2026-09-13.json`. **Mobile:** ship new `grabio-mobile` APK (code fix alone is not enough on device).
+
+**Catalog feed:** `reporting/data/grabio-meta-catalog-packages-2026-09-12.csv` now points package/add-on rows to branded 1080x1080 PNG icons under `public/meta-catalog/icons/`, using the same emoji-style UI icon language from `src/lib/pricingDisplay.ts`. Public Meta feed URL: `https://grabio.space/meta-catalog/grabio-packages-feed.csv`; icon URLs use `https://grabio.space/meta-catalog/icons/<item_group_id>.png`.
+
+### Session 2026-09-12 — Little Hands POS vs Excel master
+**Source of truth:** `Monthly Sales & Expenses .xls` col B · backup `reporting/data/backups/2026-09-12/`. **Firestore updated:** Corine **$2,500**, Natacha **$550**, Mila **$1,000**. **Map:** `reporting/data/littlehands-monthly-master-map-2026-09-12.json`. **May ~−$31 / Apr ~−$229** vs master; **Jun+Jul Pamela net ~$0**; **Dec/Jan/Mar** still POS-low vs master (Excel backfill pending). USB: `POS-DATA-ONLY-20260912/` + sqlite snapshot.
+
 **GitHub secret scanning:** Firebase `apiKey` in `google-services.json` / `GoogleService-Info.plist` are **public client IDs** (required for mobile builds). In GitHub → Security → Secret scanning → mark as *used in tests* / resolved. Restrict keys in [Firebase Console → API keys](https://console.cloud.google.com/apis/credentials). Server keys (`FIREBASE_TOKEN`, `OPENAI_API_KEY`, etc.) stay in GitHub Secrets only.
+
+**Payee map (Whish):** motor `76525269` · internet/router `76147541` (**$30/mo** recurring updated) · old owner `3281047` · current owner `3323903`.
+
+## Platform change governance — client requests
+
+Every new client request or setup discovery must be classified before code changes:
+
+- **Global platform fix:** a bug or missing core behavior that should apply to every store.
+- **Tenant option:** a behavior that some stores need and others may reject; implement as a setting with a safe default.
+- **Account data setup:** seed/configure one store using existing settings; do not change shared code for only one account.
+- **Temporary exception:** allowed only with a documented removal path and owner approval.
+
+Canonical structure map: `~/Documents/grabio-platform-docs/Architecture/Packages-Workflows-Modules.md`.
+
+Default rule: do not hardcode behavior for one client in shared web, POS, mobile, Functions, or Firestore rules. If a request changes UX, workflow, permissions, payment methods, order statuses, reservations, advance ordering, stock/accounting behavior, or customer-facing labels, model it as tenant configuration under the store profile/settings layer and keep web, POS, and mobile reading the same source of truth.
+
+Product direction rule: new roadmap energy goes to fine-dining restaurant daily operations and CRM. NGO, freelancer, mini shop, and broad custom vertical expansion are deferred. Shop, manufacturing, builder, accounting, and inventory remain maintained for existing clients or optional restaurant maturity modules, not the primary growth push.
+
+Setup rule: backend scripts, imports, and AI-assisted setup are starting methods only. Every store setup result must be visible in the admin UI, editable by the store user when allowed, and connected to the next setup step. If data setup requires Excel/product/recipe/cost/raw-material/sale-price input, the platform should evolve toward a guided UI flow: download template, upload file, validate preview, AI/setup agent correction, owner approval, then saved store data.
+
+Future agents must update `README.md`, `architecture.md`, `decision-log.md`, and the canonical docs vault when introducing or changing platform options. Data scripts must write evidence under `reporting/data/` before any client-facing numbers or closure claims.
+
+## Workspace organization and memory
+
+Canonical policy: `~/Documents/grabio-platform-docs/Architecture/Workspace-Organization-Policy.md`.
+
+Do not move, quarantine, archive, or delete workspace files without inventory first. The workspace includes main platform code, apps, vendor copies, backup structures, client data, reporting evidence, scripts, and docs. Future agents must document important planning decisions before implementation so chat memory is not the only source.
+
+Quarantine rule: `_quarantine/YYYY-MM-DD/` requires a `MANIFEST.md` with original path, reason, moved date, review date, delete approval status, and restore notes. The 40-day rule means review eligibility only. No automatic deletion is allowed without explicit Anwar approval.
+
+## Setup surface separation
+
+Canonical review: `~/Documents/grabio-platform-docs/Architecture/Setup-Surface-Separation.md`.
+
+Store Profile, Invoice Document setup, and Website Template setup must stay separated. Store Profile owns business identity and operational defaults; Invoice Document setup owns A4/PDF document branding and template style; Website Template setup owns storefront theme/layout. Invoice numbering currently remains in Store Profile and must be reviewed before the next setup refactor.
+
+## Role, permission, and environment policy
+
+Canonical policy: `~/Documents/grabio-platform-docs/Architecture/Role-Permission-Environment-Policy.md`.
+
+Builder/accounting accounts, sub-account permissions, and environments are about 60% built but must become reusable platform rules. Do not patch one account to make builder or accounting access work. New role behavior must be a default role template, tenant option, or documented temporary exception, with web, Functions, mobile, POS, and invoice app enforcement considered.
+
+### Session 2026-09-10 — SEO growth sprint (Phase 1)
+**Problem:** `/demo/*` pages indexed manually but no organic visibility; homepage lacked category keywords; no comparison pages; `www`/apex split authority.
+
+**Shipped (code):** Homepage meta + software-categories band; Shop `metaTitle`; 5 `/compare/*` pages (Square, TouchBistro, Katana, Shopify, Odoo); sitemap entries; vertical comparison links; `demo_start` tracking; Instagram/Facebook schema+footer; `WwwCanonicalRedirect`; fixed default `SEOHead` description.
+
+**Also shipped:** Post-build prerender for `/demo/*` + `/compare/*` meta; **www→apex 301** (Hosting API); Indexing API enabled on `market-flow-7b074`. **Agent gotcha:** always `gcloud config set project market-flow-7b074` before IAM/API calls (`docs/deployment/GCP-SESSION.md`).
+
+### Session 2026-09-10 — SEO Phase 2 technical cleanup
+**Problem:** GSC showed only 16 indexed URLs and initially 0 submitted sitemaps for the apex property; dynamic sitemap/store/product SEO had canonical, thin-content, and reliability risks.
+
+**Shipped:** Submitted `/sitemap.xml` in GSC (**Success**, 48 discovered pages); saved evidence in `reporting/data/grabio-gsc-indexing-baseline-2026-09-10.json`; split sitemap architecture into static index + `sitemap-static.xml` + dynamic child sitemap routes; removed `/login` and `/signup` from sitemap; changed `/marketplace` sitemap URL to `/search`; added route-level noindex for protected/utility paths and 404; fixed GSC default property to apex; added product-level SEO metadata support; added top-10 prerendered priority pages; added programmatic quality gates and authority checklist.
+
+**Verify:** `npm run build --prefix functions`, focused SEO lint, and `npm run build` passed. **Deployed 2026-09-10:** `firebase deploy --only hosting,functions:api` to `market-flow-7b074` — live sitemap index + child sitemaps return HTTP 200. **Next:** resubmit sitemap index in GSC if discovered count lags, then weekly GSC evidence exports only.
+
+### Session 2026-09-10 (evening) — Public demo preview + Internal Demo OS
+**Problem:** Marketing CTAs pointed at demo store slugs that did not exist in Firestore; public preview only showed external storefront, not internal admin/dashboard.
+
+**Shipped:** `/demo/:slug/app` + `/features/:moduleId/app` mock screen tours; `scripts/seedMarketingDemoStores.cjs` provisioned 5 marketing storefronts (`grabio-demo-*`); **Internal Demo OS** at `/demo-os` + `/demo-os/:moduleId` (12 read-only admin screens: dashboard, POS, orders, inventory, purchases, invoices, expenses, accounting, CRM, theme editor, AI); vertical tours at `/demo/:slug/os/:moduleId`; sitemap + prerender (+13 demo-os URLs, 48 SEO shells total).
+
+**Deployed 2026-09-10:** `firebase deploy --only hosting` then `functions:api` — live: `https://grabio.space/demo-os`, `https://grabio.space/demo/shop/os/dashboard`. **Next:** Phase 2 demo-os pages (analytics, recipes, production, etc.); GSC re-check after crawl.
+
+### Session 2026-09-09 (evening) — NIPCO + Little Hands + mobile marketplace
+**Shipped (web/hosting + Firestore):** NIPCO marketplace `logoUrl` (white bg); Little Hands → **restaurant / `pkg_live_kitchen` / pro**; AdminProfile save fix (locked Lebanese accounting + store admin rules); NIPCO product icons **🤧** facial tissue (all 5 SKUs).
+
+**Mobile (built, not required install today):** `grabio-mobile/release/grabio-1.3.6-137.apk` — marketplace product **emoji icons** (`icon` field) for Little Hands + Jinan's Kitchen. **Next app release must include:** `ProductVisual` + same icon logic; NIPCO icons already live on web via Firestore.
+
+**Next:** ship mobile **1.3.7+** with product icon tiles; optional AdminProfile logo upload → Storage (`logoUrl`).
+
+### Session 2026-09-09 — Builder workspace + demo WordPress staging
+**Problem:** Builder forced classic templates on create; no demo delete; demo WP used production go-live path (client domain + email). VPS WP installs failed (SSH password auth off, broken install script, Apache down, self-signed SSL).
+
+**Shipped (deployed hosting + functions + Firestore rules):**
+- **Pricing:** `pkg_web_presence` Website & Blog $10/$100; custom domain included on website packages (removed $15 add-on).
+- **Builder demos:** create picker (Classic \| Theme editor \| WordPress); soft-delete; tabs `classic|theme-editor|wordpress|products`.
+- **Demo WordPress:** staging only `{slug}-{demoId8}.demo.grabio.online` — credentials in UI, no client domain/email go-live.
+- **VPS:** `VPS_SSH_PRIVATE_KEY` + acme.sh ZeroSSL; Apache auto-start + cron watchdog; `combined.pem` = cert chain + private key.
+
+**Store slug fix:** owner store `Av22LKyet8QmVcu9b8Njz1HVfoy1` → slug **`grabio`** → `https://grabio.grabio.space`.
+
+**Handoff:** `docs/handoff/anwar-personal-account-2026-09-09.md`
+
+**Next:** wildcard DNS `*.demo.grabio.online`; mobile admin rebuild for POS expiry badge; mirror docs to Obsidian vault.
+
+### Session 2026-09-09 — Owner personal account (POS expiry test)
+**Stock alerts:** `inventorySettings.lowStockAlertsEnabled: false` + `projectBasedInventory: true` on `Av22LKyet8QmVcu9b8Njz1HVfoy1` — scheduled FCM skips. Alert you saw = likely before toggle or stale push.
+
+**POS expiry test:** `node scripts/setupAnwarPosExpiryTest.cjs --write` on **Barcode Scanner — Haixun F20 (2D)** — `expiryAlertDays: 1`, expiry tomorrow. Mobile POS shows `Expires in Nd` (rebuild admin app).
+
+### Session 2026-09-07 — Owner personal wallet
+**Model:** Personal work (Youssif/Ali electrical, Firas yoga, Wissam dev) → **personal wallet IN**; Whish company spends → **fed to company OUT**. Nicole yoga = inactive. **UI:** Business Finance → **Bank** → **Personal wallet (owner)**. Firas **$150** imported (`RV-2026-00047`). Report: `reporting/data/anwar-owner-personal-wallet-2026-09-07.json`. Script: `scripts/syncAnwarOwnerPersonalWallet.cjs`.
+
+### Session 2026-09-07 — Owner service income (Whish)
+**UI:** Business Finance → **Receivables** → **Service income (Whish)** — monthly Youssif / Wissam / Ali from `financeReceipts` (46 RVs, **$5,775**). Report: `reporting/data/anwar-owner-income-by-month-2026-09-07.json`. Script: `scripts/syncAnwarOwnerServiceIncome.cjs`. **Deploy hosting** to see new page in prod.
+
+### Session 2026-09-07 — Whish statement import (E-Service)
+**Source:** `Downloads/balancestatement.zip` → `AccountStatementCSV_20535449.csv` (Whish #20535449, Jan–Sep 2026). **Imported:** 45 RVs — Youssif Malek **$2,595** (electrical), Wissam Mansour **$2,700** (web/app); 2 rent PVs **$1,000** (+9613323903). **Not imported:** motor/EDL/water/municipality/internet/building (no clear bank labels). Reports: `reporting/data/anwar-whish-import-2026-09-07.json`, `anwar-whish-statement-parsed-2026-09-07.json`. **Fix:** period reopen now allows historical posts.
+
+### Session 2026-09-07 — Anwar personal finance setup
+**Clients:** Youssif Malek (electrical), Wissam (web/app). **Recurring monthly (from Mar 2026):** rent 500, motor 100, EDL 30, water 20, municipality 13, internet 50, building 10 → **$723/mo**. Report: `reporting/data/anwar-personal-finance-setup-2026-09-07.json`. **Pending:** income receipt amounts from Youssif/Wissam (6 months).
+
+### Session 2026-09-07 — Anwar operational wipe (E-Service)
+**Wiped** 1,380 docs on `anwar.abouhassan@gmail.com` / `Av22LKyet8QmVcu9b8Njz1HVfoy1`: orders, purchases, customers, GL journals, finance vouchers, production batches, CRM activities. **Kept:** 17 products, 17 raw materials, 6 suppliers, COA (588 accounts), store settings. Report: `reporting/data/anwar-operational-wipe-2026-09-07.json`. Script: `scripts/wipeStoreOperationalData.cjs`.
+
+### Session 2026-09-07 — Account roles locked
+**Owner:** `anwar.abouhassan@gmail.com` (`Av22LKyet8QmVcu9b8Njz1HVfoy1`) — work, personal, ecosystem ops. **Test:** `mooveelectro@gmail.com` (`EZfuoNQFTJVU4cubNuckpp4K7zw2`) — QA/missions only. Code: `subscriptionGuard`, `syncAccountRegistry.cjs`. **Next:** `node scripts/syncAccountRegistry.cjs --write` to push labels to Firestore.
 
 ### Session 2026-09-05 — Discount GL + pre-audit deploy
 **Problem:** POS discounts lowered net only — no 7090 contra; audit tomorrow. **Fix:** gross revenue + Dr 7090/410 on POS GL + manual RV; backfilled 10 historical discounted orders; TB $157,625.90 balanced. **Deployed:** hosting + `onOrderCreated`/`onOrderStatusChanged`/`api` 2026-09-05 (`Accounting-BfDXx8YL.js`). **Gate:** `scripts/auditLittleHandsPreAudit.cjs` PASS. Handoff: `docs/handoff/littlehands-pre-audit-2026-09-05.md`.
