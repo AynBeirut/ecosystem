@@ -156,7 +156,8 @@ const CrmVisitRouteForm: React.FC = () => {
         storeId,
         title: title.trim() || `Route · ${visitDate}`,
         assignedRepId,
-        assignedRepName: agentDisplayName(agents, assignedRepId) || user.displayName || 'Sales',
+        assignedRepName:
+          agentDisplayName(agents, assignedRepId) || user.name || resolveAuthActorId(user) || 'Sales',
         visitDate,
         repeatRule,
         stops: buildStopsFromClients(chosen),

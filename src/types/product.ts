@@ -194,6 +194,8 @@ export type UserRole = 'admin' | 'user' | 'sub_account' | 'crm_rep' | 'freelance
 
 export type User = {
   id: string;
+  /** Firebase Auth UID — always same as `id` when session is hydrated (legacy code used `.uid`). */
+  uid?: string;
   email: string;
   name: string;
   role: UserRole;

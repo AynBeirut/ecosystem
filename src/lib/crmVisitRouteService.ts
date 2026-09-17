@@ -314,12 +314,11 @@ export async function createVisitRoute(input: {
     throw new Error('createdBy is required to save a visit route');
   }
   const now = new Date().toISOString();
-  const ref = await addDoc(collection(getFirestore(), 'crmVisitRoutes'), {
+  const docData: Record<string, unknown> = {
     storeId: input.storeId,
     title: input.title.trim() || `Visit route · ${input.visitDate}`,
     assignedRepId: input.assignedRepId,
     assignedRepName: input.assignedRepName,
-    ...(input.assignedUserId ? { assignedUserId: input.assignedUserId } : {}),
     visitDate: input.visitDate,
     repeatRule: input.repeatRule,
     stops: input.stops,
@@ -328,7 +327,11 @@ export async function createVisitRoute(input: {
     createdBy,
     createdAt: now,
     updatedAt: now,
-  });
+  };
+  if (input.assignedUserId) {
+    docData.assignedUserId = input.assignedUserId;
+  }
+  const ref = await addDoc(collection(getFirestore(), 'crmVisitRoutes'), docData);
   invalidateVisitRouteCache(input.storeId);
 
   if (input.stops.length > 0) {
