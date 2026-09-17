@@ -75,6 +75,34 @@ const PackageLandingPage = lazy(() => import("./pages/public/packages/PackageLan
 const DemoAppPreviewPage = lazy(() => import("./pages/public/DemoAppPreviewPage"));
 const DemoOsIndexPage = lazy(() => import("./pages/public/DemoOsIndexPage"));
 const DemoOsModulePage = lazy(() => import("./pages/public/DemoOsModulePage"));
+const RestaurantDemoRoot = lazy(() => import("./pages/demo/RestaurantDemoRoot"));
+const RestaurantDemoDashboardView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoDashboardView })),
+);
+const RestaurantDemoProductsView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoProductsView })),
+);
+const RestaurantDemoCustomersView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoCustomersView })),
+);
+const RestaurantDemoOrdersView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoOrdersView })),
+);
+const RestaurantDemoCrmView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoCrmView })),
+);
+const RestaurantDemoProfileView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoProfileView })),
+);
+const RestaurantDemoScheduledOrdersView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoScheduledOrdersView })),
+);
+const RestaurantDemoEventsView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoEventsView })),
+);
+const RestaurantDemoUnknownView = lazy(() =>
+  import("./pages/demo/RestaurantDemoViews").then((m) => ({ default: m.RestaurantDemoUnknownView })),
+);
 const DemoVerticalOsPage = lazy(() => import("./pages/public/DemoVerticalOsPage"));
 const FeatureAppPreviewPage = lazy(() => import("./pages/public/FeatureAppPreviewPage"));
 const ComparisonPage = lazy(() => import("./pages/public/ComparisonPage"));
@@ -283,6 +311,25 @@ function AppFooter() {
                         <Route path="/demo-os/:moduleId" element={<DemoOsModulePage />} />
                         <Route path="/demo/:slug/os/:moduleId" element={<DemoVerticalOsPage />} />
                         <Route path="/demo/:slug/app" element={<DemoAppPreviewPage />} />
+                        <Route path="/demo/restaurant/admin" element={<RestaurantDemoRoot />}>
+                          <Route element={<AdminLayout />}>
+                            <Route index element={<Navigate to="dashboard" replace />} />
+                            <Route path="dashboard" element={<RestaurantDemoDashboardView />} />
+                            <Route path="products" element={<RestaurantDemoProductsView />} />
+                            <Route path="customers" element={<RestaurantDemoCustomersView />} />
+                            <Route path="orders" element={<RestaurantDemoOrdersView />} />
+                            <Route path="scheduled-orders" element={<RestaurantDemoScheduledOrdersView />} />
+                            <Route path="events" element={<RestaurantDemoEventsView />} />
+                            <Route path="crm" element={<Navigate to="dashboard" replace />} />
+                            <Route path="crm/dashboard" element={<RestaurantDemoCrmView />} />
+                            <Route path="profile" element={<RestaurantDemoProfileView />} />
+                            <Route path="*" element={<RestaurantDemoUnknownView />} />
+                          </Route>
+                        </Route>
+                        <Route
+                          path="/demo/live-kitchen/admin/*"
+                          element={<Navigate to="/demo/restaurant/admin/dashboard" replace />}
+                        />
                         <Route path="/demo/:slug" element={<PackageLandingPage />} />
                         <Route path="/features/:moduleId/app" element={<FeatureAppPreviewPage />} />
                         <Route path="/compare/:slug" element={<ComparisonPage />} />

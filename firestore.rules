@@ -1627,6 +1627,56 @@ service cloud.firestore {
       }
     }
 
+    function restaurantDemoSession(sessionId) {
+      return get(/databases/$(database)/documents/demoRestaurantSessions/$(sessionId)).data;
+    }
+
+    function isRestaurantDemoOwner(sessionId) {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/demoRestaurantSessions/$(sessionId))
+        && restaurantDemoSession(sessionId).ownerUid == request.auth.uid
+        && restaurantDemoSession(sessionId).expiresAt > request.time
+        && restaurantDemoSession(sessionId).demo == true;
+    }
+
+    function validRestaurantDemoEntity(sessionId) {
+      return request.resource.data.demo == true
+        && request.resource.data.sessionId == sessionId
+        && request.resource.data.createdByDemoVisitor == true
+        && request.resource.data.demoBadge == 'DEMO';
+    }
+
+    match /demoRestaurantSessions/{sessionId} {
+      allow read: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && resource.data.demo == true;
+      allow create: if request.auth != null
+        && request.resource.data.demo == true
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.sessionId == sessionId
+        && request.resource.data.maxActions == 5
+        && request.resource.data.actionCount == 0
+        && request.resource.data.demoPackage == 'pkg_live_kitchen'
+        && request.resource.data.businessWorkflow == 'live_kitchen'
+        && request.resource.data.expiresAt > request.time;
+      allow update: if request.auth != null
+        && resource.data.ownerUid == request.auth.uid
+        && resource.data.demo == true
+        && request.resource.data.actionCount == resource.data.actionCount + 1
+        && request.resource.data.actionCount <= resource.data.maxActions
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.sessionId == resource.data.sessionId
+        && request.resource.data.expiresAt == resource.data.expiresAt;
+
+      match /{entityCollection}/{entityId} {
+        allow read: if isRestaurantDemoOwner(sessionId);
+        allow create: if isRestaurantDemoOwner(sessionId)
+          && validRestaurantDemoEntity(sessionId)
+          && restaurantDemoSession(sessionId).actionCount <= restaurantDemoSession(sessionId).maxActions;
+        allow update, delete: if false;
+      }
+    }
+
     // Fallback: deny by default (public reads must be explicit above)
     match /{document=**} {
       allow read, write: if false;

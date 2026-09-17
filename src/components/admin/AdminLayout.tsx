@@ -18,6 +18,7 @@ import { isAccountingFreelancerSubAccount, isFreelancerClientSubAccount, isWebBu
 import { hasStoreAdminAccess } from '@/lib/subAccountAccess';
 import { AdminThemeProvider, useAdminTheme } from '@/hooks/useAdminTheme';
 import { cn } from '@/lib/utils';
+import { useRestaurantDemoOptional, toDemoAdminPath } from '@/context/RestaurantDemoContext';
 
 function AdminUserStrip({ variant = 'sidebar' }: { variant?: 'sidebar' | 'mobile' }) {
   const { user } = useAuth();
@@ -72,6 +73,7 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/v-purchase': 'V·Purchase',
   '/admin/v-expense': 'V·Expense',
   '/admin/scheduled-orders': 'Scheduled Orders',
+  '/admin/events': 'Reservations',
   '/admin/inventory': 'Inventory',
   '/admin/customers': 'Customers',
   '/admin/purchases': 'Purchases',
@@ -236,7 +238,11 @@ export default function AdminLayout() {
 
 function AdminLayoutShell() {
   const location = useLocation();
+  const restaurantDemo = useRestaurantDemoOptional();
   const { user } = useAuth();
+  const pathForTitle = restaurantDemo
+    ? location.pathname.replace(restaurantDemo.adminBase, '/admin')
+    : location.pathname;
   const isMobile = useIsMobile();
   const {
     menuGroups,
@@ -260,7 +266,10 @@ function AdminLayoutShell() {
   });
   const skipInitialCollapse = useRef(true);
   const { theme } = useAdminTheme();
-  const pageTitle = resolvePageTitle(location.pathname, dashboardLabel);
+  const pageTitle = resolvePageTitle(pathForTitle, dashboardLabel);
+  const dashboardHomeTo = restaurantDemo
+    ? toDemoAdminPath('/admin/dashboard', restaurantDemo.adminBase)
+    : '/admin/dashboard';
   const isWebBuilder = isWebBuilderSubAccount(user);
   const isAccountingFreelancer = isAccountingFreelancerSubAccount(user);
   const isFreelancerClient = isFreelancerClientSubAccount(user);
@@ -273,17 +282,40 @@ function AdminLayoutShell() {
     () =>
       (
         [
-          { to: '/admin/v-pos', label: 'V·POS', visible: Boolean(canViewOrders) },
-          { to: '/admin/v-purchase', label: 'V·Buy', visible: Boolean(canManageInventory) },
-          { to: '/admin/v-expense', label: 'V·Exp', visible: storeAdminAccess },
-          { to: '/admin/orders', label: 'Orders', visible: Boolean(canViewOrders) },
-          { to: '/admin/scheduled-orders', label: 'Scheduled', icon: Clock, visible: Boolean(canViewOrders) },
-          { to: '/admin/customers', label: 'Customers', visible: Boolean(canViewCustomers) },
-          { to: '/admin/inventory', label: 'Inventory', visible: Boolean(canViewInventory) },
-          { to: '/admin/pos', label: 'Grabio POS', visible: Boolean(canUseGrabioPos) },
+          {
+            to: restaurantDemo ? toDemoAdminPath('/admin/orders', restaurantDemo.adminBase) : '/admin/orders',
+            label: 'Orders',
+            visible: Boolean(canViewOrders),
+          },
+          {
+            to: restaurantDemo
+              ? toDemoAdminPath('/admin/customers', restaurantDemo.adminBase)
+              : '/admin/customers',
+            label: restaurantDemo ? 'Guests' : 'Customers',
+            visible: Boolean(canViewCustomers),
+          },
+          { to: '/admin/v-pos', label: 'V·POS', visible: !restaurantDemo && Boolean(canViewOrders) },
+          { to: '/admin/v-purchase', label: 'V·Buy', visible: !restaurantDemo && Boolean(canManageInventory) },
+          { to: '/admin/v-expense', label: 'V·Exp', visible: !restaurantDemo && storeAdminAccess },
+          {
+            to: '/admin/scheduled-orders',
+            label: 'Scheduled',
+            icon: Clock,
+            visible: !restaurantDemo && Boolean(canViewOrders),
+          },
+          { to: '/admin/inventory', label: 'Inventory', visible: !restaurantDemo && Boolean(canViewInventory) },
+          { to: '/admin/pos', label: 'Grabio POS', visible: !restaurantDemo && Boolean(canUseGrabioPos) },
         ] as Array<{ to: string; label: string; visible: boolean; icon?: LucideIcon }>
       ).filter((link) => link.visible),
-    [canManageInventory, canUseGrabioPos, canViewCustomers, canViewInventory, canViewOrders, storeAdminAccess],
+    [
+      canManageInventory,
+      canUseGrabioPos,
+      canViewCustomers,
+      canViewInventory,
+      canViewOrders,
+      restaurantDemo,
+      storeAdminAccess,
+    ],
   );
 
   // Warm V·OPS route chunks + catalogs while Daily Ops is visible.
@@ -292,9 +324,10 @@ function AdminLayoutShell() {
     for (const link of dailyOpsLinks) {
       if (link.to.startsWith('/admin/v-')) preloadAdminRoute(link.to);
     }
+    if (restaurantDemo) return;
     const sid = getActualStoreId(user) || user?.storeId || '';
     if (sid) preloadVOpsCatalogs(sid);
-  }, [dailyOpsLinks, user]);
+  }, [dailyOpsLinks, user, restaurantDemo]);
 
   const collapseSidebar = useCallback(() => {
     if (sidebarMode === 'open') return;
@@ -376,6 +409,7 @@ function AdminLayoutShell() {
 
   useEffect(() => {
     const loadStatus = async () => {
+      if (restaurantDemo) return;
       if (!user?.id) return;
       const storeId = getActualStoreId(user);
       if (!storeId) return;
@@ -390,7 +424,7 @@ function AdminLayoutShell() {
       }
     };
     void loadStatus();
-  }, [user]);
+  }, [user, restaurantDemo]);
 
   const handleStatusToggle = async () => {
     if (!user?.id || !storeStatus) return;
@@ -463,7 +497,7 @@ function AdminLayoutShell() {
               </div>
             </div>
           )}
-          {storeStatus && storeAdminAccess && (
+          {storeStatus && storeAdminAccess && !restaurantDemo && (
             <button
               type="button"
               onClick={handleStatusToggle}
@@ -533,7 +567,7 @@ function AdminLayoutShell() {
                 <FreelancerClientBackButton variant="sidebar" onNavigate={collapseSidebar} />
               ) : (
                 <Link
-                  to="/admin/dashboard"
+                  to={dashboardHomeTo}
                   onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
                   onClick={collapseSidebar}
                   className={`flex items-center px-3 py-2.5 rounded-xl border transition ${
@@ -660,7 +694,7 @@ function AdminLayoutShell() {
                 <FreelancerClientBackButton variant="sidebar-collapsed" onNavigate={collapseSidebar} />
               ) : (
                 <Link
-                  to="/admin/dashboard"
+                  to={dashboardHomeTo}
                   title="Dashboard Home"
                   onMouseEnter={() => preloadAdminRoute('/admin/dashboard')}
                   onClick={collapseSidebar}

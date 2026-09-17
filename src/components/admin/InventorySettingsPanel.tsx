@@ -7,7 +7,11 @@ import { Badge } from '@/components/ui/badge';
 import { Package, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
-import { isProjectBasedInventory, isSalesAllowedWhenOutOfStock } from '@/lib/inventorySettings';
+import {
+  isProjectBasedInventory,
+  isSalesAllowedWhenOutOfStock,
+  readInventorySettings,
+} from '@/lib/inventorySettings';
 import AllowOutOfStockSalesToggle from '@/components/admin/AllowOutOfStockSalesToggle';
 import AdminPanel from '@/components/admin/AdminPanel';
 

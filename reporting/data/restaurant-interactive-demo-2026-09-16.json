@@ -1,0 +1,28 @@
+{
+  "generatedAt": "2026-09-16T16:45:00+03:00",
+  "handoff": "builder-real-restaurant-demo-2026-09-16",
+  "routes": [
+    "/demo/restaurant/admin",
+    "/demo/live-kitchen/admin"
+  ],
+  "firestoreNamespace": "demoRestaurantSessions/{sessionId}/{products|guests|reservations|orders|documents|crmTasks}",
+  "limits": {
+    "maxCreatesPerSession": 5,
+    "ttlMinutes": 30
+  },
+  "enforcement": {
+    "actionCount": "Firestore transaction in restaurantDemoService + rules on session update and subcollection create",
+    "expiry": "expiresAt on session/entities; scheduled cleanupRestaurantDemoSessions every 15m",
+    "isolation": "No writes to stores/, orders, products, customers, journal"
+  },
+  "sideEffectsDisabled": [
+    "payments",
+    "email",
+    "whatsapp",
+    "GL",
+    "POS sync",
+    "production document serials"
+  ],
+  "tests": ["src/__tests__/restaurantDemoLogic.test.ts"],
+  "deployPush": "pending Anwar approval — rules + scheduled function require firebase deploy"
+}

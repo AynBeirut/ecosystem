@@ -935,6 +935,7 @@ export { checkSubscriptions } from './scheduled/checkSubscriptions';
 export { checkExpiringStock } from './scheduled/checkExpiringStock';
 // Export the scheduled low stock FCM alert
 export { checkLowStockAlert } from './scheduled/checkLowStock';
+export { cleanupRestaurantDemoSessions } from './scheduled/cleanupRestaurantDemoSessions';
 export { fetchExchangeRates } from './scheduled/fetchExchangeRates';
 export { runRecurringVouchers } from './scheduled/runRecurringVouchers';
 export { autoCloseFiscalPeriods } from './scheduled/autoCloseFiscalPeriods';

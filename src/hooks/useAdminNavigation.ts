@@ -49,6 +49,7 @@ import {
   canShowAdminSeoNav,
   resolveEffectiveStoreContext,
 } from '@/lib/effectiveStoreContext';
+import { useRestaurantDemoOptional, toDemoAdminPath } from '@/context/RestaurantDemoContext';
 
 export type AdminNavItem = {
   to: string;
@@ -112,6 +113,14 @@ const BUSINESS_TOOLS_ROUTES = [
   '/admin/ai-agent',
 ];
 
+function adminPathFromLocation(pathname: string, demoAdminBase?: string): string {
+  if (demoAdminBase && pathname.startsWith(demoAdminBase)) {
+    const suffix = pathname.slice(demoAdminBase.length) || '/dashboard';
+    return suffix.startsWith('/admin') ? suffix : `/admin${suffix}`;
+  }
+  return pathname;
+}
+
 function groupOpenForPath(pathname: string, groupId: string): boolean | undefined {
   if (groupId === 'daily_stock') {
     return (
@@ -125,6 +134,7 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
   if (groupId === 'daily_sales' || groupId === 'venue_operations') {
     return (
       pathname.startsWith('/admin/orders') ||
+      pathname.startsWith('/admin/scheduled-orders') ||
       pathname.startsWith('/admin/v-pos') ||
       pathname.startsWith('/admin/v-purchase') ||
       pathname.startsWith('/admin/v-expense') ||
@@ -160,9 +170,48 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
   return undefined;
 }
 
+const DEMO_ADMIN_SUFFIXES = [
+  '/dashboard',
+  '/orders',
+  '/customers',
+  '/products',
+  '/crm/dashboard',
+  '/profile',
+  '/events',
+  '/scheduled-orders',
+];
+
+function isDemoSupportedAdminPath(adminPath: string): boolean {
+  const suffix = adminPath.startsWith('/admin') ? adminPath.slice('/admin'.length) : adminPath;
+  return DEMO_ADMIN_SUFFIXES.some((s) => suffix === s || suffix.startsWith(`${s}/`));
+}
+
+function mapNavGroupsForDemo(
+  groups: { daily: AdminNavGroup[]; setup: AdminNavGroup[] },
+  adminBase: string,
+): { daily: AdminNavGroup[]; setup: AdminNavGroup[] } {
+  const mapGroup = (g: AdminNavGroup): AdminNavGroup => ({
+    ...g,
+    items: g.items.map((item) => {
+      const demoTo = toDemoAdminPath(item.to, adminBase);
+      const supported = isDemoSupportedAdminPath(item.to);
+      return {
+        ...item,
+        to: supported ? demoTo : item.to,
+        visible: item.visible && supported,
+      };
+    }),
+  });
+  return {
+    daily: groups.daily.map(mapGroup),
+    setup: groups.setup.map(mapGroup),
+  };
+}
+
 export function useAdminNavigation() {
   const { user } = useAuth();
   const location = useLocation();
+  const restaurantDemo = useRestaurantDemoOptional();
   const { canUse: canUseModule, profile, entitlements } = useStoreEntitlements();
   const effectiveCtx = useMemo(
     () =>
@@ -204,7 +253,7 @@ export function useAdminNavigation() {
   const financeSuiteVisible = showFinanceNav && canUseBusinessTools && !invoiceManagerEnabled;
 
   useEffect(() => {
-    const pathname = location.pathname;
+    const pathname = adminPathFromLocation(location.pathname, restaurantDemo?.adminBase);
     setOpenMenuGroups((prev) => {
       const next = { ...prev };
       for (const groupId of Object.keys(DEFAULT_OPEN_GROUPS)) {
@@ -213,18 +262,24 @@ export function useAdminNavigation() {
       }
       return next;
     });
-  }, [location.pathname]);
+  }, [location.pathname, restaurantDemo?.adminBase]);
 
   const isRouteActive = (route: string) => {
-    if (route === '/admin/templates' || route === '/admin/theme-editor' || route === '/admin/builder') {
-      return location.pathname === route || location.pathname.startsWith(`${route}/`);
+    const activeRoute =
+      restaurantDemo && route.startsWith('/admin')
+        ? toDemoAdminPath(route, restaurantDemo.adminBase)
+        : route;
+    if (activeRoute === '/admin/templates' || activeRoute === '/admin/theme-editor' || activeRoute === '/admin/builder') {
+      return location.pathname === activeRoute || location.pathname.startsWith(`${activeRoute}/`);
     }
-    if (route.startsWith('/admin/finance/') && route !== '/admin/finance') {
-      return location.pathname.startsWith(route);
+    if (activeRoute.startsWith('/admin/finance/') && activeRoute !== '/admin/finance') {
+      return location.pathname.startsWith(activeRoute);
     }
-    if (route === '/admin/dashboard') return location.pathname === '/admin/dashboard' || location.pathname === '/admin';
-    if (route.startsWith('/admin/crm')) return location.pathname.startsWith('/admin/crm');
-    return location.pathname === route || location.pathname.startsWith(`${route}/`);
+    if (activeRoute.endsWith('/dashboard')) {
+      return location.pathname === activeRoute || location.pathname === activeRoute.replace('/dashboard', '');
+    }
+    if (activeRoute.includes('/crm')) return location.pathname.startsWith(activeRoute.split('/crm')[0] + '/crm');
+    return location.pathname === activeRoute || location.pathname.startsWith(`${activeRoute}/`);
   };
 
   const toggleMenuGroup = (groupId: string) => {
@@ -529,7 +584,8 @@ export function useAdminNavigation() {
       },
     ];
 
-    return { daily, setup };
+    const base = { daily, setup };
+    return restaurantDemo ? mapNavGroupsForDemo(base, restaurantDemo.adminBase) : base;
   }, [
     canManageDeliveries,
     canManageInventory,
@@ -555,9 +611,12 @@ export function useAdminNavigation() {
     effectiveCtx,
     venueNav,
     user,
+    restaurantDemo,
   ]);
 
-  const dashboardLabel = isWebBuilder
+  const dashboardLabel = restaurantDemo
+    ? 'Restaurant demo'
+    : isWebBuilder
     ? 'Builder Workspace'
     : isAccountingFreelancer
       ? 'Finance Workspace'

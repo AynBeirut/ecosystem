@@ -50,7 +50,7 @@ import {
   type StaffPresenceRecord,
 } from '@/lib/staffPresence';
 import { financeExpensesCollection } from '@/lib/financeData';
-import { isPayrollExpenseListRow } from '../../../vendor/beirut-finance-flow-main/src/lib/expenseUiSurface';
+import { isPayrollExpenseListRow } from '@/lib/expenseUiSurface';
 import { getActualStoreId, resolveStoreIdForAuthUser } from '@/lib/storeUtils';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';

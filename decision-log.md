@@ -3,6 +3,10 @@
 > **Canonical decision log:** `~/Documents/grabio-platform-docs/Decision-Log/`  
 > Mirror significant decisions there when closing a sprint.
 
+## 2026-09-16 — Interactive restaurant admin demo (sandbox)
+
+**Decision:** `demoRestaurantSessions/{sessionId}` namespace — anonymous auth, 5 creates / 30 min TTL, no production collections. Routes `/demo/restaurant/admin`, `/demo/live-kitchen/admin`. Evidence: `reporting/data/restaurant-interactive-demo-2026-09-16.json`. Deploy rules + scheduler pending approval.
+
 ## 2026-09-15 — Entitlement ∧ venue toggle ∧ RBAC
 
 **Decision:** `featureAccessGate.ts` enforces billing before venue layout toggles and sub-account permissions. Nav + `ProtectedRoute` use triple gate. Evidence: `reporting/data/entitlements-venue-rbac-gate-2026-09-15.json`. Sub-account UI expansion: `docs/architecture/sub-account-feature-permissions.md`.
