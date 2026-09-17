@@ -109,12 +109,12 @@ async function hydrateAdminSellerUser(
   );
   return {
     ...baseUser,
-    id: uid,
     ...sellerPayload,
     name: resolvedName,
     role: 'admin',
     storeId,
     isSeller: true,
+    id: uid,
   };
 }
 
@@ -456,10 +456,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       baseUser = {
         ...baseUser,
-        id: uid,
         ...sellerData,
         role: sellerData.role as UserRole,
         storeId,
+        id: uid,
       };
       localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId, userId: uid }));
     } else {
@@ -716,7 +716,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (sellerSnap.exists()) {
         const sellerData = sellerSnap.data();
         const storeId = sellerData.storeId || uid;
-        baseUser = { ...baseUser, id: uid, ...sellerData, role: sellerData.role as UserRole, storeId };
+        baseUser = {
+          ...baseUser,
+          ...sellerData,
+          role: sellerData.role as UserRole,
+          storeId,
+          id: uid,
+        };
         localStorage.setItem('sellerInfo', JSON.stringify({ ...sellerData, storeId, userId: uid }));
       }
       setUser(baseUser as User);

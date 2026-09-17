@@ -23,6 +23,7 @@ import {
   type CrmVisitRoute,
 } from '@/lib/crmVisitRouteService';
 import { useToast } from '@/hooks/use-toast';
+import { resolveAuthActorId } from '@/lib/authActorId';
 import { cn } from '@/lib/utils';
 
 const CrmVisitRouteDetail: React.FC = () => {
@@ -75,7 +76,7 @@ const CrmVisitRouteDetail: React.FC = () => {
         clientId: visitClient.id,
         repId: data.assignedRepId,
         repName: data.assignedRepName,
-        userId: user.id,
+        userId: resolveAuthActorId(user),
         notes: notes.trim() || `Visit route: ${data.title} · ${visitClient.name}`,
         result: 'interested',
       });

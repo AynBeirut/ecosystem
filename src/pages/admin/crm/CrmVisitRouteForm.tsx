@@ -24,6 +24,7 @@ import {
   type VisitRouteRepeat,
 } from '@/lib/crmVisitRouteService';
 import { useToast } from '@/hooks/use-toast';
+import { resolveAuthActorId } from '@/lib/authActorId';
 import { cn } from '@/lib/utils';
 
 const REPEAT_OPTIONS: VisitRouteRepeat[] = ['none', 'weekly', 'every_15_days', 'monthly'];
@@ -165,7 +166,11 @@ const CrmVisitRouteForm: React.FC = () => {
         await updateVisitRoute({ routeId, ...payload });
         navigate(`/admin/crm/visit-routes/${routeId}?date=${visitDate}`);
       } else {
-        const newId = await createVisitRoute({ ...payload, createdBy: user.id });
+        const createdBy = resolveAuthActorId(user);
+        if (!createdBy) {
+          throw new Error('Sign in again — missing user id for audit trail');
+        }
+        const newId = await createVisitRoute({ ...payload, createdBy });
         navigate(`/admin/crm/visit-routes/${newId}?date=${visitDate}`);
       }
     } catch (e) {

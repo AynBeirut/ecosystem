@@ -309,6 +309,10 @@ export async function createVisitRoute(input: {
   createdBy: string;
   assignedUserId?: string;
 }): Promise<string> {
+  const createdBy = String(input.createdBy || '').trim();
+  if (!createdBy) {
+    throw new Error('createdBy is required to save a visit route');
+  }
   const now = new Date().toISOString();
   const ref = await addDoc(collection(getFirestore(), 'crmVisitRoutes'), {
     storeId: input.storeId,
@@ -321,7 +325,7 @@ export async function createVisitRoute(input: {
     stops: input.stops,
     occurrenceCompletions: {},
     status: 'active',
-    createdBy: input.createdBy,
+    createdBy,
     createdAt: now,
     updatedAt: now,
   });
