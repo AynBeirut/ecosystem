@@ -9,14 +9,15 @@ export { PHASE1_PACKAGES, PACKAGE_INDUSTRY_SUBNAV };
 export { HOME_INDUSTRY_CARDS } from '@/data/marketing/homeIndustryCards';
 
 export const HOME_HERO = {
-  title: 'Guest CRM and venue operations — know regulars before they sit down',
+  title: 'Fine dining and full-service restaurants — run the room on one platform',
   subtitle:
-    'Hosts, reservations, floor service, kitchen flow, and POS on one workspace. Inventory and finance when you need depth.',
+    'Floor service, reservations, kitchen flow, and POS for venues that care about experience. Guest CRM, inventory, and finance when you need them.',
 } as const;
 
 /** Hero quick links — venue-first (not full industry list). */
 export const HOME_HERO_PACKAGE_SLUGS = ['restaurant', 'cafe'] as const;
 
+export const HOME_HERO_RESTAURANT_DEMO_HREF = '/demo/restaurant';
 export const HOME_HERO_CRM_HREF = '/features/crm/app';
 
 /** Homepage — follows venue cards; restaurant ops only (no generic ERP feature grid). */
