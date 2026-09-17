@@ -1,0 +1,33 @@
+{
+  "generatedAt": "2026-09-17T20:00:00.000Z",
+  "source": "mooveelectro@gmail.com E-Moove UI E2E report 2026-09-17",
+  "fixes": [
+    {
+      "id": "crm-visit-route-createdBy",
+      "issue": "Sales CRM route save used user.uid; Grabio User uses user.id",
+      "files": ["src/pages/admin/crm/CrmVisitRouteForm.tsx", "src/pages/admin/crm/CrmVisitRouteDetail.tsx"]
+    },
+    {
+      "id": "whish-checklist-ui",
+      "issue": "Failed checks not surfaced clearly in Payments UI",
+      "files": ["src/pages/admin/AdminPayments.tsx"]
+    },
+    {
+      "id": "pos-pairing-timeout",
+      "issue": "POS generate code could hang without timeout/error",
+      "files": ["src/lib/posApi.ts"]
+    },
+    {
+      "id": "announcement-preview",
+      "issue": "Preview button had no handler",
+      "files": ["src/pages/admin/AdminAnnouncements.tsx"]
+    }
+  ],
+  "whishNote": "Many checklist failures are expected on QA stores without live Whish credentials/production callbacks; UI now lists fail reasons.",
+  "retest": [
+    "Create CRM visit route",
+    "Run Whish ops checklist and read failed rows",
+    "Grabio POS generate 6-digit code",
+    "Announcement preview dialog"
+  ]
+}

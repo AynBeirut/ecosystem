@@ -1,0 +1,30 @@
+{
+  "generatedAt": "2026-09-17T17:55:00.000Z",
+  "email": "mooveelectro@gmail.com",
+  "uid": "EZfuoNQFTJVU4cubNuckpp4K7zw2",
+  "action": "qa_full_platform_access",
+  "subscriptionStatus": "active",
+  "subscriptionTier": "business",
+  "subscriptionEndsAt": "2027-02-28T23:59:59.000Z",
+  "businessWorkflow": "live_kitchen",
+  "startingPackage": "pkg_live_kitchen",
+  "enabledModulesCount": 30,
+  "venueOpsSettings": {
+    "restaurantFirstNavEnabled": true,
+    "enableCrmPipeline": true,
+    "enableReservationsHub": true,
+    "enableFullInventory": true,
+    "enableBusinessFinance": true,
+    "enableStorefrontBuilder": true,
+    "enableSeoOps": true
+  },
+  "usersDoc": {
+    "role": "admin",
+    "storeId": "EZfuoNQFTJVU4cubNuckpp4K7zw2",
+    "activeStoreId": "EZfuoNQFTJVU4cubNuckpp4K7zw2",
+    "subAccountIdCleared": true
+  },
+  "grabioOpsUid": true,
+  "loginUrl": "https://grabio.space/login",
+  "adminDashboardUrl": "https://grabio.space/admin/dashboard"
+}

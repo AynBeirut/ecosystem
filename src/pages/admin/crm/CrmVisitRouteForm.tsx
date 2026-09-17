@@ -165,7 +165,7 @@ const CrmVisitRouteForm: React.FC = () => {
         await updateVisitRoute({ routeId, ...payload });
         navigate(`/admin/crm/visit-routes/${routeId}?date=${visitDate}`);
       } else {
-        const newId = await createVisitRoute({ ...payload, createdBy: user.uid });
+        const newId = await createVisitRoute({ ...payload, createdBy: user.id });
         navigate(`/admin/crm/visit-routes/${newId}?date=${visitDate}`);
       }
     } catch (e) {

@@ -41,6 +41,7 @@ const AdminAnnouncements: React.FC = () => {
 
   const [isCreating, setIsCreating] = useState(false);
   const [editingAnnouncement, setEditingAnnouncement] = useState<StoreAnnouncement | null>(null);
+  const [previewAnnouncement, setPreviewAnnouncement] = useState<StoreAnnouncement | null>(null);
   const [formData, setFormData] = useState({
     title: '',
     message: '',
@@ -281,6 +282,7 @@ const AdminAnnouncements: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
+                    onClick={() => setPreviewAnnouncement(announcement)}
                   >
                     <Eye className="h-3 w-3 mr-1" />
                     Preview
@@ -406,6 +408,29 @@ const AdminAnnouncements: React.FC = () => {
             <Button onClick={handleUpdate}>
               Update Announcement
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={Boolean(previewAnnouncement)} onOpenChange={(open) => !open && setPreviewAnnouncement(null)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Storefront preview</DialogTitle>
+            <DialogDescription>How shoppers may see this banner when it is active.</DialogDescription>
+          </DialogHeader>
+          {previewAnnouncement && (
+            <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-amber-950">
+              <p className="font-semibold">{previewAnnouncement.title}</p>
+              <p className="text-sm mt-1">{previewAnnouncement.message}</p>
+              <p className="text-xs text-amber-800/80 mt-2">
+                {format(previewAnnouncement.startDate, 'MMM d, yyyy')} –{' '}
+                {format(previewAnnouncement.endDate, 'MMM d, yyyy')}
+                {previewAnnouncement.isActive ? '' : ' · inactive (hidden on storefront)'}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button type="button" onClick={() => setPreviewAnnouncement(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

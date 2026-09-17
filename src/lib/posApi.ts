@@ -18,13 +18,28 @@ async function getAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
-export async function generatePairingCode(storeId: string): Promise<{ code: string; expiresInSeconds: number }> {
+async function postJsonWithTimeout(
+  path: string,
+  body: unknown,
+  timeoutMs = 30_000,
+): Promise<Response> {
   const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE}/pos/pairing-code`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ storeId }),
-  });
+  const controller = new AbortController();
+  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } finally {
+    window.clearTimeout(timer);
+  }
+}
+
+export async function generatePairingCode(storeId: string): Promise<{ code: string; expiresInSeconds: number }> {
+  const response = await postJsonWithTimeout('/pos/pairing-code', { storeId });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {
     throw new Error(data.error || `Failed to generate code (${response.status})`);
@@ -33,12 +48,7 @@ export async function generatePairingCode(storeId: string): Promise<{ code: stri
 }
 
 export async function generateInstallToken(deviceName: string): Promise<{ installToken: string; deviceName: string }> {
-  const headers = await getAuthHeaders();
-  const response = await fetch(`${API_BASE}/pos/generate-install-token`, {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ deviceName }),
-  });
+  const response = await postJsonWithTimeout('/pos/generate-install-token', { deviceName });
   const data = await response.json().catch(() => ({}));
   if (!response.ok || !data.success) {
     throw new Error(data.error || `Failed to generate install token (${response.status})`);

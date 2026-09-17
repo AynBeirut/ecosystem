@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
+import { getActualStoreId } from '@/lib/storeUtils';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -228,7 +229,7 @@ const AdminPayments: React.FC = () => {
           'Content-Type': 'application/json',
           Authorization: `Bearer ${idToken}`,
         },
-        body: JSON.stringify({ storeId: user.id }),
+        body: JSON.stringify({ storeId: getActualStoreId(user) || user.id }),
       });
 
       const payload = await response.json();
@@ -242,13 +243,29 @@ const AdminPayments: React.FC = () => {
         return;
       }
 
-      setWhishChecklist(Array.isArray(payload.checklist) ? payload.checklist : []);
+      const items = Array.isArray(payload.checklist) ? payload.checklist : [];
+      const statusRank = { fail: 0, warn: 1, pass: 2 } as const;
+      const sorted = [...items].sort(
+        (a, b) => statusRank[a.status as keyof typeof statusRank] - statusRank[b.status as keyof typeof statusRank],
+      );
+      setWhishChecklist(sorted);
       setWhishChecklistScore(payload.score || null);
       setWhishChecklistStatus(payload.overallStatus || null);
 
+      const failed = sorted.filter((i) => i.status === 'fail');
+      const warned = sorted.filter((i) => i.status === 'warn');
       toast({
         title: 'Whish checklist completed',
-        description: `Readiness score: ${payload?.score?.percentage ?? 0}%`,
+        description:
+          failed.length > 0
+            ? `${payload?.score?.percentage ?? 0}% — ${failed.length} failed: ${failed
+                .slice(0, 3)
+                .map((f) => f.label)
+                .join('; ')}`
+            : warned.length > 0
+              ? `${payload?.score?.percentage ?? 0}% — ${warned.length} warning(s); see list below`
+              : `Readiness score: ${payload?.score?.percentage ?? 0}%`,
+        variant: failed.length > 0 ? 'destructive' : 'default',
       });
     } catch (error) {
       toast({
@@ -616,12 +633,30 @@ const AdminPayments: React.FC = () => {
                       <div key={item.id} className="p-3 border rounded-md">
                         <div className="flex items-center justify-between gap-2">
                           <p className="text-sm font-medium">{item.label}</p>
-                          <Badge variant={item.status === 'pass' ? 'default' : 'outline'}>
+                          <Badge
+                            variant={
+                              item.status === 'pass'
+                                ? 'default'
+                                : item.status === 'fail'
+                                  ? 'destructive'
+                                  : 'outline'
+                            }
+                          >
                             {item.status.toUpperCase()}
                           </Badge>
                         </div>
-                        <p className="text-xs text-muted-foreground mt-1">{item.detail}</p>
-                        {item.action && <p className="text-xs text-amber-600 mt-1">Action: {item.action}</p>}
+                        <p
+                          className={
+                            item.status === 'fail'
+                              ? 'text-xs text-rose-700 mt-1 font-medium'
+                              : 'text-xs text-muted-foreground mt-1'
+                          }
+                        >
+                          {item.detail || 'No detail returned for this check.'}
+                        </p>
+                        {item.action && (
+                          <p className="text-xs text-amber-700 mt-1 font-medium">Fix: {item.action}</p>
+                        )}
                       </div>
                     ))}
                   </div>

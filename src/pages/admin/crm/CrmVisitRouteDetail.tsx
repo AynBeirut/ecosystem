@@ -75,7 +75,7 @@ const CrmVisitRouteDetail: React.FC = () => {
         clientId: visitClient.id,
         repId: data.assignedRepId,
         repName: data.assignedRepName,
-        userId: user.uid,
+        userId: user.id,
         notes: notes.trim() || `Visit route: ${data.title} · ${visitClient.name}`,
         result: 'interested',
       });
