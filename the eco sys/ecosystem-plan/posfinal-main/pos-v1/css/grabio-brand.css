@@ -1,0 +1,60 @@
+/* ===================================
+   GRABIO POS — Brand / chrome overrides
+   Loaded after styles.css + themes.css
+   =================================== */
+
+:root,
+[data-theme="dark"],
+[data-theme="light"],
+[data-theme="moderate"] {
+    /* styles.css historically referenced --dark-bg without defining it.
+       Map it to transparent so sticky cart chrome never becomes a solid slab. */
+    --dark-bg: transparent;
+}
+
+/* Cart bottom / Pay Now zone — must not paint an opaque white (or navy) bar */
+.cart-footer {
+    background: transparent !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none;
+}
+
+.cart-footer .checkout-actions {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+[data-theme="light"] .cart-footer,
+[data-theme="light"] .cart-footer .checkout-actions {
+    background: transparent !important;
+    background-color: transparent !important;
+}
+
+/* Light theme cart panel was solid #FFFFFF — keep glass so transparent footer is visible */
+[data-theme="light"] .cart-section {
+    background: rgba(255, 255, 255, 0.62) !important;
+}
+
+/* Totals sit in the same sticky footer; keep them readable but not a solid slab */
+.cart-footer .cart-totals {
+    background: rgba(10, 15, 28, 0.45) !important;
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+}
+
+[data-theme="light"] .cart-footer .cart-totals {
+    background: rgba(255, 255, 255, 0.4) !important;
+    border-color: rgba(209, 213, 219, 0.7);
+}
+
+/* Place Order uses --deep-navy, which is #FFFFFF in light theme — avoid a white brick */
+[data-theme="light"] .btn-place-order {
+    background: rgba(28, 117, 188, 0.1);
+    color: #111827;
+}
+
+[data-theme="light"] .btn-place-order:hover:not(:disabled) {
+    background: rgba(28, 117, 188, 0.2);
+    color: #0A0F1C;
+}

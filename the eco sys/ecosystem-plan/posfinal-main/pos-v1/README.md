@@ -14,6 +14,19 @@ It is an offline-first Electron + browser/PWA POS using SQL.js. The next develop
 - Main database module: [js/db-sql.js](js/db-sql.js)
 - Current sync entry point: [js/sync-manager.js](js/sync-manager.js)
 
+## HANDOFF — Grabio POS Events — STOP HERE
+
+**Confirmed done (do not rework):** expired red notification works.
+
+**Cart footer / Pay Now transparency (2026-09-21):** fixed.
+
+- Cause: `.cart-footer` used undefined `var(--dark-bg)` and light-theme cart chrome painted solid white behind Pay Now.
+- Fix files:
+  - [css/grabio-brand.css](css/grabio-brand.css) — brand overlay; forces transparent cart-footer / checkout-actions; soft light cart panel; translucent totals
+  - [css/styles.css](css/styles.css) — `.cart-footer` background set to `transparent`
+  - [index.html](index.html) — loads `grabio-brand.css` after themes
+- Do not re-introduce opaque `background` / `--dark-bg: #fff` on `.cart-footer`.
+
 ## Runtime Modes
 
 ### Electron Desktop
