@@ -1007,9 +1007,14 @@ body {
     border-top: 1px solid var(--border-grey);
     position: sticky;
     bottom: 0;
-    background: var(--dark-bg);
+    /* Transparent so cart / page show through — do not use solid --dark-bg / white */
+    background: transparent;
     z-index: 10;
     margin-top: auto;
+}
+
+[data-theme="light"] .cart-footer {
+    background: transparent;
 }
 
 .cart-totals {
