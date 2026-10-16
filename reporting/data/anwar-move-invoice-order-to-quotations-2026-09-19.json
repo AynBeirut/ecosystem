@@ -1,0 +1,25 @@
+{
+  "storeId": "Av22LKyet8QmVcu9b8Njz1HVfoy1",
+  "invoiceNo": "INV-1789822490321",
+  "orderId": "xFQSzNkeOzpkSTKVM2r9",
+  "startedAt": "2026-09-19T14:30:47.277Z",
+  "moved": [
+    {
+      "source": "financeInvoices",
+      "sourceId": "IB7kkQ7h8QA4PUfjOva5",
+      "target": "financeEstimates/QTN-1789822490321-INVOICE",
+      "amount": 8732,
+      "clientName": "جمعية الرجاء ( مائدة المحبة )"
+    },
+    {
+      "source": "orders",
+      "sourceId": "xFQSzNkeOzpkSTKVM2r9",
+      "target": "financeEstimates/QTN-1789822490321-ORDER",
+      "amount": 12082,
+      "clientName": "جمعية الرجاء ( مائدة المحبة )",
+      "previousStatus": "confirmed",
+      "previousPaymentStatus": "unpaid"
+    }
+  ],
+  "finishedAt": "2026-09-19T14:30:50.377Z"
+}

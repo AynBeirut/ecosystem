@@ -55,7 +55,9 @@ import { mergeSectionOrderFromProfile } from '@/lib/storeSectionDefaults';
 import { mergeTemplateColors } from '@/lib/storeContentDraft';
 import { sortProductsInStockFirst } from '@/lib/productSort';
 import { getStoreContactPageLabel } from '@/lib/storeContactPage';
+import { initStoreMetaPixel } from '@/lib/metaPixel';
 import { getStoreClosedDayMessage, isStoreOpenOnDate } from '@/lib/storeWorkingDays';
+import { createTableReservation } from '@/lib/tableReservationService';
 
 // ── Store-level contact form (sends message to storeContactMessages/{storeId}/messages) ──
 const StoreContactForm: React.FC<{
@@ -95,6 +97,17 @@ const StoreContactForm: React.FC<{
     setSending(true);
     setErr('');
     try {
+      if (formStyle === 11) {
+        await createTableReservation(storeId, {
+          guestName: form.name,
+          guestPhone: form.phone,
+          guestEmail: form.email,
+          visitDate: form.subject,
+          visitTime: form.company,
+          partySize: Number(form.guestCount) || 0,
+          notes: form.message,
+        });
+      }
       let subject = form.subject || `Message from ${form.name}`;
       let message = form.message;
       if (formStyle === 11) {
@@ -108,7 +121,7 @@ const StoreContactForm: React.FC<{
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ...form, subject, message, storeId }),
       });
-      if (!res.ok) {
+      if (!res.ok && formStyle !== 11) {
         const data = await res.json().catch(() => ({}));
         throw new Error((data as { error?: string }).error || 'Failed to send');
       }
@@ -551,39 +564,8 @@ const StoreDetail: React.FC = () => {
   }, [bannerImagesCount]);
 
   useEffect(() => {
-    const pixelEnabled = store?.metaIntegrationSettings?.pixelEnabled;
-    const pixelId = store?.metaIntegrationSettings?.pixelId?.trim();
-    if (!pixelEnabled || !pixelId || typeof window === 'undefined') return;
-
-    try {
-      if (localStorage.getItem('grabio_cookie_consent') !== 'accepted') return;
-    } catch {
-      return;
-    }
-
-    if (window.fbq) {
-      window.fbq('init', pixelId);
-      window.fbq('track', 'PageView');
-      return;
-    }
-
-    const fbq: any = function (...args: any[]) {
-      fbq.callMethod ? fbq.callMethod(...args) : fbq.queue.push(args);
-    };
-    fbq.push = fbq;
-    fbq.loaded = true;
-    fbq.version = '2.0';
-    fbq.queue = [];
-    window.fbq = fbq;
-    if (!window._fbq) window._fbq = fbq;
-
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
-    document.head.appendChild(script);
-
-    window.fbq('init', pixelId);
-    window.fbq('track', 'PageView');
+    if (!store?.metaIntegrationSettings?.pixelEnabled) return;
+    initStoreMetaPixel(store.metaIntegrationSettings.pixelId);
   }, [store?.metaIntegrationSettings?.pixelEnabled, store?.metaIntegrationSettings?.pixelId]);
 
   // Fetch reviews helper (declared early so effects can call it)
@@ -1076,6 +1058,7 @@ const StoreDetail: React.FC = () => {
   const menuStyle = liveEditorState?.layout?.menuStyle ?? store.menuStyle ?? 'classic';
   const aboutLayout = liveThemeFields?.aboutLayout ?? store.aboutLayout ?? 'left';
   const contactFormStyle = liveThemeFields?.contactFormStyle ?? store.contactFormStyle ?? 1;
+  const reservationsOpen = (store as Store & { venueOpsSettings?: { enableReservationsHub?: boolean } }).venueOpsSettings?.enableReservationsHub === true;
   const contactPageLabel = getStoreContactPageLabel(contactFormStyle);
   const ratingDisplayType = liveContent?.ratingDisplayType ?? liveThemeFields?.ratingDisplayType ?? store.ratingDisplayType ?? 'stars';
   const pageLayout = liveThemeFields?.pageLayout ?? store.pageLayout ?? 'contained';
@@ -1698,7 +1681,14 @@ const StoreDetail: React.FC = () => {
         );
 
       case 'contact':
-        return <StoreContactForm storeId={storeId} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle} workingDays={store.deliverySettings?.workingDays} workingHours={store.deliverySettings?.workingHours} />;
+        return (
+          <div className="space-y-4">
+            {reservationsOpen && contactFormStyle !== 11 ? (
+              <StoreContactForm storeId={storeId} storeName={store.name} theme={currentTheme} formStyle={11} workingDays={store.deliverySettings?.workingDays} workingHours={store.deliverySettings?.workingHours} />
+            ) : null}
+            <StoreContactForm storeId={storeId} storeName={store.name} theme={currentTheme} formStyle={contactFormStyle} workingDays={store.deliverySettings?.workingDays} workingHours={store.deliverySettings?.workingHours} />
+          </div>
+        );
 
       case 'hero':
         // Hero/Banner section with different layout options
@@ -2293,6 +2283,9 @@ const StoreDetail: React.FC = () => {
                 </CardContent>
               </Card>
 
+              {reservationsOpen && contactFormStyle !== 11 ? (
+                <StoreContactForm storeId={storeId!} storeName={store.name} theme={currentTheme} formStyle={11} workingDays={store.deliverySettings?.workingDays} workingHours={store.deliverySettings?.workingHours} />
+              ) : null}
               {/* Send a Message Card */}
               {contactFormStyle === 7 ? (
                 <Card className={currentTheme.cardSoft}>

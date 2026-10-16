@@ -7,7 +7,9 @@ import {
 import { accountSearchScore, compareAccountCodes, compareLedgerAccountSortKeys } from '@/lib/ledger/accountSearch';
 import {
   buildClientByGrabioMap,
+  buildClientByLedgerCodeMap,
   buildClientByParentPcgMap,
+  buildClientByPartyMap,
   displayPcgCodeForLedgerRow,
   formatPcgAccountLabel,
 } from '@/lib/ledger/grabioToPcgMap';
@@ -51,6 +53,8 @@ export function LedgerAccountCombobox({
   compactSelectedLabel,
 }: Props) {
   const clientByGrabio = useMemo(() => buildClientByGrabioMap(pcgClientAccounts), [pcgClientAccounts]);
+  const clientByLedgerCode = useMemo(() => buildClientByLedgerCodeMap(pcgClientAccounts), [pcgClientAccounts]);
+  const clientByParty = useMemo(() => buildClientByPartyMap(pcgClientAccounts), [pcgClientAccounts]);
   const clientByParentPcg = useMemo(
     () => buildClientByParentPcgMap(pcgClientAccounts),
     [pcgClientAccounts],
@@ -63,12 +67,14 @@ export function LedgerAccountCombobox({
     return list
       .map((account) => {
         const displayCode = isLebaneseCoa
-          ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg)
+          ? displayPcgCodeForLedgerRow(account, clientByGrabio, clientByParentPcg, clientByLedgerCode, clientByParty)
           : account.code;
         return {
           value: account.id,
           label: isLebaneseCoa
-            ? formatPcgAccountLabel(account, accountingLanguage, clientByGrabio)
+            ? account.partyType
+              ? `${displayCode} — ${account.name}`
+              : formatPcgAccountLabel(account, accountingLanguage, clientByGrabio)
             : formatLedgerAccountLabel(account, accountingLanguage),
           account,
           code: account.code,
@@ -76,7 +82,7 @@ export function LedgerAccountCombobox({
         };
       })
       .sort((a, b) => compareLedgerAccountSortKeys(a, b, Boolean(isLebaneseCoa)));
-  }, [accounts, accountingLanguage, clientByGrabio, clientByParentPcg, allowInactiveAccounts, filterAccounts, isLebaneseCoa]);
+  }, [accounts, accountingLanguage, clientByGrabio, clientByLedgerCode, clientByParentPcg, clientByParty, allowInactiveAccounts, filterAccounts, isLebaneseCoa]);
 
   const filterOptions = useCallback(
     (items: SearchableOption[], query: string) => {
@@ -112,7 +118,7 @@ export function LedgerAccountCombobox({
   const displayLabel =
     compactSelectedLabel && selectedAccount
       ? isLebaneseCoa
-        ? displayPcgCodeForLedgerRow(selectedAccount, clientByGrabio, clientByParentPcg)
+        ? displayPcgCodeForLedgerRow(selectedAccount, clientByGrabio, clientByParentPcg, clientByLedgerCode, clientByParty)
         : selectedAccount.code
       : undefined;
 

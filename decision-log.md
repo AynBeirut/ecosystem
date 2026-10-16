@@ -3,6 +3,192 @@
 > **Canonical decision log:** `~/Documents/grabio-platform-docs/Decision-Log/`  
 > Mirror significant decisions there when closing a sprint.
 
+## 2026-09-28 — Online table reservations
+
+**Scope:** A public table request on the store page is stored as a reservation for that store: guest, phone, date, time, party size, and an empty table until staff assign one. Staff confirm, seat, or cancel it on the Reservations admin tab. Event ticket reservations stay as they are. The booking does not post finance. Live hosting was not released.
+
+## 2026-09-28 — Venue Ops fields match the reference documents
+
+**Scope:** Allergen matrix uses the reference columns plus a cross-contamination marker, review date, and chef/approver. Menu cards have buzz words, one-liner, meaning, description, and ingredients. Specs are cocktail or batch, with quantity, unit, par, batch quantity, and shelf life. Briefings show food, drink, both buzz-word lines, one-liner, and staff talking points. Floor rows store seat numbers. Standards are a values, SOP, audit, or training checklist. No brand names were hardcoded. Live hosting was not released.
+
+## 2026-09-28 — Staging publish and import preview
+
+**Scope:** Phases 1–6 are on the staging host for E-Moove. Phase 6 is a preview only: a spreadsheet maps to specs, briefings, menu knowledge, and allergens, and save stays off. HR reports read training assignments, so that tab no longer blanks. Firestore rules for the new HR and venue collections were released because staging and live share one database. Live hosting was not released. No source-brand text was written into the product defaults.
+
+## 2026-09-28 — Optional HR and Venue Ops bridges
+
+**Scope:** Attendance can point at Salary Payments only when payroll is on. Specs can point at Recipes and Inventory only when inventory is on. Floor can point at Reservations and Guest CRM only when those gates pass. Briefings can point at HR training only when HR is on. No salary math, GL posting, or stock movement was added. Not deployed.
+
+## 2026-09-28 — HR schedule, notes, assets, reports
+
+**Scope:** Weekly shifts, manager-only notes and incidents, issued assets, and report counts under `/admin/hr`. Finance can stay off. Staff, Salaries, salary payments, and payroll GL were not rewritten. Not deployed.
+
+## 2026-09-28 — Venue Ops add and edit
+
+**Scope:** Allergen items, menu bible cards, beverage specs, and briefings can be added and edited under `/admin/venue-ops`. Records stay store-scoped and store no price or stock. Payroll, finance, invoice templates, POS, and client data were not touched. Not deployed.
+
+## 2026-09-28 — HR actions
+
+**Scope:** Employee add/edit, leave approve/reject, training complete, document issue date and notes, and live dashboard counts. No salary fields on the HR edit. Staff, Salaries, and payroll GL were not rewritten. Not deployed.
+
+## 2026-09-28 — Venue Ops core (phase 3)
+
+**Scope:** Allergen matrix, menu bible, beverage specs, briefings, standards, and floor map under `/admin/venue-ops`. No deploy, push, APK, POS, source import, or production writes.
+
+**Data:** `venueKnowledgeItems` (kind allergen, bible, or spec), `venueBriefings`, `venueFloorMaps`, `venueStandards`. Every row has `storeId`. Labels use item, table, or standard names. Price, cost, and stock are not stored.
+
+**Gates:** Venue Ops still needs restaurant or live kitchen + Venue operations + floor permission. Cashiers can open the hub. Owner and manager edit records. The HR training link shows only when HR is on. Inventory shows a placeholder note only.
+
+**Not released:** Hosting, functions, and the venue collection rules. Saves will return missing permissions until those rules are released.
+
+## 2026-09-28 — Official HR core (phase 2)
+
+**Scope:** Employee directory, attendance link, leave, training, document metadata, and dashboard cards under `/admin/hr`. No deploy, push, APK, POS, or production writes.
+
+**Data:** Employees reuse `staff` with no salary fields and `payrollExcluded: true`, so they stay off the existing payroll roster. Attendance stays `staffPresence` via a link to Daily Presence. New collections: `hrLeaveRequests`, `hrTrainingItems`, `hrTrainingAssignments`, `hrDocuments`. Every row has `storeId`. UI labels use names.
+
+**Gates:** HR core still needs Team + Official HR + HR permission. Payroll stays on the finance gate. Staff, Salaries, presence, `salaryPayments`, and payroll GL were not rewritten.
+
+**Not released:** Hosting, functions, and the HR collection rules. Leave, training, and documents will return missing permissions on staging and production until those rules are released. The employee directory can save because `staff` rules are already live.
+
+## 2026-09-28 — Salary payments read rule
+
+**Cause:** Live Firestore rules had no `salaryPayments` match, so the default deny blocked the store-scoped list. Summary cards stayed at zero.
+
+**Rule:** Same-store owner or manager can read and write. `storeId` cannot change. Delete stays off. HR/Venue Ops skeleton was not included in this rules release.
+
+**Release:** `rulesets/e15235a0-5928-445e-afc2-53f68da60afd` on `cloud.firestore`. Hosting was not released.
+
+## 2026-09-27 — HR + Venue Ops phase 1 shells
+
+**Scope:** Foundation only. White-label. No deploy, push, APK, POS, or production writes.
+
+**Gates:** HR = existing `team` module AND `venueOpsSettings.enableOfficialHr` AND owner/manager. Venue Ops = existing `restaurant` module or live-kitchen package AND `enableVenueOpsHub` AND floor permission. Payroll = finance entitlement AND finance toggle AND finance permission. Live kitchen restaurant-first defaults turn both new hubs on. Classic menu keeps them off until the store enables them.
+
+**Routes:** `/admin/hr` and `/admin/venue-ops` are shells. `/admin/staff` and `/admin/salaries` stay payroll/finance. `/admin/staff-presence` stays on its current admin route. Invoice Document setup and website theme were not moved.
+
+**Staging hosting only (2026-09-27):** https://market-flow-7b074--staging-qj6e98fx.web.app — `index-BppWzMzj.js`. Live hosting, functions, and Firestore rules were not released. Staging still reads and writes the live database. Handoff: `docs/handoff/hr-venue-ops-phase1-2026-09-27.md`.
+
+## 2026-09-27 — Builder CoC + invoice template planning status
+
+**Invoice template:** Working on invoice mobile and the main platform. Anwar tested. Round 1 closed. A later second round may polish it. Do not plan it as unsynced/broken.
+
+**Builder CoC:** Every builder documents what they did. When Anwar confirms a test, the builder writes **confirmed** (date + what was tested) on the handoff. Full text: `docs/handoff/builder-coc-2026-09-27.md`.
+
+**New features:** Own planning chat. Treated as platform options under the existing structure (tenant bind, triple gate, setup-surface split). Not one-account patches.
+
+## 2026-09-27 — Fine-dining daily task feature intake
+
+**Direction:** Fine-dining daily task features are white-label Grabio platform features. Berenjak / Michelin-star restaurant pain points may guide discovery and testing, but code, settings, labels, roles, and defaults must work for any restaurant brand. No hardcoded Berenjak store, domain, copy, or workflow.
+
+**Finance independence:** Daily operations, inventory, HR, training, standards, checklists, service routines, and CRM features must work with or without finance/accounting enabled. Cost, price, wage, payroll, COGS, GL, and financial reports are optional extensions when a store enables the matching modules and permissions.
+
+**Access and setup:** Each feature must name its setup surface and gates before execution: entitlement, store toggle, and user/sub-account permission. Tenant resolution stays `users.subAccountId` -> that sub-account's `storeId`; never email-only or unscoped `limit(1)`.
+
+**Planning TODO:** Read the restaurant-pain source folder when files are available, classify each pain into platform feature candidates, choose the setup surface, define finance-optional behavior, then wait for Anwar confirmation before implementation in a separate execution chat.
+
+**Source folder found:** `/home/anwar/Documents/grabio space/the eco sys/finedinnig ` has a trailing space in the directory name. Planning handoff: `docs/handoff/fine-dining-daily-tasks-planning-2026-09-27.md`.
+
+**Initial white-label feature candidates:** allergen matrix, food/beverage knowledge bible, beverage/batch specs, monthly F&B briefing, seat/table map, standards/values/SOP/audit/training library. All must work without finance first, with optional finance/inventory/HR extensions only when enabled and permitted.
+
+## 2026-09-23 — E-MOOVE owner full section access
+
+**Account:** `mooveelectro@gmail.com` (E-MOOVE owner, role already admin, subscription active through 2027-02-28).
+
+**Change:** remaining `enabledModules` set true (WhatsApp, domain, extra storage, legal e-sign, logistics, expense OCR, ATS, dual currency, PLM, Shopify importer, timesheet). Venue nav toggles already on (inventory, finance, CRM, reservations, builder, SEO). Other stores untouched. Evidence: `reporting/data/emoove-full-access-2026-09-23.json`.
+
+**Retest:** hard refresh while logged in as that email. Stripe stays disabled.
+
+## 2026-09-23 — Guests spinner, order search crash, reservation window
+
+**Guests:** `/admin/customers` could stay on “Opening Customer Management…” after reload. IP allow is remembered for the tab, the IP lookup times out, and the spinner gives up after 8s once the user is known.
+
+**Orders search:** typing a number crashed the list when an order had no customer name. Search now treats missing fields as empty and also matches the order number (`ON-007`).
+
+**Reservations:** a booking time outside the event start/end is rejected in the form and on the API. Existing `UI test reservation 2026` (Sep 23 on a Sep 17–18 event) is left in place.
+
+**Deployed 2026-09-23:** `firebase deploy --only hosting,functions:api` to `market-flow-7b074`. Live `https://grabio.space` serves `AdminOrders-Bjr8eItm.js` and `AdminStoreEvents-YbEsLZ9J.js`. Hard refresh, then retest orders search and a date outside the event.
+
+**Live-test rule:** while this QA pass is running, fix and deploy hosting/`functions:api` in the same turn. Do not wait for a separate “deploy” message.
+
+## 2026-09-23 — Purchase edit can add lines
+
+**Problem:** Edit on a supplier PO (example PO-000803) only changed the header. Save rewrote line 1 to the supplier name and the header amount.
+
+**Fix:** Non-cash-book edit lists every line (qty, unit price, remove) and has Add Item. Save keeps those lines and recomputes the total. Cash-book rows still use the amount field.
+
+**Currency:** Create and edit have USD or LBP. Amounts stay in the chosen currency (no conversion). Existing orders with no currency stay USD. USD and LBP totals are not added together.
+
+**Edit save:** a PO with a supplier id but no `supplierName` (PO-000803) opened a blank supplier field and Save was rejected. Edit now fills the supplier and line names from the linked records.
+
+**Invoice Manager documents:** invoices, quotations, receipts, payments, expenses, products, clients, and suppliers follow the purchase row (name, date · amount · status, **Edit** under the name, actions on the right). Currency on those forms is the store main currency, plus the secondary currency only when store setup has one. The full currency catalog stays on currency setup only. Live and staging release after `1790200273281000`.
+
+## 2026-09-23 — Admin route paint vs reservations tab
+
+**Reservations tab** lists draft/scheduled events in the same table as guest bookings. An event with no guest row is still a row (status = draft), not an empty “no reservations” table.
+
+**Route paint:** `v7_startTransition` kept the previous admin page (Sales Orders / CRM clients) after the URL changed. Router no longer defers that paint. CRM and Invoice Manager mount only the active tab.
+
+**Not deployed.** Anwar retests, then says deploy.
+
+## 2026-09-22 — Invoice mobile: do not merge trees; phone stays 1.2.45
+
+**Decision:** Do not merge `grabio space/grabio-invoice-mobile` (shell) with `grabio backup/2026-09-16-dirty-worktree/untracked/grabio-invoice-mobile` (orphan screens). The backup screens call `listExpenses`, `savePurchaseOrder`, `searchSuppliers` plus image picker / signature / notifications. Those APIs and native modules are in neither tree. A merge will not compile and a new APK is not the 1.2.45 app.
+
+**Production app:** Play/phone **1.2.45**. No sideload over it. Invoice **web** (`vendor/beirut-finance-flow-main`) stays the editable Invoice Manager source.
+
+**Cause:** 2026-09-16 dirty-worktree move split untracked mobile files; it did not preserve a complete 1.2.45 source tree.
+
+## 2026-09-19 — Chronological business document numbers (all modules)
+
+**Format:** `PREFIX-YYYY-MM-DD-000001` (6-digit daily sequence per document type): invoices, estimates, bills, expenses, POs, shop orders, and GL vouchers (RV/PV/JV/…).
+
+**Scope:** Invoice Manager + Admin Purchases + shop/POS orders + posted GL vouchers. **Not** Firebase doc ids in UI.
+
+**Backdate:** Same document type only — insert on an older **document date** renumbers that day’s sequence and any same-type documents on **later dates** (sort: document date, then `createdAt`). Tie-break: `createdAt` unless we add manual sequence later.
+
+**Legacy:** One-time per-store migration (`migrateChronologicalDocumentNumbers.cjs`) to rebuild numbers from historical rows.
+
+**Note:** Daily prefix means `000001` resets each calendar day; cross-day “messy” legacy `INV-001` / `INV-{timestamp}` / year-only `RV-2026-01332` are replaced by this scheme.
+
+## 2026-09-20 — Sequential doc numbers (amends 2026-09-19 daily format)
+
+**New format:** `PO-000001`, `ORD-000001`, `EXP-000001` — **one continuous sequence per type per store** (no date in label). Business **date** still drives sort/backfill via `rebuildChronologicalNumbers`. Little Hands **migration applied** (`migrateChronologicalDocumentNumbers.cjs --write`, 5434 updates). **POS still emits dated `ORD-2026-09-20-00000N`** — must align (cloud assign or renumber on sync). See handoff below.
+
+## 2026-09-20 — POS sync fix (Little Hands) — **treat tonight** (incl. migration fallout)
+
+**Full checklist:** `docs/handoff/littlehands-pos-sync-fix-2026-09-20.md`
+
+**Trigger (20 Sep live):** Refund/delete on POS **#1337 ($41.50)** — POS today total unchanged; cloud **no** `salesReturns`, order **paid**. Reconnect synced **10** sales **$376.23** (locals **1334–1344**); **1325–1333** in cloud still **13/19 Sep** data ( **localSaleId reuse / merge** ). Staff confused **POS #1328** vs **`ORD-001328`** ($1,366.50).
+
+**POS app tonight:** refund + void sync; net shift total; unique sale ids; catalog/inventory split; purchase `paymentStatus`/`amountPaid` on push.
+
+**Cloud tonight:** no overwrite on `localSaleId` mismatch; refund patches order; void endpoint; ORD numbering aligned with **ORD-00000N** migration; Admin Orders net of refunds.
+
+**Migration note:** Firebase renumber **≠** POS SQLite; collisions break cash vs GL reconcile until POS fixed. **Do not** re-run migration to “fix” POS — fix sync first.
+
+**Evidence:** `reporting/data/littlehands-pos-sync-after-refresh-2026-09-20.json`, `littlehands-pos-refund-live-check-2026-09-20.json`, `chronological-document-numbers-8WgfKtga-2026-09-19.json`.
+
+**Code:** `functions/src/api/posSync.ts`; POS `pos-v1` (external tree).
+
+## 2026-09-20 — One resolver, one HTML renderer for finance PDFs
+
+**Resolver:** `src/lib/financeDocumentSettingsCore.ts` → `resolveA4DocumentBranding()` (Firestore SOT: `financeDocumentSettings`).
+
+**Renderer:** `src/lib/invoiceTemplates.ts` → `generateInvoiceHTML()`; Invoice Manager + mobile finance PDFs adapt docs via `src/lib/financeDocumentHtml.ts` and rasterize with `src/lib/htmlDocumentPdf.ts` (NIPCO keeps locked jsPDF path).
+
+**Setup UI:** `BusinessFinanceInvoiceTemplateSetup` at `/admin/finance/invoice-document`; Invoice Manager `/invoice/document-setup`. Store Profile save does not overwrite `financeDocumentSettings`.
+
+Evidence: `reporting/data/invoice-template-sync-gate-2026-09-20.json`.
+
+## 2026-09-19 — Invoice PDF branding source
+
+**Plan:** Web Invoice Manager PDFs must prefer `storeProfiles/{storeId}.financeDocumentSettings` for document company name/logo/address/tax/template. Store Profile branding (`profile.name`, shop logo, storefront URL) is fallback only.
+
+**Bug:** Mobile invoice PDFs used E-Service correctly, but web Invoice Manager PDFs rendered Grabio because PDF generation prioritized `organization.name` from `storeProfiles.name` over the refreshed document company fallback.
+
+**Rule:** A4 document templates (sales invoices, Invoice Manager PDFs, purchase-order PDFs) use Invoice Template settings from `financeDocumentSettings`. Store Profile template/branding is only a fallback and must not be a competing document-branding source.
+
 ## 2026-09-16 — Interactive restaurant admin demo (sandbox)
 
 **Decision:** `demoRestaurantSessions/{sessionId}` namespace — anonymous auth, 5 creates / 30 min TTL, no production collections. Routes `/demo/restaurant/admin`, `/demo/live-kitchen/admin`. Evidence: `reporting/data/restaurant-interactive-demo-2026-09-16.json`. Deploy rules + scheduler pending approval.
@@ -47,17 +233,15 @@
 
 **SOT paths:** Cash out lines = `Final Data Expenses` `Total*` `Exp $`; payroll detail = monthly master **Salaries (col D)** + staff/cash lines as applicable.
 
-## 2026-09-13 — HANDOFF: expense tiles + mobile tenant STILL OPEN (Anwar)
+## 2026-09-13 — HANDOFF: expense tiles + mobile tenant (Anwar verify)
 
-**Status:** Not verified by owner. Prior session deployed hosting + local APK; both issues reported unresolved.
+**Status:** Code fix **2026-09-17** — hosting deploy + APK install **pending owner verify**.
 
-**Canonical handoff:** `reporting/data/HANDOFF-littlehands-expense-tiles-tenant-2026-09-13.md`
+**Handoff:** `reporting/data/HANDOFF-littlehands-expense-tiles-tenant-2026-09-13.md`
 
-**Likely gap A:** Expense UI added on `/admin/inventory` + dashboard quick actions — **not** in Dashboard sidebar group **Stock & Catalog** (`AdminDashboard.tsx` `menuGroups.daily_stock`).
+**A (web):** Sidebar = `useAdminNavigation` stock group (not dead `AdminDashboard.menuGroups`). Expenses + Quick expense added; finance-nav gate removed for stock placement.
 
-**Likely gap B:** Firestore LH bind correct; device still on **old app binary** or cached tenant — need confirmed APK install + runtime mismatch guard.
-
-**Next agent:** Read handoff file first; implement sidebar links + mobile guard; re-deploy hosting; ship APK Anwar actually installs.
+**B (mobile):** `tenantMismatchGuard` + server-first subAccount in `AuthContext`. Rebuild APK ≥140 before device test.
 
 
 **Root cause:** `users` doc had NIPCO `storeId`, `activeStoreId`, and `subAccountId` after NIPCO mobile fix; mobile resolution preferred `activeStoreId` + email-scoped NIPCO subAccount.
@@ -109,6 +293,16 @@
 **Rule:** Do not delete working modules because of the pivot. Future restaurant features must come from real client workflow drafts and be classified as daily operation, CRM, tenant option, report, automation, role/security, setup/import, optional inventory, optional finance, or temporary exception.
 
 **Canonical map:** `~/Documents/grabio-platform-docs/Architecture/Fine-Dining-Platform-Map.md`.
+
+## 2026-09-17 — NIPCO / Little Hands sub-account correction
+
+**Fault:** NIPCO active `subAccounts` wrongly included `manager@grabio.space`, which belongs to Little Hands context. A first correction also wrongly moved Ahmad `ahmadshaheen78@gmail.com` to NIPCO accounting. Owner corrected the business truth: Ahmad is Little Hands accounting manager, not NIPCO.
+
+**Fix:** Archived and removed wrong NIPCO `manager@grabio.space` sub-account `7tyb6tbO6YvkKwdvmVgz`; archived and removed wrong NIPCO Ahmad sub-account `nipco-ahmad-accounting-manager`; rebound `users/Rfvkw1MEoFduGjaxRKhz7YasCv02` to Little Hands store `8WgfKtgaE8aAXdqFhIfweEo5WFq2` with `subAccountId: PhG34sQUjSDNNdYBXWWc` and `subAccountRole: accounting`.
+
+**Current NIPCO sub-accounts:** Hadi Abou Kalfouni = sales manager; Jihan Sayegh = sales manager. `manager@grabio.space` and Ahmad are Little Hands context and must not be reused across NIPCO.
+
+**Evidence:** `reporting/data/nipco-littlehands-subaccount-correction-2026-09-17.json`. **Map:** `docs/handoff/nipco-account-subaccount-map-2026-09-17.md`.
 
 ## 2026-09-12 — Meta catalog package artwork
 

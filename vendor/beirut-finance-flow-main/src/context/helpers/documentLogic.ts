@@ -49,27 +49,29 @@ const resolveDocument = (
   documentId: string,
   ctx: GenerateContext,
 ): { doc: any; company: any } | null => {
+  const companyFallback = ctx.companyFallback || {};
+  // Document PDFs use invoice settings first; organization is only the store routing fallback.
   const company = ctx.organization
     ? {
-        name: ctx.organization.name || ctx.companyFallback?.name || '',
-        address: ctx.organization.address || ctx.companyFallback?.address || "",
-        phone: ctx.organization.phone || ctx.companyFallback?.phone || "",
-        email: ctx.organization.email || ctx.companyFallback?.email || "",
-        website: ctx.organization.website || ctx.companyFallback?.website || "",
-        logo: ctx.organization.logoUrl || ctx.companyFallback?.logo || "",
+        name: companyFallback.name || ctx.organization.name || '',
+        address: companyFallback.address || ctx.organization.address || "",
+        phone: companyFallback.phone || ctx.organization.phone || "",
+        email: companyFallback.email || ctx.organization.email || "",
+        website: companyFallback.website || ctx.organization.website || "",
+        logo: companyFallback.logo || ctx.organization.logoUrl || "",
         taxId:
+          companyFallback.taxId ||
+          companyFallback.documentTaxId ||
+          companyFallback.taxNumber ||
           ctx.organization.taxId ||
-          ctx.companyFallback?.taxId ||
-          ctx.companyFallback?.documentTaxId ||
-          ctx.companyFallback?.taxNumber ||
           "",
-        primaryColor: ctx.companyFallback?.primaryColor,
-        secondaryColor: ctx.companyFallback?.secondaryColor,
-        signature: ctx.companyFallback?.signature,
-        commercialRegistry: ctx.companyFallback?.commercialRegistry,
-        invoiceTemplate: ctx.companyFallback?.invoiceTemplate || "basic",
+        primaryColor: companyFallback.primaryColor,
+        secondaryColor: companyFallback.secondaryColor,
+        signature: companyFallback.signature,
+        commercialRegistry: companyFallback.commercialRegistry,
+        invoiceTemplate: companyFallback.invoiceTemplate || "basic",
       }
-    : ctx.companyFallback || {};
+    : companyFallback;
 
   switch (documentType) {
     case "invoice": {
@@ -120,7 +122,13 @@ export const generatePDF = async (
     }
     const exportableType = TYPE_TO_EXPORTABLE[documentType];
     const normalized = normalizeExportPayload(exportableType, resolved.doc, resolved.company);
-    const ok = await exportDocumentAsPdf(exportableType, normalized.doc, normalized.company);
+    const storeProfile = normalized.company?.__grabioStoreProfile ?? null;
+    const ok = await exportDocumentAsPdf(
+      exportableType,
+      normalized.doc,
+      normalized.company,
+      storeProfile,
+    );
     if (!ok) console.error(`[${LOG}][generatePDF] Renderer failed for ${documentType} ${documentId}`);
     return ok;
   } catch (e) {
@@ -146,7 +154,13 @@ export const generatePdfFile = async (
     }
     const exportableType = TYPE_TO_EXPORTABLE[documentType];
     const normalized = normalizeExportPayload(exportableType, resolved.doc, resolved.company);
-    return await buildDocumentPdfFile(exportableType, normalized.doc, normalized.company);
+    const storeProfile = normalized.company?.__grabioStoreProfile ?? null;
+    return await buildDocumentPdfFile(
+      exportableType,
+      normalized.doc,
+      normalized.company,
+      storeProfile,
+    );
   } catch (e) {
     console.error(`[${LOG}][generatePdfFile]`, e);
     return null;

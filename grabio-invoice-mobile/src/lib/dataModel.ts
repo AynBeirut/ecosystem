@@ -4,6 +4,10 @@ export const FINANCE_COLLECTIONS = {
   invoices: 'financeInvoices',
   estimates: 'financeEstimates',
   receipts: 'financeReceipts',
+  purchaseOrders: 'financePurchaseOrders',
+  expenses: 'financeExpenses',
+  clientPlans: 'financeClientPlans',
+  serviceTasks: 'financeServiceTasks',
 } as const;
 
 export function storeFinancePath(storeId: string, key: keyof typeof FINANCE_COLLECTIONS): string {
@@ -13,6 +17,7 @@ export function storeFinancePath(storeId: string, key: keyof typeof FINANCE_COLL
 export const SHARED_COLLECTIONS = {
   customers: 'customers',
   products: 'products',
+  suppliers: 'suppliers',
   crmActivities: 'crmActivities',
   storeProfiles: 'storeProfiles',
 } as const;

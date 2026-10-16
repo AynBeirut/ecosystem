@@ -1,0 +1,59 @@
+{
+  "storeId": "Av22LKyet8QmVcu9b8Njz1HVfoy1",
+  "sourceOfTruthPdf": "/home/anwar/Downloads/7b4a747b-3f04-4e6f-bf3b-967a00c90c93.pdf",
+  "sourceOfTruthFields": {
+    "documentCompanyName": "E-Service",
+    "documentAddress": "Lebanon",
+    "documentPhone": "+96171110952",
+    "documentEmail": "info@emoove.co",
+    "documentWebsite": "www.emoove.co",
+    "documentCountry": "Lebanon",
+    "documentTaxId": "3107098"
+  },
+  "before": {
+    "profileName": "Grabio",
+    "profileEmail": "support@grabio.space",
+    "profileWebsite": "https://grabio.space",
+    "financeDocumentSettings": {
+      "invoiceDueDays": 30,
+      "documentFooterNote": "",
+      "documentLineWeight": "regular",
+      "documentCountry": "Lebanon",
+      "invoiceTemplate": "modern",
+      "documentShowCompanyName": false,
+      "documentLogo": "https://firebasestorage.googleapis.com/v0/b/market-flow-7b074.firebasestorage.app/o/stores%2FAv22LKyet8QmVcu9b8Njz1HVfoy1%2Ffinance-logo-1788818116071.png?alt=media&token=dd918dd7-b1ca-4940-b383-057710fc7d0e",
+      "documentPhone": "+96171110952",
+      "documentAddress": "Ashrafieh, BEIRUT",
+      "documentLayout": "minimal",
+      "documentCompanyName": "E-SERVICES",
+      "signature": "https://firebasestorage.googleapis.com/v0/b/market-flow-7b074.firebasestorage.app/o/stores%2FAv22LKyet8QmVcu9b8Njz1HVfoy1%2Ffinance-signature-1788818499828.jpg?alt=media&token=3ad4a0be-732f-4dcc-a8dd-376e5abea6aa",
+      "primaryColor": "#3182CE",
+      "secondaryColor": "#2B6CB0",
+      "documentEmail": "info@emoove.co",
+      "documentTaxId": "3107098",
+      "documentWebsite": "www.emoove.co"
+    }
+  },
+  "after": {
+    "financeDocumentSettings": {
+      "invoiceDueDays": 30,
+      "documentFooterNote": "",
+      "documentLineWeight": "regular",
+      "documentCountry": "Lebanon",
+      "invoiceTemplate": "modern",
+      "documentShowCompanyName": false,
+      "documentLogo": "https://firebasestorage.googleapis.com/v0/b/market-flow-7b074.firebasestorage.app/o/stores%2FAv22LKyet8QmVcu9b8Njz1HVfoy1%2Ffinance-logo-1788818116071.png?alt=media&token=dd918dd7-b1ca-4940-b383-057710fc7d0e",
+      "documentPhone": "+96171110952",
+      "documentAddress": "Lebanon",
+      "documentLayout": "minimal",
+      "documentCompanyName": "E-Service",
+      "signature": "https://firebasestorage.googleapis.com/v0/b/market-flow-7b074.firebasestorage.app/o/stores%2FAv22LKyet8QmVcu9b8Njz1HVfoy1%2Ffinance-signature-1788818499828.jpg?alt=media&token=3ad4a0be-732f-4dcc-a8dd-376e5abea6aa",
+      "primaryColor": "#3182CE",
+      "secondaryColor": "#2B6CB0",
+      "documentEmail": "info@emoove.co",
+      "documentTaxId": "3107098",
+      "documentWebsite": "www.emoove.co"
+    }
+  },
+  "updatedAt": "2026-09-19T13:53:00.127Z"
+}

@@ -1,0 +1,65 @@
+{
+  "generatedAt": "2026-09-20T10:20:02.497Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "mode": "write",
+  "fixes": [
+    {
+      "supplierId": "lh-sup-01a0eedaf62153cf",
+      "label": "Mariam",
+      "kind": "payroll_ambiguous",
+      "purchaseIds": [
+        "lh-cashbook-aaf056056b461841"
+      ],
+      "voidPurchaseEntryIds": [
+        "JE-1789733368027"
+      ],
+      "keepPayrollEntryIds": [
+        "JE-1789734284629-aea279"
+      ],
+      "actions": [
+        "archive_supplier",
+        "archive_pcg:tbzo7ltmh9lhZRzUEd05",
+        "reclass_purchase:lh-cashbook-aaf056056b461841",
+        "void_purchase_je:JE-1789733368027"
+      ]
+    },
+    {
+      "supplierId": "lh-sup-023ebfd43f456e78",
+      "label": "Cynthia Helo",
+      "kind": "employee_payroll",
+      "staffId": "usb-8WgfKtgaE8aAXdqFhIfweEo5WFq2-cynthia-hello",
+      "purchaseIds": [
+        "lh-cashbook-5c9154ec054c7609",
+        "lh-cashbook-ff360c0b7f93888b"
+      ],
+      "voidPurchaseEntryIds": [
+        "JE-1789733182163",
+        "JE-1789733568570"
+      ],
+      "keepPayrollEntryIds": [
+        "JE-1789734102202-2729bd",
+        "JE-1789734463020-aa69ec"
+      ],
+      "actions": [
+        "archive_supplier",
+        "archive_pcg:Fs4YHAxZYEgyfG1gLyYK",
+        "reclass_purchase:lh-cashbook-5c9154ec054c7609",
+        "reclass_purchase:lh-cashbook-ff360c0b7f93888b",
+        "void_purchase_je:JE-1789733182163",
+        "void_purchase_je:JE-1789733568570"
+      ]
+    },
+    {
+      "supplierId": "lh-sup-024e1db53cd013f2",
+      "label": "Returne To Sara Exchange",
+      "kind": "treasury_exchange_remove",
+      "purchaseIds": [],
+      "voidPurchaseEntryIds": [],
+      "keepPayrollEntryIds": [],
+      "actions": [
+        "archive_supplier",
+        "archive_pcg:J7yDKhoHV2ttH1nM9Vdt"
+      ]
+    }
+  ]
+}

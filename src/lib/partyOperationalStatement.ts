@@ -8,6 +8,11 @@ import {
   where,
 } from 'firebase/firestore';
 import { isCountedSaleStatus, normalizeDateString } from '@/lib/salesRules';
+import {
+  parseCashBookSettlementMemo,
+  scoreSettlementInvoiceCandidates,
+} from '@/lib/cashBookSettlementMemo';
+import { resolvePurchaseAmountPaid } from '@/lib/purchasePaymentStatement';
 
 export type PartyType = 'customer' | 'supplier';
 
@@ -24,15 +29,27 @@ export interface PartyBillTo {
   accountCode?: string;
 }
 
+export type StatementCurrency = 'USD' | 'LBP';
+
 export interface PartyStatementLine {
   date: string;
   invoiceRef: string;
   description: string;
+  /** Cash-book / import provenance for AP lines. */
+  sourceDetail?: string;
   charges: number;
   credits: number;
   lineTotal: number;
+  currency?: StatementCurrency;
   sourceType?: 'order' | 'payment' | 'purchase' | 'return';
   sourceId?: string;
+}
+
+export interface PartyCurrencyBalance {
+  openingBalance: number;
+  closingBalance: number;
+  totalCharges: number;
+  totalCredits: number;
 }
 
 export interface PartyStatementReport {
@@ -49,6 +66,7 @@ export interface PartyStatementReport {
   totalCredits: number;
   paymentDueDate: string;
   currency: string;
+  currencyBalances: Record<StatementCurrency, PartyCurrencyBalance>;
   lines: PartyStatementLine[];
 }
 
@@ -59,7 +77,60 @@ interface StatementTxn {
   description: string;
   debit: number;
   credit: number;
+  currency?: StatementCurrency;
   data: Record<string, unknown>;
+}
+
+export function statementCurrency(value: unknown): StatementCurrency {
+  const code = String(value || '').trim().toUpperCase();
+  return code === 'LBP' || code === 'LL' ? 'LBP' : 'USD';
+}
+
+/** Split a document into USD and LBP amounts. Line currency wins; otherwise the document currency. */
+export function statementAmountBuckets(
+  data: Record<string, unknown>,
+  fallbackTotal: number,
+): Array<{ currency: StatementCurrency; amount: number }> {
+  const items = Array.isArray(data.items) ? data.items : Array.isArray(data.lineItems) ? data.lineItems : [];
+  const buckets = new Map<StatementCurrency, number>();
+  for (const raw of items) {
+    if (!raw || typeof raw !== 'object') continue;
+    const item = raw as Record<string, unknown>;
+    if (item.currency == null || String(item.currency).trim() === '') continue;
+    const qty = toFiniteNumber(item.quantity, 0);
+    const price = toFiniteNumber(item.unitPrice ?? item.unitCost, 0);
+    const sub = toFiniteNumber(item.subtotal ?? item.totalPrice, qty * price);
+    const code = statementCurrency(item.currency);
+    buckets.set(code, (buckets.get(code) || 0) + sub);
+  }
+  if (buckets.size === 0) {
+    return [{ currency: statementCurrency(data.currency), amount: fallbackTotal }];
+  }
+  return [...buckets.entries()].map(([currency, amount]) => ({ currency, amount }));
+}
+
+function tagStatementCurrencies(txns: StatementTxn[]): StatementTxn[] {
+  const out: StatementTxn[] = [];
+  for (const txn of txns) {
+    const original = txn.debit || txn.credit;
+    const buckets = statementAmountBuckets(txn.data || {}, original);
+    if (buckets.length <= 1) {
+      out.push({ ...txn, currency: buckets[0]?.currency || statementCurrency(txn.data?.currency) });
+      continue;
+    }
+    const total = buckets.reduce((sum, bucket) => sum + bucket.amount, 0);
+    const side = txn.debit > 0 ? 'debit' : 'credit';
+    for (const bucket of buckets) {
+      const share = total > 0 ? original * (bucket.amount / total) : 0;
+      out.push({
+        ...txn,
+        currency: bucket.currency,
+        debit: side === 'debit' ? share : 0,
+        credit: side === 'credit' ? share : 0,
+      });
+    }
+  }
+  return out;
 }
 
 interface AccountPaymentDoc {
@@ -144,13 +215,18 @@ function mapTxnToLine(
     partyType === 'customer' ? txn.credit : txn.debit;
   return {
     balance,
-    line: {
+      line: {
       date: toStatementDateLabel(txn.date),
       invoiceRef: txn.ref,
       description: txn.description,
+      sourceDetail:
+        typeof txn.data === 'object' && txn.data && 'sourceDetail' in txn.data
+          ? String(txn.data.sourceDetail || '') || undefined
+          : undefined,
       charges,
       credits,
       lineTotal: balance,
+      currency: txn.currency,
       sourceType:
         txn.type === 'order'
           ? 'order'
@@ -169,11 +245,118 @@ function mapTxnToLine(
   };
 }
 
+/** Business date on purchases — never prefer import createdAt when orderDate exists. */
+export function resolvePurchaseStatementDate(purchase: Record<string, unknown>): string {
+  return (
+    normalizeDateString(purchase.orderDate as string | undefined) ||
+    normalizeDateString(purchase.receivedDate as string | undefined) ||
+    normalizeDateString(purchase.date as string | undefined) ||
+    normalizeDateString(purchase.paymentDate as string | undefined) ||
+    normalizeDateString(purchase.paidAt as string | undefined) ||
+    normalizeDateString(purchase.createdAt as string | undefined) ||
+    ''
+  );
+}
+
+function cashBookLineText(purchase: Record<string, unknown>): string {
+  const stored = String(purchase.cashBookLineText || '').trim();
+  if (stored) return stored;
+  const items = purchase.items as Array<{ materialName?: string }> | undefined;
+  return String(items?.[0]?.materialName || purchase.supplierName || '').trim();
+}
+
+function purchaseSourceDetail(
+  purchase: Record<string, unknown>,
+  purchaseId: string,
+  allStorePurchases: Array<Record<string, unknown> & { id: string }>,
+): string | undefined {
+  const parts: string[] = [];
+  const lineText = cashBookLineText(purchase);
+  const settlement = parseCashBookSettlementMemo(lineText);
+  if (settlement) {
+    parts.push(`${settlement.humanLabel} — cash-book: “${settlement.rawLine}”`);
+  }
+
+  const file = String(purchase.cashBookSourceFile || '').trim();
+  const sheet = String(purchase.cashBookExcelSheet || '').trim();
+  const row = purchase.cashBookExcelRow;
+  const source = String(purchase.source || '').trim();
+  const importKey = String(purchase.importKey || '').trim();
+  if (file) parts.push(`Excel: ${file}`);
+  if (sheet && row) parts.push(`sheet “${sheet}” row ${row}`);
+  else if (sheet) parts.push(`sheet “${sheet}”`);
+  if (source) parts.push(source);
+  if (importKey) parts.push(importKey);
+
+  const neighbors = purchase.cashBookExpenseNeighbors as Array<{ row?: number; label?: string; amount?: number }> | undefined;
+  if (Array.isArray(neighbors) && neighbors.length > 0) {
+    const block = neighbors
+      .map((n) => `${n.label || '?'} $${Number(n.amount || 0).toFixed(2)} (row ${n.row})`)
+      .join('; ');
+    parts.push(`Same expense block: ${block}`);
+  }
+
+  const items = purchase.items as Array<{ materialName?: string; quantity?: number; unitPrice?: number }> | undefined;
+  if (Array.isArray(items) && items.length > 0) {
+    const itemText = items
+      .map((item) => {
+        const name = String(item.materialName || '').trim();
+        if (!name) return '';
+        const qty = item.quantity != null ? ` ×${item.quantity}` : '';
+        const price = item.unitPrice != null ? ` @${item.unitPrice}` : '';
+        return `${name}${qty}${price}`;
+      })
+      .filter(Boolean)
+      .join('; ');
+    if (itemText) parts.push(`Items: ${itemText}`);
+  }
+
+  if (settlement) {
+    const businessDate = resolvePurchaseStatementDate(purchase);
+    const amount = Number(purchase.total ?? purchase.totalAmount ?? purchase.totalCost ?? 0);
+    const candidates = scoreSettlementInvoiceCandidates(
+      allStorePurchases.map((p) => ({
+        id: p.id,
+        supplierName: String(p.supplierName || ''),
+        invoiceNumber: String(p.invoiceNumber || ''),
+        purchaseOrderNumber: String(p.purchaseOrderNumber || ''),
+        orderDate: String(p.orderDate || ''),
+        total: Number(p.total ?? p.totalAmount ?? p.totalCost ?? 0),
+      })),
+      {
+        settlementPurchaseId: purchaseId,
+        settlementDate: businessDate,
+        amount,
+        referenceName: settlement.referenceName,
+      },
+    );
+    if (candidates.length > 0) {
+      parts.push(
+        `Possible prior invoice: ${candidates
+          .map((c) => `${c.invoiceNumber} · ${c.supplierName} · ${c.orderDate} · $${c.total.toFixed(2)} (${c.matchReason})`)
+          .join(' | ')}`,
+      );
+    } else {
+      parts.push(
+        settlement.referenceName
+          ? `No prior PO in Grabio for “${settlement.referenceName}” — check paper invoice`
+          : 'No prior PO in Grabio — check paper invoice for this balance',
+      );
+    }
+  }
+
+  return parts.length > 0 ? parts.join(' · ') : undefined;
+}
+
 function supplierPurchaseDescription(
   partyName: string,
   purchase: Record<string, unknown>,
   invoiceRef: string,
 ): string {
+  const settlement = parseCashBookSettlementMemo(cashBookLineText(purchase));
+  if (settlement) {
+    return `${settlement.humanLabel} — ${invoiceRef}`;
+  }
   const note = String(purchase.notes || purchase.description || '').trim();
   const cleaned = note.replace(/\.\s*Owner owes[^.]*\.?/i, '').trim();
   if (cleaned) return `${partyName} — ${cleaned}`;
@@ -240,7 +423,7 @@ export async function buildPartyOperationalStatement(params: {
       paymentTerms = String(supplierSnap.data().paymentTerms || 'net_30');
     }
 
-    const [purchasesSnap, returnsSnap, paymentsSnap, financeExpSnap] = await Promise.all([
+    const [purchasesSnap, allPurchasesSnap, returnsSnap, paymentsSnap, financeExpSnap] = await Promise.all([
       getDocs(
         query(
           collection(db, 'purchases'),
@@ -248,6 +431,7 @@ export async function buildPartyOperationalStatement(params: {
           where('supplierId', '==', partyId),
         ),
       ),
+      getDocs(query(collection(db, 'purchases'), where('storeId', '==', storeId))),
       getDocs(
         query(
           collection(db, 'supplierReturns'),
@@ -273,36 +457,58 @@ export async function buildPartyOperationalStatement(params: {
     ]);
 
     const validPurchaseIds = new Set(purchasesSnap.docs.map((d) => d.id));
+    const allStorePurchases = allPurchasesSnap.docs.map((d) => ({
+      id: d.id,
+      ...(d.data() as Record<string, unknown>),
+    }));
 
     purchasesSnap.forEach((purchaseDoc) => {
       const purchase = purchaseDoc.data();
+      if (
+        purchase.status === 'cancelled'
+        || purchase.excludeFromPartyStatement === true
+        || purchase.paymentStatus === 'voided'
+        || purchase.accountingActive === false
+      ) {
+        return;
+      }
       const total = purchase.totalCost || purchase.totalAmount || purchase.total || 0;
       const subtotal = purchase.subtotal || total;
-      const paid =
-        purchase.paymentStatus === 'paid'
-          ? Math.max(total, toFiniteNumber(purchase.amountPaid || purchase.paid, 0))
-          : toFiniteNumber(purchase.amountPaid || purchase.paid, 0);
+      const purchaseForPay = { ...purchase, id: purchaseDoc.id } as import('@/types/inventory').Purchase;
+      const paid = resolvePurchaseAmountPaid(purchaseForPay);
       const invoiceRef = purchase.invoiceNumber || purchaseDoc.id.substring(0, 8);
 
+      const businessDate = resolvePurchaseStatementDate(purchase);
+      const sourceDetail = purchaseSourceDetail(purchase, purchaseDoc.id, allStorePurchases);
+
       allTxns.push({
-        date: purchase.date || purchase.createdAt || '',
+        date: businessDate,
         type: 'purchase',
         ref: invoiceRef,
         description: supplierPurchaseDescription(partyName, purchase, invoiceRef),
         debit: 0,
         credit: total,
-        data: { ...purchase, id: purchaseDoc.id, net: subtotal },
+        data: {
+          ...purchase,
+          id: purchaseDoc.id,
+          net: subtotal,
+          sourceDetail,
+        },
       });
 
       if (paid > 0) {
+        const paymentDate =
+          normalizeDateString(purchase.paymentDate as string | undefined) ||
+          normalizeDateString(purchase.paidAt as string | undefined) ||
+          businessDate;
         allTxns.push({
-          date: purchase.paymentDate || purchase.paidAt || purchase.date || purchase.createdAt || '',
+          date: paymentDate,
           type: 'purchase_payment',
           ref: `PAY-${invoiceRef}`.substring(0, 20),
           description: `${partyName} — Payment ${invoiceRef}`,
           debit: paid,
           credit: 0,
-          data: purchase,
+          data: { ...purchase, sourceDetail },
         });
       }
     });
@@ -500,15 +706,17 @@ export async function buildPartyOperationalStatement(params: {
     billTo.phone = phone;
   }
 
-  allTxns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const taggedTxns = tagStatementCurrencies(allTxns);
+  taggedTxns.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
-  let openingBalance = 0;
+  const openingByCurrency: Record<StatementCurrency, number> = { USD: 0, LBP: 0 };
   const periodTxns: StatementTxn[] = [];
-  for (const txn of allTxns) {
+  for (const txn of taggedTxns) {
     const txnDate = normalizeDateString(txn.date);
     if (!txnDate) continue;
+    const code = txn.currency || 'USD';
     if (startDate && txnDate < startDate) {
-      openingBalance += txn.debit - txn.credit;
+      openingByCurrency[code] += txn.debit - txn.credit;
       continue;
     }
     if (endDate && txnDate > endDate) {
@@ -518,22 +726,46 @@ export async function buildPartyOperationalStatement(params: {
   }
 
   const lines: PartyStatementLine[] = [];
-  let runningBalance = openingBalance;
-  let totalCharges = 0;
-  let totalCredits = 0;
+  const runningByCurrency: Record<StatementCurrency, number> = { ...openingByCurrency };
+  const chargesByCurrency: Record<StatementCurrency, number> = { USD: 0, LBP: 0 };
+  const creditsByCurrency: Record<StatementCurrency, number> = { USD: 0, LBP: 0 };
 
   periodTxns.forEach((txn) => {
-    const mapped = mapTxnToLine(txn, runningBalance, partyType);
-    runningBalance = mapped.balance;
-    totalCharges += mapped.line.charges;
-    totalCredits += mapped.line.credits;
+    const code = txn.currency || 'USD';
+    const mapped = mapTxnToLine(txn, runningByCurrency[code], partyType);
+    runningByCurrency[code] = mapped.balance;
+    chargesByCurrency[code] += mapped.line.charges;
+    creditsByCurrency[code] += mapped.line.credits;
     lines.push(mapped.line);
   });
+
+  const currencyBalances: Record<StatementCurrency, PartyCurrencyBalance> = {
+    USD: {
+      openingBalance: openingByCurrency.USD,
+      closingBalance: runningByCurrency.USD,
+      totalCharges: chargesByCurrency.USD,
+      totalCredits: creditsByCurrency.USD,
+    },
+    LBP: {
+      openingBalance: openingByCurrency.LBP,
+      closingBalance: runningByCurrency.LBP,
+      totalCharges: chargesByCurrency.LBP,
+      totalCredits: creditsByCurrency.LBP,
+    },
+  };
+  const openingBalance = openingByCurrency.USD;
+  const runningBalance = runningByCurrency.USD;
+  const totalCharges = chargesByCurrency.USD;
+  const totalCredits = creditsByCurrency.USD;
 
   const now = new Date();
   const statementNumber = `${partyType === 'customer' ? 'CS' : 'SS'}-${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}-${partyId.slice(0, 6).toUpperCase()}`;
 
-  let paymentDueDate = paymentDueDateFromTerms(paymentTerms, now);
+  const dueAnchor =
+    periodTxns.length > 0
+      ? new Date(normalizeDateString(periodTxns[periodTxns.length - 1]!.date) || now.toISOString())
+      : now;
+  let paymentDueDate = paymentDueDateFromTerms(paymentTerms, dueAnchor);
   if (partyType === 'customer' && nextPaymentDueFromMeta) {
     paymentDueDate = new Date(nextPaymentDueFromMeta).toLocaleDateString('en-GB');
   }
@@ -552,6 +784,7 @@ export async function buildPartyOperationalStatement(params: {
     totalCredits,
     paymentDueDate,
     currency: params.currency || 'USD',
+    currencyBalances,
     lines,
   };
 }

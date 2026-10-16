@@ -1,0 +1,42 @@
+{
+  "mode": "write",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "range": {
+    "start": "2025-12-01",
+    "end": "2026-09-30"
+  },
+  "sourceRows": 776,
+  "entries": 31,
+  "amount": 2393.06,
+  "skippedExistingKeys": 1185,
+  "skippedExistingEntries": 0,
+  "byRoute": {
+    "supplier_purchase": {
+      "rows": 440,
+      "amount": 23380.54,
+      "entries": 28
+    },
+    "payroll": {
+      "rows": 193,
+      "amount": 11653,
+      "entries": 2
+    },
+    "operating": {
+      "rows": 114,
+      "amount": 18400.22,
+      "entries": 1
+    },
+    "asset": {
+      "rows": 16,
+      "amount": 2917,
+      "entries": 0
+    },
+    "treasury": {
+      "rows": 13,
+      "amount": 2545,
+      "entries": 0
+    }
+  },
+  "errors": [],
+  "generatedAt": "2026-09-18T12:55:14.394Z"
+}

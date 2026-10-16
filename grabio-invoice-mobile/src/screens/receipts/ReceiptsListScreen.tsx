@@ -55,11 +55,11 @@ export default function ReceiptsListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: '700' },
+  title: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary },
   addBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.md },
   addText: { color: '#fff', fontWeight: '700' },
   card: { marginHorizontal: 16, marginBottom: 10, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 14, ...SHADOW.sm },
-  cardTitle: { fontWeight: '700' },
+  cardTitle: { fontWeight: '700', color: COLORS.textPrimary },
   meta: { color: COLORS.textSecondary, marginTop: 4 },
   empty: { textAlign: 'center', color: COLORS.textMuted, marginTop: 40 },
 });

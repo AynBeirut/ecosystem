@@ -44,3 +44,30 @@ export function purchaseInPeriod(orderDateIso: string, range: { startDate: strin
   if (!ymd) return false;
   return ymd >= range.startDate && ymd <= range.endDate;
 }
+
+export function resolvePurchaseBusinessDate(purchase: {
+  orderDate?: string;
+  date?: string;
+  receivedDate?: string;
+}): string {
+  return (
+    purchaseOnDate(purchase.orderDate || '')
+    || purchaseOnDate(purchase.date || '')
+    || purchaseOnDate(purchase.receivedDate || '')
+  );
+}
+
+/** Filter by business order date; optional created-at only for “Today” (manual PO with backdated order date). */
+export function purchaseMatchesPeriod(
+  purchase: { orderDate?: string; date?: string; receivedDate?: string; createdAt?: string },
+  range: { startDate: string; endDate: string } | null,
+  options?: { includeCreatedAtFallback?: boolean },
+): boolean {
+  if (!range) return true;
+  const businessYmd = resolvePurchaseBusinessDate(purchase);
+  if (businessYmd && purchaseInPeriod(businessYmd, range)) return true;
+  if (!options?.includeCreatedAtFallback) return false;
+  if (!businessYmd && purchase.createdAt && purchaseInPeriod(purchase.createdAt, range)) return true;
+  if (purchase.createdAt && purchaseInPeriod(purchase.createdAt, range)) return true;
+  return false;
+}

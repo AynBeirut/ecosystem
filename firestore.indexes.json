@@ -1,6 +1,22 @@
 {
   "indexes": [
     {
+      "collectionGroup": "invoiceTeamTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "storeId", "order": "ASCENDING" },
+        { "fieldPath": "assignedToUserId", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "invoiceTeamTasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "storeId", "order": "ASCENDING" },
+        { "fieldPath": "assignedToRepId", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "crmActivities",
       "queryScope": "COLLECTION",
       "fields": [

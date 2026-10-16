@@ -1,6 +1,7 @@
 import { collection, getDocs, getFirestore, query, where } from 'firebase/firestore';
 import { isPlatformOrderCod, resolveOrderItemProductKey } from '@/lib/salesRules';
 import type { OrderCogsLine } from '@/lib/platformGl';
+import { resolveOrderDocumentRef } from '@/lib/orderDocumentRef';
 
 const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -50,6 +51,7 @@ export function orderGlInputFromOrder(
     paymentStatus?: string;
     amountPaid?: number;
     invoiceNumber?: string;
+    orderNumber?: string;
     clientId?: string;
     clientName?: string;
     customerId?: string;
@@ -72,7 +74,7 @@ export function orderGlInputFromOrder(
     total: round2(Number(order.total) || 0),
     taxAmount: round2(Number(order.taxAmount) || 0),
     paymentMethod: order.paymentMethod || 'cash',
-    invoiceNumber: order.invoiceNumber || order.id,
+    invoiceNumber: resolveOrderDocumentRef(order),
     clientId: order.clientId,
     clientName: order.clientName || order.customerName,
     customerId: order.customerId,

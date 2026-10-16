@@ -113,6 +113,7 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderWidth: 1,
     borderColor: COLORS.border,
+    color: COLORS.textPrimary,
   },
   card: {
     marginHorizontal: 12,

@@ -20,6 +20,11 @@ import { isPayrollExpenseLike } from '../lib/ledger/payrollPosting';
 import { applyPaidOrderInventoryDeduction } from '../services/orderInventory';
 import { deductComposedIngredientsOnSale } from '../services/kitchenSaleDeduction';
 import { resolveProductIconFromPayload, resolveStoredProductIcon } from '../lib/productIcon';
+import {
+  isSellableMenuProduct,
+  resolvePosIncomingCatalogKind,
+  resolveSellableProductType,
+} from '../lib/sellableMenuProduct';
 import { validateEventBelongsToStore, linkEventTicketToOrder, serializeEventTicket, ticketsCollection } from '../lib/storeEventsCore';
 import {
   assertClientTotalMatches,
@@ -27,6 +32,7 @@ import {
   entryFeeBlocksTicketLink,
 } from '../lib/eventPricing';
 import { autoIssueEntryTicketsFromPosOrder } from '../lib/eventPosEntryTicket';
+import { resolveOrderInvoiceNumber } from '../lib/chronologicalRenumberFirestore';
 
 const db = admin.firestore();
 
@@ -628,7 +634,11 @@ export async function getPosCatalog(req: Request, res: Response): Promise<void> 
       rawMaterialsList.push({ id: doc.id, ...(data as StockRawMaterial) });
     });
 
-    const products = productsSnap.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+    const products = productsSnap.docs
+      .filter((doc: FirebaseFirestore.QueryDocumentSnapshot) =>
+        isSellableMenuProduct(doc.data() as Record<string, unknown>),
+      )
+      .map((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
       const data = doc.data() as Record<string, unknown>;
       const type = resolveProductType(data);
       const recipeId = typeof data.recipeId === 'string' ? data.recipeId : '';
@@ -665,7 +675,7 @@ export async function getPosCatalog(req: Request, res: Response): Promise<void> 
       return product;
     });
 
-    res.json({ success: true, products });
+    res.json({ success: true, products, rawMaterials: [] });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Catalog fetch failed' });
   }
@@ -906,7 +916,15 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
       const profileSnap = await transaction.get(profileRef);
 
       if (existingIdempotency.exists) {
-        const existingOrderId = String(existingIdempotency.data()?.orderId || '').trim();
+        const existing = existingIdempotency.data() || {};
+        if (existing.voided === true) {
+          return {
+            orderId: String(existing.orderId || '').trim(),
+            alreadyExisted: true as const,
+            voided: true as const,
+          };
+        }
+        const existingOrderId = String(existing.orderId || '').trim();
         if (existingOrderId) {
           return { orderId: existingOrderId, alreadyExisted: true as const };
         }
@@ -914,10 +932,6 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
 
       const storeProfile = profileSnap.data() || {};
       const currency = String(storeProfile.mainCurrency || 'USD').trim();
-      const prefix = 'POS';
-      const lastNumber = Number(storeProfile.lastPosInvoiceNumber || storeProfile.lastInvoiceNumber || 0);
-      const newNumber = Number.isFinite(lastNumber) ? lastNumber + 1 : 1;
-      const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
 
       const orderData = {
         storeId: authResult.auth.storeId,
@@ -927,7 +941,6 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
         posDeviceId: authResult.auth.deviceId,
         localSaleId: normalizedLocalSaleId,
         composedProductSource,
-        invoiceNumber,
         ...(resolvedCustomer.customerId ? { customerId: resolvedCustomer.customerId } : {}),
         customerName: resolvedCustomer.customerName,
         ...(resolvedCustomer.customerPhone ? { customerPhone: resolvedCustomer.customerPhone } : {}),
@@ -944,6 +957,9 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
         total: Number.isFinite(total) ? total : 0,
         paymentMethod: String(paymentMethod || 'cash').trim(),
         paymentStatus: 'paid',
+        amountPaid: Number.isFinite(total) ? total : 0,
+        remainingAmount: 0,
+        paymentDate: saleTimestamp.split('T')[0],
         status: 'completed',
         posSaleTimestamp: saleTimestamp,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -959,10 +975,13 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
         deviceId: authResult.auth.deviceId,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
       });
-      transaction.set(profileRef, { lastPosInvoiceNumber: newNumber }, { merge: true });
-
-      return { orderId: orderRef.id, alreadyExisted: false as const };
+      return { orderId: orderRef.id, alreadyExisted: false as const, voided: false as const };
     });
+
+    if (writeResult.voided) {
+      res.status(200).json({ success: true, voided: true });
+      return;
+    }
 
     if (writeResult.alreadyExisted) {
       res.status(200).json({
@@ -1023,9 +1042,16 @@ export async function createPosOrder(req: Request, res: Response): Promise<void>
       }
     }
 
+    const invoiceNumber = await resolveOrderInvoiceNumber(
+      db,
+      authResult.auth.storeId,
+      writeResult.orderId,
+    );
+
     res.status(200).json({
       success: true,
       orderId: writeResult.orderId,
+      invoiceNumber,
       alreadyExisted: false,
     });
   } catch (err) {
@@ -1166,19 +1192,49 @@ export async function syncPosProducts(req: Request, res: Response): Promise<void
 
     const batch = db.batch();
     let count = 0;
+    let inventoryCount = 0;
     for (const p of products) {
       const localId = String(p.id || p.productId || '').trim();
       if (!localId) continue;
       const name = String(p.name || '').trim();
       const category = String(p.category || '').trim();
-      const icon = resolveProductIconFromPayload({ ...p, name, category });
+      const payload = { ...p, name, category } as Record<string, unknown>;
+      const incomingKind = resolvePosIncomingCatalogKind(payload);
+      const productType = resolveSellableProductType(payload);
+
+      if (incomingKind === 'inventory' || productType === 'raw_material') {
+        const matRef = db.collection('rawMaterials').doc(`pos-${authResult.auth.storeId}-${localId}`);
+        batch.set(matRef, {
+          storeId: authResult.auth.storeId,
+          localId,
+          name,
+          category,
+          unit: String(p.unit || 'pieces').trim(),
+          currentStock: Number(p.stock) || 0,
+          costPerUnit: Number(p.costPrice || p.cost_price || p.cost || p.price) || 0,
+          sku: String(p.sku || p.barcode || '').trim(),
+          isActive: true,
+          source: 'pos',
+          posDeviceId: authResult.auth.deviceId,
+          vposMenuVisible: false,
+          createdAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        }, { merge: true });
+        inventoryCount++;
+        continue;
+      }
+
+      const icon = resolveProductIconFromPayload(payload);
       const docRef = db.collection('products').doc(`pos-${authResult.auth.storeId}-${localId}`);
+      const resolvedType = productType === 'service' ? 'service' : productType === 'composed' ? 'composed' : 'simple';
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
         name,
         category,
         icon,
+        productType: resolvedType,
+        isService: resolvedType === 'service',
         price: Number(p.price) || 0,
         costPrice: Number(p.costPrice || p.cost_price || p.cost) || 0,
         barcode: String(p.barcode || '').trim(),
@@ -1187,13 +1243,14 @@ export async function syncPosProducts(req: Request, res: Response): Promise<void
         description: String(p.description || '').trim(),
         source: 'pos',
         posDeviceId: authResult.auth.deviceId,
+        vposMenuVisible: true,
         createdAt: admin.firestore.FieldValue.serverTimestamp(),
         updatedAt: admin.firestore.FieldValue.serverTimestamp(),
       }, { merge: true });
       count++;
     }
     await batch.commit();
-    res.status(200).json({ success: true, synced: count });
+    res.status(200).json({ success: true, synced: count, inventorySynced: inventoryCount });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Products sync failed' });
   }
@@ -1307,12 +1364,40 @@ export async function syncPosPurchases(req: Request, res: Response): Promise<voi
       const items = Array.isArray(p.items) ? p.items : [];
       const totalAmount = Number(p.totalAmount || p.total_amount || p.total) || 0;
       const status = String(p.status || 'received').trim();
+      const paidAmountRaw = Number(p.paidAmount || p.paid_amount || p.amountPaid) || 0;
+      const explicitPayStatus = String(p.paymentStatus || p.payment_status || '').toLowerCase();
+      const markedPaidOnPos =
+        p.isPaid === true
+        || p.is_paid === true
+        || p.paid === true
+        || explicitPayStatus === 'paid';
+      let amountPaid = paidAmountRaw;
+      let paymentStatus: 'paid' | 'partial' | 'unpaid' = 'unpaid';
+      if (explicitPayStatus === 'paid' || explicitPayStatus === 'partial' || explicitPayStatus === 'unpaid') {
+        paymentStatus = explicitPayStatus;
+      } else if (markedPaidOnPos && totalAmount > 0) {
+        paymentStatus = 'paid';
+      } else if (totalAmount > 0 && amountPaid >= totalAmount - 0.005) {
+        paymentStatus = 'paid';
+      } else if (amountPaid > 0) {
+        paymentStatus = 'partial';
+      }
+      if (paymentStatus === 'paid' && amountPaid <= 0 && totalAmount > 0) {
+        amountPaid = totalAmount;
+      }
+      const paymentDateRaw = String(p.paymentDate || p.payment_date || '').trim();
+      const paymentDate =
+        paymentStatus === 'paid' || paymentStatus === 'partial'
+          ? (paymentDateRaw || date.split('T')[0])
+          : null;
+      const remainingAmount = Math.max(0, totalAmount - amountPaid);
       batch.set(docRef, {
         storeId: authResult.auth.storeId,
         localId,
         supplierId: String(p.supplierId || p.supplier_id || '').trim(),
         supplierName,
         date,
+        orderDate: date,
         invoiceNumber: String(p.invoiceNumber || p.invoice_number || '').trim(),
         items,
         totalAmount,
@@ -1321,7 +1406,12 @@ export async function syncPosPurchases(req: Request, res: Response): Promise<voi
         taxAmount: Number(p.taxAmount || p.tax_amount || p.vat) || 0,
         taxType: String(p.taxType || p.tax_type || '').trim(),
         taxRate: Number(p.taxRate || p.tax_rate) || 0,
-        paidAmount: Number(p.paidAmount || p.paid_amount) || 0,
+        paidAmount: amountPaid,
+        amountPaid,
+        paymentStatus,
+        remainingAmount,
+        paymentDate,
+        paymentMethod: String(p.paymentMethod || p.payment_method || (paymentStatus === 'paid' ? 'cash' : '')).trim(),
         status,
         notes: String(p.notes || '').trim(),
         source: 'pos',
@@ -1834,5 +1924,111 @@ export async function syncPosRefunds(req: Request, res: Response): Promise<void>
     res.status(200).json({ success: true, synced: count });
   } catch (err) {
     res.status(500).json({ error: err instanceof Error ? err.message : 'Refunds sync failed' });
+  }
+}
+
+export async function syncPosVoids(req: Request, res: Response): Promise<void> {
+  try {
+    const { storeId, deviceId, deviceToken, voids } = req.body || {};
+    const authResult = await authenticatePosDevice(storeId, deviceId, deviceToken);
+    if (!authResult.ok) {
+      res.status(authResult.status).json({ error: authResult.error });
+      return;
+    }
+    if (!Array.isArray(voids) || voids.length === 0) {
+      res.status(400).json({ error: 'voids array required' });
+      return;
+    }
+
+    const storeIdAuth = authResult.auth.storeId;
+    for (const row of voids) {
+      const localSaleId = String(row?.localSaleId || '').trim();
+      if (!localSaleId) continue;
+      const reason = String(row?.reason || 'pos_delete').trim();
+      const timestamp = normalizeIsoTimestamp(row?.timestamp);
+      const displayTicket = String(row?.displayTicket || '').trim();
+      const idempotencyRef = db
+        .collection('stores')
+        .doc(storeIdAuth)
+        .collection('posOrdersByLocalSaleId')
+        .doc(localSaleId);
+
+      const order = await findPosOrderBySaleId(storeIdAuth, localSaleId);
+      if (!order) {
+        await idempotencyRef.set(
+          {
+            localSaleId,
+            storeId: storeIdAuth,
+            voided: true,
+            voidReason: reason,
+            voidedAt: timestamp,
+            ...(displayTicket ? { displayTicket } : {}),
+            deviceId: authResult.auth.deviceId,
+            updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+          },
+          { merge: true },
+        );
+        continue;
+      }
+
+      const alreadyVoided = order.data.voided === true
+        && String(order.data.status || '').toLowerCase() === 'cancelled';
+      if (!alreadyVoided) {
+        const orderTotal = Number(order.data.total || 0);
+        const orderItems = Array.isArray(order.data.items) ? order.data.items : [];
+        if (orderTotal > 0) {
+          const cogsLines = await resolveOrderCogsLines(storeIdAuth, orderItems);
+          await glPostOrderSaleReversal(
+            storeIdAuth,
+            {
+              id: order.id,
+              storeId: storeIdAuth,
+              date: timestamp,
+              total: orderTotal,
+              subtotal: Number(order.data.subtotal || orderTotal),
+              taxAmount: Number(order.data.taxAmount || 0),
+              discountAmount: Number(order.data.discountAmount || order.data.discount || 0),
+              paymentMethod: String(order.data.paymentMethod || 'cash').trim() || 'cash',
+              invoiceNumber: String(order.data.invoiceNumber || '').trim() || order.id,
+              cogsLines,
+              isCashSale: true,
+            },
+            `void-${localSaleId}`,
+          );
+        }
+        await db.collection('orders').doc(order.id).set(
+          {
+            status: 'cancelled',
+            paymentStatus: 'voided',
+            amountPaid: 0,
+            voided: true,
+            voidReason: reason,
+            voidedAt: timestamp,
+            ...(displayTicket ? { voidDisplayTicket: displayTicket } : {}),
+            voidSource: 'pos',
+            updatedAt: timestamp,
+          },
+          { merge: true },
+        );
+      }
+
+      await idempotencyRef.set(
+        {
+          orderId: order.id,
+          localSaleId,
+          storeId: storeIdAuth,
+          voided: true,
+          voidReason: reason,
+          voidedAt: timestamp,
+          deviceId: authResult.auth.deviceId,
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true },
+      );
+    }
+
+    res.status(200).json({ success: true });
+  } catch (err) {
+    res.status(500).json({ error: err instanceof Error ? err.message : 'Voids sync failed' });
   }
 }

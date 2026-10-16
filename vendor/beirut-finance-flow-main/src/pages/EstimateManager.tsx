@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,7 +10,7 @@ import { Plus, Trash, Share2, FileDown, Phone, Eye, X, User } from "lucide-react
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableCombobox } from "@/components/SearchableCombobox";
-import { CURRENCIES } from "@/services/mockData";
+import { StoreCurrencyField, useStoreDocumentCurrencies, clampStoreCurrency } from "@/components/StoreCurrencyField";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -34,7 +34,22 @@ const estimateSchema = z.object({
 
 const EstimateManager = () => {
   const { embedded } = useFinanceEmbed();
-  const { user, clients, products, estimates, createEstimate, updateEstimate, previewEstimate, sendEstimate, exportEstimateAsPdf, logout, checkLimit, refreshDocumentCompany } = useAppContext();
+  const {
+    user,
+    clients,
+    products,
+    estimates,
+    invoices,
+    createEstimate,
+    updateEstimate,
+    deleteEstimate,
+    previewEstimate,
+    sendEstimate,
+    exportEstimateAsPdf,
+    logout,
+    checkLimit,
+    refreshDocumentCompany,
+  } = useAppContext();
   const { toast } = useToast();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState<string>("list");
@@ -60,6 +75,12 @@ const EstimateManager = () => {
       expiryDate: "",
     },
   });
+  const { codes: storeCurrencies, main: storeCurrency } = useStoreDocumentCurrencies();
+  useEffect(() => {
+    if (editingEstimateId) return;
+    const current = String(form.getValues("currency") || "").toUpperCase();
+    if (!storeCurrencies.includes(current)) form.setValue("currency", storeCurrency);
+  }, [editingEstimateId, form, storeCurrency, storeCurrencies]);
 
   const handleAddLineItem = () => {
     const newItem = {
@@ -143,7 +164,7 @@ const EstimateManager = () => {
     form.reset({
       customer: "",
       clientId: "",
-      currency: "USD",
+      currency: storeCurrency,
       tax: 0,
       discount: 0,
       notes: "",
@@ -239,17 +260,23 @@ const EstimateManager = () => {
 
     if (editingEstimateId) {
       try {
-        updateEstimate(editingEstimateId, {
+        const saved = await updateEstimate(editingEstimateId, {
           clientId: values.clientId || "",
           clientName: values.customer,
           amount: totals.total,
-          currency: values.currency,
+          total: totals.total,
+          subtotal: totals.subtotal,
+          currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
           items: lineItems,
           expiryDate: values.expiryDate,
           notes: values.notes,
           tax: values.tax,
+          taxAmount: totals.taxAmount,
           discount: values.discount,
         });
+        if (!saved) {
+          throw new Error("Estimate update was not saved to Firestore.");
+        }
         toast({
           title: "Estimate Updated",
           description: "Your estimate has been saved.",
@@ -283,9 +310,15 @@ const EstimateManager = () => {
         clientId: values.clientId || "",
         clientName: values.customer,
         amount: totals.total,
-        currency: values.currency,
+        total: totals.total,
+        subtotal: totals.subtotal,
+        currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
         items: lineItems,
         expiryDate: values.expiryDate,
+        notes: values.notes,
+        tax: values.tax,
+        taxAmount: totals.taxAmount,
+        discount: values.discount,
       });
 
       if (estimateId) {
@@ -325,7 +358,7 @@ const EstimateManager = () => {
         discount: values.discount,
         subtotal: totals.subtotal,
         total: totals.total,
-        currency: values.currency,
+        currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
         date: new Date().toLocaleDateString(),
         expiryDate: values.expiryDate,
         notes: values.notes,
@@ -410,10 +443,24 @@ const EstimateManager = () => {
             <CardContent>
               <TabsContent value="list">
               <div className="space-y-4">
-                <EstimateList 
+                <EstimateList
                   onPreview={handlePreviewEstimate}
                   onSend={handleSendEstimate}
+                  onExport={handleExportEstimate}
                   onEdit={handleEditEstimate}
+                  onDelete={(estimate) => {
+                    const linked = invoices.some(
+                      (inv) =>
+                        String(inv.notes || '').includes(estimate.id) ||
+                        String(inv.notes || '').includes(estimate.estimateNumber || ''),
+                    );
+                    const msg = linked
+                      ? 'This quotation was converted to an invoice. Delete the quotation record anyway?'
+                      : 'Delete this quotation permanently?';
+                    if (!window.confirm(msg)) return;
+                    deleteEstimate(estimate.id);
+                    toast({ title: 'Deleted', description: 'Quotation removed.' });
+                  }}
                 />
               </div>
             </TabsContent>
@@ -655,24 +702,7 @@ const EstimateManager = () => {
                       control={form.control}
                       name="currency"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Currency</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select currency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {CURRENCIES.map(currency => (
-                                <SelectItem key={currency.code} value={currency.code}>
-                                  {currency.code} - {currency.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
+                        <StoreCurrencyField value={field.value} onChange={field.onChange} />
                       )}
                     />
                   </div>

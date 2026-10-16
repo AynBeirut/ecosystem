@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
-  View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, TextInput, ActivityIndicator, RefreshControl,
+  View, Text, FlatList, TouchableOpacity, StyleSheet, TextInput, ActivityIndicator, RefreshControl,
 } from 'react-native';
+import ScreenSafeArea from '../../components/ScreenSafeArea';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
@@ -40,14 +41,14 @@ export default function InvoicesListScreen() {
   if (loading) return <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />;
 
   return (
-    <SafeAreaView style={styles.container}>
+    <ScreenSafeArea edges={['top']} style={styles.container}>
       <View style={styles.header}>
         <Text style={styles.title}>Invoices</Text>
         <TouchableOpacity style={styles.addBtn} onPress={() => navigation.navigate('InvoiceEditor', {})}>
           <Text style={styles.addText}>+ New</Text>
         </TouchableOpacity>
       </View>
-      <TextInput style={styles.search} placeholder="Search invoices…" value={search} onChangeText={setSearch} />
+      <TextInput style={styles.search} placeholder="Search invoices…" placeholderTextColor={COLORS.textMuted} value={search} onChangeText={setSearch} />
       <View style={styles.filters}>
         {['all', 'draft', 'sent', 'partial', 'paid'].map((s) => (
           <TouchableOpacity key={s} style={[styles.chip, status === s && styles.chipActive]} onPress={() => setStatus(s)}>
@@ -63,7 +64,7 @@ export default function InvoicesListScreen() {
         renderItem={({ item }) => (
           <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('InvoicePreview', { invoiceId: item.id })}>
             <View style={styles.row}>
-              <Text style={styles.cardTitle}>{item.invoiceNumber || item.id.slice(0, 8)}</Text>
+              <Text style={styles.cardTitle}>{item.invoiceNumber || 'Invoice'}</Text>
               <Text style={[styles.badge, item.status === 'paid' && styles.badgePaid]}>{item.status}</Text>
             </View>
             <Text style={styles.meta}>{item.clientName}</Text>
@@ -71,7 +72,7 @@ export default function InvoicesListScreen() {
           </TouchableOpacity>
         )}
       />
-    </SafeAreaView>
+    </ScreenSafeArea>
   );
 }
 
@@ -81,7 +82,7 @@ const styles = StyleSheet.create({
   title: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary },
   addBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.md },
   addText: { color: '#fff', fontWeight: '700' },
-  search: { marginHorizontal: 16, marginBottom: 8, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.border },
+  search: { marginHorizontal: 16, marginBottom: 8, backgroundColor: COLORS.surface, color: COLORS.textPrimary, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.border },
   filters: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, paddingHorizontal: 16, marginBottom: 8 },
   chip: { paddingHorizontal: 10, paddingVertical: 6, borderRadius: RADIUS.full, backgroundColor: COLORS.light },
   chipActive: { backgroundColor: COLORS.primary },

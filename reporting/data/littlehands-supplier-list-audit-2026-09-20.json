@@ -1,0 +1,446 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "pulledAt": "2026-09-20T09:48:19.507Z",
+  "counts": {
+    "total": 478,
+    "active": 478,
+    "archived": 0,
+    "itemLike": 282,
+    "employeeSuppliers": 5,
+    "duplicateExact": 6
+  },
+  "employeeSuppliers": [
+    {
+      "id": "lh-sup-02b15ef87562676a",
+      "name": "Eva"
+    },
+    {
+      "id": "lh-sup-1b7e15def1c081ae",
+      "name": "Nancy Ghazal"
+    },
+    {
+      "id": "lh-sup-709cec48ec9e1ce0",
+      "name": "Thaer"
+    },
+    {
+      "id": "lh-sup-c0362b339958ee39",
+      "name": "Cynthia Hello"
+    },
+    {
+      "id": "lh-sup-d977fd0a3f304e96",
+      "name": "Eva Maalouly"
+    }
+  ],
+  "itemLikeSample": [
+    {
+      "id": "lh-sup-0071e085389fb020",
+      "name": "Le Marchet Selectif ( Chedar Cheese, Tortilla Bread …)"
+    },
+    {
+      "id": "lh-sup-009b356b1911db73",
+      "name": "Librarie Mallah Weekend Workshop"
+    },
+    {
+      "id": "lh-sup-00a3d18ae4c39c32",
+      "name": "Manakich Little Hands"
+    },
+    {
+      "id": "lh-sup-015f9cc19c45f88e",
+      "name": "Chebel Bou Akl Water For Little Hands"
+    },
+    {
+      "id": "lh-sup-0218c5e5844b766a",
+      "name": "Le Marchet Selectif ( Ice, Fahem, F&V)"
+    },
+    {
+      "id": "lh-sup-041590ea74c3d125",
+      "name": "Luiji Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-04f9f793823b1010",
+      "name": "Kyes Ramel For Workshop"
+    },
+    {
+      "id": "lh-sup-057f4f70ce17d7d6",
+      "name": "Spinneys Bar Workshop"
+    },
+    {
+      "id": "lh-sup-06b4fceeae1a1a7b",
+      "name": "Cynthia Hello 8 Working H+Tr"
+    },
+    {
+      "id": "lh-sup-07700e5732f9ef4f",
+      "name": "Le Charcutier Workshop Lycee"
+    },
+    {
+      "id": "lh-sup-08a0c702186476af",
+      "name": "Karam Bake Mou3ajanet For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-08de0e99445147ae",
+      "name": "Librarie Mallah (Workshop Clay Print Out, Stamp)"
+    },
+    {
+      "id": "lh-sup-0916b63a03f93291",
+      "name": "Nancy Ghazal 9 workng H + Tr"
+    },
+    {
+      "id": "lh-sup-0935e88af7c98fee",
+      "name": "Spinneys (Kitchen,Bar Hyg,)"
+    },
+    {
+      "id": "lh-sup-0a17b949bac00341",
+      "name": "Le Marchet selectif (Birthday 5-7-2026 )"
+    },
+    {
+      "id": "lh-sup-0be1bc9e5307659e",
+      "name": "Le Marchet selectif (Birthday & Workshops )"
+    },
+    {
+      "id": "lh-sup-0c70b5faacb92bd6",
+      "name": "Strawberry For Birthday 3-5-2026"
+    },
+    {
+      "id": "lh-sup-0ce63d05efb5ed4b",
+      "name": "Spinneys Food Birtjday Today"
+    },
+    {
+      "id": "lh-sup-0daae98743cc3c10",
+      "name": "Spinneys Food For Birthday 9-5-2026"
+    },
+    {
+      "id": "lh-sup-0e0b7daff781d7e3",
+      "name": "Event Megastore Workshop 10-June"
+    },
+    {
+      "id": "lh-sup-0e80fdbb6bb7746c",
+      "name": "Fairco International Birthday June 13 + Workshop"
+    },
+    {
+      "id": "lh-sup-0ef34f7c918c1a74",
+      "name": "Spinneys Invoice Fruits & Vege"
+    },
+    {
+      "id": "lh-sup-0f0f1ff8523a22eb",
+      "name": "Legume For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-10b41741cf027436",
+      "name": "Librarie Mallah Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-10b63bd66e82b2cd",
+      "name": "Zaatar"
+    },
+    {
+      "id": "lh-sup-1188a1798b049f52",
+      "name": "Le Marchet selectif (water Beer Fruits)"
+    },
+    {
+      "id": "lh-sup-1205dcd013740b6f",
+      "name": "Events Megastore Easter  Workshop"
+    },
+    {
+      "id": "lh-sup-12806bbbd5f47acc",
+      "name": "Karam Bake Old Invoice"
+    },
+    {
+      "id": "lh-sup-12d166b3b2a18fba",
+      "name": "Le Charcutier Little Hands Kitchen"
+    },
+    {
+      "id": "lh-sup-1338b1fcd2abe500",
+      "name": "Mhamad To7fir w Emdedet Water"
+    },
+    {
+      "id": "lh-sup-14ff9f2251d58cd5",
+      "name": "Tanjeed by Fady ( Charachif for Workshop Today)"
+    },
+    {
+      "id": "lh-sup-164e4e54f3fbdeed",
+      "name": "Angelina 5.5 Working H"
+    },
+    {
+      "id": "lh-sup-16a9cea47f897e45",
+      "name": "Luigi 016 Wood For tables"
+    },
+    {
+      "id": "lh-sup-16c7f96de2bdc940",
+      "name": "Le Marchet selectif (Kiwi)"
+    },
+    {
+      "id": "lh-sup-16f8f7c455a7f75e",
+      "name": "Le Marchet Slectif (Oil, water, Fuits)"
+    },
+    {
+      "id": "lh-sup-1728d3e306849300",
+      "name": "Birthday Invoices"
+    },
+    {
+      "id": "lh-sup-191065bb1a59c4bc",
+      "name": "Nour Malek 6 Working H"
+    },
+    {
+      "id": "lh-sup-1aa5218af1ff9e96",
+      "name": "Le Marche selectif ( Orange )"
+    },
+    {
+      "id": "lh-sup-1ab127c44789f9b5",
+      "name": "Wooden Bakery Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-1b36127f3a779ac0",
+      "name": "Le Marchet Selectif (Lettus Cucumber)"
+    },
+    {
+      "id": "lh-sup-1b7dc83b7c679381",
+      "name": "La casa Decore Pouff 3 pcs For Garden"
+    },
+    {
+      "id": "lh-sup-1d473ede47a2a8e8",
+      "name": "Kitchen Tools"
+    },
+    {
+      "id": "lh-sup-1d6217f1eea934cf",
+      "name": "Spinneys (Birthday Houri 29-6)"
+    },
+    {
+      "id": "lh-sup-1eb70f0049c69138",
+      "name": "Fairco (Board Sara)"
+    },
+    {
+      "id": "lh-sup-20d16ae90a57b284",
+      "name": "Chebel Bou akel Water & Vege"
+    },
+    {
+      "id": "lh-sup-216e05b24ac0ca83",
+      "name": "Karam bek Birthday 26"
+    },
+    {
+      "id": "lh-sup-21770dbf355d010a",
+      "name": "Mne2ich zaatar Yesterday"
+    },
+    {
+      "id": "lh-sup-24b6e150c846487d",
+      "name": "Nour Malek 5 Workking H"
+    },
+    {
+      "id": "lh-sup-296a8bca541e8d37",
+      "name": "Fairco Wood Board For Mother’s Day"
+    },
+    {
+      "id": "lh-sup-2ac17ca35468f49c",
+      "name": "Event Megastore ( Workshop For College Visite)"
+    },
+    {
+      "id": "lh-sup-2ae5f5f3bd95ea52",
+      "name": "Chicken For Farm"
+    },
+    {
+      "id": "lh-sup-2c069c6b19f29339",
+      "name": "Boucherie Mafroume  For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-2cb6850b7f91e91e",
+      "name": "Le marchet Selectif ( Fruits )"
+    },
+    {
+      "id": "lh-sup-2d5564eb632e2b26",
+      "name": "Le Charcutier Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-3016ebebcfc54a80",
+      "name": "Le Marchet Selectif (Oilv Oil, Farine)"
+    },
+    {
+      "id": "lh-sup-304c3816c911d7bc",
+      "name": "Disposable ( Bttl, Jars,Wood Disk)"
+    },
+    {
+      "id": "lh-sup-305a9bdde65fdc49",
+      "name": "Le Marchet Selectif (Fruits , Flour )"
+    },
+    {
+      "id": "lh-sup-30b1a6b1870ab2b2",
+      "name": "Fairco Old February Invoice"
+    },
+    {
+      "id": "lh-sup-3182d469efce3ffd",
+      "name": "Cynthia hello 5 Working H"
+    },
+    {
+      "id": "lh-sup-3297335133844529",
+      "name": "Wooden Backery Bread"
+    },
+    {
+      "id": "lh-sup-32d988de1f9d5533",
+      "name": "Plastic Easter Eggs"
+    },
+    {
+      "id": "lh-sup-33f29766f84c944e",
+      "name": "Spinneys Kitchen Workshop Hygiene"
+    },
+    {
+      "id": "lh-sup-36e440839a91a187",
+      "name": "Manakich Zaatar For Many Days"
+    },
+    {
+      "id": "lh-sup-372cc1c4f27defa2",
+      "name": "Le Charcutier Kitchen Barbecue"
+    },
+    {
+      "id": "lh-sup-372f766a4735f448",
+      "name": "Spinneys old invoice (paid to Youssef)"
+    },
+    {
+      "id": "lh-sup-37d5ddffdf2b337c",
+      "name": "Ice For Little Hands"
+    },
+    {
+      "id": "lh-sup-383f0376d2db033f",
+      "name": "Fresh & More Vegtables & Fruits For 3 Birthdays"
+    },
+    {
+      "id": "lh-sup-386cffc3f3c39a30",
+      "name": "Meat For Birthday 9-5-2026"
+    },
+    {
+      "id": "lh-sup-3956f9b2d1446d02",
+      "name": "Youssef Malek Tabale For Garden 30*4$"
+    },
+    {
+      "id": "lh-sup-3afb8a6e50968821",
+      "name": "meat birthday and bread"
+    },
+    {
+      "id": "lh-sup-3ba8c3e23624abc3",
+      "name": "Fruits & Vegetables For Birthday 15-8"
+    },
+    {
+      "id": "lh-sup-3bc17257f9b3d835",
+      "name": "Lteif Market Fruits 213998"
+    },
+    {
+      "id": "lh-sup-3bd14832a6f6bca6",
+      "name": "Luiggi Kitchen Tools"
+    },
+    {
+      "id": "lh-sup-3cb2462f75200306",
+      "name": "Thaer Orange"
+    },
+    {
+      "id": "lh-sup-3cb52046fd9fc3b5",
+      "name": "Spinneys Easter Workshop"
+    },
+    {
+      "id": "lh-sup-3cfbf661074819d8",
+      "name": "Miro 3 Working Week"
+    },
+    {
+      "id": "lh-sup-3d0d91e257bad018",
+      "name": "Emdedet Water"
+    },
+    {
+      "id": "lh-sup-3d9bf3aa27725477",
+      "name": "Dawa Rash For Garden"
+    },
+    {
+      "id": "lh-sup-3ec5e6d53fb48b12",
+      "name": "Spinneys ( Sparkling water,Vege,Fruits)"
+    },
+    {
+      "id": "lh-sup-41226699da653fe2",
+      "name": "Le Marchet Selectif ( Ice, Water,Beer, Strawberry, Banan"
+    }
+  ],
+  "duplicateExact": [
+    {
+      "key": "cynthia hello 8 working h tr",
+      "count": 2,
+      "rows": [
+        {
+          "id": "lh-sup-06b4fceeae1a1a7b",
+          "name": "Cynthia Hello 8 Working H+Tr"
+        },
+        {
+          "id": "lh-sup-e4ab621508018ff1",
+          "name": "Cynthia Hello 8 Working H + Tr"
+        }
+      ]
+    },
+    {
+      "key": "thaer invoices",
+      "count": 2,
+      "rows": [
+        {
+          "id": "lh-sup-1de4efe769f60a3d",
+          "name": "Thaer (invoices)"
+        },
+        {
+          "id": "lh-sup-2fb0d30a9ed1603e",
+          "name": "Thaer Invoices"
+        }
+      ]
+    },
+    {
+      "key": "le marchet selectif",
+      "count": 3,
+      "rows": [
+        {
+          "id": "lh-sup-2f6dff4034bb5c5d",
+          "name": "Le marchet Selectif ("
+        },
+        {
+          "id": "lh-sup-406c44032aa379de",
+          "name": "Le Marchet selectif"
+        },
+        {
+          "id": "lh-sup-bbe3dc2badba726e",
+          "name": "Le  Marchet Selectif"
+        }
+      ]
+    },
+    {
+      "key": "nancy ghazal 4 working h",
+      "count": 2,
+      "rows": [
+        {
+          "id": "lh-sup-73ae0a0155abfcfa",
+          "name": "Nancy Ghazal  4 Working H"
+        },
+        {
+          "id": "lh-sup-7f802d2e37a6f24e",
+          "name": "Nancy Ghazal 4 Working H"
+        }
+      ]
+    },
+    {
+      "key": "spinneys",
+      "count": 2,
+      "rows": [
+        {
+          "id": "lh-sup-7bf2f0f08ac86ce4",
+          "name": "spinneys"
+        },
+        {
+          "id": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-1",
+          "name": "Spinneys"
+        }
+      ]
+    },
+    {
+      "key": "nancy ghazal 6 working h",
+      "count": 2,
+      "rows": [
+        {
+          "id": "lh-sup-9631cf9491a7d8f9",
+          "name": "Nancy Ghazal  6 Working H"
+        },
+        {
+          "id": "lh-sup-ca06e29c5f9cb0dd",
+          "name": "Nancy Ghazal 6 Working H"
+        }
+      ]
+    }
+  ]
+}

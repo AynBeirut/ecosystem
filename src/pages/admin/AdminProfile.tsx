@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { getFirestore, doc, getDoc, getDocFromServer, setDoc, updateDoc, serverTimestamp, collection, query, where, getDocs } from 'firebase/firestore';
 import { consumePackageDraftForStore } from '@/lib/applyPackageDraft';
 import { getAuth, multiFactor, TotpMultiFactorGenerator, type MultiFactorInfo, type TotpSecret } from 'firebase/auth';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId, resolveStoreIdForAuthUser } from '@/lib/storeUtils';
 import { isNipcoProductionStore } from '@/lib/nipcoInvoiceTemplateLock';
@@ -18,6 +18,7 @@ import { Upload, Store, Camera, Plus, X, Check, AlertCircle, Pencil, ImagePlus, 
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import VenueOpsSettingsPanel from '@/components/admin/VenueOpsSettingsPanel';
+import InventorySettingsPanel from '@/components/admin/InventorySettingsPanel';
 import AdminPanel from '@/components/admin/AdminPanel';
 import { StoreProfile, StorePage, MarketplaceIntegrationSetting, DropshippingPartnerSetting, AiModelPricingSetting } from '../../types/storeProfile';
 import { generateSlug, checkSlugAvailability, isValidSlug, generateUniqueSlug } from '@/lib/slugify';
@@ -1499,6 +1500,8 @@ const AdminProfile: React.FC = () => {
 
         <VenueOpsSettingsPanel />
 
+        <InventorySettingsPanel />
+
         <form onSubmit={handleSubmit} className="space-y-6">
           {/* Business identity (invoices & documents) */}
           <AdminPanel>
@@ -2562,12 +2565,11 @@ const AdminProfile: React.FC = () => {
               </div>
 
               <div className="rounded-lg border border-dashed border-slate-300 bg-slate-50/80 p-4 text-sm text-muted-foreground">
-                <strong className="text-slate-800">A4 invoice template</strong> (logo, company block, print layout) uses the{' '}
-                <strong className="text-slate-800">Logo</strong> and company fields above; open{' '}
-                <a href="/admin/invoice-manager/invoices" className="text-teal-700 font-medium hover:underline">
-                  Invoice Manager
-                </a>{' '}
-                to preview printed invoices.
+                <strong className="text-slate-800">A4 invoice PDFs</strong> (logo, layout, colors) are configured separately from shop branding — open{' '}
+                <Link to="/admin/finance/invoice-document" className="text-teal-700 font-medium hover:underline">
+                  Invoice PDF template
+                </Link>
+                .
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 rounded-lg border border-slate-200 bg-slate-50/80 p-4">

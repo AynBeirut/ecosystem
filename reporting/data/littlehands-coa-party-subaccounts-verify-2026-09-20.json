@@ -1,0 +1,35 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "verifiedAt": "2026-09-20T09:43:35.918Z",
+  "visibleSupplierAccounts": 81,
+  "visibleSpinneys": [
+    {
+      "code": "61111000001",
+      "name": "Spinneys",
+      "id": "acct-61111000001"
+    }
+  ],
+  "visibleLeMarche": [
+    {
+      "code": "61111000030",
+      "name": "Le Marche Selectif",
+      "id": "acct-61111000030"
+    }
+  ],
+  "visibleEvaSupplier": [],
+  "visiblePcgSpinneys": [
+    {
+      "code": "61111000001",
+      "name": "Spinneys",
+      "id": "NHv1w0aB5zc6mjtLdClT"
+    }
+  ],
+  "visiblePcgLeMarche": [
+    {
+      "code": "61111000030",
+      "name": "Le Marche Selectif",
+      "id": "obLkkazzrIYzlnt9zdWk"
+    }
+  ],
+  "visiblePcgEvaSupplier": []
+}

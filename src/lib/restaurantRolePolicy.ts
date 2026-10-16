@@ -278,6 +278,11 @@ function hasPermission(user: SubAccountUser, permission: SubAccountPermission): 
   return Boolean(user?.permissions?.includes(permission));
 }
 
+/** Owner and store manager edit Venue Ops records and setup. Floor roles can open the hub. */
+export function canManageVenueOpsContent(user: SubAccountUser): boolean {
+  return hasStoreAdminAccess(user);
+}
+
 /** Floor, POS, orders — excludes platform freelancer client sessions. */
 export function canAccessVenueOperations(user: SubAccountUser): boolean {
   if (user?.role === 'admin') return true;
@@ -313,6 +318,25 @@ export function canAccessRestaurantFinance(user: SubAccountUser): boolean {
   if (user?.role === 'admin' || isManagerSubAccount(user)) return true;
   if (isAccountingFreelancerSubAccount(user)) return true;
   return false;
+}
+
+/** Official HR hub — owner and store manager. Floor, builder, and accounting sessions stay out. */
+export function canAccessOfficialHr(user: SubAccountUser): boolean {
+  if (user?.role === 'admin') return true;
+  if (!user || user.role !== 'sub_account') return false;
+  if (
+    isWebBuilderSubAccount(user) ||
+    isAccountingFreelancerSubAccount(user) ||
+    isFreelancerClientSubAccount(user)
+  ) {
+    return false;
+  }
+  return isManagerSubAccount(user);
+}
+
+/** Payroll, salary payments, and GL posting. Same people as restaurant finance. */
+export function canAccessHrPayroll(user: SubAccountUser): boolean {
+  return canAccessRestaurantFinance(user);
 }
 
 export function canAccessRestaurantInventory(user: SubAccountUser): boolean {

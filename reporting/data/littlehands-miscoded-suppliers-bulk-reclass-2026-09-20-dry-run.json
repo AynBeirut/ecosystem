@@ -1,0 +1,41 @@
+{
+  "generatedAt": "2026-09-20T10:29:09.846Z",
+  "mode": "dry-run",
+  "social": [
+    {
+      "id": "lh-sup-e4e3780904bebe9b",
+      "name": "Rasha Social Media",
+      "route": "social_media"
+    }
+  ],
+  "payroll": [
+    {
+      "id": "lh-sup-710c3906ca8b54f8",
+      "name": "Angelina",
+      "route": "payroll"
+    },
+    {
+      "id": "lh-sup-787be1da4e2dbcfc",
+      "name": "Nour Malek",
+      "route": "payroll"
+    },
+    {
+      "id": "lh-sup-97aed1713eeb5e82",
+      "name": "Nour malek Visit Bebe Sucre",
+      "route": "payroll"
+    },
+    {
+      "id": "lh-sup-cd8e5466560e70f2",
+      "name": "Nour Malek Face Painting",
+      "route": "payroll"
+    },
+    {
+      "id": "lh-sup-fd89774e0385b374",
+      "name": "Tina Ibrahim Employee",
+      "route": "payroll"
+    }
+  ],
+  "treasury": [],
+  "socialJePosted": [],
+  "purchaseJesVoided": []
+}

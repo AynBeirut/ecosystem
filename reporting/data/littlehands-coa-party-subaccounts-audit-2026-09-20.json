@@ -1,0 +1,683 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "pulledAt": "2026-09-20T09:41:15.736Z",
+  "counts": {
+    "ledger": 1138,
+    "pcg": 979,
+    "suppliers": 478,
+    "staff": 41,
+    "supplierAccounts": 98
+  },
+  "duplicateExactCount": 7,
+  "duplicateExact": [
+    {
+      "key": "spinneys",
+      "count": 3,
+      "rows": [
+        {
+          "id": "acct-61111000001",
+          "code": "61111000001",
+          "name": "Spinneys",
+          "partyId": "1",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000011",
+          "code": "61111000011",
+          "name": "Spinneys",
+          "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-1",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000022",
+          "code": "61111000022",
+          "name": "spinneys",
+          "partyId": "lh-sup-7bf2f0f08ac86ce4",
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "key": "broccoli",
+      "count": 2,
+      "rows": [
+        {
+          "id": "acct-61111000003",
+          "code": "61111000003",
+          "name": "Broccoli",
+          "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-2",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000014",
+          "code": "61111000014",
+          "name": "Broccoli",
+          "partyId": "2",
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "key": "la valeur supermarket bet el kiko",
+      "count": 2,
+      "rows": [
+        {
+          "id": "acct-61111000005",
+          "code": "61111000005",
+          "name": "La valeur Supermarket - Bet El Kiko",
+          "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-3",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000019",
+          "code": "61111000019",
+          "name": "La valeur Supermarket - Bet El Kiko",
+          "partyId": "3",
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "key": "little bar",
+      "count": 2,
+      "rows": [
+        {
+          "id": "acct-61111000006",
+          "code": "61111000006",
+          "name": "Little Bar",
+          "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-9",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000015",
+          "code": "61111000015",
+          "name": "Little Bar",
+          "partyId": "9",
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "key": "maliks",
+      "count": 2,
+      "rows": [
+        {
+          "id": "acct-61111000007",
+          "code": "61111000007",
+          "name": "Maliks",
+          "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-5",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000017",
+          "code": "61111000017",
+          "name": "Maliks",
+          "partyId": "5",
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "key": "storiom kornet chehwan",
+      "count": 2,
+      "rows": [
+        {
+          "id": "acct-61111000012",
+          "code": "61111000012",
+          "name": "Storiom - kornet chehwan",
+          "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-4",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000018",
+          "code": "61111000018",
+          "name": "Storiom - kornet chehwan",
+          "partyId": "4",
+          "isActive": true
+        }
+      ]
+    },
+    {
+      "key": "yemen coffe ashweh",
+      "count": 2,
+      "rows": [
+        {
+          "id": "acct-61111000013",
+          "code": "61111000013",
+          "name": "Yemen Coffe - Ashweh",
+          "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-10",
+          "isActive": true
+        },
+        {
+          "id": "acct-61111000016",
+          "code": "61111000016",
+          "name": "Yemen Coffe - Ashweh",
+          "partyId": "10",
+          "isActive": true
+        }
+      ]
+    }
+  ],
+  "leMarcheLike": [
+    {
+      "id": "acct-61111000030",
+      "code": "61111000030",
+      "name": "Le Marchet selectif (Kiwi)",
+      "partyId": "lh-sup-16c7f96de2bdc940",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000035",
+      "code": "61111000035",
+      "name": "Le Marchet Selectif Firas",
+      "partyId": "lh-sup-b0118dace71a2c0a",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000053",
+      "code": "61111000053",
+      "name": "Le Marchet Selectif ( Ice, Lazagna, Water…)",
+      "partyId": "lh-sup-f72e4fd5ee9b3442",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000054",
+      "code": "61111000054",
+      "name": "Le Marche selectif ( Orange )",
+      "partyId": "lh-sup-1aa5218af1ff9e96",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000063",
+      "code": "61111000063",
+      "name": "Le Marchet selectif Birthday (17-18)",
+      "partyId": "lh-sup-fbef6ca194ab232f",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000078",
+      "code": "61111000078",
+      "name": "Le Marchet selectif (Birthday & Workshops )",
+      "partyId": "lh-sup-0be1bc9e5307659e",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000092",
+      "code": "61111000092",
+      "name": "Le Marchet Selectif ( Foul, Cacao, )",
+      "partyId": "lh-sup-51979ab68db53007",
+      "isActive": true
+    }
+  ],
+  "spinneysLike": [
+    {
+      "id": "acct-61111000001",
+      "code": "61111000001",
+      "name": "Spinneys",
+      "partyId": "1",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000011",
+      "code": "61111000011",
+      "name": "Spinneys",
+      "partyId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-1",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000022",
+      "code": "61111000022",
+      "name": "spinneys",
+      "partyId": "lh-sup-7bf2f0f08ac86ce4",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000028",
+      "code": "61111000028",
+      "name": "Spinneys ( Pasta,Wipes,Eggs…)",
+      "partyId": "lh-sup-f23ebb3e703a9c07",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000032",
+      "code": "61111000032",
+      "name": "Spinneys Birthday (26-27-28) + Kitchen",
+      "partyId": "lh-sup-41d5f670a5d659fb",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000048",
+      "code": "61111000048",
+      "name": "Spinneys Invoice Fruits & Vege",
+      "partyId": "lh-sup-0ef34f7c918c1a74",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000062",
+      "code": "61111000062",
+      "name": "Spinneys Food For Kitchen",
+      "partyId": "lh-sup-a003e9d0af07bd2f",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000069",
+      "code": "61111000069",
+      "name": "Spinneys Food For Birthday 9-5-2026",
+      "partyId": "lh-sup-0daae98743cc3c10",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000076",
+      "code": "61111000076",
+      "name": "Spinneys (Birthday Houri 29-6)",
+      "partyId": "lh-sup-1d6217f1eea934cf",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000093",
+      "code": "61111000093",
+      "name": "Spinneys (Spray Bttle Workshop,…)",
+      "partyId": "lh-sup-f03f9d83b80291cb",
+      "isActive": true
+    }
+  ],
+  "evaLike": [
+    {
+      "id": "acct-61111000075",
+      "code": "61111000075",
+      "name": "Eva Maalouly",
+      "partyId": "lh-sup-d977fd0a3f304e96",
+      "isActive": true
+    }
+  ],
+  "employeeAsSupplier": [
+    {
+      "id": "acct-61111000042",
+      "code": "61111000042",
+      "name": "Cynthia Hello",
+      "partyId": "lh-sup-c0362b339958ee39",
+      "staffId": "usb-8WgfKtgaE8aAXdqFhIfweEo5WFq2-cynthia-hello"
+    },
+    {
+      "id": "acct-61111000075",
+      "code": "61111000075",
+      "name": "Eva Maalouly",
+      "partyId": "lh-sup-d977fd0a3f304e96",
+      "staffId": "U0Lhm2nlggMX0xLLOeNN"
+    }
+  ],
+  "supplierCollectionSamples": [
+    {
+      "id": "lh-sup-0071e085389fb020",
+      "name": "Le Marchet Selectif ( Chedar Cheese, Tortilla Bread …)"
+    },
+    {
+      "id": "lh-sup-0218c5e5844b766a",
+      "name": "Le Marchet Selectif ( Ice, Fahem, F&V)"
+    },
+    {
+      "id": "lh-sup-02b15ef87562676a",
+      "name": "Eva"
+    },
+    {
+      "id": "lh-sup-057f4f70ce17d7d6",
+      "name": "Spinneys Bar Workshop"
+    },
+    {
+      "id": "lh-sup-08b49db2e1ccc99e",
+      "name": "Spinneys Hygiene"
+    },
+    {
+      "id": "lh-sup-0935e88af7c98fee",
+      "name": "Spinneys (Kitchen,Bar Hyg,)"
+    },
+    {
+      "id": "lh-sup-0a17b949bac00341",
+      "name": "Le Marchet selectif (Birthday 5-7-2026 )"
+    },
+    {
+      "id": "lh-sup-0be1bc9e5307659e",
+      "name": "Le Marchet selectif (Birthday & Workshops )"
+    },
+    {
+      "id": "lh-sup-0ce63d05efb5ed4b",
+      "name": "Spinneys Food Birtjday Today"
+    },
+    {
+      "id": "lh-sup-0daae98743cc3c10",
+      "name": "Spinneys Food For Birthday 9-5-2026"
+    },
+    {
+      "id": "lh-sup-0ef34f7c918c1a74",
+      "name": "Spinneys Invoice Fruits & Vege"
+    },
+    {
+      "id": "lh-sup-1188a1798b049f52",
+      "name": "Le Marchet selectif (water Beer Fruits)"
+    },
+    {
+      "id": "lh-sup-16c7f96de2bdc940",
+      "name": "Le Marchet selectif (Kiwi)"
+    },
+    {
+      "id": "lh-sup-16f8f7c455a7f75e",
+      "name": "Le Marchet Slectif (Oil, water, Fuits)"
+    },
+    {
+      "id": "lh-sup-1aa5218af1ff9e96",
+      "name": "Le Marche selectif ( Orange )"
+    },
+    {
+      "id": "lh-sup-1b36127f3a779ac0",
+      "name": "Le Marchet Selectif (Lettus Cucumber)"
+    },
+    {
+      "id": "lh-sup-1d6217f1eea934cf",
+      "name": "Spinneys (Birthday Houri 29-6)"
+    },
+    {
+      "id": "lh-sup-2a67182ef39040bb",
+      "name": "Spinneys Burgers For 31-5-2026"
+    },
+    {
+      "id": "lh-sup-2cb6850b7f91e91e",
+      "name": "Le marchet Selectif ( Fruits )"
+    },
+    {
+      "id": "lh-sup-2f161a0ba530600a",
+      "name": "Spinneys 428101"
+    },
+    {
+      "id": "lh-sup-2f6dff4034bb5c5d",
+      "name": "Le marchet Selectif ("
+    },
+    {
+      "id": "lh-sup-3016ebebcfc54a80",
+      "name": "Le Marchet Selectif (Oilv Oil, Farine)"
+    },
+    {
+      "id": "lh-sup-305a9bdde65fdc49",
+      "name": "Le Marchet Selectif (Fruits , Flour )"
+    },
+    {
+      "id": "lh-sup-33f29766f84c944e",
+      "name": "Spinneys Kitchen Workshop Hygiene"
+    },
+    {
+      "id": "lh-sup-372f766a4735f448",
+      "name": "Spinneys old invoice (paid to Youssef)"
+    },
+    {
+      "id": "lh-sup-3be5f7eb12334224",
+      "name": "Le Marchet selectif ( Free Play party )"
+    },
+    {
+      "id": "lh-sup-3cb52046fd9fc3b5",
+      "name": "Spinneys Easter Workshop"
+    },
+    {
+      "id": "lh-sup-3ec5e6d53fb48b12",
+      "name": "Spinneys ( Sparkling water,Vege,Fruits)"
+    },
+    {
+      "id": "lh-sup-406c44032aa379de",
+      "name": "Le Marchet selectif"
+    },
+    {
+      "id": "lh-sup-41226699da653fe2",
+      "name": "Le Marchet Selectif ( Ice, Water,Beer, Strawberry, Banan"
+    },
+    {
+      "id": "lh-sup-41ce1526ee470e09",
+      "name": "Le marchet Selectif ( Fruits Water , Mozarella Tahini)"
+    },
+    {
+      "id": "lh-sup-41d5f670a5d659fb",
+      "name": "Spinneys Birthday (26-27-28) + Kitchen"
+    },
+    {
+      "id": "lh-sup-437c21133c7f11b9",
+      "name": "Le Marchet Selectif (Mozarella & water)"
+    },
+    {
+      "id": "lh-sup-443f1733b041887d",
+      "name": "Spinnets Kitchen Stock ( 5-6-7 June)"
+    },
+    {
+      "id": "lh-sup-44728f76f6ef67d1",
+      "name": "Spinneys For Birthday 23-5"
+    },
+    {
+      "id": "lh-sup-497088e168cff85c",
+      "name": "Le Marchet Selectif ( Beer , water ,Olive Oil …)"
+    },
+    {
+      "id": "lh-sup-4b77934f87bf7884",
+      "name": "Le Marchet Selectif (Ice Water, F&V) 5-6-2026"
+    },
+    {
+      "id": "lh-sup-51979ab68db53007",
+      "name": "Le Marchet Selectif ( Foul, Cacao, )"
+    },
+    {
+      "id": "lh-sup-5383d8792ea740ed",
+      "name": "Le Marchet Selectif (Coffee Water, F&V, Tahini,)"
+    },
+    {
+      "id": "lh-sup-563a22ab727167fe",
+      "name": "Le Marchet Selectif (Birthday 29-7 & Birthday 31-7)"
+    },
+    {
+      "id": "lh-sup-57e5963f7c3830ec",
+      "name": "Le Marchet Selectif ( Wipes, Toilette Paper, Lemon )"
+    },
+    {
+      "id": "lh-sup-5a015bc2954569a5",
+      "name": "Spinneys kitchen"
+    },
+    {
+      "id": "lh-sup-61f6d0b04fb024a2",
+      "name": "Le Marchet Selectif ( kitchen & Orange )"
+    },
+    {
+      "id": "lh-sup-6442adb55b93f2f8",
+      "name": "Le Marchet Selectif ( Orange, Starwberry, Ice )"
+    },
+    {
+      "id": "lh-sup-6f1c30b3c9c88c97",
+      "name": "Le Marchet Selectif (Olive,lasagna, White Vine)"
+    },
+    {
+      "id": "lh-sup-6f8cf3daa515c3bb",
+      "name": "Le marcher (Foul, orange )"
+    },
+    {
+      "id": "lh-sup-75a5ef0942cf3bba",
+      "name": "Spinnets Kitchen Stock ( 5-6- June)(Backing Powder, Fruit & veg ...)"
+    },
+    {
+      "id": "lh-sup-75cac07b4ecc4576",
+      "name": "Spinneys Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-76e30e6d00d0896e",
+      "name": "Le Marchet Selectif ( Fa7em Ice water ,,,,)For Birthday"
+    },
+    {
+      "id": "lh-sup-7bf2f0f08ac86ce4",
+      "name": "spinneys"
+    },
+    {
+      "id": "lh-sup-7c09c30c74f5a843",
+      "name": "Spinneys Brth 14-3-2026"
+    },
+    {
+      "id": "lh-sup-81c4c9deed7a4d3c",
+      "name": "Spinneys College Workshop"
+    },
+    {
+      "id": "lh-sup-826162377bf11700",
+      "name": "Le Marchet Selectif (Sparkling Water,Fahem, Cucumber)"
+    },
+    {
+      "id": "lh-sup-835a60ffbdb7fe5b",
+      "name": "Le Marchet Selectif (Water )"
+    },
+    {
+      "id": "lh-sup-85fd92a0d4236861",
+      "name": "Le Marchet Selectif ( Ice, fruits…)"
+    },
+    {
+      "id": "lh-sup-87cc6e2c8bda76d2",
+      "name": "Le Marchet Selectif (Water, F& V Ice )"
+    },
+    {
+      "id": "lh-sup-886f268fc2741ee4",
+      "name": "Spinneys Food For Birthday"
+    },
+    {
+      "id": "lh-sup-94d472a3523d194e",
+      "name": "Le marcher (Backing Soda ,Ice )"
+    },
+    {
+      "id": "lh-sup-a003e9d0af07bd2f",
+      "name": "Spinneys Food For Kitchen"
+    },
+    {
+      "id": "lh-sup-a02f11c16d8f18bd",
+      "name": "Spinneys (Oil,Mayo,…)"
+    },
+    {
+      "id": "lh-sup-a0ca458e2afafd0b",
+      "name": "Le Marche Selectif"
+    },
+    {
+      "id": "lh-sup-a1d6dd4c92d7f781",
+      "name": "Le Marchet Selectif ( Fruits, Vegerable…)"
+    },
+    {
+      "id": "lh-sup-a9b73782341da0f0",
+      "name": "Spinneys Kitchen Workshop"
+    },
+    {
+      "id": "lh-sup-acb0db0ae0941eb8",
+      "name": "Le Marchet Selectif ( F&V) Inv (5-6-2026)"
+    },
+    {
+      "id": "lh-sup-ae4b69a0d6137914",
+      "name": "Spinneys For Barbecue"
+    },
+    {
+      "id": "lh-sup-b0118dace71a2c0a",
+      "name": "Le Marchet Selectif Firas"
+    },
+    {
+      "id": "lh-sup-b1fda2f95ebcc5b3",
+      "name": "Le Marchet Selectif (Veg & Fruits )"
+    },
+    {
+      "id": "lh-sup-b275f8cb9f9e37fd",
+      "name": "Spinneys For meat burger live station"
+    },
+    {
+      "id": "lh-sup-bbe3dc2badba726e",
+      "name": "Le  Marchet Selectif"
+    },
+    {
+      "id": "lh-sup-bcedf6c60d2c48e4",
+      "name": "Le Marchet Selectif ( Foul , Orange )"
+    },
+    {
+      "id": "lh-sup-c154eb5ab4ba3825",
+      "name": "Le Marchet Selectif (Old Invoices)"
+    },
+    {
+      "id": "lh-sup-c1aa89ce00479681",
+      "name": "Le Marchet Selectif (Cheese)"
+    },
+    {
+      "id": "lh-sup-c743ba5c52c3db41",
+      "name": "Spinneys ( Bread For Burger, Cold Sandwiches, Cheese"
+    },
+    {
+      "id": "lh-sup-c80a9c7d265e9aa1",
+      "name": "Le Marchet Selectif For Barbecue Today"
+    },
+    {
+      "id": "lh-sup-ca03ac457e56042f",
+      "name": "Spinneys173132 Workshop Supplies"
+    },
+    {
+      "id": "lh-sup-ca05ed9e45acb9f7",
+      "name": "Le Marchet Selectif ( Nabat Organic, Puck Cheddar  )"
+    },
+    {
+      "id": "lh-sup-cdb7330abc3e352f",
+      "name": "Spinneys Kitchen & Bar"
+    },
+    {
+      "id": "lh-sup-d0f104141aa0b81b",
+      "name": "Le Marchet Ice For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-d3b9401290e18504",
+      "name": "Spinneys Bithday 12-13 June"
+    },
+    {
+      "id": "lh-sup-d803bcc2180a5d05",
+      "name": "Le Marchet Slectif (puck Cheese, water, Beer,wipes)"
+    },
+    {
+      "id": "lh-sup-d977fd0a3f304e96",
+      "name": "Eva Maalouly"
+    },
+    {
+      "id": "lh-sup-db8d934b6157dabc",
+      "name": "Le Marchet Selectif ( Veg & Cheese, Mustard,Tuna….)"
+    },
+    {
+      "id": "lh-sup-de8925c02febe3d6",
+      "name": "Le Marchet Selectif ( Veg, Fruits, Pasta , water , Mayo"
+    },
+    {
+      "id": "lh-sup-e00a91772e3c1a01",
+      "name": "Le Marchet Fruits For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-e19ad91f9e0fa746",
+      "name": "Le Marchet Selectif For Bar Water & Fruits"
+    },
+    {
+      "id": "lh-sup-e72c0c11ed4d08df",
+      "name": "Le Marchet Selectif (Salt Orange  )"
+    },
+    {
+      "id": "lh-sup-ef3de47be4cce6c1",
+      "name": "Spinneys ( Barbecue Station)"
+    },
+    {
+      "id": "lh-sup-f03f9d83b80291cb",
+      "name": "Spinneys (Spray Bttle Workshop,…)"
+    },
+    {
+      "id": "lh-sup-f23ebb3e703a9c07",
+      "name": "Spinneys ( Pasta,Wipes,Eggs…)"
+    },
+    {
+      "id": "lh-sup-f72e4fd5ee9b3442",
+      "name": "Le Marchet Selectif ( Ice, Lazagna, Water…)"
+    },
+    {
+      "id": "lh-sup-fa90f57e7aa0d7cb",
+      "name": "Le marcher"
+    },
+    {
+      "id": "lh-sup-fbef6ca194ab232f",
+      "name": "Le Marchet selectif Birthday (17-18)"
+    },
+    {
+      "id": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-1",
+      "name": "Spinneys"
+    }
+  ]
+}

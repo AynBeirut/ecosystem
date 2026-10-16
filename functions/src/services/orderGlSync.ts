@@ -74,6 +74,9 @@ export function orderNeedsSaleGl(orderData: Record<string, unknown>): boolean {
 
   if (!storeId || total === 0 || items.length === 0) return false;
 
+  const status = normalizeString(orderData.status).toLowerCase();
+  if (status === 'cancelled' || status === 'voided' || orderData.voided === true) return false;
+
   return isCountedSaleStatus(orderData.status) || isPaidPaymentStatus(orderData.paymentStatus);
 }
 

@@ -1,0 +1,89 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "storeName": "little hands",
+  "range": {
+    "start": "2025-12-01",
+    "end": "2026-09-30"
+  },
+  "livePnlUiSnapshot": {
+    "totalClass7": 77655.81,
+    "purchasesGoods": 45819.7,
+    "endingInventory": 12664.1,
+    "totalCos": 33155.6,
+    "chargesGA": -1225.36,
+    "salariesRelated": 8698.34,
+    "totalExpenses": 7472.98,
+    "netProfit": 37027.23
+  },
+  "liveFirestoreAudit": {
+    "financeExpenses": {
+      "count": 775,
+      "totalUsd": 58743.76,
+      "bySurface": {
+        "supplier_purchase": 22281.01,
+        "operating": 16677.22,
+        "payroll": 11611,
+        "asset": 2917,
+        "cash_expense": 2712.53,
+        "treasury": 2545
+      },
+      "byCategory": {
+        "production_input": 22281.01,
+        "operating_expense": 19389.75,
+        "payroll": 11611,
+        "fixed_asset": 2917,
+        "owner_bank_youssef": 1384,
+        "owner_bank_sanaa": 1161
+      },
+      "byMonth": {
+        "2025-12": 55.64,
+        "2026-01": 1022.55,
+        "2026-02": 2263.38,
+        "2026-03": 2693.31,
+        "2026-04": 3507.4,
+        "2026-05": 9707.42,
+        "2026-06": 11028.25,
+        "2026-07": 18399.16,
+        "2026-08": 7354.12,
+        "2026-09": 2712.53
+      }
+    },
+    "completedOrders": {
+      "count": 1324,
+      "totalUsd": 87388.7
+    },
+    "postedJournalEntries": {
+      "count": 2343,
+      "bySourceType": {
+        "order": 1530,
+        "expense": 507,
+        "purchase": 276,
+        "payroll": 28,
+        "manual": 1,
+        "reversal": 1
+      }
+    },
+    "expenseRowsRepresentedByPostedSourceIdOrSourceKey": {
+      "count": 79,
+      "totalUsd": 5432.23
+    },
+    "expenseRowsNotRepresentedByPostedSourceIdOrSourceKey": {
+      "count": 696,
+      "totalUsd": 53311.53,
+      "bySurface": {
+        "supplier_purchase": 19400.78,
+        "operating": 15649.22,
+        "payroll": 10952,
+        "cash_expense": 2712.53,
+        "treasury": 2545,
+        "asset": 2052
+      }
+    }
+  },
+  "analysis": {
+    "primaryMismatch": "P&L is built from posted journalEntries/journalLines, not directly from financeExpenses Excel source rows.",
+    "costClassification": "Excel cash out is split between C.O.S, operating expenses, payroll, fixed assets, treasury, and ending inventory; P&L total expenses intentionally excludes C.O.S, assets, treasury, and ending inventory.",
+    "sourceLinkRisk": "Most financeExpenses rows cannot be reconciled back to posted GL by sourceId/sourceKey, so the UI cannot prove Excel row coverage even when account totals exist.",
+    "salesMismatchRisk": "Completed orders total is higher than P&L class 7 revenue; order-to-GL posting coverage needs separate reconciliation."
+  }
+}

@@ -37,10 +37,15 @@ function buildInitialPages(): Record<string, React.ComponentType> {
 
 export default function CrmTabHost() {
   const { pathname } = useLocation();
-  const activeTab = useMemo(
-    () => CRM_TABS.find((tab) => pathname.startsWith(tab.prefix)),
-    [pathname],
-  );
+  const activeTab = useMemo(() => {
+    if (pathname === '/admin/crm' || pathname === '/admin/crm/') {
+      return CRM_TABS.find((tab) => tab.key === 'dashboard');
+    }
+    const sorted = [...CRM_TABS].sort((a, b) => b.prefix.length - a.prefix.length);
+    return sorted.find(
+      (tab) => pathname === tab.prefix || pathname.startsWith(`${tab.prefix}/`),
+    );
+  }, [pathname]);
   const [pages, setPages] = useState<Record<string, React.ComponentType>>(buildInitialPages);
 
   useEffect(() => {
@@ -71,17 +76,13 @@ export default function CrmTabHost() {
 
   return (
     <div className="crm-tab-host relative min-h-[120px]">
-      {CRM_TABS.map((tab) => {
-        const Comp = pages[tab.key];
-        if (!Comp) return null;
-        const visible = tab.key === activeTab.key;
-        return (
-          <div key={tab.key} className={visible ? 'block' : 'hidden'} aria-hidden={!visible}>
-            <Comp />
-          </div>
-        );
-      })}
-      {!ActivePage ? <AdminEmbedLoader label="Opening CRM…" compact /> : null}
+      {ActivePage ? (
+        <div key={activeTab.key} className="block">
+          <ActivePage />
+        </div>
+      ) : (
+        <AdminEmbedLoader label="Opening CRM…" compact />
+      )}
     </div>
   );
 }

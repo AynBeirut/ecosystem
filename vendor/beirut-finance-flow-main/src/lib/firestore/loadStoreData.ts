@@ -19,6 +19,8 @@ import {
   buildFinishedGoodsCostMap,
   overlayPlatformCostsOnProducts,
 } from '@/lib/grabio/platformUnitCost';
+import { shouldShowOnLittleHandsSupplierList } from '@/lib/littleHandsSupplierRouting';
+import { dedupeLittleHandsSuppliersByDisplayName } from '@/lib/littleHandsSupplierDedupe';
 import type {
   Client,
   Supplier,
@@ -103,7 +105,19 @@ export async function loadStoreData(storeId: string): Promise<LoadedStoreData> {
     productsSnap.docs.map((d) => mapFsProduct(d.id, d.data() as Record<string, unknown>)),
     fgCostMap,
   );
-  const suppliers = suppliersSnap.docs.map((d) => mapFsSupplier(d.id, d.data() as Record<string, unknown>));
+  const suppliers = dedupeLittleHandsSuppliersByDisplayName(
+    suppliersSnap.docs
+      .filter((d) => {
+        const data = d.data() as Record<string, unknown>;
+        if (data.archivedForPurchasesUi === true || data.status === 'inactive' || data.archived === true) {
+          return false;
+        }
+        const name = String(data.name || '');
+        if (d.id.startsWith('lh-sup-') && !shouldShowOnLittleHandsSupplierList(name)) return false;
+        return true;
+      })
+      .map((d) => mapFsSupplier(d.id, d.data() as Record<string, unknown>)),
+  );
   const platformPurchaseOrders = purchasesSnap.docs.map((d) =>
     mapFsPlatformPurchase(d.id, d.data() as Record<string, unknown>),
   );

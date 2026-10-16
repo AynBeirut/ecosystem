@@ -1,0 +1,24 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "pulledAt": "2026-09-20T09:03:08.363Z",
+  "question": "Morning sales revenue ~91217 vs now ~90487.14 with no real operations",
+  "formulas": {
+    "ordersPageCountedIncludingNegatives": 90487.14,
+    "dashboardCountedExcludingNegativeTotals": 91115.78,
+    "countedPlusReturnedNonNegative": 91217.28,
+    "userMorningFigure": 91217,
+    "userNowFigure": 90487.14
+  },
+  "explanation": "No missing cash. Gap ~729.86 = ~628.64 from negative-total completed orders (credits/adjustments still status completed) plus ~101.50 from ORD-2026-09-19-000006 excluded after status returned (updatedAt 2026-09-20T09:00:18.036Z). Morning ~91217 matches counted+returned (non-negative), not current Orders tile.",
+  "fix2026-09-20": "Shared sumCountedSaleOrderRevenue in salesRules.ts — Orders + Dashboard exclude returned/pending and negative credit lines; deployed hosting.",
+  "returnedOrder": {
+    "ref": "ORD-2026-09-19-000006",
+    "total": 101.5,
+    "status": "returned",
+    "updatedAt": "2026-09-20T09:00:18.036Z"
+  },
+  "negativeCountedOrdersTotal": -628.6358,
+  "negativeCountedOrdersCount": 12,
+  "countedOrderCount": 1337,
+  "totalOrders": 1338
+}

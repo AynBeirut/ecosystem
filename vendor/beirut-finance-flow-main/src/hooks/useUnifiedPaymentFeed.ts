@@ -32,12 +32,14 @@ export function useUnifiedPaymentFeed() {
   const [remoteLoading, setRemoteLoading] = useState(true);
   const [accountPayments, setAccountPayments] = useState<Array<Record<string, unknown> & { id: string }>>([]);
   const [storeReceipts, setStoreReceipts] = useState<Array<Record<string, unknown> & { id: string }>>([]);
+  const [posOrders, setPosOrders] = useState<Array<Record<string, unknown> & { id: string }>>([]);
   const [error, setError] = useState<string | null>(null);
 
   const reload = useCallback(async () => {
     if (!storeId) {
       setAccountPayments([]);
       setStoreReceipts([]);
+      setPosOrders([]);
       setRemoteLoading(false);
       return;
     }
@@ -47,6 +49,10 @@ export function useUnifiedPaymentFeed() {
       const data = await fetchGrabioPaymentSources(storeId);
       setAccountPayments(data.accountPayments);
       setStoreReceipts(data.storeReceipts);
+      setPosOrders(data.posOrders);
+      if (data.partialErrors?.length) {
+        console.warn('[useUnifiedPaymentFeed] partial load:', data.partialErrors);
+      }
     } catch (err) {
       console.error('[useUnifiedPaymentFeed]', err);
       setError(err instanceof Error ? err.message : 'Failed to load payments');
@@ -73,8 +79,9 @@ export function useUnifiedPaymentFeed() {
         invoicePayments: payments,
         paymentOrders,
         accountPayments,
+        posOrders,
       }),
-    [storeId, profile?.mainCurrency, mergedReceipts, payments, paymentOrders, accountPayments],
+    [storeId, profile?.mainCurrency, mergedReceipts, payments, paymentOrders, accountPayments, posOrders],
   );
 
   const byDirection = useCallback(

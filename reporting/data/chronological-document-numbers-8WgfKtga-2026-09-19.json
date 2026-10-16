@@ -1,0 +1,78 @@
+{
+  "write": true,
+  "at": "2026-09-20T14:16:14.063Z",
+  "storeCount": 1,
+  "stores": [
+    {
+      "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 793,
+          "updates": 793,
+          "changed": 793
+        },
+        {
+          "label": "purchases",
+          "total": 801,
+          "updates": 801,
+          "changed": 801
+        },
+        {
+          "label": "orders",
+          "total": 1338,
+          "updates": 1338,
+          "changed": 1338
+        },
+        {
+          "label": "journal:RV",
+          "total": 1358,
+          "updates": 1358,
+          "changed": 1358
+        },
+        {
+          "label": "journal:PV",
+          "total": 802,
+          "updates": 802,
+          "changed": 802
+        },
+        {
+          "label": "journal:JV",
+          "total": 342,
+          "updates": 342,
+          "changed": 342
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    }
+  ]
+}

@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
 import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
 import { useAccounting } from "@/context/AccountingContext";
@@ -10,6 +11,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import { useStoreDocumentCurrencies } from "@/components/StoreCurrencyField";
 import { Plus, Building2, Phone, Mail, MapPin, FileText, TrendingUp, TrendingDown } from "lucide-react";
 import { openAccountingWithFocus } from "@/lib/ledger/ledgerActivity";
 import { useForm } from "react-hook-form";
@@ -34,7 +36,13 @@ type SupplierFormData = z.infer<typeof supplierSchema>;
 
 const SuppliersManager = () => {
   const { logout, suppliers, addSupplier, purchaseOrders } = useAppContext();
+  const { main: storeCurrency } = useStoreDocumentCurrencies();
   const { toast } = useToast();
+  const dateFilter = useInvoiceManagerDateFilterOptional();
+  const visibleSuppliers = useMemo(
+    () => suppliers.filter((s) => !dateFilter || dateFilter.matchesDate(s.createdAt)),
+    [suppliers, dateFilter],
+  );
   const [activeTab, setActiveTab] = useState("list");
   const [selectedSupplier, setSelectedSupplier] = useState<string | null>(null);
 
@@ -121,14 +129,14 @@ const SuppliersManager = () => {
             </CardHeader>
             <CardContent>
           <TabsContent value="list">
-                {suppliers.length === 0 ? (
+                {visibleSuppliers.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
                     <Building2 className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                     <p>No suppliers added yet. Add your first supplier!</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    {suppliers.map((supplier) => {
+                    {visibleSuppliers.map((supplier) => {
                       const statement = getSupplierStatement(supplier.id);
                       return (
                         <div
@@ -171,10 +179,10 @@ const SuppliersManager = () => {
                             </Button>
                             <div className="text-right">
                               <p className="text-sm text-muted-foreground">Outstanding</p>
-                              <p className="font-bold">{formatCurrency(statement?.balance || 0, "USD")}</p>
+                              <p className="font-bold">{formatCurrency(statement?.balance || 0, storeCurrency)}</p>
                             </div>
                             {statement && statement.balance > 0 ? (
-                              <Badge variant="destructive">Owes {formatCurrency(statement.balance, "USD")}</Badge>
+                              <Badge variant="destructive">Owes {formatCurrency(statement.balance, storeCurrency)}</Badge>
                             ) : null}
                           </div>
                         </div>
@@ -293,7 +301,7 @@ const SuppliersManager = () => {
                       <CardTitle className="text-sm font-medium text-muted-foreground">Total Purchases</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-2xl font-bold">{formatCurrency(selectedStatement.totalPurchases, "USD")}</p>
+                      <p className="text-2xl font-bold">{formatCurrency(selectedStatement.totalPurchases, storeCurrency)}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -301,7 +309,7 @@ const SuppliersManager = () => {
                       <CardTitle className="text-sm font-medium text-muted-foreground">Total Paid</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-2xl font-bold text-green-600">{formatCurrency(selectedStatement.totalPaid, "USD")}</p>
+                      <p className="text-2xl font-bold text-green-600">{formatCurrency(selectedStatement.totalPaid, storeCurrency)}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -309,7 +317,7 @@ const SuppliersManager = () => {
                       <CardTitle className="text-sm font-medium text-muted-foreground">Pending</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-2xl font-bold text-amber-600">{formatCurrency(selectedStatement.totalPending, "USD")}</p>
+                      <p className="text-2xl font-bold text-amber-600">{formatCurrency(selectedStatement.totalPending, storeCurrency)}</p>
                     </CardContent>
                   </Card>
                   <Card>
@@ -317,7 +325,7 @@ const SuppliersManager = () => {
                       <CardTitle className="text-sm font-medium text-muted-foreground">Balance Due</CardTitle>
                     </CardHeader>
                     <CardContent>
-                      <p className="text-2xl font-bold text-red-600">{formatCurrency(selectedStatement.balance, "USD")}</p>
+                      <p className="text-2xl font-bold text-red-600">{formatCurrency(selectedStatement.balance, storeCurrency)}</p>
                     </CardContent>
                   </Card>
                 </div>

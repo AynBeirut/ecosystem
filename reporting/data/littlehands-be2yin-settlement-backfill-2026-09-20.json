@@ -1,0 +1,36 @@
+{
+  "generatedAt": "2026-09-20T11:45:05.661Z",
+  "mode": "write",
+  "patch": {
+    "cashBookLineText": "Be2yin Men Fetoura abel",
+    "cashBookExcelSheet": "22-2-2026",
+    "cashBookExcelRow": 41,
+    "cashBookExpenseNeighbors": [
+      {
+        "row": 42,
+        "label": "Le Charcutier",
+        "amount": 62
+      },
+      {
+        "row": 43,
+        "label": "Flower Mothers Day",
+        "amount": 33
+      },
+      {
+        "row": 44,
+        "label": "Event MegaStore",
+        "amount": 46
+      }
+    ],
+    "settlementMemoType": "prior_invoice_balance",
+    "settlementReferenceName": "abel",
+    "organizedCategory": "misc_expense",
+    "expenseUiSurface": "misc_divers",
+    "miscItemLabel": "Be2yin Men Fetoura abel",
+    "supplierId": "lh-sup-divers",
+    "supplierName": "Divers",
+    "miscodedSupplierId": "lh-sup-a6d9bd33dee1c8fd",
+    "notes": "Cash-book: balance from prior invoice (Abel). Source Marsh2026.xls sheet 22-2-2026 row 41. Not a vendor card.",
+    "updatedAt": "2026-09-20T11:45:05.661Z"
+  }
+}

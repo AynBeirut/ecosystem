@@ -118,18 +118,30 @@ const Settings = () => {
             {!playStoreV1Nav && (
             <Card>
               <CardHeader>
-                <CardTitle>Company &amp; invoice branding</CardTitle>
+                <CardTitle>Invoice document setup (PDFs)</CardTitle>
                 <CardDescription>
-                  Store name, logo, email, website, and invoice template are managed in Grabio Admin.
+                  Company on invoices, estimates, and PDF colors — separate from web shop / menu branding.
                 </CardDescription>
               </CardHeader>
-              <CardContent>
+              <CardContent className="space-y-2">
                 <a
-                  href={`${BRAND.ecosystemUrl}/admin/profile`}
+                  href={`${import.meta.env.BASE_URL}document-setup`.replace(/\/+/g, '/').replace(':/', '://')}
                   className="inline-flex items-center text-sm font-medium text-[#38B2AC] hover:underline"
                 >
-                  Open Business &amp; Invoice Settings in Grabio Admin →
+                  Open invoice document setup →
                 </a>
+                <a
+                  href={`${BRAND.ecosystemUrl}/admin/finance/invoice-document`}
+                  className="block text-xs text-muted-foreground hover:text-[#38B2AC] hover:underline"
+                >
+                  Same setup in Grabio Admin →
+                </a>
+                <p className="text-xs text-muted-foreground">
+                  Web shop name and logo:{" "}
+                  <a href={`${BRAND.ecosystemUrl}/admin/profile`} className="text-[#38B2AC] hover:underline">
+                    Admin store profile
+                  </a>
+                </p>
               </CardContent>
             </Card>
             )}

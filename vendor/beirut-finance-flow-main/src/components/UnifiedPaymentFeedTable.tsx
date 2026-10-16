@@ -41,46 +41,30 @@ export default function UnifiedPaymentFeedTable({
   }
 
   return (
-    <div className="rounded-md border overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead>
-          <tr className="bg-muted/60">
-            <th className="py-3 px-4 text-left font-medium">Date</th>
-            <th className="py-3 px-4 text-left font-medium">Party</th>
-            <th className="py-3 px-4 text-left font-medium">Source</th>
-            <th className="py-3 px-4 text-left font-medium">Reference</th>
-            <th className="py-3 px-4 text-right font-medium">Amount</th>
-            <th className="py-3 px-4 text-left font-medium">Method</th>
-            <th className="py-3 px-4 text-right font-medium">Links</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((row) => (
-            <tr key={row.id} className="border-t">
-              <td className="py-3 px-4 whitespace-nowrap">{row.date || '—'}</td>
-              <td className="py-3 px-4">{row.partyName}</td>
-              <td className="py-3 px-4">{row.sourceLabel}</td>
-              <td className="py-3 px-4 font-mono text-xs">{row.reference}</td>
-              <td className="py-3 px-4 text-right whitespace-nowrap">
-                {row.currency} {row.amount.toFixed(2)}
-              </td>
-              <td className="py-3 px-4 capitalize">{row.method || '—'}</td>
-              <td className="py-3 px-4 text-right whitespace-nowrap">
-                <div className="flex justify-end gap-2">
-                  {row.adminLink ? (
-                    <Link to={row.adminLink} className="text-teal-700 hover:underline text-xs font-medium">
-                      Source
-                    </Link>
-                  ) : null}
-                  <Link to={row.accountingLink} className="text-teal-700 hover:underline text-xs font-medium">
-                    GL
-                  </Link>
-                </div>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <div className="space-y-3">
+      {rows.map((row) => (
+        <div
+          key={row.id}
+          className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h3 className="font-medium">{row.partyName || "Receipt"}</h3>
+            <p className="text-sm text-muted-foreground">
+              {row.date || "—"} · {row.currency} {row.amount.toFixed(2)} · {row.sourceLabel}
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            {row.adminLink ? (
+              <Link to={row.adminLink}>
+                <Button type="button" variant="outline" size="sm">Source</Button>
+              </Link>
+            ) : null}
+            <Link to={row.accountingLink}>
+              <Button type="button" variant="outline" size="sm">GL</Button>
+            </Link>
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

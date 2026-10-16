@@ -23,6 +23,7 @@ import {
   saveAccountingSlice,
 } from '@/lib/firestore/accountingFirestore';
 import { glPostExpensePayment, glPostDeliveryWalletSettlement } from '@/lib/ledger/glBridge';
+import { syncFinanceExpenseNumbers } from '@/lib/firestore/chronologicalRenumberFirestore';
 
 interface AccountingContextType {
   // Expenses
@@ -135,7 +136,7 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
 
   // ============= EXPENSE FUNCTIONS =============
   const createExpense = (expenseData: Omit<Expense, 'id' | 'createdAt' | 'updatedAt'>): string => {
-    const id = `EXP-${Date.now()}`;
+    const id = `fin-exp-${Date.now()}`;
     const now = new Date().toISOString();
     const expense: Expense = {
       ...expenseData,
@@ -147,6 +148,13 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       updatedAt: now,
     };
     setExpenses(prev => [...prev, expense]);
+    if (storeId) {
+      void syncFinanceExpenseNumbers(storeId).then((numbers) => {
+        const expenseNumber = numbers.get(id);
+        if (!expenseNumber) return;
+        setExpenses((prev) => prev.map((e) => (e.id === id ? { ...e, expenseNumber } : e)));
+      }).catch((err) => console.error('[Accounting][Expense][renumber]', err));
+    }
     console.log('[Accounting] Expense created:', id);
     return id;
   };
@@ -548,10 +556,14 @@ export const AccountingProvider: React.FC<{ children: React.ReactNode }> = ({ ch
       filteredExpenses = filteredExpenses.filter(e => new Date(e.startDate) <= new Date(endDate));
     }
 
-    filteredExpenses.forEach(expense => {
-      if (expense.status === 'paid') {
-        result[expense.category] += expense.amount;
-      }
+    filteredExpenses.forEach((expense) => {
+      const paid =
+        expense.status === 'paid'
+          ? expense.amount
+          : Math.max(0, Number(expense.paidAmount) || 0);
+      if (paid <= 0) return;
+      const bucket = expense.category in result ? expense.category : 'other';
+      result[bucket] += paid;
     });
 
     return result;

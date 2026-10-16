@@ -1,0 +1,11 @@
+{
+  "catalog": "grabio-marketing-packages",
+  "feedUrlPrimary": "https://grabio.space/meta/catalog/grabio-packages-feed.csv",
+  "feedUrlLegacy": "https://grabio.space/meta-catalog/grabio-packages-feed.csv",
+  "localCsv": "reporting/data/grabio-meta-catalog-packages-2026-09-17.csv",
+  "rowCount": 22,
+  "idRule": "Pixel content_ids must equal catalog id and retailer_id (e.g. grabio-plan-starter, grabio-demo-restaurant)",
+  "pixelRule": "On grabio.space only Grabio catalog IDs are sent; marketplace vendor product IDs are blocked from marketing pixel",
+  "metaCommerceManager": "Catalog data source = feedUrlPrimary; one pixel for this catalog only; refresh after deploy",
+  "generatedAt": "2026-09-17T00:00:00.000Z"
+}

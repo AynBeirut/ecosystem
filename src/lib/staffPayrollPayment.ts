@@ -99,8 +99,14 @@ export async function processStaffPayrollPayment(
   const paymentId = buildPayrollPaymentDocId(input.storeId, staffId, input.month);
   const paymentRef = doc(input.db, 'salaryPayments', paymentId);
 
-  const existingSnap = await getDoc(paymentRef);
-  if (existingSnap.exists()) {
+  let existingSnap: Awaited<ReturnType<typeof getDoc>> | null = null;
+  try {
+    existingSnap = await getDoc(paymentRef);
+  } catch (err) {
+    const code = String((err as { code?: string }).code || '');
+    if (code !== 'permission-denied') throw err;
+  }
+  if (existingSnap?.exists()) {
     const existing = existingSnap.data();
     if (existing?.status === 'paid' && !input.overwriteExisting) {
       return {
@@ -139,7 +145,10 @@ export async function processStaffPayrollPayment(
     idempotencyKey: `${staffId}:${input.month}`,
   };
 
-  await setDoc(paymentRef, paymentData);
+  const storedPayment = Object.fromEntries(
+    Object.entries(paymentData).filter(([, value]) => value !== undefined),
+  );
+  await setDoc(paymentRef, storedPayment);
 
   await glPostPayrollPayment(input.storeId, {
     id: paymentId,

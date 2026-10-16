@@ -18,3 +18,15 @@ export function getApiBaseUrl(): string {
 
   return explicitApiUrl.replace(/\/$/, '');
 }
+
+/** Meta Commerce CSV feed — always grabio.space (hosting rewrites /api → Cloud Function). */
+export function getMetaCatalogFeedUrl(storeId: string): string {
+  const id = String(storeId || '').trim();
+  if (!id) return '';
+  return `https://grabio.space/api/meta/catalog/feed.csv?storeId=${encodeURIComponent(id)}`;
+}
+
+/** Grabio SaaS packages catalog for Meta ads (not tenant store products). */
+export function getGrabioPackagesCatalogFeedUrl(): string {
+  return 'https://grabio.space/meta/catalog/grabio-packages-feed.csv';
+}

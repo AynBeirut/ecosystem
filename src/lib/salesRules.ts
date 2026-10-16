@@ -20,6 +20,95 @@ export function isCountedSaleStatus(status?: string): boolean {
   return COUNTED_SALE_STATUSES.includes(status as (typeof COUNTED_SALE_STATUSES)[number]);
 }
 
+export type CountedSaleRevenueOrderLike = {
+  status?: string;
+  total?: unknown;
+};
+
+/** Gross sales revenue: counted statuses only, non-negative finite totals (matches dashboard). */
+export function getOrderEffectiveAmountPaid(order: {
+  amountPaid?: unknown;
+  paymentStatus?: string;
+  total?: unknown;
+}): number {
+  const total = typeof order.total === 'number' ? order.total : Number(order.total || 0);
+  const recorded = typeof order.amountPaid === 'number' ? order.amountPaid : Number(order.amountPaid || 0);
+  const ps = String(order.paymentStatus || '').toLowerCase();
+  if ((ps === 'paid' || ps === 'completed') && Number.isFinite(total) && total > 0) {
+    if (Number.isFinite(recorded) && recorded >= total - 0.01) {
+      return Math.round(recorded * 100) / 100;
+    }
+    return Math.round(total * 100) / 100;
+  }
+  if (Number.isFinite(recorded) && recorded > 0) {
+    return Math.round(recorded * 100) / 100;
+  }
+  return 0;
+}
+
+export function getOrderAmountDue(order: {
+  amountPaid?: unknown;
+  paymentStatus?: string;
+  total?: unknown;
+}): number {
+  const total = typeof order.total === 'number' ? order.total : Number(order.total || 0);
+  const paid = getOrderEffectiveAmountPaid(order);
+  return Math.max(0, Math.round((total - paid) * 100) / 100);
+}
+
+export function normalizeOrderPaymentStatus(order: {
+  paymentStatus?: string;
+  amountPaid?: unknown;
+  total?: unknown;
+}): 'paid' | 'partial' | 'unpaid' | 'refunded' {
+  const rawStatus = String(order.paymentStatus || '').toLowerCase();
+  if (rawStatus === 'paid' || rawStatus === 'completed') return 'paid';
+  if (rawStatus === 'partial') return 'partial';
+  if (rawStatus === 'refunded') return 'refunded';
+  if (rawStatus === 'failed') return 'unpaid';
+
+  const total = Number(order.total || 0);
+  const paid = getOrderEffectiveAmountPaid(order);
+  if (Number.isFinite(total) && total > 0) {
+    if (paid >= total - 0.01) return 'paid';
+    if (paid > 0) return 'partial';
+  }
+  return 'unpaid';
+}
+
+export function sumCountedSaleOrderRevenue(orders: CountedSaleRevenueOrderLike[]): {
+  revenue: number;
+  countedOrders: number;
+  excludedNonSaleStatus: number;
+  excludedInvalidOrNegativeTotal: number;
+} {
+  let revenue = 0;
+  let countedOrders = 0;
+  let excludedNonSaleStatus = 0;
+  let excludedInvalidOrNegativeTotal = 0;
+
+  for (const order of orders) {
+    if (!isCountedSaleStatus(order.status)) {
+      excludedNonSaleStatus += 1;
+      continue;
+    }
+    const orderTotal = typeof order.total === 'number' ? order.total : Number(order.total);
+    if (!Number.isFinite(orderTotal) || orderTotal < 0) {
+      excludedInvalidOrNegativeTotal += 1;
+      continue;
+    }
+    revenue += orderTotal;
+    countedOrders += 1;
+  }
+
+  return {
+    revenue: Math.round((revenue + Number.EPSILON) * 100) / 100,
+    countedOrders,
+    excludedNonSaleStatus,
+    excludedInvalidOrNegativeTotal,
+  };
+}
+
 /** Cash-on-delivery: unpaid cash order — cash sits with courier until wallet settlement. */
 export function isPlatformOrderCod(order: {
   paymentMethod?: string;

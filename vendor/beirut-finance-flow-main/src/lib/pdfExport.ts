@@ -10,6 +10,14 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
+import {
+  generateFinanceDocumentHTML,
+  financeDocumentPdfFileName,
+  type FinancePrintableKind,
+} from "@grabio/lib/financeDocumentHtml";
+import { downloadHtmlAsPdf, htmlToPdfFile } from "@grabio/lib/htmlDocumentPdf";
+import { mapFinanceInvoiceTemplateToGrabio } from "@grabio/lib/invoiceTemplateMap";
+import type { StoreProfile } from "@grabio/types/storeProfile";
 
 // Direct PDF download — no browser print dialog (avoids about:blank / headers on mobile)
 export type ExportableType = "invoice" | "estimate" | "purchaseOrder" | "receipt" | "payment";
@@ -222,6 +230,68 @@ function isNipcoLegacyCompany(company: any): boolean {
 /** One branded PDF layout for every exportable document type on matching stores. */
 function shouldUseStoreBrandedPdf(company: any): boolean {
   return isNipcoLegacyCompany(company);
+}
+
+function storeProfileFromCompany(company: any): StoreProfile | null {
+  if (!company) return null;
+  if (company.__grabioStoreProfile) return company.__grabioStoreProfile as StoreProfile;
+  const invoiceTemplate = company.invoiceTemplate || "basic";
+  return {
+    name: company.shopName || company.storeName || company.name || "Store",
+    logo: company.shopLogo || company.logo || "",
+    location: company.shopAddress || company.address || "",
+    phone: company.shopPhone || company.phone,
+    email: company.shopEmail || company.email,
+    website: company.website,
+    taxNumber: company.taxId,
+    invoiceTemplate: mapFinanceInvoiceTemplateToGrabio(invoiceTemplate),
+    financeDocumentSettings: {
+      documentCompanyName: company.name,
+      documentAddress: company.address,
+      documentPhone: company.phone,
+      documentEmail: company.email,
+      documentWebsite: company.website,
+      documentCountry: company.country,
+      documentTaxId: company.taxId,
+      documentLayout: company.documentLayout,
+      documentShowCompanyName: company.documentShowCompanyName,
+      invoiceTemplate,
+      primaryColor: company.primaryColor,
+      secondaryColor: company.secondaryColor,
+      signature: company.signature,
+    },
+  } as StoreProfile;
+}
+
+async function exportFinanceDocumentHtmlPdf(
+  kind: FinancePrintableKind,
+  doc: any,
+  company: any,
+  storeProfile?: StoreProfile | null,
+): Promise<boolean> {
+  const profile = storeProfile || storeProfileFromCompany(company);
+  const currency = doc.currency || "USD";
+  const html = generateFinanceDocumentHTML(kind, doc, profile, (amount) =>
+    formatCurrency(amount, currency),
+  );
+  const fileName = financeDocumentPdfFileName(kind, doc);
+  await downloadHtmlAsPdf(html, fileName);
+  return true;
+}
+
+async function buildFinanceDocumentHtmlPdfFile(
+  kind: FinancePrintableKind,
+  doc: any,
+  company: any,
+  storeProfile?: StoreProfile | null,
+): Promise<File | null> {
+  const profile = storeProfile || storeProfileFromCompany(company);
+  const currency = doc.currency || "USD";
+  const html = generateFinanceDocumentHTML(kind, doc, profile, (amount) =>
+    formatCurrency(amount, currency),
+  );
+  const fileName = financeDocumentPdfFileName(kind, doc);
+  return htmlToPdfFile(html, fileName);
 }
 
 function brandedPdfFileName(type: ExportableType, doc: any): string {
@@ -704,10 +774,105 @@ async function buildNipcoModernPdf(
   return pdf;
 }
 
+async function buildSourceTruthInvoicePdf(doc: any, company: any): Promise<jsPDF> {
+  const currency = doc.currency || "USD";
+  const totals = computeTotals(doc);
+  const totalInWords = amountToWords(Math.max(0, totals.total ?? doc.total ?? 0), currency);
+  const documentNumber = resolveDocumentNumber(doc);
+  const pdf = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+  await ensureArabicFont(pdf);
+
+  const margin = 14;
+  const pageWidth = 210;
+  const contentWidth = pageWidth - margin * 2;
+  let y = 14;
+
+  const logoData = company?.logo ? await loadImageDataUrl(company.logo) : null;
+  if (logoData) {
+    try { pdf.addImage(logoData, "PNG", margin, y, 28, 18); }
+    catch { try { pdf.addImage(logoData, "JPEG", margin, y, 28, 18); } catch { /* skip */ } }
+  }
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(9);
+  pdf.setTextColor(17, 24, 39);
+  const contactX = logoData ? margin + 34 : margin;
+  const contactLines = toCleanLines(
+    company?.email,
+    company?.phone,
+    resolveSellerTaxId(company) ? `Tax ID: ${resolveSellerTaxId(company)}` : "",
+  );
+  y = writeLines(pdf, contactLines, contactX, y + 4, 5);
+
+  pdf.setFont("helvetica", "bold");
+  pdf.setFontSize(18);
+  pdf.setTextColor(17, 24, 39);
+  pdf.text("Invoice", pageWidth / 2, 34, { align: "center" });
+  pdf.setFontSize(14);
+  pdf.text("Invoice", margin, 44);
+
+  pdf.setFont("helvetica", "normal");
+  pdf.setFontSize(10);
+  const billTo = sanitizeHumanText(doc.customer ?? doc.clientName ?? doc.client?.name ?? "-");
+  pdf.text(`Bill to: ${billTo}`, margin, 54, { maxWidth: contentWidth });
+  pdf.text(`Date: ${formatDocDate(doc.date)}`, margin, 62);
+  pdf.text(`Payment: ${doc.status === "paid" ? "Paid" : "Unpaid"}`, margin, 70);
+
+  autoTable(pdf, {
+    startY: 78,
+    margin: { left: margin, right: margin },
+    head: [["Item", "Qty", "Price", "Total"]],
+    body: (doc.items || []).map((it: any) => {
+      const qty = Number(it.quantity ?? 0) || 0;
+      const price = Number(it.unitPrice ?? 0) || 0;
+      return [
+        sanitizeHumanText(it.description ?? ""),
+        text(qty),
+        price.toFixed(2),
+        (qty * price).toFixed(2),
+      ];
+    }),
+    styles: { fontSize: 9, cellPadding: 2.2, textColor: [17, 24, 39] },
+    headStyles: { fillColor: [255, 255, 255], textColor: [17, 24, 39], fontStyle: "bold" },
+    columnStyles: {
+      0: { cellWidth: "auto" },
+      1: { halign: "right", cellWidth: 18 },
+      2: { halign: "right", cellWidth: 28 },
+      3: { halign: "right", cellWidth: 30 },
+    },
+    theme: "plain",
+  });
+
+  y = ((pdf as any).lastAutoTable?.finalY as number | undefined) ?? 120;
+  y += 8;
+  pdf.setFontSize(10);
+  pdf.text(`Subtotal: ${currency} ${totals.subtotal.toFixed(2)}`, pageWidth - margin, y, { align: "right" });
+  y += 6;
+  pdf.text(`Total: ${currency} ${totals.total.toFixed(2)}`, pageWidth - margin, y, { align: "right" });
+  y += 9;
+  pdf.text(`Total in words: ${totalInWords} Dollars Only`, margin, y, { maxWidth: contentWidth });
+
+  if (company?.signature) {
+    const signatureData = await loadImageDataUrl(company.signature);
+    if (signatureData) {
+      try { pdf.addImage(signatureData, "JPEG", pageWidth - margin - 36, 246, 36, 18); }
+      catch { try { pdf.addImage(signatureData, "PNG", pageWidth - margin - 36, 246, 36, 18); } catch { /* skip */ } }
+    }
+  }
+
+  pdf.setFontSize(9);
+  pdf.text("Authorized signature", pageWidth - margin, 270, { align: "right" });
+  if (company?.country) pdf.text(text(company.country), margin, 282);
+  if (company?.website) pdf.text(text(company.website), pageWidth / 2, 282, { align: "center" });
+  pdf.text(`#${documentNumber}`, pageWidth - margin, 282, { align: "right" });
+  return pdf;
+}
+
 export async function exportDocumentAsPdf(
   type: ExportableType,
   doc: any,
   company?: any,
+  storeProfile?: StoreProfile | null,
 ): Promise<boolean> {
   if (!doc) {
     console.error("Export failed: Document not found");
@@ -723,6 +888,10 @@ export async function exportDocumentAsPdf(
     const normalized = normalizeExportPayload(type, doc, company);
     doc = normalized.doc;
     company = normalized.company;
+
+    if ((type === "invoice" || type === "estimate") && !shouldUseStoreBrandedPdf(company)) {
+      return exportFinanceDocumentHtmlPdf(type as FinancePrintableKind, doc, company, storeProfile);
+    }
 
     if (shouldUseStoreBrandedPdf(company)) {
       const brandedDoc = ensureExportLineItems(type, doc);
@@ -840,14 +1009,14 @@ export async function exportDocumentAsPdf(
       pdf.splitTextToSize(line, colWidth) as string[],
     );
 
-    const boxHeight = Math.max(leftWrapped.length, rightWrapped.length) * 4.5 + 6;
+    const boxHeight = Math.max(22, Math.max(leftWrapped.length, rightWrapped.length) * 5 + 10);
     pdf.setDrawColor(229, 231, 235);
     pdf.setLineWidth(0.2);
     pdf.roundedRect(margin, boxTop, colWidth, boxHeight, 2, 2);
     pdf.roundedRect(margin + colWidth + 6, boxTop, colWidth, boxHeight, 2, 2);
 
-    writeLines(pdf, leftWrapped, margin + 3, boxTop + 5);
-    writeLines(pdf, rightWrapped, margin + colWidth + 9, boxTop + 5, 4.5, {
+    writeLines(pdf, leftWrapped, margin + 4, boxTop + 7, 5);
+    writeLines(pdf, rightWrapped, margin + colWidth + 10, boxTop + 7, 5, {
       rightAlignArabicX: margin + colWidth * 2 + 3,
     });
     y = boxTop + boxHeight + 8;
@@ -949,6 +1118,7 @@ export async function buildDocumentPdfFile(
   type: ExportableType,
   doc: any,
   company?: any,
+  storeProfile?: StoreProfile | null,
 ): Promise<File | null> {
   if (!doc || !doc.id || doc.id === "DRAFT") return null;
 
@@ -956,6 +1126,10 @@ export async function buildDocumentPdfFile(
     const normalized = normalizeExportPayload(type, doc, company);
     doc = normalized.doc;
     company = normalized.company;
+
+    if ((type === "invoice" || type === "estimate") && !shouldUseStoreBrandedPdf(company)) {
+      return buildFinanceDocumentHtmlPdfFile(type as FinancePrintableKind, doc, company, storeProfile);
+    }
 
     if (shouldUseStoreBrandedPdf(company)) {
       const brandedDoc = ensureExportLineItems(type, doc);
@@ -1054,14 +1228,14 @@ export async function buildDocumentPdfFile(
     const leftWrapped = billFromLines.flatMap((line) => pdf.splitTextToSize(line, colWidth) as string[]);
     const rightWrapped = clientLines.flatMap((line) => pdf.splitTextToSize(line, colWidth) as string[]);
 
-    const boxHeight = Math.max(leftWrapped.length, rightWrapped.length) * 4.5 + 6;
+    const boxHeight = Math.max(22, Math.max(leftWrapped.length, rightWrapped.length) * 5 + 10);
     pdf.setDrawColor(229, 231, 235);
     pdf.setLineWidth(0.2);
     pdf.roundedRect(margin, boxTop, colWidth, boxHeight, 2, 2);
     pdf.roundedRect(margin + colWidth + 6, boxTop, colWidth, boxHeight, 2, 2);
 
-    writeLines(pdf, leftWrapped, margin + 3, boxTop + 5);
-    writeLines(pdf, rightWrapped, margin + colWidth + 9, boxTop + 5, 4.5, {
+    writeLines(pdf, leftWrapped, margin + 4, boxTop + 7, 5);
+    writeLines(pdf, rightWrapped, margin + colWidth + 10, boxTop + 7, 5, {
       rightAlignArabicX: margin + colWidth * 2 + 3,
     });
     y = boxTop + boxHeight + 8;

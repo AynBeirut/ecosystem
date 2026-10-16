@@ -192,7 +192,10 @@ const ProtectedRoute: React.FC<{
         }
 
         if (!currentIp) {
-          const response = await fetch('https://api.ipify.org?format=json', { cache: 'no-store' });
+          const response = await fetch('https://api.ipify.org?format=json', {
+            cache: 'no-store',
+            signal: AbortSignal.timeout(8000),
+          });
           const data = await response.json() as { ip?: string };
           currentIp = String(data.ip || '').trim();
           if (currentIp) {
@@ -234,7 +237,14 @@ const ProtectedRoute: React.FC<{
     return () => {
       cancelled = true;
     };
-  }, [user, requiresAdminIpCheck]);
+  }, [user?.id, user?.role, user?.storeId, requiresAdminIpCheck]);
+
+  const [gateWaitExpired, setGateWaitExpired] = useState(false);
+  useEffect(() => {
+    setGateWaitExpired(false);
+    const timer = window.setTimeout(() => setGateWaitExpired(true), 8000);
+    return () => window.clearTimeout(timer);
+  }, [location.pathname]);
 
   const requiresSubscriptionCheck = useMemo(() => {
     if (!user) return false;
@@ -327,8 +337,9 @@ const ProtectedRoute: React.FC<{
     };
   }, [user?.id, user?.role, user?.storeId, requiresSubscriptionCheck, navigate]);
 
-  // Wait for auth state to finish loading before making redirect decisions
-  if (isLoading) {
+  // Wait for auth state to finish loading before making redirect decisions.
+  // If the user is already known, do not leave Guests/Orders on this spinner forever.
+  if (isLoading && (!user || !gateWaitExpired)) {
     return <LoadingShell />;
   }
 
@@ -362,7 +373,7 @@ const ProtectedRoute: React.FC<{
   if (requiresAdminIpCheck) {
     const sid = user.storeId || user.id || '';
     const ipOk = ipAllowedRef.current || gateIpAllowedFor(sid) || ipCheckState === 'allowed';
-    if (!ipOk && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
+    if (!gateWaitExpired && !ipOk && (ipCheckState === 'idle' || ipCheckState === 'checking')) {
       return <LoadingShell />;
     }
   }
@@ -373,7 +384,7 @@ const ProtectedRoute: React.FC<{
       subscriptionAllowedRef.current ||
       gateSubscriptionAllowed(sid) ||
       subscriptionState === 'allowed';
-    if (!subOk && (subscriptionState === 'idle' || subscriptionState === 'checking')) {
+    if (!gateWaitExpired && !subOk && (subscriptionState === 'idle' || subscriptionState === 'checking')) {
       return <LoadingShell />;
     }
   }
@@ -420,13 +431,16 @@ const ProtectedRoute: React.FC<{
     if (allowedRoles.includes('admin')) {
       const hasAccess =
         user.role === 'admin' ||
-        user.role === 'sub_account';
+        user.role === 'sub_account' ||
+        (Boolean(user.role) && allowedRoles.includes(user.role));
 
       if (!hasAccess) {
-        if (user.role === 'user') {
+        if (user.role === 'user' && location.pathname !== '/subscription') {
           return <Navigate to="/subscription" replace state={{ from: location }} />;
         }
-        return <Navigate to="/" replace />;
+        if (location.pathname !== '/') {
+          return <Navigate to="/" replace />;
+        }
       }
     } else if (allowedRoles.includes('freelancer')) {
       if (!canAccessFreelancerPortal(user)) {

@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
+import { Alert } from 'react-native';
 import { getAuth, onAuthStateChanged, signOut as firebaseSignOut } from '@react-native-firebase/auth';
 import { GoogleSignin } from '@react-native-google-signin/google-signin';
 import {
@@ -8,11 +9,13 @@ import {
   limit,
   getDocs,
   getDoc,
+  getDocFromServer,
   query,
   doc,
   setDoc,
 } from '@react-native-firebase/firestore';
 import { isStoreTeamMember } from '../lib/storeProfileSync';
+import { detectTenantMismatch } from '../lib/tenantMismatchGuard';
 import type { FirebaseAuthTypes } from '@react-native-firebase/auth';
 
 interface AuthUser {
@@ -92,26 +95,53 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
                 crmRepId?: string;
               };
               teamMemberName = String(userData.name || '').trim() || undefined;
-              if (userData.role === 'admin') {
+
+              const boundSubAccountId =
+                typeof userData.subAccountId === 'string' ? userData.subAccountId.trim() : '';
+              if (boundSubAccountId) {
+                subAccountId = boundSubAccountId;
+                const subRef = doc(db, 'subAccounts', boundSubAccountId);
+                let subDoc;
+                try {
+                  subDoc = await getDocFromServer(subRef);
+                } catch {
+                  subDoc = await getDoc(subRef);
+                }
+                if (subDoc.exists()) {
+                  const sub = subDoc.data() as { storeId?: string; role?: string; name?: string };
+                  if (typeof sub.storeId === 'string' && sub.storeId.trim()) {
+                    storeId = sub.storeId.trim();
+                  }
+                  subAccountRole = (sub.role || userData.subAccountRole) as AuthUser['subAccountRole'];
+                  const subName = String(sub.name || '').trim();
+                  if (subName) teamMemberName = subName;
+                }
+                const mismatch = storeId
+                  ? detectTenantMismatch(storeId, {
+                      subAccountId: boundSubAccountId,
+                      storeId: userData.storeId,
+                      activeStoreId: userData.activeStoreId,
+                    })
+                  : null;
+                if (mismatch) {
+                  Alert.alert(
+                    'Wrong store on this device',
+                    'Your account is linked to a different store than this app session. Sign in again after updating the app from Play or your manager build.',
+                    [{ text: 'Sign out', onPress: () => void firebaseSignOut(auth) }],
+                  );
+                  setUser(null);
+                  setLoading(false);
+                  return;
+                }
+              }
+
+              if (userData.role === 'admin' && !boundSubAccountId) {
                 storeId =
                   (typeof userData.storeId === 'string' && userData.storeId.trim()) ||
                   (typeof userData.activeStoreId === 'string' && userData.activeStoreId.trim()) ||
                   undefined;
                 userRole = 'owner';
-              } else if (userData.role === 'sub_account') {
-                subAccountId = userData.subAccountId;
-                if (subAccountId) {
-                  const subDoc = await getDoc(doc(db, 'subAccounts', subAccountId));
-                  if (subDoc.exists()) {
-                    const sub = subDoc.data() as { storeId?: string; role?: string; name?: string };
-                    if (typeof sub.storeId === 'string' && sub.storeId.trim()) {
-                      storeId = sub.storeId.trim();
-                    }
-                    subAccountRole = (sub.role || userData.subAccountRole) as AuthUser['subAccountRole'];
-                    const subName = String(sub.name || '').trim();
-                    if (subName) teamMemberName = subName;
-                  }
-                }
+              } else if (userData.role === 'sub_account' || boundSubAccountId) {
                 if (!storeId && typeof userData.storeId === 'string' && userData.storeId.trim()) {
                   storeId = userData.storeId.trim();
                 }

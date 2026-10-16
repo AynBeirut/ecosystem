@@ -32,6 +32,46 @@ export function ledgerAccountByCode(accounts: LedgerAccount[], code: string): Le
   return accounts.find((account) => account.code === trimmed);
 }
 
+export function partyCurrencyCode(code?: string): 'USD' | 'LBP' | null {
+  const c = String(code || '').trim().toUpperCase();
+  if (c === 'USD') return 'USD';
+  if (c === 'LL' || c === 'LBP') return 'LBP';
+  return null;
+}
+
+/** Existing chart account for this party in this currency. Does not create one. */
+export function partyAccountForCurrency(
+  kind: PartyKind,
+  partyId: string,
+  currency: string,
+  accounts: LedgerAccount[],
+  pcgRows: PcgClientAccount[] = [],
+): { code: string } | null {
+  const id = String(partyId || '').trim();
+  const want = partyCurrencyCode(currency);
+  if (!id || !want) return null;
+
+  const ledgerHit = accounts.find(
+    (account) =>
+      account.partyType === kind &&
+      account.partyId === id &&
+      account.isActive !== false &&
+      partyCurrencyCode(account.currency) === want &&
+      String(account.code || '').trim(),
+  );
+  if (ledgerHit) return { code: String(ledgerHit.code).trim() };
+
+  const pcgHit = pcgRows.find(
+    (row) =>
+      row.partyType === kind &&
+      row.partyId === id &&
+      partyCurrencyCode(row.currency) === want &&
+      String(row.clientCode || '').trim(),
+  );
+  if (pcgHit) return { code: String(pcgHit.clientCode).trim() };
+  return null;
+}
+
 export function ledgerAccountForParty(
   kind: PartyKind,
   partyId: string,
@@ -110,8 +150,9 @@ export function mergeLedgerPartyRowsIntoPcgClients(
   const register = (row: PcgClientAccount, fromPcgCollection = false) => {
     const code = String(row.clientCode || '').trim();
     if (!code) return;
+    const partyCurrency = row.currency === 'USD' ? 'USD' : 'LL';
     const partyKey =
-      row.partyType && row.partyId ? `${row.partyType}:${row.partyId}` : '';
+      row.partyType && row.partyId ? `${row.partyType}:${row.partyId}:${partyCurrency}` : '';
 
     const existing = byCode.get(code);
     if (existing) {
@@ -132,7 +173,9 @@ export function mergeLedgerPartyRowsIntoPcgClients(
 
   for (const account of ledgerAccounts) {
     if (!account.partyType || !account.partyId || account.isActive === false) continue;
-    const partyKey = `${account.partyType}:${account.partyId}`;
+    if ((account as LedgerAccount & { archived?: boolean }).archived === true) continue;
+    const partyCurrency = account.currency === 'USD' ? 'USD' : 'LL';
+    const partyKey = `${account.partyType}:${account.partyId}:${partyCurrency}`;
     if (byParty.has(partyKey)) continue;
 
     const code = String(account.code || '').trim();

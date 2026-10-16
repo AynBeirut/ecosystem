@@ -1,0 +1,19 @@
+{
+  "action": "remove_unrequested_meta_product_catalog",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "slug": "little-hands",
+  "removedAt": "2026-09-17T15:43:31.227Z",
+  "previousMetaIntegrationSettings": {
+    "conversionTrackingEnabled": false,
+    "facebookAppId": "",
+    "pixelId": "",
+    "pixelEnabled": false,
+    "catalogId": "",
+    "facebookPageUrl": "",
+    "adAccountId": "",
+    "conversionApiToken": "2015.2019",
+    "lastConversionEventName": "AddToCart",
+    "lastConversionEventAt": "2026-09-13T14:18:46.982Z"
+  },
+  "note": "Delete catalog in Meta Commerce Manager manually; no client catalog was requested."
+}

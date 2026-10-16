@@ -11,7 +11,8 @@ import {
   where,
 } from 'firebase/firestore';
 import type { Product } from '@/types/product';
-import { allocateInvoiceNumberWithTrial } from '@/lib/subscriptionEnforcement';
+import { consumeTrialForOperation } from '@/lib/subscriptionEnforcement';
+import { renumberStoreOrders } from '@/lib/chronologicalRenumberFirestore';
 import { logAction } from '@/lib/auditLog';
 import { resolveCachedWalkInCustomer } from '@/lib/vOpsCatalog';
 
@@ -61,7 +62,9 @@ export function isVPosMenuProduct(product: Product & { vposMenuVisible?: boolean
 
 export async function generateStoreInvoiceNumber(storeId: string): Promise<string> {
   const db = getFirestore();
-  return allocateInvoiceNumberWithTrial(db, storeId, 'invoice', 'INV');
+  const map = await renumberStoreOrders(db, storeId);
+  const first = map.values().next().value;
+  return typeof first === 'string' ? first : 'ORD-PENDING';
 }
 
 async function resolveWalkInCustomer(storeId: string) {
@@ -119,10 +122,9 @@ export async function createVPosOrder(input: CreateVPosOrderInput): Promise<Crea
 
   const db = getFirestore();
 
-  // Parallel: customer resolve + single txn (trial + invoice #).
-  const [customer, invoiceNumber] = await Promise.all([
+  const [customer] = await Promise.all([
     resolveVPosCustomer(input.storeId, input.customer),
-    allocateInvoiceNumberWithTrial(db, input.storeId, 'invoice', 'INV'),
+    consumeTrialForOperation(db, input.storeId, 'invoice'),
   ]);
 
   const today = new Date().toISOString().split('T')[0];
@@ -154,7 +156,6 @@ export async function createVPosOrder(input: CreateVPosOrderInput): Promise<Crea
     deliveryMethod: 'pickup',
     deliveryFee: 0,
     estimatedDeliveryTime: '',
-    invoiceNumber,
     items,
     subtotal,
     taxType: 'none',
@@ -193,6 +194,11 @@ export async function createVPosOrder(input: CreateVPosOrderInput): Promise<Crea
   };
 
   const docRef = await addDoc(collection(db, 'orders'), orderData);
+  const numberMap = await renumberStoreOrders(db, input.storeId);
+  const invoiceNumber = numberMap.get(docRef.id) || 'ORD-PENDING';
+  if (invoiceNumber !== 'ORD-PENDING') {
+    await updateDoc(docRef, { invoiceNumber, updatedAt: nowIso });
+  }
 
   // Non-blocking post-save work — return to UI immediately.
   void (async () => {

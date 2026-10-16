@@ -2,7 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { getFirestore, doc, getDoc, setDoc } from 'firebase/firestore';
 import { getAuth } from 'firebase/auth';
 import { useAuth } from '@/context/useAuth';
-import { getActualStoreId } from '@/lib/storeUtils';
+import { getActualStoreId, resolveStoreIdForAuthUser } from '@/lib/storeUtils';
+import { getApiBaseUrl } from '@/lib/apiBase';
+import { buildStorePublicUrl } from '@/lib/storeUrls';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -34,20 +36,29 @@ const AdminPayments: React.FC = () => {
   const [whishChecklist, setWhishChecklist] = useState<Array<{ id: string; label: string; status: 'pass' | 'warn' | 'fail'; detail: string; action?: string }>>([]);
   const [whishChecklistScore, setWhishChecklistScore] = useState<{ value: number; max: number; percentage: number } | null>(null);
   const [whishChecklistStatus, setWhishChecklistStatus] = useState<'pass' | 'warn' | 'fail' | null>(null);
+  const [profileStoreId, setProfileStoreId] = useState<string | null>(null);
+  const [hasStoredWhishSecret, setHasStoredWhishSecret] = useState(false);
 
   // Load credentials from Firestore on mount
   useEffect(() => {
     const fetchCreds = async () => {
       if (user?.id) {
         const db = getFirestore();
-        const credRef = doc(db, 'storeProfiles', user.id);
+        const storeId = await resolveStoreIdForAuthUser(user.id);
+        setProfileStoreId(storeId);
+        const credRef = doc(db, 'storeProfiles', storeId);
         const credSnap = await getDoc(credRef);
         if (credSnap.exists()) {
           const data = credSnap.data() as Record<string, unknown>;
+          const slug = String(data.storeSlug || data.slug || '').trim();
+          const websiteUrl =
+            (data.websiteUrl as string)?.trim() ||
+            (slug ? buildStorePublicUrl(slug) : '');
+          setHasStoredWhishSecret(Boolean(String(data.whishSecret || '').trim()));
           setCredentials({
             whishChannel: (data.whishChannel as string) || '',
-            whishSecret: (data.whishSecret as string) || '',
-            websiteUrl: (data.websiteUrl as string) || '',
+            whishSecret: '',
+            websiteUrl,
             whishSuccessCallbackUrl: (data.whishSuccessCallbackUrl as string) || '',
             whishFailureCallbackUrl: (data.whishFailureCallbackUrl as string) || '',
           });
@@ -63,14 +74,27 @@ const AdminPayments: React.FC = () => {
 
   const handleSaveCreds = async () => {
     setIsSavingCreds(true);
-    if (user?.id) {
+    const storeId = profileStoreId || getActualStoreId(user) || user?.id;
+    if (storeId) {
       try {
-        const credRef = doc(db, 'storeProfiles', user.id);
-        await setDoc(credRef, credentials, { merge: true });
-        toast({ 
-          title: '✅ Payment Credentials Saved Successfully!', 
+        const credRef = doc(db, 'storeProfiles', storeId);
+        const payload: Record<string, string> = {
+          whishChannel: credentials.whishChannel.trim(),
+          websiteUrl: credentials.websiteUrl.trim(),
+          whishSuccessCallbackUrl: credentials.whishSuccessCallbackUrl.trim(),
+          whishFailureCallbackUrl: credentials.whishFailureCallbackUrl.trim(),
+        };
+        const secretDraft = credentials.whishSecret.trim();
+        if (secretDraft) {
+          payload.whishSecret = secretDraft;
+          setHasStoredWhishSecret(true);
+          setCredentials((prev) => ({ ...prev, whishSecret: '' }));
+        }
+        await setDoc(credRef, payload, { merge: true });
+        toast({
+          title: '✅ Payment Credentials Saved Successfully!',
           description: 'Your Whish Money credentials are now active. Customers can now pay through your merchant account.',
-          duration: 5000
+          duration: 5000,
         });
       } catch (err) {
         toast({ title: 'Error', description: 'Failed to save payment credentials.', variant: 'destructive' });
@@ -222,8 +246,7 @@ const AdminPayments: React.FC = () => {
         return;
       }
 
-      const API_BASE = (import.meta.env as { VITE_API_BASE?: string }).VITE_API_BASE ?? '/api';
-      const response = await fetch(`${API_BASE.replace(/\/$/, '')}/payment/whish/ops-checklist`, {
+      const response = await fetch(`${getApiBaseUrl()}/payment/whish/ops-checklist`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -345,7 +368,9 @@ const AdminPayments: React.FC = () => {
     gatewaySettings.bankTransferEnabled,
     gatewaySettings.cashOnDeliveryEnabled,
   ].filter(Boolean).length;
-  const whishConfigured = Boolean(credentials.whishChannel.trim() && credentials.whishSecret.trim());
+  const whishConfigured = Boolean(
+    credentials.whishChannel.trim() && (hasStoredWhishSecret || credentials.whishSecret.trim()),
+  );
 
   return (
     <AdminPageShell
@@ -452,7 +477,11 @@ const AdminPayments: React.FC = () => {
                     type="password"
                     value={credentials.whishSecret}
                     onChange={handleCredsChange}
-                    placeholder="Enter your secret key"
+                    placeholder={
+                      hasStoredWhishSecret
+                        ? 'Secret saved — enter only to replace'
+                        : 'Enter your secret key'
+                    }
                   />
                   <p className="text-xs text-gray-500 mt-1">Keep this secret! Used to process payments</p>
                 </div>
@@ -605,10 +634,15 @@ const AdminPayments: React.FC = () => {
               <CardHeader>
                 <CardTitle>Whish Production Ops Checklist</CardTitle>
                 <CardDescription>
-                  Validate production readiness for Whish cutover, callback flow, and order finalization.
+                  Production readiness for Whish. Missing credentials or payment history show as{' '}
+                  <strong>warnings</strong> until you configure Payments and run a live test cycle.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">
+                  The checklist reads <strong>saved</strong> values from Firestore (not unsaved form fields). Save
+                  credentials first, then run the checklist.
+                </p>
                 <Button onClick={handleRunWhishOpsChecklist} className="w-full" disabled={isRunningWhishChecklist}>
                   {isRunningWhishChecklist ? 'Running checklist...' : 'Run Whish Ops Checklist'}
                 </Button>

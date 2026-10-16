@@ -65,6 +65,8 @@ function mapPlatformPurchaseItems(items: unknown): PurchaseOrder['items'] {
       unitPrice,
       rawPrice: unitPrice,
       subtotal,
+      currency: item.currency ? String(item.currency) : undefined,
+      accountCode: item.accountCode ? String(item.accountCode) : undefined,
     };
   });
 }
@@ -193,6 +195,8 @@ function financeLineItemsToPurchaseItems(items: unknown): Record<string, unknown
       unitPrice,
       subtotal,
       totalPrice: subtotal,
+      currency: item.currency ? String(item.currency) : undefined,
+      accountCode: item.accountCode ? String(item.accountCode) : undefined,
     };
   });
 }
@@ -282,17 +286,24 @@ export function mapFsInvoice(id: string, data: Record<string, unknown>): Invoice
 }
 
 export function mapFsEstimate(id: string, data: Record<string, unknown>): Estimate {
+  const amount = Number(data.amount ?? data.total ?? 0);
   return {
     id,
     date: String(data.date ?? data.createdAt ?? nowIso()),
     clientId: data.clientId != null ? String(data.clientId) : data.client_id != null ? String(data.client_id) : undefined,
     clientName: String(data.clientName ?? data.client_name ?? ''),
     items: (data.lineItems ?? data.items ?? []) as Estimate['items'],
-    amount: Number(data.amount ?? 0),
+    amount,
     currency: String(data.currency ?? 'USD'),
     status: String(data.status ?? 'pending') as Estimate['status'],
     expiryDate: (data.expiryDate ?? data.expiry_date) as string | undefined,
     notes: data.notes ? String(data.notes) : undefined,
+    estimateNumber: data.estimateNumber != null ? String(data.estimateNumber) : data.estimate_number != null ? String(data.estimate_number) : undefined,
+    subtotal: data.subtotal != null ? Number(data.subtotal) : undefined,
+    tax: data.tax != null ? Number(data.tax) : undefined,
+    taxAmount: data.taxAmount != null ? Number(data.taxAmount) : data.tax_amount != null ? Number(data.tax_amount) : undefined,
+    discount: data.discount != null ? Number(data.discount) : undefined,
+    total: data.total != null ? Number(data.total) : amount,
   };
 }
 
@@ -422,6 +433,7 @@ export function rowToFirestore(table: string, storeId: string, row: Record<strin
     case 'invoices':
       return {
         storeId,
+        invoiceNumber: row.invoice_number || row.invoiceNumber || null,
         clientId: row.client_id || null,
         clientName: row.client_name || '',
         lineItems: row.items || [],
@@ -442,10 +454,16 @@ export function rowToFirestore(table: string, storeId: string, row: Record<strin
     case 'estimates':
       return {
         storeId,
+        estimateNumber: row.estimate_number || row.estimateNumber || null,
         clientId: row.client_id || null,
         clientName: row.client_name || '',
         lineItems: row.items || [],
         amount: row.amount ?? 0,
+        total: row.total ?? row.amount ?? 0,
+        subtotal: row.subtotal ?? null,
+        tax: row.tax ?? null,
+        taxAmount: row.tax_amount ?? row.taxAmount ?? null,
+        discount: row.discount ?? null,
         currency: row.currency || 'USD',
         status: row.status || 'pending',
         expiryDate: row.expiry_date || null,
@@ -485,6 +503,7 @@ export function rowToFirestore(table: string, storeId: string, row: Record<strin
     case 'expenses':
       return {
         storeId,
+        expenseNumber: row.expense_number || row.expenseNumber || null,
         name: row.name,
         description: row.description || null,
         category: row.category || 'other',
@@ -530,7 +549,8 @@ export function rowToFirestore(table: string, storeId: string, row: Record<strin
         poNumber: poId,
         status: mapFinancePurchaseStatus(financeStatus),
         orderDate: row.date || ts,
-        paymentStatus: 'unpaid',
+        paymentStatus: String(row.payment_status || row.paymentStatus || 'unpaid'),
+        amountPaid: Number(row.amount_paid ?? row.amountPaid ?? 0) || 0,
         financeOrigin: true,
         createdAt: ts,
         updatedAt: ts,
@@ -596,8 +616,11 @@ export function patchToFirestore(table: string, patch: Record<string, unknown>):
       mapKey('service_cost', 'serviceCost');
       break;
     case 'invoices':
+      mapKey('invoice_number', 'invoiceNumber');
+      mapKey('invoiceNumber', 'invoiceNumber');
       mapKey('client_id', 'clientId');
       mapKey('client_name', 'clientName');
+      mapKey('date', 'date');
       if (patch.items !== undefined) out.lineItems = patch.items;
       mapKey('amount', 'amount');
       mapKey('currency', 'currency');
@@ -612,10 +635,18 @@ export function patchToFirestore(table: string, patch: Record<string, unknown>):
       mapKey('paid_at', 'paidAt');
       break;
     case 'estimates':
+      mapKey('estimate_number', 'estimateNumber');
+      mapKey('estimateNumber', 'estimateNumber');
       mapKey('client_id', 'clientId');
       mapKey('client_name', 'clientName');
       if (patch.items !== undefined) out.lineItems = patch.items;
       mapKey('amount', 'amount');
+      mapKey('total', 'total');
+      mapKey('subtotal', 'subtotal');
+      mapKey('tax', 'tax');
+      mapKey('tax_amount', 'taxAmount');
+      mapKey('taxAmount', 'taxAmount');
+      mapKey('discount', 'discount');
       mapKey('currency', 'currency');
       mapKey('status', 'status');
       mapKey('expiry_date', 'expiryDate');
@@ -650,6 +681,8 @@ export function patchToFirestore(table: string, patch: Record<string, unknown>):
         out.totalAmount = patch.amount;
       }
       if (patch.currency !== undefined) out.currency = patch.currency;
+      if (patch.payment_status !== undefined) out.paymentStatus = patch.payment_status;
+      if (patch.amount_paid !== undefined) out.amountPaid = patch.amount_paid;
       if (patch.status !== undefined) {
         const platformStatus = mapFinancePurchaseStatus(String(patch.status));
         out.status = platformStatus;

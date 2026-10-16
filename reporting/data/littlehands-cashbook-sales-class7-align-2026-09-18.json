@@ -1,0 +1,221 @@
+{
+  "mode": "dry-run",
+  "sourceRoot": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "months": [
+    {
+      "ym": "2025-12",
+      "cashBookSalesC": 1926.63,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/December2026.xls",
+          "sheet": "Total Cash",
+          "sales": 1926.63,
+          "rows": 15
+        }
+      ],
+      "rows": 15,
+      "glClass7": 1926.63,
+      "delta": 0
+    },
+    {
+      "ym": "2026-01",
+      "cashBookSalesC": 1368.18,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/January2026.xls",
+          "sheet": "Total cash ",
+          "sales": 1368.18,
+          "rows": 13
+        }
+      ],
+      "rows": 13,
+      "glClass7": 1368.18,
+      "delta": 0
+    },
+    {
+      "ym": "2026-02",
+      "cashBookSalesC": 3185.82,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/February2026.xls",
+          "sheet": "Total Cash",
+          "sales": 3185.82,
+          "rows": 19
+        }
+      ],
+      "rows": 19,
+      "glClass7": 3185.82,
+      "delta": 0
+    },
+    {
+      "ym": "2026-03",
+      "cashBookSalesC": 3017.46,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/Marsh2026.xls",
+          "sheet": "Total",
+          "sales": 3017.46,
+          "rows": 16
+        }
+      ],
+      "rows": 16,
+      "glClass7": 3017.46,
+      "delta": 0
+    },
+    {
+      "ym": "2026-04",
+      "cashBookSalesC": 7747,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/April 2026.xls",
+          "sheet": "Total",
+          "sales": 7747,
+          "rows": 20
+        }
+      ],
+      "rows": 20,
+      "glClass7": 7747,
+      "delta": 0
+    },
+    {
+      "ym": "2026-05",
+      "cashBookSalesC": 14226,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/May 2026.xls",
+          "sheet": "Total",
+          "sales": 14226,
+          "rows": 19
+        }
+      ],
+      "rows": 19,
+      "glClass7": 14226,
+      "delta": 0
+    },
+    {
+      "ym": "2026-06",
+      "cashBookSalesC": 15495,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/June2026.xls",
+          "sheet": "Total ",
+          "sales": 15495,
+          "rows": 33
+        }
+      ],
+      "rows": 33,
+      "glClass7": 15495,
+      "delta": 0
+    },
+    {
+      "ym": "2026-07",
+      "cashBookSalesC": 19256,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/July 2026.xls",
+          "sheet": "Total July",
+          "sales": 19256,
+          "rows": 36
+        }
+      ],
+      "rows": 36,
+      "glClass7": 19256,
+      "delta": 0
+    },
+    {
+      "ym": "2026-08",
+      "cashBookSalesC": 13087.25,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/August2026.xls",
+          "sheet": "Total August",
+          "sales": 13087.25,
+          "rows": 30
+        }
+      ],
+      "rows": 30,
+      "glClass7": 13087.25,
+      "delta": 0
+    },
+    {
+      "ym": "2026-09",
+      "cashBookSalesC": 4975,
+      "sources": [
+        {
+          "file": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/Copy of September edited.xlsx",
+          "sheet": "Total Cash ",
+          "sales": 4975,
+          "rows": 10
+        }
+      ],
+      "rows": 10,
+      "glClass7": 4975,
+      "delta": 0
+    }
+  ],
+  "aligned": [],
+  "skipped": [
+    {
+      "ym": "2025-12",
+      "reason": "already_aligned",
+      "cashBookSalesC": 1926.63,
+      "glClass7": 1926.63
+    },
+    {
+      "ym": "2026-01",
+      "reason": "already_aligned",
+      "cashBookSalesC": 1368.18,
+      "glClass7": 1368.18
+    },
+    {
+      "ym": "2026-02",
+      "reason": "already_aligned",
+      "cashBookSalesC": 3185.82,
+      "glClass7": 3185.82
+    },
+    {
+      "ym": "2026-03",
+      "reason": "already_aligned",
+      "cashBookSalesC": 3017.46,
+      "glClass7": 3017.46
+    },
+    {
+      "ym": "2026-04",
+      "reason": "already_aligned",
+      "cashBookSalesC": 7747,
+      "glClass7": 7747
+    },
+    {
+      "ym": "2026-05",
+      "reason": "already_aligned",
+      "cashBookSalesC": 14226,
+      "glClass7": 14226
+    },
+    {
+      "ym": "2026-06",
+      "reason": "already_aligned",
+      "cashBookSalesC": 15495,
+      "glClass7": 15495
+    },
+    {
+      "ym": "2026-07",
+      "reason": "already_aligned",
+      "cashBookSalesC": 19256,
+      "glClass7": 19256
+    },
+    {
+      "ym": "2026-08",
+      "reason": "already_aligned",
+      "cashBookSalesC": 13087.25,
+      "glClass7": 13087.25
+    },
+    {
+      "ym": "2026-09",
+      "reason": "already_aligned",
+      "cashBookSalesC": 4975,
+      "glClass7": 4975
+    }
+  ],
+  "generatedAt": "2026-09-19T11:22:06.691Z"
+}

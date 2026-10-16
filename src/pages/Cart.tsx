@@ -20,7 +20,7 @@ import { PaymentMethod } from '@/types/product';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { buildWhatsAppOrderURL } from '@/lib/whatsapp';
-import { pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
+import { metaCatalogContentIds, pixelInitiateCheckout, pixelPurchase, trackMetaConversionEvent } from '@/lib/metaPixel';
 import ClampedText from '@/components/ClampedText';
 import ProductVisual from '@/components/ProductVisual';
 import { formatDualMoneyLines } from '@/lib/money/format';
@@ -896,7 +896,12 @@ const Cart: React.FC = () => {
 
       for (const [storeId, storeItems] of Object.entries(itemsByStore)) {
         const storeValue = storeItems.reduce((sum, item) => sum + Number(item.product.price || 0) * Number(item.quantity || 1), 0);
-        const contentIds = storeItems.map((item) => item.product.id);
+        const contentIds = metaCatalogContentIds(storeItems.map((item) => item.product.id));
+        pixelInitiateCheckout({
+          value: storeValue,
+          currency: 'USD',
+          contentIds,
+        });
         void trackMetaConversionEvent({
           storeId,
           eventName: 'InitiateCheckout',
@@ -982,11 +987,11 @@ const Cart: React.FC = () => {
       // For cash on delivery, skip payment and show success
       if (paymentMethod === 'cash') {
         toast.success('Order placed successfully! The store will contact you soon.');
-        pixelPurchase({ value: subtotal, contentIds: items.map(i => i.product.id) });
+        pixelPurchase({ value: subtotal, contentIds: metaCatalogContentIds(items.map((i) => i.product.id)) });
 
         for (const [storeId, storeItems] of Object.entries(itemsByStore)) {
           const storeValue = storeItems.reduce((sum, item) => sum + Number(item.product.price || 0) * Number(item.quantity || 1), 0);
-          const contentIds = storeItems.map((item) => item.product.id);
+          const contentIds = metaCatalogContentIds(storeItems.map((item) => item.product.id));
           void trackMetaConversionEvent({
             storeId,
             eventName: 'Purchase',

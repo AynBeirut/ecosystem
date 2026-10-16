@@ -15,6 +15,7 @@ import {
 } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
+import { getApiBaseUrl, getMetaCatalogFeedUrl } from '@/lib/apiBase';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -88,7 +89,8 @@ const FIELD_LABELS: Record<string, string> = {
 };
 
 const AVAILABLE_MAPPING_FIELDS = ['name', 'description', 'category', 'price', 'image', 'stock', 'sku'];
-const API_URL = import.meta.env.VITE_API_URL || 'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
+
+const API_URL = getApiBaseUrl();
 
 type MetaCatalogState = {
   pixelId?: string;
@@ -1028,7 +1030,9 @@ const AdminMarketplaceSync: React.FC = () => {
               </div>
               <div>
                 <p className="text-muted-foreground">Feed URL</p>
-                <p className="font-medium break-all">{metaCatalog.catalogFeedUrl || `${API_URL}/meta/catalog/feed?storeId=${storeId || ''}`}</p>
+                <p className="font-medium break-all">
+                  {storeId ? getMetaCatalogFeedUrl(storeId) : metaCatalog.catalogFeedUrl || ''}
+                </p>
               </div>
               <div>
                 <p className="text-muted-foreground">Last Sync</p>
@@ -1072,7 +1076,10 @@ const AdminMarketplaceSync: React.FC = () => {
                 type="button"
                 variant="outline"
                 disabled={!storeId}
-                onClick={() => window.open(`${API_URL}/meta/catalog/feed?storeId=${storeId}`, '_blank', 'noopener,noreferrer')}
+                onClick={() => {
+                  if (!storeId) return;
+                  window.open(getMetaCatalogFeedUrl(storeId), '_blank', 'noopener,noreferrer');
+                }}
               >
                 <Link2 className="h-4 w-4 mr-2" />
                 Open Feed

@@ -1,0 +1,83 @@
+{
+  "mode": "write",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "sourceFiles": [
+    "/media/anwar/12AD-9999/Sanaa .xlsx",
+    "/media/anwar/12AD-9999/Sara.xlsx"
+  ],
+  "discountAccount": {
+    "id": "acct-7090",
+    "code": "7090"
+  },
+  "months": [
+    {
+      "ym": "2025-12",
+      "targetDiscount": 103.4,
+      "alreadyPostedDiscount": 103.4,
+      "missingDiscount": 0,
+      "overPosted": 0,
+      "sourceRows": 18,
+      "fullDiscountSummaries": []
+    },
+    {
+      "ym": "2026-01",
+      "targetDiscount": 938.28,
+      "alreadyPostedDiscount": 408.38,
+      "missingDiscount": 529.9,
+      "overPosted": 0,
+      "sourceRows": 75,
+      "fullDiscountSummaries": [
+        {
+          "ym": "2026-01",
+          "discount": 529.9,
+          "file": "/media/anwar/12AD-9999/Sanaa .xlsx",
+          "sheet": "Dyafe January 2026",
+          "excelRow": 13,
+          "kind": "full_discount_summary"
+        }
+      ]
+    },
+    {
+      "ym": "2026-02",
+      "targetDiscount": 59.49,
+      "alreadyPostedDiscount": 59.49,
+      "missingDiscount": 0,
+      "overPosted": 0,
+      "sourceRows": 15,
+      "fullDiscountSummaries": []
+    },
+    {
+      "ym": "2026-03",
+      "targetDiscount": 157.41,
+      "alreadyPostedDiscount": 157.41,
+      "missingDiscount": 0,
+      "overPosted": 0,
+      "sourceRows": 16,
+      "fullDiscountSummaries": []
+    }
+  ],
+  "posted": [
+    {
+      "ym": "2026-01",
+      "sourceKey": "owner_discount_backup:2026-01:discount-trueup:02",
+      "entryId": "JE-1789747025781-57580b",
+      "voucherNumber": "RV-2026-01337",
+      "amount": 529.9
+    }
+  ],
+  "skipped": [
+    {
+      "ym": "2025-12",
+      "reason": "already_aligned"
+    },
+    {
+      "ym": "2026-02",
+      "reason": "already_aligned"
+    },
+    {
+      "ym": "2026-03",
+      "reason": "already_aligned"
+    }
+  ],
+  "generatedAt": "2026-09-18T15:57:05.779Z"
+}

@@ -22,11 +22,17 @@ import { Product } from '@/types/product';
 import { logAction } from '@/lib/auditLog';
 import { generateSKU, generateBarcode } from '@/lib/skuGenerator';
 import { enforceAndConsumeTrialOperation } from '@/lib/subscriptionEnforcement';
-import { allocatePurchaseOrderNumber } from '@/lib/documentSerial';
+import { renumberStorePurchases } from '@/lib/chronologicalRenumberFirestore';
 import { purchaseDisplayRef } from '@/lib/purchaseDisplayRef';
+import { RankedOptionSelect } from '@/components/RankedOptionSelect';
+import { V_EXPENSE_CATEGORIES } from '@/lib/vExpense';
 import { formatMoney as fmtMoney } from '@/lib/money/format';
 import { glPostPurchaseReceived } from '@/lib/platformGl';
+import { ensurePartySubaccount } from '../../../vendor/beirut-finance-flow-main/src/lib/ledger/partySubaccount';
+import { resolveLiveUsdToLbpRate } from '../../../vendor/beirut-finance-flow-main/src/lib/currency/usdLbpRate';
 import { purchaseOrderForGlReceive } from '@/lib/purchaseGlInput';
+import { resolveA4DocumentBranding } from '@/lib/financeDocumentSettings';
+import { safeDocumentFilePart } from '@/lib/orderDocumentRef';
 import { OcrReceiptFlow, type OcrPurchaseSave } from '@/features/ocr';
 import { ensureOcrMaterial, ensureOcrSupplier } from '@/lib/ocrEnsure';
 import {
@@ -39,9 +45,14 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { filterPurchasesForStore, filterSuppliersForStore } from '@/lib/littleHandsPurchasesVisibility';
+import { resolveDeliveryExpenseAccount } from '@/lib/deliveryExpenseAccount';
+import {
+  formatPurchasePaymentStatement,
+  resolvePurchasePaymentStatus,
+} from '@/lib/purchasePaymentStatement';
 import {
   type PurchaseDatePreset,
-  purchaseInPeriod,
+  purchaseMatchesPeriod,
   resolvePurchasePeriodRange,
 } from '@/lib/purchaseDateFilter';
 import { purchaseMatchesSearch } from '@/lib/purchaseListSearch';
@@ -65,6 +76,10 @@ function resolveItemUnitPrice(item: PurchaseItemLike): number {
 
 function resolvePurchaseTotal(purchase: Pick<Purchase, 'totalAmount' | 'total' | 'totalCost'>): number {
   return parseNumberish(purchase.totalAmount ?? purchase.total ?? purchase.totalCost);
+}
+
+function purchaseCurrencyCode(purchase: { currency?: string } | null | undefined): 'USD' | 'LBP' {
+  return String(purchase?.currency || '').toUpperCase() === 'LBP' ? 'LBP' : 'USD';
 }
 
 function resolveItemLineTotal(item: PurchaseItemLike): number {
@@ -93,7 +108,9 @@ function normalizePurchase(purchase: Purchase): Purchase {
       }))
     : [];
   const amountPaid = parseNumberish(
-    purchase.amountPaid ?? paymentHistory.reduce((sum, payment) => sum + payment.amount, 0),
+    purchase.amountPaid
+      ?? (purchase as { paidAmount?: number }).paidAmount
+      ?? paymentHistory.reduce((sum, payment) => sum + payment.amount, 0),
   );
   const totalAmount = resolvePurchaseTotal(purchase);
   return {
@@ -137,6 +154,8 @@ const AdminPurchases: React.FC = () => {
     notes: '',
     paymentStatus: 'paid' as Purchase['paymentStatus'],
     amountPaid: '',
+    items: [] as PurchaseItem[],
+    currency: 'USD' as 'USD' | 'LBP',
   });
   
   const [newPurchase, setNewPurchase] = useState({
@@ -150,6 +169,10 @@ const AdminPurchases: React.FC = () => {
     items: [] as PurchaseItem[],
     taxType: 'none' as 'none' | 'VAT' | 'TTC',
     taxRate: 0,
+    deliveryFee: 0,
+    currency: 'USD' as 'USD' | 'LBP',
+    paymentStatus: 'unpaid' as Purchase['paymentStatus'],
+    amountPaid: 0,
   });
 
   // Double-click prevention locks
@@ -190,6 +213,39 @@ const AdminPurchases: React.FC = () => {
     setNewPurchase(prev => ({ ...prev, orderDate: today, expectedDeliveryDate: today }));
   };
 
+  const purchaseDraftKey = user?.storeId ? `po_create_draft_${user.storeId}` : '';
+  const purchaseDraftReady = useRef(false);
+
+  useEffect(() => {
+    if (!purchaseDraftKey) return;
+    try {
+      const raw = localStorage.getItem(purchaseDraftKey);
+      if (!raw) return;
+      const saved = JSON.parse(raw) as { savedAt?: string; draft?: typeof newPurchase };
+      const age = saved.savedAt ? Date.now() - new Date(saved.savedAt).getTime() : Number.POSITIVE_INFINITY;
+      if (!saved.draft?.items?.length || age > 7 * 24 * 60 * 60 * 1000) {
+        localStorage.removeItem(purchaseDraftKey);
+        return;
+      }
+      setNewPurchase(saved.draft);
+      setIsAddingPurchase(true);
+    } catch {
+      localStorage.removeItem(purchaseDraftKey);
+    } finally {
+      purchaseDraftReady.current = true;
+    }
+  }, [purchaseDraftKey]);
+
+  useEffect(() => {
+    if (!purchaseDraftKey || !purchaseDraftReady.current) return;
+    const hasWork = newPurchase.items.length > 0 || Boolean(newPurchase.supplierId || newPurchase.supplierName?.trim());
+    if (!hasWork) {
+      localStorage.removeItem(purchaseDraftKey);
+      return;
+    }
+    localStorage.setItem(purchaseDraftKey, JSON.stringify({ savedAt: new Date().toISOString(), draft: newPurchase }));
+  }, [purchaseDraftKey, newPurchase]);
+
   // Load dates when supplier changes
   useEffect(() => {
     if (newPurchase.supplierId) {
@@ -200,7 +256,9 @@ const AdminPurchases: React.FC = () => {
 
   const [isCreatingNewSupplier, setIsCreatingNewSupplier] = useState(false);
   const [creatingMaterialIndex, setCreatingMaterialIndex] = useState<number | null>(null);
+  const [creatingProductIndex, setCreatingProductIndex] = useState<number | null>(null);
   const [inlineMaterial, setInlineMaterial] = useState({ name: '', unit: 'kg', costPerUnit: '' });
+  const [inlineProduct, setInlineProduct] = useState({ name: '', costPrice: '' });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -266,12 +324,19 @@ const AdminPurchases: React.FC = () => {
     fetchData();
   }, [user?.storeId]);
 
-  const generatePONumber = async (documentDate?: string | Date | null): Promise<string> => {
-    if (!user?.storeId) {
-      throw new Error('Store required to allocate PO number');
-    }
-    const prefix = storeProfile?.purchaseOrderPrefix?.trim() || 'PO';
-    return allocatePurchaseOrderNumber(user.storeId, prefix, documentDate);
+  const syncPurchaseDocumentNumbers = async (): Promise<Map<string, string>> => {
+    if (!user?.storeId) return new Map();
+    const db = getFirestore();
+    const map = await renumberStorePurchases(db, user.storeId);
+    setPurchases((prev) =>
+      prev.map((p) => {
+        const next = map.get(p.id);
+        return next
+          ? { ...p, poNumber: next, purchaseOrderNumber: next, invoiceNumber: next }
+          : p;
+      }),
+    );
+    return map;
   };
 
   // Format currency with LBP conversion
@@ -285,10 +350,44 @@ const AdminPurchases: React.FC = () => {
   const secondaryRate = typeof storeProfile?.customExchangeRate === 'number' && storeProfile.customExchangeRate > 0
     ? storeProfile.customExchangeRate
     : undefined;
+  const legacyUsdToLbp = Number((storeProfile as { usdToLbpRate?: number } | null)?.usdToLbpRate);
+  const profileUsdToLbp = secondaryRate || (Number.isFinite(legacyUsdToLbp) && legacyUsdToLbp > 0 ? legacyUsdToLbp : undefined);
+  const [liveUsdToLbp, setLiveUsdToLbp] = useState<number | undefined>();
+  useEffect(() => {
+    if (profileUsdToLbp) return;
+    let cancelled = false;
+    void resolveLiveUsdToLbpRate().then((rate) => {
+      if (!cancelled && rate) setLiveUsdToLbp(rate);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [profileUsdToLbp]);
+  const usdToLbp = profileUsdToLbp || liveUsdToLbp;
 
   /** Plain-text money in the store's base currency (JSX + toasts + WhatsApp). */
   const money = (amount: unknown): string =>
     fmtMoney(parseNumberish(amount), { currency: baseCurrency, style: numberStyle });
+
+  const purchaseCurrencyChoices = [
+    String(baseCurrency || 'USD').toUpperCase(),
+    ...(secondaryCurrency ? [String(secondaryCurrency).toUpperCase()] : []),
+  ].filter((code, index, all) => code && all.indexOf(code) === index);
+
+  const moneyIn = (amount: unknown, currency: string): string =>
+    fmtMoney(parseNumberish(amount), {
+      currency: String(currency).toUpperCase() === 'LBP' ? 'LBP' : 'USD',
+      style: numberStyle,
+    });
+
+  const dualMoney = (amount: unknown, currency: string): string => {
+    const value = parseNumberish(amount);
+    const code = String(currency || 'USD').toUpperCase() === 'LBP' ? 'LBP' : 'USD';
+    const primary = moneyIn(value, code);
+    if (!usdToLbp) return primary;
+    const other = code === 'USD' ? moneyIn(value * usdToLbp, 'LBP') : moneyIn(value / usdToLbp, 'USD');
+    return `${primary} · ${other}`;
+  };
 
   /** Base + optional secondary (display-only) — used in HTML receipts/PDF. */
   const formatCurrency = (amount: unknown, showDual: boolean = true): string => {
@@ -301,16 +400,58 @@ const AdminPurchases: React.FC = () => {
     return primary;
   };
 
-  const calculateTotal = (items: PurchaseItem[], taxType: string = 'none', taxRate: number = 0): number => {
+  const calculateTotal = (
+    items: PurchaseItem[],
+    taxType: string = 'none',
+    taxRate: number = 0,
+    deliveryFee: number = 0,
+  ): number => {
     const subtotal = items.reduce((sum, item) => {
       const qty = parseNumberish(item.quantity);
       const price = parseNumberish(item.unitPrice);
       return sum + (qty * price);
     }, 0);
-    
-    if (taxType === 'none') return subtotal;
-    const taxAmount = subtotal * (taxRate / 100);
-    return subtotal + taxAmount;
+    const taxAmount = taxType === 'none' ? 0 : subtotal * (taxRate / 100);
+    return subtotal + taxAmount + parseNumberish(deliveryFee);
+  };
+
+  const deliveryExpenseLedger = resolveDeliveryExpenseAccount(storeProfile);
+
+  const createInlineSupplierRecord = async (): Promise<string | null> => {
+    if (!newPurchase.supplierName?.trim() || !newPurchase.supplierContact?.trim() || !user?.storeId) {
+      return null;
+    }
+    const db = getFirestore();
+    const supplierData = {
+      storeId: user.storeId,
+      name: newPurchase.supplierName.trim(),
+      contactPerson: newPurchase.supplierContact.trim(),
+      email: newPurchase.supplierEmail || '',
+      phone: '',
+      address: '',
+      status: 'active' as const,
+      supplierCode: `SUP-${newPurchase.supplierName.trim().substring(0, 3).toUpperCase()}-${String(suppliers.length + 1).padStart(4, '0')}`,
+      source: 'admin_manual' as const,
+      purchasesPageEligible: true,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    const docRef = await addDoc(collection(db, 'suppliers'), supplierData);
+    try {
+      await ensurePartySubaccount({
+        storeId: user.storeId,
+        kind: 'supplier',
+        partyId: docRef.id,
+        partyName: supplierData.name,
+      });
+    } catch (accountError) {
+      console.warn('[Supplier] USD and LBP accounts skipped', accountError);
+    }
+    const newSupplier = { id: docRef.id, ...supplierData } as Supplier;
+    setSuppliers((prev) => [...prev, newSupplier]);
+    setNewPurchase((prev) => ({ ...prev, supplierId: docRef.id }));
+    setIsCreatingNewSupplier(false);
+    return docRef.id;
   };
 
   const handleCreateInlineSupplier = async () => {
@@ -320,28 +461,23 @@ const AdminPurchases: React.FC = () => {
     }
 
     try {
-      const db = getFirestore();
-      const supplierData = {
-        storeId: user.storeId,
-        name: newPurchase.supplierName,
-        contactPerson: newPurchase.supplierContact,
-        email: newPurchase.supplierEmail || '',
-        phone: '',
-        address: '',
-        createdAt: new Date().toISOString(),
-      };
-
-      const docRef = await addDoc(collection(db, 'suppliers'), supplierData);
-      const newSupplier = { id: docRef.id, ...supplierData };
-      setSuppliers([...suppliers, newSupplier]);
-      setNewPurchase({ ...newPurchase, supplierId: docRef.id });
-      setIsCreatingNewSupplier(false);
+      await createInlineSupplierRecord();
       toast({ title: "Success", description: "Supplier created successfully" });
     } catch (error) {
       console.error('Error creating supplier:', error);
       toast({ title: "Error", description: "Failed to create supplier", variant: "destructive" });
     }
   };
+
+  const purchaseLineIsReady = (item: PurchaseItem) => {
+    if (parseNumberish(item.quantity) <= 0) return false;
+    if (item.itemType === 'expense') return Boolean(String(item.materialName || '').trim());
+    if (item.itemType === 'product') return Boolean(item.productId && String(item.productId).trim());
+    return Boolean(item.rawMaterialId && String(item.rawMaterialId).trim());
+  };
+
+  const countValidPurchaseLines = (items: PurchaseItem[]) =>
+    items.filter((item) => purchaseLineIsReady(item)).length;
 
   const handleCreateInlineRawMaterial = async (itemIndex: number) => {
     const cost = parseFloat(inlineMaterial.costPerUnit);
@@ -402,15 +538,83 @@ const AdminPurchases: React.FC = () => {
     }
   };
 
+  const handleCreateInlineProduct = async (itemIndex: number) => {
+    const cost = parseFloat(inlineProduct.costPrice);
+    if (!inlineProduct.name.trim() || !user?.storeId || !Number.isFinite(cost) || cost <= 0) {
+      toast({
+        title: 'Error',
+        description: 'Product name and unit cost are required',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    try {
+      const db = getFirestore();
+      const storePrefix = user.storeId.substring(0, 5).toUpperCase();
+      const sku = generateSKU(storePrefix, 'PRD', simpleProducts.length + 1);
+      const barcode = generateBarcode();
+      const productData = {
+        name: inlineProduct.name.trim(),
+        sku,
+        barcode,
+        price: 0,
+        costPrice: cost,
+        stock: 0,
+        inStock: true,
+        productType: 'simple' as const,
+        isService: false,
+        storeId: user.storeId,
+        category: 'inventory',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      };
+
+      const docRef = await addDoc(collection(db, 'products'), productData);
+      const created = { id: docRef.id, ...productData } as Product;
+      setSimpleProducts((prev) => [...prev, created]);
+
+      const updatedItems = [...newPurchase.items];
+      updatedItems[itemIndex] = {
+        ...updatedItems[itemIndex],
+        itemType: 'product',
+        productId: docRef.id,
+        rawMaterialId: '',
+        materialName: inlineProduct.name.trim(),
+        sku,
+        unit: 'piece',
+        unitPrice: cost,
+        unitCost: cost,
+      };
+      setNewPurchase({ ...newPurchase, items: updatedItems });
+      setCreatingProductIndex(null);
+      setInlineProduct({ name: '', costPrice: '' });
+      toast({ title: 'Success', description: 'Product created and added to this line' });
+    } catch (error) {
+      console.error('Error creating product:', error);
+      toast({ title: 'Error', description: 'Failed to create product', variant: 'destructive' });
+    }
+  };
+
   const generatePOHTML = (purchase: Purchase) => {
-    const template = storeProfile?.invoiceTemplate || 'modern';
-    const storeName = storeProfile?.name || 'Your Store';
-    const storeLogo = storeProfile?.logo || '';
-    const storeSlogan = storeProfile?.slogan || '';
-    const storeWebsite = storeProfile?.website || '';
-    const storePhone = storeProfile?.phone || '';
-    const storeEmail = storeProfile?.email || '';
-    const storeTaxNumber = storeProfile?.taxNumber || '';
+    const docCurrency = purchaseCurrencyCode(purchase);
+    const formatCurrency = (amount: unknown, showDual: boolean = true): string => {
+      const primary = fmtMoney(parseNumberish(amount), { currency: docCurrency, style: numberStyle });
+      if (showDual && docCurrency === baseCurrency && secondaryCurrency && secondaryRate) {
+        const secondary = fmtMoney(parseNumberish(amount) * secondaryRate, { currency: secondaryCurrency, style: numberStyle });
+        return `${primary} (${secondary})`;
+      }
+      return primary;
+    };
+    const branding = resolveA4DocumentBranding(storeProfile);
+    const template = branding.template;
+    const storeName = branding.companyName;
+    const storeLogo = branding.logo;
+    const storeSlogan = branding.slogan;
+    const storeWebsite = branding.website;
+    const storePhone = branding.phone;
+    const storeEmail = branding.email;
+    const storeTaxNumber = branding.taxNumber;
     const poNum = purchaseDisplayRef(purchase);
     const subtotalFromItems = purchase.items?.reduce((sum, item) => {
       const qty = parseNumberish(item.quantity);
@@ -643,7 +847,7 @@ const AdminPurchases: React.FC = () => {
             <div class="totals">
               <div style="font-size: 14px; color: #64748b; margin-bottom: 8px;">Subtotal: ${formatCurrency(subtotal, true)}</div>
               ${hasTax ? `<div style="font-size: 14px; color: #64748b; margin-bottom: 8px;">${taxLabel}${taxRate > 0 ? ` (${taxRate.toFixed(2)}%)` : ''}: ${formatCurrency(taxAmount, true)}</div>` : ''}
-              <div class="grand-total">TOTAL: ${formatCurrency(totalAmount, true)}</div>
+              <div class="grand-total">TOTAL: ${dualMoney(totalAmount, docCurrency)}</div>
             </div>
 
             ${purchase.notes ? `
@@ -881,7 +1085,7 @@ const AdminPurchases: React.FC = () => {
             <div class="totals">
               <div style="font-size: 14px; color: #666; margin-bottom: 8px;">Subtotal: ${formatCurrency(subtotal, true)}</div>
               ${hasTax ? `<div style="font-size: 14px; color: #666; margin-bottom: 8px;">${taxLabel}${taxRate > 0 ? ` (${taxRate.toFixed(2)}%)` : ''}: ${formatCurrency(taxAmount, true)}</div>` : ''}
-              <div class="grand-total">AMOUNT: ${formatCurrency(totalAmount, true)}</div>
+              <div class="grand-total">AMOUNT: ${dualMoney(totalAmount, docCurrency)}</div>
             </div>
 
             ${purchase.notes ? `
@@ -1148,7 +1352,7 @@ const AdminPurchases: React.FC = () => {
             <div class="totals">
               <div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">Subtotal: ${formatCurrency(subtotal, true)}</div>
               ${hasTax ? `<div style="font-size: 14px; color: #6b7280; margin-bottom: 8px;">${taxLabel}${taxRate > 0 ? ` (${taxRate.toFixed(2)}%)` : ''}: ${formatCurrency(taxAmount, true)}</div>` : ''}
-              <div class="grand-total">TOTAL AMOUNT: ${formatCurrency(totalAmount, true)}</div>
+              <div class="grand-total">TOTAL AMOUNT: ${dualMoney(totalAmount, docCurrency)}</div>
             </div>
 
             ${purchase.notes ? `
@@ -1309,30 +1513,34 @@ const AdminPurchases: React.FC = () => {
   };
 
   const handleSendEmail = (purchase: Purchase) => {
+    const money = (amount: unknown) => moneyIn(amount, purchaseCurrencyCode(purchase));
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
+    const documentCompanyName = resolveA4DocumentBranding(storeProfile).companyName;
     const subject = `Purchase Order ${purchase.invoiceNumber || purchase.poNumber}`;
-    const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: ${money(resolvePurchaseTotal(purchase))}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
+    const body = `Dear ${supplier?.name},\n\nPlease find attached Purchase Order ${purchase.invoiceNumber || purchase.poNumber}.\n\nOrder Details:\nTotal Amount: ${dualMoney(resolvePurchaseTotal(purchase), purchaseCurrencyCode(purchase))}\nExpected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\nItems:\n${purchase.items.map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
       const product = simpleProducts.find(p => p.id === item.productId);
       const itemName = material?.name || product?.name || item.materialName || 'Item';
       const itemUnit = material?.unit || item.unit || 'unit';
       return `- ${itemName}: ${item.quantity} ${itemUnit} @ ${money(item.unitPrice)}`;
-    }).join('\n')}\n\nBest regards,\n${storeProfile?.name || 'Your Store'}`;
+    }).join('\n')}\n\nBest regards,\n${documentCompanyName}`;
     
     const mailtoLink = `mailto:${supplier?.email || ''}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
     window.open(mailtoLink, '_blank');
   };
 
   const handleSendWhatsApp = (purchase: Purchase) => {
+    const money = (amount: unknown) => moneyIn(amount, purchaseCurrencyCode(purchase));
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
-    const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: ${money(resolvePurchaseTotal(purchase))}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${(purchase.items ?? []).map(item => {
+    const documentCompanyName = resolveA4DocumentBranding(storeProfile).companyName;
+    const message = `*Purchase Order ${purchase.invoiceNumber || purchase.poNumber}*\n\nDear ${supplier?.name},\n\nOrder Details:\n💰 Total Amount: ${dualMoney(resolvePurchaseTotal(purchase), purchaseCurrencyCode(purchase))}\n📅 Expected Delivery: ${purchase.expectedDeliveryDate ? new Date(purchase.expectedDeliveryDate).toLocaleDateString() : 'Not set'}\n\n*Items:*\n${(purchase.items ?? []).map(item => {
       const material = rawMaterials.find(m => m.id === item.rawMaterialId);
       const product = simpleProducts.find(p => p.id === item.productId);
       const itemName = material?.name || product?.name || item.materialName || 'Item';
       const itemUnit = material?.unit || item.unit || 'unit';
       const unitPrice = resolveItemUnitPrice(item);
       return `• ${itemName}: ${item.quantity} ${itemUnit} @ ${money(unitPrice)} = ${money(resolveItemLineTotal(item))}`;
-    }).join('\n')}\n\nThank you!\n${storeProfile?.name || 'Your Store'}`;
+    }).join('\n')}\n\nThank you!\n${documentCompanyName}`;
     
     const whatsappUrl = `https://wa.me/${supplier?.phone?.replace(/\D/g, '') || ''}?text=${encodeURIComponent(message)}`;
     window.open(whatsappUrl, '_blank');
@@ -1350,6 +1558,7 @@ const AdminPurchases: React.FC = () => {
           quantity: 0,
           unitPrice: 0,
           unitCost: 0,
+          currency: String(newPurchase.currency || 'USD').toUpperCase() === 'LBP' ? 'LBP' : 'USD',
           subtotal: 0,
           receivedQuantity: 0,
           materialName: '',
@@ -1403,8 +1612,6 @@ const AdminPurchases: React.FC = () => {
     try {
       const db = getFirestore();
       await enforceAndConsumeTrialOperation(db, user.storeId, 'purchase');
-      const invoiceNumber = await generatePONumber(data.orderDate);
-
       const normalizedItems: PurchaseItem[] = data.items.map((item) => {
         const quantity = Number(item.quantity) || 0;
         const unitPrice = Number(item.unitPrice) || 0;
@@ -1423,9 +1630,6 @@ const AdminPurchases: React.FC = () => {
 
       const subtotal = normalizedItems.reduce((sum, item) => sum + item.quantity * (item.unitPrice || item.unitCost), 0);
       const purchaseData = {
-        poNumber: invoiceNumber,
-        purchaseOrderNumber: invoiceNumber,
-        invoiceNumber,
         supplierId: data.supplierId,
         orderDate: data.orderDate ? new Date(data.orderDate).toISOString() : new Date().toISOString(),
         expectedDeliveryDate: data.orderDate,
@@ -1447,7 +1651,13 @@ const AdminPurchases: React.FC = () => {
       };
 
       const docRef = await addDoc(collection(db, 'purchases'), purchaseData);
-      setPurchases([{ id: docRef.id, ...purchaseData }, ...purchases]);
+      const map = await syncPurchaseDocumentNumbers();
+      const poNumber = map.get(docRef.id);
+      setPurchases((prev) => {
+        const row = { id: docRef.id, ...purchaseData, poNumber, purchaseOrderNumber: poNumber, invoiceNumber: poNumber };
+        const without = prev.filter((p) => p.id !== docRef.id);
+        return [row, ...without];
+      });
 
       try {
         await logAction(
@@ -1457,7 +1667,7 @@ const AdminPurchases: React.FC = () => {
           'create',
           'purchase',
           docRef.id,
-          { newValue: purchaseData },
+          { newValue: { ...purchaseData, poNumber } },
           user.storeId,
         );
       } catch (logError) {
@@ -1475,22 +1685,46 @@ const AdminPurchases: React.FC = () => {
       return;
     }
 
-    if (!newPurchase.supplierId || newPurchase.items.length === 0 || !user?.storeId) {
-      toast({ title: "Error", description: "Supplier and at least one item required", variant: "destructive" });
+    if (!user?.storeId) {
+      toast({ title: "Error", description: "Store session missing — sign in again", variant: "destructive" });
       return;
     }
 
-    // Validate that each item has either rawMaterialId OR productId
-    const invalidItems = newPurchase.items.filter(item => {
-      const hasRawMaterial = item.rawMaterialId && item.rawMaterialId.trim() !== '';
-      const hasProduct = item.productId && item.productId.trim() !== '';
-      return !hasRawMaterial && !hasProduct; // Neither is set
-    });
+    let supplierId = newPurchase.supplierId;
+    if (!supplierId && (isCreatingNewSupplier || newPurchase.supplierName?.trim())) {
+      try {
+        supplierId = (await createInlineSupplierRecord()) || '';
+      } catch (error) {
+        console.error('Error creating supplier:', error);
+        toast({ title: "Error", description: "Failed to create supplier", variant: "destructive" });
+        return;
+      }
+    }
+
+    if (!supplierId) {
+      toast({
+        title: "Supplier required",
+        description: "Choose a supplier from the list, or add a new one (name + contact) and save.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (countValidPurchaseLines(newPurchase.items) === 0) {
+      toast({
+        title: "Line items required",
+        description: "Tap Add Item, pick a material or product, and enter quantity. Delivery fee alone cannot create a PO.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    const invalidItems = newPurchase.items.filter((item) => !purchaseLineIsReady(item));
 
     if (invalidItems.length > 0) {
       toast({ 
         title: "Error", 
-        description: "Each item must have either a raw material or product selected", 
+        description: "Each line needs a raw material, an item, or an expense, plus a quantity", 
         variant: "destructive" 
       });
       return;
@@ -1499,36 +1733,46 @@ const AdminPurchases: React.FC = () => {
     isAddingPurchaseRef.current = true;
     setIsCreatingPO(true);
     let operationSucceeded = false;
+    let poNumber: string | undefined;
     const today = new Date().toISOString().split('T')[0]; // Move outside try block for scope
 
     try {
       const db = getFirestore();
       await enforceAndConsumeTrialOperation(db, user.storeId, 'purchase');
-      const invoiceNumber = await generatePONumber(newPurchase.orderDate);
-      
       // Ensure all numeric values are properly converted
-      const normalizedItems = newPurchase.items.map(item => {
+      const lineItems = newPurchase.items.filter((item) => purchaseLineIsReady(item));
+      const normalizedItems = lineItems.map(item => {
         const unitPrice = parseNumberish(item.unitPrice);
         return {
           ...item,
           quantity: parseNumberish(item.quantity),
           unitPrice,
-          unitCost: unitPrice, // Ensure unitCost is also set for compatibility
+          unitCost: unitPrice,
+          currency: newPurchase.currency,
         };
       });
       
       const subtotal = normalizedItems.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0);
       const taxAmount = newPurchase.taxType !== 'none' ? subtotal * (newPurchase.taxRate / 100) : 0;
-      const totalAmount = subtotal + taxAmount;
+      const deliveryFee = parseNumberish(newPurchase.deliveryFee);
+      const totalAmount = subtotal + taxAmount + deliveryFee;
+      const deliveryLedger = resolveDeliveryExpenseAccount(storeProfile);
+
+      const supplierName =
+        suppliers.find((s) => s.id === supplierId)?.name || newPurchase.supplierName || '';
 
       const purchaseData = {
-        poNumber: invoiceNumber,
-        purchaseOrderNumber: invoiceNumber,
-        invoiceNumber,
-        supplierId: newPurchase.supplierId,
+        supplierId,
+        supplierName,
         orderDate: newPurchase.orderDate ? new Date(newPurchase.orderDate).toISOString() : new Date().toISOString(),
         expectedDeliveryDate: newPurchase.expectedDeliveryDate,
         status: 'draft' as const,
+        source: 'admin_manual',
+        purchasesPageEligible: true,
+        organizedCategory: 'production_input' as const,
+        deliveryFee,
+        deliveryExpenseLedgerAccountId: deliveryLedger.accountId,
+        deliveryExpenseLedgerAccountCode: deliveryLedger.accountCode,
         items: normalizedItems,
         subtotal,
         taxType: newPurchase.taxType,
@@ -1536,16 +1780,35 @@ const AdminPurchases: React.FC = () => {
         vat: taxAmount,
         totalAmount,
         totalCost: totalAmount,
+        currency: newPurchase.currency,
         notes: newPurchase.notes,
-        paymentStatus: 'unpaid' as const,
-        amountPaid: 0,
+        paymentStatus: newPurchase.paymentStatus || 'unpaid',
+        amountPaid: newPurchase.paymentStatus === 'paid'
+          ? totalAmount
+          : newPurchase.paymentStatus === 'partial'
+            ? parseNumberish(newPurchase.amountPaid)
+            : 0,
         storeId: user.storeId,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
       const docRef = await addDoc(collection(db, 'purchases'), purchaseData);
-      setPurchases([{ id: docRef.id, ...purchaseData }, ...purchases]);
+      const map = await syncPurchaseDocumentNumbers();
+      poNumber = map.get(docRef.id);
+      setPurchases((prev) => {
+        const row = {
+          id: docRef.id,
+          ...purchaseData,
+          poNumber,
+          purchaseOrderNumber: poNumber,
+          invoiceNumber: poNumber,
+        };
+        const without = prev.filter((p) => p.id !== docRef.id);
+        return filterPurchasesForStore([row, ...without], storeProfile).sort(
+          (a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime(),
+        );
+      });
       
       // Mark operation as succeeded immediately after purchase is created
       operationSucceeded = true;
@@ -1571,7 +1834,7 @@ const AdminPurchases: React.FC = () => {
         console.error('Audit log failed:', logError);
       }
 
-      toast({ title: "Success", description: `Purchase order ${invoiceNumber} created!` });
+      toast({ title: "Success", description: `Purchase order ${poNumber || 'created'}!` });
     } catch (error) {
       console.error('Error adding purchase:', error);
       toast({ title: "Error", description: "Failed to create purchase order", variant: "destructive" });
@@ -1580,6 +1843,7 @@ const AdminPurchases: React.FC = () => {
       setIsCreatingPO(false);
       
       if (operationSucceeded) {
+        if (user?.storeId) localStorage.removeItem(`po_create_draft_${user.storeId}`);
         setNewPurchase({
           supplierId: '',
           supplierName: '',
@@ -1591,6 +1855,10 @@ const AdminPurchases: React.FC = () => {
           items: [],
           taxType: 'none',
           taxRate: 0,
+          deliveryFee: 0,
+          currency: 'USD',
+          paymentStatus: 'unpaid',
+          amountPaid: 0,
         });
         setIsAddingPurchase(false);
       }
@@ -1688,8 +1956,7 @@ const AdminPurchases: React.FC = () => {
         const receivedQty = item.receivedQuantity || 0;
         console.log(`Processing item: ${item.materialName}, receivedQty: ${receivedQty}`);
         
-        if (receivedQty <= 0) {
-          console.log('⚠️ Skipping item with zero quantity');
+        if (receivedQty <= 0 || item.itemType === 'expense') {
           continue;
         }
         
@@ -1888,12 +2155,14 @@ const AdminPurchases: React.FC = () => {
   };
 
   const generatePaymentVoucherHTML = (purchase: Purchase, payment: PaymentRecord) => {
+    const money = (amount: unknown) => moneyIn(amount, purchaseCurrencyCode(purchase));
     const supplier = suppliers.find(s => s.id === purchase.supplierId);
+    const purchaseRef = purchaseDisplayRef(purchase) || purchase.invoiceNumber || purchase.purchaseOrderNumber || 'PO-PENDING';
     return `
       <div class="voucher-container" style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 30px;">
           <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">PAYMENT VOUCHER</h1>
-          <p style="margin: 5px 0; color: #666; font-size: 14px;">Voucher #${payment.id}</p>
+          <p style="margin: 5px 0; color: #666; font-size: 14px;">Payment for ${purchaseRef}</p>
         </div>
 
         <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
@@ -1902,7 +2171,7 @@ const AdminPurchases: React.FC = () => {
               <p style="margin: 0; color: #666; font-size: 12px;">Date</p>
               <p style="margin: 5px 0 15px; font-weight: 600;">${new Date(payment.date).toLocaleDateString()}</p>
               <p style="margin: 0; color: #666; font-size: 12px;">Purchase Order</p>
-              <p style="margin: 5px 0 15px; font-weight: 600;">${purchase.invoiceNumber || purchase.purchaseOrderNumber}</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${purchaseRef}</p>
             </div>
             <div style="text-align: right;">
               <p style="margin: 0; color: #666; font-size: 12px;">Payment Method</p>
@@ -1979,7 +2248,8 @@ const AdminPurchases: React.FC = () => {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Payment-Voucher-${payment.id}.pdf`);
+      const purchaseRef = purchaseDisplayRef(purchase) || purchase.invoiceNumber || purchase.purchaseOrderNumber || 'PO-PENDING';
+      pdf.save(`Payment-Voucher-${safeDocumentFilePart(purchaseRef)}-${safeDocumentFilePart(payment.date)}.pdf`);
       
       document.body.removeChild(tempDiv);
       toast({ title: "Success", description: "Payment voucher downloaded" });
@@ -2007,9 +2277,10 @@ const AdminPurchases: React.FC = () => {
   const sharePaymentVoucher = async (purchase: Purchase, payment: PaymentRecord) => {
     if (navigator.share) {
       try {
+        const purchaseRef = purchaseDisplayRef(purchase) || purchase.invoiceNumber || purchase.purchaseOrderNumber || 'PO-PENDING';
         await navigator.share({
-          title: `Payment Voucher ${payment.id}`,
-          text: `Payment of ${money(payment.amount)} recorded for PO ${purchase.invoiceNumber || purchase.purchaseOrderNumber}`,
+          title: `Payment Voucher ${purchaseRef}`,
+          text: `Payment of ${money(payment.amount)} recorded for PO ${purchaseRef}`,
         });
       } catch (error) {
         console.error('Error sharing:', error);
@@ -2028,21 +2299,93 @@ const AdminPurchases: React.FC = () => {
   const openEditPurchase = (purchase: Purchase) => {
     const total = resolvePurchaseTotal(purchase);
     const orderYmd = purchase.orderDate ? purchaseOnDateFromIso(purchase.orderDate) : localPurchaseYmd();
+    const supplierName = purchase.supplierName
+      || suppliers.find((s) => s.id === purchase.supplierId)?.name
+      || '';
     setEditDraft({
-      supplierName: purchase.supplierName || '',
+      supplierName,
       orderDate: orderYmd,
       amount: String(total),
       notes: purchase.notes || '',
-      paymentStatus: purchase.paymentStatus || 'paid',
-      amountPaid: String(purchase.amountPaid ?? total),
+      paymentStatus: purchase.paymentStatus || 'unpaid',
+      amountPaid: String(purchase.amountPaid ?? 0),
+      items: (purchase.items || []).map((item) => {
+        const material = rawMaterials.find((m) => m.id === item.rawMaterialId);
+        const product = simpleProducts.find((p) => p.id === item.productId);
+        return {
+          ...item,
+          materialName: item.materialName || material?.name || product?.name || '',
+          unitPrice: resolveItemUnitPrice(item),
+          unitCost: resolveItemUnitPrice(item),
+          currency: String(item.currency || purchaseCurrencyCode(purchase)).toUpperCase() === 'LBP' ? 'LBP' : 'USD',
+        };
+      }),
+      currency: purchaseCurrencyCode(purchase),
     });
     setEditingPurchase(purchase);
   };
 
+  const blankEditItem = (): PurchaseItem => ({
+    itemType: 'raw_material',
+    rawMaterialId: '',
+    productId: '',
+    quantity: 1,
+    unitPrice: 0,
+    unitCost: 0,
+    currency: 'USD',
+    subtotal: 0,
+    receivedQuantity: 0,
+    materialName: '',
+    sku: '',
+  });
+
+  const addEditItem = () => {
+    setEditDraft((draft) => ({ ...draft, items: [...draft.items, blankEditItem()] }));
+  };
+
+  const removeEditItem = (index: number) => {
+    setEditDraft((draft) => ({ ...draft, items: draft.items.filter((_, i) => i !== index) }));
+  };
+
+  const updateEditItem = (index: number, field: keyof PurchaseItem, value: unknown) => {
+    setEditDraft((draft) => {
+      const updated = [...draft.items];
+      updated[index] = { ...updated[index], [field]: value as PurchaseItem[keyof PurchaseItem] };
+      if (field === 'rawMaterialId' && value) {
+        const material = rawMaterials.find((m) => m.id === value);
+        if (material) {
+          updated[index].unitPrice = material.costPerUnit;
+          updated[index].unitCost = material.costPerUnit;
+          updated[index].materialName = material.name;
+          updated[index].sku = material.sku;
+          updated[index].unit = material.unit;
+          updated[index].itemType = 'raw_material';
+        }
+      }
+      if (field === 'productId' && value) {
+        const product = simpleProducts.find((p) => p.id === value);
+        if (product) {
+          const price = product.costPrice || product.price || 0;
+          updated[index].unitPrice = price;
+          updated[index].unitCost = price;
+          updated[index].materialName = product.name;
+          updated[index].sku = product.sku || '';
+          updated[index].unit = 'piece';
+          updated[index].itemType = 'product';
+        }
+      }
+      return { ...draft, items: updated };
+    });
+  };
+
   const handleSaveEditPurchase = async () => {
     if (!editingPurchase || !user?.storeId) return;
+    const cashBook = isCashBookPurchase(editingPurchase);
     const amount = parseNumberish(editDraft.amount);
-    if (!editDraft.supplierName.trim() || amount <= 0) {
+    const supplierName = editDraft.supplierName.trim()
+      || suppliers.find((s) => s.id === editingPurchase.supplierId)?.name
+      || '';
+    if (!supplierName || (cashBook && amount <= 0)) {
       toast({ title: 'Error', description: 'Supplier name and amount required', variant: 'destructive' });
       return;
     }
@@ -2053,42 +2396,99 @@ const AdminPurchases: React.FC = () => {
         ? new Date(`${editDraft.orderDate}T12:00:00`).toISOString()
         : editingPurchase.orderDate;
       const paid = parseNumberish(editDraft.amountPaid);
-      const items = Array.isArray(editingPurchase.items) && editingPurchase.items.length > 0
-        ? editingPurchase.items.map((item, idx) =>
-            idx === 0
-              ? {
+      const items = cashBook
+        ? (Array.isArray(editingPurchase.items) && editingPurchase.items.length > 0
+          ? editingPurchase.items.map((item, idx) =>
+              idx === 0
+                ? {
+                    ...item,
+                    materialName: supplierName,
+                    quantity: 1,
+                    unitPrice: amount,
+                    unitCost: amount,
+                    receivedQuantity: item.receivedQuantity ?? 1,
+                  }
+                : item,
+            )
+          : [
+              {
+                materialName: supplierName,
+                sku: 'CASHBOOK',
+                quantity: 1,
+                unitPrice: amount,
+                unitCost: amount,
+                receivedQuantity: 1,
+              } as PurchaseItem,
+            ])
+        : (() => {
+            const incomplete = editDraft.items.filter((item) => {
+              const qty = parseNumberish(item.quantity);
+              const named = Boolean(
+                String(item.rawMaterialId || '').trim()
+                || String(item.productId || '').trim()
+                || String(item.materialName || '').trim(),
+              );
+              return qty > 0 && !named;
+            });
+            if (incomplete.length > 0) {
+              throw new Error('Each new line needs a material or product');
+            }
+            return editDraft.items
+              .filter((item) => {
+                const qty = parseNumberish(item.quantity);
+                const named = Boolean(
+                  String(item.rawMaterialId || '').trim()
+                  || String(item.productId || '').trim()
+                  || String(item.materialName || '').trim(),
+                );
+                return qty > 0 && named;
+              })
+              .map((item) => {
+                const quantity = parseNumberish(item.quantity);
+                const unitPrice = resolveItemUnitPrice(item);
+                return {
                   ...item,
-                  materialName: editDraft.supplierName.trim(),
-                  quantity: 1,
-                  unitPrice: amount,
-                  unitCost: amount,
-                  receivedQuantity: item.receivedQuantity ?? 1,
-                }
-              : item,
-          )
-        : [
-            {
-              materialName: editDraft.supplierName.trim(),
-              sku: 'CASHBOOK',
-              quantity: 1,
-              unitPrice: amount,
-              unitCost: amount,
-              receivedQuantity: 1,
-            } as PurchaseItem,
-          ];
+                  quantity,
+                  unitPrice,
+                  unitCost: unitPrice,
+                  subtotal: quantity * unitPrice,
+                  currency: editDraft.currency,
+                };
+              });
+          })();
+      if (!cashBook && items.length === 0) {
+        toast({ title: 'Line items required', description: 'Add at least one item with a quantity.', variant: 'destructive' });
+        setIsSavingEdit(false);
+        return;
+      }
+
+      const subtotal = cashBook
+        ? amount
+        : items.reduce((sum, item) => sum + parseNumberish(item.quantity) * resolveItemUnitPrice(item), 0);
+      const taxExtra = editingPurchase as Purchase & { taxType?: string; taxRate?: number };
+      const deliveryFee = cashBook ? 0 : parseNumberish(editingPurchase.deliveryFee);
+      const taxAmount = cashBook
+        ? 0
+        : taxExtra.taxType && taxExtra.taxType !== 'none'
+          ? subtotal * (parseNumberish(taxExtra.taxRate) / 100)
+          : parseNumberish(editingPurchase.taxAmount);
+      const totalAmount = subtotal + taxAmount + deliveryFee;
 
       const payload = {
-        supplierName: editDraft.supplierName.trim(),
+        supplierName,
+        storeId: editingPurchase.storeId,
         orderDate: orderIso,
         receivedDate: editingPurchase.receivedDate || orderIso,
-        notes: editDraft.notes,
-        items,
-        subtotal: amount,
-        total: amount,
-        totalAmount: amount,
-        totalCost: amount,
-        paymentStatus: editDraft.paymentStatus || 'paid',
+        notes: editDraft.notes || '',
+        items: JSON.parse(JSON.stringify(items)),
+        subtotal,
+        taxAmount,
+        total: totalAmount,
+        totalAmount,
+        totalCost: totalAmount,
+        paymentStatus: editDraft.paymentStatus || 'unpaid',
         amountPaid: paid,
+        currency: editDraft.currency,
         updatedAt: new Date().toISOString(),
       };
 
@@ -2096,21 +2496,30 @@ const AdminPurchases: React.FC = () => {
       setPurchases(
         purchases.map((p) => (p.id === editingPurchase.id ? { ...p, ...payload } : p)),
       );
-      await logAction(
-        user.id,
-        user.name,
-        user.role,
-        'update',
-        'purchase',
-        editingPurchase.id,
-        { oldValue: editingPurchase, newValue: payload },
-        user.storeId,
-      );
+      try {
+        await logAction(
+          user.id,
+          user.name,
+          user.role,
+          'update',
+          'purchase',
+          editingPurchase.id,
+          { oldValue: editingPurchase, newValue: payload },
+          user.storeId,
+        );
+      } catch (logError) {
+        console.error('Audit log failed:', logError);
+      }
       toast({ title: 'Saved', description: 'Purchase order updated' });
       setEditingPurchase(null);
     } catch (error) {
       console.error('Error updating purchase:', error);
-      toast({ title: 'Error', description: 'Failed to update purchase', variant: 'destructive' });
+      const message = error instanceof Error && error.message.startsWith('Each new line')
+        ? error.message
+        : error instanceof Error && error.message
+          ? error.message
+          : 'Failed to update purchase';
+      toast({ title: 'Error', description: message, variant: 'destructive' });
     } finally {
       setIsSavingEdit(false);
     }
@@ -2190,23 +2599,19 @@ const AdminPurchases: React.FC = () => {
   };
 
   const getPaymentBadge = (purchase: Purchase) => {
-    const paymentStatus = purchase.paymentStatus || 'unpaid';
+    const paymentStatus = resolvePurchasePaymentStatus(purchase);
     const variants: Record<string, { variant: 'default' | 'secondary' | 'destructive' | 'outline'; label: string; color: string }> = {
       paid: { variant: 'default', label: 'Paid', color: 'bg-green-100 text-green-800' },
       partial: { variant: 'secondary', label: 'Partial', color: 'bg-yellow-100 text-yellow-800' },
       unpaid: { variant: 'destructive', label: 'Unpaid', color: 'bg-red-100 text-red-800' },
     };
-    
-    if (purchase.status !== 'received') {
-      return null; // Don't show payment status for non-received orders
-    }
-    
-  return (
-    <Badge className={variants[paymentStatus].color}>
-      {variants[paymentStatus].label}
-    </Badge>
-  );
-};
+
+    return (
+      <Badge className={variants[paymentStatus].color}>
+        {variants[paymentStatus].label}
+      </Badge>
+    );
+  };
 
   const purchaseDateRange = useMemo(
     () => resolvePurchasePeriodRange(datePreset, customRangeStart, customRangeEnd),
@@ -2215,21 +2620,29 @@ const AdminPurchases: React.FC = () => {
 
   const filteredPurchases = useMemo(() => {
     const list = purchases.filter((p) => {
-      if (!purchaseInPeriod(p.orderDate, purchaseDateRange)) return false;
+      if (!purchaseMatchesPeriod(p, purchaseDateRange, { includeCreatedAtFallback: datePreset === 'today' })) {
+        return false;
+      }
       const supplier = suppliers.find((s) => s.id === p.supplierId);
       return purchaseMatchesSearch(p, supplier?.name, purchaseSearch);
     });
     return list.sort((a, b) => new Date(b.orderDate).getTime() - new Date(a.orderDate).getTime());
-  }, [purchases, purchaseDateRange, purchaseSearch, suppliers]);
+  }, [purchases, purchaseDateRange, purchaseSearch, suppliers, datePreset]);
 
   const purchaseStats = useMemo(() => {
     const openStatuses = ['pending', 'confirmed'];
     const openOrders = filteredPurchases.filter((p) => openStatuses.includes(String(p.status || '').toLowerCase())).length;
-    const totalValue = filteredPurchases.reduce((sum, p) => sum + resolvePurchaseTotal(p), 0);
-    const amountDue = filteredPurchases
-      .filter((p) => p.status === 'received' && p.paymentStatus !== 'paid')
-      .reduce((sum, p) => sum + Math.max(0, resolvePurchaseTotal(p) - parseNumberish(p.amountPaid)), 0);
-    return { total: filteredPurchases.length, openOrders, totalValue, amountDue };
+    const sumIn = (code: 'USD' | 'LBP', dueOnly: boolean) => filteredPurchases
+      .filter((p) => purchaseCurrencyCode(p) === code)
+      .filter((p) => !dueOnly || (p.status === 'received' && p.paymentStatus !== 'paid'))
+      .reduce((sum, p) => sum + (dueOnly
+        ? Math.max(0, resolvePurchaseTotal(p) - parseNumberish(p.amountPaid))
+        : resolvePurchaseTotal(p)), 0);
+    const totalValue = sumIn('USD', false);
+    const totalValueLbp = sumIn('LBP', false);
+    const amountDue = sumIn('USD', true);
+    const amountDueLbp = sumIn('LBP', true);
+    return { total: filteredPurchases.length, openOrders, totalValue, totalValueLbp, amountDue, amountDueLbp };
   }, [filteredPurchases]);
 
   return (
@@ -2260,8 +2673,8 @@ const AdminPurchases: React.FC = () => {
       <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
         <AdminStatCard title="Purchase Orders" value={purchaseStats.total} icon={ShoppingCart} gradient="from-teal-500 to-teal-700" subtitle={datePreset === 'all' ? 'All POs on record' : 'In selected period'} />
         <AdminStatCard title="Open POs" value={purchaseStats.openOrders} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle="Pending or confirmed" />
-        <AdminStatCard title="Total PO Value" value={money(purchaseStats.totalValue)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Sum of all orders" />
-        <AdminStatCard title="Amount Due" value={money(purchaseStats.amountDue)} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 ? 'text-orange-600' : undefined} />
+        <AdminStatCard title="Total PO Value" value={[purchaseStats.totalValue > 0 ? money(purchaseStats.totalValue) : '', purchaseStats.totalValueLbp > 0 ? moneyIn(purchaseStats.totalValueLbp, 'LBP') : ''].filter(Boolean).join(' · ') || money(0)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="USD and LBP kept separate" />
+        <AdminStatCard title="Amount Due" value={[purchaseStats.amountDue > 0 ? money(purchaseStats.amountDue) : '', purchaseStats.amountDueLbp > 0 ? moneyIn(purchaseStats.amountDueLbp, 'LBP') : ''].filter(Boolean).join(' · ') || money(0)} icon={AlertTriangle} gradient="from-orange-400 to-orange-600" subtitle="Received but unpaid" valueClassName={purchaseStats.amountDue > 0 || purchaseStats.amountDueLbp > 0 ? 'text-orange-600' : undefined} />
       </div>
 
       <AdminPanel className="mb-4 sticky top-0 z-10 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
@@ -2530,21 +2943,54 @@ const AdminPurchases: React.FC = () => {
                               className={DIALOG_NATIVE_SELECT_CLASS}
                               value={item.itemType || 'raw_material'}
                               onChange={(e) => {
-                                const value = e.target.value as 'raw_material' | 'product';
+                                const value = e.target.value as 'raw_material' | 'product' | 'expense';
                                 const updated = [...newPurchase.items];
-                                updated[index] = { ...updated[index], itemType: value, rawMaterialId: '', productId: '' };
+                                updated[index] = {
+                                  ...updated[index],
+                                  itemType: value,
+                                  rawMaterialId: '',
+                                  productId: '',
+                                  expenseCategory: '',
+                                  materialName: '',
+                                  sku: '',
+                                };
                                 setNewPurchase({ ...newPurchase, items: updated });
                                 setCreatingMaterialIndex(null);
+                                setCreatingProductIndex(null);
                               }}
                             >
-                              <option value="raw_material">Raw Material</option>
-                              <option value="product">Simple Product</option>
+                              <option value="raw_material">Raw material</option>
+                              <option value="product">Item</option>
+                              <option value="expense">Expenses</option>
                             </select>
                           </div>
                           <div>
                             <div className="flex items-center justify-between mb-1">
-                              <Label className="text-xs">{item.itemType === 'product' ? 'Product' : 'Raw Material'}</Label>
-                              {item.itemType !== 'product' && creatingMaterialIndex !== index ? (
+                              <Label className="text-xs">{item.itemType === 'product' ? 'Item' : item.itemType === 'expense' ? 'Expense' : 'Raw material'}</Label>
+                              {item.itemType === 'expense' ? null : item.itemType === 'product' && creatingProductIndex !== index ? (
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="text-xs h-auto p-0"
+                                  onClick={() => {
+                                    setCreatingProductIndex(index);
+                                    setInlineProduct({ name: '', costPrice: '' });
+                                  }}
+                                >
+                                  + Add new product
+                                </Button>
+                              ) : item.itemType === 'product' && creatingProductIndex === index ? (
+                                <Button
+                                  type="button"
+                                  variant="link"
+                                  size="sm"
+                                  className="text-xs h-auto p-0"
+                                  onClick={() => setCreatingProductIndex(null)}
+                                >
+                                  Select existing
+                                </Button>
+                              ) : item.itemType !== 'product' && creatingMaterialIndex !== index ? (
                                 <Button
                                   type="button"
                                   variant="link"
@@ -2569,19 +3015,76 @@ const AdminPurchases: React.FC = () => {
                                 </Button>
                               ) : null}
                             </div>
-                            {item.itemType === 'product' ? (
-                              <select
-                                className={DIALOG_NATIVE_SELECT_CLASS}
-                                value={item.productId || ''}
-                                onChange={(e) => updateItem(index, 'productId', e.target.value)}
-                              >
-                                <option value="">Select product</option>
-                                {simpleProducts.map((prod) => (
-                                  <option key={prod.id} value={prod.id}>
-                                    {prod.name}{prod.sku ? ` (${prod.sku})` : ''}
-                                  </option>
-                                ))}
-                              </select>
+                            {item.itemType === 'expense' ? (
+                              <RankedOptionSelect
+                                options={V_EXPENSE_CATEGORIES.map((category) => ({
+                                  value: category.id,
+                                  label: category.label,
+                                }))}
+                                value={item.expenseCategory || ''}
+                                onChange={(id) => {
+                                  const category = V_EXPENSE_CATEGORIES.find((row) => row.id === id);
+                                  const updated = [...newPurchase.items];
+                                  updated[index] = {
+                                    ...updated[index],
+                                    expenseCategory: id,
+                                    materialName: category?.label || '',
+                                    sku: '',
+                                  };
+                                  setNewPurchase({ ...newPurchase, items: updated });
+                                }}
+                                placeholder="Search expense"
+                                searchPlaceholder="Type expense name…"
+                              />
+                            ) : item.itemType === 'product' ? (
+                              creatingProductIndex === index ? (
+                                <div className="space-y-2 p-3 border rounded-md bg-muted/40">
+                                  <Input
+                                    placeholder="Product name *"
+                                    value={inlineProduct.name}
+                                    onChange={(e) => setInlineProduct((prev) => ({ ...prev, name: e.target.value }))}
+                                  />
+                                  <Input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    placeholder="Unit cost *"
+                                    value={inlineProduct.costPrice}
+                                    onChange={(e) => setInlineProduct((prev) => ({ ...prev, costPrice: e.target.value }))}
+                                  />
+                                  <Button
+                                    type="button"
+                                    size="sm"
+                                    className="w-full"
+                                    onClick={() => void handleCreateInlineProduct(index)}
+                                  >
+                                    Save product
+                                  </Button>
+                                </div>
+                              ) : simpleProducts.length === 0 ? (
+                                <button
+                                  type="button"
+                                  className={`${DIALOG_NATIVE_SELECT_CLASS} text-left text-muted-foreground`}
+                                  onClick={() => {
+                                    setCreatingProductIndex(index);
+                                    setInlineProduct({ name: '', costPrice: '' });
+                                  }}
+                                >
+                                  No products yet — tap to add one
+                                </button>
+                              ) : (
+                                <RankedOptionSelect
+                                  options={simpleProducts.map((prod) => ({
+                                    value: prod.id,
+                                    label: prod.name,
+                                    keywords: prod.sku || '',
+                                  }))}
+                                  value={item.productId || ''}
+                                  onChange={(id) => updateItem(index, 'productId', id)}
+                                  placeholder="Search product"
+                                  searchPlaceholder="Type product name…"
+                                />
+                              )
                             ) : creatingMaterialIndex === index ? (
                               <div className="space-y-2 p-3 border rounded-md bg-muted/40">
                                 <Input
@@ -2632,18 +3135,17 @@ const AdminPurchases: React.FC = () => {
                                 No materials yet — tap to add one
                               </button>
                             ) : (
-                              <select
-                                className={DIALOG_NATIVE_SELECT_CLASS}
+                              <RankedOptionSelect
+                                options={rawMaterials.map((mat) => ({
+                                  value: mat.id,
+                                  label: mat.name,
+                                  keywords: [mat.sku, mat.unit].filter(Boolean).join(' '),
+                                }))}
                                 value={item.rawMaterialId || ''}
-                                onChange={(e) => updateItem(index, 'rawMaterialId', e.target.value)}
-                              >
-                                <option value="">Select material</option>
-                                {rawMaterials.map((mat) => (
-                                  <option key={mat.id} value={mat.id}>
-                                    {mat.name} ({mat.unit})
-                                  </option>
-                                ))}
-                              </select>
+                                onChange={(id) => updateItem(index, 'rawMaterialId', id)}
+                                placeholder="Search material"
+                                searchPlaceholder="Type material name…"
+                              />
                             )}
                           </div>
                         </div>
@@ -2674,7 +3176,7 @@ const AdminPurchases: React.FC = () => {
                         <div className="flex items-center justify-between gap-3">
                           <div>
                             <Label className="text-xs">Total</Label>
-                            <p className="text-sm font-medium py-1">{money(lineTotal)}</p>
+                            <p className="text-sm font-medium py-1">{moneyIn(lineTotal, newPurchase.currency)}</p>
                           </div>
                           <Button
                             type="button"
@@ -2693,23 +3195,95 @@ const AdminPurchases: React.FC = () => {
                     <div className="mt-2 p-3 bg-gray-100 rounded space-y-2">
                       <div className="flex justify-between">
                         <span>Subtotal:</span>
-                        <span>{money(newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0))}</span>
+                        <span>{moneyIn(newPurchase.items.reduce((sum, item) => sum + (parseNumberish(item.quantity) * parseNumberish(item.unitPrice)), 0), newPurchase.currency)}</span>
                       </div>
                       {newPurchase.taxType !== 'none' && (
                         <div className="flex justify-between">
                           <span>Tax ({newPurchase.taxRate}%):</span>
-                          <span>{money(newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (newPurchase.taxRate / 100))}</span>
+                          <span>{moneyIn(newPurchase.items.reduce((sum, item) => sum + (item.quantity * item.unitPrice), 0) * (newPurchase.taxRate / 100), newPurchase.currency)}</span>
+                        </div>
+                      )}
+                      {parseNumberish(newPurchase.deliveryFee) > 0 && (
+                        <div className="flex justify-between">
+                          <span>Delivery ({deliveryExpenseLedger.accountCode}):</span>
+                          <span>{moneyIn(parseNumberish(newPurchase.deliveryFee), newPurchase.currency)}</span>
                         </div>
                       )}
                       <div className="flex justify-between text-lg font-bold border-t pt-2">
                         <span>Total Amount:</span>
-                        <span>{money(calculateTotal(newPurchase.items, newPurchase.taxType, newPurchase.taxRate))}</span>
+                        <span>
+                          {dualMoney(
+                            calculateTotal(
+                              newPurchase.items,
+                              newPurchase.taxType,
+                              newPurchase.taxRate,
+                              newPurchase.deliveryFee,
+                            ),
+                            newPurchase.currency,
+                          )}
+                        </span>
                       </div>
                     </div>
                   )}
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="po-currency">Currency</Label>
+                    <select
+                      id="po-currency"
+                      className={DIALOG_NATIVE_SELECT_CLASS}
+                      value={String(newPurchase.currency || 'USD').toUpperCase() === 'LBP' ? 'LBP' : 'USD'}
+                      onChange={(e) => {
+                        const currency = e.target.value === 'LBP' ? 'LBP' : 'USD';
+                        setNewPurchase({
+                          ...newPurchase,
+                          currency,
+                          items: newPurchase.items.map((item) => ({ ...item, currency })),
+                        });
+                      }}
+                    >
+                      {purchaseCurrencyChoices.map((code) => (
+                        <option key={code} value={code}>{code}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <Label htmlFor="po-payment">Payment</Label>
+                    <select
+                      id="po-payment"
+                      className={DIALOG_NATIVE_SELECT_CLASS}
+                      value={newPurchase.paymentStatus}
+                      onChange={(e) =>
+                        setNewPurchase({
+                          ...newPurchase,
+                          paymentStatus: e.target.value as Purchase['paymentStatus'],
+                        })
+                      }
+                    >
+                      <option value="unpaid">Unpaid</option>
+                      <option value="partial">Partial</option>
+                      <option value="paid">Paid</option>
+                    </select>
+                  </div>
+                  {newPurchase.paymentStatus === 'partial' && (
+                    <div>
+                      <Label htmlFor="po-amount-paid">Amount paid</Label>
+                      <Input
+                        id="po-amount-paid"
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={newPurchase.amountPaid || ''}
+                        onChange={(e) =>
+                          setNewPurchase({
+                            ...newPurchase,
+                            amountPaid: e.target.value === '' ? 0 : parseFloat(e.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                  )}
                   <div>
                     <Label>Tax Type</Label>
                     <select
@@ -2726,6 +3300,25 @@ const AdminPurchases: React.FC = () => {
                       <option value="VAT">VAT</option>
                       <option value="TTC">TTC</option>
                     </select>
+                  </div>
+                  <div>
+                    <Label>Delivery fee ({newPurchase.currency})</Label>
+                    <Input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={newPurchase.deliveryFee === 0 ? '' : newPurchase.deliveryFee}
+                      onChange={(e) =>
+                        setNewPurchase((prev) => ({
+                          ...prev,
+                          deliveryFee: e.target.value === '' ? 0 : parseFloat(e.target.value) || 0,
+                        }))
+                      }
+                      placeholder="0"
+                    />
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Posts to {deliveryExpenseLedger.name} ({deliveryExpenseLedger.accountCode})
+                    </p>
                   </div>
                   {newPurchase.taxType !== 'none' && (
                     <div>
@@ -2783,6 +3376,7 @@ const AdminPurchases: React.FC = () => {
           ) : (
             filteredPurchases.map((purchase) => {
               const supplier = suppliers.find(s => s.id === purchase.supplierId);
+              const money = (amount: unknown) => moneyIn(amount, purchaseCurrencyCode(purchase));
               const poRef = purchaseDisplayRef(purchase);
               const isCashBookRef = poRef.startsWith('CB-');
 
@@ -2796,10 +3390,44 @@ const AdminPurchases: React.FC = () => {
                             {poRef}
                           </span>
                           {getStatusBadge(purchase.status)}
-                          {getPaymentBadge(purchase)}
+                          <select
+                            className="h-8 rounded-md border bg-background px-2 text-xs"
+                            value={resolvePurchasePaymentStatus(purchase)}
+                            onChange={(e) => {
+                              const next = e.target.value as Purchase['paymentStatus'];
+                              const total = resolvePurchaseTotal(purchase);
+                              const amountPaid = next === 'paid' ? total : next === 'unpaid' ? 0 : parseNumberish(purchase.amountPaid);
+                              const db = getFirestore();
+                              void updateDoc(doc(db, 'purchases', purchase.id), {
+                                paymentStatus: next,
+                                amountPaid,
+                                updatedAt: new Date().toISOString(),
+                              }).then(() => {
+                                setPurchases((prev) => prev.map((row) => (
+                                  row.id === purchase.id ? { ...row, paymentStatus: next, amountPaid } : row
+                                )));
+                              }).catch(() => {
+                                toast({ title: 'Error', description: 'Could not update payment', variant: 'destructive' });
+                              });
+                            }}
+                          >
+                            <option value="unpaid">Unpaid</option>
+                            <option value="partial">Partial</option>
+                            <option value="paid">Paid</option>
+                          </select>
                         </CardTitle>
                         <CardDescription>
-                          Supplier: {supplier?.name || purchase.supplierName || 'Unknown'} | Order Date: {new Date(purchase.orderDate).toLocaleDateString()}
+                          Supplier: {supplier?.name || purchase.supplierName || 'Unknown'} | Order Date:{' '}
+                          {new Date(purchase.orderDate).toLocaleDateString()}
+                          <span className="block text-xs mt-1 font-medium text-slate-700">
+                            {formatPurchasePaymentStatement(purchase, money)}
+                          </span>
+                          {parseNumberish(purchase.deliveryFee) > 0 && (
+                            <span className="block text-xs mt-0.5 text-slate-600">
+                              Delivery {money(parseNumberish(purchase.deliveryFee))} → COA{' '}
+                              {purchase.deliveryExpenseLedgerAccountCode || '653'}
+                            </span>
+                          )}
                           {isCashBookRef && (
                             <span className="block text-xs mt-0.5">CB = cash book reference for this imported expense line</span>
                           )}
@@ -2922,7 +3550,7 @@ const AdminPurchases: React.FC = () => {
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
                       <div>
                         <p className="text-sm text-gray-500">Total Amount</p>
-                        <p className="font-bold text-lg">{money(resolvePurchaseTotal(purchase))}</p>
+                        <p className="font-bold text-lg">{dualMoney(resolvePurchaseTotal(purchase), purchaseCurrencyCode(purchase))}</p>
                       </div>
                       {purchase.status === 'received' && (
                         <div>
@@ -3027,12 +3655,40 @@ const AdminPurchases: React.FC = () => {
             if (!open) setEditingPurchase(null);
           }}
         >
-          <DialogContent className="sm:max-w-lg">
+          <DialogContent className="sm:max-w-3xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Edit purchase {editingPurchase ? purchaseDisplayRef(editingPurchase) : ''}</DialogTitle>
-              <DialogDescription>Update supplier, date, amount, and notes.</DialogDescription>
+              <DialogDescription>
+                {editingPurchase && isCashBookPurchase(editingPurchase)
+                  ? 'Update supplier, date, amount, and notes.'
+                  : 'Update the order and add or change line items.'}
+              </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="edit-order-date">Order date</Label>
+                  <Input
+                    id="edit-order-date"
+                    type="date"
+                    value={editDraft.orderDate}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, orderDate: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="edit-currency">Currency</Label>
+                  <select
+                    id="edit-currency"
+                    className={DIALOG_NATIVE_SELECT_CLASS}
+                    value={String(editDraft.currency || 'USD').toUpperCase() === 'LBP' ? 'LBP' : 'USD'}
+                    onChange={(e) => setEditDraft((d) => ({ ...d, currency: e.target.value === 'LBP' ? 'LBP' : 'USD' }))}
+                  >
+                    {purchaseCurrencyChoices.map((code) => (
+                      <option key={code} value={code}>{code}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
               <div>
                 <Label htmlFor="edit-supplier">Supplier / description</Label>
                 <Input
@@ -3041,27 +3697,105 @@ const AdminPurchases: React.FC = () => {
                   onChange={(e) => setEditDraft((d) => ({ ...d, supplierName: e.target.value }))}
                 />
               </div>
+              {editingPurchase && !isCashBookPurchase(editingPurchase) && (
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label>Items</Label>
+                    <Button type="button" size="sm" onClick={addEditItem}>
+                      <Plus className="h-4 w-4 mr-1" /> Add Item
+                    </Button>
+                  </div>
+                  <div className="space-y-3">
+                    {editDraft.items.map((item, index) => {
+                      const material = rawMaterials.find((m) => m.id === item.rawMaterialId);
+                      const product = simpleProducts.find((p) => p.id === item.productId);
+                      const itemName = material?.name || product?.name || item.materialName || '';
+                      const lineTotal = parseNumberish(item.quantity) * resolveItemUnitPrice(item);
+                      return (
+                        <div key={index} className="grid grid-cols-12 gap-2 items-end border rounded-md p-2">
+                          <div className="col-span-12 sm:col-span-5">
+                            <Label className="text-xs">Item</Label>
+                            <Input
+                              value={itemName}
+                              placeholder="Item name"
+                              onChange={(e) => updateEditItem(index, 'materialName', e.target.value)}
+                            />
+                            <div className="mt-1">
+                              <RankedOptionSelect
+                                options={[
+                                  ...(!rawMaterials.some((mat) => mat.id === item.rawMaterialId) && item.rawMaterialId
+                                    ? [{ value: `material:${item.rawMaterialId}`, label: itemName || 'Current material' }]
+                                    : []),
+                                  ...rawMaterials.map((mat) => ({ value: `material:${mat.id}`, label: mat.name, keywords: mat.sku || '' })),
+                                  ...simpleProducts.map((prod) => ({ value: `product:${prod.id}`, label: prod.name, keywords: prod.sku || '' })),
+                                ]}
+                                value={item.productId ? `product:${item.productId}` : item.rawMaterialId ? `material:${item.rawMaterialId}` : ''}
+                                onChange={(next) => {
+                                  const splitAt = next.indexOf(':');
+                                  const kind = next.slice(0, splitAt);
+                                  const id = next.slice(splitAt + 1);
+                                  if (kind === 'product') updateEditItem(index, 'productId', id);
+                                  else updateEditItem(index, 'rawMaterialId', id);
+                                }}
+                                placeholder="Search item"
+                                searchPlaceholder="Type item name…"
+                              />
+                            </div>
+                          </div>
+                          <div className="col-span-4 sm:col-span-2">
+                            <Label className="text-xs">Qty</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.001"
+                              value={item.quantity}
+                              onChange={(e) => updateEditItem(index, 'quantity', e.target.value === '' ? 0 : parseFloat(e.target.value))}
+                            />
+                          </div>
+                          <div className="col-span-4 sm:col-span-2">
+                            <Label className="text-xs">Unit price</Label>
+                            <Input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={resolveItemUnitPrice(item) || ''}
+                              onChange={(e) => {
+                                const price = e.target.value === '' ? 0 : parseFloat(e.target.value);
+                                updateEditItem(index, 'unitPrice', price);
+                              }}
+                            />
+                          </div>
+                          <div className="col-span-3 sm:col-span-2 text-sm font-medium pb-2">
+                            {moneyIn(lineTotal, editDraft.currency)}
+                          </div>
+                          <div className="col-span-1">
+                            <Button type="button" variant="ghost" size="sm" onClick={() => removeEditItem(index)} title="Remove item">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                  <p className="text-sm font-medium mt-2">
+                    Total {dualMoney(editDraft.items.reduce((sum, item) => sum + parseNumberish(item.quantity) * resolveItemUnitPrice(item), 0) + parseNumberish(editingPurchase.deliveryFee) + parseNumberish(editingPurchase.taxAmount), editDraft.currency)}
+                  </p>
+                </div>
+              )}
+              {editingPurchase && isCashBookPurchase(editingPurchase) && (
               <div>
-                <Label htmlFor="edit-order-date">Order date</Label>
+                <Label htmlFor="edit-amount">Amount</Label>
                 <Input
-                  id="edit-order-date"
-                  type="date"
-                  value={editDraft.orderDate}
-                  onChange={(e) => setEditDraft((d) => ({ ...d, orderDate: e.target.value }))}
+                  id="edit-amount"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={editDraft.amount}
+                  onChange={(e) => setEditDraft((d) => ({ ...d, amount: e.target.value }))}
                 />
               </div>
+              )}
               <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="edit-amount">Amount</Label>
-                  <Input
-                    id="edit-amount"
-                    type="number"
-                    min="0"
-                    step="0.01"
-                    value={editDraft.amount}
-                    onChange={(e) => setEditDraft((d) => ({ ...d, amount: e.target.value }))}
-                  />
-                </div>
                 <div>
                   <Label htmlFor="edit-payment-status">Payment</Label>
                   <select

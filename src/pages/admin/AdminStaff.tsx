@@ -47,6 +47,7 @@ import {
 import { logAction } from '@/lib/auditLog';
 import {
   countPresenceDays,
+  totalPresenceHours,
   type StaffPresenceRecord,
 } from '@/lib/staffPresence';
 import { financeExpensesCollection } from '@/lib/financeData';
@@ -492,12 +493,29 @@ const AdminStaff: React.FC = () => {
         isActive: resolveStaffStatus(editingStaff) === 'active' || editingStaff.status === 'active',
         updatedAt: new Date().toISOString(),
       };
+      const payFreq = resolvePaymentFrequency(updatedData);
+      if (payFreq === 'hourly') {
+        const rate = Number(updatedData.hourlyRate ?? updatedData.salary ?? 0);
+        updatedData.hourlyRate = rate;
+        updatedData.salary = rate;
+        if (updatedData.hourlyRateSource === 'ui') {
+          updatedData.hourlyRateSource = 'ui';
+        }
+      } else if (payFreq === 'monthly') {
+        const rate = Number(updatedData.monthlySalary ?? updatedData.salary ?? 0);
+        updatedData.monthlySalary = rate;
+        updatedData.salary = rate;
+      }
       if (updatedData.isActive) {
         delete (updatedData as { endDate?: string }).endDate;
       }
 
+      const { id: _staffDocId, ...staffFields } = updatedData;
+      const staffPatch = Object.fromEntries(
+        Object.entries(staffFields).filter(([, value]) => value !== undefined),
+      );
       await updateDoc(staffRef, {
-        ...updatedData,
+        ...staffPatch,
         ...(updatedData.isActive ? { endDate: deleteField() } : {}),
       });
       setStaff(staff.map(s => s.id === editingStaff.id ? updatedData : s));
@@ -518,7 +536,11 @@ const AdminStaff: React.FC = () => {
       toast({ title: "Success", description: "Staff member updated successfully!" });
     } catch (error) {
       console.error('Error updating staff:', error);
-      toast({ title: "Error", description: "Failed to update staff member", variant: "destructive" });
+      toast({
+        title: "Error",
+        description: error instanceof Error ? error.message : "Failed to update staff member",
+        variant: "destructive",
+      });
     }
   };
 
@@ -704,7 +726,6 @@ const AdminStaff: React.FC = () => {
 
   const renderStaffCard = (member: StaffPayrollRecord) => {
     const status = resolveStaffStatus(member);
-    const timesheetLine = formatTimesheetTotals(member, payMonth);
     const payLine = formatStaffPayLine(member);
     const roleLabel = formatStaffRoleLabel(member);
     const paidForMonth = isStaffPaidForMonth(salaryPayments, member.id, payMonth);
@@ -719,7 +740,18 @@ const AdminStaff: React.FC = () => {
       resolvePaymentFrequency(member) === 'hourly' ? hourlyMonthSummary(member, payMonth) : null;
     const paymentFreq = resolvePaymentFrequency(member);
     const showPresence = paymentFreq === 'monthly' || paymentFreq === 'daily' || paymentFreq === 'hourly';
-    const presenceDays = countPresenceDays(presenceByStaffId[member.id]);
+    const presence = presenceByStaffId[member.id];
+    const presenceDays = countPresenceDays(presence);
+    const presenceHours = totalPresenceHours(presence);
+    const rate = payKind === 'Hourly' ? resolveHourlyRate(member) : payKind === 'Daily' ? resolveDailyRate(member) : 0;
+    const hours = presenceHours > 0 ? presenceHours : (monthStats?.totalHours || 0);
+    const computedAmount = payKind === 'Hourly'
+      ? (hours > 0 && rate > 0 ? roundMoney(hours * rate) : (monthStats?.payUsd || 0))
+      : payKind === 'Daily'
+        ? roundMoney(presenceDays * rate)
+        : roundMoney(Number(member.monthlySalary ?? member.salary ?? 0));
+    const monthAmount = monthPayment ? Number(monthPayment.totalAmount || 0) : computedAmount;
+    const monthHours = monthPayment?.hoursWorked ? Number(monthPayment.hoursWorked) : hours;
 
     return (
       <AdminPanel key={member.id}>
@@ -801,16 +833,12 @@ const AdminStaff: React.FC = () => {
               <p className="font-medium">{payLine}</p>
             </div>
             <div>
-              <p className="text-sm text-gray-500">{payKind === 'Hourly' ? 'Excel timesheet' : payKind === 'Daily' ? 'Pay basis' : 'Pay basis'}</p>
-              <p className="font-medium">
-                {payKind === 'Daily'
-                  ? `${formatStaffPayLine(member)} · ${presenceDays} day${presenceDays === 1 ? '' : 's'} marked in ${payMonth}`
-                  : payKind === 'Monthly'
-                    ? presenceDays > 0
-                      ? `${presenceDays} day${presenceDays === 1 ? '' : 's'} present in ${payMonth}`
-                      : 'Mark daily presence before month-end pay'
-                    : timesheetLine || (payKind === 'Hourly' ? 'Enter pay manually' : 'Monthly salary')}
-              </p>
+              <p className="text-sm text-gray-500">Hours</p>
+              <p className="font-medium">{monthHours.toFixed(2)} hrs</p>
+            </div>
+            <div>
+              <p className="text-sm text-gray-500">Amount</p>
+              <p className="font-medium">${monthAmount.toFixed(2)}</p>
             </div>
             <div>
               <p className="text-sm text-gray-500">Status</p>
@@ -846,11 +874,12 @@ const AdminStaff: React.FC = () => {
               </p>
             </div>
           ) : null}
-          {monthStats && payKind === 'Hourly' ? (
-            <p className="text-xs text-muted-foreground">
-              {payMonth}: {monthStats.shiftCount} shifts · ${monthStats.payUsd.toFixed(2)} from Excel
-            </p>
-          ) : null}
+          <p className="text-xs text-muted-foreground">
+            {payMonth}: {monthHours.toFixed(2)} hrs · ${monthAmount.toFixed(2)}
+            {payKind !== 'Hourly' && presenceDays > 0
+              ? ` · ${presenceDays} day${presenceDays === 1 ? '' : 's'} present`
+              : ''}
+          </p>
           {member.phone ? <p className="text-sm text-gray-500 mt-2">Phone: {member.phone}</p> : null}
         </CardContent>
       </AdminPanel>
@@ -958,7 +987,7 @@ const AdminStaff: React.FC = () => {
                 {hourlyStaff.length > 0 ? (
                   <div className="space-y-3">
                     <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                      Hourly employees (Excel timesheets)
+                      Hourly employees
                     </h3>
                     {renderStaffRosterSections(hourlyStaff, {
                       showActiveHeading: false,
@@ -1679,14 +1708,39 @@ const AdminStaff: React.FC = () => {
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="edit-salary">Salary Amount *</Label>
+                    <Label htmlFor="edit-salary">
+                      {resolvePaymentFrequency(editingStaff) === 'hourly'
+                        ? 'Hourly rate (USD) *'
+                        : resolvePaymentFrequency(editingStaff) === 'daily'
+                          ? 'Daily rate (USD) *'
+                          : 'Monthly salary (USD) *'}
+                    </Label>
                     <Input
                       id="edit-salary"
                       type="number"
                       min="0"
                       step="0.01"
-                      value={editingStaff.salary}
-                      onChange={(e) => setEditingStaff(prev => prev ? { ...prev, salary: parseFloat(e.target.value) || 0 } : null)}
+                      value={
+                        resolvePaymentFrequency(editingStaff) === 'hourly'
+                          ? (editingStaff.hourlyRateSource === 'ui'
+                              ? Number(editingStaff.hourlyRate ?? editingStaff.salary ?? 0)
+                              : resolveHourlyRate(editingStaff))
+                          : resolvePaymentFrequency(editingStaff) === 'monthly'
+                            ? (editingStaff.monthlySalary ?? editingStaff.salary ?? 0)
+                            : (editingStaff.salary ?? 0)
+                      }
+                      onChange={(e) => {
+                        const rate = parseFloat(e.target.value) || 0;
+                        setEditingStaff((prev) => {
+                          if (!prev) return null;
+                          const freq = resolvePaymentFrequency(prev);
+                          if (freq === 'hourly') {
+                            return { ...prev, hourlyRate: rate, salary: rate, hourlyRateSource: 'ui' };
+                          }
+                          if (freq === 'monthly') return { ...prev, monthlySalary: rate, salary: rate };
+                          return { ...prev, salary: rate };
+                        });
+                      }}
                     />
                   </div>
                   <div>

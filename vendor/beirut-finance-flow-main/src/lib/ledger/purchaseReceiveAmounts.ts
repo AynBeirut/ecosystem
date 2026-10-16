@@ -21,12 +21,14 @@ export type PurchaseReceiveInput = {
   vat?: number;
   taxType?: string;
   taxRate?: number;
+  deliveryFee?: number;
 };
 
 export type PurchaseReceiveSplit = {
   apCredit: number;
   inventoryDebit: number;
   inputVatDebit: number;
+  deliveryDebit: number;
 };
 
 export function sumPurchaseLinesExVat(items: PurchaseReceiveItem[] | undefined): number {
@@ -80,12 +82,17 @@ export function resolvePurchaseReceiveSplit(purchase: PurchaseReceiveInput): Pur
     inputVatDebit = 0;
   }
 
-  const check = round2(inventoryDebit + inputVatDebit);
-  if (check !== ttc) {
-    inventoryDebit = round2(ttc - inputVatDebit);
+  const deliveryDebit = round2(Math.max(0, Number(purchase.deliveryFee || 0)));
+  if (deliveryDebit > 0) {
+    inventoryDebit = round2(Math.max(0, inventoryDebit - deliveryDebit));
   }
 
-  return { apCredit: ttc, inventoryDebit, inputVatDebit };
+  const check = round2(inventoryDebit + inputVatDebit + deliveryDebit);
+  if (check !== ttc) {
+    inventoryDebit = round2(Math.max(0, ttc - inputVatDebit - deliveryDebit));
+  }
+
+  return { apCredit: ttc, inventoryDebit, inputVatDebit, deliveryDebit };
 }
 
 export const INPUT_VAT_CODE = GL_ACCOUNT_CODES.INPUT_VAT;

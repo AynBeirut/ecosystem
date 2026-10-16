@@ -3,7 +3,7 @@ import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, SafeAr
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import firestore from '@react-native-firebase/firestore';
 import { useAuth } from '../../context/AuthContext';
-import { saveClient } from '../../lib/financeService';
+import { deleteClient, saveClient } from '../../lib/financeService';
 import type { RootStackParamList } from '../../types';
 import { COLORS, RADIUS } from '../../theme';
 
@@ -38,8 +38,12 @@ export default function ClientEditorScreen() {
       Alert.alert('Required', 'Client name is required');
       return;
     }
-    await saveClient(user.storeId, { id: route.params.clientId, name: name.trim(), phone, email, address });
-    navigation.goBack();
+    try {
+      await saveClient(user.storeId, { id: route.params.clientId, name: name.trim(), phone, email, address });
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Could not save', e instanceof Error ? e.message : 'Try again');
+    }
   };
 
   if (loading) return <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />;
@@ -48,13 +52,36 @@ export default function ClientEditorScreen() {
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.title}>{route.params.clientId ? 'Edit client' : 'New client'}</Text>
-        <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
-        <TextInput style={styles.input} placeholder="Phone" value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
-        <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" />
-        <TextInput style={styles.input} placeholder="Address" value={address} onChangeText={setAddress} />
+        <TextInput style={styles.input} placeholder="Name" placeholderTextColor={COLORS.textMuted} value={name} onChangeText={setName} />
+        <TextInput style={styles.input} placeholder="Phone" placeholderTextColor={COLORS.textMuted} value={phone} onChangeText={setPhone} keyboardType="phone-pad" />
+        <TextInput style={styles.input} placeholder="Email" placeholderTextColor={COLORS.textMuted} value={email} onChangeText={setEmail} autoCapitalize="none" />
+        <TextInput style={styles.input} placeholder="Address" placeholderTextColor={COLORS.textMuted} value={address} onChangeText={setAddress} />
         <TouchableOpacity style={styles.saveBtn} onPress={() => void save()}>
           <Text style={styles.saveText}>Save client</Text>
         </TouchableOpacity>
+        {route.params.clientId ? (
+          <TouchableOpacity
+            style={styles.deleteBtn}
+            onPress={() => {
+              const clientId = route.params.clientId;
+              if (!user?.storeId || !clientId) return;
+              Alert.alert('Delete client', 'Remove this client?', [
+                { text: 'Cancel', style: 'cancel' },
+                {
+                  text: 'Delete',
+                  style: 'destructive',
+                  onPress: () => {
+                    void deleteClient(user.storeId, clientId)
+                      .then(() => navigation.goBack())
+                      .catch((e) => Alert.alert('Could not delete', e instanceof Error ? e.message : 'Try again'));
+                  },
+                },
+              ]);
+            }}
+          >
+            <Text style={styles.deleteText}>Delete client</Text>
+          </TouchableOpacity>
+        ) : null}
       </ScrollView>
     </SafeAreaView>
   );
@@ -63,8 +90,10 @@ export default function ClientEditorScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 16 },
-  title: { fontSize: 22, fontWeight: '700', marginBottom: 12 },
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, marginBottom: 8 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 12, color: COLORS.textPrimary },
+  input: { backgroundColor: COLORS.surface, color: COLORS.textPrimary, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, padding: 14, marginBottom: 8, fontSize: 16 },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 16, alignItems: 'center', marginTop: 8 },
   saveText: { color: '#fff', fontWeight: '700' },
+  deleteBtn: { borderWidth: 1, borderColor: COLORS.error, borderRadius: RADIUS.md, padding: 16, alignItems: 'center', marginTop: 12 },
+  deleteText: { color: COLORS.error, fontWeight: '700' },
 });

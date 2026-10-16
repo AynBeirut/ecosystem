@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
+import { View, Text, ScrollView, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import { RouteProp, useNavigation, useRoute } from '@react-navigation/native';
 import { useAuth } from '../../context/AuthContext';
 import { getProduct, productUnitPrice, saveProduct } from '../../lib/financeService';
@@ -12,38 +12,50 @@ export default function ProductEditorScreen() {
   const { user } = useAuth();
   const route = useRoute<Route>();
   const navigation = useNavigation();
-  const [loading, setLoading] = useState(!!route.params.productId);
+  const productId = route.params?.productId;
+  const [loading, setLoading] = useState(!!productId);
+  const [saving, setSaving] = useState(false);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [sku, setSku] = useState('');
+  const [kind, setKind] = useState<'raw_material' | 'item' | 'service' | ''>('');
 
   useEffect(() => {
-    if (!user?.storeId || !route.params.productId) {
+    if (!user?.storeId || !productId) {
       setLoading(false);
       return;
     }
-    void getProduct(user.storeId, route.params.productId).then((p) => {
+    void getProduct(user.storeId, productId).then((p) => {
       if (p) {
         setName(p.name);
         setPrice(String(productUnitPrice(p) || ''));
         setSku(p.sku || '');
+        setKind(p.productType || '');
       }
       setLoading(false);
     });
-  }, [user?.storeId, route.params.productId]);
+  }, [user?.storeId, productId]);
 
   const save = async () => {
-    if (!user?.storeId || !name.trim()) {
-      Alert.alert('Required', 'Product name is required');
+    if (!user?.storeId || !name.trim() || !kind) {
+      Alert.alert('Required', !kind ? 'Select raw material, item, or service' : 'Product name is required');
       return;
     }
-    await saveProduct(user.storeId, {
-      id: route.params.productId,
-      name: name.trim(),
-      sellingPrice: parseFloat(price) || 0,
-      sku,
-    });
-    navigation.goBack();
+    setSaving(true);
+    try {
+      await saveProduct(user.storeId, {
+        id: productId,
+        name: name.trim(),
+        sellingPrice: parseFloat(price) || 0,
+        sku: sku.trim(),
+        productType: kind,
+      });
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Could not save product', e instanceof Error ? e.message : 'Save failed');
+    } finally {
+      setSaving(false);
+    }
   };
 
   if (loading) return <ActivityIndicator size="large" color={COLORS.primary} style={{ marginTop: 40 }} />;
@@ -51,12 +63,27 @@ export default function ProductEditorScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.title}>{route.params.productId ? 'Edit product' : 'New product'}</Text>
-        <TextInput style={styles.input} placeholder="Name" value={name} onChangeText={setName} />
-        <TextInput style={styles.input} placeholder="Price" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-        <TextInput style={styles.input} placeholder="SKU (optional)" value={sku} onChangeText={setSku} />
-        <TouchableOpacity style={styles.saveBtn} onPress={() => void save()}>
-          <Text style={styles.saveText}>Save product</Text>
+        <Text style={styles.title}>{productId ? 'Edit product' : 'New product'}</Text>
+        <Text style={styles.label}>Type</Text>
+        <View style={styles.row}>
+          {([
+            ['raw_material', 'Raw material'],
+            ['item', 'Item'],
+            ['service', 'Service'],
+          ] as const).map(([id, label]) => (
+            <TouchableOpacity key={id} style={[styles.chip, kind === id && styles.chipOn]} onPress={() => setKind(id)}>
+              <Text style={[styles.chipText, kind === id && styles.chipTextOn]}>{label}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <Text style={styles.label}>Name</Text>
+        <TextInput style={styles.input} placeholder="Product name" placeholderTextColor={COLORS.textMuted} value={name} onChangeText={setName} />
+        <Text style={styles.label}>Price</Text>
+        <TextInput style={styles.input} placeholder="0.00" placeholderTextColor={COLORS.textMuted} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+        <Text style={styles.label}>SKU</Text>
+        <TextInput style={styles.input} placeholder="Optional" placeholderTextColor={COLORS.textMuted} value={sku} onChangeText={setSku} />
+        <TouchableOpacity style={styles.saveBtn} onPress={() => void save()} disabled={saving}>
+          <Text style={styles.saveText}>{saving ? 'Saving…' : 'Save product'}</Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -66,8 +93,14 @@ export default function ProductEditorScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scroll: { padding: 16 },
-  title: { fontSize: 22, fontWeight: '700', marginBottom: 12 },
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 12, marginBottom: 8 },
+  title: { fontSize: 22, fontWeight: '700', marginBottom: 12, color: COLORS.textPrimary },
+  label: { fontWeight: '600', color: COLORS.textSecondary, marginBottom: 6 },
+  row: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
+  chip: { borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.full, paddingHorizontal: 12, paddingVertical: 8, backgroundColor: COLORS.surface },
+  chipOn: { backgroundColor: COLORS.primary, borderColor: COLORS.primary },
+  chipText: { color: COLORS.textPrimary, fontWeight: '600' },
+  chipTextOn: { color: '#fff' },
+  input: { backgroundColor: COLORS.surface, color: COLORS.textPrimary, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.lg, padding: 14, marginBottom: 12, fontSize: 16 },
   saveBtn: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 16, alignItems: 'center', marginTop: 8 },
   saveText: { color: '#fff', fontWeight: '700' },
 });

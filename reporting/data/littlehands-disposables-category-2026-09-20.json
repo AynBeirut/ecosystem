@@ -1,0 +1,39 @@
+{
+  "generatedAt": "2026-09-20T11:28:40.952Z",
+  "mode": "write",
+  "suppliers": [
+    {
+      "id": "lh-sup-304c3816c911d7bc",
+      "name": "Disposable ( Bttl, Jars,Wood Disk)"
+    },
+    {
+      "id": "lh-sup-35addc2a677bc871",
+      "name": "Polavera Disposable"
+    },
+    {
+      "id": "lh-sup-75235c7ec1ab9af1",
+      "name": "Polavera Bar Disposable"
+    },
+    {
+      "id": "lh-sup-a44f6003ec39e96a",
+      "name": "Disposbles"
+    },
+    {
+      "id": "lh-sup-dd514ccf762db7bd",
+      "name": "Palovera Disposable (Bottles Cups Meal Box)"
+    },
+    {
+      "id": "lh-sup-f59654c38ec9cf5f",
+      "name": "Prodel Disposables"
+    },
+    {
+      "id": "lh-sup-fa8f417f8b5e1957",
+      "name": "Disposables"
+    }
+  ],
+  "category": {
+    "id": "DISPOSBLES",
+    "label": "Disposables",
+    "categorySupplierId": "lh-sup-cat-disposables"
+  }
+}

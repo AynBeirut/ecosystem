@@ -84,6 +84,8 @@ const PAGE_TITLES: Record<string, string> = {
   '/admin/invoice-manager/invoices': 'Invoice Manager',
   '/admin/staff': 'Staff',
   '/admin/staff-presence': 'Daily Presence',
+  '/admin/hr': 'HR',
+  '/admin/venue-ops': 'Venue Ops',
   '/admin/sub-accounts': 'Sub-Accounts',
   '/admin/account-statement': 'Account Statement',
   '/admin/cash-collection': 'Cash Collection',
@@ -107,6 +109,8 @@ const PAGE_TITLES: Record<string, string> = {
 
 function resolvePageTitle(pathname: string, fallback: string) {
   if (PAGE_TITLES[pathname]) return PAGE_TITLES[pathname];
+  if (pathname.startsWith('/admin/hr')) return 'HR';
+  if (pathname.startsWith('/admin/venue-ops')) return 'Venue Ops';
   if (pathname.startsWith('/admin/crm')) return 'Sales CRM';
   if (pathname.startsWith('/admin/invoice-manager')) return 'Invoice Manager';
   if (pathname.startsWith('/admin/finance')) return 'Business Finance';
@@ -452,7 +456,7 @@ function AdminLayoutShell() {
         className="fixed inset-0 z-[100] flex flex-col overflow-hidden bg-background text-foreground"
       >
         <Suspense fallback={<AdminOutletFallback />}>
-          <Outlet />
+          <Outlet key={location.pathname} />
         </Suspense>
       </div>
     );
@@ -761,7 +765,7 @@ function AdminLayoutShell() {
         <main className="flex-1 min-w-0 min-h-0 overflow-x-hidden p-4 md:p-6">
           <div className="mx-auto w-full max-w-screen-2xl">
             <Suspense fallback={<AdminOutletFallback />}>
-              <Outlet />
+              <Outlet key={location.pathname} />
             </Suspense>
           </div>
         </main>

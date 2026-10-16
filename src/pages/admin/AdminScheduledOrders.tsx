@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
+  addDoc,
   collection,
   doc,
   getDocs,
@@ -11,8 +12,16 @@ import {
 import { Bell, CheckCircle2, Clock, ExternalLink, Users } from 'lucide-react';
 import { useAuth } from '@/context/useAuth';
 import { db } from '@/lib/firebase';
+import { getActualStoreId } from '@/lib/storeUtils';
+import { resolveAuthActorId } from '@/lib/authActorId';
+import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Plus } from 'lucide-react';
 import { Order, OrderItem } from '@/types/order';
 import { formatMoney } from '@/lib/money/format';
+import { resolveOrderDocumentRef } from '@/lib/invoiceTemplates';
 import { getFulfillmentLabel } from '@/lib/fulfillmentOptions';
 import {
   formatScheduledForDisplay,
@@ -62,10 +71,20 @@ const AdminScheduledOrders: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [acceptingId, setAcceptingId] = useState<string | null>(null);
   const [tab, setTab] = useState<'pending' | 'scheduled' | 'all'>('all');
+  const [createOpen, setCreateOpen] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [draft, setDraft] = useState({
+    customerName: '',
+    customerPhone: '',
+    scheduledFor: '',
+    guestCount: '2',
+    notes: '',
+  });
   const remindedRef = useRef<Set<string>>(new Set());
+  const storeId = getActualStoreId(user) || user?.storeId || '';
 
   const loadOrders = useCallback(async () => {
-    if (!user?.storeId) {
+    if (!storeId) {
       setOrders([]);
       setLoading(false);
       return;
@@ -74,7 +93,7 @@ const AdminScheduledOrders: React.FC = () => {
     try {
       const q = query(
         collection(db, 'orders'),
-        where('storeId', '==', user.storeId),
+        where('storeId', '==', storeId),
         where('status', 'in', ['pending', 'confirmed', 'processing', 'ready']),
       );
       const snap = await getDocs(q);
@@ -96,7 +115,61 @@ const AdminScheduledOrders: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [toast, user?.storeId]);
+  }, [toast, storeId]);
+
+  const handleCreateScheduled = async () => {
+    if (!storeId || !user) return;
+    if (!draft.customerName.trim() || !draft.scheduledFor.trim()) {
+      toast({ title: 'Name and scheduled time required', variant: 'destructive' });
+      return;
+    }
+    const actorId = resolveAuthActorId(user);
+    setCreating(true);
+    try {
+      const invoiceNumber = `SCH-${new Date().toISOString().slice(0, 10).replace(/-/g, '')}-${String(
+        Date.now(),
+      ).slice(-4)}`;
+      await addDoc(collection(db, 'orders'), {
+        storeId,
+        customerName: draft.customerName.trim(),
+        customerPhone: draft.customerPhone.trim(),
+        deliveryMethod: 'dine_in',
+        deliveryNotes: draft.notes.trim(),
+        scheduledFor: draft.scheduledFor.trim(),
+        guestCount: Number(draft.guestCount) || 2,
+        invoiceNumber,
+        items: [
+          {
+            productId: 'scheduled-hold',
+            productName: 'Scheduled reservation hold',
+            quantity: 1,
+            price: 0,
+          },
+        ],
+        subtotal: 0,
+        total: 0,
+        currency: 'USD',
+        status: 'pending',
+        paymentStatus: 'unpaid',
+        amountPaid: 0,
+        createdAt: new Date().toISOString(),
+        createdBy: actorId,
+        orderChannel: 'web',
+      });
+      toast({ title: 'Scheduled order created', description: invoiceNumber });
+      setCreateOpen(false);
+      setDraft({ customerName: '', customerPhone: '', scheduledFor: '', guestCount: '2', notes: '' });
+      await loadOrders();
+    } catch (e) {
+      toast({
+        title: 'Could not create',
+        description: e instanceof Error ? e.message : 'Save failed',
+        variant: 'destructive',
+      });
+    } finally {
+      setCreating(false);
+    }
+  };
 
   useEffect(() => {
     loadOrders();
@@ -115,7 +188,7 @@ const AdminScheduledOrders: React.FC = () => {
         if (!order.scheduledFor) continue;
         const key1h = `${order.id}:1h`;
         const key30m = `${order.id}:30m`;
-        const ref = order.invoiceNumber || order.id.slice(-6).toUpperCase();
+        const ref = resolveOrderDocumentRef(order);
 
         if (shouldSendScheduledReminder1h(order, now) && !remindedRef.current.has(key1h)) {
           remindedRef.current.add(key1h);
@@ -157,28 +230,29 @@ const AdminScheduledOrders: React.FC = () => {
   }, [orders, tab]);
 
   const handleAcceptOrder = async (order: ScheduledOrder) => {
-    if (!user?.storeId || !user.uid) return;
+    const actorId = user ? resolveAuthActorId(user) : '';
+    if (!storeId || !actorId) return;
     setAcceptingId(order.id);
     try {
       await updateDoc(doc(db, 'orders', order.id), {
         status: 'confirmed',
         confirmedAt: new Date().toISOString(),
-        confirmedBy: user.uid,
+        confirmedBy: actorId,
         updatedAt: new Date().toISOString(),
       });
       await logAction(
-        user.uid,
-        user.name,
-        user.role,
+        actorId,
+        user?.name,
+        user?.role,
         'approve',
         'order',
         order.id,
         { newValue: { status: 'confirmed', scheduledFor: order.scheduledFor } },
-        user.storeId,
+        storeId,
       );
       toast({
         title: 'Order accepted',
-        description: `${order.invoiceNumber || order.id} marked as confirmed.`,
+        description: `${resolveOrderDocumentRef(order)} marked as confirmed.`,
       });
       await loadOrders();
     } catch (err) {
@@ -210,13 +284,77 @@ const AdminScheduledOrders: React.FC = () => {
         <Button variant="outline" size="sm" onClick={loadOrders} disabled={loading}>
           Refresh
         </Button>
+        <Button size="sm" className="gap-1" onClick={() => setCreateOpen(true)}>
+          <Plus size={14} />
+          New scheduled order
+        </Button>
       </div>
+
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>New scheduled order</DialogTitle>
+          </DialogHeader>
+          <div className="grid gap-3 py-2">
+            <div>
+              <Label>Guest name</Label>
+              <Input
+                value={draft.customerName}
+                onChange={(e) => setDraft((d) => ({ ...d, customerName: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Phone</Label>
+              <Input
+                value={draft.customerPhone}
+                onChange={(e) => setDraft((d) => ({ ...d, customerPhone: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Scheduled for (local)</Label>
+              <Input
+                type="datetime-local"
+                value={draft.scheduledFor}
+                onChange={(e) => setDraft((d) => ({ ...d, scheduledFor: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Guest count</Label>
+              <Input
+                value={draft.guestCount}
+                onChange={(e) => setDraft((d) => ({ ...d, guestCount: e.target.value }))}
+              />
+            </div>
+            <div>
+              <Label>Notes</Label>
+              <Textarea
+                value={draft.notes}
+                onChange={(e) => setDraft((d) => ({ ...d, notes: e.target.value }))}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCreateOpen(false)}>Cancel</Button>
+            <Button onClick={() => void handleCreateScheduled()} disabled={creating}>
+              {creating ? 'Saving…' : 'Create'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {loading ? (
         <p className="text-sm text-muted-foreground animate-pulse">Loading orders…</p>
       ) : filtered.length === 0 ? (
         <AdminPanel>
-          <p className="p-4 text-sm text-muted-foreground">No pending or scheduled orders right now.</p>
+          <p className="p-4 text-sm text-muted-foreground">
+            No pending or scheduled orders right now. Use <strong>New scheduled order</strong> or create an order in
+            Orders with a scheduled time.
+          </p>
+          <div className="px-4 pb-4">
+            <Button size="sm" variant="outline" asChild>
+              <Link to="/admin/orders">Open Orders</Link>
+            </Button>
+          </div>
         </AdminPanel>
       ) : (
         <div className="space-y-4">
@@ -232,7 +370,7 @@ const AdminScheduledOrders: React.FC = () => {
               <AdminPanel key={order.id}>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base">
-                    {order.invoiceNumber || order.id.slice(-8).toUpperCase()}
+                    {resolveOrderDocumentRef(order)}
                   </CardTitle>
                   <CardDescription>
                     {order.customerName || 'Guest'} · {formatMoney(order.total || 0, { currency: order.currency || 'USD' })}

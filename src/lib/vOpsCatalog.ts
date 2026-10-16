@@ -6,6 +6,7 @@ import {
   vOpsCacheKey,
   vOpsCacheSet,
 } from '@/lib/vOpsCache';
+import { isSellableMenuProduct } from '@/lib/catalogProductCount';
 
 export type VPosProductLite = {
   id: string;
@@ -34,7 +35,7 @@ function salePrice(data: Record<string, unknown>): number {
 }
 
 function mapProduct(id: string, data: Record<string, unknown>): VPosProductLite | null {
-  if (data.vposMenuVisible === false) return null;
+  if (!isSellableMenuProduct(data)) return null;
   const price = salePrice(data);
   if (price <= 0) return null;
   return {
@@ -105,10 +106,10 @@ export async function loadVSuppliers(
 
   const db = getFirestore();
   const snap = await getDocs(query(collection(db, 'suppliers'), where('storeId', '==', storeId)));
-  const rows = snap.docs.map((d) => {
-    const data = d.data() as Partial<Supplier>;
-    return { id: d.id, name: String(data.name || 'Supplier') };
-  });
+  const rows = snap.docs
+    .map((d) => ({ id: d.id, data: d.data() as Partial<Supplier> }))
+    .filter(({ data }) => data.status !== 'inactive' && !data.archivedForPurchasesUi)
+    .map(({ id, data }) => ({ id, name: String(data.name || 'Supplier') }));
   rows.sort((a, b) => a.name.localeCompare(b.name));
   vOpsCacheSet(key, rows);
   return rows;

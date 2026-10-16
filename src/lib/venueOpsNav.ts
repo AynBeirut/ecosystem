@@ -10,6 +10,8 @@ export type VenueOpsNavFlags = {
   showReservationsNav: boolean;
   showStorefrontGrowNav: boolean;
   showSeoNav: boolean;
+  showOfficialHrNav: boolean;
+  showVenueOpsHubNav: boolean;
   /** Operations group first; optional stock group after. */
   useOperationsFirstLayout: boolean;
   operationsGroupTitle: string;
@@ -23,6 +25,8 @@ const LIVE_KITCHEN_NAV_DEFAULTS: VenueOpsSettings = {
   enableReservationsHub: true,
   enableStorefrontBuilder: false,
   enableSeoOps: false,
+  enableOfficialHr: true,
+  enableVenueOpsHub: true,
 };
 
 const LEGACY_NAV_DEFAULTS: VenueOpsSettings = {
@@ -32,6 +36,8 @@ const LEGACY_NAV_DEFAULTS: VenueOpsSettings = {
   enableReservationsHub: true,
   enableStorefrontBuilder: true,
   enableSeoOps: true,
+  enableOfficialHr: false,
+  enableVenueOpsHub: false,
 };
 
 function isLiveKitchenWorkflow(profile: Pick<StoreProfile, 'businessWorkflow' | 'startingPackage'> | null | undefined): boolean {
@@ -51,6 +57,8 @@ function mergeVenueOpsSettings(
     enableReservationsHub: overrides?.enableReservationsHub ?? base.enableReservationsHub,
     enableStorefrontBuilder: overrides?.enableStorefrontBuilder ?? base.enableStorefrontBuilder,
     enableSeoOps: overrides?.enableSeoOps ?? base.enableSeoOps,
+    enableOfficialHr: overrides?.enableOfficialHr ?? base.enableOfficialHr,
+    enableVenueOpsHub: overrides?.enableVenueOpsHub ?? base.enableVenueOpsHub,
   };
 }
 
@@ -79,6 +87,8 @@ export function resolveVenueOpsNavFlags(
       showReservationsNav: true,
       showStorefrontGrowNav: true,
       showSeoNav: true,
+      showOfficialHrNav: Boolean(profile?.venueOpsSettings?.enableOfficialHr),
+      showVenueOpsHubNav: Boolean(profile?.venueOpsSettings?.enableVenueOpsHub),
       useOperationsFirstLayout: false,
       operationsGroupTitle: 'Sales & Customers',
       stockGroupTitle: 'Stock & Catalog',
@@ -96,6 +106,8 @@ export function resolveVenueOpsNavFlags(
     showReservationsNav: Boolean(effective.enableReservationsHub),
     showStorefrontGrowNav: Boolean(effective.enableStorefrontBuilder),
     showSeoNav: Boolean(effective.enableSeoOps),
+    showOfficialHrNav: Boolean(effective.enableOfficialHr),
+    showVenueOpsHubNav: Boolean(effective.enableVenueOpsHub),
     useOperationsFirstLayout: true,
     operationsGroupTitle: 'Operations',
     stockGroupTitle: 'Kitchen & stock',

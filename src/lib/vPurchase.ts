@@ -6,7 +6,8 @@ import {
   runTransaction,
   updateDoc,
 } from 'firebase/firestore';
-import { allocateInvoiceNumberWithTrial } from '@/lib/subscriptionEnforcement';
+import { consumeTrialForOperation } from '@/lib/subscriptionEnforcement';
+import { renumberStorePurchases } from '@/lib/chronologicalRenumberFirestore';
 import type { PurchaseItem } from '@/types/inventory';
 
 export type VPurchaseLine = {
@@ -79,7 +80,7 @@ export async function createVPurchase(
   if (!input.items.length) throw new Error('Add at least one material');
 
   const db = getFirestore();
-  const invoiceNumber = await allocateInvoiceNumberWithTrial(db, input.storeId, 'purchase', 'PO');
+  await consumeTrialForOperation(db, input.storeId, 'purchase');
   const markPaid = input.markPaid;
 
   const normalizedItems: PurchaseItem[] = input.items.map((item) => {
@@ -107,8 +108,6 @@ export async function createVPurchase(
   const today = now.slice(0, 10);
 
   const purchaseData = {
-    poNumber: invoiceNumber,
-    invoiceNumber,
     supplierId: input.supplierId,
     orderDate: now,
     expectedDeliveryDate: today,
@@ -150,6 +149,8 @@ export async function createVPurchase(
   };
 
   const docRef = await addDoc(collection(db, 'purchases'), purchaseData);
+  const poMap = await renumberStorePurchases(db, input.storeId);
+  const invoiceNumber = poMap.get(docRef.id) || 'PO-PENDING';
 
   if (markPaid) {
     await applyReceivedStock(input.storeId, normalizedItems);

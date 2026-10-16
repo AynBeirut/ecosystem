@@ -1,0 +1,12 @@
+{
+  "ok": true,
+  "invoiceNumber": "ORD-000182",
+  "storeId": "EZfuoNQFTJVU4cubNuckpp4K7zw2",
+  "alreadyVoided": false,
+  "status": "cancelled",
+  "paymentStatus": "voided",
+  "total": 1000,
+  "ord181Status": "completed",
+  "ord181PaymentStatus": "paid",
+  "at": "2026-09-25T15:08:38.975Z"
+}

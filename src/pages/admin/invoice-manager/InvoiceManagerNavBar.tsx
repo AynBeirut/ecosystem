@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/select';
 import { INVOICE_MANAGER_MODULE_OPTIONS } from '@/pages/admin/invoice-manager/invoiceManagerModuleTabs';
 import type { InvoiceManagerModule } from '@/pages/admin/invoice-manager/invoiceManagerModuleTabs';
+import InvoiceManagerDateFilterBar from '../../../../vendor/beirut-finance-flow-main/src/components/InvoiceManagerDateFilterBar';
 
 type Props = {
   activeModule: InvoiceManagerModule;
@@ -23,6 +24,7 @@ export default function InvoiceManagerNavBar({ activeModule, onModuleChange }: P
   );
 
   return (
+    <div className="space-y-2">
     <div className="finance-compact-nav flex flex-wrap items-center gap-2">
       <Link
         to="/admin/dashboard"
@@ -46,6 +48,15 @@ export default function InvoiceManagerNavBar({ activeModule, onModuleChange }: P
           ))}
         </SelectContent>
       </Select>
+
+      <Link
+        to="/admin/finance/invoice-document"
+        className="inline-flex h-8 items-center rounded-md border border-teal-200 bg-teal-50 px-2.5 text-xs font-medium text-teal-800 hover:bg-teal-100"
+      >
+        Invoice PDF setup
+      </Link>
+    </div>
+    <InvoiceManagerDateFilterBar />
     </div>
   );
 }

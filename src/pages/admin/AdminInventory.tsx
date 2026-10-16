@@ -19,8 +19,6 @@ import { isLowStockAlertsEnabled } from '@/lib/inventorySettings';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 import { canAccessBusinessTools, canViewStoreInventory } from '@/lib/subAccountAccess';
-import InventorySettingsPanel from '@/components/admin/InventorySettingsPanel';
-
 const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -188,7 +186,6 @@ const AdminInventory: React.FC<{ embedded?: boolean }> = ({ embedded = false }) 
 
   const inventoryBody = (
     <div className="min-w-0">
-        <InventorySettingsPanel />
         {!embedded && (
         <div className="grid grid-cols-2 md:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4 mb-6">
           <AdminNavCard title="Products" description="Manage all product types: Simple items, Services, and Composed products" icon={Package} gradient="from-teal-500 to-teal-700" onClick={() => navigate('/admin/products')} />

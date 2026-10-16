@@ -5,10 +5,18 @@ import { HelmetProvider } from 'react-helmet-async';
 import { initGA, trackPageView } from './lib/analytics';
 import { initMetaPixel, pixelPageView } from './lib/metaPixel';
 import { initGTM } from './lib/gtm';
+import { isPlatformHostname } from '@/lib/platformHosts';
+
+function shouldRunMarketingMetaPixel(): boolean {
+  if (typeof window === 'undefined') return false;
+  return isPlatformHostname(window.location.hostname);
+}
 
 // Initialize analytics on load (no-ops if env vars not set)
 initGA();
-initMetaPixel();
+if (shouldRunMarketingMetaPixel()) {
+  initMetaPixel();
+}
 initGTM();
 
 function RouteTracker() {
@@ -23,11 +31,12 @@ function RouteTracker() {
     window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
     const path = location.pathname + location.search;
     trackPageView(path);
-    pixelPageView();
+    if (shouldRunMarketingMetaPixel()) {
+      pixelPageView();
+    }
   }, [location.pathname, location.search]);
   return null;
 }
-import { isPlatformHostname } from '@/lib/platformHosts';
 import { storeSlugFromHostname } from '@/lib/storeUrls';
 import StoreSlugRedirect from './components/StoreSlugRedirect';
 import { Toaster as SonnerToaster } from "sonner";
@@ -133,6 +142,8 @@ const AdminSupplierCredits = lazy(() => import("./pages/admin/AdminSupplierCredi
 const AdminStaffPresence = lazy(() => import("./pages/admin/AdminStaffPresence"));
 const AdminStaff = lazy(() => import("./pages/admin/AdminStaff"));
 const AdminSalaries = lazy(() => import("./pages/admin/AdminSalaries"));
+const AdminHrShell = lazy(() => import("./pages/admin/AdminHrShell"));
+const AdminVenueOpsShell = lazy(() => import("./pages/admin/AdminVenueOpsShell"));
 const AdminSubAccounts = lazy(() => import("./pages/admin/AdminSubAccounts"));
 const AdminReports = lazy(() => import("./pages/admin/AdminReports"));
 const AdminInventory = lazy(() => import("./pages/admin/AdminInventory"));
@@ -181,6 +192,9 @@ const BuilderDashboard = lazy(() => import("./pages/builder/BuilderDashboard"));
 const BuilderDemoEdit = lazy(() => import("./pages/builder/BuilderDemoEdit"));
 const BuilderDemoPreview = lazy(() => import("./pages/builder/BuilderDemoPreview"));
 const FinanceModuleShell = lazy(() => import("./pages/admin/finance/FinanceModuleShell"));
+const BusinessFinanceInvoiceTemplateSetup = lazy(
+  () => import("./pages/admin/finance/BusinessFinanceInvoiceTemplateSetup"),
+);
 const InvoiceManagerModuleShell = lazy(() => import("./pages/admin/invoice-manager/InvoiceManagerModuleShell"));
 import AdminVPos from "./pages/admin/AdminVPos";
 import AdminVPurchase from "./pages/admin/AdminVPurchase";
@@ -237,7 +251,6 @@ function AppFooter() {
                   <FavoritesProvider>
                     <BrowserRouter
                       future={{
-                        v7_startTransition: true,
                         v7_relativeSplatPath: true,
                       }}
                     >
@@ -424,10 +437,15 @@ function AppFooter() {
                         <Route path="/admin/supplier-credits" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><AdminSupplierCredits /></ProtectedRoute>} />
                         <Route path="/admin/supplier-returns" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><SupplierReturns /></ProtectedRoute>} />
                         <Route path="/admin/sales-returns" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="stock"><SalesReturns /></ProtectedRoute>} />
-                        {/* Staff & HR */}
+                        {/* Staff & HR. Old payroll/presence routes stay. New hubs use the triple gate. */}
                         <Route path="/admin/staff-presence" element={<ProtectedRoute allowedRoles={['admin']}><AdminStaffPresence /></ProtectedRoute>} />
                         <Route path="/admin/staff" element={<ProtectedRoute allowedRoles={['admin']}><AdminStaff /></ProtectedRoute>} />
                         <Route path="/admin/salaries" element={<ProtectedRoute allowedRoles={['admin']}><AdminSalaries /></ProtectedRoute>} />
+                        <Route path="/admin/hr/payroll" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminHrShell /></ProtectedRoute>} />
+                        <Route path="/admin/hr/*" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminHrShell /></ProtectedRoute>} />
+                        <Route path="/admin/hr" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminHrShell /></ProtectedRoute>} />
+                        <Route path="/admin/venue-ops/*" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminVenueOpsShell /></ProtectedRoute>} />
+                        <Route path="/admin/venue-ops" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><AdminVenueOpsShell /></ProtectedRoute>} />
                         <Route path="/admin/sub-accounts" element={<ProtectedRoute allowedRoles={['admin']} requiredModule="team"><AdminSubAccounts /></ProtectedRoute>} />
                         {/* Financial */}
                         <Route path="/admin/expenses" element={<Navigate to="/admin/invoice-manager/expenses" replace />} />
@@ -441,6 +459,14 @@ function AppFooter() {
                         <Route path="/admin/finance/receipts" element={<Navigate to="/admin/invoice-manager/receipts" replace />} />
                         <Route path="/admin/finance/recu" element={<Navigate to="/admin/invoice-manager/receipts" replace />} />
                         <Route path="/admin/finance/settings" element={<Navigate to="/admin/finance/tools" replace />} />
+                        <Route
+                          path="/admin/finance/invoice-document"
+                          element={
+                            <ProtectedRoute allowedRoles={['admin', 'sub_account']}>
+                              <BusinessFinanceInvoiceTemplateSetup />
+                            </ProtectedRoute>
+                          }
+                        />
                         <Route path="/admin/finance/*" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><FinanceModuleShell /></ProtectedRoute>} />
                         <Route path="/admin/invoice-manager/*" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']}><InvoiceManagerModuleShell /></ProtectedRoute>} />
                         <Route path="/admin/pos" element={<ProtectedRoute allowedRoles={['admin', 'sub_account']} requiredPermission="create_orders" requiredModule="pos"><PosPairing /></ProtectedRoute>} />

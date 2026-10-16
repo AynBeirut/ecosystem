@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { initGA, trackPageView } from '@/lib/analytics';
 import { initMetaPixel, pixelPageView } from '@/lib/metaPixel';
 import { initGTM } from '@/lib/gtm';
+import { isPlatformHostname } from '@/lib/platformHosts';
 
 const CONSENT_KEY = 'grabio_cookie_consent';
 
@@ -37,10 +38,12 @@ export default function CookieConsent() {
     setCookieConsent('accepted');
     setVisible(false);
     initGA();
-    initMetaPixel();
-    initGTM();
     trackPageView(window.location.pathname + window.location.search);
-    pixelPageView();
+    if (isPlatformHostname(window.location.hostname)) {
+      initMetaPixel();
+      pixelPageView();
+    }
+    initGTM();
   };
 
   const handleDecline = () => {

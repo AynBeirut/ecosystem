@@ -12,8 +12,10 @@ import { initArabicPDF, writeText } from '@/lib/arabicPDF';
 import {
   buildPartyOperationalStatement,
   loadStoreCompanyProfile,
+  type PartyCurrencyBalance,
   type PartyStatementReport,
   type PartyType,
+  type StatementCurrency,
   type StoreCompanyProfile,
 } from '@/lib/partyOperationalStatement';
 import { cn } from '@/lib/utils';
@@ -108,7 +110,10 @@ function exportStatementPdf(
       }
       doc.text(line.date, 16, y);
       doc.text(line.invoiceRef.substring(0, 12), 38, y);
-      writeText(doc, line.description.substring(0, 28), 68, y);
+      const desc = line.sourceDetail
+        ? `${line.description} (${line.sourceDetail})`
+        : line.description;
+      writeText(doc, desc.substring(0, 52), 68, y);
       if (line.charges) doc.text(money(line.charges), 130, y, { align: 'right' });
       if (line.credits) doc.text(money(line.credits), 155, y, { align: 'right' });
       doc.text(formatAmount(line.lineTotal, money), 180, y, { align: 'right' });
@@ -139,6 +144,7 @@ const PartyAccountStatementPage: React.FC = () => {
   const { user } = useAuth();
   const { money, currency, loaded } = useStoreCurrency();
   const navigate = useNavigate();
+  const [currencyView, setCurrencyView] = useState<'USD' | 'LBP' | 'both'>('both');
   const [report, setReport] = useState<PartyStatementReport | null>(null);
   const [company, setCompany] = useState<StoreCompanyProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -146,6 +152,10 @@ const PartyAccountStatementPage: React.FC = () => {
 
   const backTo = partyType === 'supplier' ? '/admin/suppliers' : '/admin/customers';
   const partyLabel = partyType === 'customer' ? 'Customer' : 'Supplier';
+  const visibleLines = (report?.lines || []).filter((line) => currencyView === 'both' || line.currency === currencyView);
+  const moneyIn = (amount: number, code: StatementCurrency) => money(amount, { currency: code });
+  const balanceFor = (code: StatementCurrency): PartyCurrencyBalance =>
+    report?.currencyBalances?.[code] || { openingBalance: 0, closingBalance: 0, totalCharges: 0, totalCredits: 0 };
 
   useEffect(() => {
     const storeId = getActualStoreId(user);
@@ -228,6 +238,19 @@ const PartyAccountStatementPage: React.FC = () => {
       }
     >
       <div className="mx-auto max-w-5xl rounded-lg border border-slate-200 bg-white p-6 shadow-sm print:border-0 print:p-0 print:shadow-none">
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 print:hidden">
+          <label htmlFor="statement-currency" className="text-sm font-semibold text-slate-700">Currency</label>
+          <select
+            id="statement-currency"
+            className="h-10 min-w-[180px] rounded-md border border-slate-300 bg-white px-3 text-sm"
+            value={currencyView}
+            onChange={(e) => setCurrencyView(e.target.value as 'USD' | 'LBP' | 'both')}
+          >
+            <option value="both">USD and LBP</option>
+            <option value="USD">USD</option>
+            <option value="LBP">LBP</option>
+          </select>
+        </div>
         <div className="mb-6 grid gap-6 md:grid-cols-2">
           <div>
             <h1 className="text-2xl font-bold text-[#1e4080]">{company.name}</h1>
@@ -277,17 +300,27 @@ const PartyAccountStatementPage: React.FC = () => {
           <div className="overflow-hidden rounded-md border border-slate-200">
             <div className="bg-[#1e4080] px-3 py-2 text-sm font-semibold text-white">Account Summary</div>
             <div className="divide-y text-sm">
-              {[
-                ['Previous Balance', report.openingBalance],
-                ['Credits', report.totalCredits],
-                ['New Charges', report.totalCharges],
-                ['Total Balance Due', report.closingBalance],
-              ].map(([label, amount]) => (
-                <div key={String(label)} className="flex items-center justify-between px-3 py-2">
-                  <span>{label}</span>
-                  <span className="font-medium tabular-nums">{formatAmount(Number(amount), money)}</span>
-                </div>
-              ))}
+              {(currencyView === 'both' ? (['USD', 'LBP'] as const) : [currencyView]).map((code) => {
+                const bucket = balanceFor(code);
+                return (
+                  <div key={code}>
+                    {currencyView === 'both' ? (
+                      <div className="bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-600">{code}</div>
+                    ) : null}
+                    {[
+                      ['Previous Balance', bucket.openingBalance],
+                      ['Credits', bucket.totalCredits],
+                      ['New Charges', bucket.totalCharges],
+                      ['Total Balance Due', bucket.closingBalance],
+                    ].map(([label, amount]) => (
+                      <div key={`${code}-${label}`} className="flex items-center justify-between px-3 py-2">
+                        <span>{label}</span>
+                        <span className="font-medium tabular-nums">{formatAmount(Number(amount), (value) => moneyIn(value, code))}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
               <div className="flex items-center justify-between px-3 py-2">
                 <span>Payment Due Date</span>
                 <span className="rounded border border-slate-300 px-2 py-0.5 font-medium">{report.paymentDueDate}</span>
@@ -303,29 +336,38 @@ const PartyAccountStatementPage: React.FC = () => {
                 <th className="px-3 py-2 text-left font-semibold">Date</th>
                 <th className="px-3 py-2 text-left font-semibold">Invoice #</th>
                 <th className="px-3 py-2 text-left font-semibold">Description</th>
+                {currencyView === 'both' ? <th className="px-3 py-2 text-left font-semibold">Currency</th> : null}
                 <th className="px-3 py-2 text-right font-semibold">Charges</th>
                 <th className="px-3 py-2 text-right font-semibold">Credits</th>
                 <th className="px-3 py-2 text-right font-semibold">Line Total</th>
               </tr>
             </thead>
             <tbody>
-              {report.lines.length === 0 ? (
+              {visibleLines.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-3 py-8 text-center text-slate-500">
-                    No transactions on this account yet.
+                  <td colSpan={currencyView === 'both' ? 7 : 6} className="px-3 py-8 text-center text-slate-500">
+                    No transactions in this currency.
                   </td>
                 </tr>
               ) : (
-                report.lines.map((line, index) => (
+                visibleLines.map((line, index) => (
                   <tr key={`${line.invoiceRef}-${index}`} className={cn(index % 2 === 0 && 'bg-slate-50')}>
                     <td className="px-3 py-2 whitespace-nowrap">{line.date}</td>
                     <td className="px-3 py-2 font-mono text-xs">{line.invoiceRef}</td>
-                    <td className="px-3 py-2">{line.description}</td>
+                    <td className="px-3 py-2">
+                      <div>{line.description}</div>
+                      {line.sourceDetail ? (
+                        <div className="mt-1 text-xs text-slate-500">{line.sourceDetail}</div>
+                      ) : null}
+                    </td>
+                    {currencyView === 'both' ? (
+                      <td className="px-3 py-2 text-xs font-medium">{line.currency || 'USD'}</td>
+                    ) : null}
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {line.charges ? money(line.charges) : '—'}
+                      {line.charges ? moneyIn(line.charges, line.currency || 'USD') : '—'}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">
-                      {line.credits ? money(line.credits) : '—'}
+                      {line.credits ? moneyIn(line.credits, line.currency || 'USD') : '—'}
                     </td>
                     <td
                       className={cn(
@@ -333,7 +375,7 @@ const PartyAccountStatementPage: React.FC = () => {
                         line.lineTotal < 0 && 'text-red-700',
                       )}
                     >
-                      {formatAmount(line.lineTotal, money)}
+                      {formatAmount(line.lineTotal, (value) => moneyIn(value, line.currency || 'USD'))}
                     </td>
                   </tr>
                 ))
@@ -342,9 +384,15 @@ const PartyAccountStatementPage: React.FC = () => {
           </table>
         </div>
 
-        <div className="mt-0 flex items-center justify-between bg-[#1e4080] px-4 py-3 text-white">
-          <span className="font-semibold">Account Current Balance</span>
-          <span className="text-lg font-bold tabular-nums">{formatAmount(report.closingBalance, money)}</span>
+        <div className="mt-0 bg-[#1e4080] px-4 py-3 text-white">
+          {(currencyView === 'both' ? (['USD', 'LBP'] as const) : [currencyView]).map((code) => (
+            <div key={code} className="flex items-center justify-between">
+              <span className="font-semibold">Balance {code}</span>
+              <span className="text-lg font-bold tabular-nums">
+                {formatAmount(balanceFor(code).closingBalance, (value) => moneyIn(value, code))}
+              </span>
+            </div>
+          ))}
         </div>
 
         <div className="mt-6 space-y-2 text-center text-sm text-slate-600">

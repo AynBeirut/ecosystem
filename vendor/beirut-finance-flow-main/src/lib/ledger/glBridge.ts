@@ -26,13 +26,35 @@ import {
   type PlatformOrderInput,
 } from '@/lib/ledger/autoPosting';
 import { paymentSourceKey, upsertAutoPaymentReceiptDoc } from '@/lib/ledger/paymentReceiptDoc';
+import {
+  findLockedPeriodForDate,
+  journalDateOnly,
+  PeriodLockedError,
+} from '@/lib/ledger/periodLockCore';
+import { loadClosedPeriodClosures } from '@/lib/ledger/periodLock';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+function isPeriodLockedError(err: unknown): boolean {
+  return (
+    err instanceof PeriodLockedError
+    || (err instanceof Error && err.name === 'PeriodLockedError')
+    || (err instanceof Error && /period .* is closed/i.test(err.message))
+  );
+}
 
 function logGlError(scope: string, err: unknown): never {
   console.error(`[GL][${scope}]`, err);
   const message = err instanceof Error ? err.message : String(err);
   throw new Error(`GL posting failed (${scope}): ${message}`);
+}
+
+/** Background/idempotent sync — never uncaught-reject the finance shell on closed periods. */
+function logGlBackgroundError(scope: string, err: unknown): void {
+  if (isPeriodLockedError(err)) {
+    return;
+  }
+  console.error(`[GL][${scope}]`, err);
 }
 
 function invoiceTotal(invoice: Invoice): number {
@@ -210,7 +232,7 @@ export async function glPostPurchaseReceived(storeId: string, po: PurchaseOrder)
     const accounts = await ensureDefaultChartOfAccounts(storeId);
     await autoPostPurchaseReceived(storeId, po, accounts);
   } catch (err) {
-    logGlError('purchase-received', err);
+    logGlBackgroundError('purchase-received', err);
   }
 }
 
@@ -258,12 +280,32 @@ export async function glPostPurchasePayment(storeId: string, payment: PaymentOrd
   }
 }
 
-/** Post GL for platform purchases already received (idempotent). */
+const purchaseGlSyncByStore = new Map<string, Promise<void>>();
+
+/** Post GL for fulfilled POs missing journals — only in open periods (no closed-period spam on load). */
 export async function glSyncPurchasesOnLoad(storeId: string, purchaseOrders: PurchaseOrder[]): Promise<void> {
-  const receivable = purchaseOrders.filter((po) => po.status === 'fulfilled');
-  for (const po of receivable) {
-    await glPostPurchaseReceived(storeId, po);
-  }
+  const existing = purchaseGlSyncByStore.get(storeId);
+  if (existing) return existing;
+
+  const job = (async () => {
+    const closures = await loadClosedPeriodClosures(storeId);
+    const asOf = journalDateOnly(new Date().toISOString());
+    const receivable = purchaseOrders.filter((po) => po.status === 'fulfilled');
+    for (const po of receivable) {
+      const poDate = po.date || po.createdAt || asOf;
+      if (findLockedPeriodForDate(poDate, closures, asOf)) continue;
+      try {
+        await glPostPurchaseReceived(storeId, po);
+      } catch (err) {
+        logGlBackgroundError('purchase-received', err);
+      }
+    }
+  })().finally(() => {
+    purchaseGlSyncByStore.delete(storeId);
+  });
+
+  purchaseGlSyncByStore.set(storeId, job);
+  return job;
 }
 
 export type { PlatformOrderInput };

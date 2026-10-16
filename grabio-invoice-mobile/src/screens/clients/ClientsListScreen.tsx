@@ -1,9 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, TextInput, ActivityIndicator, RefreshControl } from 'react-native';
+import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, TextInput, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
-import { listClients } from '../../lib/financeService';
+import { deleteClient, listClients } from '../../lib/financeService';
 import type { FinanceClient, RootStackParamList } from '../../types';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 
@@ -42,18 +42,44 @@ export default function ClientsListScreen() {
           <Text style={styles.addText}>+ New</Text>
         </TouchableOpacity>
       </View>
-      <TextInput style={styles.search} placeholder="Search clients…" value={search} onChangeText={setSearch} />
+      <TextInput style={styles.search} placeholder="Search clients…" placeholderTextColor={COLORS.textMuted} value={search} onChangeText={setSearch} />
       <FlatList
         data={filtered}
         keyExtractor={(i) => i.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); void load(); }} />}
         ListEmptyComponent={<Text style={styles.empty}>No clients yet.</Text>}
         renderItem={({ item }) => (
-          <TouchableOpacity style={styles.card} onPress={() => navigation.navigate('ClientEditor', { clientId: item.id })}>
-            <Text style={styles.cardTitle}>{item.name}</Text>
-            {item.phone ? <Text style={styles.meta}>{item.phone}</Text> : null}
-            {item.email ? <Text style={styles.meta}>{item.email}</Text> : null}
-          </TouchableOpacity>
+          <View style={styles.card}>
+            <TouchableOpacity onPress={() => navigation.navigate('ClientEditor', { clientId: item.id })}>
+              <Text style={styles.cardTitle}>{item.name}</Text>
+              {item.phone ? <Text style={styles.meta}>{item.phone}</Text> : null}
+              {item.email ? <Text style={styles.meta}>{item.email}</Text> : null}
+            </TouchableOpacity>
+            <View style={styles.actions}>
+              <TouchableOpacity onPress={() => navigation.navigate('ClientEditor', { clientId: item.id })}>
+                <Text style={styles.edit}>Edit</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+              onPress={() => {
+                if (!user?.storeId) return;
+                Alert.alert('Delete client', `Remove ${item.name}?`, [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Delete',
+                    style: 'destructive',
+                    onPress: () => {
+                      void deleteClient(user.storeId, item.id)
+                        .then(() => load())
+                        .catch((e) => Alert.alert('Could not delete', e instanceof Error ? e.message : 'Try again'));
+                    },
+                  },
+                ]);
+              }}
+            >
+              <Text style={styles.delete}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         )}
       />
     </SafeAreaView>
@@ -63,12 +89,15 @@ export default function ClientsListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: '700' },
+  title: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary },
   addBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.md },
   addText: { color: '#fff', fontWeight: '700' },
-  search: { marginHorizontal: 16, marginBottom: 8, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.border },
+  search: { marginHorizontal: 16, marginBottom: 8, backgroundColor: COLORS.surface, color: COLORS.textPrimary, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.border },
   card: { marginHorizontal: 16, marginBottom: 10, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 14, ...SHADOW.sm },
-  cardTitle: { fontWeight: '700' },
+  cardTitle: { fontWeight: '700', color: COLORS.textPrimary },
   meta: { color: COLORS.textSecondary, marginTop: 4 },
+  actions: { flexDirection: 'row', gap: 16, marginTop: 10 },
+  edit: { color: COLORS.primary, fontWeight: '700' },
+  delete: { color: COLORS.error, fontWeight: '700' },
   empty: { textAlign: 'center', color: COLORS.textMuted, marginTop: 40 },
 });

@@ -1,0 +1,49 @@
+{
+  "checkedAt": "2026-09-20T15:37:48.244Z",
+  "refundRegisteredInCloud": false,
+  "salesReturnsToday": [],
+  "salesReturnsLatest": [
+    {
+      "id": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-11",
+      "saleId": "878",
+      "amount": 24,
+      "type": "partial",
+      "ts": "2026-05-31T15:04:41.079Z",
+      "day": "2026-05-31",
+      "status": "completed"
+    },
+    {
+      "id": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-10",
+      "saleId": "672",
+      "amount": 40,
+      "type": "full",
+      "ts": "2026-05-17T12:02:02.082Z",
+      "day": "2026-05-17",
+      "status": "completed"
+    },
+    {
+      "id": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-9",
+      "saleId": "428",
+      "amount": 40,
+      "type": "full",
+      "ts": "2026-04-11T14:34:51.469Z",
+      "day": "2026-04-11",
+      "status": "completed"
+    }
+  ],
+  "ordersWithRefundFlagsCount": 0,
+  "todayPosSalesCount": 10,
+  "todayPosGrossTotal": 376.23,
+  "order1337Today": {
+    "invoice": "ORD-2026-09-20-000004",
+    "total": 41.5,
+    "pay": "paid",
+    "amountPaid": 41.5
+  },
+  "posDevices": [
+    {
+      "name": "1",
+      "lastSync": "2026-09-20T15:37:50.129Z"
+    }
+  ]
+}

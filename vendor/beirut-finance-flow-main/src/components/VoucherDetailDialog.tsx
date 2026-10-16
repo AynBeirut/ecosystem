@@ -13,7 +13,11 @@ import VoucherSaleTotalsBand, {
 import { formatCurrency } from '@/lib/utils';
 import { supportsArabicEntry, type AccountingLanguage } from '@/lib/grabio/accountingMode';
 import { buildClientByGrabioMap, displayPcgCode, resolvePcgDisplay } from '@/lib/ledger/grabioToPcgMap';
-import { journalEntryDisplayLabel } from '@/lib/ledger/ledgerHumanLabels';
+import {
+  displayMemoForJournalEntry,
+  journalEntryDisplayLabel,
+  sanitizeJournalLineDescriptionForDisplay,
+} from '@/lib/ledger/ledgerHumanLabels';
 import { usePostedVoucherEditor } from '@/hooks/usePostedVoucherEditor';
 import { useVoucherParty } from '@/hooks/useVoucherParty';
 import { useLedger } from '@/context/LedgerContext';
@@ -28,13 +32,21 @@ import {
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
 function entryLabel(entry: JournalEntry) {
-  return journalEntryDisplayLabel(entry);
+  return displayMemoForJournalEntry(entry) || journalEntryDisplayLabel(entry);
 }
 
 function entryKind(entry: JournalEntry) {
   if (entry.sourceType === 'order' && entry.event === 'sale-recognized') return 'Sales';
+  if (
+    entry.sourceType === 'cashbook_sales' ||
+    entry.sourceType === 'monthly_sales_master' ||
+    entry.sourceType === 'dp_edited_sales' ||
+    entry.sourceType === 'owner_discount_backup'
+  ) {
+    return entry.voucherType || 'RV';
+  }
   if (entry.voucherType) return entry.voucherType;
-  return entry.sourceType;
+  return entry.voucherType || 'Journal';
 }
 
 type InvoiceLike = {
@@ -144,7 +156,7 @@ export default function VoucherDetailDialog({
       title={entryLabel(entry)}
       description={
         <>
-          {entry.date.slice(0, 10)} · {entry.sourceType}
+          {entry.date.slice(0, 10)}
           {entry.voucherNumber ? ` · ${entry.voucherNumber}` : ''}
         </>
       }
@@ -235,7 +247,9 @@ export default function VoucherDetailDialog({
                       </div>
                     ) : null}
                   </TableCell>
-                  <TableCell>{line.description || '—'}</TableCell>
+                  <TableCell>
+                    {sanitizeJournalLineDescriptionForDisplay(line.description || '', entry) || '—'}
+                  </TableCell>
                   <TableCell className="text-right">{line.debit ? formatCurrency(line.debit) : '—'}</TableCell>
                   <TableCell className="text-right">{line.credit ? formatCurrency(line.credit) : '—'}</TableCell>
                 </TableRow>

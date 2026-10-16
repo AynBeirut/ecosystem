@@ -23,6 +23,7 @@ const EstimateManager = lazy(() => import("./pages/EstimateManager"));
 const ReceiptManager = lazy(() => import("./pages/ReceiptManager"));
 const CompanyProfileRedirect = lazy(() => import("./pages/CompanyProfileRedirect"));
 const Settings = lazy(() => import("./pages/Settings"));
+const InvoiceDocumentSetup = lazy(() => import("./pages/InvoiceDocumentSetup"));
 const PremiumUpgrade = lazy(() => import("./pages/PremiumUpgrade"));
 const SubUsers = lazy(() => import("./pages/SubUsers"));
 const Reports = lazy(() => import("./pages/Reports"));
@@ -92,6 +93,7 @@ const App = () => (
                 <Route path="/receipts" element={wrap(<ReceiptManager />)} />
                 <Route path="/profile" element={wrap(<CompanyProfileRedirect />, "profile")} />
                 <Route path="/settings" element={wrap(<Settings />)} />
+                <Route path="/document-setup" element={wrap(<InvoiceDocumentSetup />, "document-setup")} />
                 <Route path="/premium" element={wrap(<PremiumUpgrade />)} />
                 <Route path="/reports" element={wrap(<Reports />)} />
                 <Route path="/accounting" element={wrap(<Accounting />)} />

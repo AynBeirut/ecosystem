@@ -192,16 +192,12 @@ export async function enforceAndConsumeTrialOperation(
   });
 }
 
-/**
- * One round-trip: trial consume (if needed) + next invoice/PO number.
- * Prefer this on V·POS / V·Buy save paths.
- */
-export async function allocateInvoiceNumberWithTrial(
+/** Trial consume (if needed). Document numbers assigned via chronological renumber after save. */
+export async function consumeTrialForOperation(
   db: Firestore,
   storeId: string,
   operationType: TrialOperationType,
-  numberFallbackPrefix = 'INV',
-): Promise<string> {
+): Promise<void> {
   const monthKey = getMonthKey();
   const skipTrial = isStoreMarkedNotTrial(storeId);
 
@@ -255,11 +251,9 @@ export async function allocateInvoiceNumberWithTrial(
       }
     }
 
-    const prefix = String(profile.invoiceNumberPrefix || numberFallbackPrefix);
-    const lastNumber = Number(profile.lastInvoiceNumber || 0);
-    const nextNumber = lastNumber + 1;
-    updates.lastInvoiceNumber = nextNumber;
     transaction.set(profileRef, updates, { merge: true });
-    return `${prefix}-${String(nextNumber).padStart(3, '0')}`;
   });
 }
+
+/** @deprecated Use consumeTrialForOperation */
+export const allocateInvoiceNumberWithTrial = consumeTrialForOperation;

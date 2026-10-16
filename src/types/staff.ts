@@ -18,6 +18,7 @@ export interface StaffMember {
   paymentFrequency: PaymentFrequency;
   paymentType?: 'hourly' | 'monthly' | 'daily' | string;
   hourlyRate?: number;
+  hourlyRateSource?: 'ui';
   monthlySalary?: number;
   payBasis?: string;
   isActive?: boolean;

@@ -23,6 +23,7 @@ export type PaymentStatus = 'paid' | 'unpaid' | 'partial';
 
 export interface Expense {
   id: string;
+  expenseNumber?: string;
   name: string;
   description?: string;
   category: ExpenseCategory;

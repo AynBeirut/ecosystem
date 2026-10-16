@@ -244,6 +244,15 @@ export async function validateEventBelongsToStore(
   return { ok: true, event };
 }
 
+/** Guest booking must sit inside the event window (inclusive). */
+export function reservationFitsEventWindow(event: StoreEventSnapshot, reservedFor: Date): boolean {
+  const when = reservedFor.getTime();
+  const start = new Date(event.startAt).getTime();
+  const end = new Date(event.endAt).getTime();
+  if (!Number.isFinite(when) || !Number.isFinite(start) || !Number.isFinite(end)) return false;
+  return when >= start && when <= end;
+}
+
 export function parseSinceTimestamp(value: unknown): Date | null {
   const raw = String(value || '').trim();
   if (!raw) return null;

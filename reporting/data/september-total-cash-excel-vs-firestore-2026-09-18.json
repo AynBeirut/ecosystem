@@ -1,0 +1,54 @@
+{
+  "sourceExcel": "/media/anwar/12AD-9999/Cash/september/Copy of September edited.xlsx",
+  "sheet": "Total Cash ",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "storeName": "little hands",
+  "sessionUser": "manager@grabio.space",
+  "parsedAt": "2026-09-18T11:40:00.000Z",
+  "columnLegend": {
+    "C": "In$ (cash in)",
+    "D": "Exp $ (cash expenses)"
+  },
+  "excel_totalCash_colD_exp": {
+    "lineCount": 23,
+    "totalUsd": 9965.47,
+    "note": "Includes summary rows (1765, 5935, 500.47); operational lines ≈19 rows / 1613 USD on strict exclude rules"
+  },
+  "excel_totalCash_colC_in": {
+    "lineCount": 12,
+    "totalUsd": 15550,
+    "sep2026_dmy_parsed_subtotalUsd": 6622,
+    "sep2026_excl_opening_balanceUsd": 3822,
+    "note": "Opening row 'Cash Remaining From August' = 2800; exclude 'Total Sum per Month' double-count"
+  },
+  "firestore_financeExpenses": {
+    "allTimeCount": 759,
+    "sep2026Count": 0,
+    "sep2026TotalUsd": 0,
+    "dateHistogramTop": {
+      "2026-07": 165,
+      "2026-06": 159,
+      "2026-05": 141,
+      "2026-08": 96,
+      "2026-09": 0
+    }
+  },
+  "firestore_sep2026_moneyIn": {
+    "completedOrdersCount": 41,
+    "completedOrdersTotalUsd": 6288.08,
+    "financeReceiptsCount": 41,
+    "financeReceiptsTotalUsd": 6288.08
+  },
+  "gapSummary": {
+    "invoiceManagerThisMonthEmptyBecause": "No financeExpenses documents dated 2026-09-01..2026-09-30; Excel September cash expenses were not imported.",
+    "excelExpMissingInFirestore": "All 23 Exp$ lines on Total Cash (9965.47 USD per raw col D sum) — 0 matches in financeExpenses for September.",
+    "cashInMismatch": "Excel col C September activity (excl. 2800 opening) ≈ 3822 USD cash lines vs Firestore completed sales/receipts September ≈ 6288.08 USD — app includes non-cash-book POS totals; Excel is physical cash movements only."
+  },
+  "excel_exp_lines_sample": [
+    { "excelRow": 7, "desc": "Eva", "amountUsd": 18 },
+    { "excelRow": 8, "desc": "Aalaf For Farm", "amountUsd": 86 },
+    { "excelRow": 29, "desc": "Moteur", "amountUsd": 320 },
+    { "excelRow": 41, "desc": "Thaer Invoices", "amountUsd": 150 },
+    { "excelRow": 82, "desc": "Remainig Cash Flow From August  (Sanaa)", "amountUsd": 5935 }
+  ]
+}

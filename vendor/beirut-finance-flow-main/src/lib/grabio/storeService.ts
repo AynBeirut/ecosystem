@@ -30,9 +30,12 @@ export type StoreCompanyView = {
   email: string;
   logo: string;
   website?: string;
+  country?: string;
   taxId?: string;
   commercialRegistry?: string;
   description?: string;
+  documentLayout?: string;
+  documentShowCompanyName?: boolean;
   primaryColor: string;
   secondaryColor: string;
   invoiceTemplate: 'basic' | 'modern' | 'professional';
@@ -97,16 +100,22 @@ export function storeProfileToCompany(profile: GrabioStoreProfile): StoreCompany
   return {
     name: docSettings.documentCompanyName?.trim() || profile.name || profile.storeName || 'My Company',
     address: docSettings.documentAddress?.trim() || profile.location || '',
-    phone: profile.phone || profile.contactInfo?.phone || '',
-    email: profile.email || profile.contactInfo?.email || '',
+    phone: docSettings.documentPhone?.trim() || profile.phone || profile.contactInfo?.phone || '',
+    email: docSettings.documentEmail?.trim() || profile.email || profile.contactInfo?.email || '',
     logo: docSettings.documentLogo || profile.logo || '',
-    website: profile.website,
+    website: docSettings.documentWebsite?.trim() || profile.website,
+    country: docSettings.documentCountry?.trim(),
     taxId: docSettings.documentTaxId?.trim() || profile.taxId || profile.taxNumber,
     commercialRegistry: profile.commercialRegistry,
     description: profile.description,
+    documentLayout: docSettings.documentLayout,
+    documentShowCompanyName: docSettings.documentShowCompanyName,
     primaryColor,
     secondaryColor,
-    invoiceTemplate: docSettings.invoiceTemplate ?? 'basic',
+    invoiceTemplate: mapGrabioInvoiceTemplateToFinance(
+      profile.invoiceTemplate,
+      docSettings.invoiceTemplate,
+    ),
     signature: docSettings.signature,
   };
 }

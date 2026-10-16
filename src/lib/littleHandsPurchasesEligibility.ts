@@ -1,5 +1,11 @@
 /** Mirror of scripts/lib/littleHandsPurchasesEligibility.cjs for Purchases UI filter. */
 
+import {
+  isLittleHandsPayrollPersonName,
+  isLittleHandsSocialMediaName,
+  isLittleHandsTreasuryNoise,
+} from '@/lib/littleHandsSupplierRouting';
+
 const PAYROLL_MARKERS = [
   'salary',
   'salaries',
@@ -50,10 +56,18 @@ export function belongsOnLittleHandsPurchasesPage(
   }
   if (organizedCategory === 'owner_bank_sanaa' || organizedCategory === 'owner_bank_youssef') return false;
 
+  const label = `${description || ''} ${vendor || ''}`.trim();
+  if (isLittleHandsTreasuryNoise(label)) return false;
+  if (isLittleHandsSocialMediaName(label)) return false;
+  if (isLittleHandsPayrollPersonName(label)) return false;
+
   const t = normText(description, vendor);
   if (PAYROLL_MARKERS.some((m) => t.includes(m))) return false;
   if (OPERATING_NOT_PURCHASE.some((m) => t.includes(m))) return false;
   if (/\bmiro\b/.test(t) && (t.includes('advance') || t.includes('salary') || t.includes('working'))) {
+    return false;
+  }
+  if (/cynthia\s+hel[lo]/.test(t) && !t.includes('bakery') && !t.includes('boucherie')) {
     return false;
   }
   if (
@@ -86,7 +100,10 @@ export function belongsOnLittleHandsPurchasesPage(
   if (t.includes('marawi7') || t.includes('marawe7') || (t.includes('melhem') && t.includes('garden'))) {
     return false;
   }
-  if (/\bmariam\b/.test(t) || /\bmiram\b/.test(t) || /\bmiriam\b/.test(t)) {
+  if (
+    (/\bmariam\b/.test(t) || /\bmiram\b/.test(t) || /\bmiriam\b/.test(t))
+    && !/\bmariam\s+[a-z]{3,}/i.test(t)
+  ) {
     return false;
   }
   if (t.includes('kitchen tools') || t.includes('kitcken tools') || t.includes('tools for kitchen')) {

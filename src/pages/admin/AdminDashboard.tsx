@@ -3,6 +3,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '@/context/useAuth';
 import { getActualStoreId } from '@/lib/storeUtils';
+import { isAdminFeatureAllowed, staffPayrollShortcutVisible } from '@/lib/featureAccessGate';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 // tabs import removed (unused)
@@ -41,6 +42,7 @@ import {
   Layers,
   Link2,
   Receipt,
+  ScrollText,
 } from 'lucide-react';
 import SallyIconBadge, { SallyNavIcon } from '@/components/admin/SallyIconBadge';
 import { getFirestore, doc, getDoc, setDoc, collection, query, where, getDocs, updateDoc, orderBy, limit } from 'firebase/firestore';
@@ -50,7 +52,7 @@ import { fetchUsdToLbpRateFresh, getUsdToLbpRate, formatLbp } from '@/lib/curren
 import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 import MobileHeader from '@/components/MobileHeader';
 import { useIsMobile } from '@/hooks/use-mobile';
-import { isCountedSaleStatus } from '@/lib/salesRules';
+import { sumCountedSaleOrderRevenue } from '@/lib/salesRules';
 import type { StoreProfile } from '@/types/storeProfile';
 import { requestNotificationPermission, saveFcmToken } from '@/lib/notifications';
 import { ECOSYSTEM_FLAGS } from '@/lib/ecosystemFlags';
@@ -102,6 +104,7 @@ function withFinancePinnedQuickActions(
 const DEFAULT_QUICK_ACTION_IDS = [
   'sally',
   'invoice-manager',
+  'invoice-pdf-template',
   'grabio-platform',
   'customers',
   'sales-crm',
@@ -123,6 +126,7 @@ const DEFAULT_QUICK_ACTION_IDS = [
 const MOBILE_DEFAULT_QUICK_ACTION_IDS = [
   'sally',
   'invoice-manager',
+  'invoice-pdf-template',
   'expenses',
   'customers',
   'sales-crm',
@@ -295,7 +299,7 @@ const AdminDashboard: React.FC = () => {
   const canViewReports = storeAdminAccess || user?.permissions?.includes('view_reports');
   const canManageDeliveries = storeAdminAccess || user?.permissions?.includes('manage_deliveries');
   const canProcessPayments = storeAdminAccess || user?.permissions?.includes('process_payments');
-  const { canUse: canUseModule, profile } = useStoreEntitlements();
+  const { canUse: canUseModule, profile, entitlements } = useStoreEntitlements();
   const canUseBusinessTools = canAccessBusinessTools(user);
   const crmEnabled = storeAdminAccess;
   const invoiceManagerEnabled = canUseBusinessTools && canUseInvoiceManagerApp(profile);
@@ -333,14 +337,14 @@ const AdminDashboard: React.FC = () => {
       to: '/admin/invoice-manager/expenses',
       label: 'Expenses',
       icon: DollarSign,
-      visible: invoiceManagerEnabled || canUseBusinessTools,
+      visible: invoiceManagerEnabled || canUseBusinessTools || canViewInventory,
     },
     {
       id: 'v-expense',
       to: '/admin/v-expense',
       label: 'Quick expense',
       icon: CreditCard,
-      visible: invoiceManagerEnabled && storeAdminAccess,
+      visible: (invoiceManagerEnabled || canUseBusinessTools || canViewInventory) && storeAdminAccess,
     },
     { id: 'customers', to: '/admin/customers', label: 'Customers', icon: Users, visible: true },
     {
@@ -365,6 +369,13 @@ const AdminDashboard: React.FC = () => {
       icon: Landmark,
     },
     {
+      id: 'invoice-pdf-template',
+      to: '/admin/finance/invoice-document',
+      label: 'Invoice PDF template',
+      icon: ScrollText,
+      visible: invoiceManagerEnabled || canUseBusinessTools,
+    },
+    {
       id: 'grabio-platform',
       to: '/admin/grabio-platform',
       label: 'Grabio Clients',
@@ -376,7 +387,27 @@ const AdminDashboard: React.FC = () => {
     { id: 'delivery-wallet', to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
     { id: 'finance', to: '/admin/finance', label: 'Finance Suite', icon: DollarSign, visible: financeSuiteVisible },
     { id: 'staff-presence', to: '/admin/staff-presence', label: 'Daily Presence', icon: Users, visible: canUseBusinessTools },
-    { id: 'staff', to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },
+    {
+      id: 'staff',
+      to: '/admin/staff',
+      label: 'Staff (Payroll)',
+      icon: Users,
+      visible: staffPayrollShortcutVisible(canUseBusinessTools, profile, entitlements, user),
+    },
+    {
+      id: 'hr',
+      to: '/admin/hr',
+      label: 'HR',
+      icon: Users,
+      visible: isAdminFeatureAllowed('hr', profile, entitlements, user),
+    },
+    {
+      id: 'venue-ops',
+      to: '/admin/venue-ops',
+      label: 'Venue Ops',
+      icon: Users,
+      visible: isAdminFeatureAllowed('venue_ops', profile, entitlements, user),
+    },
     { id: 'sub-accounts', to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: storeAdminAccess && moduleVisible('team') },
     { id: 'store-profile', to: '/admin/profile', label: 'Store Profile', icon: User, visible: storeAdminAccess },
     { id: 'classic-template', to: '/admin/templates', label: 'Classic Template', icon: LayoutTemplate, visible: builderVisible },
@@ -401,7 +432,7 @@ const AdminDashboard: React.FC = () => {
     { id: 'delivery', to: '/admin/delivery', label: 'Delivery', icon: Package, visible: canManageDeliveries },
     { id: 'announcements', to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
     { id: 'analytics', to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: canViewReports },
-  ], [canManageDeliveries, canViewInventory, canViewReports, crmEnabled, user, canUseModule, canManageInventory, canUseBusinessTools, invoiceManagerEnabled, financeSuiteVisible]);
+  ], [canManageDeliveries, canViewInventory, canViewReports, crmEnabled, user, canUseModule, canManageInventory, canUseBusinessTools, invoiceManagerEnabled, financeSuiteVisible, profile, entitlements]);
 
   const visibleQuickActionItems = useMemo(
     () => quickActionItems.filter((item) => item.visible),
@@ -652,6 +683,12 @@ const AdminDashboard: React.FC = () => {
         title: 'Profile & Store Setup',
         items: [
           { to: '/admin/profile', label: 'Store Profile', icon: User, visible: storeAdminAccess },
+          {
+            to: '/admin/finance/invoice-document',
+            label: 'Invoice PDF template',
+            icon: ScrollText,
+            visible: invoiceManagerEnabled || canUseBusinessTools,
+          },
           { to: '/admin/payments', label: 'Payment Settings', icon: CreditCard, visible: storeAdminAccess && canProcessPayments },
           { to: '/admin/announcements', label: 'Announcements', icon: Megaphone, visible: true },
           { to: '/admin/marketing', label: 'Email Marketing', icon: Mail, visible: canViewReports },
@@ -690,7 +727,7 @@ const AdminDashboard: React.FC = () => {
           { to: '/admin/account-statement', label: 'Account Statement', icon: FileText, visible: canUseBusinessTools },
           { to: '/admin/cash-collection', label: 'Cash Collection', icon: DollarSign, visible: canUseBusinessTools },
           { to: '/admin/delivery-wallet', label: 'Delivery Wallets', icon: Wallet, visible: canUseBusinessTools },
-          { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: canUseBusinessTools },
+          { to: '/admin/staff', label: 'Staff (Payroll)', icon: Users, visible: staffPayrollShortcutVisible(canUseBusinessTools, profile, entitlements, user) },
           { to: '/admin/staff-presence', label: 'Daily Presence', icon: Users, visible: canUseBusinessTools },
           { to: '/admin/sub-accounts', label: 'Sub-Accounts', icon: Users, visible: storeAdminAccess },
           { to: '/admin/marketplace', label: 'Marketplace Sync', icon: Globe, visible: storeAdminAccess },
@@ -781,22 +818,14 @@ const AdminDashboard: React.FC = () => {
         setProductCount(productsSnap.size);
         setOrderCount(ordersSnap.size);
         // Revenue and customers
-        let totalRevenue = 0;
-        let invalidRevenueRows = 0;
         const customerSet = new Set();
-        ordersSnap.forEach(doc => {
-          const data = doc.data();
-          if (!isCountedSaleStatus(data.status)) return;
-          const orderTotal = typeof data.total === 'number' ? data.total : Number(data.total);
-          if (!Number.isFinite(orderTotal) || orderTotal < 0) {
-            invalidRevenueRows += 1;
-            return;
-          }
-          totalRevenue += orderTotal;
+        const orderRows = ordersSnap.docs.map((doc) => doc.data());
+        const revenueRollup = sumCountedSaleOrderRevenue(orderRows);
+        orderRows.forEach((data) => {
           if (data.customerId) customerSet.add(data.customerId);
         });
-        setRevenue(totalRevenue);
-        setQuarantinedRevenueOrders(invalidRevenueRows);
+        setRevenue(revenueRollup.revenue);
+        setQuarantinedRevenueOrders(revenueRollup.excludedInvalidOrNegativeTotal);
         // Fetch a fallback rate in background if no stored rate exists.
         if (!profileSnap.exists() || (!profileSnap.data()?.customExchangeRate && !profileSnap.data()?.usdToLbpRate)) {
           getUsdToLbpRate().then(r => {

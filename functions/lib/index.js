@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onWordPressProvisioningRequestCreated = exports.onAccountPaymentCreated = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkMorningWorkBriefing = exports.checkCrmVisitReminders = exports.checkScheduledOrderReminders = exports.autoCloseFiscalPeriods = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
+exports.onRawMaterialWrittenSyncRecipes = exports.onRecipeWrittenSyncCost = exports.onCatalogProductWritten = exports.onStoreAnnouncement = exports.onOrderCreatedCrmSync = exports.onWordPressProvisioningRequestCreated = exports.onAccountPaymentCreated = exports.onOrderStatusChanged = exports.onOrderCreated = exports.checkMorningWorkBriefing = exports.checkCrmVisitReminders = exports.checkScheduledOrderReminders = exports.autoCloseFiscalPeriods = exports.runRecurringVouchers = exports.fetchExchangeRates = exports.cleanupRestaurantDemoSessions = exports.checkLowStockAlert = exports.checkExpiringStock = exports.checkSubscriptions = exports.api = void 0;
 const express_1 = __importDefault(require("express"));
 const admin = __importStar(require("firebase-admin"));
 const functions = __importStar(require("firebase-functions/v2"));
@@ -71,6 +71,7 @@ const subscription_1 = require("./api/subscription");
 const webhooks_1 = require("./api/webhooks");
 const checkout_1 = require("./api/checkout");
 const currencies_1 = require("./lib/money/currencies");
+const chronologicalRenumberFirestore_1 = require("./lib/chronologicalRenumberFirestore");
 const whishOps_1 = require("./api/whishOps");
 const stripeCheckout_1 = require("./api/stripeCheckout");
 const squareCheckout_1 = require("./api/squareCheckout");
@@ -104,10 +105,20 @@ const eventReservations_1 = require("./api/eventReservations");
 const publicProductStock_1 = require("./api/publicProductStock");
 const r2_1 = require("./api/r2");
 const ocrReceipt_1 = require("./api/ocrReceipt");
+const travelAgency_1 = require("./api/travelAgency");
 const moduleGate_1 = require("./middleware/moduleGate");
 const db = admin.firestore();
 const app = (0, express_1.default)();
 app.use((0, cors_1.default)({ origin: true }));
+/** Hosting rewrite: grabio.space/api/** → function; Express routes omit /api prefix. */
+app.use((req, _res, next) => {
+    if (req.path === '/api' || req.path.startsWith('/api/')) {
+        const suffix = req.path === '/api' ? '' : req.path.slice(4);
+        const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+        req.url = `${suffix || '/'}${qs}`;
+    }
+    next();
+});
 app.post('/webhook/stripe', express_1.default.raw({ type: 'application/json' }), stripeCheckout_1.handleStripeWebhook);
 // 8mb so /ocr/receipt can accept resized mobile photos as base64 (image is not persisted).
 app.use(express_1.default.json({ limit: '8mb' }));
@@ -270,6 +281,9 @@ app.post('/seo/sitemap/submit', sitemap_1.submitSitemap);
 app.post('/seo/platform/sitemap-ping', sitemap_1.pingPlatformSitemap);
 // Meta catalog sync
 app.get('/meta/catalog/feed', metaCatalog_1.getMetaCatalogFeed);
+app.get('/meta/catalog/feed.csv', metaCatalog_1.getMetaCatalogFeed);
+app.get('/meta/catalog/grabio-packages-feed.csv', metaCatalog_1.getGrabioPackagesCatalogFeed);
+app.get('/meta-catalog/grabio-packages-feed.csv', metaCatalog_1.getGrabioPackagesCatalogFeed);
 app.post('/meta/catalog/sync', metaCatalog_1.syncMetaCatalog);
 app.post('/meta/shop/connect', metaCatalog_1.connectFacebookShop);
 app.post('/meta/instagram/connect', metaCatalog_1.connectInstagramShopping);
@@ -306,6 +320,7 @@ app.post('/pos/salaries', posSync_1.syncPosSalaries);
 app.post('/pos/raw-materials', posSync_1.syncPosRawMaterials);
 app.post('/pos/recipes', posSync_1.syncPosRecipes);
 app.post('/pos/refunds', posSync_1.syncPosRefunds);
+app.post('/pos/voids', posSync_1.syncPosVoids);
 app.get('/pos/events', storeEvents_1.getPosEvents);
 app.get('/pos/active-event', storeEvents_1.getPosActiveEvent);
 app.get('/pos/online-orders', storeEvents_1.getPosOnlineOrders);
@@ -334,6 +349,16 @@ app.post('/public/product-stock', publicProductStock_1.getPublicProductStock);
 app.post('/r2/presign', r2_1.presignR2Upload);
 app.post('/ocr/receipt', ocrReceipt_1.ocrReceipt);
 app.get('/marketing/campaigns', marketing_1.listCampaigns);
+// Travel agency — Nextra adapter + proposals (store-scoped)
+app.post('/travel/nextra/search', travelAgency_1.travelNextraSearch);
+app.post('/travel/nextra/book', travelAgency_1.travelNextraBook);
+app.post('/travel/nextra/wallet', travelAgency_1.travelNextraWallet);
+app.post('/travel/nextra/bookings', travelAgency_1.travelNextraBookings);
+app.post('/travel/proposal/link', travelAgency_1.travelCreateProposalLink);
+app.get('/travel/proposal/public/:token', travelAgency_1.travelGetPublicProposal);
+app.post('/travel/proposal/accept', travelAgency_1.travelAcceptProposal);
+app.post('/travel/deposit/record', travelAgency_1.travelRecordDeposit);
+app.get('/travel/owner/summary', travelAgency_1.travelOwnerSummary);
 app.post('/notifications/order/retry', async (req, res) => {
     try {
         const authHeader = req.get('authorization') || '';
@@ -497,6 +522,7 @@ app.post('/checkout', async (req, res) => {
         let ordersCreated = 0;
         const orderIds = [];
         const invoiceNumbers = [];
+        const createdOrders = [];
         await db.runTransaction(async (tx) => {
             const transaction = tx;
             // PHASE 1: ALL READS FIRST (Firestore requirement)
@@ -593,17 +619,10 @@ app.post('/checkout', async (req, res) => {
             }
             // PHASE 2: ALL WRITES (after all reads are complete)
             for (const orderData of ordersToCreate) {
-                // Generate online order invoice number
-                const prefix = 'ON';
-                const lastNumber = orderData.storeProfile?.lastInvoiceNumber || 0;
-                const newNumber = lastNumber + 1;
-                const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
-                // Update store profile with new invoice number (use set with merge to create if not exists)
                 const profileRef = db.doc(`storeProfiles/${orderData.storeId}`);
-                transaction.set(profileRef, {
-                    lastInvoiceNumber: newNumber,
-                    ...(orderData.trialOperationUpdate || {}),
-                }, { merge: true });
+                if (orderData.trialOperationUpdate) {
+                    transaction.set(profileRef, orderData.trialOperationUpdate, { merge: true });
+                }
                 const fulfillmentMethod = deliveryInfo?.fulfillmentMethod || 'delivery';
                 const orderDeliveryMethod = fulfillmentMethod === 'pickup'
                     ? 'pickup'
@@ -645,7 +664,6 @@ app.post('/checkout', async (req, res) => {
                     customerPhone: deliveryInfo?.phone || customerPhone || '',
                     customerEmail: deliveryInfo?.email || customerEmail || '',
                     isGuest, // Flag to indicate guest checkout
-                    invoiceNumber,
                     items: orderData.orderItems,
                     subtotal: orderData.subtotal,
                     taxType: 'none',
@@ -671,11 +689,10 @@ app.post('/checkout', async (req, res) => {
                     createdAt: getServerTimestamp(),
                 });
                 orderIds.push(orderRef.id);
-                invoiceNumbers.push(invoiceNumber);
+                createdOrders.push({ orderId: orderRef.id, storeId: orderData.storeId });
                 ordersCreated++;
                 console.log('Order created:', {
                     orderId: orderRef.id,
-                    invoiceNumber,
                     storeId: orderData.storeId,
                     customerId: userId,
                     customerName,
@@ -694,6 +711,17 @@ app.post('/checkout', async (req, res) => {
             }
         });
         console.log('Orders created:', orderIds);
+        const renumberedStores = new Set();
+        for (const row of createdOrders) {
+            if (renumberedStores.has(row.storeId))
+                continue;
+            await (0, chronologicalRenumberFirestore_1.renumberStoreOrders)(db, row.storeId);
+            renumberedStores.add(row.storeId);
+        }
+        for (const row of createdOrders) {
+            const snap = await db.collection('orders').doc(row.orderId).get();
+            invoiceNumbers.push(String(snap.data()?.invoiceNumber || ''));
+        }
         // Send FCM push notification to each store owner for their new order(s)
         // Fire-and-forget: don't block the checkout response on notification success
         (async () => {
@@ -784,6 +812,8 @@ Object.defineProperty(exports, "checkExpiringStock", { enumerable: true, get: fu
 // Export the scheduled low stock FCM alert
 var checkLowStock_1 = require("./scheduled/checkLowStock");
 Object.defineProperty(exports, "checkLowStockAlert", { enumerable: true, get: function () { return checkLowStock_1.checkLowStockAlert; } });
+var cleanupRestaurantDemoSessions_1 = require("./scheduled/cleanupRestaurantDemoSessions");
+Object.defineProperty(exports, "cleanupRestaurantDemoSessions", { enumerable: true, get: function () { return cleanupRestaurantDemoSessions_1.cleanupRestaurantDemoSessions; } });
 var fetchExchangeRates_1 = require("./scheduled/fetchExchangeRates");
 Object.defineProperty(exports, "fetchExchangeRates", { enumerable: true, get: function () { return fetchExchangeRates_1.fetchExchangeRates; } });
 var runRecurringVouchers_1 = require("./scheduled/runRecurringVouchers");

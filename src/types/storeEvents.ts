@@ -80,5 +80,5 @@ export const DEFAULT_EVENT_SETTINGS: StoreEventSettings = {
   discountEnabled: false,
   requireGuestName: true,
   linkTicketsToSales: true,
-  reservationsEnabled: false,
+  reservationsEnabled: true,
 };

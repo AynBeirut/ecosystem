@@ -51,6 +51,74 @@ function parsePaymentPeriod(raw: unknown): { periodStart: string; periodEnd: str
   return { periodStart: now, periodEnd: now };
 }
 
+const EXPENSE_CATEGORY_KEYS: Expense['category'][] = [
+  'rent',
+  'utilities',
+  'fuel',
+  'internet',
+  'maintenance',
+  'office_supplies',
+  'marketing',
+  'insurance',
+  'legal',
+  'travel',
+  'meals',
+  'payroll',
+  'other',
+];
+
+function mapFinanceExpenseCategory(raw: Record<string, unknown>): Expense['category'] {
+  const rawCat = String(raw.category || raw.organizedCategory || 'other')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, '_');
+  if ((EXPENSE_CATEGORY_KEYS as string[]).includes(rawCat)) return rawCat as Expense['category'];
+  if (rawCat.includes('payroll') || rawCat === 'payroll') return 'payroll';
+  if (rawCat.includes('rent')) return 'rent';
+  if (rawCat.includes('utilit')) return 'utilities';
+  if (rawCat.includes('fuel')) return 'fuel';
+  return 'other';
+}
+
+function normalizeFinanceExpense(raw: Record<string, unknown> & { id: string }): Expense {
+  const amount = Number(raw.amount ?? 0);
+  const paidRaw = raw.paidAmount;
+  const statusRaw = String(raw.status || '').toLowerCase();
+  let status: Expense['status'] =
+    statusRaw === 'paid' || statusRaw === 'partial' || statusRaw === 'unpaid'
+      ? (statusRaw as Expense['status'])
+      : amount > 0
+        ? 'paid'
+        : 'unpaid';
+  let paidAmount = Number(paidRaw);
+  if (!Number.isFinite(paidAmount)) {
+    paidAmount = status === 'paid' ? amount : status === 'partial' ? 0 : 0;
+  }
+  if (status === 'paid' && paidAmount <= 0 && amount > 0) paidAmount = amount;
+  const date =
+    raw.startDate ?? raw.expenseDate ?? raw.date ?? raw.createdAt ?? new Date().toISOString();
+  return {
+    id: raw.id,
+    expenseNumber: raw.expenseNumber ? String(raw.expenseNumber) : undefined,
+    name: String(raw.name || raw.description || 'Expense'),
+    description: raw.description ? String(raw.description) : undefined,
+    category: mapFinanceExpenseCategory(raw),
+    type: raw.type === 'recurring' ? 'recurring' : 'one-time',
+    recurrenceInterval: raw.recurrenceInterval as Expense['recurrenceInterval'],
+    amount,
+    startDate: String(date),
+    endDate: raw.endDate ? String(raw.endDate) : undefined,
+    paymentMethod: (raw.paymentMethod as Expense['paymentMethod']) || 'cash',
+    status,
+    paidAmount,
+    notes: raw.notes ? String(raw.notes) : undefined,
+    supplierId: raw.supplierId ? String(raw.supplierId) : undefined,
+    vendorName: raw.vendorName ? String(raw.vendorName) : undefined,
+    createdAt: String(raw.createdAt ?? date),
+    updatedAt: String(raw.updatedAt ?? date),
+  };
+}
+
 function mapTopLevelSalaryToStaffPayment(id: string, data: Record<string, unknown>): StaffPayment {
   const { periodStart, periodEnd } = parsePaymentPeriod(data.paymentPeriod);
   const statusRaw = String(data.status || 'paid').toLowerCase();
@@ -95,8 +163,12 @@ export async function loadAccountingFromFirestore(storeId: string): Promise<Acco
   ]);
 
   const byId = new Map<string, Expense>();
-  for (const exp of operationalLegacy) byId.set(exp.id, exp);
-  for (const exp of expensesRaw) byId.set(exp.id, exp);
+  for (const exp of operationalLegacy) {
+    byId.set(exp.id, normalizeFinanceExpense(exp as Record<string, unknown> & { id: string }));
+  }
+  for (const exp of expensesRaw) {
+    byId.set(exp.id, normalizeFinanceExpense(exp as Record<string, unknown> & { id: string }));
+  }
   const expenses = [...byId.values()];
   let normalizedStaffPayments = staffPayments;
   if (normalizedStaffPayments.length === 0) {

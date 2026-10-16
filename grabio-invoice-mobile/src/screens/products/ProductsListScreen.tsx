@@ -38,7 +38,7 @@ export default function ProductsListScreen() {
           <Text style={styles.addText}>+ New</Text>
         </TouchableOpacity>
       </View>
-      <TextInput style={styles.search} placeholder="Search products…" value={search} onChangeText={setSearch} />
+      <TextInput style={styles.search} placeholder="Search products…" placeholderTextColor={COLORS.textMuted} value={search} onChangeText={setSearch} />
       <FlatList
         data={filtered}
         keyExtractor={(i) => i.id}
@@ -59,12 +59,12 @@ export default function ProductsListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background, paddingTop: 16 },
   header: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 16, marginBottom: 8 },
-  title: { fontSize: 24, fontWeight: '700' },
+  title: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary },
   addBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.md },
   addText: { color: '#fff', fontWeight: '700' },
-  search: { marginHorizontal: 16, marginBottom: 8, backgroundColor: COLORS.surface, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.border },
+  search: { marginHorizontal: 16, marginBottom: 8, backgroundColor: COLORS.surface, color: COLORS.textPrimary, borderRadius: RADIUS.md, padding: 12, borderWidth: 1, borderColor: COLORS.border },
   card: { marginHorizontal: 16, marginBottom: 10, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 14, ...SHADOW.sm },
-  cardTitle: { fontWeight: '700' },
+  cardTitle: { fontWeight: '700', color: COLORS.textPrimary },
   price: { color: COLORS.primary, fontWeight: '700', marginTop: 4 },
   meta: { color: COLORS.textSecondary, marginTop: 4 },
   empty: { textAlign: 'center', color: COLORS.textMuted, marginTop: 40 },

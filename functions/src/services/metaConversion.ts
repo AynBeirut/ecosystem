@@ -50,6 +50,18 @@ function normalizePhoneAndHash(value: string | undefined): string | undefined {
   return createHash('sha256').update(normalized).digest('hex');
 }
 
+function normalizeMetaCatalogContentIds(ids: unknown[]): string[] {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const raw of ids) {
+    const id = String(raw || '').trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(id);
+  }
+  return out;
+}
+
 function extractMetaError(payload: unknown): string {
   if (typeof payload === 'object' && payload !== null) {
     const maybeError = payload as { error?: { message?: string } };
@@ -193,9 +205,11 @@ export async function trackOrderPurchaseConversion(orderId: string, orderData: R
 
   const total = Number(orderData.total || 0);
   const currency = String(orderData.currency || 'USD').trim() || 'USD';
-  const contentIds = Array.isArray(orderData.items)
-    ? (orderData.items as Array<{ productId?: string }>).map((item) => String(item.productId || '').trim()).filter(Boolean)
-    : [];
+  const contentIds = normalizeMetaCatalogContentIds(
+    Array.isArray(orderData.items)
+      ? (orderData.items as Array<{ productId?: string }>).map((item) => item.productId)
+      : [],
+  );
 
   await trackMetaConversion({
     storeId,
@@ -208,6 +222,9 @@ export async function trackOrderPurchaseConversion(orderId: string, orderData: R
       currency,
       content_ids: contentIds,
       content_type: 'product',
+      ...(contentIds.length > 0
+        ? { contents: contentIds.map((id) => ({ id, quantity: 1 })) }
+        : {}),
     },
     userData: {
       email: String(orderData.customerEmail || ''),

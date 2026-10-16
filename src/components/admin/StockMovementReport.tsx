@@ -12,7 +12,6 @@ import { getActualStoreId } from '@/lib/storeUtils';
 import { useStoreCurrency } from '@/hooks/useStoreCurrency';
 import { exportToCSV } from '@/lib/exportUtils';
 import { normalizeDateRange, quarterBounds, currentVatQuarter } from '@/lib/reportPeriodPresets';
-import AllowOutOfStockSalesToggle from '@/components/admin/AllowOutOfStockSalesToggle';
 import { buildStockMovements } from '@/lib/stockListReports';
 
 export default function StockMovementReport() {
@@ -77,20 +76,17 @@ export default function StockMovementReport() {
 
   return (
     <AdminPanel>
-      <div className="p-4 space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
+      <div className="space-y-3 p-3 md:p-4">
+        <div className="flex flex-wrap items-start justify-between gap-2">
           <div>
-            <h2 className="text-lg font-semibold">Inventory &amp; stock movement</h2>
-            <p className="text-sm text-muted-foreground">
-              Line-level stock in/out from sales and purchases — use From / To dates (Q1–Q4 for VAT quarters).
+            <h2 className="text-base font-semibold">Stock movement</h2>
+            <p className="text-xs text-muted-foreground">
+              Sales &amp; purchases by period — Q1–Q4 shortcuts below.
             </p>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <AllowOutOfStockSalesToggle compact />
-            <Button type="button" size="sm" variant="outline" onClick={exportCsv}>
-              <Download className="h-4 w-4 mr-1" /> Export CSV
-            </Button>
-          </div>
+          <Button type="button" size="sm" variant="outline" className="h-8 text-xs" onClick={exportCsv}>
+            <Download className="h-3.5 w-3.5 mr-1" /> Export CSV
+          </Button>
         </div>
 
         <ReportPeriodToolbar
@@ -108,22 +104,22 @@ export default function StockMovementReport() {
           className="h-9 max-w-md"
         />
 
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
-          <div className="rounded-lg border p-3">
-            <p className="text-muted-foreground">Purchase in (qty)</p>
-            <p className="text-xl font-semibold text-emerald-700">{totals.purchaseIn}</p>
+        <div className="grid grid-cols-2 gap-2 text-xs md:grid-cols-4 md:gap-3">
+          <div className="rounded-md border px-2.5 py-2">
+            <p className="text-muted-foreground">Purchase in</p>
+            <p className="text-lg font-semibold tabular-nums text-emerald-700">{totals.purchaseIn}</p>
           </div>
-          <div className="rounded-lg border p-3">
-            <p className="text-muted-foreground">Sales out (qty)</p>
-            <p className="text-xl font-semibold text-orange-700">{totals.salesOut}</p>
+          <div className="rounded-md border px-2.5 py-2">
+            <p className="text-muted-foreground">Sales out</p>
+            <p className="text-lg font-semibold tabular-nums text-orange-700">{totals.salesOut}</p>
           </div>
-          <div className="rounded-lg border p-3">
+          <div className="rounded-md border px-2.5 py-2">
             <p className="text-muted-foreground">Net qty</p>
-            <p className="text-xl font-semibold">{totals.netQty}</p>
+            <p className="text-lg font-semibold tabular-nums">{totals.netQty}</p>
           </div>
-          <div className="rounded-lg border p-3">
+          <div className="rounded-md border px-2.5 py-2">
             <p className="text-muted-foreground">Line value</p>
-            <p className="text-xl font-semibold">{money(totals.amount)}</p>
+            <p className="text-lg font-semibold tabular-nums">{money(totals.amount)}</p>
           </div>
         </div>
 

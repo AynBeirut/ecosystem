@@ -108,9 +108,22 @@ export default function AdminVPurchase() {
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
     if (!q) return materials;
-    return materials.filter(
-      (m) => m.name.toLowerCase().includes(q) || String(m.sku || '').toLowerCase().includes(q),
-    );
+    const ranked = materials
+      .map((m, index) => {
+        const name = m.name.toLowerCase();
+        const sku = String(m.sku || '').toLowerCase();
+        const words = `${name} ${sku}`.split(/[^a-z0-9]+/).filter(Boolean);
+        const rank = name.startsWith(q) || words.some((word) => word.startsWith(q))
+          ? 0
+          : name.includes(q) || sku.includes(q)
+            ? 1
+            : null;
+        return rank === null ? null : { m, index, rank };
+      })
+      .filter((row): row is { m: VMaterialLite; index: number; rank: number } => row !== null)
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .map((row) => row.m);
+    return ranked;
   }, [materials, search]);
 
   const filteredSuppliers = useMemo(() => {

@@ -134,10 +134,19 @@ import { useFinanceEmbed } from "@/context/FinanceEmbedContext";
 import { useFinanceShellState } from "@/context/FinanceShellStateContext";
 
 function monthBounds(year: number, month: number): { start: string; end: string } {
-  const start = `${year}-${String(month).padStart(2, "0")}-01`;
-  const lastDay = new Date(year, month, 0).getDate();
-  const end = `${year}-${String(month).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+  const safeYear = Number.isFinite(year) ? year : new Date().getFullYear();
+  const safeMonth = Number.isFinite(month) && month >= 1 && month <= 12 ? month : new Date().getMonth() + 1;
+  const start = `${safeYear}-${String(safeMonth).padStart(2, "0")}-01`;
+  const lastDay = new Date(safeYear, safeMonth, 0).getDate();
+  const end = `${safeYear}-${String(safeMonth).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
   return { start, end };
+}
+
+function toNoonIsoOrNull(ymd: string): string | null {
+  const value = String(ymd || "").slice(0, 10);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+  const d = new Date(`${value}T12:00:00.000Z`);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
 }
 
 type AccountingTabDef = {
@@ -838,7 +847,8 @@ const Accounting = () => {
 
   const depPreview = useMemo(() => {
     const end = monthBounds(depYear, depMonth).end;
-    const locked = isDateLocked(new Date(`${end}T12:00:00.000Z`).toISOString());
+    const endIso = toNoonIsoOrNull(end);
+    const locked = endIso ? isDateLocked(endIso) : false;
     return buildDepreciationRunPreview(fixedAssets, depYear, depMonth, { periodLocked: locked });
   }, [fixedAssets, depYear, depMonth, isDateLocked]);
 
@@ -1001,7 +1011,12 @@ const Accounting = () => {
 
   const handlePostDepreciation = async () => {
     if (!activeOrganizationId || !depPreview.canPost) return;
-    if (isDateLocked(new Date(`${depPreview.postDate}T12:00:00.000Z`).toISOString())) {
+    const postDateIso = toNoonIsoOrNull(depPreview.postDate);
+    if (!postDateIso) {
+      toast.error("Invalid depreciation post date.");
+      return;
+    }
+    if (isDateLocked(postDateIso)) {
       toast.error("That period is closed.");
       return;
     }
@@ -2232,7 +2247,13 @@ const Accounting = () => {
                   <div className="flex flex-wrap gap-4">
                     <div>
                       <Label>Run month</Label>
-                      <Select value={String(depMonth)} onValueChange={(v) => setDepMonth(Number(v))}>
+                      <Select
+                        value={String(depMonth)}
+                        onValueChange={(v) => {
+                          const parsed = Number(v);
+                          setDepMonth(Number.isFinite(parsed) && parsed >= 1 && parsed <= 12 ? parsed : new Date().getMonth() + 1);
+                        }}
+                      >
                         <SelectTrigger className="w-[140px]">
                           <SelectValue />
                         </SelectTrigger>
@@ -2247,7 +2268,13 @@ const Accounting = () => {
                     </div>
                     <div>
                       <Label>Year</Label>
-                      <Select value={String(depYear)} onValueChange={(v) => setDepYear(Number(v))}>
+                      <Select
+                        value={String(depYear)}
+                        onValueChange={(v) => {
+                          const parsed = Number(v);
+                          setDepYear(Number.isFinite(parsed) && parsed >= 2000 && parsed <= 2100 ? parsed : new Date().getFullYear());
+                        }}
+                      >
                         <SelectTrigger className="w-[100px]">
                           <SelectValue />
                         </SelectTrigger>

@@ -1,0 +1,88 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "pulledAt": "2026-09-20T09:51:18.439Z",
+  "evaOnPayroll": [
+    {
+      "id": "U0Lhm2nlggMX0xLLOeNN",
+      "name": "Eva Maalouly"
+    }
+  ],
+  "evaVisibleOnSupplierList": [],
+  "employeeVisibleOnSupplierList": [],
+  "counts": {
+    "suppliersCollectionAll": 478,
+    "visibleOnSupplierList": 120,
+    "invoiceLikeVisible": 17,
+    "likelyRealVisible": 103
+  },
+  "invoiceLikeVisibleSample": [
+    {
+      "id": "lh-sup-1d07780aa939a68d",
+      "name": "Ashwe (Wissam Mansour)"
+    },
+    {
+      "id": "lh-sup-2d14ee89dc17d72d",
+      "name": "Event Megastore ( Workshops & Birthdays )"
+    },
+    {
+      "id": "lh-sup-4011bcc71c6b44de",
+      "name": "Fady Tanjeed (11*12$) +36$"
+    },
+    {
+      "id": "lh-sup-4e46b33d0fefe87c",
+      "name": "Geryes Malek (Brocoli)"
+    },
+    {
+      "id": "lh-sup-5623a5b6abd5ef9a",
+      "name": "Youssef Aalaf & Maintenance Car ( Thaer)"
+    },
+    {
+      "id": "lh-sup-581239b67bee220b",
+      "name": "Storium Worksho  23-5 & Barbecue 24-5"
+    },
+    {
+      "id": "lh-sup-595d975c85438a1a",
+      "name": "Social Media ( Sara, Sanaa) July"
+    },
+    {
+      "id": "lh-sup-67a25148d78794c3",
+      "name": "Storium (Lycee Montaigne Activites)"
+    },
+    {
+      "id": "lh-sup-7db5e0643a67db2e",
+      "name": "For sanaa From Yesterday ( Maken Fi Frata)"
+    },
+    {
+      "id": "lh-sup-9ce4a79bdbe58ff3",
+      "name": "Maliks (Print Out )"
+    },
+    {
+      "id": "lh-sup-c049796d15fc348e",
+      "name": "Maasri Hostein ( lspp)"
+    },
+    {
+      "id": "lh-sup-c0e53a32595121ed",
+      "name": "Wooden Backery (Bouchee Burgers)"
+    },
+    {
+      "id": "lh-sup-c46fe3b30c0f7c41",
+      "name": "Anti Fly Fan (Marwaha Lal Deben)"
+    },
+    {
+      "id": "lh-sup-e6af0997cc077445",
+      "name": "Librarie Mallah ( Oui Oui Nursery)"
+    },
+    {
+      "id": "lh-sup-fd7dee87ec0c51d6",
+      "name": "Hammok ( Marjouha Mlawane)"
+    },
+    {
+      "id": "lh-sup-fe4503a60b93de69",
+      "name": "Mont Liban ( Dry Milk, Gabbrovet, ,,,,)"
+    },
+    {
+      "id": "lh-sup-fe7ccefb99f19ea4",
+      "name": "Boucherie Ziad (Mafroume)"
+    }
+  ]
+}

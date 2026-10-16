@@ -1,0 +1,12 @@
+---
+description: Prevent opaque IDs in business document numbering and user-facing labels
+globs: **/*.{ts,tsx,js,jsx}
+alwaysApply: false
+---
+
+# No Opaque IDs In Business Documents
+
+- Never show Firestore IDs, POS sync IDs, random tokens, or sliced IDs in customer/admin-facing labels, PDF filenames, document titles, memos, emails, or print output.
+- Use business document numbers instead: `invoiceNumber`, `orderNumber`, `poNumber`, voucher numbers, bill numbers, or generated date-based refs.
+- If a legacy document has no human number, show an explicit unnumbered label such as `INV-UNNUMBERED`; do not fall back to `id`, `id.slice(...)`, or `sourceId`.
+- Internal database fields like `referenceId`, Firestore doc IDs, and idempotency keys may still store opaque IDs, but they must not become display text.

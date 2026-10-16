@@ -13,12 +13,15 @@ import { Plus, Trash, Share2, FileDown, Phone, Eye, X, User } from "lucide-react
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableCombobox } from "@/components/SearchableCombobox";
-import { CURRENCIES } from "@/services/mockData";
+import { StoreCurrencyField, useStoreDocumentCurrencies, clampStoreCurrency } from "@/components/StoreCurrencyField";
+import { usePartyCurrencyAccounts } from "@/hooks/usePartyCurrencyAccounts";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
+import { formatDualCurrency } from "@/lib/utils";
+import { useReportExchangeRate } from "@/hooks/useReportExchangeRate";
 import { useNavigate } from "react-router-dom";
 import AccountingSideSheet from "@/components/AccountingSideSheet";
 import ShareSheet from "@/components/ShareSheet";
@@ -54,7 +57,7 @@ const InvoiceManager = () => {
   const { enabled: systemGuideEnabled } = useSystemGuide();
   const [activeTab, setActiveTab] = useState<string>("list");
   const [editingInvoiceId, setEditingInvoiceId] = useState<string | null>(null);
-  const [lineItems, setLineItems] = useState<Array<{ id: string, description: string, quantity: number, unitPrice: number, subtotal: number }>>([]);
+  const [lineItems, setLineItems] = useState<Array<{ id: string, description: string, quantity: number, unitPrice: number, subtotal: number, currency?: string, accountCode?: string }>>([]);
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
@@ -100,6 +103,23 @@ const InvoiceManager = () => {
       paymentMethod: "",
     },
   });
+  const { codes: storeCurrencies, main: storeCurrency } = useStoreDocumentCurrencies();
+  const { usdToLbp } = useReportExchangeRate();
+  const clientId = form.watch("clientId");
+  const { accountFor } = usePartyCurrencyAccounts("client", clientId);
+  const stampLines = (items: typeof lineItems, docCurrency: string) => {
+    const currency = clampStoreCurrency(docCurrency, storeCurrencies, storeCurrency);
+    return items.map((item) => ({
+      ...item,
+      currency,
+      accountCode: accountFor(currency)?.code || "",
+    }));
+  };
+  useEffect(() => {
+    if (editingInvoiceId) return;
+    const current = String(form.getValues("currency") || "").toUpperCase();
+    if (!storeCurrencies.includes(current)) form.setValue("currency", storeCurrency);
+  }, [editingInvoiceId, form, storeCurrency, storeCurrencies]);
 
   const handleAddLineItem = () => {
     const newItem = {
@@ -107,7 +127,8 @@ const InvoiceManager = () => {
       description: "",
       quantity: 1,
       unitPrice: 0,
-      subtotal: 0
+      subtotal: 0,
+      currency: clampStoreCurrency(form.getValues("currency"), storeCurrencies, storeCurrency),
     };
     setLineItems([...lineItems, newItem]);
   };
@@ -173,8 +194,8 @@ const InvoiceManager = () => {
   const productOptions = useMemo(
     () => products.map((product) => ({
       value: product.id,
-      label: `${product.name} — $${product.salePrice.toFixed(2)}`,
-      keywords: product.sku || product.category || '',
+      label: product.name,
+      keywords: [product.sku, product.category].filter(Boolean).join(' '),
     })),
     [products],
   );
@@ -191,7 +212,7 @@ const InvoiceManager = () => {
     form.reset({
       customer: "",
       clientId: "",
-      currency: "USD",
+      currency: storeCurrency,
       tax: 0,
       discount: 0,
       notes: "",
@@ -207,7 +228,7 @@ const InvoiceManager = () => {
     clientId?: string;
     clientName?: string;
     currency?: string;
-    items?: Array<{ id: string; description: string; quantity: number; unitPrice: number; subtotal: number }>;
+    items?: Array<{ id: string; description: string; quantity: number; unitPrice: number; subtotal: number; currency?: string; accountCode?: string }>;
     tax?: number;
     discount?: number;
     notes?: string;
@@ -232,6 +253,8 @@ const InvoiceManager = () => {
         quantity: item.quantity || 1,
         unitPrice: item.unitPrice || 0,
         subtotal: item.subtotal || (item.quantity || 0) * (item.unitPrice || 0),
+        currency: item.currency || invoice.currency || storeCurrency,
+        accountCode: item.accountCode || "",
       })),
     );
     setActiveTab("create");
@@ -281,6 +304,7 @@ const InvoiceManager = () => {
       return;
     }
 
+    const stamped = stampLines(lineItems, values.currency);
     const totals = calculateTotals();
     console.log("[InvoiceManager] Calculated totals:", totals);
 
@@ -290,8 +314,8 @@ const InvoiceManager = () => {
           clientId: values.clientId || "",
           clientName: values.customer,
           amount: totals.total,
-          currency: values.currency,
-          items: lineItems,
+          currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
+          items: stamped,
           tax: values.tax,
           discount: values.discount,
           total: totals.total,
@@ -333,8 +357,8 @@ const InvoiceManager = () => {
         clientId: values.clientId || "",
         clientName: values.customer,
         amount: totals.total,
-        currency: values.currency,
-        items: lineItems,
+        currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
+        items: stamped,
         tax: values.tax,
         discount: values.discount,
         total: totals.total,
@@ -411,7 +435,7 @@ const InvoiceManager = () => {
         discount: values.discount,
         subtotal: totals.subtotal,
         total: totals.total,
-        currency: values.currency,
+        currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
         date: new Date().toLocaleDateString(),
         notes: values.notes,
         company: user?.company,
@@ -500,6 +524,7 @@ const InvoiceManager = () => {
                 <InvoiceList 
                   onPreview={handlePreviewInvoice}
                   onSend={handleSendInvoice}
+                  onExport={handleExportInvoice}
                   onEdit={handleEditInvoice}
                 />
               </div>
@@ -607,7 +632,7 @@ const InvoiceManager = () => {
                       <div className="space-y-4">
                         {lineItems.map((item, index) => (
                           <div key={item.id} className="grid grid-cols-12 gap-2 items-end border p-3 rounded-md">
-                            <div className="col-span-12 md:col-span-6">
+                            <div className="col-span-12 md:col-span-5">
                               <label className="text-sm font-medium mb-1 block">Description</label>
                               <div className="flex flex-col space-y-2">
                                 {products.length > 0 && (
@@ -641,7 +666,7 @@ const InvoiceManager = () => {
                                 placeholder="0.00"
                               />
                             </div>
-                            <div className="col-span-3 md:col-span-1 text-right">
+                            <div className="col-span-3 md:col-span-2 text-right">
                               <label className="text-sm font-medium mb-1 block">Subtotal</label>
                               <div className="py-2 px-1 text-right">
                                 ${(item.quantity * item.unitPrice).toFixed(2)}
@@ -719,7 +744,7 @@ const InvoiceManager = () => {
                       </div>
                       
                       <div className="text-right text-lg">Total:</div>
-                      <div className="text-right text-lg font-bold">${totals.total.toFixed(2)}</div>
+                      <div className="text-right text-lg font-bold">{formatDualCurrency(totals.total, form.watch("currency") || storeCurrency, usdToLbp)}</div>
                     </div>
                   </div>
                   
@@ -742,24 +767,7 @@ const InvoiceManager = () => {
                       control={form.control}
                       name="currency"
                       render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Currency</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select currency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {CURRENCIES.map(currency => (
-                                <SelectItem key={currency.code} value={currency.code}>
-                                  {currency.code} - {currency.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
+                        <StoreCurrencyField value={field.value} onChange={field.onChange} />
                       )}
                     />
 
@@ -936,7 +944,7 @@ const InvoiceManager = () => {
                     </div>
                     <div className="flex justify-between py-2 font-bold border-t">
                       <span>Total:</span>
-                      <span>{previewInvoiceData.currency} {previewInvoiceData.total?.toFixed(2)}</span>
+                      <span>{formatDualCurrency(Number(previewInvoiceData.total) || 0, previewInvoiceData.currency, usdToLbp)}</span>
                     </div>
                   </div>
                 </div>

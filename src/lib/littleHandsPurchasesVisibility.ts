@@ -1,6 +1,8 @@
 import type { Purchase, Supplier } from '@/types/inventory';
 import type { StoreProfile } from '@/types/storeProfile';
 import { belongsOnLittleHandsPurchasesPage } from '@/lib/littleHandsPurchasesEligibility';
+import { shouldShowOnLittleHandsSupplierList } from '@/lib/littleHandsSupplierListEligibility';
+import { dedupeLittleHandsSuppliersByDisplayName } from '@/lib/littleHandsSupplierDedupe';
 
 const CASH_BOOK_SOT = 'littlehands-cash-book-2026-09-12';
 
@@ -17,6 +19,17 @@ function isPosPurchase(p: Purchase): boolean {
   const src = String((p as Purchase & { source?: string }).source || '');
   if (src === 'pos') return true;
   return p.id.startsWith('pos-');
+}
+
+/** PO created in admin (not cash-book import). */
+function isLittleHandsManualPurchase(p: Purchase): boolean {
+  if (p.archivedForPurchasesUi || p.purchasesPageEligible === false) return false;
+  if (p.importKey?.startsWith('lh-cashbook-') || p.isSourceOfTruth) return false;
+  const src = String((p as Purchase & { source?: string }).source || '');
+  if (src.includes('littlehands-cash-book') || src === 'pos') return false;
+  if (p.id.startsWith('pos-')) return false;
+  if (p.organizedCategory && p.organizedCategory !== 'production_input') return false;
+  return true;
 }
 
 function isCashBookPurchase(p: Purchase): boolean {
@@ -43,20 +56,39 @@ export function filterPurchasesForStore(purchases: Purchase[], profile: StorePro
   if (!littleHandsUsesCashBookPurchases(profile)) {
     return purchases.filter((p) => !p.archivedForPurchasesUi);
   }
-  return purchases.filter((p) => isCashBookPurchase(p) && !isPosPurchase(p) && !isLegacyPosNoise(p));
+  return purchases.filter((p) => {
+    if (isPosPurchase(p) || isLegacyPosNoise(p)) return false;
+    return isCashBookPurchase(p) || isLittleHandsManualPurchase(p);
+  });
+}
+
+/** Admin / menu-created vendors (not cash-book import, not POS sync). */
+export function isAdminManagedSupplier(s: Supplier): boolean {
+  const ext = s as Supplier & { purchasesPageEligible?: boolean };
+  if (ext.purchasesPageEligible === true) return true;
+  const source = String(s.source || '').toLowerCase();
+  if (source === 'admin_manual' || source === 'admin' || source === 'ocr') return true;
+  if (s.id.startsWith('pos-') || source === 'pos') return false;
+  if (s.isSourceOfTruth || s.id.startsWith('lh-sup-')) return false;
+  const importSrc = String(s.importSource || '');
+  if (importSrc.includes('littlehands-cash-book')) return false;
+  return Boolean(s.supplierCode || s.name);
 }
 
 export function filterSuppliersForStore(suppliers: Supplier[], profile: StoreProfile | null | undefined): Supplier[] {
-  if (!littleHandsUsesCashBookPurchases(profile)) {
-    return suppliers.filter((s) => s.status !== 'inactive' && !s.archivedForPurchasesUi);
-  }
-  return suppliers.filter((s) => {
-    if (s.archivedForPurchasesUi) return false;
+  const lhCashBook = littleHandsUsesCashBookPurchases(profile);
+  const filtered = suppliers.filter((s) => {
+    if (s.status === 'inactive' || s.archivedForPurchasesUi) return false;
+    if (s.id.startsWith('lh-sup-') && !shouldShowOnLittleHandsSupplierList(s.name || '')) return false;
+    if (!lhCashBook) return true;
     if (s.id.startsWith('pos-') || (s as Supplier & { source?: string }).source === 'pos') return false;
+    if (isAdminManagedSupplier(s)) return true;
     if (s.isSourceOfTruth || s.id.startsWith('lh-sup-')) return true;
     const src = String(s.importSource || (s as Supplier & { importSource?: string }).importSource || '');
     return src.includes('littlehands-cash-book');
   });
+  if (!lhCashBook) return filtered;
+  return dedupeLittleHandsSuppliersByDisplayName(filtered);
 }
 
 export { CASH_BOOK_SOT };

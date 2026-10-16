@@ -1,5 +1,7 @@
 import type { StoreEntitlements } from '@/lib/entitlements';
 import {
+  canAccessHrPayroll,
+  canAccessOfficialHr,
   canAccessRestaurantFinance,
   canAccessRestaurantInventory,
   canAccessSeoOps,
@@ -18,7 +20,10 @@ export type GatedAdminFeature =
   | 'seo'
   | 'builder'
   | 'reservations'
-  | 'pos';
+  | 'pos'
+  | 'hr'
+  | 'venue_ops'
+  | 'payroll';
 
 export type FeatureAccessDenialReason = 'not_entitled' | 'store_toggle' | 'permission';
 
@@ -48,12 +53,26 @@ export function isPosEntitled(entitlements: StoreEntitlements | null): boolean {
 
 export function isBuilderEntitled(entitlements: StoreEntitlements | null): boolean {
   const m = entitlements?.modules ?? {};
-  return Boolean(m.builder || m.ai_builder);
+  return Boolean(m.builder || m.ai_builder || m.blog_publisher);
 }
 
 export function isSeoEntitled(entitlements: StoreEntitlements | null): boolean {
   const m = entitlements?.modules ?? {};
   return Boolean(m.blog_publisher || m.seo_assistant || m.content_creator);
+}
+
+/** Existing team module. No new package id. */
+export function isHrEntitled(entitlements: StoreEntitlements | null): boolean {
+  return Boolean(entitlements?.modules?.team);
+}
+
+/** Existing restaurant module, or a live-kitchen package/workflow. */
+export function isVenueOpsHubEntitled(entitlements: StoreEntitlements | null): boolean {
+  if (entitlements?.modules?.restaurant) return true;
+  return (
+    entitlements?.businessWorkflow === 'live_kitchen' ||
+    entitlements?.startingPackage === 'pkg_live_kitchen'
+  );
 }
 
 function storeToggleForFeature(nav: VenueOpsNavFlags, feature: GatedAdminFeature): boolean {
@@ -72,6 +91,12 @@ function storeToggleForFeature(nav: VenueOpsNavFlags, feature: GatedAdminFeature
       return nav.showReservationsNav;
     case 'pos':
       return true;
+    case 'hr':
+      return nav.showOfficialHrNav;
+    case 'venue_ops':
+      return nav.showVenueOpsHubNav;
+    case 'payroll':
+      return nav.showBusinessFinanceNav;
     default:
       return false;
   }
@@ -93,6 +118,12 @@ function userPermissionForFeature(user: FeatureAccessActor, feature: GatedAdminF
     case 'reservations':
     case 'pos':
       return canAccessVenueOperations(user);
+    case 'hr':
+      return canAccessOfficialHr(user);
+    case 'venue_ops':
+      return canAccessVenueOperations(user);
+    case 'payroll':
+      return canAccessHrPayroll(user);
     default:
       return false;
   }
@@ -113,6 +144,12 @@ function isEntitledForFeature(entitlements: StoreEntitlements | null, feature: G
     case 'reservations':
     case 'pos':
       return isPosEntitled(entitlements);
+    case 'hr':
+      return isHrEntitled(entitlements);
+    case 'venue_ops':
+      return isVenueOpsHubEntitled(entitlements);
+    case 'payroll':
+      return isFinanceEntitled(entitlements);
     default:
       return false;
   }
@@ -132,6 +169,16 @@ export function isAdminFeatureAllowed(
   if (!storeToggleForFeature(nav, feature)) return false;
   if (!userPermissionForFeature(user, feature)) return false;
   return true;
+}
+
+/** Dashboard / menu label for Staff (Payroll). Business-tools access is not enough when finance is off. */
+export function staffPayrollShortcutVisible(
+  canUseBusinessTools: boolean,
+  profile: StoreProfile | null | undefined,
+  entitlements: StoreEntitlements | null,
+  user?: FeatureAccessActor,
+): boolean {
+  return canUseBusinessTools && isAdminFeatureAllowed('payroll', profile, entitlements, user);
 }
 
 export function getAdminFeatureDenial(
@@ -154,12 +201,39 @@ export function getAdminFeatureDenial(
 }
 
 const FINANCE_PATH_PREFIXES = ['/admin/finance', '/admin/invoice-manager', '/admin/v-expense', '/admin/cash-collection', '/admin/delivery-wallet', '/admin/staff', '/admin/salaries'];
+
+/** Payroll tab under the new HR hub. Parent HR gate is applied in getAdminPathFeatureDenial. */
+export function isOfficialHrPayrollPath(pathname: string): boolean {
+  return pathname === '/admin/hr/payroll' || pathname.startsWith('/admin/hr/payroll/');
+}
+
+/**
+ * Old HR screens stay on their current gates.
+ * Staff and salaries are payroll (finance). Daily presence is not finance-gated.
+ */
+export function legacyHrRouteKind(pathname: string): 'payroll' | 'attendance' | null {
+  if (
+    pathname === '/admin/staff' ||
+    pathname.startsWith('/admin/staff/') ||
+    pathname === '/admin/salaries' ||
+    pathname.startsWith('/admin/salaries/')
+  ) {
+    return 'payroll';
+  }
+  if (pathname === '/admin/staff-presence' || pathname.startsWith('/admin/staff-presence/')) {
+    return 'attendance';
+  }
+  return null;
+}
 const INVENTORY_PATH_PREFIXES = ['/admin/inventory', '/admin/purchases', '/admin/v-purchase'];
 const SEO_PATH_PREFIXES = ['/admin/seo-'];
 const BUILDER_PATH_PREFIXES = ['/admin/theme-editor', '/admin/templates', '/admin/builder'];
 const CRM_PATH_PREFIXES = ['/admin/crm'];
 
 export function resolveGatedFeatureForAdminPath(pathname: string): GatedAdminFeature | null {
+  if (isOfficialHrPayrollPath(pathname)) return 'payroll';
+  if (pathname === '/admin/hr' || pathname.startsWith('/admin/hr/')) return 'hr';
+  if (pathname === '/admin/venue-ops' || pathname.startsWith('/admin/venue-ops/')) return 'venue_ops';
   if (FINANCE_PATH_PREFIXES.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return 'finance';
   }
@@ -187,6 +261,12 @@ export function getAdminPathFeatureDenial(
   entitlements: StoreEntitlements | null,
   user: FeatureAccessActor,
 ): FeatureAccessDenial | null {
+  if (isOfficialHrPayrollPath(pathname)) {
+    return (
+      getAdminFeatureDenial('hr', profile, entitlements, user) ??
+      getAdminFeatureDenial('payroll', profile, entitlements, user)
+    );
+  }
   const feature = resolveGatedFeatureForAdminPath(pathname);
   if (!feature) return null;
   return getAdminFeatureDenial(feature, profile, entitlements, user);
@@ -211,6 +291,10 @@ export function isVenueToggleEntitled(
       return isBuilderEntitled(entitlements);
     case 'enableSeoOps':
       return isSeoEntitled(entitlements);
+    case 'enableOfficialHr':
+      return isHrEntitled(entitlements);
+    case 'enableVenueOpsHub':
+      return isVenueOpsHubEntitled(entitlements);
     default:
       return false;
   }

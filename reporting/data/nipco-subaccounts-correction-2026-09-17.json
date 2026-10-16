@@ -1,0 +1,190 @@
+{
+  "date": "2026-09-17T16:20:49.554Z",
+  "action": "NIPCO sub-account correction",
+  "storeId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+  "changes": [
+    "Archived and deleted wrong NIPCO manager@grabio.space subAccount",
+    "Created/updated Ahmad Shaheen as NIPCO accounting subAccount",
+    "Rebound Ahmad users doc to NIPCO accounting subAccount"
+  ],
+  "before": {
+    "user": {
+      "email": "ahmadshaheen78@gmail.com",
+      "name": "Ahmad Shaheen",
+      "role": "sub_account",
+      "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+      "subAccountId": "PhG34sQUjSDNNdYBXWWc",
+      "updatedAt": "2026-07-23T15:52:02.925Z",
+      "createdAt": "2026-07-23T15:52:02.925Z",
+      "dashboardQuickActions": {
+        "customQuickActions": [],
+        "selectedQuickActionIds": [
+          "customers",
+          "orders",
+          "payments",
+          "account-statement",
+          "cash-collection",
+          "delivery-wallet",
+          "delivery",
+          "announcements",
+          "analytics",
+          "products"
+        ],
+        "updatedAt": "2026-09-08T12:10:09.038Z"
+      },
+      "dashboardQuickActionsUpdatedAt": "2026-09-08T12:10:09.038Z",
+      "assistantBriefingSentAt": "2026-09-17"
+    },
+    "wrongNipcoManager": {
+      "storeId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+      "email": "manager@grabio.space",
+      "name": "Grabio Manager",
+      "role": "manager",
+      "subAccountRole": "manager",
+      "permissions": [
+        "view_orders",
+        "create_orders",
+        "manage_orders",
+        "view_inventory",
+        "manage_inventory",
+        "view_customers",
+        "manage_customers",
+        "view_reports",
+        "manage_deliveries",
+        "process_payments"
+      ],
+      "status": "active",
+      "createdBy": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+      "createdAt": "2026-09-12T09:37:55.931Z",
+      "lastLogin": "2026-09-12T14:19:03.482Z",
+      "linkNote": "Little Hands manager — mobile binds via users.subAccountId only",
+      "updatedAt": "2026-09-13T08:41:01.622Z"
+    },
+    "ahmadNipcoAccounting": null,
+    "subAccountsByAhmadEmail": [
+      {
+        "id": "PhG34sQUjSDNNdYBXWWc",
+        "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+        "email": "ahmadshaheen78@gmail.com",
+        "name": "Ahmad Shaheen",
+        "role": "manager",
+        "permissions": [
+          "view_orders",
+          "create_orders",
+          "manage_orders",
+          "view_inventory",
+          "manage_inventory",
+          "view_customers",
+          "manage_customers",
+          "view_reports",
+          "manage_deliveries",
+          "process_payments"
+        ],
+        "status": "active",
+        "createdAt": "2026-07-23T15:52:02.925Z",
+        "createdBy": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+        "userId": "Rfvkw1MEoFduGjaxRKhz7YasCv02",
+        "updatedAt": "2026-09-07T12:27:11.481Z",
+        "lastLogin": "2026-09-09T14:31:32.586Z"
+      }
+    ]
+  },
+  "after": {
+    "user": {
+      "email": "ahmadshaheen78@gmail.com",
+      "name": "Ahmad Shaheen",
+      "role": "sub_account",
+      "createdAt": "2026-07-23T15:52:02.925Z",
+      "dashboardQuickActions": {
+        "customQuickActions": [],
+        "selectedQuickActionIds": [
+          "customers",
+          "orders",
+          "payments",
+          "account-statement",
+          "cash-collection",
+          "delivery-wallet",
+          "delivery",
+          "announcements",
+          "analytics",
+          "products"
+        ],
+        "updatedAt": "2026-09-08T12:10:09.038Z"
+      },
+      "dashboardQuickActionsUpdatedAt": "2026-09-08T12:10:09.038Z",
+      "assistantBriefingSentAt": "2026-09-17",
+      "subAccountId": "nipco-ahmad-accounting-manager",
+      "activeStoreId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+      "permissions": [
+        "view_orders",
+        "view_reports",
+        "process_payments"
+      ],
+      "storeId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+      "subAccountRole": "accounting",
+      "updatedAt": "2026-09-17T16:20:49.554Z"
+    },
+    "wrongNipcoManagerExists": false,
+    "archivedWrongNipcoManagerExists": true,
+    "ahmadNipcoAccounting": {
+      "createdAt": "2026-09-17T16:20:49.554Z",
+      "role": "accounting",
+      "sourceNote": "NIPCO accounting manager access correction 2026-09-17",
+      "createdBy": "cursor-agent-2026-09-17",
+      "permissions": [
+        "view_orders",
+        "view_reports",
+        "process_payments"
+      ],
+      "name": "Ahmad Shaheen",
+      "storeId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+      "userId": "Rfvkw1MEoFduGjaxRKhz7YasCv02",
+      "email": "ahmadshaheen78@gmail.com",
+      "status": "active",
+      "updatedAt": "2026-09-17T16:20:49.554Z"
+    },
+    "nipcoSubAccounts": [
+      {
+        "id": "nipco-ahmad-accounting-manager",
+        "email": "ahmadshaheen78@gmail.com",
+        "name": "Ahmad Shaheen",
+        "role": "accounting",
+        "status": "active",
+        "permissions": [
+          "view_orders",
+          "view_reports",
+          "process_payments"
+        ]
+      },
+      {
+        "id": "xRVKQQN78uFQpbqynbiv",
+        "email": "h.akalfouni@nip-lb.com",
+        "name": "Hadi Abou Kalfouni",
+        "role": "manager",
+        "status": "active",
+        "permissions": [
+          "view_orders",
+          "create_orders",
+          "view_inventory",
+          "view_customers",
+          "manage_customers",
+          "process_payments"
+        ]
+      },
+      {
+        "id": "pB5UbUYw06JHLRTnRftA",
+        "email": "j.sayegh@nip-lb.com",
+        "name": "Jihan Sayegh",
+        "role": "sales",
+        "status": "active",
+        "permissions": [
+          "view_orders",
+          "create_orders",
+          "view_customers",
+          "manage_customers",
+          "process_payments"
+        ]
+      }
+    ]
+  }
+}

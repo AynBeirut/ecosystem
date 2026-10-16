@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { canConfigureVenueOpsSettings, mergeVenueOpsSettingsPatch } from '@/lib/venueOpsSettingsUi';
+import { canConfigureVenueOpsSettings, hrVenueHubToggleChecked, mergeVenueOpsSettingsPatch } from '@/lib/venueOpsSettingsUi';
 import { getEffectiveVenueOpsSettings } from '@/lib/venueOpsNav';
 
 describe('venueOpsSettingsUi', () => {
@@ -16,6 +16,12 @@ describe('venueOpsSettingsUi', () => {
     });
   });
 
+  it('shows HR and Venue Ops switches on a classic store only after they are saved on', () => {
+    expect(hrVenueHubToggleChecked('enableOfficialHr', {}, null, true)).toBe(false);
+    expect(hrVenueHubToggleChecked('enableVenueOpsHub', { enableVenueOpsHub: true }, null, true)).toBe(true);
+    expect(hrVenueHubToggleChecked('enableOfficialHr', { enableOfficialHr: true }, null, false)).toBe(false);
+  });
+
   it('effective settings use live kitchen defaults when enabled', () => {
     const effective = getEffectiveVenueOpsSettings({
       businessWorkflow: 'live_kitchen',
@@ -24,5 +30,7 @@ describe('venueOpsSettingsUi', () => {
     });
     expect(effective?.enableCrmPipeline).toBe(true);
     expect(effective?.enableFullInventory).toBe(false);
+    expect(effective?.enableOfficialHr).toBe(true);
+    expect(effective?.enableVenueOpsHub).toBe(true);
   });
 });

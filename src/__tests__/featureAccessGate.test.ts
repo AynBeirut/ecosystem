@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { getAdminFeatureDenial, isAdminFeatureAllowed } from '@/lib/featureAccessGate';
+import { getAdminFeatureDenial, isAdminFeatureAllowed, staffPayrollShortcutVisible } from '@/lib/featureAccessGate';
 import type { StoreEntitlements } from '@/lib/entitlements';
 
 const baseEntitlements: StoreEntitlements = {
@@ -78,6 +78,25 @@ describe('featureAccessGate', () => {
   it('blocks builder/SEO when not entitled even if grow toggles are on', () => {
     expect(isAdminFeatureAllowed('builder', liveKitchenProfile, baseEntitlements)).toBe(false);
     expect(isAdminFeatureAllowed('seo', liveKitchenProfile, baseEntitlements)).toBe(false);
+  });
+
+  it('hides the Staff (Payroll) shortcut when the payroll gate is off', () => {
+    expect(
+      staffPayrollShortcutVisible(true, liveKitchenProfile, baseEntitlements, {
+        role: 'admin',
+        permissions: [],
+      }),
+    ).toBe(false);
+  });
+
+  it('shows the Staff (Payroll) shortcut when finance is entitled and toggled', () => {
+    const entitlements = { ...baseEntitlements, modules: { ...baseEntitlements.modules, invoicing: true } };
+    expect(
+      staffPayrollShortcutVisible(true, liveKitchenProfile, entitlements, {
+        role: 'admin',
+        permissions: [],
+      }),
+    ).toBe(true);
   });
 
   it('allows manager finance only when entitled and toggled', () => {

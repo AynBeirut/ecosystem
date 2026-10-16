@@ -1,0 +1,534 @@
+{
+  "generatedAt": "2026-09-20T10:10:43.325Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "mode": "dry-run",
+  "canonical": {
+    "supplierId": "lh-sup-406c44032aa379de",
+    "ledgerCode": "61111000030",
+    "name": "Le Marchet Selectif"
+  },
+  "purchasesRemapped": 74,
+  "suppliersArchived": [
+    {
+      "id": "lh-sup-0071e085389fb020",
+      "name": "Le Marchet Selectif ( Chedar Cheese, Tortilla Bread …)"
+    },
+    {
+      "id": "lh-sup-0218c5e5844b766a",
+      "name": "Le Marchet Selectif ( Ice, Fahem, F&V)"
+    },
+    {
+      "id": "lh-sup-0a17b949bac00341",
+      "name": "Le Marchet selectif (Birthday 5-7-2026 )"
+    },
+    {
+      "id": "lh-sup-0be1bc9e5307659e",
+      "name": "Le Marchet selectif (Birthday & Workshops )"
+    },
+    {
+      "id": "lh-sup-1188a1798b049f52",
+      "name": "Le Marchet selectif (water Beer Fruits)"
+    },
+    {
+      "id": "lh-sup-16c7f96de2bdc940",
+      "name": "Le Marchet selectif (Kiwi)"
+    },
+    {
+      "id": "lh-sup-16f8f7c455a7f75e",
+      "name": "Le Marchet Slectif (Oil, water, Fuits)"
+    },
+    {
+      "id": "lh-sup-1aa5218af1ff9e96",
+      "name": "Le Marche selectif ( Orange )"
+    },
+    {
+      "id": "lh-sup-1b36127f3a779ac0",
+      "name": "Le Marchet Selectif (Lettus Cucumber)"
+    },
+    {
+      "id": "lh-sup-2cb6850b7f91e91e",
+      "name": "Le marchet Selectif ( Fruits )"
+    },
+    {
+      "id": "lh-sup-2f6dff4034bb5c5d",
+      "name": "Le marchet Selectif ("
+    },
+    {
+      "id": "lh-sup-3016ebebcfc54a80",
+      "name": "Le Marchet Selectif (Oilv Oil, Farine)"
+    },
+    {
+      "id": "lh-sup-305a9bdde65fdc49",
+      "name": "Le Marchet Selectif (Fruits , Flour )"
+    },
+    {
+      "id": "lh-sup-3be5f7eb12334224",
+      "name": "Le Marchet selectif ( Free Play party )"
+    },
+    {
+      "id": "lh-sup-41226699da653fe2",
+      "name": "Le Marchet Selectif ( Ice, Water,Beer, Strawberry, Banan"
+    },
+    {
+      "id": "lh-sup-41ce1526ee470e09",
+      "name": "Le marchet Selectif ( Fruits Water , Mozarella Tahini)"
+    },
+    {
+      "id": "lh-sup-437c21133c7f11b9",
+      "name": "Le Marchet Selectif (Mozarella & water)"
+    },
+    {
+      "id": "lh-sup-497088e168cff85c",
+      "name": "Le Marchet Selectif ( Beer , water ,Olive Oil …)"
+    },
+    {
+      "id": "lh-sup-4b77934f87bf7884",
+      "name": "Le Marchet Selectif (Ice Water, F&V) 5-6-2026"
+    },
+    {
+      "id": "lh-sup-51979ab68db53007",
+      "name": "Le Marchet Selectif ( Foul, Cacao, )"
+    },
+    {
+      "id": "lh-sup-5383d8792ea740ed",
+      "name": "Le Marchet Selectif (Coffee Water, F&V, Tahini,)"
+    },
+    {
+      "id": "lh-sup-563a22ab727167fe",
+      "name": "Le Marchet Selectif (Birthday 29-7 & Birthday 31-7)"
+    },
+    {
+      "id": "lh-sup-57e5963f7c3830ec",
+      "name": "Le Marchet Selectif ( Wipes, Toilette Paper, Lemon )"
+    },
+    {
+      "id": "lh-sup-61f6d0b04fb024a2",
+      "name": "Le Marchet Selectif ( kitchen & Orange )"
+    },
+    {
+      "id": "lh-sup-6442adb55b93f2f8",
+      "name": "Le Marchet Selectif ( Orange, Starwberry, Ice )"
+    },
+    {
+      "id": "lh-sup-6f1c30b3c9c88c97",
+      "name": "Le Marchet Selectif (Olive,lasagna, White Vine)"
+    },
+    {
+      "id": "lh-sup-6f8cf3daa515c3bb",
+      "name": "Le marcher (Foul, orange )"
+    },
+    {
+      "id": "lh-sup-76e30e6d00d0896e",
+      "name": "Le Marchet Selectif ( Fa7em Ice water ,,,,)For Birthday"
+    },
+    {
+      "id": "lh-sup-826162377bf11700",
+      "name": "Le Marchet Selectif (Sparkling Water,Fahem, Cucumber)"
+    },
+    {
+      "id": "lh-sup-835a60ffbdb7fe5b",
+      "name": "Le Marchet Selectif (Water )"
+    },
+    {
+      "id": "lh-sup-85fd92a0d4236861",
+      "name": "Le Marchet Selectif ( Ice, fruits…)"
+    },
+    {
+      "id": "lh-sup-87cc6e2c8bda76d2",
+      "name": "Le Marchet Selectif (Water, F& V Ice )"
+    },
+    {
+      "id": "lh-sup-94d472a3523d194e",
+      "name": "Le marcher (Backing Soda ,Ice )"
+    },
+    {
+      "id": "lh-sup-a0ca458e2afafd0b",
+      "name": "Le Marche Selectif"
+    },
+    {
+      "id": "lh-sup-a1d6dd4c92d7f781",
+      "name": "Le Marchet Selectif ( Fruits, Vegerable…)"
+    },
+    {
+      "id": "lh-sup-acb0db0ae0941eb8",
+      "name": "Le Marchet Selectif ( F&V) Inv (5-6-2026)"
+    },
+    {
+      "id": "lh-sup-b0118dace71a2c0a",
+      "name": "Le Marchet Selectif Firas"
+    },
+    {
+      "id": "lh-sup-b1fda2f95ebcc5b3",
+      "name": "Le Marchet Selectif (Veg & Fruits )"
+    },
+    {
+      "id": "lh-sup-bbe3dc2badba726e",
+      "name": "Le  Marchet Selectif"
+    },
+    {
+      "id": "lh-sup-bcedf6c60d2c48e4",
+      "name": "Le Marchet Selectif ( Foul , Orange )"
+    },
+    {
+      "id": "lh-sup-c154eb5ab4ba3825",
+      "name": "Le Marchet Selectif (Old Invoices)"
+    },
+    {
+      "id": "lh-sup-c1aa89ce00479681",
+      "name": "Le Marchet Selectif (Cheese)"
+    },
+    {
+      "id": "lh-sup-c80a9c7d265e9aa1",
+      "name": "Le Marchet Selectif For Barbecue Today"
+    },
+    {
+      "id": "lh-sup-ca05ed9e45acb9f7",
+      "name": "Le Marchet Selectif ( Nabat Organic, Puck Cheddar  )"
+    },
+    {
+      "id": "lh-sup-d0f104141aa0b81b",
+      "name": "Le Marchet Ice For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-d803bcc2180a5d05",
+      "name": "Le Marchet Slectif (puck Cheese, water, Beer,wipes)"
+    },
+    {
+      "id": "lh-sup-db8d934b6157dabc",
+      "name": "Le Marchet Selectif ( Veg & Cheese, Mustard,Tuna….)"
+    },
+    {
+      "id": "lh-sup-de8925c02febe3d6",
+      "name": "Le Marchet Selectif ( Veg, Fruits, Pasta , water , Mayo"
+    },
+    {
+      "id": "lh-sup-e00a91772e3c1a01",
+      "name": "Le Marchet Fruits For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-e19ad91f9e0fa746",
+      "name": "Le Marchet Selectif For Bar Water & Fruits"
+    },
+    {
+      "id": "lh-sup-e72c0c11ed4d08df",
+      "name": "Le Marchet Selectif (Salt Orange  )"
+    },
+    {
+      "id": "lh-sup-f72e4fd5ee9b3442",
+      "name": "Le Marchet Selectif ( Ice, Lazagna, Water…)"
+    },
+    {
+      "id": "lh-sup-fa90f57e7aa0d7cb",
+      "name": "Le marcher"
+    },
+    {
+      "id": "lh-sup-fbef6ca194ab232f",
+      "name": "Le Marchet selectif Birthday (17-18)"
+    }
+  ],
+  "pcgArchived": [
+    {
+      "id": "0ij36UI3FdfJAhCQjRO0",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Wipes, Toilette Paper, Lemon )"
+    },
+    {
+      "id": "2FRTP3LtrmyDgN3liXlZ",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif For Barbecue Today"
+    },
+    {
+      "id": "30p0G1tQ5J93z8VRYTKP",
+      "code": "61111000097",
+      "name": "Le marchet Selectif ( Fruits Water , Mozarella Tahini)"
+    },
+    {
+      "id": "3QKJudchHu6PAbmCHKgL",
+      "code": "61111000054",
+      "name": "Le Marche selectif ( Orange )"
+    },
+    {
+      "id": "3cNEq2nWwp2lqRfgBQ3W",
+      "code": "61111000097",
+      "name": "Le Marchet selectif ( Free Play party )"
+    },
+    {
+      "id": "4i7foL5cMTptq8WtZiIH",
+      "code": "61111000054",
+      "name": "Le Marche selectif ( Orange )"
+    },
+    {
+      "id": "5UquqvVyCWXFEmzIq3Pp",
+      "code": "61111000078",
+      "name": "Le Marchet selectif (Birthday & Workshops )"
+    },
+    {
+      "id": "5bTOgIFMaCIYajSUHY5z",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Water, F& V Ice )"
+    },
+    {
+      "id": "5c7pua9hxMNElYeq2Zyn",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif For Bar Water & Fruits"
+    },
+    {
+      "id": "6LwrVpeu668tuY7L5PHD",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Ice, fruits…)"
+    },
+    {
+      "id": "6PTlF9p4JAQIdGdxRTnu",
+      "code": "61111000097",
+      "name": "Le Marchet Fruits For Birthday 9-5-"
+    },
+    {
+      "id": "6mo1nxkWWk1WPbUArjEu",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Cheese)"
+    },
+    {
+      "id": "7n89mxN0z2cJj4IfQroy",
+      "code": "61111000097",
+      "name": "Le marcher"
+    },
+    {
+      "id": "7xuee7Eyol1LMdoKRUb1",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Ice, Water,Beer, Strawberry, Banan"
+    },
+    {
+      "id": "BEBrkWOQupV42M6uOv7i",
+      "code": "61111000097",
+      "name": "Le Marche Selectif"
+    },
+    {
+      "id": "CRU8TljdeOoktl0WfUd7",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Mozarella & water)"
+    },
+    {
+      "id": "CUAqaXPW5XaEnOo12uAh",
+      "code": "61111000035",
+      "name": "Le Marchet Selectif Firas"
+    },
+    {
+      "id": "FH1NLR4dFSKuoqBAScWI",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Coffee Water, F&V, Tahini,)"
+    },
+    {
+      "id": "FW7o2PK7ne3OWuGVDmY3",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Old Invoices)"
+    },
+    {
+      "id": "Fy4YusALRgh4JQmM1JDN",
+      "code": "61111000078",
+      "name": "Le Marchet selectif (Birthday & Workshops )"
+    },
+    {
+      "id": "GziUH3DrjqRDQZePpav5",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Ice Water, F&V) 5-6-2026"
+    },
+    {
+      "id": "IMH5KY4bXxNqOpOnbDJD",
+      "code": "61111000097",
+      "name": "Le marchet Selectif ("
+    },
+    {
+      "id": "K39PHbRizlTzv7bIGK7z",
+      "code": "61111000053",
+      "name": "Le Marchet Selectif ( Ice, Lazagna, Water…)"
+    },
+    {
+      "id": "MA8h3ldH22z5bVoI8TFo",
+      "code": "61111000092",
+      "name": "Le Marchet Selectif ( Foul, Cacao, )"
+    },
+    {
+      "id": "MMyURZxyMbfGdSzPy78r",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Salt Orange  )"
+    },
+    {
+      "id": "NSyXv4M34ACMnlaZDIqK",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Ice, Fahem, F&V)"
+    },
+    {
+      "id": "NbRNDg4MWRf4WmCYz58c",
+      "code": "61111000035",
+      "name": "Le Marchet Selectif Firas"
+    },
+    {
+      "id": "NpeEdCwLNKIKk9XDvqG1",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Fruits , Flour )"
+    },
+    {
+      "id": "OXRhoFTPK0wxJSy0okVF",
+      "code": "61111000097",
+      "name": "Le Marchet selectif"
+    },
+    {
+      "id": "SGsTrX6uioYC7Er0Q5DI",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Lettus Cucumber)"
+    },
+    {
+      "id": "Uf8RTGT0SebsQ4noaop6",
+      "code": "61111000063",
+      "name": "Le Marchet selectif Birthday (17-18)"
+    },
+    {
+      "id": "XYsN0TyNfCgATpamvC5g",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Fa7em Ice water ,,,,)For Birthday"
+    },
+    {
+      "id": "ZsSHF7OU03sHrpF1EXMM",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Nabat Organic, Puck Cheddar  )"
+    },
+    {
+      "id": "aGGMoJY7EUdHPASeuvuh",
+      "code": "61111000097",
+      "name": "Le Marchet selectif (Birthday 5-7-2026 )"
+    },
+    {
+      "id": "cAy1xUpDs2gdgvhBgrXF",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Beer , water ,Olive Oil …)"
+    },
+    {
+      "id": "egQFEeK6Dfvu9L7bEIAe",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Water )"
+    },
+    {
+      "id": "f3r5O38WSWVLB1JXvQ8x",
+      "code": "61111000097",
+      "name": "Le marchet Selectif ( Fruits )"
+    },
+    {
+      "id": "fWKoye1iDxUlkZB1fom7",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( kitchen & Orange )"
+    },
+    {
+      "id": "hwKOiPL5udLVETNyRUkl",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Chedar Cheese, Tortilla Bread …)"
+    },
+    {
+      "id": "jkysRYAIgxwWQrl4ZSym",
+      "code": "61111000097",
+      "name": "Le Marchet Slectif (Oil, water, Fuits)"
+    },
+    {
+      "id": "kOsV0bKUbQedLjDJNA0b",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Veg & Fruits )"
+    },
+    {
+      "id": "lsYSfhUHvy89Abv3flnN",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Veg & Cheese, Mustard,Tuna….)"
+    },
+    {
+      "id": "mHQG6V02CRZ9x3FmufdV",
+      "code": "61111000097",
+      "name": "Le marcher (Foul, orange )"
+    },
+    {
+      "id": "nvvT0phB9WzIdH27Xc6x",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Oilv Oil, Farine)"
+    },
+    {
+      "id": "obLkkazzrIYzlnt9zdWk",
+      "code": "61111000030",
+      "name": "Le Marche Selectif"
+    },
+    {
+      "id": "r5b7Tj9md14fvNAOEdwC",
+      "code": "61111000092",
+      "name": "Le Marchet Selectif ( Foul, Cacao, )"
+    },
+    {
+      "id": "rbJU847c0gtOprDIDOgs",
+      "code": "61111000097",
+      "name": "Le Marchet Slectif (puck Cheese, water, Beer,wipes)"
+    },
+    {
+      "id": "wXfapv3KVxqE45EbOa4A",
+      "code": "61111000097",
+      "name": "Le marcher (Backing Soda ,Ice )"
+    },
+    {
+      "id": "wkso86Fa6KoUXYz29h1Q",
+      "code": "61111000053",
+      "name": "Le Marchet Selectif ( Ice, Lazagna, Water…)"
+    },
+    {
+      "id": "wp7bw0q72IZArfK0FEkx",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Birthday 29-7 & Birthday 31-7)"
+    },
+    {
+      "id": "wy6yVB2ddSIX1FM5WMPj",
+      "code": "61111000097",
+      "name": "Le Marchet selectif (water Beer Fruits)"
+    },
+    {
+      "id": "xMdHurqPYHEtOOvc54zx",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Orange, Starwberry, Ice )"
+    },
+    {
+      "id": "xYEXjlvzL14owW9RHfiI",
+      "code": "61111000097",
+      "name": "Le Marchet Ice For Birthday 9-5-"
+    },
+    {
+      "id": "yKaJGPY8TtBPFoiTTp83",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Fruits, Vegerable…)"
+    },
+    {
+      "id": "yZDFXDfjIuVcjTRSR0lL",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Sparkling Water,Fahem, Cucumber)"
+    },
+    {
+      "id": "yeBlpmhMimvKWwswdsKc",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif (Olive,lasagna, White Vine)"
+    },
+    {
+      "id": "ytEDCis3BRHqy5D4VYVR",
+      "code": "61111000097",
+      "name": "Le  Marchet Selectif"
+    },
+    {
+      "id": "z9mBCMZJY7d3lRxcoXHr",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( F&V) Inv (5-6-2026)"
+    },
+    {
+      "id": "zCUBeZkm2E8Macl68KRz",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Veg, Fruits, Pasta , water , Mayo"
+    },
+    {
+      "id": "zzFqSL3wtllj5NQ4Zqss",
+      "code": "61111000097",
+      "name": "Le Marchet Selectif ( Foul , Orange )"
+    }
+  ],
+  "ledgerUpdated": [
+    "61111000030"
+  ]
+}

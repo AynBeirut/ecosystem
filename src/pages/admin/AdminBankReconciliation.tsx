@@ -8,6 +8,7 @@ import AdminPanel from '@/components/admin/AdminPanel';
 import { isCountedSaleStatus } from '@/lib/salesRules';
 import { Order } from '@/types/order';
 import { CashCollectionRecord } from '@/types/financial';
+import { resolveOrderDocumentRef } from '@/lib/invoiceTemplates';
 
 type OrderWithId = Order & { id: string };
 
@@ -150,7 +151,7 @@ const AdminBankReconciliation: React.FC = () => {
 
         return {
           id: order.id,
-          invoiceNumber: order.invoiceNumber || order.orderNumber || order.id.slice(0, 8),
+          invoiceNumber: resolveOrderDocumentRef(order),
           customerName: order.customerName || 'Walk-in Customer',
           createdAt: resolveOrderDate(order),
           remainingCash,

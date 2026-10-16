@@ -21,6 +21,7 @@ import { Order } from '@/types/order';
 import { exportToCSV, exportToPDF } from '@/lib/exportUtils';
 import { fetchFinanceExpenses } from '@/lib/financeData';
 import { purchaseDisplayRef } from '@/lib/purchaseDisplayRef';
+import { resolveOrderDocumentRef } from '@/lib/invoiceTemplates';
 
 const AdminReports: React.FC = () => {
   const { user } = useAuth();
@@ -704,7 +705,7 @@ const AdminReports: React.FC = () => {
                       return (
                         <div key={order.id} className="flex justify-between items-center p-3 bg-orange-50 rounded">
                           <div>
-                            <p className="font-medium">{order.invoiceNumber || `Order #${order.id.slice(0, 8)}`}</p>
+                            <p className="font-medium">{resolveOrderDocumentRef(order)}</p>
                             <p className="text-xs text-gray-500">
                               {order.customerName} • {new Date(order.createdAt || '').toLocaleDateString()}
                             </p>

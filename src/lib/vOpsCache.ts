@@ -94,10 +94,24 @@ export function markGateSubscriptionAllowed(storeId: string): void {
   }
 }
 
+const GATE_IP_SS = `${SS_PREFIX}gate:ip:`;
+
 export function gateIpAllowedFor(storeId: string): boolean {
-  return Boolean(storeId && gateIpAllowed.has(storeId));
+  if (!storeId) return false;
+  if (gateIpAllowed.has(storeId)) return true;
+  try {
+    return sessionStorage.getItem(`${GATE_IP_SS}${storeId}`) === '1';
+  } catch {
+    return false;
+  }
 }
 
 export function markGateIpAllowed(storeId: string): void {
-  if (storeId) gateIpAllowed.add(storeId);
+  if (!storeId) return;
+  gateIpAllowed.add(storeId);
+  try {
+    sessionStorage.setItem(`${GATE_IP_SS}${storeId}`, '1');
+  } catch {
+    // private mode — in-memory set still works for this tab
+  }
 }

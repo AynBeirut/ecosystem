@@ -5,7 +5,7 @@ import { onAuthStateChanged, signOut as firebaseSignOut, getRedirectResult } fro
 import { getFinanceAuth, getFinanceAuthReady } from "@/integrations/firebase/client";
 import { supabase } from "@/integrations/supabase/client";
 import { resolveGrabioStore, storeProfileToCompany, updateFinanceDocumentSettings, type StoreCompanyView } from "@/lib/grabio/storeService";
-import type { FinanceDocumentSettings } from "@/lib/grabio/types";
+import type { FinanceDocumentSettings, GrabioStoreProfile } from "@/lib/grabio/types";
 import { resolveInvoiceAppPlan } from "@/lib/grabio/entitlements";
 import {
   mapDbClient, mapDbSupplier, mapDbProduct, mapDbInvoice,
@@ -18,6 +18,10 @@ const contextLog = (...args: unknown[]) => {
   if (import.meta.env.DEV) console.log(...args);
 };
 import { loadStoreData } from "@/lib/firestore/loadStoreData";
+import {
+  syncFinanceEstimateNumbers,
+  syncFinanceInvoiceNumbers,
+} from "@/lib/firestore/chronologicalRenumberFirestore";
 import { migrateLocalPaymentOrders } from "@/lib/firestore/migratePaymentOrders";
 import {
   calculateComposedProductCost as calcComposedCost,
@@ -89,6 +93,10 @@ export interface Supplier {
 export interface LineItem {
   id: string; description: string; quantity: number; unitPrice: number;
   rawPrice?: number; subtotal: number;
+  /** Line currency. USD posts to the party USD account, LBP to the LBP account. */
+  currency?: string;
+  /** Existing chart account for this party and line currency. */
+  accountCode?: string;
 }
 
 export interface Receipt {
@@ -118,6 +126,12 @@ export interface Estimate {
   id: string; date: string; clientId?: string; clientName: string;
   items: LineItem[]; amount: number; currency: string;
   status: "pending" | "approved" | "rejected"; expiryDate?: string; notes?: string;
+  estimateNumber?: string;
+  subtotal?: number;
+  tax?: number;
+  taxAmount?: number;
+  discount?: number;
+  total?: number;
 }
 
 export interface PurchaseOrder {
@@ -216,7 +230,7 @@ interface AppContextType {
   updateInvoice: (invoiceId: string, data: Partial<Invoice>) => void;
   recordInvoicePayment: (invoiceId: string, amount: number, paymentMethod?: string) => void;
   deleteEstimate: (estimateId: string) => void;
-  updateEstimate: (estimateId: string, data: Partial<Estimate>) => void;
+  updateEstimate: (estimateId: string, data: Partial<Estimate>) => Promise<boolean>;
   deletePurchaseOrder: (poId: string) => Promise<void>;
   updatePurchaseOrder: (poId: string, data: Partial<PurchaseOrder>) => void;
   updatePaymentOrder: (poId: string, data: Partial<PaymentOrder>) => void;
@@ -448,6 +462,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     try {
       const { storeId, profile, role } = await resolveGrabioStore(uid, email);
       const company = storeProfileToCompany(profile);
+      (company as StoreCompanyView & { __grabioStoreProfile?: GrabioStoreProfile }).__grabioStoreProfile =
+        profile;
       documentCompanyRef.current = company;
       const plan = resolveInvoiceAppPlan(profile, email);
       const mapped: Organization[] = [{
@@ -641,6 +657,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     try {
       const { storeId, profile, role } = await resolveGrabioStore(uid, email);
       const company = storeProfileToCompany(profile);
+      (company as StoreCompanyView & { __grabioStoreProfile?: GrabioStoreProfile }).__grabioStoreProfile =
+        profile;
       documentCompanyRef.current = company;
       const plan = resolveInvoiceAppPlan(profile, email);
       const mapped: Organization[] = [{
@@ -816,8 +834,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
       }
     }
 
-    const id = `INV-${Date.now()}`;
-    const date = new Date().toISOString();
+    const id = `fin-inv-${Date.now()}`;
+    const date = String((invoice as { date?: string }).date || new Date().toISOString());
 
     // Snapshot unit cost once at invoice save time (forward-only COGS).
     const normalizedItems: LineItem[] = invoicePayload.items.map(item => {
@@ -896,6 +914,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
       raw_cost: it.rawPrice || 0, subtotal: it.subtotal,
     }));
     await dbBulkInsert('invoice_items', itemRows, 'Context][InvoiceItems');
+
+    try {
+      const numbers = await syncFinanceInvoiceNumbers(orgId);
+      const invoiceNumber = numbers.get(id);
+      if (invoiceNumber) {
+        await dbUpdate('invoices', id, { invoice_number: invoiceNumber }, 'Context][Invoice][number]');
+        setInvoices((prev) => prev.map((i) => (i.id === id ? { ...i, invoiceNumber } : i)));
+      }
+    } catch (err) {
+      console.error('[Context][Invoice][renumber]', err);
+    }
 
     if (orgId && initialStatus !== 'draft') {
       void glSyncInvoiceGl(orgId, { ...newInvoice, status: initialStatus, paymentMethod: pm || undefined } as Invoice);
@@ -987,7 +1016,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     if (normalizedData.paymentMethod !== undefined) dbU.payment_method = normalizedData.paymentMethod;
     if (normalizedData.paidAmount !== undefined) dbU.paid_amount = normalizedData.paidAmount;
     if (normalizedData.paidAt !== undefined) dbU.paid_at = normalizedData.paidAt;
+    if (normalizedData.date !== undefined) dbU.date = normalizedData.date;
     if (Object.keys(dbU).length > 0) dbUpdate('invoices', invoiceId, dbU, 'Context][Invoice][update');
+
+    if (orgId && normalizedData.date !== undefined) {
+      void syncFinanceInvoiceNumbers(orgId)
+        .then((numbers) => {
+          const invoiceNumber = numbers.get(invoiceId);
+          if (!invoiceNumber) return;
+          setInvoices((prev) => prev.map((inv) => (inv.id === invoiceId ? { ...inv, invoiceNumber } : inv)));
+        })
+        .catch((err) => console.error('[Context][Invoice][renumber][update]', err));
+    }
 
     if (orgId) {
       const merged = prev ? { ...prev, ...normalizedData } : null;
@@ -1106,15 +1146,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
       items: syncedItems,
     };
 
-    const id = `EST-${Date.now()}`;
-    const date = new Date().toISOString();
+    const id = `fin-est-${Date.now()}`;
+    const date = String((estimate as { date?: string }).date || new Date().toISOString());
     const optimistic: Estimate = { ...estimatePayload, id, date, status: "pending" };
     setEstimates(prev => [...prev, optimistic]);
 
     const ok = await dbInsert('estimates', {
       id, user_id: userId, organization_id: orgId, date,
       client_id: estimatePayload.clientId || null, client_name: estimatePayload.clientName,
-      items: estimatePayload.items, amount: estimate.amount, currency: estimate.currency,
+      items: estimatePayload.items,
+      amount: estimate.amount,
+      total: estimate.total ?? estimate.amount,
+      subtotal: estimate.subtotal ?? null,
+      tax: estimate.tax ?? null,
+      tax_amount: estimate.taxAmount ?? null,
+      discount: estimate.discount ?? null,
+      currency: estimate.currency,
       status: 'pending', expiry_date: estimate.expiryDate || null, notes: estimate.notes || null,
     }, 'Context][Estimate');
 
@@ -1133,11 +1180,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     }));
     if (itemRows.length > 0) await dbBulkInsert('estimate_items', itemRows, 'Context][EstimateItems');
 
+    try {
+      const numbers = await syncFinanceEstimateNumbers(orgId);
+      const estimateNumber = numbers.get(id);
+      if (estimateNumber) {
+        await dbUpdate('estimates', id, { estimate_number: estimateNumber }, 'Context][Estimate][number]');
+        setEstimates((prev) => prev.map((e) => (e.id === id ? { ...e, estimateNumber } : e)));
+      }
+    } catch (err) {
+      console.error('[Context][Estimate][renumber]', err);
+    }
+
     return id;
   };
 
-  const updateEstimate = (estimateId: string, data: Partial<Estimate>) => {
+  const updateEstimate = async (estimateId: string, data: Partial<Estimate>): Promise<boolean> => {
     const orgId = getOrgId();
+    const previousEstimates = estimates;
     setEstimates(prev => prev.map(e => e.id === estimateId ? { ...e, ...data } : e));
     const dbU: any = {};
     if (data.clientName !== undefined) dbU.client_name = data.clientName;
@@ -1149,18 +1208,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     if (data.expiryDate !== undefined) dbU.expiry_date = data.expiryDate;
     if (data.notes !== undefined) dbU.notes = data.notes;
     if (data.tax !== undefined) dbU.tax = data.tax;
+    if (data.taxAmount !== undefined) dbU.tax_amount = data.taxAmount;
     if (data.discount !== undefined) dbU.discount = data.discount;
-    if (Object.keys(dbU).length > 0) dbUpdate('estimates', estimateId, dbU, 'Context][Estimate][update');
+    if (data.total !== undefined) dbU.total = data.total;
+    if (data.subtotal !== undefined) dbU.subtotal = data.subtotal;
+    if (data.date !== undefined) dbU.date = data.date;
+
+    if (Object.keys(dbU).length > 0) {
+      const ok = await dbUpdate('estimates', estimateId, dbU, 'Context][Estimate][update');
+      if (!ok) {
+        setEstimates(previousEstimates);
+        return false;
+      }
+    }
 
     if (data.items && orgId) {
-      dbDeleteWhere('estimate_items', 'estimate_id', estimateId, 'Context][EstimateItems][delete');
+      const deleted = await dbDeleteWhere('estimate_items', 'estimate_id', estimateId, 'Context][EstimateItems][delete');
       const itemRows = data.items.map(it => ({
         organization_id: orgId, estimate_id: estimateId, product_id: it.id || null,
         name: it.description, quantity: it.quantity, unit_price: it.unitPrice,
         raw_cost: it.rawPrice || 0, subtotal: it.subtotal,
       }));
-      dbBulkInsert('estimate_items', itemRows, 'Context][EstimateItems][replace');
+      const inserted = itemRows.length > 0
+        ? await dbBulkInsert('estimate_items', itemRows, 'Context][EstimateItems][replace')
+        : true;
+      if (!deleted || !inserted) return false;
     }
+
+    return true;
   };
 
   const deleteEstimate = (estimateId: string) => {
@@ -1312,6 +1387,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
       supplier_id: poPayload.supplierId || null, supplier_name: poPayload.supplierName,
       items: poPayload.items, amount: po.amount, currency: po.currency,
       status: 'draft', notes: po.notes || null,
+      payment_status: po.paymentStatus || 'unpaid',
+      amount_paid: po.paidAmount ?? 0,
     }, 'Context][PO');
     if (!okPO) return null;
 
@@ -1333,6 +1410,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
     if (data.currency !== undefined) dbU.currency = data.currency;
     if (data.status !== undefined) dbU.status = data.status;
     if (data.notes !== undefined) dbU.notes = data.notes;
+    if (data.paymentStatus !== undefined) dbU.payment_status = data.paymentStatus;
+    if (data.paidAmount !== undefined) dbU.amount_paid = data.paidAmount;
     if (Object.keys(dbU).length > 0) dbUpdate('purchase_orders', poId, dbU, 'Context][PO][update');
 
   };
@@ -1702,8 +1781,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode; embedded?: boole
   const exportPurchaseOrderAsPdf = (id: string) =>
     runDocumentAction(() => generatePDF("purchaseOrder", id, buildDocCtx()));
 
-  const getDocumentPdfFile = (documentType: DocumentType, documentId: string): Promise<File | null> =>
-    generatePdfFile(documentType, documentId, buildDocCtx());
+  const getDocumentPdfFile = async (documentType: DocumentType, documentId: string): Promise<File | null> => {
+    await refreshDocumentCompany();
+    return generatePdfFile(documentType, documentId, buildDocCtx());
+  };
 
   const updateSettings = (settings: any) => contextLog("Settings updated:", settings);
 

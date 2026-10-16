@@ -1,4 +1,5 @@
 import { supportsArabicEntry, type AccountingLanguage } from '@/lib/grabio/accountingMode';
+import { displayVendorPartyName } from '@/lib/vendorDisplayName';
 import { LEBANESE_PCG_CHART, type LebanesePcgAccount } from '@/lib/ledger/lebanesePcgChart.generated';
 import { isGrabioPartySuffixCode } from '@/lib/ledger/pcgClientCode';
 import type { PcgClientAccount } from '@/types/generalLedger';
@@ -189,10 +190,13 @@ export function resolvePcgDisplay(
 
   const templateCode = client && !fromLedger ? mapGrabioCodeToPcg(code) : pcgCode;
   const pcg = templateCode ? pcgByCode.get(templateCode) : pcgByCode.get(pcgCode);
+  const rawName = client?.name || pcg?.name || fallbackName || code;
+  const name =
+    client?.partyType === 'supplier' ? displayVendorPartyName(rawName) : rawName;
   return {
     grabioCode: code,
     pcgCode,
-    name: client?.name || pcg?.name || fallbackName || code,
+    name,
     nameAr: client?.nameAr || pcg?.nameAr || '',
     currency: client?.currency || pcg?.currency || 'LL',
   };

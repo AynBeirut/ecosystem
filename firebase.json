@@ -42,8 +42,28 @@
         "function": "api"
       },
       {
+        "source": "/robots.txt",
+        "function": "api"
+      },
+      {
+        "source": "/meta/catalog/grabio-packages-feed.csv",
+        "function": "api"
+      },
+      {
+        "source": "/meta-catalog/grabio-packages-feed.csv",
+        "function": "api"
+      },
+      {
+        "source": "/api/**",
+        "function": "api"
+      },
+      {
         "source": "/invoice/**",
         "destination": "/invoice/index.html"
+      },
+      {
+        "source": "/travel/**",
+        "destination": "/travel/index.html"
       },
       {
         "source": "!/assets/**",
@@ -74,7 +94,7 @@
         ]
       },
       {
-        "source": "/robots.txt",
+        "source": "/meta-catalog/**",
         "headers": [
           {
             "key": "Cache-Control",

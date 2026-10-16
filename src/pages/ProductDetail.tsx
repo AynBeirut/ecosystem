@@ -3,7 +3,13 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useParams, Link, useNavigate } from 'react-router-dom';
 import { getFirestore, doc, getDoc, collection, query, where, getDocs, addDoc, serverTimestamp } from 'firebase/firestore';
 import SEOHead from '@/components/SEOHead';
-import { pixelAddToCart, pixelViewContent, trackMetaConversionEvent } from '@/lib/metaPixel';
+import {
+  initStoreMetaPixel,
+  metaCatalogContentId,
+  pixelAddToCart,
+  pixelViewContent,
+  trackMetaConversionEvent,
+} from '@/lib/metaPixel';
 import { Product, ProductReview, Store } from '@/types/product';
 import { Recipe, RawMaterial } from '@/types/inventory';
 import { calculateAvailableStock } from '@/lib/composedProductStock';
@@ -31,14 +37,6 @@ import ProductVisual from '@/components/ProductVisual';
 import { resolveStoreShopUrl } from '@/lib/storeNavigation';
 import { buildStoreMobileNavLinks, buildStorePublicUrl, buildStoreRelativePath, buildStoreRootPath, buildStoreTabPath, isExternalUrl, isStoreBrandedHost, redirectToStoreSubdomain, storeSlugFromHostname } from '@/lib/storeUrls';
 import { getStoreContactPageLabel } from '@/lib/storeContactPage';
-
-type FbqFunction = ((...args: unknown[]) => void) & {
-  callMethod?: (...args: unknown[]) => void;
-  queue: unknown[][];
-  push: FbqFunction;
-  loaded: boolean;
-  version: string;
-};
 
 const ProductDetail: React.FC = () => {
   const { id, productSlug, storeSlug } = useParams<{ id?: string; productSlug?: string; storeSlug?: string }>();
@@ -219,43 +217,8 @@ const ProductDetail: React.FC = () => {
   }, [id, productSlug, storeSlug, navigate, user?.uid]);
 
   useEffect(() => {
-    const pixelEnabled = store?.metaIntegrationSettings?.pixelEnabled;
-    const pixelId = store?.metaIntegrationSettings?.pixelId?.trim();
-    if (!pixelEnabled || !pixelId || typeof window === 'undefined') return;
-
-    try {
-      if (localStorage.getItem('grabio_cookie_consent') !== 'accepted') return;
-    } catch {
-      return;
-    }
-
-    if (window.fbq) {
-      window.fbq('init', pixelId);
-      window.fbq('track', 'PageView');
-      return;
-    }
-
-    const fbq = ((...args: unknown[]) => {
-      if (fbq.callMethod) {
-        fbq.callMethod(...args);
-        return;
-      }
-      fbq.queue.push(args);
-    }) as FbqFunction;
-    fbq.push = fbq;
-    fbq.loaded = true;
-    fbq.version = '2.0';
-    fbq.queue = [];
-    window.fbq = fbq;
-    if (!window._fbq) window._fbq = fbq;
-
-    const script = document.createElement('script');
-    script.async = true;
-    script.src = 'https://connect.facebook.net/en_US/fbevents.js';
-    document.head.appendChild(script);
-
-    window.fbq('init', pixelId);
-    window.fbq('track', 'PageView');
+    if (!store?.metaIntegrationSettings?.pixelEnabled) return;
+    initStoreMetaPixel(store.metaIntegrationSettings.pixelId);
   }, [store?.metaIntegrationSettings?.pixelEnabled, store?.metaIntegrationSettings?.pixelId]);
 
   useEffect(() => {
@@ -358,25 +321,28 @@ const ProductDetail: React.FC = () => {
 
   useEffect(() => {
     if (!product) return;
+    const catalogId = metaCatalogContentId(product.id);
+    if (!catalogId) return;
+    const currency = String(store?.mainCurrency || 'USD').trim() || 'USD';
     pixelViewContent({
-      contentId: product.id,
+      contentId: catalogId,
       contentName: product.name,
       value: Number(product.price || 0),
-      currency: 'USD',
+      currency,
     });
     void trackMetaConversionEvent({
       storeId: product.storeId,
       eventName: 'ViewContent',
-      contentIds: [product.id],
+      contentIds: [catalogId],
       contentName: product.name,
       value: Number(product.price || 0),
-      currency: 'USD',
+      currency,
       userData: {
         externalId: String(user?.id || ''),
         email: String(user?.email || ''),
       },
     });
-  }, [product?.id, user?.id]);
+  }, [product?.id, product?.storeId, product?.name, product?.price, store?.mainCurrency, user?.id, user?.email]);
 
   const handleSubmitReview = async () => {
     if (!user?.id || !product || !store?.id) {
@@ -431,19 +397,21 @@ const ProductDetail: React.FC = () => {
   const handleAddToCart = () => {
     if (product) {
       addToCart(product, quantity);
+      const catalogId = metaCatalogContentId(product.id);
+      const currency = String(store?.mainCurrency || 'USD').trim() || 'USD';
       pixelAddToCart({
-        contentId: product.id,
+        contentId: catalogId,
         contentName: product.name,
         value: product.price,
-        currency: 'USD',
+        currency,
       });
       void trackMetaConversionEvent({
         storeId: product.storeId,
         eventName: 'AddToCart',
-        contentIds: [product.id],
+        contentIds: [catalogId],
         contentName: product.name,
         value: Number(product.price || 0),
-        currency: 'USD',
+        currency,
         userData: {
           externalId: String(user?.id || ''),
           email: String(user?.email || ''),

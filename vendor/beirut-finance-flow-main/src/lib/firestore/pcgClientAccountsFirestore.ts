@@ -20,7 +20,8 @@ function col(storeId: string) {
 export async function loadPcgClientAccounts(storeId: string): Promise<PcgClientAccount[]> {
   const snap = await getDocs(col(storeId));
   return snap.docs
-    .map((d) => ({ id: d.id, ...(d.data() as Omit<PcgClientAccount, 'id'>) }))
+    .map((d) => ({ id: d.id, ...(d.data() as Omit<PcgClientAccount, 'id'> & { archived?: boolean; isActive?: boolean }) }))
+    .filter((row) => row.archived !== true && row.isActive !== false)
     .sort((a, b) => a.clientCode.localeCompare(b.clientCode));
 }
 

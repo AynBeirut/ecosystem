@@ -1,0 +1,73 @@
+{
+  "generatedAt": "2026-09-18T09:55:18.893Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "source": "firestore:market-flow-7b074 (live pull)",
+  "definitions": {
+    "cashBookMirrorIn": "Sum stores/{storeId}/financeReceipts.amount",
+    "cashBookMirrorOut": "Sum stores/{storeId}/financeExpenses.amount (all rows)",
+    "cashBookSotOut": "financeExpenses where source contains littlehands-cash-book OR isSourceOfTruth",
+    "accountStatementIn": "Counted orders + accountStatements direction=in",
+    "accountStatementOut": "All financeExpenses + all purchases totals (mobile AccountStatement pattern)"
+  },
+  "totals": {
+    "financeReceipts": {
+      "count": 1329,
+      "sum": 89818.18,
+      "counted": 1329,
+      "skipped": 0
+    },
+    "financeExpensesAll": {
+      "count": 759,
+      "sum": 57091.66,
+      "counted": 759,
+      "skipped": 0
+    },
+    "financeExpensesCashBookSot": {
+      "count": 759,
+      "sum": 57091.66,
+      "counted": 759,
+      "skipped": 0
+    },
+    "purchasesAll": {
+      "count": 799,
+      "sum": 48077.64,
+      "counted": 799,
+      "skipped": 0
+    },
+    "purchasesCashBookSource": {
+      "count": 601,
+      "sum": 36605.44,
+      "counted": 601,
+      "skipped": 0
+    },
+    "ordersCountedIn": {
+      "count": 1331,
+      "sum": 90206.74
+    },
+    "accountStatementsIn": {
+      "count": 0,
+      "sum": 0
+    },
+    "accountStatementsOut": {
+      "count": 0,
+      "sum": 0
+    },
+    "accountStatementStyle": {
+      "totalIn": 90206.74,
+      "totalOut": 105169.3,
+      "balance": -14962.56
+    },
+    "cashBookMirror": {
+      "totalIn": 89818.18,
+      "totalOut": 57091.66,
+      "balance": 32726.52
+    }
+  },
+  "expenseUiSurfaceBreakdown": {
+    "supplier_purchase": 23077.44,
+    "payroll": 11756,
+    "operating": 16796.22,
+    "asset": 2917,
+    "treasury": 2545
+  }
+}

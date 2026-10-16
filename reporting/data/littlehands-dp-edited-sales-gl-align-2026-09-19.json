@@ -1,0 +1,100 @@
+{
+  "mode": "dry-run",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "dpEditedDir": "/media/anwar/12AD-9999/d.p Edited",
+  "rule": {
+    "incomeSales": "column C + column F",
+    "expenses": "column D + column E (report only)"
+  },
+  "alignRevision": "2026-09-19-dp-edited-c-plus-f",
+  "months": [
+    {
+      "ym": "2026-06",
+      "sourceFile": "/media/anwar/12AD-9999/d.p Edited/Cash June.xls",
+      "sourceSheet": "Total ",
+      "totalSumRow": 254,
+      "summaryExcelRow": 249,
+      "colC": 16380,
+      "colF": 2044.74,
+      "colD": 11028.25,
+      "colE": 2044.74,
+      "incomeCF": 18424.74,
+      "expenseDE": 13072.99,
+      "glClass7": 18424.74,
+      "delta": 0
+    },
+    {
+      "ym": "2026-07",
+      "sourceFile": "/media/anwar/12AD-9999/d.p Edited/July 2026.xls",
+      "sourceSheet": "Total July",
+      "totalSumRow": 265,
+      "summaryExcelRow": 260,
+      "colC": 20231,
+      "colF": 3724.6,
+      "colD": 8370.16,
+      "colE": 3724.6,
+      "incomeCF": 23955.6,
+      "expenseDE": 12094.76,
+      "glClass7": 23955.6,
+      "delta": 0
+    },
+    {
+      "ym": "2026-08",
+      "sourceFile": "/media/anwar/12AD-9999/d.p Edited/August2026.xls",
+      "sourceSheet": "Total August",
+      "totalSumRow": 183,
+      "summaryExcelRow": 178,
+      "colC": 14042.25,
+      "colF": 1202.85,
+      "colD": 5834.12,
+      "colE": 1202.85,
+      "incomeCF": 15245.1,
+      "expenseDE": 7036.97,
+      "glClass7": 15245.1,
+      "delta": 0
+    },
+    {
+      "ym": "2026-09",
+      "sourceFile": "/media/anwar/12AD-9999/d.p Edited/September.xls",
+      "sourceSheet": "Total Cash ",
+      "totalSumRow": 49,
+      "summaryExcelRow": 44,
+      "colC": 5456,
+      "colF": 617.53,
+      "colD": 863,
+      "colE": 617.53,
+      "incomeCF": 6073.53,
+      "expenseDE": 1480.53,
+      "glClass7": 6073.53,
+      "delta": 0
+    }
+  ],
+  "aligned": [],
+  "skipped": [
+    {
+      "ym": "2026-06",
+      "reason": "already_aligned",
+      "incomeCF": 18424.74,
+      "glClass7": 18424.74
+    },
+    {
+      "ym": "2026-07",
+      "reason": "already_aligned",
+      "incomeCF": 23955.6,
+      "glClass7": 23955.6
+    },
+    {
+      "ym": "2026-08",
+      "reason": "already_aligned",
+      "incomeCF": 15245.1,
+      "glClass7": 15245.1
+    },
+    {
+      "ym": "2026-09",
+      "reason": "already_aligned",
+      "incomeCF": 6073.53,
+      "glClass7": 6073.53
+    }
+  ],
+  "generatedAt": "2026-09-19T12:51:07.371Z"
+}

@@ -1,4 +1,5 @@
 import { addDoc, collection, getFirestore } from 'firebase/firestore';
+import { ensurePartySubaccount } from '../../vendor/beirut-finance-flow-main/src/lib/ledger/partySubaccount';
 import { generateBarcode, generateSKU } from '@/lib/skuGenerator';
 import type { OcrCatalogMaterial, OcrCatalogSupplier } from '@/features/ocr/OcrReceiptFlow';
 import { fuzzyMatchSupplier } from '@/features/ocr/OcrReceiptFlow';
@@ -54,6 +55,16 @@ export async function ensureOcrSupplier(opts: {
     source: opts.source || 'ocr',
   };
   const ref = await addDoc(collection(db, 'suppliers'), data);
+  try {
+    await ensurePartySubaccount({
+      storeId: opts.storeId,
+      kind: 'supplier',
+      partyId: ref.id,
+      partyName: name,
+    });
+  } catch (accountError) {
+    console.warn('[Supplier] USD and LBP accounts skipped', accountError);
+  }
   return { id: ref.id, name };
 }
 

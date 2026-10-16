@@ -9,6 +9,7 @@ import {
 import { getFirestore } from 'firebase/firestore';
 import { isPlatformOrderCod } from '@/lib/salesRules';
 import { glPostDeliveryWalletSettlement } from '@/lib/platformGl';
+import { resolveOrderDocumentRef } from '@/lib/orderDocumentRef';
 
 const round2 = (n: number) => Math.round((Number(n) + Number.EPSILON) * 100) / 100;
 
@@ -16,6 +17,7 @@ export type PlatformDeliveryOrder = {
   id: string;
   storeId: string;
   invoiceNumber?: string;
+  orderNumber?: string;
   customerName?: string;
   total?: number;
   paymentMethod?: string;
@@ -107,7 +109,7 @@ export async function syncCodOrderToDeliveryWallet(
       id: order.id,
       platformOrderId: order.id,
       invoiceId: order.id,
-      invoiceNumber: order.invoiceNumber || order.id,
+      invoiceNumber: resolveOrderDocumentRef(order),
       deliveryPersonId,
       deliveryPersonName,
       clientName: order.customerName || 'Customer',

@@ -4,6 +4,7 @@ import { canUseModule } from '../lib/entitlements';
 import { verifyPosDevice } from '../services/posDeviceAuth';
 import { assertRealStoreForCommerce } from '../services/storeCommerceGuard';
 import { resolveStoredProductIcon } from '../lib/productIcon';
+import { isSellableMenuProduct } from '../lib/sellableMenuProduct';
 
 const db = admin.firestore();
 
@@ -30,8 +31,13 @@ export async function getPosCatalog(req: Request, res: Response): Promise<void> 
     const composedProductSource =
       auth.deviceData.composedProductSource === 'pos' ? 'pos' : 'platform';
 
+    const includeInventory = String(req.query.inventory || '').trim() === '1';
     const productsSnap = await db.collection('products').where('storeId', '==', storeId).get();
-    const products = productsSnap.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
+    const products = productsSnap.docs
+      .filter((doc: FirebaseFirestore.QueryDocumentSnapshot) =>
+        isSellableMenuProduct(doc.data() as Record<string, unknown>),
+      )
+      .map((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
       const data = doc.data();
       return {
         id: doc.id,
@@ -54,18 +60,18 @@ export async function getPosCatalog(req: Request, res: Response): Promise<void> 
     let rawMaterials: Array<Record<string, unknown>> = [];
 
     if (composedProductSource === 'platform') {
-      const [recipesSnap, rawMaterialsSnap] = await Promise.all([
-        db.collection('recipes').where('storeId', '==', storeId).get(),
-        db.collection('rawMaterials').where('storeId', '==', storeId).get(),
-      ]);
+      const recipesSnap = await db.collection('recipes').where('storeId', '==', storeId).get();
       recipes = recipesSnap.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => ({
         id: doc.id,
         ...doc.data(),
       }));
-      rawMaterials = rawMaterialsSnap.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => ({
-        id: doc.id,
-        ...doc.data(),
-      }));
+      if (includeInventory) {
+        const rawMaterialsSnap = await db.collection('rawMaterials').where('storeId', '==', storeId).get();
+        rawMaterials = rawMaterialsSnap.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => ({
+          id: doc.id,
+          ...doc.data(),
+        }));
+      }
     }
 
     await db

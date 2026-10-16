@@ -9,7 +9,11 @@ import VoucherDetailDialog from "@/components/VoucherDetailDialog";
 import { cn, formatCurrency } from "@/lib/utils";
 import type { JournalEntry, JournalLine, PcgClientAccount } from "@/types/generalLedger";
 import SystemGuideInfo from "@/components/SystemGuideInfo";
-import { sanitizeJournalMemoForDisplay, journalEntryDisplayLabel } from "@/lib/ledger/ledgerHumanLabels";
+import {
+  displayMemoForJournalEntry,
+  journalEntryDisplayLabel,
+  sanitizeJournalMemoForDisplay,
+} from "@/lib/ledger/ledgerHumanLabels";
 import type { OpenVoucherEntryHandler } from "@/lib/accounting/accountingNavigation";
 import { legacyReportTableHeadClass, legacyReportTableHeaderRowClass, legacyReportTableHeaderShellClass } from "@/components/legacyErpReportFrame";
 
@@ -73,7 +77,7 @@ function entryVoucherNo(entry: JournalEntry): string {
 }
 
 function entryDescription(entry: JournalEntry): string {
-  const memo = sanitizeJournalMemoForDisplay(entry.memo || '');
+  const memo = displayMemoForJournalEntry(entry);
   const meta = voucherMeta(entry);
   if (entry.voucherType === "PV" && meta?.payee) return String(meta.payee);
   if (entry.voucherType === "RV" && meta?.payer) return String(meta.payer);
@@ -342,7 +346,7 @@ export default function VoucherRegisterPanel({
                         <TableRow key={entry.id}>
                           <TableCell className="py-2 text-xs">{entry.date.slice(0, 10)}</TableCell>
                           <TableCell className="py-2 text-xs">{entry.voucherType || "JV"}</TableCell>
-                          <TableCell className="py-2 text-xs">{sanitizeJournalMemoForDisplay(entry.memo || "")}</TableCell>
+                          <TableCell className="py-2 text-xs">{displayMemoForJournalEntry(entry)}</TableCell>
                           <TableCell className="py-2 text-right">
                             {onPostDraft ? (
                               <Button

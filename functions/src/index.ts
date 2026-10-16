@@ -33,6 +33,7 @@ import { startTrial, subscribe, subscribeStripe, cancelSubscription, getSubscrip
 import { handleWhishWebhook } from './api/webhooks';
 import { processCheckout, handleCheckoutCallback } from './api/checkout';
 import { normalizeCurrencyCode } from './lib/money/currencies';
+import { renumberStoreOrders } from './lib/chronologicalRenumberFirestore';
 import { runWhishOpsChecklist } from './api/whishOps';
 import { createStripeCheckoutSession, confirmStripeCheckoutSession, handleStripeWebhook } from './api/stripeCheckout';
 import { createSquareCheckoutSession, confirmSquareCheckoutSession } from './api/squareCheckout';
@@ -47,7 +48,7 @@ import { validateSeoSchema } from './api/seoAeo';
 import { checkSeoLink } from './api/seoLinks';
 import { queryAgent } from './api/agent';
 import { queryGrabioGuide } from './api/grabioGuide';
-import { connectFacebookShop, connectInstagramShopping, createMetaAdsCampaign, enableDynamicProductAds, getMetaCatalogFeed, syncMetaCatalog, trackMetaConversionEvent } from './api/metaCatalog';
+import { connectFacebookShop, connectInstagramShopping, createMetaAdsCampaign, enableDynamicProductAds, getGrabioPackagesCatalogFeed, getMetaCatalogFeed, syncMetaCatalog, trackMetaConversionEvent } from './api/metaCatalog';
 import { getRobotsTxt, getSitemap, pingPlatformSitemap, submitSitemap } from './api/sitemap';
 import { subscribeToStore, unsubscribeFromStore, listSubscribers, sendCampaign, listCampaigns } from './api/marketing';
 import { dispatchOrderNotifications, retryOrderNotification } from './services/orderNotifications';
@@ -82,6 +83,7 @@ import {
   syncPosRawMaterials,
   syncPosRecipes,
   syncPosRefunds,
+  syncPosVoids,
 } from './api/posSync';
 import { createAccountingPairingCode, pairExternalAccounting } from './api/accountingPairing';
 import {
@@ -117,11 +119,31 @@ import {
 import { getPublicProductStock } from './api/publicProductStock';
 import { presignR2Upload } from './api/r2';
 import { ocrReceipt } from './api/ocrReceipt';
+import {
+  travelAcceptProposal,
+  travelCreateProposalLink,
+  travelGetPublicProposal,
+  travelNextraBook,
+  travelNextraBookings,
+  travelNextraSearch,
+  travelNextraWallet,
+  travelOwnerSummary,
+  travelRecordDeposit,
+} from './api/travelAgency';
 import { requireModule } from './middleware/moduleGate';
 const db = admin.firestore();
 
 const app = express();
 app.use(cors({ origin: true }));
+/** Hosting rewrite: grabio.space/api/** → function; Express routes omit /api prefix. */
+app.use((req, _res, next) => {
+  if (req.path === '/api' || req.path.startsWith('/api/')) {
+    const suffix = req.path === '/api' ? '' : req.path.slice(4);
+    const qs = req.url.includes('?') ? req.url.slice(req.url.indexOf('?')) : '';
+    req.url = `${suffix || '/'}${qs}`;
+  }
+  next();
+});
 app.post('/webhook/stripe', express.raw({ type: 'application/json' }), handleStripeWebhook);
 // 8mb so /ocr/receipt can accept resized mobile photos as base64 (image is not persisted).
 app.use(express.json({ limit: '8mb' }));
@@ -295,6 +317,9 @@ app.post('/seo/platform/sitemap-ping', pingPlatformSitemap);
 
 // Meta catalog sync
 app.get('/meta/catalog/feed', getMetaCatalogFeed);
+app.get('/meta/catalog/feed.csv', getMetaCatalogFeed);
+app.get('/meta/catalog/grabio-packages-feed.csv', getGrabioPackagesCatalogFeed);
+app.get('/meta-catalog/grabio-packages-feed.csv', getGrabioPackagesCatalogFeed);
 app.post('/meta/catalog/sync', syncMetaCatalog);
 app.post('/meta/shop/connect', connectFacebookShop);
 app.post('/meta/instagram/connect', connectInstagramShopping);
@@ -333,6 +358,7 @@ app.post('/pos/salaries', syncPosSalaries);
 app.post('/pos/raw-materials', syncPosRawMaterials);
 app.post('/pos/recipes', syncPosRecipes);
 app.post('/pos/refunds', syncPosRefunds);
+app.post('/pos/voids', syncPosVoids);
 app.get('/pos/events', getPosEvents);
 app.get('/pos/active-event', getPosActiveEvent);
 app.get('/pos/online-orders', getPosOnlineOrders);
@@ -361,6 +387,17 @@ app.post('/public/product-stock', getPublicProductStock);
 app.post('/r2/presign', presignR2Upload);
 app.post('/ocr/receipt', ocrReceipt);
 app.get('/marketing/campaigns', listCampaigns);
+
+// Travel agency — Nextra adapter + proposals (store-scoped)
+app.post('/travel/nextra/search', travelNextraSearch);
+app.post('/travel/nextra/book', travelNextraBook);
+app.post('/travel/nextra/wallet', travelNextraWallet);
+app.post('/travel/nextra/bookings', travelNextraBookings);
+app.post('/travel/proposal/link', travelCreateProposalLink);
+app.get('/travel/proposal/public/:token', travelGetPublicProposal);
+app.post('/travel/proposal/accept', travelAcceptProposal);
+app.post('/travel/deposit/record', travelRecordDeposit);
+app.get('/travel/owner/summary', travelOwnerSummary);
 
 app.post('/notifications/order/retry', async (req: Request, res: Response) => {
   try {
@@ -581,6 +618,7 @@ app.post('/checkout', async (req: Request, res: Response) => {
     let ordersCreated = 0;
     const orderIds: string[] = [];
     const invoiceNumbers: string[] = [];
+    const createdOrders: Array<{ orderId: string; storeId: string }> = [];
 
     await db.runTransaction(async (tx: unknown) => {
       const transaction = tx as {
@@ -720,23 +758,11 @@ app.post('/checkout', async (req: Request, res: Response) => {
 
       // PHASE 2: ALL WRITES (after all reads are complete)
       for (const orderData of ordersToCreate) {
-        // Generate online order invoice number
-        const prefix = 'ON';
-        const lastNumber = (orderData.storeProfile?.lastInvoiceNumber as number) || 0;
-        const newNumber = lastNumber + 1;
-        const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
-        
-        // Update store profile with new invoice number (use set with merge to create if not exists)
         const profileRef = db.doc(`storeProfiles/${orderData.storeId}`);
-        transaction.set(
-          profileRef,
-          {
-            lastInvoiceNumber: newNumber,
-            ...(orderData.trialOperationUpdate || {}),
-          },
-          { merge: true }
-        );
-        
+        if (orderData.trialOperationUpdate) {
+          transaction.set(profileRef, orderData.trialOperationUpdate, { merge: true });
+        }
+
         const fulfillmentMethod = deliveryInfo?.fulfillmentMethod || 'delivery';
         const orderDeliveryMethod =
           fulfillmentMethod === 'pickup'
@@ -787,7 +813,6 @@ app.post('/checkout', async (req: Request, res: Response) => {
           customerPhone: deliveryInfo?.phone || customerPhone || '',
           customerEmail: deliveryInfo?.email || customerEmail || '',
           isGuest, // Flag to indicate guest checkout
-          invoiceNumber,
           items: orderData.orderItems,
           subtotal: orderData.subtotal,
           taxType: 'none',
@@ -813,11 +838,10 @@ app.post('/checkout', async (req: Request, res: Response) => {
           createdAt: getServerTimestamp(),
         });
         orderIds.push(orderRef.id);
-        invoiceNumbers.push(invoiceNumber);
+        createdOrders.push({ orderId: orderRef.id, storeId: orderData.storeId });
         ordersCreated++;
         console.log('Order created:', {
           orderId: orderRef.id,
-          invoiceNumber,
           storeId: orderData.storeId,
           customerId: userId,
           customerName,
@@ -838,6 +862,17 @@ app.post('/checkout', async (req: Request, res: Response) => {
     });
 
     console.log('Orders created:', orderIds);
+
+    const renumberedStores = new Set<string>();
+    for (const row of createdOrders) {
+      if (renumberedStores.has(row.storeId)) continue;
+      await renumberStoreOrders(db, row.storeId);
+      renumberedStores.add(row.storeId);
+    }
+    for (const row of createdOrders) {
+      const snap = await db.collection('orders').doc(row.orderId).get();
+      invoiceNumbers.push(String(snap.data()?.invoiceNumber || ''));
+    }
 
     // Send FCM push notification to each store owner for their new order(s)
     // Fire-and-forget: don't block the checkout response on notification success

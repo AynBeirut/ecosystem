@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Users, Plus, Edit2, Trash2, Star, DollarSign, TrendingUp, Award, FileText, ScrollText } from 'lucide-react';
 import { openAccountingWithFocus } from '../../../vendor/beirut-finance-flow-main/src/lib/ledger/ledgerActivity';
+import { ensurePartySubaccount } from '../../../vendor/beirut-finance-flow-main/src/lib/ledger/partySubaccount';
 import { useToast } from '@/hooks/use-toast';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
@@ -365,6 +366,16 @@ const AdminCustomers: React.FC = () => {
       };
 
       const docRef = await addDoc(collection(db, 'customers'), customerData);
+      try {
+        await ensurePartySubaccount({
+          storeId,
+          kind: 'client',
+          partyId: docRef.id,
+          partyName: newCustomer.name,
+        });
+      } catch (accountError) {
+        console.warn('[Client] USD and LBP accounts skipped', accountError);
+      }
       const newCustomerObj = normalizeCustomer(docRef.id, customerData as unknown as Record<string, unknown>);
       setCustomers([...customers, newCustomerObj]);
 
@@ -489,10 +500,9 @@ const AdminCustomers: React.FC = () => {
     const filtered = customers.filter(customer => {
       if (customer.hideFromCustomerList) return false;
       if (customer.name.trim().toLowerCase() === 'walk-in') return false;
-      const matchesSearch = customer.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           customer.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           customer.phone.includes(searchTerm) ||
-                           (customer.contactPerson || '').toLowerCase().includes(searchTerm.toLowerCase());
+      const search = searchTerm.toLowerCase();
+      const matchesSearch = [customer.name, customer.email, customer.phone, customer.contactPerson]
+        .some((value) => String(value || '').toLowerCase().includes(search));
       const tier = getCustomerTier(customer);
       const matchesTier = filterTier === 'all' || tier.value === filterTier;
       return matchesSearch && matchesTier;

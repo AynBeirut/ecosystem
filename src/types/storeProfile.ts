@@ -11,7 +11,13 @@ export type FinanceDocumentSettings = {
   documentLogo?: string;
   documentCompanyName?: string;
   documentAddress?: string;
+  documentPhone?: string;
+  documentEmail?: string;
+  documentWebsite?: string;
+  documentCountry?: string;
   documentTaxId?: string;
+  documentShowCompanyName?: boolean;
+  documentLayout?: 'minimal' | 'classic' | 'modern' | string;
   invoiceTemplate?: 'basic' | 'modern' | 'professional';
   primaryColor?: string;
   secondaryColor?: string;
@@ -120,6 +126,10 @@ export type VenueOpsSettings = {
   enableReservationsHub?: boolean;
   enableStorefrontBuilder?: boolean;
   enableSeoOps?: boolean;
+  /** Official HR hub. Payroll stays on the finance gate. */
+  enableOfficialHr?: boolean;
+  /** Fine-dining daily operations hub (knowledge, briefings, floor, standards). */
+  enableVenueOpsHub?: boolean;
 };
 
 export interface StoreDeliverySettings {

@@ -32,6 +32,8 @@ export type StaffPayrollRecord = StaffMember & {
   paymentFrequency?: PaymentFrequency | string;
   payBasis?: string;
   hourlyRate?: number;
+  /** Set only when someone edits the rate in the app. Until then Excel stays the rate. */
+  hourlyRateSource?: 'ui';
   monthlySalary?: number;
   isActive?: boolean;
   localId?: string;
@@ -207,7 +209,7 @@ export function resolvePaymentFrequency(member: StaffPayrollRecord): PaymentFreq
 export function formatStaffPayLine(member: StaffPayrollRecord): string {
   const freq = resolvePaymentFrequency(member);
   if (freq === 'hourly') {
-    const rate = Number(member.hourlyRate ?? member.salary ?? 0);
+    const rate = resolveHourlyRate(member);
     return `$${rate.toFixed(2)}/hr`;
   }
   if (freq === 'daily') {
@@ -293,17 +295,26 @@ export function partitionStaffByEmploymentStatus(roster: StaffPayrollRecord[]): 
   return { active, inactive };
 }
 
-export function resolveHourlyRate(member: StaffPayrollRecord): number {
-  const fromMember = Number(member.hourlyRate ?? member.salary ?? 0);
-  if (fromMember > 0) return fromMember;
-
+function excelHourlyRate(member: StaffPayrollRecord): number {
   const summary = getUsbTimesheetSummary(member);
   const ownPeriods = filterStatementPeriodsForMember(member, summary?.periods || []);
-  for (const period of ownPeriods) {
-    const rate = Number(period.hourlyRateUsd ?? 0);
+  for (let i = ownPeriods.length - 1; i >= 0; i -= 1) {
+    const rate = Number(ownPeriods[i].hourlyRateUsd ?? 0);
     if (rate > 0) return rate;
   }
   return 0;
+}
+
+/** Excel rate until a UI edit sets hourlyRateSource to ui. That edit then stays the rate. */
+export function resolveHourlyRate(member: StaffPayrollRecord): number {
+  if (member.hourlyRateSource === 'ui') {
+    const edited = Number(member.hourlyRate ?? member.salary ?? 0);
+    if (edited > 0) return edited;
+  }
+  const fromExcel = excelHourlyRate(member);
+  if (fromExcel > 0) return fromExcel;
+  const fromMember = Number(member.hourlyRate ?? member.salary ?? 0);
+  return fromMember > 0 ? fromMember : 0;
 }
 
 /** Daily wage from staff profile (`salary` field stores per-day rate for daily employees). */

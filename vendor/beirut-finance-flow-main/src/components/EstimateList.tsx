@@ -1,22 +1,26 @@
 import React from "react";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Eye, Share2, Pencil } from "lucide-react";
+import { resolveInvoiceNumber } from "@/lib/financeDocumentNormalization";
 import { useAppContext } from "@/context/AppContext";
-import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
 
 interface EstimateListProps {
   onPreview: (estimate: any) => void;
   onSend: (estimateId: string) => void;
   onExport?: (estimateId: string) => void;
   onEdit?: (estimate: any) => void;
+  onDelete?: (estimate: any) => void;
 }
 
-const EstimateList: React.FC<EstimateListProps> = ({ onPreview, onSend, onEdit }) => {
+const EstimateList: React.FC<EstimateListProps> = ({ onPreview, onSend, onExport, onEdit, onDelete }) => {
   const { estimates } = useAppContext();
+  const dateFilter = useInvoiceManagerDateFilterOptional();
+  const visibleEstimates = (estimates || []).filter(
+    (estimate) => !dateFilter || dateFilter.matchesDate(estimate.date ?? estimate.createdAt),
+  );
 
-  if (!estimates || estimates.length === 0) {
+  if (!visibleEstimates.length) {
     return (
       <div className="text-center py-8">
         <p className="text-gray-500">No estimates found. Click "New Estimate" to create one.</p>
@@ -26,54 +30,40 @@ const EstimateList: React.FC<EstimateListProps> = ({ onPreview, onSend, onEdit }
 
   return (
     <div className="space-y-3">
-      {estimates.map((estimate) => (
-        <Card key={estimate.id}>
-          <CardHeader className="pb-2">
-            <div className="flex flex-col gap-2 sm:flex-row sm:justify-between sm:items-start">
-              <div className="min-w-0">
-                <h3 className="text-base sm:text-lg font-semibold truncate">{estimate.id}</h3>
-                <p className="text-sm text-muted-foreground truncate">{estimate.clientName || "-"}</p>
-              </div>
-              <Badge
-                className="self-start shrink-0"
-                variant={
-                  estimate.status === "approved"
-                    ? "success"
-                    : estimate.status === "rejected"
-                      ? "destructive"
-                      : "outline"
-                }
+      {visibleEstimates.map((estimate) => (
+        <div
+          key={estimate.id}
+          className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+        >
+          <div>
+            <h3 className="font-medium">{estimate.clientName || "Quotation"}</h3>
+            <p className="text-sm text-muted-foreground">
+              {estimate.date} · {formatCurrency(estimate.amount, estimate.currency)} · {estimate.status}
+              {resolveInvoiceNumber(estimate as Record<string, unknown>)
+                ? ` · ${resolveInvoiceNumber(estimate as Record<string, unknown>)}`
+                : ""}
+            </p>
+            {onEdit && (
+              <button
+                type="button"
+                style={{ marginTop: 8, background: "#0f766e", color: "#ffffff", border: 0, borderRadius: 6, padding: "6px 12px", fontWeight: 700 }}
+                onClick={() => onEdit(estimate)}
               >
-                {estimate.status}
-              </Badge>
-            </div>
-          </CardHeader>
-          <CardContent className="space-y-3 pt-0">
-            <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-              <p className="text-lg font-semibold">{formatCurrency(estimate.amount, estimate.currency)}</p>
-              <p className="text-muted-foreground">Date: {new Date(estimate.date).toLocaleDateString()}</p>
-              {estimate.expiryDate && (
-                <p className="text-muted-foreground">Expires: {estimate.expiryDate}</p>
-              )}
-            </div>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:flex sm:flex-wrap sm:justify-end">
-              {onEdit && (
-                <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => onEdit(estimate)}>
-                  <Pencil className="mr-1 h-4 w-4 sm:mr-2" />
-                  <span className="text-xs sm:text-sm">Edit</span>
-                </Button>
-              )}
-              <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => onPreview(estimate)}>
-                <Eye className="mr-1 h-4 w-4 sm:mr-2" />
-                <span className="text-xs sm:text-sm">Preview</span>
-              </Button>
-              <Button variant="outline" size="sm" className="w-full sm:w-auto" onClick={() => onSend(estimate.id)}>
-                <Share2 className="mr-1 h-4 w-4 sm:mr-2" />
-                <span className="text-xs sm:text-sm">Share</span>
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+                Edit quotation
+              </button>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => onPreview(estimate)}>Preview</Button>
+            <Button variant="outline" size="sm" onClick={() => onSend(estimate.id)}>Share</Button>
+            {onExport && (
+              <Button variant="outline" size="sm" onClick={() => onExport(estimate.id)}>Export</Button>
+            )}
+            {onDelete && (
+              <Button variant="outline" size="sm" onClick={() => onDelete(estimate)}>Delete</Button>
+            )}
+          </div>
+        </div>
       ))}
     </div>
   );

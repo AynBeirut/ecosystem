@@ -1,0 +1,77 @@
+{
+  "sourceFile": "/home/anwar/Downloads/Monthly Sales & Expenses .xls",
+  "sheet": "Sheet1",
+  "note": "Master month map — Sales col B = in proxy; Expenses col C + Salaries col D = operating out proxy (not cash-book drawer Total In/Out)",
+  "months": [
+    {
+      "month": "31-12-2025",
+      "sales": 1910,
+      "expenses": 1565,
+      "salaries": 4368,
+      "totalRevenue": -4023
+    },
+    {
+      "month": "31-1-2026",
+      "sales": 1431,
+      "expenses": 1565,
+      "salaries": 3276,
+      "totalRevenue": -3410
+    },
+    {
+      "month": "28-2-2026",
+      "sales": 3227,
+      "expenses": 1098,
+      "salaries": 3505,
+      "totalRevenue": -1376
+    },
+    {
+      "month": "31-3-2026",
+      "sales": 3108,
+      "expenses": 2730,
+      "salaries": 3129,
+      "totalRevenue": -2751
+    },
+    {
+      "month": "30-4-2026",
+      "sales": 7747,
+      "expenses": 7748,
+      "salaries": 2797,
+      "totalRevenue": -2798
+    },
+    {
+      "month": "31-5-2026",
+      "sales": 14226,
+      "expenses": 10808,
+      "salaries": 3504,
+      "totalRevenue": -86
+    },
+    {
+      "month": "30-6-2026",
+      "sales": 16380,
+      "expenses": 11029,
+      "salaries": 3441,
+      "totalRevenue": 1910
+    },
+    {
+      "month": "31-7-2026",
+      "sales": 23371,
+      "expenses": 17653,
+      "salaries": 3717,
+      "totalRevenue": 2001
+    },
+    {
+      "month": "30-8-2026",
+      "sales": 15003,
+      "expenses": 8567,
+      "salaries": 3928,
+      "totalRevenue": 2508
+    }
+  ],
+  "totals": {
+    "salesColB": 86403,
+    "expensesColC": 62763,
+    "salariesColD": 31665,
+    "expensesPlusSalaries": 94428,
+    "totalRevenueColG": -8025
+  }
+}

@@ -49,52 +49,217 @@ async function canAccessStore(user: AuthUser, storeId: string): Promise<boolean>
   return false;
 }
 
+/** Accept storeProfiles doc id or public slug (Meta URLs often use the wrong value). */
+async function resolveStoreProfileForCatalogFeed(
+  db: FirebaseFirestore.Firestore,
+  storeIdOrSlug: string,
+): Promise<FirebaseFirestore.DocumentSnapshot | null> {
+  const hint = String(storeIdOrSlug || '').trim();
+  if (!hint) return null;
+
+  const direct = await db.collection('storeProfiles').doc(hint).get();
+  if (direct.exists) return direct;
+
+  const bySlug = await db.collection('storeProfiles').where('slug', '==', hint).limit(1).get();
+  if (!bySlug.empty) return bySlug.docs[0];
+
+  const normalizedSlug = hint.toLowerCase().replace(/\s+/g, '-');
+  if (normalizedSlug !== hint) {
+    const byNormalized = await db.collection('storeProfiles').where('slug', '==', normalizedSlug).limit(1).get();
+    if (!byNormalized.empty) return byNormalized.docs[0];
+  }
+
+  return null;
+}
+
+export type MetaCatalogFeedItem = {
+  id: string;
+  retailer_id: string;
+  title: string;
+  description: string;
+  availability: string;
+  condition: string;
+  price: string;
+  link: string;
+  image_link: string;
+  brand: string;
+  google_product_category: string;
+};
+
+const META_CATALOG_API_BASE =
+  'https://us-central1-market-flow-7b074.cloudfunctions.net/api';
+
+/** Meta requires a public HTTPS image; POS/menu rows often have emoji-only visuals in Firestore. */
+export const META_CATALOG_FALLBACK_IMAGE_URL =
+  'https://grabio.space/meta-catalog/icons/icon-192x192.png';
+
+export function buildMetaCatalogFeedUrl(storeId: string, apiBase = META_CATALOG_API_BASE): string {
+  const base = apiBase.replace(/\/$/, '');
+  return `${base}/meta/catalog/feed.csv?storeId=${encodeURIComponent(storeId)}`;
+}
+
+function escapeCsvCell(value: string): string {
+  const cell = String(value ?? '').replace(/\r?\n/g, ' ').trim();
+  if (/[",\n]/.test(cell)) {
+    return `"${cell.replace(/"/g, '""')}"`;
+  }
+  return cell;
+}
+
+function isHttpImageUrl(value: unknown): boolean {
+  const url = String(value || '').trim();
+  return /^https?:\/\//i.test(url);
+}
+
+export function resolveMetaCatalogImageLink(
+  data: Record<string, unknown>,
+  storeData?: Record<string, unknown>,
+): string {
+  const candidates = [
+    data.image,
+    data.imageUrl,
+    data.thumbnail,
+    storeData?.logo,
+    storeData?.logoUrl,
+    storeData?.profileImage,
+  ];
+  for (const candidate of candidates) {
+    if (isHttpImageUrl(candidate)) return String(candidate).trim();
+  }
+  return META_CATALOG_FALLBACK_IMAGE_URL;
+}
+
+function isValidMetaCatalogProduct(data: Record<string, unknown>): boolean {
+  const hasName = String(data.name || '').trim().length > 0;
+  const price = Number(data.price || 0);
+  return hasName && Number.isFinite(price) && price > 0;
+}
+
+function buildMetaCatalogItems(
+  productsSnap: FirebaseFirestore.QuerySnapshot,
+  storeSlug: string,
+  storeName: string,
+  currency: string,
+  storeData?: Record<string, unknown>,
+  options?: { catalogReadyOnly?: boolean },
+): MetaCatalogFeedItem[] {
+  const catalogReadyOnly = options?.catalogReadyOnly !== false;
+  const items: MetaCatalogFeedItem[] = [];
+
+  for (const doc of productsSnap.docs) {
+    const data = doc.data() as Record<string, unknown>;
+    if (catalogReadyOnly && !isValidMetaCatalogProduct(data)) continue;
+
+    const productId = String(doc.id || '').trim();
+    if (!productId) continue;
+
+    const productSlug = String(data.slug || productId).trim();
+    const price = Number(data.price || 0);
+    const inStock = Boolean(data.inStock);
+    const description = String(data.description || data.name || '').trim();
+
+    items.push({
+      id: productId,
+      retailer_id: productId,
+      title: String(data.name || '').trim(),
+      description,
+      availability: inStock ? 'in stock' : 'out of stock',
+      condition: 'new',
+      price: `${Number.isFinite(price) ? price.toFixed(2) : '0.00'} ${currency}`,
+      link: `https://${storeSlug}.grabio.space/product/${productSlug}`,
+      image_link: resolveMetaCatalogImageLink(data, storeData),
+      brand: storeName,
+      google_product_category: String(data.category || '').trim(),
+    });
+  }
+
+  return items;
+}
+
+function metaCatalogItemsToCsv(items: MetaCatalogFeedItem[]): string {
+  const headers = [
+    'id',
+    'title',
+    'description',
+    'availability',
+    'condition',
+    'price',
+    'link',
+    'image_link',
+    'brand',
+    'google_product_category',
+    'retailer_id',
+  ];
+  const lines = [headers.join(',')];
+  for (const item of items) {
+    lines.push(
+      [
+        item.id,
+        item.title,
+        item.description,
+        item.availability,
+        item.condition,
+        item.price,
+        item.link,
+        item.image_link,
+        item.brand,
+        item.google_product_category,
+        item.retailer_id,
+      ]
+        .map(escapeCsvCell)
+        .join(','),
+    );
+  }
+  return `${lines.join('\n')}\n`;
+}
+
+function wantsCsvCatalogFeed(req: Request): boolean {
+  const format = String(req.query.format || '').trim().toLowerCase();
+  if (format === 'csv') return true;
+  return req.path.toLowerCase().endsWith('/feed.csv');
+}
+
 /**
- * GET /meta/catalog/feed?storeId=xxx
- * Public feed endpoint formatted for Meta catalog ingestion.
+ * GET /meta/catalog/feed?storeId=xxx (&format=csv)
+ * GET /meta/catalog/feed.csv?storeId=xxx
+ * Public feed for Meta catalog ingestion (CSV default for .csv path).
  */
 export async function getMetaCatalogFeed(req: Request, res: Response): Promise<void> {
   try {
-    const storeId = String(req.query.storeId || '').trim();
-    if (!storeId) {
+    const storeHint = String(req.query.storeId || req.query.storeSlug || '').trim();
+    if (!storeHint) {
       res.status(400).json({ error: 'Missing required query param: storeId' });
       return;
     }
 
     const db = admin.firestore();
-    const [storeSnap, productsSnap] = await Promise.all([
-      db.collection('storeProfiles').doc(storeId).get(),
-      db.collection('products').where('storeId', '==', storeId).get(),
-    ]);
-
-    if (!storeSnap.exists) {
-      res.status(404).json({ error: 'Store not found' });
+    const storeSnap = await resolveStoreProfileForCatalogFeed(db, storeHint);
+    if (!storeSnap?.exists) {
+      res.status(404).json({
+        error: 'Store not found',
+        hint:
+          'Use your store document ID from Admin → Store Profile (top of page), or slug e.g. little-hands — not your login email.',
+        received: storeHint,
+      });
       return;
     }
+
+    const storeId = storeSnap.id;
+    const productsSnap = await db.collection('products').where('storeId', '==', storeId).get();
 
     const storeData = storeSnap.data() as Record<string, unknown>;
     const storeSlug = String(storeData.slug || storeId).trim();
     const storeName = String(storeData.name || 'Store').trim();
     const currency = String(storeData.mainCurrency || 'USD').trim();
 
-    const items = productsSnap.docs.map((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
-      const data = doc.data() as Record<string, unknown>;
-      const productSlug = String(data.slug || doc.id).trim();
-      const price = Number(data.price || 0);
-      const inStock = Boolean(data.inStock);
-      return {
-        id: doc.id,
-        title: String(data.name || '').trim(),
-        description: String(data.description || '').trim(),
-        availability: inStock ? 'in stock' : 'out of stock',
-        condition: 'new',
-        price: `${Number.isFinite(price) ? price.toFixed(2) : '0.00'} ${currency}`,
-        link: `https://${storeSlug}.grabio.space/product/${productSlug}`,
-        image_link: String(data.image || '').trim(),
-        brand: storeName,
-        google_product_category: String(data.category || '').trim(),
-      };
-    });
+    const items = buildMetaCatalogItems(productsSnap, storeSlug, storeName, currency, storeData);
+
+    if (wantsCsvCatalogFeed(req)) {
+      res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+      res.setHeader('Cache-Control', 'public, max-age=300');
+      res.status(200).send(metaCatalogItemsToCsv(items));
+      return;
+    }
 
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
     res.setHeader('Cache-Control', 'public, max-age=300');
@@ -102,11 +267,29 @@ export async function getMetaCatalogFeed(req: Request, res: Response): Promise<v
       generatedAt: new Date().toISOString(),
       storeId,
       count: items.length,
+      feedCsvUrl: buildMetaCatalogFeedUrl(storeId),
       items,
     });
   } catch (err) {
     console.error('Meta catalog feed error:', err);
     res.status(500).json({ error: 'Failed to generate Meta catalog feed' });
+  }
+}
+
+import { grabioMetaCatalogToCsv } from '../lib/grabioMetaCatalog';
+
+/**
+ * GET /meta/catalog/grabio-packages-feed.csv
+ * Grabio marketing SaaS packages (not tenant store products).
+ */
+export async function getGrabioPackagesCatalogFeed(req: Request, res: Response): Promise<void> {
+  try {
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Cache-Control', 'public, max-age=300');
+    res.status(200).send(grabioMetaCatalogToCsv());
+  } catch (err) {
+    console.error('Grabio packages catalog feed error:', err);
+    res.status(500).json({ error: 'Failed to generate Grabio packages catalog feed' });
   }
 }
 
@@ -159,14 +342,11 @@ export async function syncMetaCatalog(req: Request, res: Response): Promise<void
     const totalProducts = productsSnap.size;
     const validProducts = productsSnap.docs.filter((doc: FirebaseFirestore.QueryDocumentSnapshot) => {
       const data = doc.data() as Record<string, unknown>;
-      const hasName = String(data.name || '').trim().length > 0;
-      const hasImage = String(data.image || '').trim().length > 0;
-      const price = Number(data.price || 0);
-      return hasName && hasImage && Number.isFinite(price) && price > 0;
+      return isValidMetaCatalogProduct(data);
     }).length;
 
     const syncedAt = new Date().toISOString();
-    const feedUrl = `https://us-central1-market-flow-7b074.cloudfunctions.net/api/meta/catalog/feed?storeId=${encodeURIComponent(storeId)}`;
+    const feedUrl = buildMetaCatalogFeedUrl(storeId);
 
     const jobRef = await db.collection('metaCatalogSyncJobs').add({
       storeId,
@@ -261,7 +441,7 @@ export async function connectFacebookShop(req: Request, res: Response): Promise<
     }
 
     const feedUrl = String(metaIntegrationSettings.catalogFeedUrl || '').trim() ||
-      `https://us-central1-market-flow-7b074.cloudfunctions.net/api/meta/catalog/feed?storeId=${encodeURIComponent(storeId)}`;
+      buildMetaCatalogFeedUrl(storeId);
     const connectedAt = new Date().toISOString();
     const onboardingUrl = `https://business.facebook.com/commerce_manager/catalogs/${encodeURIComponent(catalogId)}`;
 
@@ -360,7 +540,7 @@ export async function connectInstagramShopping(req: Request, res: Response): Pro
     }
 
     const feedUrl = String(metaIntegrationSettings.catalogFeedUrl || '').trim() ||
-      `https://us-central1-market-flow-7b074.cloudfunctions.net/api/meta/catalog/feed?storeId=${encodeURIComponent(storeId)}`;
+      buildMetaCatalogFeedUrl(storeId);
     const connectedAt = new Date().toISOString();
     const onboardingUrl = `https://business.facebook.com/commerce_manager/catalogs/${encodeURIComponent(catalogId)}`;
 
@@ -433,9 +613,14 @@ export async function trackMetaConversionEvent(req: Request, res: Response): Pro
     const eventId = String(req.body?.eventId || '').trim() || undefined;
     const value = Number(req.body?.value || 0);
     const currency = String(req.body?.currency || 'USD').trim() || 'USD';
-    const contentIds = Array.isArray(req.body?.contentIds)
-      ? (req.body.contentIds as unknown[]).map((value) => String(value || '').trim()).filter(Boolean)
-      : [];
+    const contentIdSet = new Set<string>();
+    if (Array.isArray(req.body?.contentIds)) {
+      for (const value of req.body.contentIds as unknown[]) {
+        const id = String(value || '').trim();
+        if (id) contentIdSet.add(id);
+      }
+    }
+    const contentIds = Array.from(contentIdSet);
     const contentName = String(req.body?.contentName || '').trim();
     const eventSourceUrl = String(req.body?.eventSourceUrl || req.headers.referer || '').trim() || undefined;
 
@@ -448,7 +633,13 @@ export async function trackMetaConversionEvent(req: Request, res: Response): Pro
       customData: {
         ...(Number.isFinite(value) && value > 0 ? { value } : {}),
         currency,
-        ...(contentIds.length > 0 ? { content_ids: contentIds, content_type: 'product' } : {}),
+        ...(contentIds.length > 0
+          ? {
+            content_ids: contentIds,
+            content_type: 'product',
+            contents: contentIds.map((id) => ({ id, quantity: 1 })),
+          }
+          : {}),
         ...(contentName ? { content_name: contentName } : {}),
       },
       userData: {

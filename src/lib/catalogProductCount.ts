@@ -21,18 +21,40 @@ const EXCLUDED_PRODUCT_TYPES = new Set([
   'recipe_ingredient',
 ]);
 
-export function isCatalogCountableProductData(data: Record<string, unknown> | undefined): boolean {
+export function isInventoryOnlyProductData(data: Record<string, unknown> | undefined): boolean {
   if (!data) return false;
-
-  const rawType = String(data.productType ?? data.type ?? '').trim().toLowerCase();
+  const rawType = String(data.productType ?? data.type ?? data.kind ?? '').trim().toLowerCase();
   const itemType = String(data.itemType ?? '').trim().toLowerCase();
+  if (data.isSellable === false && EXCLUDED_PRODUCT_TYPES.has(rawType)) return true;
+  if (itemType === 'raw_material' || itemType === 'ingredient') return true;
+  return EXCLUDED_PRODUCT_TYPES.has(rawType);
+}
 
+/** Menu / V·POS / POS catalog — simple, composed, and services only (no ingredients). */
+export function resolveSellableProductType(
+  data: Record<string, unknown>,
+): 'simple' | 'composed' | 'service' | 'raw_material' {
+  const rawType = String(data.productType ?? data.type ?? data.kind ?? '').trim().toLowerCase();
+  if (rawType === 'composed') return 'composed';
+  if (rawType === 'service') return 'service';
+  if (rawType === 'simple') return 'simple';
+  if (isInventoryOnlyProductData(data)) return 'raw_material';
+  const category = String(data.category || '').trim().toLowerCase();
+  if (category === 'services' || category.startsWith('service')) return 'service';
+  return 'simple';
+}
+
+export function isSellableMenuProduct(data: Record<string, unknown> | undefined): boolean {
+  if (!data) return false;
+  if (data.vposMenuVisible === false) return false;
   if (data.isSellable === false) return false;
   if (data.excludeFromCatalogCount === true) return false;
-  if (itemType === 'raw_material' || itemType === 'ingredient') return false;
-  if (EXCLUDED_PRODUCT_TYPES.has(rawType)) return false;
+  const kind = resolveSellableProductType(data);
+  return kind === 'simple' || kind === 'composed' || kind === 'service';
+}
 
-  return true;
+export function isCatalogCountableProductData(data: Record<string, unknown> | undefined): boolean {
+  return isSellableMenuProduct(data);
 }
 
 export async function getCatalogProductCount(db: Firestore, storeId: string): Promise<number> {

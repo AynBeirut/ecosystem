@@ -1,0 +1,18 @@
+{
+  "date": "2026-09-17",
+  "storeId": "EZfuoNQFTJVU4cubNuckpp4K7zw2",
+  "qaEmail": "mooveelectro@gmail.com",
+  "fixes": [
+    "whishOps: credentials-present downgraded from fail to warn with field-level detail",
+    "Firestore: enabledModules all true, websiteUrl https://grabio.space, whishEnabled true",
+    "featureAccessGate: isBuilderEntitled includes blog_publisher module",
+    "AdminScheduledOrders: New scheduled order dialog + getActualStoreId",
+    "AdminPayments: checklist copy explains warn vs fail"
+  ],
+  "retest": [
+    "Hard refresh Admin → Payments Whish checklist → overall should be WARN not FAIL",
+    "Admin → Theme Editor → should load (builder module on)",
+    "Admin → Scheduled Orders → New scheduled order",
+    "Deploy: firebase deploy --only hosting,functions (pending user confirmation)"
+  ]
+}

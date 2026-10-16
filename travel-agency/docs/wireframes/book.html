@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wireframe — Book wizard</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f1f5f9; }
+    main { max-width: 720px; margin: 32px auto; padding: 0 16px; }
+    .steps { display: flex; gap: 8px; margin-bottom: 24px; font-size: 12px; }
+    .steps span { padding: 4px 10px; border-radius: 99px; background: #e2e8f0; }
+    .steps span.on { background: #06b6d4; color: #fff; }
+    .panel { background: #fff; border-radius: 12px; padding: 20px; border: 1px solid #e2e8f0; }
+    label { font-size: 12px; color: #64748b; display: block; margin-top: 12px; }
+    input, select { width: 100%; padding: 10px; margin-top: 4px; border: 1px solid #cbd5e1; border-radius: 8px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    button { margin-top: 20px; width: 100%; padding: 12px; background: #06b6d4; color: #fff; border: none; border-radius: 8px; font-size: 15px; }
+    .deal-pill { font-size: 12px; background: #ecfeff; color: #0e7490; padding: 6px 10px; border-radius: 8px; display: inline-block; margin-bottom: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="steps"><span class="on">1. Link deal</span><span>2. Search</span><span>3. Attach to deal</span></div>
+    <div class="panel">
+      <span class="deal-pill">Attached: Dubai — Sharma family</span>
+      <div class="row">
+        <div><label>From</label><input value="DEL" /></div>
+        <div><label>To</label><input value="DXB" /></div>
+      </div>
+      <label>Departure</label><input type="date" />
+      <label>Passengers</label><select><option>2 adults, 2 children</option></select>
+      <label>Product</label><select><option>Flights</option><option>Hotels</option><option>Group tour</option></select>
+      <button>Search (Nextra API)</button>
+    </div>
+  </main>
+</body>
+</html>

@@ -1,0 +1,31 @@
+{
+  "generatedAt": "2026-09-18T15:15:54.287Z",
+  "source": [
+    "/media/anwar/12AD-9999/New folder/Little Hands/Owners/Sanaa .xlsx#December ",
+    "/media/anwar/12AD-9999/New folder/Little Hands/Owners/Sara.xlsx#December 2025"
+  ],
+  "findings": {
+    "sanaaDecember2025": {
+      "rows": 17,
+      "gross": 104.44,
+      "net": 9.5,
+      "discount": 94.94,
+      "discountRatePct": 90.9
+    },
+    "saraDecember2025": {
+      "rows": 2,
+      "gross": 10.66,
+      "net": 2.2,
+      "discount": 8.46,
+      "discountRatePct": 79.36
+    },
+    "combinedDecember2025": {
+      "rows": 19,
+      "gross": 115.1,
+      "net": 11.7,
+      "discount": 103.4,
+      "discountRatePct": 89.84
+    }
+  },
+  "note": "These discounted owner-sheet lines are not present in orders/invoices collections for Dec 2025, so no sale-recognized discount JE is generated from POS order pipeline."
+}

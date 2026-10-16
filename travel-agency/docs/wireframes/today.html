@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wireframe — Today</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0; background: #f1f5f9; color: #0f172a; }
+    header { background: #fff; border-bottom: 1px solid #e2e8f0; padding: 12px 24px; display: flex; gap: 16px; align-items: center; }
+    nav a { margin-right: 12px; color: #64748b; text-decoration: none; font-size: 14px; }
+    nav a.active { color: #0891b2; font-weight: 600; }
+    main { max-width: 960px; margin: 24px auto; padding: 0 16px; }
+    h1 { font-size: 22px; margin-bottom: 8px; }
+    .sub { color: #64748b; font-size: 14px; margin-bottom: 24px; }
+    .card { background: #fff; border-radius: 12px; padding: 16px 20px; margin-bottom: 12px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center; }
+    .card strong { display: block; font-size: 15px; }
+    .card span { font-size: 13px; color: #64748b; }
+    .btn { background: #06b6d4; color: #fff; border: none; padding: 8px 14px; border-radius: 8px; font-size: 13px; cursor: pointer; }
+    .tag { font-size: 11px; background: #fef3c7; color: #92400e; padding: 2px 8px; border-radius: 99px; }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>Agency</strong>
+    <nav>
+      <a class="active" href="today.html">Today</a>
+      <a href="deal.html">Deals</a>
+      <a href="book.html">Book</a>
+    </nav>
+  </header>
+  <main>
+    <h1>Good afternoon, Agent</h1>
+    <p class="sub">One tap to the next action — no empty dashboard.</p>
+    <div class="card"><div><strong>Follow up — Sharma family</strong><span>Quote sent 3 days ago · no reply</span></div><button class="btn">Open deal</button></div>
+    <div class="card"><div><strong>Deposit due — Dubai package</strong><span>QT-2026-10-01-002 · accepted, no payment</span></div><button class="btn">Record deposit</button></div>
+    <div class="card"><div><strong>Book now — Goa flights</strong><span>Deposit received · no PNR yet</span></div><button class="btn">Book via Nextra</button></div>
+    <div class="card"><div><strong>Wallet low</strong><span>₹26,670 available · ₹73,330 due</span></div><span class="tag">Owner alert</span></div>
+  </main>
+</body>
+</html>

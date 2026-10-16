@@ -1,0 +1,168 @@
+{
+  "generatedAt": "2026-09-20T11:20:31.683Z",
+  "mode": "write",
+  "merges": [
+    {
+      "key": "ashwe",
+      "displayName": "Ashwe",
+      "winnerId": "lh-sup-05506e15620c3f41",
+      "loserIds": [
+        "lh-sup-1d07780aa939a68d",
+        "lh-sup-9a7d2b52b2d0c894"
+      ],
+      "loserNames": [
+        "Ashwe",
+        "Ashwe"
+      ]
+    },
+    {
+      "key": "panino backery",
+      "displayName": "Panino Backery",
+      "winnerId": "lh-sup-0d6822c35c8b0aa5",
+      "loserIds": [
+        "lh-sup-d97c15cebecbcde6"
+      ],
+      "loserNames": [
+        "Panino Backery"
+      ]
+    },
+    {
+      "key": "event mega store",
+      "displayName": "Event Mega Store",
+      "winnerId": "lh-sup-4bbdb18cd55c9cc5",
+      "loserIds": [
+        "lh-sup-2432e3e8efc61f2f",
+        "lh-sup-2d14ee89dc17d72d",
+        "lh-sup-54728a3d10bbb6ae"
+      ],
+      "loserNames": [
+        "Event Mega Store",
+        "Event Mega Store",
+        "Event Mega Store"
+      ]
+    },
+    {
+      "key": "storium",
+      "displayName": "Storium",
+      "winnerId": "lh-sup-2fd806e0a90b227e",
+      "loserIds": [
+        "lh-sup-581239b67bee220b",
+        "lh-sup-67a25148d78794c3"
+      ],
+      "loserNames": [
+        "Storium",
+        "Storium"
+      ]
+    },
+    {
+      "key": "wooden backery",
+      "displayName": "Wooden Backery",
+      "winnerId": "lh-sup-3d96eba7ce248772",
+      "loserIds": [
+        "lh-sup-c0e53a32595121ed"
+      ],
+      "loserNames": [
+        "Wooden Backery"
+      ]
+    },
+    {
+      "key": "le marchet selectif",
+      "displayName": "Le Marchet Selectif",
+      "winnerId": "lh-sup-406c44032aa379de",
+      "loserIds": [
+        "lh-sup-77affd6051541214"
+      ],
+      "loserNames": [
+        "Le  Marchet Selectif"
+      ]
+    },
+    {
+      "key": "librarie mallah",
+      "displayName": "Librarie Mallah",
+      "winnerId": "lh-sup-794ad3dbaedae9bf",
+      "loserIds": [
+        "lh-sup-4ca2f46c70fd7b0c",
+        "lh-sup-63cea468f0cfab6d",
+        "lh-sup-e6af0997cc077445"
+      ],
+      "loserNames": [
+        "Librarie Mallah",
+        "Librarie Mallah",
+        "Librarie Mallah"
+      ]
+    },
+    {
+      "key": "brocolie",
+      "displayName": "Brocolie",
+      "winnerId": "lh-sup-4e46b33d0fefe87c",
+      "loserIds": [
+        "lh-sup-5d23bd146ff9987e",
+        "lh-sup-bfe767e17ec74a92"
+      ],
+      "loserNames": [
+        "Brocolie",
+        "Brocolie"
+      ]
+    },
+    {
+      "key": "lteif market",
+      "displayName": "Lteif Market",
+      "winnerId": "lh-sup-6165639dbc1a5703",
+      "loserIds": [
+        "lh-sup-55e0370ee177c10c",
+        "lh-sup-71790539d8b129cf"
+      ],
+      "loserNames": [
+        "Lteif Market",
+        "Lteif Market"
+      ]
+    },
+    {
+      "key": "spinneys",
+      "displayName": "Spinneys",
+      "winnerId": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-1",
+      "loserIds": [
+        "lh-sup-833ac14f35c2eeb4"
+      ],
+      "loserNames": [
+        "Spinneys"
+      ]
+    },
+    {
+      "key": "boucherie ziad",
+      "displayName": "Boucherie Ziad",
+      "winnerId": "lh-sup-da60586256219a1d",
+      "loserIds": [
+        "lh-sup-84ec350012ec3754",
+        "lh-sup-fe7ccefb99f19ea4"
+      ],
+      "loserNames": [
+        "Boucherie Ziad",
+        "Boucherie Ziad (Mafroume)"
+      ]
+    },
+    {
+      "key": "luigi",
+      "displayName": "LuiGi",
+      "winnerId": "lh-sup-86375dc0dd3ded24",
+      "loserIds": [
+        "lh-sup-e5806ae5e3f03009"
+      ],
+      "loserNames": [
+        "LuiGi"
+      ]
+    },
+    {
+      "key": "maasri hostein",
+      "displayName": "Maasri Hostein",
+      "winnerId": "lh-sup-b87745aa7de546fe",
+      "loserIds": [
+        "lh-sup-c049796d15fc348e"
+      ],
+      "loserNames": [
+        "Maasri Hostein ( lspp)"
+      ]
+    }
+  ],
+  "purchasesRemapped": 24
+}

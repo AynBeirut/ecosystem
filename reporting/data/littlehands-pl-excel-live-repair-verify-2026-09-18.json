@@ -1,0 +1,40 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "storeName": "little hands",
+  "range": {
+    "start": "2025-12-01",
+    "end": "2026-09-30"
+  },
+  "repairInputs": {
+    "financeExpensesCount": 775,
+    "financeExpensesTotalUsd": 58743.76,
+    "operatingCashAndPayrollSourceUsd": 31000.75
+  },
+  "repairsApplied": {
+    "sourceToGlRepairReport": "reporting/data/littlehands-excel-source-to-gl-repair-2026-09-18.json",
+    "sourceToGlEntriesCreated": 1091,
+    "sourceRowsProcessed": 775,
+    "purchaseSupplierCreditRemapReport": "reporting/data/littlehands-purchase-received-ap-remap-2026-09-18.json",
+    "purchaseReceivedCreditLinesMovedToAp": 188,
+    "purchaseReceivedCreditAmountMovedToApUsd": 13731.06
+  },
+  "verifiedPnlAfterRepair": {
+    "sales": 3601.8,
+    "totalClass7": 77655.81,
+    "beginningInventory": 0,
+    "purchasesGoods": 73500.27,
+    "endingInventory": 40344.67,
+    "totalCos": 33155.6,
+    "grossProfit": 44500.21,
+    "chargesGA": 19552.83,
+    "salariesRelated": 20309.34,
+    "totalExpenses": 39862.17,
+    "netProfit": 4638.04
+  },
+  "expectedUiEffect": {
+    "expensesThisMonth": "September financeExpenses are present and should show in Invoice Manager > Expenses > This month.",
+    "profitAndLoss": "P&L now includes Excel/import operating, cash expense, and payroll rows in expense buckets; supplier purchases affect purchases/ending inventory instead of negative G&A.",
+    "futurePurchasePosting": "Purchase receive/payment posting now uses AP 201 instead of supplier expense detail accounts."
+  },
+  "generatedAt": "2026-09-18T12:31:00.000Z"
+}

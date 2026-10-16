@@ -90,6 +90,8 @@ Canonical structure map: `~/Documents/grabio-platform-docs/Architecture/Packages
 - Store-scoped settings may be grouped under typed objects such as `orderSettings`, `paymentSettings`, `reservationSettings`, `roleSettings`, `inventorySettings`, and `financeDocumentSettings`.
 - Web admin, public marketplace, mobile apps, POS, and Cloud Functions must resolve the same effective settings for the same store.
 - **Web admin resolver (2026-09-15):** `src/lib/effectiveStoreContext.ts` — profile + entitlements + role + `venueOpsSettings`; see `docs/architecture/effective-store-context.md`.
+- **HR + Venue Ops (2026-09-28, staging):** `/admin/hr` holds employees, leave, training, documents, shifts, notes, assets, and reports. `/admin/venue-ops` holds allergens, menu bible, specs, briefings, floor tables, standards, and an import preview that does not save. None of those records store price or stock. Payroll stays on `/admin/staff` and `/admin/salaries`. The new collections are store-scoped. Live hosting was not released.
+- **Online table reservations:** The store-page table form writes `tableReservations` for that store. Staff manage them on `/admin/events` (Reservations tab). Event tickets stay on `storeEvents`.
 - Package gates decide whether a feature is available; tenant settings decide whether an available feature is enabled and how it behaves.
 - Defaults must be explicit and product-safe so older stores keep stable behavior when a new option is added.
 

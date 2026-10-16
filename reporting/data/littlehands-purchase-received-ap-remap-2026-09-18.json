@@ -1,0 +1,130 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "action": "remap purchase received supplier expense credits to AP 201",
+  "matched": 188,
+  "updated": 188,
+  "amount": 13731.06,
+  "generatedAt": "2026-09-18T12:28:54.296Z",
+  "samples": [
+    {
+      "lineId": "JE-1789732391534-L2",
+      "entryId": "JE-1789732391534",
+      "fromAccount": "61111000022 spinneys",
+      "credit": 20
+    },
+    {
+      "lineId": "JE-1789732398458-L2",
+      "entryId": "JE-1789732398458",
+      "fromAccount": "61111000023 Panino Bakery",
+      "credit": 6.74
+    },
+    {
+      "lineId": "JE-1789732450933-L2",
+      "entryId": "JE-1789732450933",
+      "fromAccount": "61111000038 Citern Water Toni Nehme",
+      "credit": 80
+    },
+    {
+      "lineId": "JE-1789732488079-L2",
+      "entryId": "JE-1789732488079",
+      "fromAccount": "61111000049 Manakich Zaatar",
+      "credit": 6
+    },
+    {
+      "lineId": "JE-1789732492439-L2",
+      "entryId": "JE-1789732492439",
+      "fromAccount": "61111000050 Thaer Benzin",
+      "credit": 40
+    },
+    {
+      "lineId": "JE-1789732519017-L2",
+      "entryId": "JE-1789732519017",
+      "fromAccount": "61111000056 KaraM Biek",
+      "credit": 60
+    },
+    {
+      "lineId": "JE-1789732523746-L2",
+      "entryId": "JE-1789732523746",
+      "fromAccount": "61111000057 Tables",
+      "credit": 350
+    },
+    {
+      "lineId": "JE-1789732539650-L2",
+      "entryId": "JE-1789732539650",
+      "fromAccount": "61111000061 Fairco International",
+      "credit": 40.9
+    },
+    {
+      "lineId": "JE-1789732547011-L2",
+      "entryId": "JE-1789732547011",
+      "fromAccount": "61111000063 Le Marchet selectif Birthday (17-18)",
+      "credit": 252
+    },
+    {
+      "lineId": "JE-1789732551356-L2",
+      "entryId": "JE-1789732551356",
+      "fromAccount": "61111000064 Boucherie Ziad",
+      "credit": 19
+    },
+    {
+      "lineId": "JE-1789732556350-L2",
+      "entryId": "JE-1789732556350",
+      "fromAccount": "61111000065 Thaer Orange",
+      "credit": 20
+    },
+    {
+      "lineId": "JE-1789732563635-L2",
+      "entryId": "JE-1789732563635",
+      "fromAccount": "61111000067 Anti Fly Fan (Marwaha Lal Deben)",
+      "credit": 84
+    },
+    {
+      "lineId": "JE-1789732572451-L2",
+      "entryId": "JE-1789732572451",
+      "fromAccount": "61111000022 spinneys",
+      "credit": 51
+    },
+    {
+      "lineId": "JE-1789732592078-L2",
+      "entryId": "JE-1789732592078",
+      "fromAccount": "61111000075 Eva Maalouly",
+      "credit": 21
+    },
+    {
+      "lineId": "JE-1789732597966-L2",
+      "entryId": "JE-1789732597966",
+      "fromAccount": "61111000037 Event Megastore",
+      "credit": 27.3
+    },
+    {
+      "lineId": "JE-1789732602863-L2",
+      "entryId": "JE-1789732602863",
+      "fromAccount": "61111000077 Mhamad Extra Work Farm July Paid On August",
+      "credit": 100
+    },
+    {
+      "lineId": "JE-1789732690970-L2",
+      "entryId": "JE-1789732690970",
+      "fromAccount": "61111000078 Le Marchet selectif (Birthday & Workshops )",
+      "credit": 112
+    },
+    {
+      "lineId": "JE-1789732706015-L2",
+      "entryId": "JE-1789732706015",
+      "fromAccount": "61111000022 spinneys",
+      "credit": 31
+    },
+    {
+      "lineId": "JE-1789732713927-L2",
+      "entryId": "JE-1789732713927",
+      "fromAccount": "61111000081 Thaer Wood Fork, wood  Spoon",
+      "credit": 48.5
+    },
+    {
+      "lineId": "JE-1789732730561-L2",
+      "entryId": "JE-1789732730561",
+      "fromAccount": "61111000085 Assab for Garden",
+      "credit": 7
+    }
+  ]
+}

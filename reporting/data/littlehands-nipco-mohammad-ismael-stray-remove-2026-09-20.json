@@ -1,0 +1,45 @@
+{
+  "date": "2026-09-20T10:06:18.532Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "nipcoCanonical": {
+    "storeId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+    "supplierId": "YKdTvl1cO1yroqwBQMcK",
+    "purchaseCount": 7
+  },
+  "archived": {
+    "suppliers": [
+      {
+        "id": "KSsrnQrz934QF4MAwpyk",
+        "name": "Mohammad Ismael"
+      },
+      {
+        "id": "8VmnuwYF1WVpbFyMXsSG",
+        "name": "Mohammad Ismael ttt"
+      }
+    ],
+    "pcg": [
+      {
+        "id": "mGHA8MRWqHqNcfFFxB1m",
+        "code": "61111000009",
+        "name": "Mohammad Ismael ttt"
+      },
+      {
+        "id": "mWRtafdw5jVsaWMD5lVL",
+        "code": "61111000008",
+        "name": "Mohammad Ismael"
+      }
+    ],
+    "ledger": [
+      {
+        "id": "acct-61111000008",
+        "code": "61111000008",
+        "name": "Mohammad Ismael"
+      },
+      {
+        "id": "acct-61111000009",
+        "code": "61111000009",
+        "name": "Mohammad Ismael ttt"
+      }
+    ]
+  }
+}

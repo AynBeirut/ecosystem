@@ -59,7 +59,11 @@ import {
   previewLineSideAmount,
   previewLineFxLabel,
 } from "@/lib/ledger/voucherDraftLineUtils";
-import { sanitizeJournalMemoForDisplay } from '@/lib/ledger/ledgerHumanLabels';
+import {
+  displayMemoForJournalEntry,
+  sanitizeJournalLineDescriptionForDisplay,
+  sanitizeJournalMemoForDisplay,
+} from '@/lib/ledger/ledgerHumanLabels';
 import { assertUniqueVoucherReference, peekAutoVoucherReference } from '@/lib/ledger/voucherReference';
 import { validateBalancedLines } from '@/lib/ledger/postingService';
 import { parseVoucherAmountNumber } from '@/lib/ledger/voucherAmountInput';
@@ -220,7 +224,9 @@ export default function VoucherEntryPanel({
     voucherMeta?: Record<string, unknown>;
   } | null>(null);
   const [previewPosting, setPreviewPosting] = useState(false);
+  const [previewBlockReason, setPreviewBlockReason] = useState<string | null>(null);
   const pendingPreviewAction = useRef<(() => void | Promise<void>) | null>(null);
+  const previewOpenedAt = useRef(0);
   const [allocOpen, setAllocOpen] = useState(false);
   const [pendingPost, setPendingPost] = useState<{
     voucherType: VoucherType;
@@ -278,9 +284,14 @@ export default function VoucherEntryPanel({
   const lineHasAmount = (line: DraftLine) =>
     parseVoucherAmountNumber(line.debit) > 0 || parseVoucherAmountNumber(line.credit) > 0;
 
+  const blockPreview = (text: string) => {
+    setPreviewBlockReason(text);
+    toast.error(text);
+  };
+
   const assertAccountsOnAmountLines = (lines: DraftLine[]): boolean => {
     if (lines.some((line) => lineHasAmount(line) && !line.accountId)) {
-      toast.error("Select an account on every line with an amount.");
+      blockPreview("Select an account on every line with an amount.");
       return false;
     }
     return true;
@@ -384,7 +395,7 @@ export default function VoucherEntryPanel({
     const vt = (entry.voucherType || "JV") as VoucherType;
     setVoucherTab(vt);
     setEntryDate(entry.date.slice(0, 10));
-    setMemo(sanitizeJournalMemoForDisplay(entry.memo || ""));
+    setMemo(displayMemoForJournalEntry(entry));
     setEditLockedReference(
       String(
         meta.externalReference || meta.paymentRef || meta.receiptRef || meta.transferRef || "",
@@ -517,6 +528,7 @@ export default function VoucherEntryPanel({
 
   const closePreview = () => {
     if (previewPosting) return;
+    if (Date.now() - previewOpenedAt.current < 400) return;
     pendingPreviewAction.current = null;
     setPreview(null);
   };
@@ -531,6 +543,8 @@ export default function VoucherEntryPanel({
     },
     action: () => void | Promise<void>,
   ) => {
+    previewOpenedAt.current = Date.now();
+    setPreviewBlockReason(null);
     pendingPreviewAction.current = action;
     setPreview(payload);
   };
@@ -678,7 +692,7 @@ export default function VoucherEntryPanel({
       assertUniqueVoucherReference(registerEntries, autoVoucherReference, excludeEntryId);
     } catch (err) {
       const text = err instanceof Error ? err.message : "Duplicate voucher reference.";
-      toast.error(text);
+      blockPreview(text);
       throw err;
     }
   };
@@ -696,7 +710,7 @@ export default function VoucherEntryPanel({
     if (!tryGuardReference()) return;
     if (!assertAccountsOnAmountLines(draftLines)) return;
     if (!jvBalanced) {
-      toast.error(
+      blockPreview(
         matrixJvFooter
           ? "USD and LBP buckets must each balance before posting."
           : "Entry must be balanced before posting.",
@@ -705,7 +719,7 @@ export default function VoucherEntryPanel({
     }
     const lines = mapVoucherLines(draftLines);
     if (lines.length < 2) {
-      toast.error("Add at least two lines with accounts and amounts.");
+      blockPreview("Add at least two lines with accounts and amounts.");
       return;
     }
     const payload = {
@@ -1041,6 +1055,16 @@ export default function VoucherEntryPanel({
               : "rounded-md border border-amber-300 bg-amber-50 text-amber-900",
           )}>
             Editing posted voucher — Confirm reverses the original and posts a new serial. Posted lines are not rewritten.
+          </p>
+        ) : null}
+        {previewBlockReason ? (
+          <p className={cn(
+            "mb-3 px-3 py-2 text-sm",
+            isLebaneseCoa
+              ? "legacy-erp-alert legacy-erp-alert--error"
+              : "rounded-md border border-red-300 bg-red-50 text-red-900",
+          )}>
+            {previewBlockReason}
           </p>
         ) : null}
 

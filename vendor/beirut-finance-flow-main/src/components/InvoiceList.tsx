@@ -1,13 +1,12 @@
 
 import { useMemo, useState } from "react";
 import { useAppContext } from "@/context/AppContext";
-import { formatCurrency } from "@/lib/utils";
-import { Badge } from "@/components/ui/badge";
+import { formatDualCurrency } from "@/lib/utils";
+import { useReportExchangeRate } from "@/hooks/useReportExchangeRate";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Eye, Share2, CheckCircle2, Undo2, Pencil } from "lucide-react";
 import { toast } from "sonner";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
 
 interface InvoiceListProps {
   limit?: number;
@@ -19,6 +18,8 @@ interface InvoiceListProps {
 
 const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceListProps) => {
   const { invoices, updateInvoice, recordInvoicePayment } = useAppContext();
+  const { usdToLbp } = useReportExchangeRate();
+  const dateFilter = useInvoiceManagerDateFilterOptional();
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
 
@@ -40,6 +41,7 @@ const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceList
       const statusMatches = statusFilter === "all" || status === statusFilter;
 
       if (!statusMatches) return false;
+      if (dateFilter && !dateFilter.matchesDate(invoice.date ?? invoice.createdAt)) return false;
       if (!query) return true;
 
       const haystack = [
@@ -54,7 +56,7 @@ const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceList
 
       return haystack.includes(query);
     });
-  }, [invoices, searchTerm, statusFilter]);
+  }, [invoices, searchTerm, statusFilter, dateFilter]);
 
   const displayedInvoices = limit ? filteredInvoices.slice(0, limit) : filteredInvoices;
 
@@ -87,37 +89,6 @@ const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceList
       toast.error(e?.message || "Failed to record payment");
     }
   };
-
-  const actionButtons = (invoice: any) => (
-    <div className="flex flex-wrap gap-2">
-      {invoice.status === "paid" ? (
-        <Button variant="outline" size="sm" onClick={() => togglePaid(invoice)} title="Mark as unpaid">
-          <Undo2 className="h-4 w-4 mr-1" />
-          Unpaid
-        </Button>
-      ) : (
-        <Button variant="default" size="sm" onClick={() => togglePaid(invoice)} title="Mark as paid">
-          <CheckCircle2 className="h-4 w-4 mr-1" />
-          Paid
-        </Button>
-      )}
-      {onEdit && (
-        <Button variant="outline" size="sm" onClick={() => onEdit(invoice)} title="Edit">
-          <Pencil className="h-4 w-4" />
-        </Button>
-      )}
-      {onPreview && (
-        <Button variant="outline" size="sm" onClick={() => onPreview(invoice)} title="Preview">
-          <Eye className="h-4 w-4" />
-        </Button>
-      )}
-      {onSend && (
-        <Button variant="outline" size="sm" onClick={() => onSend(invoice.id)} title="Share">
-          <Share2 className="h-4 w-4" />
-        </Button>
-      )}
-    </div>
-  );
 
   if (displayedInvoices.length === 0) {
     return (
@@ -176,90 +147,46 @@ const InvoiceList = ({ limit, onPreview, onSend, onExport, onEdit }: InvoiceList
         </div>
       )}
 
-      {/* Mobile: card list */}
-      <div className="space-y-3 md:hidden">
+      <div className="space-y-3">
         {displayedInvoices.map((invoice) => (
-          <Card key={invoice.id}>
-            <CardHeader className="pb-2">
-              <div className="flex justify-between items-start gap-2">
-                <div className="min-w-0">
-                  <p className="font-semibold truncate">{invoice.invoiceNumber || invoice.id}</p>
-                  <p className="text-sm text-muted-foreground truncate">
-                    {invoice.clientName || invoice.clientId || "-"}
-                  </p>
-                </div>
-                <Badge
-                  variant={
-                    invoice.status === "paid"
-                      ? "success"
-                      : invoice.status === "partial"
-                        ? "secondary"
-                        : invoice.status === "sent"
-                          ? "secondary"
-                          : "outline"
-                  }
+          <div
+            key={invoice.id}
+            className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <h3 className="font-medium">{invoice.clientName || "Invoice"}</h3>
+              <p className="text-sm text-muted-foreground">
+                {invoice.date} · {formatDualCurrency(invoiceTotal(invoice), invoice.currency, usdToLbp)} · {invoice.status}
+                {invoice.invoiceNumber ? ` · ${invoice.invoiceNumber}` : ""}
+              </p>
+              {onEdit && (
+                <button
+                  type="button"
+                  style={{ marginTop: 8, background: "#0f766e", color: "#ffffff", border: 0, borderRadius: 6, padding: "6px 12px", fontWeight: 700 }}
+                  onClick={() => onEdit(invoice)}
                 >
-                  {invoice.status === "partial"
-                    ? `partial (${formatCurrency(invoice.paidAmount || 0, invoice.currency)} paid)`
-                    : invoice.status}
-                </Badge>
-              </div>
-            </CardHeader>
-            <CardContent className="space-y-3 pt-0">
-              <div className="flex justify-between text-sm">
-                <span className="text-muted-foreground">{new Date(invoice.date).toLocaleDateString()}</span>
-                <span className="font-semibold">{formatCurrency(invoice.amount, invoice.currency)}</span>
-              </div>
-              {actionButtons(invoice)}
-            </CardContent>
-          </Card>
+                  Edit invoice
+                </button>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {invoice.status === "paid" ? (
+                <Button variant="outline" size="sm" onClick={() => togglePaid(invoice)}>Unpaid</Button>
+              ) : (
+                <Button variant="outline" size="sm" onClick={() => togglePaid(invoice)}>Paid</Button>
+              )}
+              {onPreview && (
+                <Button variant="outline" size="sm" onClick={() => onPreview(invoice)}>Preview</Button>
+              )}
+              {onSend && (
+                <Button variant="outline" size="sm" onClick={() => onSend(invoice.id)}>Share</Button>
+              )}
+              {onExport && (
+                <Button variant="outline" size="sm" onClick={() => onExport(invoice.id)}>Export</Button>
+              )}
+            </div>
+          </div>
         ))}
-      </div>
-
-      {/* Desktop: table */}
-      <div className="hidden md:block overflow-x-auto">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b">
-              <th className="text-left py-3 px-4">Invoice #</th>
-              <th className="text-left py-3 px-4">Client</th>
-              <th className="text-left py-3 px-4">Date</th>
-              <th className="text-right py-3 px-4">Amount</th>
-              <th className="text-left py-3 px-4">Status</th>
-              <th className="text-right py-3 px-4">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y">
-            {displayedInvoices.map((invoice) => (
-              <tr key={invoice.id}>
-                <td className="py-3 px-4">{invoice.invoiceNumber || invoice.id}</td>
-                <td className="py-3 px-4">{invoice.clientName || invoice.clientId || "-"}</td>
-                <td className="py-3 px-4">{new Date(invoice.date).toLocaleDateString()}</td>
-                <td className="py-3 px-4 text-right">
-                  {formatCurrency(invoice.amount, invoice.currency)}
-                </td>
-                <td className="py-3 px-4">
-                  <Badge
-                    variant={
-                      invoice.status === "paid"
-                        ? "success"
-                        : invoice.status === "partial"
-                          ? "secondary"
-                          : invoice.status === "sent"
-                            ? "secondary"
-                            : "outline"
-                    }
-                  >
-                    {invoice.status === "partial"
-                      ? `partial (${formatCurrency(invoice.paidAmount || 0, invoice.currency)} paid)`
-                      : invoice.status}
-                  </Badge>
-                </td>
-                <td className="py-3 px-4 text-right">{actionButtons(invoice)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
       </div>
     </>
   );

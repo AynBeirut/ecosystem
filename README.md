@@ -31,6 +31,85 @@ Do not commit `.env.production`, credentials, or local backup folders.
 
 **GCP session (agents):** Before any `gcloud`/Indexing/GSC work, set project **`market-flow-7b074`** (default `gcloud` config often points at `gj-real-estate-346907`). Full checklist: [`docs/deployment/GCP-SESSION.md`](docs/deployment/GCP-SESSION.md).
 
+### Session 2026-09-28 — Online table reservations
+**Problem:** The store page table form only sent an email. **Method:** Style 11 now writes a store-scoped table reservation (guest, date, time, party). Admin Reservations lists them and can confirm, seat, or cancel by table name. Event tickets were not changed. **Result:** Staging https://market-flow-7b074--staging-qj6e98fx.web.app (`index-Dn3Aakhr.js`). Live hosting was not released. **Handoff:** `docs/handoff/online-table-reservations-2026-09-28.md`.
+
+### Session 2026-09-28 — Venue Ops reference fields
+**Problem:** Venue Ops was a generic form, so it could not be called complete. **Method:** Screens now follow the reference documents: allergen columns, bible meaning and description, cocktail or batch specs, briefing buzz words, seat numbers, and standards checklists. **Result:** Staging https://market-flow-7b074--staging-qj6e98fx.web.app (`index-DzstbxAn.js`). A dish row saved with gluten, sesame, and the cross-contamination marker. Live hosting was not released. **Handoff:** `docs/handoff/hr-venue-ops-builder-roadmap-2026-09-28.md`.
+
+### Session 2026-09-28 — HR and Venue Ops on staging
+**Problem:** Phases 1–5 were local, the reports tab crashed, and import had no preview. **Method:** Published the admin app to the staging channel. Released the store-scoped HR and venue collection rules. Import preview maps a spreadsheet and does not save. Reports now count training assignments. **Result:** Staging https://market-flow-7b074--staging-qj6e98fx.web.app . Live hosting was not released. E-Moove test rows were written on that test store. **Handoff:** `docs/handoff/hr-venue-ops-staging-2026-09-28.md`.
+
+### Session 2026-09-28 — Optional HR and Venue Ops bridges
+**Problem:** Payroll, inventory, reservations, and CRM links could show even when those modules are off. **Method:** Phase 5 bridges only. Links appear when the matching gate passes. No payroll or stock posting. **Result:** Local only. Not published. **Handoff:** `docs/handoff/hr-venue-ops-phase5-bridges-2026-09-28.md`. **Next:** Phase 6 waits for Anwar to name a store and approve a preview import.
+
+### Session 2026-09-28 — HR schedule, notes, assets, reports
+**Problem:** Schedule, notes, assets, and reports were empty tabs. **Method:** Store-scoped `hrSchedules`, `hrNotes`, and `hrAssets`. Notes stay on the owner/manager gate. Report counts use the same records. Payroll screens were not rewritten. **Result:** Local only. Not published. **Handoff:** `docs/handoff/hr-advanced-2026-09-28.md`.
+
+### Session 2026-09-28 — Venue Ops add/edit
+**Problem:** Venue Ops could add cards but not edit them, and several required fields were missing. **Method:** Same store collections. Allergen, menu bible, spec, and briefing now add and edit. No price or stock. **Result:** Local only. Not published. Previous staging bundle does not include this pass. **Handoff:** `docs/handoff/venue-ops-actions-2026-09-28.md`.
+
+### Session 2026-09-28 — HR actions (not placeholders)
+**Problem:** HR could add records but could not edit an employee, approve leave, or complete training. **Method:** Same `staff` and HR collections. Edit writes no salary. Leave decision and training completion are status updates. Dashboard counts active employees, pending leave, overdue training, and expiring documents. **Result:** Staging hosting only: https://market-flow-7b074--staging-qj6e98fx.web.app (`index-ryGUiGT_.js`). Live hosting and Firestore rules were not released. **Handoff:** `docs/handoff/hr-core-actions-2026-09-28.md`.
+
+### Session 2026-09-28 — Venue Ops core (phase 3)
+**Problem:** `/admin/venue-ops` was a shell with no allergen, menu, spec, briefing, floor, or standard records. **Method:** Store-scoped writes on `venueKnowledgeItems`, `venueBriefings`, `venueFloorMaps`, `venueStandards`. No price or stock. Cashiers can open the hub; managers edit. HR training link stays behind the HR gate. **Result:** Local only. Not deployed. Venue rules are still local, so saves fail permissions until a later rules release. **Handoff:** `docs/handoff/venue-ops-phase3-2026-09-28.md`. **Next:** Anwar tests on his own store with Venue operations on.
+
+### Session 2026-09-28 — Official HR core (phase 2)
+**Problem:** `/admin/hr` was a shell with no employee, leave, training, or document records. **Method:** Reuse `staff` (no wage, `payrollExcluded`), keep `staffPresence` and payroll screens, add store-scoped leave/training/document writes. **Result:** Local only. Not deployed. HR collection rules are still local, so leave/training/documents fail permissions until a later rules release. Employee directory uses `staff`, which already allows a store admin. **Handoff:** `docs/handoff/hr-core-phase2-2026-09-28.md`. **Next:** Anwar tests on his own store with Official HR on.
+
+### Session 2026-09-27 — HR + Venue Ops phase 1 shells
+**Problem:** Official HR and Venue Ops had no shared gates or admin shells, and payroll was mixed into finance paths. **Method:** Phase 1 only — store toggles, `/admin/hr` and `/admin/venue-ops` shells, nav and route gates, Firestore rule skeleton, focused gate tests. Finance and inventory stay optional. **Result:** Staging hosting only: https://market-flow-7b074--staging-qj6e98fx.web.app (`index-BppWzMzj.js`). Live hosting, functions, and Firestore rules were not released. **Handoff:** `docs/handoff/hr-venue-ops-phase1-2026-09-27.md`. **Next:** Anwar tests the shells, then Phase 2 in a new chat.
+
+### Session 2026-10-09 — Staff pay + hourly rate
+**Problem:** Mark as paid showed “Missing or insufficient permissions.” Nancy’s hourly rate saved as 4 and reloaded as 3. **Method:** Rules allow the missing salary-payment check. Excel stays the rate until a UI edit sets `hourlyRateSource: ui`. **Result:** Hosting and Firestore rules deployed. Live main bundle `index-CFrPqPPT.js`. Hard-refresh. September pay must use month 2026-09.
+
+### Session 2026-09-30 — JV preview blocked
+**Problem:** Preview JV did nothing on a balanced Little Hands voucher. **Method:** Auto reference passed the year into the date-serial helper, so every 2026 JV peeked `JV-2026-01-01-000001` and the duplicate check stopped the sheet. **Result:** Reference now follows the voucher date (`JV-YYYY-MM-DD-######`). Unit tests passed. Hosting deployed. Live main bundle `index-Bx5LRva6.js`. Hard-refresh.
+
+### Session 2026-09-25 — Little Hands purchases / POS handoff (new chat)
+**Context:** PO numbering, delivery COA 653, supplier PO dropdown (cash-book filter + Spinneys 23 Sep), POS sync gaps post migration. **Handoff (paste into new chat):** `docs/handoff/littlehands-purchases-pos-handoff-2026-09-25.md`. **POS checklist:** `docs/handoff/littlehands-pos-sync-fix-2026-09-20.md`. **Spinneys evidence:** `reporting/data/littlehands-supplier-spynes-live-2026-09-23.json`.
+
+### Session 2026-09-25 — Invoice Manager edit + store currency
+**Problem:** Invoice Manager purchase list had no Edit, and document forms listed every world currency. **Method:** Purchase-style row (Edit under the name) on invoices, quotations, receipts, expenses, and products. Currency is store main, plus secondary only when store setup has one. **Result:** Live and staging both serve `index-DAqUWas3.js`. Little Hands is USD + LBP, rate 0. **Handoff:** `docs/handoff/invoice-manager-edit-currency-2026-09-25.md`. Not committed.
+
+**Purchase currency (same day, live):** Document currency is one USD or LBP for the whole invoice or purchase. Totals show both. Hosting `index-D_CT-EGU.js` / invoice `index-khmikphs.js`. Hard-refresh. Not committed.
+
+**Item search (live):** Product and material pickers rank names that start with the typed text first. Hosting `index-g9d8jiga.js` / invoice `index-WT_DLiee.js`. Hard-refresh. Not committed.
+
+**Line total + statement currency (live):** Purchase line total follows the document currency. Statement Currency select is on the statement: USD, LBP, or both. Hosting `index-Czm-gT56.js`. Hard-refresh. Not committed.
+
+**POS voids (live API):** `POST /pos/voids` cancels the existing sale by `localSaleId` and blocks reuse. ORD-000182 (laptops, $1000) is cancelled. Evidence: `reporting/data/pos-void-ord-000182-2026-09-25.json`. Functions `api` only. Not committed.
+
+**Purchase line type (live):** Create Purchase → Add Item type is Raw material, Item, or Expenses. Expense lines are not received into stock. Hosting `index-BuTDXak_.js`. Hard-refresh. Not committed.
+
+**Purchase draft (live):** Create Purchase is kept in that browser for 7 days and reopens after a refresh. It is not in the database until Create. A form lost before this deploy cannot be restored. Hosting `index-DZMx0tCw.js`. Hard-refresh. **New chat:** `docs/handoff/purchases-currency-pos-handoff-2026-09-27.md`. Not committed.
+
+### Session 2026-09-20 — Little Hands POS sync + doc migration (tonight)
+**Migration:** Store doc numbers → `PO/ORD/EXP-000001` (Little Hands write done). **POS not updated:** refunds/voids/delete unsynced, `localSaleId` reuse overwrites cloud, dated ORD from POS vs migrated ORD-00000N, gross today total on POS, menu/raw material push, purchase `paidAmount` field gap. **Handoff (POS fix checklist):** `docs/handoff/littlehands-pos-sync-fix-2026-09-20.md`. **Decision:** `decision-log.md` 2026-09-20 POS + sequential numbers.
+
+### Session 2026-09-19 — Anwar invoice/quotation handoff
+Invoice template/numbering attempts stopped by owner; two records moved to draft quotations. Handoff: `docs/handoff/anwar-invoice-template-quotation-handoff-2026-09-19.md`. Evidence: `reporting/data/anwar-move-invoice-order-to-quotations-2026-09-19.json`.
+
+### Session 2026-09-22 — Invoice Manager phone template
+**Problem:** The phone was on Play build 1.2.45 (full app). The workspace shell was a thin app and must not be installed. **Method:** Restored the 16 Sep untracked screens into `grabio-invoice-mobile`, kept the shell navigator/services, and wired Settings to the 10-template preview. **Result:** Phone upgraded in place to 1.2.51 (55), package `space.grabio.finance`. Backup: `grabio-invoice-mobile/release/phone-backup-2026-09-22/phone-before-1.2.51-was-1.2.45.apk`. **Next:** Phone is on **1.2.62 (66)**. Client list has Edit and Delete. Thumbnail scale fix is in this build. Daily tasks rules are deployed. Expense currency follows store currencies. Purchase list includes store purchases. Clients can be deleted. New products require raw material, item, or service. Invoice header can hide the business name and place address/website in the header or footer. Daily tasks rules for `invoiceTeamTasks` are deployed. Staff client delete is deployed with the same rules. Do not install `invoice-1.2.46` through `1.2.50`.
+
+### Session 2026-09-19 — Estimate edit persistence
+**Problem:** New estimates appeared in the app/browser, but edits from the web Estimate Manager did not reload elsewhere because `updateEstimate` showed success without awaiting Firestore and estimate tax/discount/total fields were not fully mapped for Firestore patches. **Fix:** Estimate edits now await Firestore, rollback on failed save, and persist/read `subtotal`, `tax`, `taxAmount`, `discount`, and `total`. **Verify/deploy:** `npm run build` exit 0; `firebase deploy --only hosting` exit 0; live `https://grabio.space` returned HTTP 200.
+
+### Session 2026-09-19 — Invoice Manager web PDF branding
+**Problem:** Mobile invoice PDF used E-Service branding, but web Invoice Manager PDF rendered Grabio because PDF export prioritized `organization.name` from Store Profile over refreshed invoice document settings.
+
+**Fix:** Web PDF generation now prefers `financeDocumentSettings` company fields (`documentCompanyName`, logo, address, tax/template via `storeProfileToCompany`) over Store Profile branding; organization fields are fallback only. Share/file PDF path refreshes company settings before generating. Root A4 order invoices and purchase-order PDFs now use the same invoice-template helper; Store Profile template/name/logo are fallback only.
+
+**Verify/deploy:** `npm run build --prefix vendor/beirut-finance-flow-main` exit 0; full `npm run build` exit 0 after both branding passes; `firebase deploy --only hosting` exit 0 twice. Live `https://grabio.space` returned HTTP 200 after first deploy. Existing Vite warnings only (CSS import order, chunk size/dynamic import).
+
+### Session 2026-09-18 — Little Hands Class 7 cash-book alignment
+**Sales SOT changed:** `/media/anwar/12AD-9999/Cash` workbooks are source of truth for Little Hands P&L Class 7. Mapping: B description, C sales, D expenses, E birthday DP expenses, F Sanaa treasury, G incoming DP, H running total. Script `scripts/alignLittleHandsCashBookSalesToGl.cjs` posts idempotent GL alignment JEs (`cashbook_sales:{YYYY-MM}:class7-align`). **Verified:** Dec 2025–Sep 2026 GL Class 7 equals cash-book column C; evidence `reporting/data/littlehands-cashbook-sales-class7-align-2026-09-18.json`. USB copied to `reporting/data/littlehands-usb-staging/2026-09-18-cash-audit/`.
+
+### Session 2026-09-18 — Owner discount true-up (Sanaa/Sara backup)
+User confirmed owner backups `/media/anwar/12AD-9999/Sanaa .xlsx` and `/media/anwar/12AD-9999/Sara.xlsx` as source for missed discount rows. Added `scripts/repairLittleHandsOwnerDiscountTrueUp.cjs` to compare owner-sheet discount deltas vs posted GL and add only missing amounts (idempotent). Unpaid marker row (`529.9 unpaid`) is excluded. Posted missing discount true-up (Dr 7090 / Cr 401): Dec 2025 **103.40**, Jan 2026 **408.38**, Feb 2026 **59.49**, Mar 2026 **157.41**. Evidence: `reporting/data/littlehands-owner-discount-trueup-2026-09-18.json`.
+
 ### Session 2026-09-13 — Little Hands production data (cash book)
 **SOT:** `Final Data Expenses/*.xlsx` → `littlehands-cash-book-organized-2026-09-13.json` (classifier fix: payroll/social before POS vendor map). **Firestore:** `financeExpenses` **761** lines · Purchases UI **512** supplier lines only (payroll/social/insurance not on Purchases). **Gate:** `reporting/data/littlehands-production-data-gate-2026-09-13.json`.
 **USB local mirror:** `reporting/data/littlehands-usb-staging/Final-Data-Expenses/` (9 workbooks) · fresh export `littlehands-cash-expenses-export-2026-09-13.json` (**$57,601.66**). **Payroll:** master *Monthly Sales & Expenses* col **D** = **$31,665** (`littlehands-payroll-cashbook-vs-master-2026-09-13.json`); cash-book wage lines classified **$11,756** — not the same bucket as col D.
@@ -39,6 +118,9 @@ Do not commit `.env.production`, credentials, or local backup folders.
 **Active core:** live_kitchen / venue ops / CRM. **Optional maturity:** accounting + inventory + recipe/production. **High-end connected:** builder/template/SEO. **Maintained:** shop + factory (not dropped). **Deferred:** NGO/freelancer/mini shop. Details: `architecture.md`, `decision-log.md`.
 
 **Execution:** Slices A–D + marketing pivot + Store Profile venue ops + ops readiness on Grabio Platform. **Resolver slice:** `effectiveStoreContext.ts` + readiness continue links — `reporting/data/resolver-setup-readiness-2026-09-15.json`. **Mobile 1.3.9 (140)** built; links smoke-tested OK; sidebar/toggle verify **pending**. Play: `docs/handoff/play-upload-1.3.9-140.md`. Handoff: `docs/handoff/builder-finish-resolver-setup-readiness-2026-09-15.md`.
+
+### Session 2026-09-17 — NIPCO / Little Hands sub-account correction
+**Fault fixed:** NIPCO active sub-accounts must be Hadi `h.akalfouni@nip-lb.com` and Jihan `j.sayegh@nip-lb.com` as sales managers only. `manager@grabio.space` and Ahmad `ahmadshaheen78@gmail.com` belong to Little Hands context, not NIPCO. Wrong NIPCO sub-accounts were archived/removed; Ahmad is rebound to Little Hands `accounting` sub-account `PhG34sQUjSDNNdYBXWWc`; `manager@grabio.space` remains Little Hands manager. **Map:** `docs/handoff/nipco-account-subaccount-map-2026-09-17.md`. **Evidence:** `reporting/data/nipco-littlehands-subaccount-correction-2026-09-17.json`.
 
 ### Session 2026-09-14 — Platform + POS fix backlog (manager mobile)
 **Root cause:** Play mobile **1.3.5** `ownerAccess.ts` owner-only; web uses `hasStoreAdminAccess()`. **Not** Firestore/cache. **Client fix:** Play update ≥140, no sideload. **POS:** Windows POS local RBAC ≠ Firebase subAccounts. **Full list:** `reporting/data/platform-pos-discovered-fixes-2026-09-14.md`.
@@ -78,6 +160,9 @@ Product direction rule: new roadmap energy goes to fine-dining restaurant daily 
 Setup rule: backend scripts, imports, and AI-assisted setup are starting methods only. Every store setup result must be visible in the admin UI, editable by the store user when allowed, and connected to the next setup step. If data setup requires Excel/product/recipe/cost/raw-material/sale-price input, the platform should evolve toward a guided UI flow: download template, upload file, validate preview, AI/setup agent correction, owner approval, then saved store data.
 
 Future agents must update `README.md`, `architecture.md`, `decision-log.md`, and the canonical docs vault when introducing or changing platform options. Data scripts must write evidence under `reporting/data/` before any client-facing numbers or closure claims.
+
+### Session 2026-09-18 — Little Hands Excel → GL/P&L repair
+**Problem:** P&L was reading posted GL while the Excel/import source rows in `financeExpenses` were not fully represented as live-equivalent journals; old purchase receive entries also credited supplier detail expense accounts, creating negative G&A. **Fix:** `scripts/repairLittleHandsExcelSourceToGl.cjs` backfilled source rows into GL by route (supplier purchases → inventory/AP/cash; operating/cash expenses → G&A/cash; payroll → salaries/cash; assets/treasury off P&L), remapped old supplier purchase credits to AP 201, and changed future purchase posting to use AP. **Evidence:** `reporting/data/littlehands-pl-excel-live-repair-verify-2026-09-18.json`.
 
 ## Workspace organization and memory
 

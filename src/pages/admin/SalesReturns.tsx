@@ -18,6 +18,7 @@ import { SalesReturn, SalesReturnItem } from '@/types/salesReturns';
 import { logAction } from '@/lib/auditLog';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { resolveOrderDocumentRef } from '@/lib/orderDocumentRef';
 
 const SalesReturns: React.FC = () => {
   const { user } = useAuth();
@@ -673,7 +674,7 @@ const SalesReturns: React.FC = () => {
                           <Badge className="bg-red-100 text-red-800">REFUND</Badge>
                         </CardTitle>
                         <CardDescription>
-                          Invoice: {order.invoiceNumber || order.orderNumber || order.id}
+                          Invoice: {resolveOrderDocumentRef(order)}
                           {' | '}
                           Customer: {order.customerName || '—'}
                           {' | '}

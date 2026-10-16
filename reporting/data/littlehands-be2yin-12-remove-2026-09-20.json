@@ -1,0 +1,27 @@
+{
+  "generatedAt": "2026-09-20T13:22:00.468Z",
+  "mode": "write",
+  "purchaseId": "lh-cashbook-519ad04b8de73c27",
+  "actions": [
+    "purchase_voided",
+    "je_voided:JE-1789734084519-2c6269",
+    "je_voided:JE-1789734085055-94759c",
+    "supplier_archived"
+  ],
+  "purchase": {
+    "total": 12,
+    "supplierName": "Divers"
+  },
+  "journalEntries": [
+    {
+      "id": "JE-1789734084519-2c6269",
+      "status": "posted",
+      "memo": "Purchase received — Be2yin Men Fetoura abel"
+    },
+    {
+      "id": "JE-1789734085055-94759c",
+      "status": "posted",
+      "memo": "Purchase paid — Be2yin Men Fetoura abel"
+    }
+  ]
+}

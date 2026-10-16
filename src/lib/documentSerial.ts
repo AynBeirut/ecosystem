@@ -1,21 +1,46 @@
 /**
- * Per-store business document numbers — counter per document calendar date.
- * Format: PO-2026-09-12-001 (001 each date, then 002…).
+ * Per-store business document numbers — one continuous sequence per kind (never resets by date).
+ * Display: PO-000001, PO-000002… Document date is stored separately for sorting/backfill.
  */
 import { doc, getFirestore, runTransaction } from 'firebase/firestore';
 
-export type BusinessDocumentKind = 'PO' | 'SO' | 'INV' | 'EST' | 'BILL';
+export type BusinessDocumentKind =
+  | 'PO'
+  | 'SO'
+  | 'INV'
+  | 'EST'
+  | 'BILL'
+  | 'EXP'
+  | 'ORD'
+  | 'RV'
+  | 'PV'
+  | 'JV'
+  | 'CV'
+  | 'CRN'
+  | 'DRN';
 
-const DEFAULT_PREFIX: Record<BusinessDocumentKind, string> = {
+export const DEFAULT_PREFIX: Record<BusinessDocumentKind, string> = {
   PO: 'PO',
   SO: 'SO',
   INV: 'INV',
   EST: 'EST',
   BILL: 'BILL',
+  EXP: 'EXP',
+  ORD: 'ORD',
+  RV: 'RV',
+  PV: 'PV',
+  JV: 'JV',
+  CV: 'CV',
+  CRN: 'CRN',
+  DRN: 'DRN',
 };
 
+const DEFAULT_SEQ_PADDING = 6;
+
+const DATE_BASED_DOC = /^[A-Z]{2,5}-\d{4}-\d{2}-\d{2}-\d{3,}$/i;
 const DATE_BASED_PO = /^PO-\d{4}-\d{2}-\d{2}-\d{3,}$/i;
 const CASH_BOOK_PO = /^CB-\d{4}-\d{2}-\d{2}-/i;
+const SEQUENTIAL_BUSINESS_DOC = /^[A-Z]{2,5}-\d{6,}$/i;
 
 export function normalizeDocumentDateKey(input?: string | Date | null): string {
   if (input instanceof Date && !Number.isNaN(input.getTime())) {
@@ -28,33 +53,56 @@ export function normalizeDocumentDateKey(input?: string | Date | null): string {
   return new Date().toISOString().slice(0, 10);
 }
 
+export function formatSequentialDocumentNumber(
+  kind: BusinessDocumentKind,
+  sequence: number,
+  prefixOverride?: string,
+  seqPadding = DEFAULT_SEQ_PADDING,
+): string {
+  const prefix = (prefixOverride || DEFAULT_PREFIX[kind] || kind).trim() || kind;
+  return `${prefix}-${String(sequence).padStart(seqPadding, '0')}`;
+}
+
 export function peekNextDocumentSerial(
   counters: Record<string, number> | undefined,
   kind: BusinessDocumentKind,
-  documentDateKey: string,
+  _documentDateKey?: string,
   prefixOverride?: string,
-  seqPadding = 3,
+  seqPadding = DEFAULT_SEQ_PADDING,
 ): { next: number; documentNumber: string; counterKey: string } {
-  const prefix = (prefixOverride || DEFAULT_PREFIX[kind] || kind).trim() || kind;
-  const dateKey = normalizeDocumentDateKey(documentDateKey);
-  const counterKey = `${kind}-${dateKey}`;
+  const counterKey = kind;
   const next = (counters?.[counterKey] || 0) + 1;
   return {
     next,
     counterKey,
-    documentNumber: `${prefix}-${dateKey}-${String(next).padStart(seqPadding, '0')}`,
+    documentNumber: formatSequentialDocumentNumber(kind, next, prefixOverride, seqPadding),
   };
+}
+
+export function isSequentialBusinessNumber(value: string): boolean {
+  const s = String(value || '').trim();
+  return SEQUENTIAL_BUSINESS_DOC.test(s);
+}
+
+export function isDateBasedBusinessNumber(value: string): boolean {
+  const s = String(value || '').trim();
+  return DATE_BASED_DOC.test(s) || DATE_BASED_PO.test(s) || CASH_BOOK_PO.test(s);
+}
+
+export function isBusinessDocumentNumber(value: string): boolean {
+  return isSequentialBusinessNumber(value) || isDateBasedBusinessNumber(value);
 }
 
 export function isDateBasedPurchaseOrderNumber(value: string): boolean {
   const s = String(value || '').trim();
-  return DATE_BASED_PO.test(s) || CASH_BOOK_PO.test(s);
+  if (isSequentialBusinessNumber(s) && /^PO-/i.test(s)) return true;
+  return isDateBasedBusinessNumber(s) && /^PO-/i.test(s);
 }
 
 export function isOpaqueBusinessRef(value: string): boolean {
   const s = String(value || '').trim();
   if (!s) return true;
-  if (isDateBasedPurchaseOrderNumber(s)) return false;
+  if (isDateBasedPurchaseOrderNumber(s) || isSequentialBusinessNumber(s)) return false;
   if (/^pos-[A-Za-z0-9_-]{8,}(?:-[A-Za-z0-9_-]+)?$/i.test(s)) return true;
   if (/^[A-Za-z0-9_-]{18,}$/.test(s) && !/^\d{1,12}$/.test(s)) return true;
   if (/^PO-pos-/i.test(s)) return true;
@@ -70,6 +118,7 @@ export function resolvePurchaseOrderNumber(fields: {
   for (const raw of [fields.poNumber, fields.purchaseOrderNumber, fields.invoiceNumber]) {
     const s = String(raw || '').trim();
     if (s && !isOpaqueBusinessRef(s) && isDateBasedPurchaseOrderNumber(s)) return s;
+    if (s && /^PO-\d{6,}$/i.test(s)) return s;
   }
   return '';
 }
@@ -116,4 +165,14 @@ export async function allocatePurchaseOrderNumber(
   const prefix = (purchaseOrderPrefix || 'PO').trim() || 'PO';
   const dateKey = normalizeDocumentDateKey(documentDate);
   return allocateStoreDocumentNumber(storeId, 'PO', dateKey, prefix);
+}
+
+export async function allocateChronologicalDocumentNumber(
+  storeId: string,
+  kind: BusinessDocumentKind,
+  documentDate?: string | Date | null,
+  prefixOverride?: string,
+): Promise<string> {
+  const dateKey = normalizeDocumentDateKey(documentDate);
+  return allocateStoreDocumentNumber(storeId, kind, dateKey, prefixOverride);
 }

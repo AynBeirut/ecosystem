@@ -1,0 +1,64 @@
+{
+  "title": "Little Hands Jun–Sep — d.p Edited folder (USB)",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "sourceDir": "/media/anwar/12AD-9999/d.p Edited",
+  "rules": {
+    "incomeSales": "month summary: column C + column F",
+    "expenses": "month summary: column D + column E (reference for ops; not auto-posted to GL in this pass)"
+  },
+  "alignRevision": "2026-09-19-dp-edited-c-plus-f",
+  "verifiedAt": "2026-09-19T12:49:40.611Z",
+  "months": [
+    {
+      "ym": "2026-06",
+      "file": "Cash June.xls",
+      "colC": 16380,
+      "colF": 2044.74,
+      "incomeCF": 18424.74,
+      "colD": 11028.25,
+      "colE": 2044.74,
+      "expenseDE": 13072.99,
+      "glClass7After": 18424.74,
+      "status": "ok"
+    },
+    {
+      "ym": "2026-07",
+      "file": "July 2026.xls",
+      "colC": 20231,
+      "colF": 3724.6,
+      "incomeCF": 23955.6,
+      "colD": 8370.16,
+      "colE": 3724.6,
+      "expenseDE": 12094.76,
+      "glClass7After": 23955.6,
+      "status": "ok",
+      "note": "Matches Excel ~23930 (C+F on month summary row; was 19256 when only daily col C was used)"
+    },
+    {
+      "ym": "2026-08",
+      "file": "August2026.xls",
+      "colC": 14042.25,
+      "colF": 1202.85,
+      "incomeCF": 15245.1,
+      "colD": 5834.12,
+      "colE": 1202.85,
+      "expenseDE": 7036.97,
+      "glClass7After": 15245.1,
+      "status": "ok"
+    },
+    {
+      "ym": "2026-09",
+      "file": "September.xls",
+      "colC": 5456,
+      "colF": 617.53,
+      "incomeCF": 6073.53,
+      "colD": 863,
+      "colE": 617.53,
+      "expenseDE": 1480.53,
+      "glClass7After": 6073.53,
+      "status": "ok"
+    }
+  ],
+  "detailReport": "reporting/data/littlehands-dp-edited-sales-gl-align-2026-09-19.json",
+  "script": "scripts/alignLittleHandsDpEditedSalesToGl.cjs"
+}

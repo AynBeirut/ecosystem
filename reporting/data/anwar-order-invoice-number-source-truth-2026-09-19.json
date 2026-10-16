@@ -1,0 +1,15 @@
+{
+  "orderId": "xFQSzNkeOzpkSTKVM2r9",
+  "sourceOfTruthPdf": "/home/anwar/Downloads/7b4a747b-3f04-4e6f-bf3b-967a00c90c93.pdf",
+  "before": {
+    "invoiceNumber": "INV-1789823129739",
+    "customerName": "جمعية الرجاء ( مائدة المحبة )",
+    "createdAt": "2026-09-19T13:05:29.739Z"
+  },
+  "after": {
+    "invoiceNumber": "INV-1789822490321",
+    "customerName": "جمعية الرجاء ( مائدة المحبة )",
+    "createdAt": "2026-09-19T13:05:29.739Z"
+  },
+  "updatedAt": "2026-09-19T13:56:55.990Z"
+}

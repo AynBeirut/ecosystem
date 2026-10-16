@@ -13,6 +13,9 @@ import { verticalAppPreviewPath } from '@/data/marketing/demoPreviewCatalog';
 import { verticalDemoOsPath } from '@/data/marketing/demoOsCatalog';
 import { buildSolutionSchema } from '@/lib/grabioBrandSchema';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
+import { grabioDemoCatalogId } from '@/lib/grabioMetaCatalog';
+import { pixelViewContent } from '@/lib/metaPixel';
+import { PLAN_PRICING } from '@/lib/pricingDisplay';
 
 const PackageLandingPage: React.FC = () => {
   const { slug } = useParams<{ slug: string }>();
@@ -22,6 +25,13 @@ const PackageLandingPage: React.FC = () => {
     if (!pkg) return;
     trackSEOEvent('page_view', { page_path: `/demo/${pkg.slug}` });
     trackUniqueVisit();
+    const catalogId = grabioDemoCatalogId(pkg.slug);
+    pixelViewContent({
+      contentId: catalogId,
+      contentName: pkg.label,
+      value: PLAN_PRICING.starter.monthly,
+      currency: 'USD',
+    });
   }, [pkg]);
 
   if (!pkg) {

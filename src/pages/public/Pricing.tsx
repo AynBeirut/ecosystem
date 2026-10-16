@@ -5,6 +5,8 @@ import { doc, getDoc, getFirestore } from 'firebase/firestore';
 import PublicPageShell from '@/components/public/PublicPageShell';
 import { cn } from '@/lib/utils';
 import { trackSEOEvent, trackUniqueVisit } from '@/lib/seoTracker';
+import { grabioPlanCatalogId } from '@/lib/grabioMetaCatalog';
+import { pixelViewContent } from '@/lib/metaPixel';
 import { Switch } from '@/components/ui/switch';
 import { useAuth } from '@/context/useAuth';
 import { StoreProfile } from '@/types/storeProfile';
@@ -75,6 +77,16 @@ const Pricing: React.FC = () => {
     trackSEOEvent('page_view');
     trackUniqueVisit();
   }, []);
+
+  useEffect(() => {
+    const catalogId = grabioPlanCatalogId(selectedTier);
+    pixelViewContent({
+      contentId: catalogId,
+      contentName: `Grabio ${selectedTier} plan`,
+      value: PLAN_PRICING[selectedTier].monthly,
+      currency: 'USD',
+    });
+  }, [selectedTier]);
 
   useEffect(() => {
     const loadProfile = async () => {

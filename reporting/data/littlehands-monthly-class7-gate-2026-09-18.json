@@ -1,0 +1,97 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "masterPath": "/home/anwar/Downloads/Monthly Sales & Expenses .xls",
+  "generatedAt": "2026-09-18T13:34:43.376Z",
+  "months": [
+    {
+      "ym": "2025-12",
+      "masterSales": 1910,
+      "glClass7": 1910,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2025-12:revenue-trueup",
+      "hasMasterTrueUp": true
+    },
+    {
+      "ym": "2026-01",
+      "masterSales": 1431,
+      "glClass7": 1431,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-01:revenue-trueup",
+      "hasMasterTrueUp": true
+    },
+    {
+      "ym": "2026-02",
+      "masterSales": 3227,
+      "glClass7": 3227,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-02:revenue-trueup",
+      "hasMasterTrueUp": true
+    },
+    {
+      "ym": "2026-03",
+      "masterSales": 3108,
+      "glClass7": 3108,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-03:revenue-trueup",
+      "hasMasterTrueUp": true
+    },
+    {
+      "ym": "2026-04",
+      "masterSales": 7747,
+      "glClass7": 7747,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-04:revenue-trueup",
+      "hasMasterTrueUp": true
+    },
+    {
+      "ym": "2026-05",
+      "masterSales": 14226,
+      "glClass7": 14226,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-05:revenue-trueup",
+      "hasMasterTrueUp": true
+    },
+    {
+      "ym": "2026-06",
+      "masterSales": 16380,
+      "glClass7": 16380,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-06:revenue-trueup",
+      "hasMasterTrueUp": true
+    },
+    {
+      "ym": "2026-07",
+      "masterSales": 23371,
+      "glClass7": 23371,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-07:revenue-trueup",
+      "hasMasterTrueUp": false
+    },
+    {
+      "ym": "2026-08",
+      "masterSales": 15003,
+      "glClass7": 15003,
+      "delta": 0,
+      "status": "ok",
+      "masterTrueUpKey": "monthly_sales_master:2026-08:revenue-trueup",
+      "hasMasterTrueUp": true
+    }
+  ],
+  "september": {
+    "ym": "2026-09",
+    "masterSales": null,
+    "cashBookSalesRef": null,
+    "glClass7": 5110.12,
+    "status": "no_sep_excel"
+  },
+  "needsBackfill": [],
+  "overMaster": []
+}

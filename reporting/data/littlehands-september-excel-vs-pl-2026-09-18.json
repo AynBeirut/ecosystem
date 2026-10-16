@@ -1,0 +1,33 @@
+{
+  "sourceExcel": "/media/anwar/12AD-9999/Cash/september/Copy of September edited.xlsx",
+  "sheet": "Total Cash ",
+  "period": "2026-09-01..2026-09-30",
+  "columnMap": {
+    "C": "In$ (cash sales / events)",
+    "D": "Exp $ (petty cash operating)",
+    "E": "Invoice paid from birthday D.P (supplier purchases)"
+  },
+  "excelDetailTotalsUsd": {
+    "colC_salesLines_exclOpeningAndSanaa": 4975,
+    "colD_expPettyCash": 1765,
+    "colE_supplierFromDp": 1099.53,
+    "colD_plus_E": 2864.53,
+    "excludedRows": [61, 66, 67, 82, 85],
+    "excludedReason": "monthly subtotals and August/Sanaa treasury — not P&L line items"
+  },
+  "grabioPlSep2026Usd_userScreenshot": {
+    "sales": 3598.61,
+    "totalClass7": 5110.12,
+    "purchasesGoods": 0,
+    "chargesGA": 2718.53,
+    "salariesRelated": 24.5,
+    "totalExpenses": 2743.03,
+    "netProfit": 2286.19
+  },
+  "reconciliationNotes": [
+    "P&L is GL-based, not the cash workbook. Compare Total Class 7 to Excel col C detail (~4975), not the Sales sub-line (POS/narrow 7xxx only).",
+    "Compare col D+E detail (~2864.53) to G&A + Salaries + Purchases Goods; col E must post as supplier_purchase (inventory/AP), not only G&A.",
+    "Firestore had 33 expense lines / 2712.53 USD before fix — missing row 33 ($152 blank description) and col E misclassified as operating."
+  ],
+  "generatedAt": "2026-09-18T12:55:00.000Z"
+}

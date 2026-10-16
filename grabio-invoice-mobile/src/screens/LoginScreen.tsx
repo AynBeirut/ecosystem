@@ -64,8 +64,8 @@ export default function LoginScreen() {
       <ScrollView contentContainerStyle={styles.inner} keyboardShouldPersistTaps="handled">
         <Text style={styles.logo}>Grabio Invoice</Text>
         <Text style={styles.subtitle}>Invoices, estimates & CRM</Text>
-        <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
-        <TextInput style={styles.input} placeholder="Password" value={password} onChangeText={setPassword} secureTextEntry />
+        <TextInput style={styles.input} placeholder="Email" placeholderTextColor={COLORS.textMuted} value={email} onChangeText={setEmail} autoCapitalize="none" keyboardType="email-address" />
+        <TextInput style={styles.input} placeholder="Password" placeholderTextColor={COLORS.textMuted} value={password} onChangeText={setPassword} secureTextEntry />
         <TouchableOpacity style={styles.button} onPress={handleAuth} disabled={loading}>
           <Text style={styles.buttonText}>{loading ? 'Signing in…' : 'Sign In'}</Text>
         </TouchableOpacity>
@@ -82,7 +82,7 @@ const styles = StyleSheet.create({
   inner: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   logo: { fontSize: 32, fontWeight: '800', color: COLORS.primary, textAlign: 'center' },
   subtitle: { textAlign: 'center', color: COLORS.textSecondary, marginBottom: 24 },
-  input: { backgroundColor: COLORS.surface, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 14, marginBottom: 12 },
+  input: { backgroundColor: COLORS.surface, color: COLORS.textPrimary, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 14, marginBottom: 12, fontSize: 16 },
   button: { backgroundColor: COLORS.primary, borderRadius: RADIUS.md, padding: 16, alignItems: 'center', marginTop: 8 },
   buttonText: { color: '#fff', fontWeight: '700' },
   googleBtn: { marginTop: 16, borderWidth: 1, borderColor: COLORS.border, borderRadius: RADIUS.md, padding: 14, alignItems: 'center', backgroundColor: COLORS.surface },

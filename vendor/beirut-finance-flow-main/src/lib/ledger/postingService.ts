@@ -139,7 +139,7 @@ export async function postJournalEntry(
   await assertPeriodOpenForPost(input.storeId, input.date);
 
   const entryDateIso = parseJournalDateInput(input.date);
-  const entryYear = Number(journalDateOnly(entryDateIso).slice(0, 4));
+  const entryDateKey = journalDateOnly(entryDateIso);
 
   // Accurate currency label: caller-provided currency, else the store's base currency.
   const currency = input.currency
@@ -198,7 +198,7 @@ export async function postJournalEntry(
           serialSnap,
           input.storeId,
           input.voucherType,
-          entryYear,
+          entryDateKey,
         );
       }
 

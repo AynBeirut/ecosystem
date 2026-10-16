@@ -42,6 +42,16 @@ type SearchableComboboxProps = {
   popoverClassName?: string;
 };
 
+/** Lower rank = closer match. Names that start with the query come first. */
+function matchRank(option: SearchableOption, query: string): number | null {
+  const label = option.label.toLowerCase();
+  const keywords = (option.keywords || '').toLowerCase();
+  const words = `${label} ${keywords}`.split(/[^a-z0-9]+/).filter(Boolean);
+  if (label.startsWith(query) || words.some((word) => word.startsWith(query))) return 0;
+  if (label.includes(query) || keywords.includes(query)) return 1;
+  return null;
+}
+
 export function SearchableCombobox({
   options,
   value,
@@ -69,12 +79,12 @@ export function SearchableCombobox({
     if (filterOptions) return filterOptions(options, query);
     const q = query.trim().toLowerCase();
     if (!q) return options;
-    return options.filter(
-      (option) =>
-        option.label.toLowerCase().includes(q) ||
-        option.value.toLowerCase().includes(q) ||
-        (option.keywords || '').toLowerCase().includes(q),
-    );
+    return options
+      .map((option, index) => ({ option, index, rank: matchRank(option, q) }))
+      .filter((row): row is { option: SearchableOption; index: number; rank: number } => row.rank !== null)
+      .sort((a, b) => a.rank - b.rank || a.index - b.index)
+      .slice(0, 40)
+      .map((row) => row.option);
   }, [filterOptions, options, query]);
 
   useEffect(() => {
@@ -127,7 +137,8 @@ export function SearchableCombobox({
                 {filtered.map((option) => (
                   <CommandItem
                     key={option.value}
-                    value={option.value}
+                    value={option.label}
+                    keywords={[option.keywords || '']}
                     className="items-center overflow-hidden py-1.5"
                     onSelect={() => {
                       onValueChange(option.value);

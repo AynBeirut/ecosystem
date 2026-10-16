@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef, useMemo } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { getFirestore, collection, query, where, getDocs, updateDoc, doc, getDoc, addDoc, deleteDoc, runTransaction, increment } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
+import { ensurePartySubaccount } from '../../../vendor/beirut-finance-flow-main/src/lib/ledger/partySubaccount';
 import jsPDF from 'jspdf';
 import html2canvas from 'html2canvas';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,8 +25,14 @@ import { FulfillmentLocation } from '@/types/inventory';
 import { ShoppingCart, Plus, Printer, FileText, Download, Eye, Trash2, User, Share2, DollarSign, Edit3, Clock, AlertCircle } from 'lucide-react';
 import { getActualStoreId } from '@/lib/storeUtils';
 import { logAction } from '@/lib/auditLog';
-import { generateInvoiceHTML as generateInvoiceHTMLTemplate } from '@/lib/invoiceTemplates';
+import {
+  generateInvoiceHTML as generateInvoiceHTMLTemplate,
+  hasHumanOrderDocumentRef,
+  resolveOrderDocumentRef,
+  safeDocumentFilePart,
+} from '@/lib/invoiceTemplates';
 import { formatMoney } from '@/lib/money/format';
+import { renumberStoreOrders } from '@/lib/chronologicalRenumberFirestore';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminStatCard from '@/components/admin/AdminStatCard';
 import AdminPanel from '@/components/admin/AdminPanel';
@@ -37,7 +44,20 @@ import SystemGuideInfo from '@/components/system-guide/SystemGuideInfo';
 const devLog = (...args: unknown[]) => {
   if (import.meta.env.DEV) console.log(...args);
 };
-import { isCountedSaleStatus, resolveOrderItemProductKey } from '@/lib/salesRules';
+import {
+  getOrderAmountDue,
+  getOrderEffectiveAmountPaid,
+  isCountedSaleStatus,
+  isDateInRange,
+  normalizeOrderPaymentStatus,
+  resolveOrderItemProductKey,
+  sumCountedSaleOrderRevenue,
+} from '@/lib/salesRules';
+import {
+  buildInventoryEventKey,
+  findFgDeductionPriorKeyForRollback,
+  findOrderDeductionPriorKey,
+} from '@/lib/orderInventoryPriorKeys';
 import { isProjectBasedInventory, isSalesAllowedWhenOutOfStock } from '@/lib/inventorySettings';
 import {
   decideRefundRestoreQuantity,
@@ -52,12 +72,18 @@ import { isPlatformOrderCod } from '@/lib/salesRules';
 import { syncCodOrderToDeliveryWallet } from '@/lib/deliveryWalletService';
 import { getOrderStatusValuesForStore, isActivePreDeliveryStatus } from '@/lib/orderStatusFlow';
 
+/** Incident 2026-03-18: order path must not mutate raw materials until recipe flow is gated. */
+const ENABLE_ORDER_RAW_MATERIAL_DEDUCTION = false;
+const ORDERS_PAGE_SIZE = 50;
+
 const ORDER_STATUSES = [
   { value: 'pending', label: 'Pending', color: 'bg-yellow-100 text-yellow-800' },
   { value: 'confirmed', label: 'Confirmed', color: 'bg-blue-100 text-blue-800' },
   { value: 'processing', label: 'Processing', color: 'bg-purple-100 text-purple-800' },
   { value: 'ready', label: 'Ready', color: 'bg-green-100 text-green-800' },
   { value: 'delivered', label: 'Delivered', color: 'bg-gray-100 text-gray-800' },
+  { value: 'completed', label: 'Completed', color: 'bg-emerald-100 text-emerald-800' },
+  { value: 'paid', label: 'Paid', color: 'bg-green-100 text-green-800' },
   { value: 'returned', label: 'Returned', color: 'bg-orange-100 text-orange-800' },
   { value: 'cancelled', label: 'Cancelled', color: 'bg-red-100 text-red-800' },
 ];
@@ -128,7 +154,21 @@ type OrderViewFilters = {
   statusFilter: string;
   paymentFilter: string;
   deliveryMethodFilter: string;
+  orderDateFrom: string;
+  orderDateTo: string;
 };
+
+function resolveOrderFilterDate(order: Order & { id: string }): string | number | Date | undefined {
+  const candidates = [
+    (order as Order & { posSaleTimestamp?: string }).posSaleTimestamp,
+    order.createdAt,
+    (order as Order & { orderDate?: string }).orderDate,
+  ];
+  for (const value of candidates) {
+    if (value) return value as string | number | Date;
+  }
+  return undefined;
+}
 
 type SavedOrderView = {
   id: string;
@@ -174,6 +214,9 @@ const AdminOrders: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [paymentFilter, setPaymentFilter] = useState('all');
   const [deliveryMethodFilter, setDeliveryMethodFilter] = useState('all');
+  const [orderDateFrom, setOrderDateFrom] = useState('');
+  const [orderDateTo, setOrderDateTo] = useState('');
+  const [ordersPage, setOrdersPage] = useState(1);
   const [savedOrderViews, setSavedOrderViews] = useState<SavedOrderView[]>([]);
   const [selectedOrderViewId, setSelectedOrderViewId] = useState('');
   const [newOrderViewName, setNewOrderViewName] = useState('');
@@ -319,25 +362,8 @@ const AdminOrders: React.FC = () => {
 
   const resolveStoreId = () => getActualStoreId(user) || user?.storeId || '';
 
-  const getNormalizedPaymentStatus = (order: Order & { id: string }) => {
-    const rawStatus = String(order.paymentStatus || '').toLowerCase();
-    if (rawStatus === 'paid' || rawStatus === 'completed') return 'paid';
-    if (rawStatus === 'partial') return 'partial';
-    if (rawStatus === 'refunded') return 'refunded';
-    if (rawStatus === 'failed') return 'unpaid';
-
-    const total = Number(order.total || 0);
-    const paid = Number(order.amountPaid || 0);
-    if (Number.isFinite(total) && Number.isFinite(paid) && total > 0) {
-      if (paid >= total) return 'paid';
-      if (paid > 0) return 'partial';
-    }
-
-    return 'unpaid';
-  };
-
-  const getOrderAmountDue = (order: Order & { id: string }) =>
-    Math.max(0, Math.round(((order.total || 0) - (order.amountPaid || 0)) * 100) / 100);
+  const getNormalizedPaymentStatus = (order: Order & { id: string }) =>
+    normalizeOrderPaymentStatus(order);
 
   const openPayOrderDialog = (order: Order & { id: string }) => {
     setPayingOrder(order);
@@ -352,15 +378,15 @@ const AdminOrders: React.FC = () => {
   const isOrderPaymentDue = (order: Order & { id: string }) =>
     order.status !== 'cancelled' && getNormalizedPaymentStatus(order) !== 'paid';
 
-  const resolveOrderStatusValue = (status?: string) =>
-    ORDER_STATUSES.some((entry) => entry.value === status) ? String(status) : 'pending';
+  const resolveOrderStatusValue = (status?: string) => {
+    const normalized = String(status || 'pending').toLowerCase();
+    if (ORDER_STATUSES.some((entry) => entry.value === normalized)) return normalized;
+    if (normalized === 'completed' || normalized === 'paid') return normalized;
+    return 'pending';
+  };
 
   const hasInventoryEvent = (transactions: InventoryTransaction[], idempotencyKey: string) => {
     return (transactions || []).some((tx: InventoryTransaction) => tx?.idempotencyKey === idempotencyKey);
-  };
-
-  const buildInventoryEventKey = (kind: string, orderId: string, productId: string, meta = '') => {
-    return [kind, orderId, productId, meta].join(':');
   };
 
   const round3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -436,25 +462,6 @@ const AdminOrders: React.FC = () => {
       stockTransactions: [...transactions, stockTransaction],
       updatedAt: nowIso,
     });
-  };
-
-  const findOrderDeductionPriorKey = (
-    transactions: ProductStockTransaction[],
-    orderId: string,
-    productKey: string,
-  ): string | null => {
-    const paidKey = `payment-paid:${orderId}:${productKey}`;
-    if (transactions.some((tx) => tx?.idempotencyKey === paidKey)) return paidKey;
-    const deliveredKeys = transactions
-      .map((tx) => tx?.idempotencyKey)
-      .filter(
-        (key): key is string =>
-          typeof key === 'string' && key.startsWith(`status-delivered:${orderId}:${productKey}:`),
-      );
-    if (deliveredKeys.length > 0) {
-      return deliveredKeys.sort().pop() ?? null;
-    }
-    return null;
   };
 
   const restoreInventoryForRefund = async (
@@ -554,9 +561,9 @@ const AdminOrders: React.FC = () => {
               quantity: restoreQty,
               unitCost: cost,
               totalCost: round3(cost * restoreQty),
-              reason: `Refund ${refundId}: Order ${order.invoiceNumber || order.id}`,
+              reason: `Refund: Order ${resolveOrderDocumentRef(order)}`,
               referenceId: order.id,
-              referenceNumber: order.invoiceNumber || order.id,
+              referenceNumber: resolveOrderDocumentRef(order),
               userId: user.id,
               userName: user.name,
               idempotencyKey,
@@ -603,9 +610,9 @@ const AdminOrders: React.FC = () => {
         restoreQty,
         'restore',
         idempotencyKey,
-        `Refund ${refundId}: Order ${order.invoiceNumber || order.id}`,
+        `Refund: Order ${resolveOrderDocumentRef(order)}`,
         order.id,
-        order.invoiceNumber || order.id,
+        resolveOrderDocumentRef(order),
         priorKey,
       );
       restoredLines += 1;
@@ -1078,36 +1085,34 @@ const AdminOrders: React.FC = () => {
     };
   };
 
-  const generateInvoiceNumber = async (): Promise<string> => {
-    if (!user?.storeId) return 'INV-001';
-    
+  const assignChronologicalOrderNumber = async (orderId: string): Promise<string> => {
+    if (!user?.storeId) return 'ORD-PENDING';
     const db = getFirestore();
-    const profileRef = doc(db, 'storeProfiles', user.storeId);
-    
-    // CRITICAL FIX: Use Firestore transaction for atomic increment to prevent race conditions
-    const result = await runTransaction(db, async (transaction) => {
-      const profileSnap = await transaction.get(profileRef);
-      
-      if (!profileSnap.exists()) {
-        throw new Error('Store profile not found');
-      }
-      
-      const currentProfile = profileSnap.data() as StoreProfile;
-      const prefix = currentProfile?.invoiceNumberPrefix || 'INV';
-      const lastNumber = currentProfile?.lastInvoiceNumber || 0;
-      const newNumber = lastNumber + 1;
-      const invoiceNumber = `${prefix}-${String(newNumber).padStart(3, '0')}`;
-      
-      // Atomically update the invoice number
-      transaction.update(profileRef, { lastInvoiceNumber: newNumber });
-      
-      return { invoiceNumber, newProfile: { ...currentProfile, lastInvoiceNumber: newNumber } };
-    });
-    
-    // Update local state to keep UI in sync
-    setStoreProfile(result.newProfile);
-    
-    return result.invoiceNumber;
+    const map = await renumberStoreOrders(db, user.storeId);
+    const invoiceNumber = map.get(orderId) || 'ORD-PENDING';
+    setOrders((prev) =>
+      prev.map((existing) => {
+        const next = map.get(existing.id);
+        return next ? { ...existing, invoiceNumber: next } : existing;
+      }),
+    );
+    return invoiceNumber;
+  };
+
+  const generateInvoiceNumber = async (orderId?: string): Promise<string> => {
+    if (orderId) return assignChronologicalOrderNumber(orderId);
+    if (!user?.storeId) return 'ORD-PENDING';
+    const db = getFirestore();
+    const map = await renumberStoreOrders(db, user.storeId);
+    const first = map.values().next().value;
+    return typeof first === 'string' ? first : 'ORD-PENDING';
+  };
+
+  const ensureInvoiceNumberForOrder = async (order: Order & { id: string }): Promise<Order & { id: string }> => {
+    const invoiceNumber = await assignChronologicalOrderNumber(order.id);
+    const updatedOrder = { ...order, invoiceNumber };
+    setViewingOrder((prev) => (prev?.id === order.id ? { ...prev, invoiceNumber } : prev));
+    return updatedOrder;
   };
 
   // Base currency + large-number style come from the store profile (multi-currency).
@@ -1159,6 +1164,16 @@ const AdminOrders: React.FC = () => {
       };
 
       const docRef = await addDoc(collection(db, 'customers'), customerData);
+      try {
+        await ensurePartySubaccount({
+          storeId: user.storeId,
+          kind: 'client',
+          partyId: docRef.id,
+          partyName: customerData.name,
+        });
+      } catch (accountError) {
+        console.warn('[Client] USD and LBP accounts skipped', accountError);
+      }
       const newCustomer = { id: docRef.id, ...customerData };
       setCustomers([...customers, newCustomer]);
       setNewOrder({ ...newOrder, customerId: docRef.id });
@@ -1256,9 +1271,6 @@ const AdminOrders: React.FC = () => {
         return;
       }
 
-      // Generate custom invoice number
-      const invoiceNumber = await generateInvoiceNumber();
-
       // Add prices to items
       const itemsWithPrices = enrichOrderItemsForSave(newOrder.items);
 
@@ -1278,7 +1290,6 @@ const AdminOrders: React.FC = () => {
         estimatedDeliveryTime: getDeliveryOptions().find((opt) => opt.value === newOrder.deliveryMethod)?.time || '',
         deliveryWorkingDays: getEffectiveDeliverySettings().workingDays,
         deliveryWorkingHours: getEffectiveDeliverySettings().workingHours,
-        invoiceNumber,
         items: itemsWithPrices,
         subtotal: financialCheck.normalized.subtotal,
         taxType: newOrder.taxType,
@@ -1316,7 +1327,12 @@ const AdminOrders: React.FC = () => {
       devLog('Creating order with data:', orderData);
       const docRef = await addDoc(collection(db, 'orders'), orderData);
       devLog('Order created successfully, ID:', docRef.id);
-      setOrders([{ id: docRef.id, ...orderData }, ...orders]);
+      const invoiceNumber = await assignChronologicalOrderNumber(docRef.id);
+      setOrders((prev) => {
+        const row = { id: docRef.id, ...orderData, invoiceNumber };
+        const without = prev.filter((o) => o.id !== docRef.id);
+        return [row, ...without];
+      });
 
       const ownerStoreId = getActualStoreId(user) || user.storeId;
       if (newOrder.customerId && ownerStoreId) {
@@ -1449,6 +1465,7 @@ const AdminOrders: React.FC = () => {
 
     setStatusUpdatingOrderId(orderId);
     let sideEffectWarning = false;
+    let sideEffectErrorDetail = '';
 
     try {
       const db = getFirestore();
@@ -1474,11 +1491,20 @@ const AdminOrders: React.FC = () => {
             if (!itemProductId) continue;
 
             const idempotencyKey = buildInventoryEventKey('status-rollback', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
-            const requiredDeliveryKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${currentDeliveryCount}`);
 
             const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
 
             if (matchingFG) {
+              const fgTx = (matchingFG.data().transactions || []) as InventoryTransaction[];
+              const requiredDeliveryKey = findFgDeductionPriorKeyForRollback(
+                fgTx,
+                orderId,
+                itemProductId,
+                lineIdx,
+                currentDeliveryCount,
+              );
+              if (!requiredDeliveryKey) continue;
+
               await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
                 const qty = item.quantity;
                 const cost = (fgData.costPrice as number) || 0;
@@ -1504,19 +1530,34 @@ const AdminOrders: React.FC = () => {
                 };
               }, requiredDeliveryKey);
             } else {
+              const productSnap = await getDoc(doc(db, 'products', itemProductId));
+              const stockTx = productSnap.exists()
+                ? ((productSnap.data() as { stockTransactions?: ProductStockTransaction[] }).stockTransactions || [])
+                : [];
+              const requiredDeliveryKey = findOrderDeductionPriorKey(stockTx, orderId, itemProductId)
+                ?? findFgDeductionPriorKeyForRollback(stockTx, orderId, itemProductId, lineIdx, currentDeliveryCount);
+              if (!requiredDeliveryKey) continue;
+
               await applySimpleProductStockChange(
                 db,
                 itemProductId,
                 Number(item.quantity || 0),
                 'restore',
                 idempotencyKey,
-                `Status rollback: Order ${order.invoiceNumber || orderId} changed from ${order.status} to ${newStatus}`,
+                `Status rollback: Order ${resolveOrderDocumentRef(order)} changed from ${order.status} to ${newStatus}`,
                 orderId,
-                order.invoiceNumber || orderId,
+                resolveOrderDocumentRef(order),
                 requiredDeliveryKey,
               );
             }
           }
+
+          const cogsLines = await resolveOrderCogsLines(storeId, items);
+          await glPostOrderSaleReversal(
+            storeId,
+            orderGlInputFromOrder({ ...order, id: orderId, storeId }, cogsLines),
+            buildInventoryEventKey('status-rollback', orderId, 'gl', newStatus),
+          );
 
           if (ENABLE_ORDER_RAW_MATERIAL_DEDUCTION) {
             await applyRawMaterialStockFromOrder(db, order, 'restore');
@@ -1564,9 +1605,9 @@ const AdminOrders: React.FC = () => {
                     quantity: -qty,
                     unitCost: cost,
                     totalCost: round3(cost * qty),
-                    reason: `Sale from order ${order.invoiceNumber || order.id}`,
+                    reason: `Sale from order ${resolveOrderDocumentRef(order)}`,
                     referenceId: orderId,
-                    referenceNumber: order.invoiceNumber || order.id,
+                    referenceNumber: resolveOrderDocumentRef(order),
                     userId: user?.id,
                     userName: user?.name,
                     idempotencyKey,
@@ -1580,9 +1621,9 @@ const AdminOrders: React.FC = () => {
                 Number(item.quantity || 0),
                 'consume',
                 idempotencyKey,
-                `Sale from order ${order.invoiceNumber || order.id}`,
+                `Sale from order ${resolveOrderDocumentRef(order)}`,
                 orderId,
-                order.invoiceNumber || order.id,
+                resolveOrderDocumentRef(order),
               );
             }
           }
@@ -1616,6 +1657,8 @@ const AdminOrders: React.FC = () => {
         }
       } catch (sideEffectError) {
         sideEffectWarning = true;
+        sideEffectErrorDetail =
+          sideEffectError instanceof Error ? sideEffectError.message : String(sideEffectError);
         console.error('Order status side effects failed:', sideEffectError);
       }
 
@@ -1642,7 +1685,7 @@ const AdminOrders: React.FC = () => {
       toast({
         title: sideEffectWarning ? 'Status updated with warning' : 'Success',
         description: sideEffectWarning
-          ? 'Order status saved, but stock/wallet sync had an issue.'
+          ? `Order status saved, but stock/wallet sync failed${sideEffectErrorDetail ? `: ${sideEffectErrorDetail}` : '.'}`
           : 'Order status updated!',
         variant: sideEffectWarning ? 'destructive' : 'default',
       });
@@ -1811,9 +1854,9 @@ const AdminOrders: React.FC = () => {
                     quantity: -diff,
                     unitCost: cost,
                     totalCost: round3(Math.abs(diff) * cost),
-                    reason: `Order edit: ${editingOrder.invoiceNumber || editingOrder.id} quantity changed from ${oldQty} to ${newQty}`,
+                    reason: `Order edit: ${resolveOrderDocumentRef(editingOrder)} quantity changed from ${oldQty} to ${newQty}`,
                     referenceId: editingOrder.id,
-                    referenceNumber: editingOrder.invoiceNumber || editingOrder.id,
+                    referenceNumber: resolveOrderDocumentRef(editingOrder),
                     userId: user.id,
                     userName: user.name,
                     idempotencyKey,
@@ -1827,9 +1870,9 @@ const AdminOrders: React.FC = () => {
                 Math.abs(diff),
                 diff > 0 ? 'consume' : 'restore',
                 idempotencyKey,
-                `Order edit: ${editingOrder.invoiceNumber || editingOrder.id} quantity changed from ${oldQty} to ${newQty}`,
+                `Order edit: ${resolveOrderDocumentRef(editingOrder)} quantity changed from ${oldQty} to ${newQty}`,
                 editingOrder.id,
-                editingOrder.invoiceNumber || editingOrder.id,
+                resolveOrderDocumentRef(editingOrder),
               );
             }
           }
@@ -1960,12 +2003,20 @@ const AdminOrders: React.FC = () => {
 
           const deleteCount = Number((order as Order & { _stockDeliveryCount?: number })._stockDeliveryCount || 0);
           const idempotencyKey = buildInventoryEventKey('order-delete', orderId, itemProductId, `${order.status || 'unknown'}:line${lineIdx}`);
-          // Only restore if the matching delivery transaction actually exists
-          const requiredDeliveryKey = buildInventoryEventKey('status-delivered', orderId, itemProductId, `line${lineIdx}:v${deleteCount}`);
 
           const matchingFG = findMatchingFinishedGood(fgSnapshot.docs, itemProductId);
           
           if (matchingFG) {
+            const fgTx = (matchingFG.data().transactions || []) as InventoryTransaction[];
+            const requiredDeliveryKey = findFgDeductionPriorKeyForRollback(
+              fgTx,
+              orderId,
+              itemProductId,
+              lineIdx,
+              deleteCount,
+            );
+            if (!requiredDeliveryKey) continue;
+
             await updateFGInventoryAtomic(db, matchingFG.id, idempotencyKey, (fgData) => {
               const qty = item.quantity;
               const cost = (fgData.costPrice as number) || 0;
@@ -1991,15 +2042,23 @@ const AdminOrders: React.FC = () => {
               };
             }, requiredDeliveryKey);
           } else {
+            const productSnap = await getDoc(doc(db, 'products', itemProductId));
+            const stockTx = productSnap.exists()
+              ? ((productSnap.data() as { stockTransactions?: ProductStockTransaction[] }).stockTransactions || [])
+              : [];
+            const requiredDeliveryKey = findOrderDeductionPriorKey(stockTx, orderId, itemProductId)
+              ?? findFgDeductionPriorKeyForRollback(stockTx, orderId, itemProductId, lineIdx, deleteCount);
+            if (!requiredDeliveryKey) continue;
+
             await applySimpleProductStockChange(
               db,
               itemProductId,
               Number(item.quantity || 0),
               'restore',
               idempotencyKey,
-              `Reversal: Order ${order.invoiceNumber || orderId} deleted`,
+              `Reversal: Order ${resolveOrderDocumentRef(order)} deleted`,
               orderId,
-              order.invoiceNumber || orderId,
+              resolveOrderDocumentRef(order),
               requiredDeliveryKey,
             );
           }
@@ -2087,9 +2146,9 @@ const AdminOrders: React.FC = () => {
               quantity: item.quantity, // Positive = adding back
               unitCost: fgData.costPrice || 0,
               totalCost: (fgData.costPrice || 0) * item.quantity,
-              reason: `Reversal: Payment voided for order ${voidingPayment.invoiceNumber || voidingPayment.id}`,
+              reason: `Reversal: Payment voided for order ${resolveOrderDocumentRef(voidingPayment)}`,
               referenceId: voidingPayment.id,
-              referenceNumber: voidingPayment.invoiceNumber || voidingPayment.id,
+              referenceNumber: resolveOrderDocumentRef(voidingPayment),
               userId: user.id,
               userName: user.name,
               idempotencyKey,
@@ -2109,9 +2168,9 @@ const AdminOrders: React.FC = () => {
               Number(item.quantity || 0),
               'restore',
               idempotencyKey,
-              `Reversal: Payment voided for order ${voidingPayment.invoiceNumber || voidingPayment.id}`,
+              `Reversal: Payment voided for order ${resolveOrderDocumentRef(voidingPayment)}`,
               voidingPayment.id,
-              voidingPayment.invoiceNumber || voidingPayment.id,
+              resolveOrderDocumentRef(voidingPayment),
             );
           }
         }
@@ -2494,6 +2553,7 @@ const AdminOrders: React.FC = () => {
   };
 
   const generatePaymentVoucherHTML = (order: Order & { id: string }, payment: PaymentRecord) => {
+    const invoiceRef = resolveOrderDocumentRef(order);
     const isRefund = payment.entryType === 'refund' || Number(payment.amount || 0) < 0;
     const transactionTitle = isRefund ? 'REFUND RECEIPT' : 'PAYMENT RECEIPT';
     const amountLabel = isRefund ? 'REFUND AMOUNT' : 'PAYMENT AMOUNT';
@@ -2505,7 +2565,7 @@ const AdminOrders: React.FC = () => {
       <div class="voucher-container" style="padding: 40px; font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto;">
         <div style="text-align: center; margin-bottom: 30px;">
           <h1 style="margin: 0; color: #1a1a1a; font-size: 28px;">${transactionTitle}</h1>
-          <p style="margin: 5px 0; color: #666; font-size: 14px;">Receipt #${payment.id}</p>
+          <p style="margin: 5px 0; color: #666; font-size: 14px;">${transactionTitle} for ${invoiceRef}</p>
         </div>
 
         <div style="background: #f9fafb; padding: 20px; border-radius: 8px; margin-bottom: 25px;">
@@ -2514,7 +2574,7 @@ const AdminOrders: React.FC = () => {
               <p style="margin: 0; color: #666; font-size: 12px;">Date</p>
               <p style="margin: 5px 0 15px; font-weight: 600;">${new Date(payment.date).toLocaleDateString()}</p>
               <p style="margin: 0; color: #666; font-size: 12px;">Invoice Number</p>
-              <p style="margin: 5px 0 15px; font-weight: 600;">${order.invoiceNumber || order.orderNumber || order.id.slice(0, 8)}</p>
+              <p style="margin: 5px 0 15px; font-weight: 600;">${invoiceRef}</p>
             </div>
             <div style="text-align: right;">
               <p style="margin: 0; color: #666; font-size: 12px;">Payment Method</p>
@@ -2576,8 +2636,9 @@ const AdminOrders: React.FC = () => {
 
   const downloadPaymentVoucher = async (order: Order & { id: string }, payment: PaymentRecord) => {
     try {
+      const invoiceOrder = await ensureInvoiceNumberForOrder(order);
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = generatePaymentVoucherHTML(order, payment);
+      tempDiv.innerHTML = generatePaymentVoucherHTML(invoiceOrder, payment);
       tempDiv.style.position = 'absolute';
       tempDiv.style.left = '-9999px';
       document.body.appendChild(tempDiv);
@@ -2590,7 +2651,7 @@ const AdminOrders: React.FC = () => {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`Payment-Receipt-${payment.id}.pdf`);
+      pdf.save(`Payment-Receipt-${safeDocumentFilePart(resolveOrderDocumentRef(invoiceOrder))}.pdf`);
       
       document.body.removeChild(tempDiv);
       toast({ title: "Success", description: "Payment receipt downloaded" });
@@ -2600,11 +2661,12 @@ const AdminOrders: React.FC = () => {
     }
   };
 
-  const printPaymentVoucher = (order: Order & { id: string }, payment: PaymentRecord) => {
+  const printPaymentVoucher = async (order: Order & { id: string }, payment: PaymentRecord) => {
     const printWindow = window.open('', '', 'height=600,width=800');
     if (printWindow) {
+      const invoiceOrder = await ensureInvoiceNumberForOrder(order);
       printWindow.document.write('<html><head><title>Payment Receipt</title></head><body>');
-      printWindow.document.write(generatePaymentVoucherHTML(order, payment));
+      printWindow.document.write(generatePaymentVoucherHTML(invoiceOrder, payment));
       printWindow.document.write('</body></html>');
       printWindow.document.close();
       printWindow.focus();
@@ -2618,9 +2680,10 @@ const AdminOrders: React.FC = () => {
   const sharePaymentVoucher = async (order: Order & { id: string }, payment: PaymentRecord) => {
     if (navigator.share) {
       try {
+        const invoiceOrder = await ensureInvoiceNumberForOrder(order);
         await navigator.share({
-          title: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} Receipt ${payment.id}`,
-          text: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} of ${money(Math.abs(payment.amount))} for Invoice ${order.invoiceNumber || order.orderNumber}`,
+          title: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} Receipt ${resolveOrderDocumentRef(invoiceOrder)}`,
+          text: `${payment.entryType === 'refund' ? 'Refund' : 'Payment'} of ${money(Math.abs(payment.amount))} for Invoice ${resolveOrderDocumentRef(invoiceOrder)}`,
         });
       } catch (error) {
         console.error('Error sharing:', error);
@@ -2634,21 +2697,22 @@ const AdminOrders: React.FC = () => {
     const printWindow = window.open('', '_blank');
     if (!printWindow) return;
 
+    const invoiceOrder = await ensureInvoiceNumberForOrder(order);
     // If order doesn't have customerTaxId or address, fetch it from customer record
-    let enrichedOrder = order;
-    if ((!order.customerTaxId || !order.deliveryAddress) && order.customerId) {
+    let enrichedOrder = invoiceOrder;
+    if ((!invoiceOrder.customerTaxId || !invoiceOrder.deliveryAddress) && invoiceOrder.customerId) {
       try {
         const db = getFirestore();
-        const customerRef = doc(db, 'customers', order.customerId);
+        const customerRef = doc(db, 'customers', invoiceOrder.customerId);
         const customerSnap = await getDoc(customerRef);
         if (customerSnap.exists()) {
           const customerData = customerSnap.data();
           enrichedOrder = { 
-            ...order, 
-            customerTaxId: order.customerTaxId || customerData.taxId || '',
-            customerPhone: order.customerPhone || customerData.phone || '',
-            deliveryAddress: order.deliveryAddress || customerData.address || '',
-            deliveryCity: order.deliveryCity || customerData.city || ''
+            ...invoiceOrder, 
+            customerTaxId: invoiceOrder.customerTaxId || customerData.taxId || '',
+            customerPhone: invoiceOrder.customerPhone || customerData.phone || '',
+            deliveryAddress: invoiceOrder.deliveryAddress || customerData.address || '',
+            deliveryCity: invoiceOrder.deliveryCity || customerData.city || ''
           };
         }
       } catch (error) {
@@ -2668,21 +2732,22 @@ const AdminOrders: React.FC = () => {
 
   const handleDownloadPDF = async (order: Order & { id: string }) => {
     try {
+      const invoiceOrder = await ensureInvoiceNumberForOrder(order);
       // If order doesn't have customerTaxId or address, fetch it from customer record
-      let enrichedOrder = order;
-      if ((!order.customerTaxId || !order.deliveryAddress) && order.customerId) {
+      let enrichedOrder = invoiceOrder;
+      if ((!invoiceOrder.customerTaxId || !invoiceOrder.deliveryAddress) && invoiceOrder.customerId) {
         try {
           const db = getFirestore();
-          const customerRef = doc(db, 'customers', order.customerId);
+          const customerRef = doc(db, 'customers', invoiceOrder.customerId);
           const customerSnap = await getDoc(customerRef);
           if (customerSnap.exists()) {
             const customerData = customerSnap.data();
             enrichedOrder = { 
-              ...order, 
-              customerTaxId: order.customerTaxId || customerData.taxId || '',
-              customerPhone: order.customerPhone || customerData.phone || '',
-              deliveryAddress: order.deliveryAddress || customerData.address || '',
-              deliveryCity: order.deliveryCity || customerData.city || ''
+              ...invoiceOrder, 
+              customerTaxId: invoiceOrder.customerTaxId || customerData.taxId || '',
+              customerPhone: invoiceOrder.customerPhone || customerData.phone || '',
+              deliveryAddress: invoiceOrder.deliveryAddress || customerData.address || '',
+              deliveryCity: invoiceOrder.deliveryCity || customerData.city || ''
             };
           }
         } catch (error) {
@@ -2706,7 +2771,7 @@ const AdminOrders: React.FC = () => {
       const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
       
       pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-      pdf.save(`invoice-${order.id}.pdf`);
+      pdf.save(`Invoice-${safeDocumentFilePart(resolveOrderDocumentRef(enrichedOrder))}.pdf`);
       toast({ title: "Success", description: "Invoice downloaded as PDF" });
     } catch (error) {
       console.error('PDF generation error:', error);
@@ -2716,8 +2781,9 @@ const AdminOrders: React.FC = () => {
 
   const handleShareInvoice = async (order: Order & { id: string }) => {
     try {
+      const invoiceOrder = await ensureInvoiceNumberForOrder(order);
       // Generate PDF
-      const html = generateInvoiceHTML(order);
+      const html = generateInvoiceHTML(invoiceOrder);
       const container = document.createElement('div');
       container.innerHTML = html;
       container.style.position = 'absolute';
@@ -2736,13 +2802,14 @@ const AdminOrders: React.FC = () => {
       
       // Get PDF as blob
       const pdfBlob = pdf.output('blob');
-      const pdfFile = new File([pdfBlob], `invoice-${order.id}.pdf`, { type: 'application/pdf' });
+      const invoiceFileName = `Invoice-${safeDocumentFilePart(resolveOrderDocumentRef(invoiceOrder))}.pdf`;
+      const pdfFile = new File([pdfBlob], invoiceFileName, { type: 'application/pdf' });
       
       if (navigator.share && isMobile) {
         try {
           await navigator.share({
-            title: `Invoice #${order.id}`,
-            text: `Invoice for ${order.customerName}`,
+            title: `Invoice ${resolveOrderDocumentRef(invoiceOrder)}`,
+            text: `Invoice for ${invoiceOrder.customerName}`,
             files: [pdfFile]
           });
           toast({ title: "Success", description: "Invoice PDF shared successfully" });
@@ -2750,13 +2817,13 @@ const AdminOrders: React.FC = () => {
           if ((error as Error).name !== 'AbortError') {
             console.error('Error sharing:', error);
             // Fallback to download
-            pdf.save(`invoice-${order.id}.pdf`);
+            pdf.save(invoiceFileName);
             toast({ title: "Downloaded", description: "Invoice PDF downloaded" });
           }
         }
       } else {
         // Desktop fallback - download PDF
-        pdf.save(`invoice-${order.id}.pdf`);
+        pdf.save(invoiceFileName);
         toast({ title: "Downloaded", description: "Invoice PDF downloaded" });
       }
     } catch (error) {
@@ -2856,7 +2923,6 @@ const AdminOrders: React.FC = () => {
       const db = getFirestore();
       const now = new Date().toISOString();
       const childOrderRef = doc(collection(db, 'orders'));
-      const childInvoiceNumber = await generateInvoiceNumber();
 
       const parentTaxType = splittingOrder.taxType || 'none';
       const parentTaxRate = Number(splittingOrder.taxRate || 0);
@@ -2895,7 +2961,6 @@ const AdminOrders: React.FC = () => {
         deliveryCity: splittingOrder.deliveryCity,
         deliveryMethod: 'pickup',
         deliveryFee: 0,
-        invoiceNumber: childInvoiceNumber,
         items: movedItems,
         subtotal: childTotals.subtotal,
         taxType: 'none',
@@ -2931,6 +2996,8 @@ const AdminOrders: React.FC = () => {
         transaction.set(childOrderRef, childOrderData);
       });
 
+      const childInvoiceNumber = await assignChronologicalOrderNumber(childOrderRef.id);
+
       setOrders((prev) => {
         const updatedSource = {
           ...splittingOrder,
@@ -2944,7 +3011,11 @@ const AdminOrders: React.FC = () => {
           splitToOrderIds: parentSplitIds,
           updatedAt: now,
         };
-        const childOrder: Order & { id: string } = { id: childOrderRef.id, ...childOrderData };
+        const childOrder: Order & { id: string } = {
+          id: childOrderRef.id,
+          ...childOrderData,
+          invoiceNumber: childInvoiceNumber,
+        };
         return [childOrder, ...prev.map((o) => (o.id === splittingOrder.id ? updatedSource : o))];
       });
 
@@ -3127,6 +3198,8 @@ const AdminOrders: React.FC = () => {
         statusFilter,
         paymentFilter,
         deliveryMethodFilter,
+        orderDateFrom,
+        orderDateTo,
       };
       const docRef = await addDoc(collection(db, 'orderViews'), {
         storeId: user.storeId,
@@ -3156,6 +3229,8 @@ const AdminOrders: React.FC = () => {
     setStatusFilter(selected.filters.statusFilter || 'all');
     setPaymentFilter(selected.filters.paymentFilter || 'all');
     setDeliveryMethodFilter(selected.filters.deliveryMethodFilter || 'all');
+    setOrderDateFrom(selected.filters.orderDateFrom || '');
+    setOrderDateTo(selected.filters.orderDateTo || '');
     toast({ title: 'View Applied', description: `Applied "${selected.name}".` });
   };
 
@@ -3177,6 +3252,35 @@ const AdminOrders: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    setOrdersPage(1);
+  }, [searchTerm, statusFilter, paymentFilter, deliveryMethodFilter, orderDateFrom, orderDateTo]);
+
+  const hasActiveOrderFilters =
+    Boolean(searchTerm.trim())
+    || statusFilter !== 'all'
+    || paymentFilter !== 'all'
+    || deliveryMethodFilter !== 'all'
+    || Boolean(orderDateFrom)
+    || Boolean(orderDateTo);
+
+  const clearOrderFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setPaymentFilter('all');
+    setDeliveryMethodFilter('all');
+    setOrderDateFrom('');
+    setOrderDateTo('');
+    setSelectedOrderViewId('');
+  };
+
+  const setOrderDateToday = () => {
+    const today = new Date().toISOString().slice(0, 10);
+    setOrderDateFrom(today);
+    setOrderDateTo(today);
+    setSelectedOrderViewId('');
+  };
+
   const getFilteredOrders = () => {
     return orders.filter((order) => {
       if (statusFilter !== 'all' && String(order.status || '').toLowerCase() !== statusFilter.toLowerCase()) {
@@ -3191,15 +3295,24 @@ const AdminOrders: React.FC = () => {
         return false;
       }
 
+      if (orderDateFrom || orderDateTo) {
+        if (!isDateInRange(resolveOrderFilterDate(order), orderDateFrom, orderDateTo)) {
+          return false;
+        }
+      }
+
       if (!searchTerm) return true;
       const search = searchTerm.toLowerCase();
-      return (
-        order.customerName.toLowerCase().includes(search) ||
-        (order.invoiceNumber && order.invoiceNumber.toLowerCase().includes(search)) ||
-        order.id.toLowerCase().includes(search) ||
-        (order.status && order.status.toLowerCase().includes(search)) ||
-        (order.assignedSalesPersonName && order.assignedSalesPersonName.toLowerCase().includes(search))
-      );
+      const haystack = [
+        order.customerName,
+        order.invoiceNumber,
+        order.orderNumber,
+        order.id,
+        order.status,
+        order.assignedSalesPersonName,
+        order.customerPhone,
+      ];
+      return haystack.some((value) => String(value || '').toLowerCase().includes(search));
     });
   };
 
@@ -3213,6 +3326,7 @@ const AdminOrders: React.FC = () => {
   const buildShippingLabelHTML = (order: Order & { id: string }) => {
     const items = order.items || [];
     const createdAt = order.createdAt ? new Date(order.createdAt).toLocaleString() : '-';
+    const orderRef = resolveOrderDocumentRef(order);
     const destination = [order.deliveryAddress || '-', order.deliveryCity || '-'].filter(Boolean).join(', ');
     const itemRows = items
       .map((item) => {
@@ -3225,7 +3339,7 @@ const AdminOrders: React.FC = () => {
       <div style="font-family:Arial, sans-serif;padding:16px;border:2px solid #111;max-width:760px;margin:0 auto 16px auto;">
         <h2 style="margin:0 0 8px 0;">Shipping Label</h2>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px;">
-          <div><strong>Order:</strong> ${order.invoiceNumber || order.id.slice(0, 8)}</div>
+          <div><strong>Order:</strong> ${orderRef}</div>
           <div><strong>Date:</strong> ${createdAt}</div>
           <div><strong>Customer:</strong> ${order.customerName || '-'}</div>
           <div><strong>Phone:</strong> ${order.customerPhone || '-'}</div>
@@ -3304,11 +3418,12 @@ const AdminOrders: React.FC = () => {
     }
 
     const batchId = `LBL-${Date.now()}`;
-    printHTMLDocument(`Shipping Label ${order.invoiceNumber || order.id.slice(0, 8)}`, buildShippingLabelHTML(order));
+    const orderRef = resolveOrderDocumentRef(order);
+    printHTMLDocument(`Shipping Label ${orderRef}`, buildShippingLabelHTML(order));
 
     try {
       await markOrdersLabeled([order.id], batchId);
-      toast({ title: 'Label Generated', description: `Shipping label created for ${order.invoiceNumber || order.id.slice(0, 8)}.` });
+      toast({ title: 'Label Generated', description: `Shipping label created for ${orderRef}.` });
     } catch (error) {
       console.error('Error marking order labeled:', error);
       toast({ title: 'Partial Success', description: 'Label printed but status update failed.', variant: 'destructive' });
@@ -3353,7 +3468,7 @@ const AdminOrders: React.FC = () => {
         return `
           <tr>
             <td style="padding:6px 8px;border:1px solid #ddd;">${index + 1}</td>
-            <td style="padding:6px 8px;border:1px solid #ddd;">${order.invoiceNumber || order.id.slice(0, 8)}</td>
+            <td style="padding:6px 8px;border:1px solid #ddd;">${resolveOrderDocumentRef(order)}</td>
             <td style="padding:6px 8px;border:1px solid #ddd;">${order.customerName || '-'}</td>
             <td style="padding:6px 8px;border:1px solid #ddd;">${order.customerPhone || '-'}</td>
             <td style="padding:6px 8px;border:1px solid #ddd;">${destination}</td>
@@ -3483,7 +3598,10 @@ const AdminOrders: React.FC = () => {
   };
 
   const getStatusBadge = (status?: string) => {
-    const statusConfig = ORDER_STATUSES.find(s => s.value === status) || ORDER_STATUSES[0];
+    const normalized = String(status || 'pending').toLowerCase();
+    const statusConfig =
+      ORDER_STATUSES.find((s) => s.value === normalized)
+      || ORDER_STATUSES.find((s) => s.value === 'pending')!;
     return <Badge className={statusConfig.color}>{statusConfig.label}</Badge>;
   };
 
@@ -3513,7 +3631,24 @@ const AdminOrders: React.FC = () => {
   const totals = calculateOrderTotals(newOrder.items, newOrder.taxType, newOrder.taxRate, newOrder.discountType, newOrder.discountValue, newOrder.deliveryMethod);
   const deliveryOptions = getDeliveryOptions();
   const selectedDeliveryOption = deliveryOptions.find((o) => o.value === newOrder.deliveryMethod);
-  const filteredOrders = getFilteredOrders();
+  const filteredOrders = useMemo(
+    () => getFilteredOrders(),
+    [
+      orders,
+      searchTerm,
+      statusFilter,
+      paymentFilter,
+      deliveryMethodFilter,
+      orderDateFrom,
+      orderDateTo,
+    ],
+  );
+  const ordersPageCount = Math.max(1, Math.ceil(filteredOrders.length / ORDERS_PAGE_SIZE));
+  const safeOrdersPage = Math.min(ordersPage, ordersPageCount);
+  const pagedOrders = filteredOrders.slice(
+    (safeOrdersPage - 1) * ORDERS_PAGE_SIZE,
+    safeOrdersPage * ORDERS_PAGE_SIZE,
+  );
   const orderFlowSettings = storeProfile?.deliverySettings;
   const visibleOrderStatuses = useMemo(() => {
     const allowed = new Set(getOrderStatusValuesForStore(user?.storeId, orderFlowSettings));
@@ -3532,9 +3667,8 @@ const AdminOrders: React.FC = () => {
     [user?.storeId, orderFlowSettings?.skipKitchenStatuses],
   );
   const activeOrdersCount = orders.filter((o) => activeOrderStatuses.includes(String(o.status || '').toLowerCase())).length;
-  const countedRevenue = orders
-    .filter((o) => isCountedSaleStatus(o.status))
-    .reduce((sum, o) => sum + Number(o.total || 0), 0);
+  const countedSaleRevenue = sumCountedSaleOrderRevenue(orders);
+  const countedRevenue = countedSaleRevenue.revenue;
   const unpaidOrdersCount = orders.filter((o) => {
     const ps = getNormalizedPaymentStatus(o);
     return ps === 'unpaid' || ps === 'partial';
@@ -3595,7 +3729,7 @@ const AdminOrders: React.FC = () => {
               <DialogHeader>
                 <DialogTitle>{editingOrder ? 'Edit Order' : 'Create New Order'}</DialogTitle>
                 <DialogDescription>
-                  {editingOrder ? `Edit order ${editingOrder.invoiceNumber || editingOrder.id.slice(0, 8)}` : 'Create a sales order for a customer'}
+                  {editingOrder ? `Edit order ${resolveOrderDocumentRef(editingOrder)}` : 'Create a sales order for a customer'}
                 </DialogDescription>
               </DialogHeader>
               <div className="grid gap-4">
@@ -4103,95 +4237,228 @@ const AdminOrders: React.FC = () => {
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 mb-6">
           <AdminStatCard title="Total Orders" value={orders.length} icon={ShoppingCart} gradient="from-orange-400 to-orange-600" subtitle="All sales orders" />
           <AdminStatCard title="Active" value={activeOrdersCount} icon={Clock} gradient="from-amber-400 to-yellow-600" subtitle={orderFlowSettings?.skipKitchenStatuses ? 'Pending through confirmed' : 'Pending through ready'} />
-          <AdminStatCard title="Sales Revenue" value={money(countedRevenue)} icon={DollarSign} gradient="from-slate-600 to-slate-800" subtitle="Counted sale statuses" />
+          <AdminStatCard
+            title="Sales Revenue"
+            value={money(countedRevenue)}
+            icon={DollarSign}
+            gradient="from-slate-600 to-slate-800"
+            subtitle={
+              countedSaleRevenue.excludedInvalidOrNegativeTotal > 0
+                ? `Completed/delivered/paid · ${countedSaleRevenue.excludedInvalidOrNegativeTotal} credit lines excluded`
+                : 'Completed, delivered, and paid orders'
+            }
+          />
           <AdminStatCard title="Unpaid / Partial" value={unpaidOrdersCount} icon={AlertCircle} gradient="from-red-500 to-rose-700" subtitle="Needs payment follow-up" valueClassName={unpaidOrdersCount > 0 ? 'text-red-600' : undefined} />
         </div>
 
-        {/* Search + Views — stack on mobile */}
-        <div className="mb-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-          <Input
-            placeholder="Search by customer, invoice number, order ID, or status..."
-            value={searchTerm}
-            onChange={(e) => {
-              setSearchTerm(e.target.value);
-              setSelectedOrderViewId('');
-            }}
-          />
-          <Select
-            value={statusFilter}
-            onValueChange={(value) => {
-              setStatusFilter(value);
-              setSelectedOrderViewId('');
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by status" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Statuses</SelectItem>
-              {visibleOrderStatuses.map((status) => (
-                <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Select
-            value={paymentFilter}
-            onValueChange={(value) => {
-              setPaymentFilter(value);
-              setSelectedOrderViewId('');
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by payment" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Payment Statuses</SelectItem>
-              <SelectItem value="paid">Paid</SelectItem>
-              <SelectItem value="partial">Partial</SelectItem>
-              <SelectItem value="unpaid">Unpaid</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select
-            value={deliveryMethodFilter}
-            onValueChange={(value) => {
-              setDeliveryMethodFilter(value);
-              setSelectedOrderViewId('');
-            }}
-          >
-            <SelectTrigger>
-              <SelectValue placeholder="Filter by delivery method" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Delivery Methods</SelectItem>
-              <SelectItem value="standard">Standard</SelectItem>
-              <SelectItem value="express">Express</SelectItem>
-              <SelectItem value="same_day">Same Day</SelectItem>
-              <SelectItem value="pickup">Pickup</SelectItem>
-              <SelectItem value="dine_in">Dine In</SelectItem>
-            </SelectContent>
-          </Select>
-          <Select value={selectedOrderViewId || 'none'} onValueChange={(value) => applySavedView(value === 'none' ? '' : value)}>
-            <SelectTrigger>
-              <SelectValue placeholder="Apply saved view" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="none">No Saved View</SelectItem>
-              {savedOrderViews.map((view) => (
-                <SelectItem key={view.id} value={view.id}>{view.name}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Input
-            placeholder="Save current filters as..."
-            value={newOrderViewName}
-            onChange={(e) => setNewOrderViewName(e.target.value)}
-          />
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={handleSaveCurrentView}>Save View</Button>
-            <Button variant="outline" size="sm" onClick={handleDeleteSavedView} disabled={!selectedOrderViewId}>Delete View</Button>
-          </div>
-        </div>
+        <AdminPanel className="mb-4 border-slate-200/90 shadow-sm">
+          <CardContent className="space-y-4 p-4 md:p-5">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label htmlFor="orders-search" className="text-xs font-medium text-slate-500">Search orders</Label>
+                <Input
+                  id="orders-search"
+                  className="h-10 bg-white"
+                  placeholder="Customer, invoice #, order ID…"
+                  value={searchTerm}
+                  onChange={(e) => {
+                    setSearchTerm(e.target.value);
+                    setSelectedOrderViewId('');
+                  }}
+                />
+              </div>
+              {hasActiveOrderFilters ? (
+                <Button type="button" variant="ghost" size="sm" className="shrink-0 text-slate-600" onClick={clearOrderFilters}>
+                  Clear filters
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="grid grid-cols-1 items-end gap-3 sm:grid-cols-2 xl:grid-cols-5">
+              <div className="flex w-full flex-col gap-1.5">
+                <div className="flex h-6 items-center">
+                  <Label className="text-xs font-medium leading-none text-slate-500">Status</Label>
+                </div>
+                <Select
+                  value={statusFilter}
+                  onValueChange={(value) => {
+                    setStatusFilter(value);
+                    setSelectedOrderViewId('');
+                  }}
+                >
+                  <SelectTrigger className="h-10 bg-white">
+                    <SelectValue placeholder="All statuses" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All statuses</SelectItem>
+                    {visibleOrderStatuses.map((status) => (
+                      <SelectItem key={status.value} value={status.value}>{status.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-full flex-col gap-1.5">
+                <div className="flex h-6 items-center">
+                  <Label className="text-xs font-medium leading-none text-slate-500">Payment</Label>
+                </div>
+                <Select
+                  value={paymentFilter}
+                  onValueChange={(value) => {
+                    setPaymentFilter(value);
+                    setSelectedOrderViewId('');
+                  }}
+                >
+                  <SelectTrigger className="h-10 bg-white">
+                    <SelectValue placeholder="All payments" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All payments</SelectItem>
+                    <SelectItem value="paid">Paid</SelectItem>
+                    <SelectItem value="partial">Partial</SelectItem>
+                    <SelectItem value="unpaid">Unpaid</SelectItem>
+                    <SelectItem value="refunded">Refunded</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-full flex-col gap-1.5">
+                <div className="flex h-6 items-center">
+                  <Label className="text-xs font-medium leading-none text-slate-500">Delivery</Label>
+                </div>
+                <Select
+                  value={deliveryMethodFilter}
+                  onValueChange={(value) => {
+                    setDeliveryMethodFilter(value);
+                    setSelectedOrderViewId('');
+                  }}
+                >
+                  <SelectTrigger className="h-10 bg-white">
+                    <SelectValue placeholder="All methods" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All methods</SelectItem>
+                    <SelectItem value="standard">Standard</SelectItem>
+                    <SelectItem value="express">Express</SelectItem>
+                    <SelectItem value="same_day">Same day</SelectItem>
+                    <SelectItem value="pickup">Pickup</SelectItem>
+                    <SelectItem value="dine_in">Dine in</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex w-full flex-col gap-1.5 sm:col-span-2 xl:col-span-2">
+                <div className="flex h-6 items-center justify-between gap-2">
+                  <Label className="text-xs font-medium leading-none text-slate-500">Order date</Label>
+                  <Button
+                    type="button"
+                    variant="link"
+                    size="sm"
+                    className="h-6 shrink-0 px-0 py-0 text-xs leading-none text-teal-700"
+                    onClick={setOrderDateToday}
+                  >
+                    Today
+                  </Button>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <Input
+                    type="date"
+                    aria-label="From date"
+                    className="h-10 bg-white"
+                    value={orderDateFrom}
+                    onChange={(e) => {
+                      setOrderDateFrom(e.target.value);
+                      setSelectedOrderViewId('');
+                    }}
+                  />
+                  <Input
+                    type="date"
+                    aria-label="To date"
+                    className="h-10 bg-white"
+                    value={orderDateTo}
+                    onChange={(e) => {
+                      setOrderDateTo(e.target.value);
+                      setSelectedOrderViewId('');
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 lg:flex-row lg:items-end">
+              <div className="min-w-0 flex-1 space-y-1.5">
+                <Label className="text-xs font-medium text-slate-500">Saved view</Label>
+                <Select value={selectedOrderViewId || 'none'} onValueChange={(value) => applySavedView(value === 'none' ? '' : value)}>
+                  <SelectTrigger className="h-10 bg-white">
+                    <SelectValue placeholder="No saved view" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No saved view</SelectItem>
+                    {savedOrderViews.map((view) => (
+                      <SelectItem key={view.id} value={view.id}>{view.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex min-w-0 flex-1 flex-col gap-1.5 sm:flex-row sm:items-end">
+                <div className="min-w-0 flex-1 space-y-1.5">
+                  <Label htmlFor="orders-view-name" className="text-xs font-medium text-slate-500">Save as</Label>
+                  <Input
+                    id="orders-view-name"
+                    className="h-10 bg-white"
+                    placeholder="View name"
+                    value={newOrderViewName}
+                    onChange={(e) => setNewOrderViewName(e.target.value)}
+                  />
+                </div>
+                <div className="flex shrink-0 gap-2">
+                  <Button type="button" variant="outline" size="sm" className={adminOutlineButtonClass} onClick={handleSaveCurrentView}>
+                    Save
+                  </Button>
+                  <Button type="button" variant="outline" size="sm" className={adminOutlineButtonClass} onClick={handleDeleteSavedView} disabled={!selectedOrderViewId}>
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-col gap-2 border-t border-slate-100 pt-3 text-xs text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+              <p>
+                Showing{' '}
+                <span className="font-semibold text-slate-700">
+                  {filteredOrders.length === 0 ? 0 : (safeOrdersPage - 1) * ORDERS_PAGE_SIZE + 1}
+                  -
+                  {Math.min(safeOrdersPage * ORDERS_PAGE_SIZE, filteredOrders.length)}
+                </span>{' '}
+                of <span className="font-semibold text-slate-700">{filteredOrders.length}</span>
+                {filteredOrders.length !== orders.length ? ` filtered from ${orders.length}` : ''} orders
+              </p>
+              {ordersPageCount > 1 ? (
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={adminOutlineButtonClass}
+                    disabled={safeOrdersPage <= 1}
+                    onClick={() => setOrdersPage((page) => Math.max(1, page - 1))}
+                  >
+                    Previous
+                  </Button>
+                  <span className="font-medium text-slate-600">
+                    Page {safeOrdersPage} / {ordersPageCount}
+                  </span>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className={adminOutlineButtonClass}
+                    disabled={safeOrdersPage >= ordersPageCount}
+                    onClick={() => setOrdersPage((page) => Math.min(ordersPageCount, page + 1))}
+                  >
+                    Next
+                  </Button>
+                </div>
+              ) : null}
+            </div>
+          </CardContent>
+        </AdminPanel>
 
         <div className="admin-batch-toolbar mb-4 flex flex-wrap items-center gap-2">
           <Button
@@ -4292,7 +4559,7 @@ const AdminOrders: React.FC = () => {
               </CardContent>
             </AdminPanel>
           ) : (
-            filteredOrders.map((order) => (
+            pagedOrders.map((order) => (
               <AdminPanel key={order.id}>
                 <CardHeader>
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -4303,10 +4570,10 @@ const AdminOrders: React.FC = () => {
                             type="checkbox"
                             checked={selectedOrderIds.includes(order.id)}
                             onChange={(e) => toggleOrderSelection(order.id, e.target.checked)}
-                            aria-label={`Select order ${order.invoiceNumber || order.id.slice(0, 8)} for shipping batch`}
+                            aria-label={`Select order ${resolveOrderDocumentRef(order)} for shipping batch`}
                           />
                         )}
-                        {order.invoiceNumber ? order.invoiceNumber : `Order #${order.id.slice(0, 8)}`}
+                        {resolveOrderDocumentRef(order)}
                         {getStatusBadge(order.status)}
                         {getPaymentBadge(order)}
                         {(order as { isEventSale?: boolean }).isEventSale && (
@@ -4428,14 +4695,17 @@ const AdminOrders: React.FC = () => {
                       )}
                       {order.status !== 'cancelled' && (
                         <>
-                          {(order.paymentStatus === 'paid' || order.paymentStatus === 'partial' || (order.amountPaid || 0) > 0) && (
+                          {(getNormalizedPaymentStatus(order) === 'paid'
+                            || getNormalizedPaymentStatus(order) === 'partial'
+                            || getOrderEffectiveAmountPaid(order) > 0
+                            || (order.paymentHistory?.length || 0) > 0) && (
                             <>
-                              {(order.amountPaid || 0) > 0 && (
+                              {getOrderEffectiveAmountPaid(order) > 0 && (
                                 <Button
                                   variant="outline"
                                   size="sm"
                                   onClick={() => {
-                                    const refundable = Math.max(0, Math.round((order.amountPaid || 0) * 100) / 100);
+                                    const refundable = Math.max(0, Math.round(getOrderEffectiveAmountPaid(order) * 100) / 100);
                                     setRefundingOrder(order);
                                     setRefundData({
                                       amount: refundable,
@@ -4491,7 +4761,7 @@ const AdminOrders: React.FC = () => {
                         <>
                           <div>
                             <p className="text-sm text-gray-500">Amount Paid</p>
-                            <p className="font-bold text-lg text-green-600">{money(order.amountPaid || 0)}</p>
+                            <p className="font-bold text-lg text-green-600">{money(getOrderEffectiveAmountPaid(order))}</p>
                           </div>
                           {order.paymentStatus !== 'paid' && (
                             <div>

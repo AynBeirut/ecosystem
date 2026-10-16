@@ -1,8 +1,18 @@
 import { describe, expect, it } from 'vitest';
-import { isWalkInClient, mergeLedgerPartyRowsIntoPcgClients } from '@/lib/ledger/partySubaccountLedger';
+import { isWalkInClient, mergeLedgerPartyRowsIntoPcgClients, partyAccountForCurrency } from '@/lib/ledger/partySubaccountLedger';
 import type { LedgerAccount, PcgClientAccount } from '@/types/generalLedger';
 
 describe('partySubaccountLedger', () => {
+  it('links a party line to the existing account in that currency', () => {
+    const accounts = [
+      { id: 'a', code: '6111001', partyId: 's1', partyType: 'supplier', currency: 'USD', isActive: true },
+      { id: 'b', code: '6111002', partyId: 's1', partyType: 'supplier', currency: 'LL', isActive: true },
+    ] as LedgerAccount[];
+    expect(partyAccountForCurrency('supplier', 's1', 'USD', accounts)?.code).toBe('6111001');
+    expect(partyAccountForCurrency('supplier', 's1', 'LBP', accounts)?.code).toBe('6111002');
+    expect(partyAccountForCurrency('client', 's1', 'USD', accounts)).toBeNull();
+  });
+
   it('treats missing client as walk-in', () => {
     expect(isWalkInClient(undefined, '')).toBe(true);
     expect(isWalkInClient(undefined, 'Walk-in customer')).toBe(true);
@@ -25,6 +35,15 @@ describe('partySubaccountLedger', () => {
     expect(merged).toHaveLength(1);
     expect(merged[0].clientCode).toBe('4010009');
     expect(merged[0].parentPcgCode).toBe('7010');
+  });
+
+  it('keeps both USD and LBP accounts for the same party', () => {
+    const accounts = [
+      { id: 'usd', code: '4010001', name: 'Client USD', partyId: 'c1', partyType: 'client', currency: 'USD', isActive: true },
+      { id: 'lbp', code: '4010002', name: 'Client LBP', partyId: 'c1', partyType: 'client', currency: 'LL', isActive: true },
+    ] as LedgerAccount[];
+    const merged = mergeLedgerPartyRowsIntoPcgClients(accounts, []);
+    expect(merged.map((row) => row.clientCode).sort()).toEqual(['4010001', '4010002']);
   });
 
   it('does not duplicate existing pcg party rows', () => {

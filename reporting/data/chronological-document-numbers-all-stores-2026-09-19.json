@@ -1,0 +1,1995 @@
+{
+  "write": true,
+  "at": "2026-09-19T14:59:50.624Z",
+  "storeCount": 28,
+  "stores": [
+    {
+      "storeId": "1K94SMqUrHVpiNdxuCwy3arXtbl1",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "6UOoq0Tn8xhGUqBk5o0JMMKsgNN2",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 793,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 800,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 1333,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 1353,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 796,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 342,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "Av22LKyet8QmVcu9b8Njz1HVfoy1",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 4,
+          "updates": 4,
+          "changed": 4
+        },
+        {
+          "label": "financeEstimates",
+          "total": 3,
+          "updates": 3,
+          "changed": 3
+        },
+        {
+          "label": "financeExpenses",
+          "total": 340,
+          "updates": 340,
+          "changed": 340
+        },
+        {
+          "label": "purchases",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 59,
+          "updates": 59,
+          "changed": 59
+        },
+        {
+          "label": "journal:PV",
+          "total": 332,
+          "updates": 332,
+          "changed": 332
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "financeExpenses",
+          "total": 5,
+          "updates": 5,
+          "changed": 5
+        },
+        {
+          "label": "purchases",
+          "total": 16,
+          "updates": 16,
+          "changed": 16
+        },
+        {
+          "label": "orders",
+          "total": 308,
+          "updates": 308,
+          "changed": 308
+        },
+        {
+          "label": "journal:RV",
+          "total": 281,
+          "updates": 281,
+          "changed": 281
+        },
+        {
+          "label": "journal:PV",
+          "total": 4,
+          "updates": 4,
+          "changed": 4
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "EZfuoNQFTJVU4cubNuckpp4K7zw2",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "financeEstimates",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "financeExpenses",
+          "total": 15,
+          "updates": 15,
+          "changed": 15
+        },
+        {
+          "label": "purchases",
+          "total": 18,
+          "updates": 18,
+          "changed": 18
+        },
+        {
+          "label": "orders",
+          "total": 175,
+          "updates": 175,
+          "changed": 175
+        },
+        {
+          "label": "journal:RV",
+          "total": 159,
+          "updates": 159,
+          "changed": 159
+        },
+        {
+          "label": "journal:PV",
+          "total": 2,
+          "updates": 2,
+          "changed": 2
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "FT5kK83C6sQcLvHgGr2GWLRIFeh1",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "G9mnY6Tg7GhIFBIq3rPqDT3tmYi1",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "fFHswEhf5sNS1L94sq8nsB9zmj43",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "marketing-demo-cafe",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "marketing-demo-ecommerce",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "marketing-demo-manufacturing",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "marketing-demo-restaurant",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "marketing-demo-shop",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "p5zesYQXZRRYA3wKUxjfVCqxQQo1",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 9,
+          "updates": 9,
+          "changed": 9
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-live-pos-order-1784114233210",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "journal:RV",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-pos-gl-1784108920815",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-pos-gl-1784108947286",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "orders",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-pos-gl-1786896600725",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "orders",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "journal:RV",
+          "total": 1,
+          "updates": 1,
+          "changed": 1
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-pos-order-customer-1784114081846",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 3,
+          "updates": 3,
+          "changed": 3
+        },
+        {
+          "label": "journal:RV",
+          "total": 3,
+          "updates": 3,
+          "changed": 3
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-ymalek-e2e-1773855497946",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 2,
+          "updates": 2,
+          "changed": 2
+        },
+        {
+          "label": "orders",
+          "total": 2,
+          "updates": 2,
+          "changed": 2
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-ymalek-e2e-1773855748992",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 2,
+          "updates": 2,
+          "changed": 2
+        },
+        {
+          "label": "orders",
+          "total": 3,
+          "updates": 3,
+          "changed": 3
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-ymalek-e2e-1773855801417",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 2,
+          "updates": 2,
+          "changed": 2
+        },
+        {
+          "label": "orders",
+          "total": 3,
+          "updates": 3,
+          "changed": 3
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "test-ymalek-e2e-1773856286925",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 2,
+          "updates": 2,
+          "changed": 2
+        },
+        {
+          "label": "orders",
+          "total": 4,
+          "updates": 4,
+          "changed": 4
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "tmp-manual-audit-proof",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "ujff7blWYvUvlekQOrybvNCnn9V2",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 124,
+          "updates": 124,
+          "changed": 124
+        },
+        {
+          "label": "purchases",
+          "total": 16,
+          "updates": 16,
+          "changed": 16
+        },
+        {
+          "label": "orders",
+          "total": 60,
+          "updates": 60,
+          "changed": 60
+        },
+        {
+          "label": "journal:RV",
+          "total": 57,
+          "updates": 57,
+          "changed": 57
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "xd6pGIer3RUEdL1vMy5OJQunjAO2",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    },
+    {
+      "storeId": "ysfON3hH43RjupMemVoWVkjTaMH3",
+      "sections": [
+        {
+          "label": "financeInvoices",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeEstimates",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "financeExpenses",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "purchases",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "orders",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:RV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:PV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:JV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CV",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:CRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        },
+        {
+          "label": "journal:DRN",
+          "total": 0,
+          "updates": 0,
+          "changed": 0
+        }
+      ]
+    }
+  ]
+}

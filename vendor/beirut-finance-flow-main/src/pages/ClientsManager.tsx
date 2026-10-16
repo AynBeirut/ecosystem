@@ -9,6 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 import { formatCurrency } from "@/lib/utils";
+import { useStoreDocumentCurrencies } from "@/components/StoreCurrencyField";
 import { Building2, FileText, Plus, Users } from "lucide-react";
 import { openAccountingWithFocus } from "@/lib/ledger/ledgerActivity";
 import { z } from "zod";
@@ -17,6 +18,7 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import ClientAccountStatement from "@/components/clients/ClientAccountStatement";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
 
 const clientSchema = z.object({
   name: z.string().min(1, "Client name is required"),
@@ -32,7 +34,13 @@ const clientSchema = z.object({
 
 const ClientsManager = () => {
   const { clients, addClient, logout, invoices, receipts } = useAppContext();
+  const { main: storeCurrency } = useStoreDocumentCurrencies();
   const { toast } = useToast();
+  const dateFilter = useInvoiceManagerDateFilterOptional();
+  const visibleClients = useMemo(
+    () => clients.filter((c) => !dateFilter || dateFilter.matchesDate(c.createdAt)),
+    [clients, dateFilter],
+  );
   const [activeTab, setActiveTab] = useState<string>("list");
   const [selectedClientId, setSelectedClientId] = useState<string | null>(null);
 
@@ -123,14 +131,14 @@ const ClientsManager = () => {
             </CardHeader>
             <CardContent>
             <TabsContent value="list">
-              {clients.length === 0 ? (
+              {visibleClients.length === 0 ? (
                 <div className="text-center py-8 text-muted-foreground">
                   <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p>No clients added yet. Add your first client!</p>
                 </div>
               ) : (
                 <div className="space-y-3">
-                  {clients.map((client) => {
+                  {visibleClients.map((client) => {
                     const clientInvoices = invoices.filter(
                       (inv) => inv.clientId === client.id || inv.clientName === client.name
                     );
@@ -182,10 +190,10 @@ const ClientsManager = () => {
                           </Button>
                           <div className="text-right">
                             <p className="text-sm text-muted-foreground">Outstanding</p>
-                            <p className="font-bold">{formatCurrency(outstanding, "USD")}</p>
+                            <p className="font-bold">{formatCurrency(outstanding, storeCurrency)}</p>
                           </div>
                           {outstanding > 0 && (
-                            <Badge variant="destructive">Owes {formatCurrency(outstanding, "USD")}</Badge>
+                            <Badge variant="destructive">Owes {formatCurrency(outstanding, storeCurrency)}</Badge>
                           )}
                         </div>
                       </div>

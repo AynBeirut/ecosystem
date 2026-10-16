@@ -183,6 +183,15 @@ export async function createLedgerAccount(
   return account;
 }
 
+export async function setLedgerAccountCurrency(
+  storeId: string,
+  accountId: string,
+  currency: 'LL' | 'USD',
+): Promise<void> {
+  const ref = doc(getFinanceDb(), 'stores', storeId, 'ledgerAccounts', accountId);
+  await updateDoc(ref, { currency, updatedAt: nowIso() });
+}
+
 export async function updateLedgerAccountNames(
   storeId: string,
   accountId: string,

@@ -1,0 +1,121 @@
+{
+  "mode": "write",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "masterPath": "/home/anwar/Downloads/Monthly Sales & Expenses .xls",
+  "months": [
+    {
+      "ym": "2025-12",
+      "masterSales": 1910,
+      "glClass7Net": 1910,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    },
+    {
+      "ym": "2026-01",
+      "masterSales": 1431,
+      "glClass7Net": 1431,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    },
+    {
+      "ym": "2026-02",
+      "masterSales": 3227,
+      "glClass7Net": 3227,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    },
+    {
+      "ym": "2026-03",
+      "masterSales": 3108,
+      "glClass7Net": 3108,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    },
+    {
+      "ym": "2026-04",
+      "masterSales": 7747,
+      "glClass7Net": 7747,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    },
+    {
+      "ym": "2026-05",
+      "masterSales": 14226,
+      "glClass7Net": 14226,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    },
+    {
+      "ym": "2026-06",
+      "masterSales": 16380,
+      "glClass7Net": 16380,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    },
+    {
+      "ym": "2026-07",
+      "masterSales": 23371,
+      "glClass7Net": 57079.65,
+      "trueUpAmount": 0,
+      "alignDownAmount": 33708.65
+    },
+    {
+      "ym": "2026-08",
+      "masterSales": 15003,
+      "glClass7Net": 15003,
+      "trueUpAmount": 0,
+      "alignDownAmount": 0
+    }
+  ],
+  "posted": [],
+  "alignedDown": [
+    {
+      "ym": "2026-07",
+      "masterSales": 23371,
+      "glClass7Net": 57079.65,
+      "trueUpAmount": 0,
+      "alignDownAmount": 33708.65,
+      "posted": true,
+      "sourceKey": "monthly_sales_master:2026-07:revenue-align-master",
+      "entryId": "JE-1789738387687-d5e7f6",
+      "voucherNumber": "RV-2026-01325",
+      "amount": 33708.65
+    }
+  ],
+  "skipped": [
+    {
+      "ym": "2025-12",
+      "reason": "ok"
+    },
+    {
+      "ym": "2026-01",
+      "reason": "ok"
+    },
+    {
+      "ym": "2026-02",
+      "reason": "ok"
+    },
+    {
+      "ym": "2026-03",
+      "reason": "ok"
+    },
+    {
+      "ym": "2026-04",
+      "reason": "ok"
+    },
+    {
+      "ym": "2026-05",
+      "reason": "ok"
+    },
+    {
+      "ym": "2026-06",
+      "reason": "ok"
+    },
+    {
+      "ym": "2026-08",
+      "reason": "ok"
+    }
+  ],
+  "alignOver": true,
+  "at": "2026-09-18T13:31:56.161Z"
+}

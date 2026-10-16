@@ -439,6 +439,11 @@ export async function autoPostPurchaseReceived(
     taxType?: string;
     totalCost?: number;
   };
+  const poDelivery = po as PurchaseOrder & {
+    deliveryFee?: number;
+    deliveryExpenseLedgerAccountId?: string;
+    deliveryExpenseLedgerAccountCode?: string;
+  };
   const split = resolvePurchaseReceiveSplit({
     items: po.items,
     total: poExt.total ?? poExt.amount,
@@ -448,17 +453,12 @@ export async function autoPostPurchaseReceived(
     taxAmount: po.taxAmount,
     taxRate: po.taxRate,
     taxType: poExt.taxType || (Number(po.taxRate) > 0 ? 'VAT' : 'none'),
+    deliveryFee: poDelivery.deliveryFee,
   });
   if (!split || split.apCredit <= 0) return null;
 
   const inventory = accountByCode(accounts, GL_ACCOUNT_CODES.INVENTORY);
-  const creditAcct = await supplierCreditAccount(
-    storeId,
-    po.supplierId,
-    po.supplierName,
-    accounts,
-    GL_ACCOUNT_CODES.AP,
-  );
+  const creditAcct = accountByCode(accounts, GL_ACCOUNT_CODES.AP);
   let inputVatAcct: LedgerAccount | null = null;
   if (split.inputVatDebit > 0) {
     inputVatAcct = await ensureAccountActive(storeId, accounts, INPUT_VAT_CODE);
@@ -469,6 +469,23 @@ export async function autoPostPurchaseReceived(
   const lines: JournalLineInput[] = [
     { accountId: inventory.id, debit: split.inventoryDebit, credit: 0, description: 'Inventory received (net)' },
   ];
+  if (split.deliveryDebit > 0) {
+    const deliveryCode = poDelivery.deliveryExpenseLedgerAccountCode || '653';
+    const deliveryAcct =
+      (poDelivery.deliveryExpenseLedgerAccountId
+        ? accounts.find((a) => a.id === poDelivery.deliveryExpenseLedgerAccountId)
+        : null) || accountByCodeOptional(accounts, deliveryCode);
+    if (deliveryAcct) {
+      lines.push({
+        accountId: deliveryAcct.id,
+        debit: split.deliveryDebit,
+        credit: 0,
+        description: 'Delivery & courier',
+      });
+    } else {
+      lines[0].debit = round2(lines[0].debit + split.deliveryDebit);
+    }
+  }
   if (split.inputVatDebit > 0 && inputVatAcct) {
     lines.push({
       accountId: inputVatAcct.id,
@@ -483,7 +500,7 @@ export async function autoPostPurchaseReceived(
     accountId: creditAcct.id,
     debit: 0,
     credit: split.apCredit,
-    description: po.supplierId ? `Supplier · ${po.supplierName || 'Supplier'}` : 'Accounts payable (TTC)',
+    description: po.supplierId ? `Accounts payable · ${po.supplierName || 'Supplier'}` : 'Accounts payable (TTC)',
   });
 
   return postJournalEntry(
@@ -515,13 +532,7 @@ export async function autoPostPurchasePaid(
   const amount = round2(po.amount || 0);
   if (amount <= 0) return null;
 
-  const payTo = await supplierDebitAccount(
-    storeId,
-    po.supplierId,
-    po.supplierName,
-    accounts,
-    GL_ACCOUNT_CODES.AP,
-  );
+  const payTo = accountByCode(accounts, GL_ACCOUNT_CODES.AP);
   const cashAcct = accountByCode(accounts, cashOrBank(paymentMethod));
 
   return postJournalEntry(

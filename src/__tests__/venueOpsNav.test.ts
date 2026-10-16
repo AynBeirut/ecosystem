@@ -11,6 +11,8 @@ describe('resolveVenueOpsNavFlags', () => {
     expect(flags.mode).toBe('legacy');
     expect(flags.showInventoryNav).toBe(true);
     expect(flags.showBusinessFinanceNav).toBe(true);
+    expect(flags.showOfficialHrNav).toBe(false);
+    expect(flags.showVenueOpsHubNav).toBe(false);
   });
 
   it('applies live_kitchen defaults when restaurant-first nav is enabled', () => {
@@ -22,6 +24,8 @@ describe('resolveVenueOpsNavFlags', () => {
     expect(flags.showInventoryNav).toBe(false);
     expect(flags.showBusinessFinanceNav).toBe(false);
     expect(flags.showCrmNav).toBe(true);
+    expect(flags.showOfficialHrNav).toBe(true);
+    expect(flags.showVenueOpsHubNav).toBe(true);
     expect(flags.useOperationsFirstLayout).toBe(true);
   });
 

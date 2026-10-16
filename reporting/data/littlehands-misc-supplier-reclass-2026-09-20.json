@@ -1,0 +1,183 @@
+{
+  "generatedAt": "2026-09-20T10:05:12.532Z",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "mode": "write",
+  "voided": [
+    {
+      "entryId": "JE-1789734042945-3eb8ab",
+      "reason": "lh-misc-reclass:divers"
+    },
+    {
+      "entryId": "JE-1789733440704",
+      "reason": "lh-misc-reclass:social"
+    },
+    {
+      "entryId": "JE-1789734342792-4ca78e",
+      "reason": "lh-misc-reclass:social"
+    },
+    {
+      "entryId": "JE-1789734261639-fa4069",
+      "reason": "lh-misc-reclass:removeExchange"
+    },
+    {
+      "entryId": "JE-1789734262202-fad858",
+      "reason": "lh-misc-reclass:removeExchange"
+    },
+    {
+      "entryId": "JE-1789732563635",
+      "reason": "lh-misc-reclass:antiFly"
+    },
+    {
+      "entryId": "JE-1789733937475-730277",
+      "reason": "lh-misc-reclass:antiFly"
+    },
+    {
+      "entryId": "JE-1789733954850-fb9f37",
+      "reason": "lh-misc-reclass:hammok"
+    },
+    {
+      "entryId": "JE-1789733955322-f5fd9b",
+      "reason": "lh-misc-reclass:hammok"
+    }
+  ],
+  "reposted": [
+    {
+      "purchaseId": "lh-cashbook-3e2650843f17780b",
+      "entryId": "JE-lh-reclass-lh-cashbook-3e2650843f17780b",
+      "voucherNumber": "PV-2026-06-14-LHRECLASS",
+      "debit": "6269.91",
+      "amount": 66
+    },
+    {
+      "purchaseId": "lh-cashbook-c80293df90cdfef4",
+      "entryId": "JE-lh-reclass-lh-cashbook-c80293df90cdfef4",
+      "voucherNumber": "PV-2026-06-14-LHRECLASS",
+      "debit": "6269.3",
+      "amount": 100
+    },
+    {
+      "purchaseId": "lh-cashbook-13d049f1791bb575",
+      "entryId": "JE-lh-reclass-lh-cashbook-13d049f1791bb575",
+      "voucherNumber": "PV-2026-06-14-LHRECLASS",
+      "debit": "6269.91",
+      "amount": 84
+    },
+    {
+      "purchaseId": "lh-cashbook-1c77a0a1db87e419",
+      "entryId": "JE-lh-reclass-lh-cashbook-1c77a0a1db87e419",
+      "voucherNumber": "PV-2026-06-14-LHRECLASS",
+      "debit": "6269.91",
+      "amount": 15
+    }
+  ],
+  "purchases": [
+    {
+      "id": "lh-cashbook-3e2650843f17780b",
+      "action": "updated",
+      "patch": {
+        "supplierId": "lh-sup-divers",
+        "supplierName": "Divers",
+        "miscItemLabel": "Youssef Aalaf & Maintenance Car ( Thaer)",
+        "organizedCategory": "misc_expense",
+        "expenseUiSurface": "misc_divers",
+        "reclassFromSupplierId": "lh-sup-5623a5b6abd5ef9a",
+        "reclassBy": "repair-lh-misc-supplier-reclass-2026-09-20",
+        "updatedAt": "2026-09-20T10:05:12.532Z"
+      }
+    },
+    {
+      "id": "lh-cashbook-c80293df90cdfef4",
+      "action": "updated",
+      "patch": {
+        "supplierId": null,
+        "supplierName": "Advertising & Publicity",
+        "miscItemLabel": "Social Media ( Sara, Sanaa) July",
+        "organizedCategory": "marketing",
+        "expenseUiSurface": "operating",
+        "reclassFromSupplierId": "lh-sup-595d975c85438a1a",
+        "reclassBy": "repair-lh-misc-supplier-reclass-2026-09-20",
+        "updatedAt": "2026-09-20T10:05:12.532Z",
+        "archivedForPurchasesUi": false
+      }
+    },
+    {
+      "id": "lh-cashbook-a47d7d3dedbe0636",
+      "action": "archived_removed"
+    },
+    {
+      "id": "lh-cashbook-13d049f1791bb575",
+      "action": "updated",
+      "patch": {
+        "supplierId": "lh-sup-divers",
+        "supplierName": "Divers",
+        "miscItemLabel": "Anti Fly Fan (Marwaha Lal Deben)",
+        "organizedCategory": "misc_expense",
+        "expenseUiSurface": "misc_divers",
+        "reclassFromSupplierId": "lh-sup-c46fe3b30c0f7c41",
+        "reclassBy": "repair-lh-misc-supplier-reclass-2026-09-20",
+        "updatedAt": "2026-09-20T10:05:12.532Z"
+      }
+    },
+    {
+      "id": "lh-cashbook-1c77a0a1db87e419",
+      "action": "updated",
+      "patch": {
+        "supplierId": "lh-sup-divers",
+        "supplierName": "Divers",
+        "miscItemLabel": "Hammok ( Marjouha Mlawane)",
+        "organizedCategory": "misc_expense",
+        "expenseUiSurface": "misc_divers",
+        "reclassFromSupplierId": "lh-sup-fd7dee87ec0c51d6",
+        "reclassBy": "repair-lh-misc-supplier-reclass-2026-09-20",
+        "updatedAt": "2026-09-20T10:05:12.532Z"
+      }
+    }
+  ],
+  "suppliersArchived": [
+    "lh-sup-5623a5b6abd5ef9a",
+    "lh-sup-595d975c85438a1a",
+    "lh-sup-7db5e0643a67db2e",
+    "lh-sup-c46fe3b30c0f7c41",
+    "lh-sup-fd7dee87ec0c51d6"
+  ],
+  "pcgArchived": [
+    {
+      "id": "rjHos04klt0LrvvvRned",
+      "partyId": "lh-sup-5623a5b6abd5ef9a",
+      "code": "61111000097"
+    },
+    {
+      "id": "KO6r1HEBNcLNcQ9CM6nH",
+      "partyId": "lh-sup-595d975c85438a1a",
+      "code": "61111000097"
+    },
+    {
+      "id": "D87T78yVCAVh9u961J2O",
+      "partyId": "lh-sup-7db5e0643a67db2e",
+      "code": "61111000097"
+    },
+    {
+      "id": "IvbdpFKki8WrPgTJQLcz",
+      "partyId": "lh-sup-c46fe3b30c0f7c41",
+      "code": "61111000067"
+    },
+    {
+      "id": "SG2LgdtfOZKjcN4fwPEu",
+      "partyId": "lh-sup-c46fe3b30c0f7c41",
+      "code": "61111000067"
+    },
+    {
+      "id": "D67wZKfrynJ56l4Ru2Yl",
+      "partyId": "lh-sup-fd7dee87ec0c51d6",
+      "code": "61111000084"
+    }
+  ],
+  "ledgerDeactivated": [
+    "acct-61111000067",
+    "acct-61111000084"
+  ],
+  "diversSupplier": {
+    "id": "lh-sup-divers",
+    "existed": false
+  }
+}

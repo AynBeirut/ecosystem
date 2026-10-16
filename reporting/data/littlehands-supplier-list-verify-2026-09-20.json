@@ -1,0 +1,240 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "verifiedAt": "2026-09-20T09:49:54.055Z",
+  "total": 478,
+  "visibleSuppliers": 120,
+  "archived": 358,
+  "visibleEvaRows": [],
+  "visibleSpinneysRows": [
+    {
+      "id": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-1",
+      "name": "Spinneys"
+    }
+  ],
+  "visibleLeMarcheRows": [
+    {
+      "id": "lh-sup-406c44032aa379de",
+      "name": "Le Marche Selectif"
+    }
+  ],
+  "remainingSuspicious": [
+    {
+      "id": "lh-sup-2d14ee89dc17d72d",
+      "name": "Event Megastore ( Workshops & Birthdays )"
+    },
+    {
+      "id": "lh-sup-581239b67bee220b",
+      "name": "Storium Worksho  23-5 & Barbecue 24-5"
+    },
+    {
+      "id": "lh-sup-f59654c38ec9cf5f",
+      "name": "Prodel Disposables"
+    },
+    {
+      "id": "lh-sup-fa8f417f8b5e1957",
+      "name": "Disposables"
+    }
+  ],
+  "sampleVisible": [
+    {
+      "id": "8VmnuwYF1WVpbFyMXsSG",
+      "name": "Mohammad Ismael ttt"
+    },
+    {
+      "id": "KSsrnQrz934QF4MAwpyk",
+      "name": "Mohammad Ismael"
+    },
+    {
+      "id": "lh-sup-01a0eedaf62153cf",
+      "name": "Mariam"
+    },
+    {
+      "id": "lh-sup-023ebfd43f456e78",
+      "name": "Cynthia Helo"
+    },
+    {
+      "id": "lh-sup-024e1db53cd013f2",
+      "name": "Returne To Sara Exchange"
+    },
+    {
+      "id": "lh-sup-05506e15620c3f41",
+      "name": "Ashwe Coffe Payment"
+    },
+    {
+      "id": "lh-sup-0d6822c35c8b0aa5",
+      "name": "Panino Mini Birgers"
+    },
+    {
+      "id": "lh-sup-0fb5534415dc5fca",
+      "name": "Zammour"
+    },
+    {
+      "id": "lh-sup-138e902658903ae0",
+      "name": "Joe Market"
+    },
+    {
+      "id": "lh-sup-18952c36b096a12f",
+      "name": "Karam Beik Bakery"
+    },
+    {
+      "id": "lh-sup-1d07780aa939a68d",
+      "name": "Ashwe (Wissam Mansour)"
+    },
+    {
+      "id": "lh-sup-1db801932bcf5cc1",
+      "name": "Chebel Bou Akl"
+    },
+    {
+      "id": "lh-sup-1f345b503e3d06bb",
+      "name": "KaraM Biek"
+    },
+    {
+      "id": "lh-sup-232668bbda9883a2",
+      "name": "Le Charcutier"
+    },
+    {
+      "id": "lh-sup-2432e3e8efc61f2f",
+      "name": "Event Mega Store"
+    },
+    {
+      "id": "lh-sup-2d14ee89dc17d72d",
+      "name": "Event Megastore ( Workshops & Birthdays )"
+    },
+    {
+      "id": "lh-sup-2fd806e0a90b227e",
+      "name": "Storium"
+    },
+    {
+      "id": "lh-sup-3238678f68b5f305",
+      "name": "Lucciana"
+    },
+    {
+      "id": "lh-sup-36beb750ed3b032c",
+      "name": "Shop Al Makhazen"
+    },
+    {
+      "id": "lh-sup-3a6d64c24cf80b69",
+      "name": "Sara"
+    },
+    {
+      "id": "lh-sup-3b0fe0d342e9fa16",
+      "name": "Internet"
+    },
+    {
+      "id": "lh-sup-3d96eba7ce248772",
+      "name": "Wooden Backery"
+    },
+    {
+      "id": "lh-sup-4011bcc71c6b44de",
+      "name": "Fady Tanjeed (11*12$) +36$"
+    },
+    {
+      "id": "lh-sup-406c44032aa379de",
+      "name": "Le Marche Selectif"
+    },
+    {
+      "id": "lh-sup-42ecb7b9fef11932",
+      "name": "Balkis"
+    },
+    {
+      "id": "lh-sup-455c9cd884516edb",
+      "name": "Librarie Halim"
+    },
+    {
+      "id": "lh-sup-4bbdb18cd55c9cc5",
+      "name": "Event MegaStore"
+    },
+    {
+      "id": "lh-sup-4ca2f46c70fd7b0c",
+      "name": "Librarie Mallah Egg Hunts Easter 2"
+    },
+    {
+      "id": "lh-sup-4d71727916bbdf30",
+      "name": "Teben For Furm"
+    },
+    {
+      "id": "lh-sup-4e46b33d0fefe87c",
+      "name": "Geryes Malek (Brocoli)"
+    },
+    {
+      "id": "lh-sup-5202c112a190aa7d",
+      "name": "Mariam Fegir"
+    },
+    {
+      "id": "lh-sup-54728a3d10bbb6ae",
+      "name": "Event Mega Store Outdoor Lamps"
+    },
+    {
+      "id": "lh-sup-55038cb05768d6c9",
+      "name": "Maasri Holsten Powder Milk"
+    },
+    {
+      "id": "lh-sup-55e0370ee177c10c",
+      "name": "Lteif Market Sanita"
+    },
+    {
+      "id": "lh-sup-5623a5b6abd5ef9a",
+      "name": "Youssef Aalaf & Maintenance Car ( Thaer)"
+    },
+    {
+      "id": "lh-sup-576fe106797ef34c",
+      "name": "Kassab"
+    },
+    {
+      "id": "lh-sup-581239b67bee220b",
+      "name": "Storium Worksho  23-5 & Barbecue 24-5"
+    },
+    {
+      "id": "lh-sup-595d975c85438a1a",
+      "name": "Social Media ( Sara, Sanaa) July"
+    },
+    {
+      "id": "lh-sup-5b8da5a1f111d6a3",
+      "name": "Shein Orders"
+    },
+    {
+      "id": "lh-sup-5d23bd146ff9987e",
+      "name": "Geryes Malek Brocolie"
+    },
+    {
+      "id": "lh-sup-6165639dbc1a5703",
+      "name": "Lteif Market"
+    },
+    {
+      "id": "lh-sup-63cea468f0cfab6d",
+      "name": "Librarie Mallah printing For event sanaa"
+    },
+    {
+      "id": "lh-sup-643565a98b46ee55",
+      "name": "Pro plus  Cups"
+    },
+    {
+      "id": "lh-sup-67a25148d78794c3",
+      "name": "Storium (Lycee Montaigne Activites)"
+    },
+    {
+      "id": "lh-sup-69b84cbc18ea9040",
+      "name": "Fairco"
+    },
+    {
+      "id": "lh-sup-6bbacdb156e39bf5",
+      "name": "Karam Bake"
+    },
+    {
+      "id": "lh-sup-710c3906ca8b54f8",
+      "name": "Angelina"
+    },
+    {
+      "id": "lh-sup-71790539d8b129cf",
+      "name": "Lteif Market Prill"
+    },
+    {
+      "id": "lh-sup-76bdd41509ca456a",
+      "name": "L’ Architecte"
+    },
+    {
+      "id": "lh-sup-771afad52e183327",
+      "name": "Cleaning Supplies"
+    }
+  ]
+}

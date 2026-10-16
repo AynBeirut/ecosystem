@@ -1,5 +1,8 @@
 import type { AccountBookLine, JournalEntry, JournalLine, LedgerAccount } from '@/types/generalLedger';
-import { sanitizeJournalMemoForDisplay } from '@/lib/ledger/ledgerHumanLabels';
+import {
+  displayMemoForJournalEntry,
+  sanitizeJournalLineDescriptionForDisplay,
+} from '@/lib/ledger/ledgerHumanLabels';
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
@@ -37,12 +40,12 @@ export function buildBookLinesForAccount(
       lineId: line.id,
       entryId: entry.id,
       entryDate: entry.date.slice(0, 10),
-      memo: sanitizeJournalMemoForDisplay(entry.memo || ''),
+      memo: displayMemoForJournalEntry(entry),
       voucherNumber: entry.voucherNumber,
       sourceType: entry.sourceType,
       debit: round2(line.debit || 0),
       credit: round2(line.credit || 0),
-      description: line.description,
+      description: sanitizeJournalLineDescriptionForDisplay(line.description || '', entry),
     });
   }
 

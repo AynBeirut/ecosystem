@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,7 +11,7 @@ import { Plus, Eye, FileDown, Share2, Mail, Phone } from "lucide-react";
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableCombobox } from "@/components/SearchableCombobox";
-import { CURRENCIES } from "@/services/mockData";
+import { StoreCurrencyField, useStoreDocumentCurrencies, clampStoreCurrency } from "@/components/StoreCurrencyField";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
@@ -21,6 +21,7 @@ import AccountingSideSheet from "@/components/AccountingSideSheet";
 import ShareSheet from "@/components/ShareSheet";
 import UnifiedPaymentFeedTable from "@/components/UnifiedPaymentFeedTable";
 import { useUnifiedPaymentFeed } from "@/hooks/useUnifiedPaymentFeed";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
 
 const receiptSchema = z.object({
   clientName: z.string().min(1, "Client name is required"),
@@ -54,7 +55,16 @@ const ReceiptManager = () => {
   } = useAppContext();
   const { toast } = useToast();
   const { moneyIn, moneyOut, loading: feedLoading, error: feedError, reload: reloadFeed } = useUnifiedPaymentFeed();
-  
+  const dateFilter = useInvoiceManagerDateFilterOptional();
+  const filteredMoneyIn = useMemo(
+    () => moneyIn.filter((row) => !dateFilter || dateFilter.matchesDate(row.date, false)),
+    [moneyIn, dateFilter],
+  );
+  const filteredMoneyOut = useMemo(
+    () => moneyOut.filter((row) => !dateFilter || dateFilter.matchesDate(row.date, false)),
+    [moneyOut, dateFilter],
+  );
+
   const [activeTab, setActiveTab] = useState("receipts-list");
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
@@ -91,6 +101,13 @@ const ReceiptManager = () => {
       notes: "",
     },
   });
+  const { codes: storeCurrencies, main: storeCurrency } = useStoreDocumentCurrencies();
+  useEffect(() => {
+    for (const docForm of [receiptForm, paymentOrderForm]) {
+      const current = String(docForm.getValues("currency") || "").toUpperCase();
+      if (!storeCurrencies.includes(current)) docForm.setValue("currency", storeCurrency);
+    }
+  }, [paymentOrderForm, receiptForm, storeCurrency, storeCurrencies]);
 
   const handleClientSelect = (clientId: string) => {
     const selectedClient = clients.find(client => client.id === clientId);
@@ -130,7 +147,7 @@ const ReceiptManager = () => {
     const success = await createReceipt({
       clientName: values.clientName,
       amount: values.amount,
-      currency: values.currency,
+      currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
       paymentDate: values.paymentDate,
       paymentMethod: values.paymentMethod,
       notes: values.notes,
@@ -155,7 +172,7 @@ const ReceiptManager = () => {
     const success = createPaymentOrder({
       supplierName: values.supplierName,
       amount: values.amount,
-      currency: values.currency,
+      currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
       paymentMethod: values.paymentMethod,
       notes: values.notes,
       supplierId: values.supplierId,
@@ -188,7 +205,7 @@ const ReceiptManager = () => {
         id: "DRAFT",
         clientName: values.clientName,
         amount: values.amount,
-        currency: values.currency,
+        currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
         paymentDate: values.paymentDate,
         paymentMethod: values.paymentMethod,
         notes: values.notes,
@@ -213,7 +230,7 @@ const ReceiptManager = () => {
         id: "DRAFT",
         supplierName: values.supplierName,
         amount: values.amount,
-        currency: values.currency,
+        currency: clampStoreCurrency(values.currency, storeCurrencies, storeCurrency),
         paymentDate: values.paymentDate,
         paymentMethod: values.paymentMethod,
         notes: values.notes,
@@ -330,7 +347,7 @@ const ReceiptManager = () => {
                 </div>
 
                 <UnifiedPaymentFeedTable
-                  rows={moneyIn}
+                  rows={filteredMoneyIn}
                   loading={feedLoading}
                   error={feedError}
                   onReload={() => void reloadFeed()}
@@ -405,24 +422,7 @@ const ReceiptManager = () => {
                           control={receiptForm.control}
                           name="currency"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Currency</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select currency" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {CURRENCIES.map(currency => (
-                                    <SelectItem key={currency.code} value={currency.code}>
-                                      {currency.code} - {currency.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
+                            <StoreCurrencyField value={field.value} onChange={field.onChange} />
                           )}
                         />
                       </div>
@@ -522,7 +522,7 @@ const ReceiptManager = () => {
                 </div>
 
                 <UnifiedPaymentFeedTable
-                  rows={moneyOut}
+                  rows={filteredMoneyOut}
                   loading={feedLoading}
                   error={feedError}
                   onReload={() => void reloadFeed()}
@@ -597,24 +597,7 @@ const ReceiptManager = () => {
                           control={paymentOrderForm.control}
                           name="currency"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Currency</FormLabel>
-                              <Select onValueChange={field.onChange} defaultValue={field.value}>
-                                <FormControl>
-                                  <SelectTrigger>
-                                    <SelectValue placeholder="Select currency" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  {CURRENCIES.map(currency => (
-                                    <SelectItem key={currency.code} value={currency.code}>
-                                      {currency.code} - {currency.name}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
+                            <StoreCurrencyField value={field.value} onChange={field.onChange} />
                           )}
                         />
                       </div>

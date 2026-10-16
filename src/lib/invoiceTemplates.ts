@@ -1,5 +1,10 @@
-import { Order } from '@/types/order';
-import { StoreProfile } from '@/types/storeProfile';
+import { Order } from '../types/order';
+import { StoreProfile } from '../types/storeProfile';
+import { numberToWords } from './documentNumberWords';
+import { generateProfessionalDocumentHTML } from './electroServiceDocumentHtml';
+import { resolveA4DocumentBranding } from './financeDocumentSettingsCore';
+import { lineWeightToBorderPx, normalizeDocumentLayout } from './invoiceDocumentSetupConfig';
+import { resolveOrderDocumentRef } from './orderDocumentRef';
 
 const escapeHtml = (value: string): string =>
   value
@@ -21,7 +26,7 @@ const resolveCatalogDescription = (product?: { description?: string; productDesc
   return '';
 };
 
-import { resolveA4DocumentBranding } from '@/lib/financeDocumentSettings';
+export { hasHumanOrderDocumentRef, resolveOrderDocumentRef, safeDocumentFilePart } from './orderDocumentRef';
 
 export const generateInvoiceHTML = (
   order: Order & { id: string },
@@ -32,21 +37,29 @@ export const generateInvoiceHTML = (
   const branding = resolveA4DocumentBranding(storeProfile);
   const template = branding.template;
   const storeName = branding.companyName;
+  const showCompanyName = branding.showCompanyName;
+  const companyHeadingHtml = (name: string, escaped = false) =>
+    showCompanyName ? `<h1>${escaped ? escapeHtml(name) : name}</h1>` : '';
   const storeLogo = branding.logo;
   const storeSlogan = branding.slogan;
   const storeWebsite = branding.website;
   const storePhone = branding.phone;
   const storeEmail = branding.email;
   const storeTaxNumber = branding.taxNumber;
+  const storeAddress = branding.address;
+  const storeCountry = branding.country;
   
-  // Generate invoice number with store prefix
-  let invoiceNum = order.invoiceNumber;
-  if (!invoiceNum) {
-    const prefix = storeProfile?.invoiceNumberPrefix || 'INV';
-    const orderNumber = order.id.slice(0, 6).toUpperCase();
-    invoiceNum = `${prefix}-${orderNumber}`;
-  }
-  
+  const invoiceNum = resolveOrderDocumentRef(order);
+
+  return generateProfessionalDocumentHTML({
+    kind: 'invoice',
+    order,
+    products,
+    storeProfile,
+    formatCurrency,
+    documentRef: invoiceNum,
+  });
+
   const itemsHtml = order.items?.map(item => {
     const product = products.find(p => p.id === item.productId);
     const itemName = item.productName || product?.name || 'Product';
@@ -115,6 +128,133 @@ export const generateInvoiceHTML = (
       </div>
     `;
   })();
+
+  const rawDocLayout = (branding.layout || '').trim();
+  const layoutId = normalizeDocumentLayout(rawDocLayout);
+  const usesDocumentLayoutShell =
+    Boolean(rawDocLayout) &&
+    ['minimal', 'classic-band', 'accent-line', 'sidebar'].includes(layoutId);
+  if (usesDocumentLayoutShell) {
+    const contactLine = [storeAddress, storePhone, storeEmail, storeWebsite].filter(Boolean).join(' • ');
+    const accent = branding.primaryColor || '#3182CE';
+    const accentSoft = branding.secondaryColor || '#2B6CB0';
+    const borderPx = lineWeightToBorderPx(branding.lineWeight);
+    const footerNote = (branding.footer || '').trim();
+    const signature = branding.signature || '';
+    const invoiceDate = new Date(order.createdAt || Date.now());
+    const dueDate = new Date(invoiceDate);
+    dueDate.setDate(dueDate.getDate() + (branding.invoiceDueDays || 30));
+    const brandBlock = `
+      <div class="brand">
+        ${storeLogo ? `<img src="${storeLogo}" alt="${escapeHtml(storeName)}" class="logo">` : ''}
+        <div>
+          ${companyHeadingHtml(storeName, true)}
+          ${contactLine ? `<p class="contact">${escapeHtml(contactLine)}</p>` : ''}
+        </div>
+      </div>`;
+    const titleBlock = `
+      <div class="invoice-title">
+        <h2>Invoice</h2>
+        <p>#${escapeHtml(invoiceNum)}</p>
+      </div>`;
+    const headerClass =
+      layoutId === 'classic-band'
+        ? 'header header-band'
+        : layoutId === 'sidebar'
+          ? 'header header-sidebar'
+          : layoutId === 'accent-line'
+            ? 'header header-accent-line'
+            : 'header header-minimal';
+    const headerInner =
+      layoutId === 'sidebar'
+        ? `<div class="sidebar-accent"></div><div class="header-main">${brandBlock}${titleBlock}</div>`
+        : `${brandBlock}${titleBlock}`;
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <title>Invoice ${invoiceNum}</title>
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: Arial, sans-serif; padding: 36px; color: #1f2937; background: #fff; }
+          .invoice-container { max-width: 820px; margin: 0 auto; background: #fff; }
+          .header { display: flex; justify-content: space-between; gap: 28px; align-items: flex-start; }
+          .header-minimal { padding-bottom: 22px; border-bottom: ${borderPx} solid ${accent}; margin-bottom: 24px; }
+          .header-accent-line { padding-bottom: 18px; border-bottom: ${borderPx} solid ${accent}; margin-bottom: 24px; }
+          .header-band { background: linear-gradient(135deg, ${accent} 0%, ${accentSoft} 100%); color: #fff; padding: 22px 24px; border-radius: 8px; margin-bottom: 24px; }
+          .header-band .brand h1, .header-band .invoice-title h2 { color: #fff; }
+          .header-band .contact, .header-band .invoice-title p { color: rgba(255,255,255,0.88); }
+          .header-sidebar { margin-bottom: 24px; align-items: stretch; }
+          .header-sidebar .sidebar-accent { width: 6px; border-radius: 4px; background: ${accent}; flex-shrink: 0; }
+          .header-sidebar .header-main { flex: 1; display: flex; justify-content: space-between; gap: 28px; padding-left: 16px; border-bottom: ${borderPx} solid ${accent}; padding-bottom: 18px; }
+          .brand { display: flex; gap: 18px; align-items: center; min-width: 0; }
+          .logo { width: 76px; max-height: 60px; object-fit: contain; }
+          .brand h1 { font-size: 28px; line-height: 1.1; color: #111827; margin-bottom: 6px; }
+          .brand p, .brand .contact { color: #6b7280; font-size: 13px; line-height: 1.4; }
+          .invoice-title { text-align: right; flex-shrink: 0; }
+          .invoice-title h2 { color: ${accent}; font-size: 30px; margin-bottom: 8px; }
+          .invoice-title p { color: #6b7280; font-size: 13px; }
+          .meta { margin: 0 0 28px; font-size: 14px; line-height: 1.8; color: #111827; }
+          .meta strong { font-weight: 600; }
+          table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+          th { background: #f8fafc; color: #374151; font-size: 13px; padding: 12px 10px; text-align: left; border: ${borderPx} solid #e5e7eb; }
+          td { font-size: 14px; padding: 10px; border: ${borderPx} solid #e5e7eb; color: #111827; }
+          .num { text-align: right; white-space: nowrap; }
+          .totals { width: 280px; margin-left: auto; margin-top: 20px; font-size: 14px; }
+          .totals-row { display: flex; justify-content: space-between; padding: 6px 0; }
+          .total { color: ${accent}; font-weight: 700; border-top: ${borderPx} solid ${accent}; margin-top: 6px; padding-top: 10px; }
+          .words { margin-top: 18px; color: #6b7280; font-size: 13px; }
+          .doc-footer-note { margin-top: 24px; padding: 14px 16px; background: #f8fafc; border-radius: 8px; font-size: 13px; color: #334155; line-height: 1.5; white-space: pre-wrap; }
+          .signature { margin-top: 28px; text-align: right; }
+          .signature img { max-height: 72px; object-fit: contain; }
+          .footer { margin-top: 32px; display: flex; justify-content: space-between; color: #6b7280; font-size: 13px; }
+        </style>
+      </head>
+      <body>
+        <div class="invoice-container">
+          <div class="${headerClass}">
+            ${headerInner}
+          </div>
+
+          <div class="meta">
+            <div><strong>Bill to:</strong> ${escapeHtml(order.customerName || 'N/A')}</div>
+            <div><strong>Date:</strong> ${invoiceDate.toLocaleDateString()}</div>
+            <div><strong>Due:</strong> ${dueDate.toLocaleDateString()} (${branding.invoiceDueDays || 30} days)</div>
+            <div><strong>Payment:</strong> ${order.paymentStatus === 'paid' ? 'Paid' : 'Unpaid'}</div>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th>Item</th>
+                <th class="num">Qty</th>
+                <th class="num">Price</th>
+                <th class="num">Total</th>
+              </tr>
+            </thead>
+            <tbody>${itemsHtml}</tbody>
+          </table>
+
+          <div class="totals">
+            <div class="totals-row"><span>Subtotal</span><span>${formatCurrency(order.subtotal || 0, true)}</span></div>
+            ${order.taxAmount ? `<div class="totals-row"><span>Tax</span><span>${formatCurrency(order.taxAmount, true)}</span></div>` : ''}
+            ${order.discountAmount ? `<div class="totals-row"><span>Discount</span><span>- ${formatCurrency(order.discountAmount, true)}</span></div>` : ''}
+            <div class="totals-row total"><span>Total</span><span>${formatCurrency(order.total || 0, true)}</span></div>
+          </div>
+
+          <div class="words">Total in words: ${numberToWords(Math.round(order.total || 0))} Dollars Only</div>
+          ${invoiceNotesSectionHtml}
+          ${footerNote ? `<div class="doc-footer-note">${formatMultilineHtml(footerNote)}</div>` : ''}
+          ${signature ? `<div class="signature"><img src="${signature}" alt="Signature" /></div>` : ''}
+          <div class="footer">
+            <span>${storeCountry ? escapeHtml(storeCountry) : ''}</span>
+            <span>${storeWebsite ? escapeHtml(storeWebsite) : ''}</span>
+          </div>
+        </div>
+      </body>
+      </html>
+    `;
+  }
 
   // Modern Template (Blue/Teal)
   if (template === 'modern') {
@@ -278,7 +418,7 @@ export const generateInvoiceHTML = (
             <div class="logo-section">
               ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
               <div class="store-info">
-                <h1>${storeName}</h1>
+                ${companyHeadingHtml(storeName)}
                 ${storeSlogan ? `<p style="font-style: italic; color: #0ea5e9;">"${storeSlogan}"</p>` : ''}
                 ${storeWebsite ? `<p>🌐 ${storeWebsite}</p>` : ''}
                 ${storePhone ? `<p>📞 ${storePhone}</p>` : ''}
@@ -557,7 +697,7 @@ export const generateInvoiceHTML = (
         <div class="invoice-container">
           <div class="header">
             ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
-            <h1>${storeName}</h1>
+            ${companyHeadingHtml(storeName)}
             ${storeSlogan ? `<div class="slogan">"${storeSlogan}"</div>` : ''}
             <div class="contact-info">
               ${storeWebsite ? `${storeWebsite}<br/>` : ''}
@@ -645,7 +785,7 @@ export const generateInvoiceHTML = (
           ${invoiceNotesSectionHtml}
 
           <div class="footer">
-            <p>Thank you for choosing ${storeName}. We appreciate your business.</p>
+            <p>${showCompanyName ? `Thank you for choosing ${storeName}. We appreciate your business.` : 'Thank you for your business.'}</p>
             <p>Please remit payment at your earliest convenience.</p>
           </div>
         </div>
@@ -866,7 +1006,7 @@ export const generateInvoiceHTML = (
             <div class="logo-section">
               ${storeLogo ? `<img src="${storeLogo}" alt="${storeName}" class="logo">` : ''}
               <div class="store-details">
-                <h1>${storeName}</h1>
+                ${companyHeadingHtml(storeName)}
                 ${storeSlogan ? `<p style="font-style: italic; font-size: 16px;">"${storeSlogan}"</p>` : ''}
                 ${storeWebsite ? `<p>🌐 ${storeWebsite}</p>` : ''}
                 ${storePhone ? `<p>📞 ${storePhone}</p>` : ''}

@@ -1,5 +1,6 @@
 import { doc, runTransaction, type DocumentReference, type Transaction } from 'firebase/firestore';
 import { getFinanceDb } from '@/integrations/firebase/client';
+import { normalizeDocumentDateKey } from '@/lib/documentSerial';
 import type { VoucherType } from '@/types/generalLedger';
 
 const nowIso = () => new Date().toISOString();
@@ -12,14 +13,15 @@ export function voucherSerialsRef(storeId: string) {
 export function peekNextVoucherSerial(
   counters: Record<string, number> | undefined,
   voucherType: VoucherType,
-  year = new Date().getFullYear(),
+  documentDateKey?: string,
 ): { next: number; voucherNumber: string; counterKey: string } {
-  const counterKey = `${voucherType}-${year}`;
+  const dateKey = normalizeDocumentDateKey(documentDateKey);
+  const counterKey = `${voucherType}-${dateKey}`;
   const next = (counters?.[counterKey] || 0) + 1;
   return {
     next,
     counterKey,
-    voucherNumber: `${voucherType}-${year}-${String(next).padStart(5, '0')}`,
+    voucherNumber: `${voucherType}-${dateKey}-${String(next).padStart(6, '0')}`,
   };
 }
 
@@ -30,12 +32,12 @@ export function allocateVoucherNumberInTransaction(
   serialSnap: { exists: () => boolean; data: () => Record<string, unknown> | undefined },
   storeId: string,
   voucherType: VoucherType,
-  entryYear?: number,
+  entryDate?: string | Date | null,
 ): string {
   const data = serialSnap.exists() ? serialSnap.data() : undefined;
   const counters = (data?.counters as Record<string, number>) || {};
-  const year = entryYear && Number.isFinite(entryYear) ? entryYear : new Date().getFullYear();
-  const { voucherNumber, counterKey, next } = peekNextVoucherSerial(counters, voucherType, year);
+  const dateKey = normalizeDocumentDateKey(entryDate);
+  const { voucherNumber, counterKey, next } = peekNextVoucherSerial(counters, voucherType, dateKey);
   tx.set(
     serialRef,
     {
@@ -50,11 +52,15 @@ export function allocateVoucherNumberInTransaction(
 }
 
 /** @deprecated Prefer allocation inside postJournalEntry transaction. Kept for tests/tools. */
-export async function allocateVoucherNumber(storeId: string, voucherType: VoucherType): Promise<string> {
+export async function allocateVoucherNumber(
+  storeId: string,
+  voucherType: VoucherType,
+  entryDate?: string | Date | null,
+): Promise<string> {
   const ref = voucherSerialsRef(storeId);
   return runTransaction(getFinanceDb(), async (tx) => {
     const snap = await tx.get(ref);
-    return allocateVoucherNumberInTransaction(tx, ref, snap, storeId, voucherType);
+    return allocateVoucherNumberInTransaction(tx, ref, snap, storeId, voucherType, entryDate);
   });
 }
 

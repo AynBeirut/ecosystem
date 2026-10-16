@@ -25,6 +25,7 @@ import { supportsArabicEntry, type AccountingLanguage } from "@/lib/grabio/accou
 import type { JournalEntry, JournalLine, LedgerAccount, PcgClientAccount } from "@/types/generalLedger";
 import PcgAccountMovementsSheet from "@/components/PcgAccountMovementsSheet";
 import { cn } from "@/lib/utils";
+import { displayVendorPartyName } from "@/lib/vendorDisplayName";
 
 import type { OpenVoucherEntryHandler } from "@/lib/accounting/accountingNavigation";
 
@@ -68,6 +69,8 @@ function PcgTreeNodeRow({
   const addTarget = pcgAddTargetFromNode(node);
   const canAdd = Boolean(onAddClientAccount && addTarget);
   const clientRow = node.kind === "client" ? node.clientAccount : undefined;
+  const displayName =
+    clientRow?.partyType === "supplier" ? displayVendorPartyName(node.name) : node.name;
   const canEditClient = Boolean(onEditClientAccount && clientRow);
   const canEditPcg = Boolean(onEditPcgAccount && pcgNodeCanEdit(node));
   const canEdit = canEditClient || canEditPcg;
@@ -121,7 +124,7 @@ function PcgTreeNodeRow({
             {node.code}
           </button>
           <span className={cn("text-sm", node.pcgKind === "G" ? "font-semibold text-foreground" : "text-foreground/90")}>
-            {node.name}
+            {displayName}
           </span>
           {suffix ? <span className="text-xs text-muted-foreground">{suffix}</span> : null}
           {node.kind === "client" ? (

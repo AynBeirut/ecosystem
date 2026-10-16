@@ -1,0 +1,45 @@
+{
+  "date": "2026-09-20",
+  "resolver": "src/lib/financeDocumentSettingsCore.ts → resolveA4DocumentBranding() (re-exported from src/lib/financeDocumentSettings.ts)",
+  "renderer": "src/lib/invoiceTemplates.ts → generateInvoiceHTML(); finance docs via src/lib/financeDocumentHtml.ts → generateFinanceDocumentHTML(); PDF rasterization src/lib/htmlDocumentPdf.ts",
+  "nipcoSkipped": true,
+  "nipcoStoreId": "DfIhBAEZ5NR7yNX0HboZvv58Nf82",
+  "surfacesReadingFinanceDocumentSettings": [
+    "src/lib/invoiceTemplates.ts (orders)",
+    "vendor/beirut-finance-flow-main/src/lib/pdfExport.ts (invoice/estimate HTML path)",
+    "vendor/beirut-finance-flow-main/src/lib/grabio/storeService.ts (storeProfileToCompany)",
+    "src/pages/admin/finance/BusinessFinanceInvoiceTemplateSetup.tsx",
+    "vendor/beirut-finance-flow-main/src/pages/InvoiceDocumentSetup.tsx",
+    "grabio-invoice-mobile/src/lib/financeDocumentBranding.ts + documentPdfHtml.ts (minimal layout; branding from financeDocumentSettings)"
+  ],
+  "estimateDeletePaths": {
+    "web": "vendor/beirut-finance-flow-main/src/pages/EstimateManager.tsx → AppContext.deleteEstimate → Firestore estimates",
+    "mobile": "grabio-invoice-mobile/src/lib/financeService.ts deleteEstimate → stores/{storeId}/financeEstimates/{id}"
+  },
+  "shopMenuUnchanged": "AdminProfile.tsx preserves financeDocumentSettings merge-only; document setup writes financeDocumentSettings only via updateFinanceDocumentSettings",
+  "filesChanged": [
+    "src/lib/financeDocumentSettingsCore.ts",
+    "src/lib/financeDocumentSettings.ts",
+    "src/lib/financeDocumentHtml.ts",
+    "src/lib/htmlDocumentPdf.ts",
+    "src/App.tsx",
+    "vendor/beirut-finance-flow-main/src/lib/pdfExport.ts",
+    "vendor/beirut-finance-flow-main/src/lib/grabio/storeService.ts",
+    "vendor/beirut-finance-flow-main/src/pages/InvoiceDocumentSetup.tsx",
+    "vendor/beirut-finance-flow-main/src/App.tsx",
+    "vendor/beirut-finance-flow-main/src/pages/Settings.tsx",
+    "vendor/beirut-finance-flow-main/src/components/EstimateList.tsx",
+    "vendor/beirut-finance-flow-main/src/pages/EstimateManager.tsx",
+    "grabio-invoice-mobile/src/lib/financeService.ts",
+    "grabio-invoice-mobile/src/lib/pdfShare.ts",
+    "grabio-invoice-mobile/src/lib/documentPdfHtml.ts",
+    "grabio-invoice-mobile/src/lib/financeDocumentBranding.ts",
+    "grabio-invoice-mobile/src/lib/documentSerial.ts"
+  ],
+  "remainingMobileRisks": [
+    "Mobile PDF uses documentPdfHtml minimal template until shared metro bundle with full invoiceTemplates.ts",
+    "Invoice editor / product editor TextInput contrast not fully audited on every screen",
+    "APK install not run — pending Anwar approval"
+  ],
+  "testsRun": "not run — logic reviewed only"
+}

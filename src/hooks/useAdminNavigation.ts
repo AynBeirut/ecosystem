@@ -18,12 +18,14 @@ import {
   Package,
   Paintbrush,
   Receipt,
+  ScrollText,
   Settings2,
   ShoppingCart,
   Store as StoreIcon,
   TrendingUp,
   User,
   Users,
+  UtensilsCrossed,
   Wallet,
   type LucideIcon,
 } from 'lucide-react';
@@ -128,7 +130,8 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
       pathname.startsWith('/admin/products') ||
       pathname.startsWith('/admin/purchases') ||
       pathname.startsWith('/admin/delivery') ||
-      pathname.startsWith('/admin/invoice-manager/expenses')
+      pathname.startsWith('/admin/invoice-manager/expenses') ||
+      pathname.startsWith('/admin/v-expense')
     );
   }
   if (groupId === 'daily_sales' || groupId === 'venue_operations') {
@@ -143,7 +146,9 @@ function groupOpenForPath(pathname: string, groupId: string): boolean | undefine
       pathname.startsWith('/admin/customers') ||
       pathname.startsWith('/admin/crm') ||
       pathname.startsWith('/admin/payments') ||
-      pathname.startsWith('/admin/analytics')
+      pathname.startsWith('/admin/analytics') ||
+      pathname.startsWith('/admin/hr') ||
+      pathname.startsWith('/admin/venue-ops')
     );
   }
   if (groupId === 'setup_profile') {
@@ -317,6 +322,12 @@ export function useAdminNavigation() {
               icon: BarChart,
               visible: canViewReports,
             },
+            {
+              to: '/admin/finance/invoice-document',
+              label: 'Invoice PDF template',
+              icon: ScrollText,
+              visible: true,
+            },
           ],
         },
       ];
@@ -380,7 +391,13 @@ export function useAdminNavigation() {
           to: '/admin/invoice-manager/expenses',
           label: 'Expenses',
           icon: Receipt,
-          visible: showFinanceNav && Boolean(showStockExpenseNav),
+          visible: showInventoryNav && Boolean(showStockExpenseNav),
+        },
+        {
+          to: '/admin/v-expense',
+          label: 'Quick expense',
+          icon: CreditCard,
+          visible: showInventoryNav && Boolean(showStockExpenseNav) && storeAdminAccess,
         },
       ],
     };
@@ -431,6 +448,13 @@ export function useAdminNavigation() {
           visible: Boolean(canViewCustomers),
         },
         { to: '/admin/crm/dashboard', label: 'Sales CRM', icon: LayoutGrid, visible: crmEnabled },
+        { to: '/admin/hr', label: 'HR', icon: Users, visible: effectiveCtx.modulesVisible.hr },
+        {
+          to: '/admin/venue-ops',
+          label: 'Venue Ops',
+          icon: UtensilsCrossed,
+          visible: effectiveCtx.modulesVisible.venueOps,
+        },
         { to: '/admin/payments', label: 'Payments', icon: CreditCard, visible: Boolean(canProcessPayments) },
         { to: '/admin/analytics', label: 'Analytics', icon: BarChart, visible: Boolean(canViewReports) },
       ],
@@ -530,6 +554,12 @@ export function useAdminNavigation() {
             label: 'Invoice Manager',
             icon: Receipt,
             visible: invoiceManagerEnabled,
+          },
+          {
+            to: '/admin/finance/invoice-document',
+            label: 'Invoice PDF template',
+            icon: ScrollText,
+            visible: invoiceManagerEnabled || showFinanceNav,
           },
           {
             to: '/admin/cash-collection',

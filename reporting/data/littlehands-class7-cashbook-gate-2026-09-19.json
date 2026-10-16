@@ -1,0 +1,31 @@
+{
+  "title": "Little Hands Class 7 vs cash book column C",
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "cashSource": "reporting/data/littlehands-usb-staging/2026-09-18-cash-audit",
+  "septemberWorkbook": "Copy of September edited.xlsx",
+  "parserRevision": "2026-09-19-no-monthly-net-in-cash-rollup",
+  "verifiedAt": "2026-09-19T11:22:06.691Z",
+  "allMonthsPass": true,
+  "months": [
+    { "ym": "2025-12", "cashBookColC": 1926.63, "glClass7": 1926.63, "delta": 0, "status": "ok" },
+    { "ym": "2026-01", "cashBookColC": 1368.18, "glClass7": 1368.18, "delta": 0, "status": "ok" },
+    { "ym": "2026-02", "cashBookColC": 3185.82, "glClass7": 3185.82, "delta": 0, "status": "ok" },
+    { "ym": "2026-03", "cashBookColC": 3017.46, "glClass7": 3017.46, "delta": 0, "status": "ok" },
+    { "ym": "2026-04", "cashBookColC": 7747, "glClass7": 7747, "delta": 0, "status": "ok" },
+    { "ym": "2026-05", "cashBookColC": 14226, "glClass7": 14226, "delta": 0, "status": "ok" },
+    { "ym": "2026-06", "cashBookColC": 15495, "glClass7": 15495, "delta": 0, "status": "ok" },
+    { "ym": "2026-07", "cashBookColC": 19256, "glClass7": 19256, "delta": 0, "status": "ok" },
+    { "ym": "2026-08", "cashBookColC": 13087.25, "glClass7": 13087.25, "delta": 0, "status": "ok" },
+    { "ym": "2026-09", "cashBookColC": 4975, "glClass7": 4975, "delta": 0, "status": "ok" }
+  ],
+  "rollupCorrectionsPosted": [
+    { "ym": "2025-12", "amount": 336.2, "direction": "decrease" },
+    { "ym": "2026-01", "amount": 26.99, "direction": "decrease" },
+    { "ym": "2026-03", "amount": 224.15, "direction": "decrease" },
+    { "ym": "2026-05", "amount": 3418.58, "direction": "decrease" },
+    { "ym": "2026-06", "amount": 1.75, "direction": "decrease" },
+    { "ym": "2026-07", "amount": 436.84, "direction": "decrease" },
+    { "ym": "2026-09", "amount": 75, "direction": "decrease" }
+  ],
+  "detailReport": "reporting/data/littlehands-cashbook-sales-class7-align-2026-09-18.json"
+}

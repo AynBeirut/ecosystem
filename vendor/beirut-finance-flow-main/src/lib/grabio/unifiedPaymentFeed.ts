@@ -169,6 +169,7 @@ export function mergeUnifiedPaymentFeed(input: {
   invoicePayments: Payment[];
   paymentOrders: PaymentOrder[];
   accountPayments: Array<Record<string, unknown> & { id: string }>;
+  posOrders?: Array<Record<string, unknown> & { id: string }>;
 }): UnifiedPaymentRow[] {
   const currency = input.currency || 'USD';
   const rows: UnifiedPaymentRow[] = [];
@@ -276,21 +277,82 @@ export function mergeUnifiedPaymentFeed(input: {
     });
   }
 
+  for (const order of input.posOrders || []) {
+    if (covered.has(coveredSourceKey('order', order.id))) continue;
+    const amount = toNumber(order.total);
+    if (amount <= 0) continue;
+    const status = String(order.status || '').toLowerCase();
+    const paid = String(order.paymentStatus || '').toLowerCase() === 'paid' || order.paid === true;
+    if (status !== 'completed' && !paid) continue;
+    rows.push({
+      id: `ord:${order.id}`,
+      direction: 'in',
+      date: toDateString(order.completedAt, toDateString(order.createdAt)),
+      amount,
+      currency: String(order.currency || currency),
+      partyName: String(order.customerName || order.clientName || 'Walk-in Customer'),
+      method: String(order.paymentMethod || order.paymentType || 'cash'),
+      source: 'pos_order',
+      sourceLabel: sourceLabel('pos_order'),
+      reference: String(order.orderNumber || order.id),
+      adminLink: '/admin/orders',
+      accountingLink,
+    });
+  }
+
   return rows.sort((a, b) => (a.date < b.date ? 1 : a.date > b.date ? -1 : 0));
 }
 
 export async function fetchGrabioPaymentSources(storeId: string): Promise<{
   accountPayments: Array<Record<string, unknown> & { id: string }>;
   storeReceipts: Array<Record<string, unknown> & { id: string }>;
+  posOrders: Array<Record<string, unknown> & { id: string }>;
+  partialErrors: string[];
 }> {
   const db = getFinanceDb();
-  const [accountSnap, receiptsSnap] = await Promise.all([
+  const partialErrors: string[] = [];
+  const [accountResult, receiptsResult, ordersResult] = await Promise.allSettled([
     getDocs(query(collection(db, 'accountPayments'), where('storeId', '==', storeId))),
     getDocs(collection(db, 'stores', storeId, 'financeReceipts')),
+    getDocs(query(collection(db, 'orders'), where('storeId', '==', storeId))),
   ]);
 
+  const accountPayments =
+    accountResult.status === 'fulfilled'
+      ? accountResult.value.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+      : [];
+  if (accountResult.status === 'rejected') {
+    partialErrors.push(
+      accountResult.reason instanceof Error ? accountResult.reason.message : 'accountPayments',
+    );
+  }
+
+  const storeReceipts =
+    receiptsResult.status === 'fulfilled'
+      ? receiptsResult.value.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+      : [];
+  if (receiptsResult.status === 'rejected') {
+    partialErrors.push(
+      receiptsResult.reason instanceof Error ? receiptsResult.reason.message : 'financeReceipts',
+    );
+  }
+
+  const posOrders =
+    ordersResult.status === 'fulfilled'
+      ? ordersResult.value.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() }))
+      : [];
+  if (ordersResult.status === 'rejected') {
+    partialErrors.push(ordersResult.reason instanceof Error ? ordersResult.reason.message : 'orders');
+  }
+
+  if (!accountPayments.length && !storeReceipts.length && !posOrders.length && partialErrors.length) {
+    throw new Error(partialErrors[0] || 'Failed to load payments');
+  }
+
   return {
-    accountPayments: accountSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
-    storeReceipts: receiptsSnap.docs.map((docSnap) => ({ id: docSnap.id, ...docSnap.data() })),
+    accountPayments,
+    storeReceipts,
+    posOrders,
+    partialErrors,
   };
 }

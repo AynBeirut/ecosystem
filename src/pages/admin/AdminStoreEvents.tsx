@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import TableReservationsPanel from '@/components/admin/TableReservationsPanel';
 import { useToast } from '@/hooks/use-toast';
 import {
   cancelEventTicket,
@@ -157,9 +158,8 @@ const AdminStoreEvents: React.FC = () => {
   useEffect(() => {
     if (selectedEvent) {
       void loadTickets(selectedEvent.id);
-      if (selectedEvent.settings.reservationsEnabled) void loadReservations(selectedEvent.id);
     }
-  }, [selectedEvent, loadTickets, loadReservations]);
+  }, [selectedEvent, loadTickets]);
 
   const eventDates = useMemo(
     () => [
@@ -322,6 +322,21 @@ const AdminStoreEvents: React.FC = () => {
       toast({ title: 'Guest name required', variant: 'destructive' });
       return;
     }
+    const reservedAt = new Date(reservationForm.reservedFor);
+    const eventStart = parseISO(selectedEvent.startAt);
+    const eventEnd = parseISO(selectedEvent.endAt);
+    if (
+      Number.isNaN(reservedAt.getTime())
+      || reservedAt < eventStart
+      || reservedAt > eventEnd
+    ) {
+      toast({
+        title: 'Outside the event',
+        description: `Pick a time between ${format(eventStart, 'MMM d, HH:mm')} and ${format(eventEnd, 'MMM d, HH:mm')}.`,
+        variant: 'destructive',
+      });
+      return;
+    }
     try {
       await createEventReservation(selectedEvent.id, {
         guestName: reservationForm.guestName.trim(),
@@ -338,7 +353,6 @@ const AdminStoreEvents: React.FC = () => {
         notes: '',
       });
       toast({ title: 'Reservation saved' });
-      await loadReservations(selectedEvent.id);
       await loadReservations();
     } catch (error) {
       toast({
@@ -353,7 +367,6 @@ const AdminStoreEvents: React.FC = () => {
     if (!selectedEvent) return;
     try {
       await updateEventReservation(selectedEvent.id, reservation.id, { status });
-      await loadReservations(selectedEvent.id);
       await loadReservations();
     } catch (error) {
       toast({
@@ -445,11 +458,14 @@ const AdminStoreEvents: React.FC = () => {
             />
           </TabsContent>
 
-          <TabsContent value="reservations" className="mt-4">
+          <TabsContent value="reservations" className="mt-4 space-y-4">
+            <TableReservationsPanel />
             <AdminPanel>
               <CardHeader>
                 <CardTitle className="text-base">All event reservations</CardTitle>
-                <CardDescription>Merged calendar view across events with reservations enabled.</CardDescription>
+                <CardDescription>
+                  Draft and scheduled events are listed here even before a guest books. Guest rows appear under the same event.
+                </CardDescription>
               </CardHeader>
               <CardContent className="overflow-x-auto">
                 <table className="min-w-full text-sm">
@@ -463,17 +479,55 @@ const AdminStoreEvents: React.FC = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    {reservations.map((reservation) => (
-                      <tr key={reservation.id} className="border-t">
-                        <td className="px-3 py-2">{reservation.reservedFor ? format(parseISO(reservation.reservedFor), 'MMM d, HH:mm') : '—'}</td>
-                        <td className="px-3 py-2">{reservation.eventName || reservation.eventId}</td>
-                        <td className="px-3 py-2">{reservation.guestName}</td>
-                        <td className="px-3 py-2">{reservation.partySize}</td>
-                        <td className="px-3 py-2"><Badge className={STATUS_COLORS[reservation.status] || ''}>{reservation.status}</Badge></td>
+                    {events
+                      .filter((event) => event.status !== 'cancelled')
+                      .flatMap((event) => {
+                        const bookings = reservations.filter((reservation) => reservation.eventId === event.id);
+                        if (bookings.length === 0) {
+                          return [(
+                            <tr
+                              key={event.id}
+                              className="border-t cursor-pointer hover:bg-muted/40"
+                              onClick={() => setSelectedEvent(event)}
+                            >
+                              <td className="px-3 py-2">
+                                {format(parseISO(event.startAt), 'MMM d, HH:mm')}
+                              </td>
+                              <td className="px-3 py-2 font-medium">{event.name}</td>
+                              <td className="px-3 py-2 text-muted-foreground">—</td>
+                              <td className="px-3 py-2 text-muted-foreground">—</td>
+                              <td className="px-3 py-2">
+                                <Badge className={STATUS_COLORS[event.status] || ''}>{event.status}</Badge>
+                              </td>
+                            </tr>
+                          )];
+                        }
+                        return bookings.map((reservation) => (
+                          <tr
+                            key={reservation.id}
+                            className="border-t cursor-pointer hover:bg-muted/40"
+                            onClick={() => setSelectedEvent(event)}
+                          >
+                            <td className="px-3 py-2">
+                              {reservation.reservedFor
+                                ? format(parseISO(reservation.reservedFor), 'MMM d, HH:mm')
+                                : format(parseISO(event.startAt), 'MMM d, HH:mm')}
+                            </td>
+                            <td className="px-3 py-2 font-medium">{event.name}</td>
+                            <td className="px-3 py-2">{reservation.guestName}</td>
+                            <td className="px-3 py-2">{reservation.partySize}</td>
+                            <td className="px-3 py-2">
+                              <Badge className={STATUS_COLORS[reservation.status] || ''}>{reservation.status}</Badge>
+                            </td>
+                          </tr>
+                        ));
+                      })}
+                    {events.filter((event) => event.status !== 'cancelled').length === 0 && (
+                      <tr>
+                        <td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">
+                          No events yet. Use <strong>New event</strong> — drafts show on this tab before anyone books.
+                        </td>
                       </tr>
-                    ))}
-                    {reservations.length === 0 && (
-                      <tr><td colSpan={5} className="px-3 py-6 text-center text-muted-foreground">No reservations yet.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -571,7 +625,13 @@ const AdminStoreEvents: React.FC = () => {
                 <Input placeholder="Guest name *" value={reservationForm.guestName} onChange={(e) => setReservationForm((p) => ({ ...p, guestName: e.target.value }))} />
                 <Input placeholder="Phone" value={reservationForm.guestPhone} onChange={(e) => setReservationForm((p) => ({ ...p, guestPhone: e.target.value }))} />
                 <Input type="number" min={1} placeholder="Party size" value={reservationForm.partySize} onChange={(e) => setReservationForm((p) => ({ ...p, partySize: e.target.value }))} />
-                <Input type="datetime-local" value={reservationForm.reservedFor} onChange={(e) => setReservationForm((p) => ({ ...p, reservedFor: e.target.value }))} />
+                <Input
+                  type="datetime-local"
+                  min={toLocalInputValue(selectedEvent.startAt)}
+                  max={toLocalInputValue(selectedEvent.endAt)}
+                  value={reservationForm.reservedFor}
+                  onChange={(e) => setReservationForm((p) => ({ ...p, reservedFor: e.target.value }))}
+                />
                 <Button onClick={() => void handleCreateReservation()}>Add reservation</Button>
               </div>
               <div className="space-y-2">

@@ -8,11 +8,29 @@ import { useToast } from '@/hooks/use-toast';
 import { useStoreEntitlements } from '@/hooks/useStoreEntitlements';
 import AdminPanel from '@/components/admin/AdminPanel';
 import type { VenueOpsSettings } from '@/types/storeProfile';
-import { canConfigureVenueOpsSettings, mergeVenueOpsSettingsPatch } from '@/lib/venueOpsSettingsUi';
+import {
+  canConfigureVenueOpsSettings,
+  hrVenueHubToggleChecked,
+  mergeVenueOpsSettingsPatch,
+  type HrVenueHubToggleKey,
+} from '@/lib/venueOpsSettingsUi';
 import { resolveEffectiveStoreContext } from '@/lib/effectiveStoreContext';
 import { isVenueToggleEntitled } from '@/lib/featureAccessGate';
 
 type ToggleKey = keyof Omit<VenueOpsSettings, never>;
+
+const HUB_TOGGLES: { key: HrVenueHubToggleKey; label: string; hint: string }[] = [
+  {
+    key: 'enableOfficialHr',
+    label: 'Official HR',
+    hint: 'Directory, attendance, leave, and training. Payroll stays with finance.',
+  },
+  {
+    key: 'enableVenueOpsHub',
+    label: 'Venue operations',
+    hint: 'Allergens, menu knowledge, briefings, floor map, and standards.',
+  },
+];
 
 const MODULE_TOGGLES: { key: ToggleKey; label: string; hint: string }[] = [
   {
@@ -91,11 +109,57 @@ const VenueOpsSettingsPanel: React.FC = () => {
     }
   };
 
-  if (!visible) return null;
-
   const layoutOn = Boolean(settings.restaurantFirstNavEnabled);
 
+  const hubCard = (
+    <AdminPanel className="mb-6 border border-teal-200/60 bg-teal-50/20">
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UtensilsCrossed className="h-5 w-5 text-teal-700" />
+          HR and Venue Ops
+        </CardTitle>
+        <CardDescription>
+          Turns on the HR and Venue Ops pages for this store. Invoice documents and the website theme stay separate.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-2">
+        {HUB_TOGGLES.map(({ key, label, hint }) => (
+          <div
+            key={key}
+            className="flex flex-col gap-2 border-t border-slate-100 pt-3 first:border-t-0 first:pt-0 sm:flex-row sm:items-center sm:justify-between"
+          >
+            <div>
+              <Label htmlFor={`venue-hub-${key}`} className="text-sm font-medium">{label}</Label>
+              <p className="text-xs text-muted-foreground">{hint}</p>
+              {!isVenueToggleEntitled(key, entitlements) ? (
+                <p className="text-xs font-medium text-amber-800">Not on subscription — upgrade to enable.</p>
+              ) : null}
+            </div>
+            <div className="flex items-center gap-2 shrink-0">
+              {savingKey === key && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
+              <Switch
+                id={`venue-hub-${key}`}
+                checked={hrVenueHubToggleChecked(
+                  key,
+                  settings,
+                  effective,
+                  isVenueToggleEntitled(key, entitlements),
+                )}
+                disabled={!storeId || savingKey !== null || !isVenueToggleEntitled(key, entitlements)}
+                onCheckedChange={(checked) => void save({ [key]: checked }, key)}
+              />
+            </div>
+          </div>
+        ))}
+      </CardContent>
+    </AdminPanel>
+  );
+
+  if (!visible) return hubCard;
+
   return (
+    <>
+      {hubCard}
     <AdminPanel className="mb-6 border border-teal-200/60 bg-teal-50/20">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
@@ -171,6 +235,7 @@ const VenueOpsSettingsPanel: React.FC = () => {
         )}
       </CardContent>
     </AdminPanel>
+    </>
   );
 };
 

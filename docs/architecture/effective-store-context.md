@@ -25,6 +25,7 @@ Implemented in `src/lib/featureAccessGate.ts`. Venue toggles never unlock unpaid
 
 - **Legacy:** `restaurantFirstNavEnabled` unset/false → full admin nav (`venueOpsNav` legacy mode). Unpaid modules still hidden via entitlements.
 - **Restaurant-first:** `live_kitchen` / `pkg_live_kitchen` defaults hide inventory + finance nav until toggles on Store Profile → Venue operations layout (and package includes module).
+- **HR / Venue Ops (2026-09-27):** `enableOfficialHr` uses the existing `team` module. `enableVenueOpsHub` uses `restaurant` or a live-kitchen package. Both default on for live kitchen when restaurant-first nav is on, and stay off on the classic menu until the store turns them on. Payroll uses the finance gate. Invoice Document setup and website theme stay separate.
 
 ## Consumers
 

@@ -8,7 +8,18 @@ export function getProductSalePrice(data: Record<string, unknown>): number {
   return Math.round((n + Number.EPSILON) * 100) / 100;
 }
 
+function isSellableMenuProduct(data: Record<string, unknown>): boolean {
+  const rawType = String(data.productType ?? data.type ?? data.kind ?? '').trim().toLowerCase();
+  const excluded = new Set(['raw_material', 'raw-material', 'ingredient', 'material', 'component']);
+  if (data.vposMenuVisible === false || data.isSellable === false) return false;
+  if (excluded.has(rawType)) return false;
+  const itemType = String(data.itemType ?? '').trim().toLowerCase();
+  if (itemType === 'raw_material' || itemType === 'ingredient') return false;
+  return true;
+}
+
 export function mapPosProduct(id: string, data: Record<string, unknown>): Product | null {
+  if (!isSellableMenuProduct(data)) return null;
   const price = getProductSalePrice(data);
   if (price <= 0) return null;
   return {

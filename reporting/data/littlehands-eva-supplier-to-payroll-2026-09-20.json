@@ -1,0 +1,12 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "write": true,
+  "at": "2026-09-20T09:51:06.927Z",
+  "archivedEmployeeNamedSuppliers": [],
+  "counts": {
+    "suppliersCollection": 478,
+    "visibleOnSupplierList": 120,
+    "invoiceLikeVisible": 17,
+    "likelyRealVisible": 103
+  }
+}

@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
 import * as admin from 'firebase-admin';
 import { canUseModule } from '../lib/entitlements';
-import { loadStoreEvent, parseEventTimestamp, validateEventBelongsToStore } from '../lib/storeEventsCore';
+import { loadStoreEvent, parseEventTimestamp, reservationFitsEventWindow, validateEventBelongsToStore } from '../lib/storeEventsCore';
 
 const db = admin.firestore();
 
@@ -109,6 +109,10 @@ export async function createEventReservation(req: Request, res: Response): Promi
     }
 
     const reservedFor = parseEventTimestamp(req.body?.reservedFor, 'reservedFor');
+    if (!reservationFitsEventWindow(eventCheck.event, reservedFor.toDate())) {
+      res.status(400).json({ error: 'Reservation time must be within the event start and end' });
+      return;
+    }
     const partySizeRaw = Number(req.body?.partySize || 1);
     const partySize = Number.isFinite(partySizeRaw) && partySizeRaw > 0 ? Math.round(partySizeRaw) : 1;
 
@@ -189,14 +193,27 @@ export async function updateEventReservation(req: Request, res: Response): Promi
     const existing = snap.data() || {};
     const statusRaw = String(req.body?.status || existing.status || 'pending');
     const allowed = new Set(['pending', 'confirmed', 'seated', 'cancelled', 'no_show']);
+    const reservedFor = req.body?.reservedFor != null
+      ? parseEventTimestamp(req.body.reservedFor, 'reservedFor')
+      : existing.reservedFor;
+    if (req.body?.reservedFor != null) {
+      const eventCheck = await validateEventBelongsToStore(db, auth.storeId, eventId);
+      if (!eventCheck.ok) {
+        res.status(404).json({ error: eventCheck.error });
+        return;
+      }
+      const when = reservedFor?.toDate ? reservedFor.toDate() : new Date(reservedFor);
+      if (!reservationFitsEventWindow(eventCheck.event, when)) {
+        res.status(400).json({ error: 'Reservation time must be within the event start and end' });
+        return;
+      }
+    }
 
     await ref.set({
       guestName: req.body?.guestName != null ? String(req.body.guestName).trim() : existing.guestName,
       guestPhone: req.body?.guestPhone != null ? String(req.body.guestPhone).trim() : existing.guestPhone,
       partySize: req.body?.partySize != null ? Number(req.body.partySize) : existing.partySize,
-      reservedFor: req.body?.reservedFor != null
-        ? parseEventTimestamp(req.body.reservedFor, 'reservedFor')
-        : existing.reservedFor,
+      reservedFor,
       notes: req.body?.notes != null ? String(req.body.notes).trim() : existing.notes,
       status: allowed.has(statusRaw) ? statusRaw : existing.status,
       updatedAt: admin.firestore.FieldValue.serverTimestamp(),

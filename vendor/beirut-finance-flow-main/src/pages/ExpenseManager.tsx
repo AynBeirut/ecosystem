@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
+import { expenseRecordDate } from "@/lib/invoiceManagerDateFilter";
 import { Link } from "react-router-dom";
 import FinancePageShell from "@/components/FinancePageShell";
 import { useAppContext } from "@/context/AppContext";
@@ -14,6 +16,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
+import { useStoreDocumentCurrencies } from "@/components/StoreCurrencyField";
 import { Plus, Receipt, Calendar, CreditCard, Wallet, Building2, Repeat, AlertCircle, Trash2, Edit, DollarSign, ScanLine } from "lucide-react";
 import { 
   Expense, 
@@ -35,11 +38,12 @@ const ExpenseManager = () => {
     updateExpense, 
     deleteExpense,
     payExpense,
-    getTotalExpensesByCategory 
   } = useAccounting();
   const { toast } = useToast();
+  const dateFilter = useInvoiceManagerDateFilterOptional();
 
   const [isCreateOpen, setIsCreateOpen] = useState(false);
+  const [editingExpenseId, setEditingExpenseId] = useState<string | null>(null);
   const [isPayOpen, setIsPayOpen] = useState(false);
   const [ocrOpen, setOcrOpen] = useState(false);
   const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
@@ -61,6 +65,8 @@ const ExpenseManager = () => {
 
   const [paymentAmount, setPaymentAmount] = useState("");
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod>("cash");
+
+  const { main: storeCurrency } = useStoreDocumentCurrencies();
 
   const handleLogout = () => {
     logout();
@@ -93,6 +99,26 @@ const ExpenseManager = () => {
     const amount = parseFloat(formData.amount);
     if (isNaN(amount) || amount <= 0) {
       toast({ title: "Error", description: "Invalid amount", variant: "destructive" });
+      return;
+    }
+
+    if (editingExpenseId) {
+      updateExpense(editingExpenseId, {
+        name: formData.name,
+        description: formData.description || undefined,
+        category: formData.category,
+        type: formData.type,
+        recurrenceInterval: formData.type === "recurring" ? formData.recurrenceInterval : undefined,
+        amount,
+        startDate: formData.startDate,
+        endDate: formData.endDate || undefined,
+        paymentMethod: formData.paymentMethod,
+        notes: formData.notes || undefined,
+      });
+      toast({ title: "Expense updated", description: formData.name });
+      setEditingExpenseId(null);
+      resetForm();
+      setIsCreateOpen(false);
       return;
     }
 
@@ -170,16 +196,32 @@ const ExpenseManager = () => {
     }
   };
 
-  const filteredExpenses = expenses.filter(e => {
+  const expensesInPeriod = useMemo(
+    () =>
+      expenses.filter(
+        (e) => !dateFilter || dateFilter.matchesDate(expenseRecordDate(e)),
+      ),
+    [expenses, dateFilter],
+  );
+
+  const filteredExpenses = expensesInPeriod.filter((e) => {
     if (activeTab === "all") return true;
     if (activeTab === "unpaid") return e.status !== "paid";
     if (activeTab === "recurring") return e.type === "recurring";
     return e.category === activeTab;
   });
 
-  const totals = getTotalExpensesByCategory();
-  const totalPaid = Object.values(totals).reduce((a, b) => a + b, 0);
-  const totalUnpaid = expenses.filter(e => e.status !== "paid").reduce((sum, e) => sum + e.amount - (e.paidAmount || 0), 0);
+  const paidOnExpense = (e: Expense) => {
+    if (e.status === "paid") return e.amount;
+    return Math.max(0, Number(e.paidAmount) || 0);
+  };
+
+  const totalPaid = expensesInPeriod.reduce((sum, e) => sum + paidOnExpense(e), 0);
+  const totalUnpaid = expensesInPeriod.reduce(
+    (sum, e) => sum + Math.max(0, e.amount - paidOnExpense(e)),
+    0,
+  );
+  const totalExpenseAmount = expensesInPeriod.reduce((sum, e) => sum + e.amount, 0);
 
   return (
     <FinancePageShell onLogout={handleLogout}>
@@ -200,18 +242,18 @@ const ExpenseManager = () => {
             <Button variant="outline" onClick={() => setOcrOpen(true)}>
               <ScanLine className="mr-2 h-4 w-4" /> Scan receipt
             </Button>
-            <Button onClick={() => setIsCreateOpen(true)}>
+            <Button onClick={() => { setEditingExpenseId(null); resetForm(); setIsCreateOpen(true); }}>
               <Plus className="mr-2 h-4 w-4" /> Add Expense
             </Button>
             <AccountingSideSheet
               open={isCreateOpen}
               onOpenChange={setIsCreateOpen}
-              title="Create New Expense"
+              title={editingExpenseId ? "Edit Expense" : "Create New Expense"}
               size="default"
               footer={
                 <>
                   <Button type="button" variant="outline" onClick={() => setIsCreateOpen(false)}>Cancel</Button>
-                  <Button type="submit" form="create-expense-form" className="ml-2">Create Expense</Button>
+                  <Button type="submit" form="create-expense-form" className="ml-2">{editingExpenseId ? "Save changes" : "Create Expense"}</Button>
                 </>
               }
             >
@@ -367,7 +409,10 @@ const ExpenseManager = () => {
               <CardTitle className="text-sm font-medium text-muted-foreground">Total Expenses</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{expenses.length}</p>
+              <p className="text-2xl font-bold">{formatCurrency(totalExpenseAmount, "USD")}</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {expensesInPeriod.length} in selected period
+              </p>
             </CardContent>
           </Card>
           <Card>
@@ -375,7 +420,7 @@ const ExpenseManager = () => {
               <CardTitle className="text-sm font-medium text-muted-foreground">Recurring</CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{expenses.filter(e => e.type === "recurring").length}</p>
+              <p className="text-2xl font-bold">{expensesInPeriod.filter(e => e.type === "recurring").length}</p>
             </CardContent>
           </Card>
         </div>
@@ -402,68 +447,64 @@ const ExpenseManager = () => {
                   <div className="text-center py-12 text-muted-foreground">
                     <Receipt className="h-12 w-12 mx-auto mb-4 opacity-50" />
                     <p>No expenses found</p>
+                    {expenses.length > 0 && expensesInPeriod.length === 0 ? (
+                      <p className="text-xs mt-2 max-w-md mx-auto">
+                        {expenses.length} expense(s) exist all-time; none fall in the selected period. Widen with Custom or verify imported dates (start / expense date).
+                      </p>
+                    ) : null}
                   </div>
                 ) : (
                   filteredExpenses.map(expense => (
-                    <div 
-                      key={expense.id} 
-                      className="flex items-center justify-between p-4 border rounded-lg hover:bg-muted/50 transition-colors"
+                    <div
+                      key={expense.id}
+                      className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
                     >
-                      <div className="flex items-center gap-4">
-                        <div className={`p-2 rounded-full ${
-                          expense.type === "recurring" ? "bg-purple-100 dark:bg-purple-900/30" : "bg-blue-100 dark:bg-blue-900/30"
-                        }`}>
-                          {expense.type === "recurring" ? (
-                            <Repeat className="h-5 w-5 text-purple-600 dark:text-purple-400" />
-                          ) : (
-                            <Receipt className="h-5 w-5 text-blue-600 dark:text-blue-400" />
-                          )}
-                        </div>
-                        <div>
-                          <h3 className="font-medium">{expense.name}</h3>
-                          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                            <span>{EXPENSE_CATEGORY_LABELS[expense.category]}</span>
-                            <span>•</span>
-                            <span>{new Date(expense.startDate).toLocaleDateString()}</span>
-                            {expense.type === "recurring" && (
-                              <>
-                                <span>•</span>
-                                <span className="capitalize">{expense.recurrenceInterval}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
+                      <div>
+                        <h3 className="font-medium">{expense.name}</h3>
+                        <p className="text-sm text-muted-foreground">
+                          {expense.startDate} · {formatCurrency(expense.amount, storeCurrency)} · {expense.status}
+                        </p>
+                        <button
+                          type="button"
+                          style={{ marginTop: 8, background: "#0f766e", color: "#ffffff", border: 0, borderRadius: 6, padding: "6px 12px", fontWeight: 700 }}
+                          onClick={() => {
+                            setEditingExpenseId(expense.id);
+                            setFormData({
+                              name: expense.name,
+                              description: expense.description || "",
+                              category: expense.category,
+                              type: expense.type,
+                              recurrenceInterval: expense.recurrenceInterval || "monthly",
+                              amount: String(expense.amount),
+                              startDate: expense.startDate,
+                              endDate: expense.endDate || "",
+                              paymentMethod: expense.paymentMethod,
+                              notes: expense.notes || "",
+                            });
+                            setIsCreateOpen(true);
+                          }}
+                        >
+                          Edit expense
+                        </button>
                       </div>
-                      
-                      <div className="flex items-center gap-4">
-                        <div className="text-right">
-                          <p className="font-bold">{formatCurrency(expense.amount, "USD")}</p>
-                          {expense.paidAmount && expense.paidAmount > 0 && expense.paidAmount < expense.amount && (
-                            <p className="text-sm text-muted-foreground">
-                              Paid: {formatCurrency(expense.paidAmount, "USD")}
-                            </p>
-                          )}
-                        </div>
+                      <div className="flex flex-wrap items-center gap-2">
                         {getStatusBadge(expense.status)}
-                        
-                        <div className="flex gap-1">
-                          {expense.status !== "paid" && (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => {
-                                setSelectedExpense(expense);
-                                setPaymentAmount(String(expense.amount - (expense.paidAmount || 0)));
-                                setIsPayOpen(true);
-                              }}
-                            >
-                              <DollarSign className="h-4 w-4" />
-                            </Button>
-                          )}
-                          <Button size="sm" variant="ghost" onClick={() => handleDelete(expense.id)}>
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                        {expense.status !== "paid" && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setSelectedExpense(expense);
+                              setPaymentAmount(String(expense.amount - (expense.paidAmount || 0)));
+                              setIsPayOpen(true);
+                            }}
+                          >
+                            Pay
                           </Button>
-                        </div>
+                        )}
+                        <Button size="sm" variant="outline" onClick={() => handleDelete(expense.id)}>
+                          Delete
+                        </Button>
                       </div>
                     </div>
                   ))
@@ -492,8 +533,8 @@ const ExpenseManager = () => {
                 <div className="p-4 bg-muted rounded-lg">
                   <p className="font-medium">{selectedExpense.name}</p>
                   <p className="text-sm text-muted-foreground">
-                    Total: {formatCurrency(selectedExpense.amount, "USD")} • 
-                    Remaining: {formatCurrency(selectedExpense.amount - (selectedExpense.paidAmount || 0), "USD")}
+                    Total: {formatCurrency(selectedExpense.amount, storeCurrency)} • 
+                    Remaining: {formatCurrency(selectedExpense.amount - (selectedExpense.paidAmount || 0), storeCurrency)}
                   </p>
                 </div>
                 

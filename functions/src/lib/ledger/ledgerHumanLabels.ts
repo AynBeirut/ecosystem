@@ -37,10 +37,56 @@ export function stripInternalIdTokens(text: string): string {
     .trim();
 }
 
+const INTERNAL_OPS_MEMO =
+  /align\s+class\s*7|cash\s*book\s*column|sales\s+align|class7-align|revenue-trueup|revenue-align-master|monthly\s+sales\s*\(|owner\s+discount\s+true-up|d\.p\s+edited\s+sales|includes\s+100%\s+discounted/i;
+
+const INTERNAL_LINE_DESC =
+  /sales\s+revenue\s*[-—]|sales\s+align|cash\s+book|align\s+class|owner\s+discount\s+true-up|d\.p\s+edited/i;
+
+function monthLabelFromYm(ym: string): string {
+  const [y, m] = ym.split('-').map(Number);
+  if (!Number.isFinite(y) || !Number.isFinite(m) || m < 1 || m > 12) return ym;
+  return new Date(y, m - 1, 15).toLocaleString('en-US', { month: 'long', year: 'numeric' });
+}
+
+function periodFromEntry(entry: { sourceId?: string; memo?: string }): string {
+  const fromSource = String(entry.sourceId || '').trim();
+  if (/^\d{4}-\d{2}$/.test(fromSource)) return monthLabelFromYm(fromSource);
+  const fromMemo = String(entry.memo || '').match(/(20\d{2})[-/](\d{2})/);
+  if (fromMemo) return monthLabelFromYm(`${fromMemo[1]}-${fromMemo[2]}`);
+  return '';
+}
+
+/** User-facing label for script-generated sales/discount alignment JEs — never show column/script text. */
+export function humanizeSystemJournalMemo(entry: {
+  memo?: string;
+  sourceType?: string;
+  sourceId?: string;
+  event?: string;
+}): string | null {
+  const st = String(entry.sourceType || '').trim();
+  const period = periodFromEntry(entry);
+  const suffix = period ? ` — ${period}` : '';
+
+  if (st === 'owner_discount_backup' || /owner\s+discount/i.test(String(entry.memo || ''))) {
+    return `Sales discount${suffix}`;
+  }
+  if (
+    st === 'cashbook_sales' ||
+    st === 'monthly_sales_master' ||
+    st === 'dp_edited_sales' ||
+    INTERNAL_OPS_MEMO.test(String(entry.memo || ''))
+  ) {
+    return `Sales adjustment${suffix}`;
+  }
+  return null;
+}
+
 /** Clean legacy memos that embedded internal ids at post time. */
 export function sanitizeJournalMemoForDisplay(memo: string): string {
   let s = String(memo || '').trim();
   if (!s) return '';
+  if (INTERNAL_OPS_MEMO.test(s)) return '';
 
   if (s.startsWith('(') && s.endsWith(')')) {
     s = s.slice(1, -1).trim();
@@ -56,14 +102,38 @@ export function sanitizeJournalMemoForDisplay(memo: string): string {
   }
 
   s = stripInternalIdTokens(s);
-  return s || String(memo || '').trim();
+  if (INTERNAL_OPS_MEMO.test(s)) return '';
+  return s || '';
+}
+
+export function sanitizeJournalLineDescriptionForDisplay(
+  description: string,
+  entry?: { memo?: string; sourceType?: string; sourceId?: string },
+): string {
+  const d = String(description || '').trim();
+  if (!d) return '';
+  if (entry && humanizeSystemJournalMemo(entry)) {
+    if (INTERNAL_LINE_DESC.test(d) || INTERNAL_OPS_MEMO.test(d)) {
+      if (/discount|7090|410/i.test(d)) return 'Sales discount';
+      if (/cash|5300|102/i.test(d)) return 'Cash';
+      if (/revenue|sales|7010|401/i.test(d)) return 'Sales';
+      return '—';
+    }
+  }
+  if (INTERNAL_LINE_DESC.test(d) || INTERNAL_OPS_MEMO.test(d)) return '';
+  const cleaned = sanitizeJournalMemoForDisplay(d);
+  return cleaned || d;
 }
 
 export function displayMemoForJournalEntry(entry: {
   memo?: string;
   voucherNumber?: string;
   sourceType?: string;
+  sourceId?: string;
+  event?: string;
 }): string {
+  const system = humanizeSystemJournalMemo(entry);
+  if (system) return system;
   return sanitizeJournalMemoForDisplay(entry.memo || '') || journalEntryDisplayLabel(entry);
 }
 

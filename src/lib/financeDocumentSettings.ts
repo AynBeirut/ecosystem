@@ -1,54 +1,16 @@
 import { doc, getDoc, serverTimestamp, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import {
-  mapFinanceInvoiceTemplateToGrabio,
-  mapGrabioInvoiceTemplateToFinance,
-  type FinanceInvoiceTemplate,
-  type GrabioInvoiceTemplate,
-} from '@/lib/invoiceTemplateMap';
+import { mapFinanceInvoiceTemplateToGrabio } from '@/lib/invoiceTemplateMap';
 import type { StoreProfile } from '@/types/storeProfile';
 import { assertNipcoInvoiceTemplateWritable } from '@/lib/nipcoInvoiceTemplateLock';
+import {
+  readFinanceDocumentSettings,
+  resolveA4DocumentBranding,
+  type FinanceDocumentSettings,
+} from '@/lib/financeDocumentSettingsCore';
 
-/** A4 invoice branding — NIPCO store is locked; see nipcoInvoiceTemplateLock.ts */
-
-export type FinanceDocumentSettings = {
-  documentLogo?: string;
-  documentCompanyName?: string;
-  documentAddress?: string;
-  documentTaxId?: string;
-  invoiceTemplate?: FinanceInvoiceTemplate;
-  primaryColor?: string;
-  secondaryColor?: string;
-  signature?: string;
-};
-
-export function readFinanceDocumentSettings(
-  profile: StoreProfile | null | undefined,
-): FinanceDocumentSettings {
-  return (profile?.financeDocumentSettings ?? {}) as FinanceDocumentSettings;
-}
-
-/** Branding used on A4 invoices, estimates, and PDF exports (not POS 80mm receipts). */
-export function resolveA4DocumentBranding(profile: StoreProfile | null | undefined) {
-  const docSettings = readFinanceDocumentSettings(profile);
-  const invoiceTemplate = mapGrabioInvoiceTemplateToFinance(
-    profile?.invoiceTemplate,
-    docSettings.invoiceTemplate,
-  );
-  const grabioTemplate = mapFinanceInvoiceTemplateToGrabio(invoiceTemplate);
-
-  return {
-    template: grabioTemplate as GrabioInvoiceTemplate,
-    logo: docSettings.documentLogo || profile?.logo || '',
-    companyName: docSettings.documentCompanyName?.trim() || profile?.name || 'Your Store',
-    address: docSettings.documentAddress?.trim() || profile?.location || '',
-    taxNumber: docSettings.documentTaxId?.trim() || profile?.taxNumber || '',
-    phone: profile?.phone || '',
-    email: profile?.email || '',
-    website: profile?.website || '',
-    slogan: profile?.slogan || '',
-  };
-}
+export type { FinanceDocumentSettings };
+export { readFinanceDocumentSettings, resolveA4DocumentBranding };
 
 function stripUndefined(input: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};

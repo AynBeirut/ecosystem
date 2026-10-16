@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { getFirestore, collection, query, where, getDocs, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
+import { getFirestore, collection, query, where, getDocs, getDoc, addDoc, updateDoc, deleteDoc, doc } from 'firebase/firestore';
 import { useAuth } from '@/context/useAuth';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -16,6 +16,9 @@ import { Supplier } from '@/types/inventory';
 import { logAction } from '@/lib/auditLog';
 import AdminPageShell from '@/components/admin/AdminPageShell';
 import AdminPanel from '@/components/admin/AdminPanel';
+import { filterSuppliersForStore } from '@/lib/littleHandsPurchasesVisibility';
+import { ensurePartySubaccount } from '../../../vendor/beirut-finance-flow-main/src/lib/ledger/partySubaccount';
+import type { StoreProfile } from '@/types/storeProfile';
 
 const AdminSuppliers: React.FC = () => {
   const { user } = useAuth();
@@ -45,11 +48,13 @@ const AdminSuppliers: React.FC = () => {
       const suppliersRef = collection(db, 'suppliers');
       const q = query(suppliersRef, where('storeId', '==', user.storeId));
       const snapshot = await getDocs(q);
-      const suppliersList: Supplier[] = snapshot.docs.map(doc => ({ 
-        id: doc.id, 
-        ...doc.data() 
+      const suppliersList: Supplier[] = snapshot.docs.map(doc => ({
+        id: doc.id,
+        ...doc.data(),
       } as Supplier));
-      setSuppliers(suppliersList);
+      const profileSnap = user.storeId ? await getDoc(doc(db, 'storeProfiles', user.storeId)) : null;
+      const profile = profileSnap?.exists() ? (profileSnap.data() as StoreProfile) : null;
+      setSuppliers(filterSuppliersForStore(suppliersList, profile));
     };
     fetchSuppliers();
   }, [user?.storeId]);
@@ -73,12 +78,24 @@ const AdminSuppliers: React.FC = () => {
         ...newSupplier,
         supplierCode,
         storeId: user.storeId,
+        source: 'admin_manual' as const,
+        purchasesPageEligible: true,
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
       };
 
       const docRef = await addDoc(collection(db, 'suppliers'), supplierData);
       setSuppliers([...suppliers, { id: docRef.id, ...supplierData }]);
+      try {
+        await ensurePartySubaccount({
+          storeId: user.storeId,
+          kind: 'supplier',
+          partyId: docRef.id,
+          partyName: supplierData.name,
+        });
+      } catch (accountError) {
+        console.warn('[Supplier] USD and LBP accounts skipped', accountError);
+      }
       
       // Audit log
       await logAction(

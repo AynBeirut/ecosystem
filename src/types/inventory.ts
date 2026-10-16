@@ -30,6 +30,7 @@ export interface Supplier {
   importSource?: string;
   isSourceOfTruth?: boolean;
   archivedForPurchasesUi?: boolean;
+  purchasesPageEligible?: boolean;
 }
 
 export interface RawMaterial {
@@ -199,6 +200,14 @@ export interface Purchase {
   archivedForPurchasesUi?: boolean;
   organizedCategory?: string;
   purchasesPageEligible?: boolean;
+  expenseUiSurface?: string;
+  miscItemCategory?: string;
+  miscItemLabel?: string;
+  deliveryFee?: number;
+  deliveryExpenseLedgerAccountId?: string;
+  deliveryExpenseLedgerAccountCode?: string;
+  /** Document currency. Amounts are stored in this currency. Missing means USD. */
+  currency?: 'USD' | 'LBP';
 }
 
 export interface FulfillmentLocation {
@@ -220,13 +229,16 @@ export interface FulfillmentLocation {
 
 export interface PurchaseItem {
   // Item can be either a raw material OR a simple product
-  itemType?: 'raw_material' | 'product'; // Type of item being purchased
+  itemType?: 'raw_material' | 'product' | 'expense'; // Type of item being purchased
+  expenseCategory?: string;
   rawMaterialId?: string; // ID of raw material (if itemType is 'raw_material')
   productId?: string; // ID of product (if itemType is 'product')
   materialName: string; // Name of the item (material or product)
   sku: string;
   unit?: string; // Unit from raw material (kg, liter, piece, etc.)
   quantity: number;
+  /** Line currency. USD and LBP stay on separate supplier accounts. */
+  currency?: 'USD' | 'LBP' | string;
   unitCost: number;
   unitPrice?: number; // alias for unitCost
   subtotal: number;

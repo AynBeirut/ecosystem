@@ -22,6 +22,7 @@ export interface AuthUser {
   userRole: 'owner' | 'sub_seller' | 'sub_manager' | 'sub_delivery' | 'crm_rep' | 'buyer';
   subAccountRole?: 'sales' | 'delivery' | 'manager';
   crmRepId?: string;
+  subAccountId?: string;
 }
 
 interface AuthContextType {

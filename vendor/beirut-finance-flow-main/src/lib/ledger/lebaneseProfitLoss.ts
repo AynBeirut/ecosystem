@@ -63,6 +63,9 @@ function isClass7(account: LedgerAccount): boolean {
 function isOperatingSales(account: LedgerAccount): boolean {
   const c = String(account.code || '').trim();
   if (['401', '402', '403', '405', '410'].includes(c)) return true;
+  // PCG client revenue slots (e.g. 70101000001) — accountHead() is not 7xxx for long codes.
+  if (/^7010/.test(c)) return true;
+  if (account.type === 'revenue' && /^70/.test(c) && !isFxOther(account)) return true;
   const head = accountHead(c);
   return Number.isFinite(head) && head >= 7000 && head < 7200;
 }

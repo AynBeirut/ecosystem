@@ -13,7 +13,7 @@ export default function InvoicePreviewScreen() {
   const { user } = useAuth();
   const route = useRoute<Route>();
   const [invoice, setInvoice] = useState<FinanceInvoice | null>(null);
-  const [companyName, setCompanyName] = useState('Grabio Store');
+  const [storeProfile, setStoreProfile] = useState<Record<string, unknown> | null>(null);
   const [loading, setLoading] = useState(true);
   const [sharing, setSharing] = useState(false);
 
@@ -24,7 +24,7 @@ export default function InvoicePreviewScreen() {
       fetchStoreProfile(user.storeId),
     ]);
     setInvoice(inv);
-    setCompanyName(String((profile as { storeName?: string; name?: string; businessName?: string } | null)?.storeName || (profile as { name?: string } | null)?.name || 'Grabio Store'));
+    setStoreProfile(profile as Record<string, unknown> | null);
     setLoading(false);
   };
 
@@ -41,7 +41,7 @@ export default function InvoicePreviewScreen() {
     if (!invoice) return;
     setSharing(true);
     try {
-      await shareInvoicePdf(invoice, companyName);
+      await shareInvoicePdf(invoice, storeProfile);
     } catch (e) {
       Alert.alert('Share failed', e instanceof Error ? e.message : 'Could not share PDF');
     } finally {
@@ -56,8 +56,7 @@ export default function InvoicePreviewScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
-        <Text style={styles.company}>{companyName}</Text>
-        <Text style={styles.title}>Invoice #{invoice.invoiceNumber || invoice.id.slice(0, 8)}</Text>
+        <Text style={styles.title}>Invoice #{invoice.invoiceNumber || 'pending'}</Text>
         <Text style={styles.meta}>Client: {invoice.clientName}</Text>
         <Text style={styles.meta}>Date: {new Date(invoice.date).toLocaleString()}</Text>
         <Text style={styles.meta}>Status: {invoice.status}</Text>

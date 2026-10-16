@@ -59,6 +59,17 @@ function scoreStatus(status: ChecklistStatus): number {
   return 0;
 }
 
+/** Prefer explicit websiteUrl; otherwise canonical slug subdomain on grabio.space. */
+function resolveStoreWebsiteUrl(storeData: Record<string, unknown>): string {
+  const explicit = String(storeData.websiteUrl || '').trim();
+  if (explicit) return explicit;
+  const slug = String(storeData.storeSlug || storeData.slug || '').trim().toLowerCase();
+  if (slug && /^[a-z0-9][a-z0-9-]{0,62}$/.test(slug)) {
+    return `https://${slug}.grabio.space`;
+  }
+  return '';
+}
+
 export async function runWhishOpsChecklist(req: Request, res: Response): Promise<void> {
   try {
     const { storeId } = await resolveStoreAuth(req);
@@ -75,7 +86,7 @@ export async function runWhishOpsChecklist(req: Request, res: Response): Promise
 
     const whishChannel = String(storeData.whishChannel || '').trim();
     const whishSecret = String(storeData.whishSecret || '').trim();
-    const websiteUrl = String(storeData.websiteUrl || '').trim();
+    const websiteUrl = resolveStoreWebsiteUrl(storeData);
 
     const callbackBase = buildCallbackBaseUrl(req);
     const expectedSuccessCallback = `${callbackBase}/payment/callback?externalId={externalId}&orderId={orderId}`;
@@ -118,11 +129,19 @@ export async function runWhishOpsChecklist(req: Request, res: Response): Promise
       {
         id: 'credentials-present',
         label: 'Whish channel + secret + website URL are configured',
-        status: whishChannel && whishSecret && websiteUrl ? 'pass' : 'fail',
+        status: whishChannel && whishSecret && websiteUrl ? 'pass' : 'warn',
         detail: whishChannel && whishSecret && websiteUrl
           ? 'All required Whish credentials are present.'
-          : 'One or more Whish credentials are missing.',
-        action: whishChannel && whishSecret && websiteUrl ? undefined : 'Fill all Whish credentials in Admin > Payment Credentials.',
+          : [
+              !whishChannel ? 'Channel ID missing' : null,
+              !whishSecret ? 'Secret missing' : null,
+              !websiteUrl ? 'Website URL missing' : null,
+            ]
+              .filter(Boolean)
+              .join(' · ') || 'One or more Whish credentials are missing.',
+        action: whishChannel && whishSecret && websiteUrl
+          ? undefined
+          : 'Admin → Payments → Payment Credentials (channel, secret, HTTPS website URL).',
       },
       {
         id: 'live-credentials-check',

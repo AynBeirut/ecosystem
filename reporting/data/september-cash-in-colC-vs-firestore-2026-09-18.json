@@ -1,0 +1,167 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "excel_colC": {
+    "lines": 12,
+    "total": 15550,
+    "rows": [
+      {
+        "row": 3,
+        "date": "2026-09-01",
+        "desc": "Cash Remaining From August",
+        "amount": 2800
+      },
+      {
+        "row": 6,
+        "date": "2026-09-04",
+        "desc": "Walk-in",
+        "amount": 514
+      },
+      {
+        "row": 12,
+        "date": "2026-09-05",
+        "desc": "Walk-in",
+        "amount": 71
+      },
+      {
+        "row": 13,
+        "date": "2026-09-05",
+        "desc": "Birthday Nathalie",
+        "amount": 210
+      },
+      {
+        "row": 14,
+        "date": "2026-09-05",
+        "desc": "Birthday Joanna",
+        "amount": 390
+      },
+      {
+        "row": 22,
+        "date": "2026-09-06",
+        "desc": "Birthday Cynthia Krayde",
+        "amount": 1373
+      },
+      {
+        "row": 34,
+        "date": "2026-09-11",
+        "desc": "Walk-in",
+        "amount": 98
+      },
+      {
+        "row": 36,
+        "date": "2026-09-13",
+        "desc": "Walk-in",
+        "amount": 100
+      },
+      {
+        "row": 37,
+        "date": "2026-09-13",
+        "desc": "Gaelle Abi Mansour",
+        "amount": 1066
+      },
+      {
+        "row": 47,
+        "date": "2026-12-09",
+        "desc": "Walk-in Today: Cash In USD",
+        "amount": 87
+      },
+      {
+        "row": 48,
+        "date": "2026-12-09",
+        "desc": "Myraim Makhlouf Birthday",
+        "amount": 1066
+      },
+      {
+        "row": 66,
+        "date": "2026-12-09",
+        "desc": "Total Sum per Month $ =",
+        "amount": 7775
+      }
+    ]
+  },
+  "firestore_sep2026": {
+    "completedOrders": 41,
+    "orderTotalUsd": 6288.079999999999,
+    "financeReceipts": 41,
+    "receiptTotalUsd": 6288.079999999999,
+    "financeExpensesSep": 0
+  },
+  "financeExpenses_date_histogram": [
+    [
+      "2026-07",
+      165
+    ],
+    [
+      "2026-06",
+      159
+    ],
+    [
+      "2026-05",
+      141
+    ],
+    [
+      "2026-08",
+      96
+    ],
+    [
+      "2026-04",
+      55
+    ],
+    [
+      "2026-02",
+      47
+    ],
+    [
+      "2026-03",
+      46
+    ],
+    [
+      "2026-01",
+      30
+    ],
+    [
+      "2025-11",
+      16
+    ],
+    [
+      "2025-12",
+      3
+    ],
+    [
+      "2025-07",
+      1
+    ]
+  ],
+  "financeExpenses_total": 759,
+  "excel_colC_missing_obvious_match": [
+    {
+      "row": 3,
+      "date": "2026-09-01",
+      "desc": "Cash Remaining From August",
+      "amount": 2800
+    },
+    {
+      "row": 13,
+      "date": "2026-09-05",
+      "desc": "Birthday Nathalie",
+      "amount": 210
+    },
+    {
+      "row": 22,
+      "date": "2026-09-06",
+      "desc": "Birthday Cynthia Krayde",
+      "amount": 1373
+    },
+    {
+      "row": 48,
+      "date": "2026-12-09",
+      "desc": "Myraim Makhlouf Birthday",
+      "amount": 1066
+    },
+    {
+      "row": 66,
+      "date": "2026-12-09",
+      "desc": "Total Sum per Month $ =",
+      "amount": 7775
+    }
+  ]
+}

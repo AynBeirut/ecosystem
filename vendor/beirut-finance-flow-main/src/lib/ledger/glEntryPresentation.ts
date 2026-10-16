@@ -5,11 +5,14 @@ import {
   type PurchasePartyLookup,
 } from '@/lib/ledger/partyStatement';
 import {
+  displayMemoForJournalEntry,
+  humanizeSystemJournalMemo,
   journalEntryDisplayLabel,
   journalEntryReferenceLabel,
   parseOrderMemoClientName,
   resolveOrderClientName,
   sanitizeDisplayLabel,
+  sanitizeJournalLineDescriptionForDisplay,
   sanitizeJournalMemoForDisplay,
 } from '@/lib/ledger/ledgerHumanLabels';
 
@@ -317,13 +320,20 @@ export function presentGlEntry(
   ctx: GlPresentationContext,
   entryLines: JournalLine[] = [],
 ): GlEntryPresentation {
-  const memo = sanitizeJournalMemoForDisplay((entry.memo || '').trim());
+  const memo = displayMemoForJournalEntry(entry);
   const m = meta(entry);
   const offsetCategory = resolveOffsetCategory(entry, line, entryLines, ctx);
 
   let core: Omit<GlEntryPresentation, 'typeLabel' | 'voucherLabel'>;
 
-  if (entry.sourceType === 'order' || (entry.voucherType === 'RV' && /^Order\s+/i.test(memo))) {
+  if (humanizeSystemJournalMemo(entry)) {
+    core = {
+      party: '',
+      category: 'Sales',
+      description: memo,
+      reference: entry.voucherNumber || '—',
+    };
+  } else if (entry.sourceType === 'order' || (entry.voucherType === 'RV' && /^Order\s+/i.test(memo))) {
     core = orderPresentation(entry, ctx);
   } else if (entry.sourceType === 'purchase_payment' || /^Purchase payment/i.test(memo)) {
     core = purchasePaymentPresentation(entry, ctx);
@@ -348,12 +358,12 @@ export function presentGlEntry(
       reference: (typeof m.receiptRef === 'string' && m.receiptRef) || '—',
     };
   } else {
-    const lineDetail = line?.description?.trim();
+    const lineDetail = sanitizeJournalLineDescriptionForDisplay(line?.description || '', entry);
     core = {
       party: '',
       category: offsetCategory || humanizeCategory(entry.sourceType),
       description: lineDetail && lineDetail !== memo ? `${memo || 'Entry'} · ${lineDetail}` : memo || lineDetail || '—',
-      reference: entry.sourceType || 'Ledger',
+      reference: entry.voucherNumber || journalEntryReferenceLabel(entry.sourceId) || '—',
     };
   }
 

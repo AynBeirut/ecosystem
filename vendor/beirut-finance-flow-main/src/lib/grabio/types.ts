@@ -4,7 +4,13 @@ export type FinanceDocumentSettings = {
   documentLogo?: string;
   documentCompanyName?: string;
   documentAddress?: string;
+  documentPhone?: string;
+  documentEmail?: string;
+  documentWebsite?: string;
+  documentCountry?: string;
   documentTaxId?: string;
+  documentShowCompanyName?: boolean;
+  documentLayout?: 'minimal' | 'classic' | 'modern' | string;
   primaryColor?: string;
   secondaryColor?: string;
   invoiceTemplate?: 'basic' | 'modern' | 'professional';

@@ -1,5 +1,6 @@
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -15,6 +16,7 @@ import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
+import { useStoreDocumentCurrencies } from "@/components/StoreCurrencyField";
 
 const productSchema = z.object({
   name: z.string().min(1, "Product/Service name is required"),
@@ -25,9 +27,16 @@ const productSchema = z.object({
 });
 
 const ProductsManager = () => {
-  const { products, addProduct, logout } = useAppContext();
+  const { products, addProduct, updateProduct, logout } = useAppContext();
   const { toast } = useToast();
+  const dateFilter = useInvoiceManagerDateFilterOptional();
+  const visibleProducts = useMemo(
+    () => products.filter((p) => !dateFilter || dateFilter.matchesDate(p.createdAt)),
+    [products, dateFilter],
+  );
   const [activeTab, setActiveTab] = useState<string>("list");
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const { main: storeCurrency } = useStoreDocumentCurrencies();
 
   const form = useForm<z.infer<typeof productSchema>>({
     resolver: zodResolver(productSchema),
@@ -58,6 +67,15 @@ const ProductsManager = () => {
       rawPrice: values.rawPrice,
       salePrice: values.salePrice,
     };
+
+    if (editingProductId) {
+      updateProduct(editingProductId, productData);
+      toast({ title: "Product updated", description: values.name });
+      setEditingProductId(null);
+      form.reset();
+      setActiveTab("list");
+      return;
+    }
 
     const id = await addProduct(productData);
     if (!id) return; // error toast already shown by context
@@ -91,7 +109,7 @@ const ProductsManager = () => {
           </div>
           <Button 
             className="mt-4 sm:mt-0 bg-indigo-600 hover:bg-indigo-700"
-            onClick={() => setActiveTab("add")}
+            onClick={() => { setEditingProductId(null); form.reset(); setActiveTab("add"); }}
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Product
@@ -103,56 +121,47 @@ const ProductsManager = () => {
             <CardHeader>
               <TabsList>
                 <TabsTrigger value="list">Product List</TabsTrigger>
-                <TabsTrigger value="add">Add Product</TabsTrigger>
+                <TabsTrigger value="add">{editingProductId ? "Edit Product" : "Add Product"}</TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent>
             <TabsContent value="list">
-              {products.length === 0 ? (
+              {visibleProducts.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">
                   <Package className="h-12 w-12 mx-auto mb-4 text-gray-400" />
                   <p>No products added yet. Add your first product or service!</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {products.map((product) => (
-                    <div key={product.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
+                <div className="space-y-3">
+                  {visibleProducts.map((product) => (
+                    <div
+                      key={product.id}
+                      className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div>
                         <h3 className="font-medium">{product.name}</h3>
-                        {product.type === "product" ? (
-                          <Package className="h-4 w-4 text-blue-600" />
-                        ) : (
-                          <Tag className="h-4 w-4 text-purple-600" />
-                        )}
+                        <p className="text-sm text-muted-foreground">
+                          {product.type} · {formatCurrency(product.salePrice, storeCurrency)}
+                          {product.rawPrice !== undefined ? ` · cost ${formatCurrency(product.rawPrice, storeCurrency)}` : ""}
+                        </p>
+                        <button
+                          type="button"
+                          style={{ marginTop: 8, background: "#0f766e", color: "#ffffff", border: 0, borderRadius: 6, padding: "6px 12px", fontWeight: 700 }}
+                          onClick={() => {
+                            setEditingProductId(product.id);
+                            form.reset({
+                              name: product.name,
+                              description: product.description || "",
+                              type: product.type === "service" ? "service" : "product",
+                              rawPrice: product.rawPrice,
+                              salePrice: product.salePrice,
+                            });
+                            setActiveTab("add");
+                          }}
+                        >
+                          Edit product
+                        </button>
                       </div>
-                      <p className="text-xs text-gray-500 mb-2 capitalize">{product.type}</p>
-                      <div className="flex justify-between mt-1">
-                        <p className="text-indigo-600 dark:text-indigo-400 font-medium">
-                          {formatCurrency(product.salePrice, "USD")}
-                        </p>
-                        {product.rawPrice !== undefined && (
-                          <p className="text-sm text-gray-500">
-                            Cost: {formatCurrency(product.rawPrice, "USD")}
-                          </p>
-                        )}
-                      </div>
-                      {product.type === "product" && product.stockQuantity !== undefined && (
-                        <p className="mt-1 text-sm">
-                          <span className={product.stockQuantity < 10 ? "text-red-600 font-semibold" : "text-gray-600"}>
-                            Stock: {product.stockQuantity} units
-                          </span>
-                        </p>
-                      )}
-                      {product.rawPrice !== undefined && product.salePrice !== undefined && (
-                        <p className="mt-1 text-green-600 text-sm">
-                          Margin: {calculateProfitMargin(product.rawPrice, product.salePrice)}%
-                        </p>
-                      )}
-                      {product.description && (
-                        <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
-                          {product.description}
-                        </p>
-                      )}
                     </div>
                   ))}
                 </div>

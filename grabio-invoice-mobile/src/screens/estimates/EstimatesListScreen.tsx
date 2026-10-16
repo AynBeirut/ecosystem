@@ -3,7 +3,8 @@ import { View, Text, FlatList, TouchableOpacity, StyleSheet, SafeAreaView, Activ
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { useAuth } from '../../context/AuthContext';
-import { convertEstimateToInvoice, listEstimates } from '../../lib/financeService';
+import { convertEstimateToInvoice, deleteEstimate, fetchStoreProfile, listEstimates } from '../../lib/financeService';
+import { shareEstimatePdf } from '../../lib/pdfShare';
 import type { FinanceEstimate, RootStackParamList } from '../../types';
 import { COLORS, RADIUS, SHADOW } from '../../theme';
 
@@ -59,7 +60,8 @@ export default function EstimatesListScreen() {
         ListEmptyComponent={<Text style={styles.empty}>No estimates yet.</Text>}
         renderItem={({ item }) => (
           <View style={styles.card}>
-            <Text style={styles.cardTitle}>{item.clientName}</Text>
+            <Text style={styles.cardTitle}>{item.estimateNumber || 'Estimate'}</Text>
+            <Text style={styles.meta}>{item.clientName}</Text>
             <Text style={styles.meta}>{item.currency} {(item.total ?? item.amount).toFixed(2)} · {item.status}</Text>
             <View style={styles.actions}>
               <TouchableOpacity onPress={() => navigation.navigate('EstimateEditor', { estimateId: item.id })}>
@@ -67,6 +69,37 @@ export default function EstimatesListScreen() {
               </TouchableOpacity>
               <TouchableOpacity onPress={() => convert(item.id)}>
                 <Text style={styles.link}>Convert</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  void (async () => {
+                    if (!user?.storeId) return;
+                    const profile = await fetchStoreProfile(user.storeId);
+                    await shareEstimatePdf(item, profile as Record<string, unknown> | null);
+                  })();
+                }}
+              >
+                <Text style={styles.link}>PDF</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => {
+                  Alert.alert('Delete estimate?', 'This removes the quotation record only.', [
+                    { text: 'Cancel', style: 'cancel' },
+                    {
+                      text: 'Delete',
+                      style: 'destructive',
+                      onPress: () => {
+                        void (async () => {
+                          if (!user?.storeId) return;
+                          await deleteEstimate(user.storeId, item.id);
+                          await load();
+                        })();
+                      },
+                    },
+                  ]);
+                }}
+              >
+                <Text style={[styles.link, { color: '#dc2626' }]}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -79,7 +112,7 @@ export default function EstimatesListScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   header: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, alignItems: 'center' },
-  title: { fontSize: 24, fontWeight: '700' },
+  title: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary },
   addBtn: { backgroundColor: COLORS.primary, paddingHorizontal: 14, paddingVertical: 8, borderRadius: RADIUS.md },
   addText: { color: '#fff', fontWeight: '700' },
   card: { marginHorizontal: 16, marginBottom: 10, backgroundColor: COLORS.surface, borderRadius: RADIUS.lg, padding: 14, ...SHADOW.sm },

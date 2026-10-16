@@ -413,6 +413,19 @@ const AppLayout = ({ children, onLogout }: AppLayoutProps) => {
               </Button>
             )}
 
+            <Button
+              variant="ghost"
+              className={cn(
+                "w-full justify-start",
+                location.pathname === "/document-setup" && "bg-gray-100 dark:bg-gray-800",
+              )}
+              asChild
+            >
+              <Link to="/document-setup">
+                <FileText className="mr-2 h-4 w-4" /> Invoice PDF setup
+              </Link>
+            </Button>
+
             <Button 
               variant="ghost" 
               className={cn("w-full justify-start",

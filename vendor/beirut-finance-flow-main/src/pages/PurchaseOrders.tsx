@@ -1,5 +1,5 @@
 
-import { useState, useMemo } from "react";
+import { useEffect, useState, useMemo } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -10,16 +10,19 @@ import { Plus, Trash, Mail, FileDown, Share2, Phone, Eye, X, Building } from "lu
 import { useAppContext } from "@/context/AppContext";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { SearchableCombobox } from "@/components/SearchableCombobox";
-import { CURRENCIES } from "@/services/mockData";
+import { StoreCurrencyField, useStoreDocumentCurrencies, clampStoreCurrency } from "@/components/StoreCurrencyField";
+import { usePartyCurrencyAccounts } from "@/hooks/usePartyCurrencyAccounts";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useForm } from "react-hook-form";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
 import { useToast } from "@/hooks/use-toast";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDualCurrency } from "@/lib/utils";
+import { useReportExchangeRate } from "@/hooks/useReportExchangeRate";
 import { useNavigate } from "react-router-dom";
 import AccountingSideSheet from "@/components/AccountingSideSheet";
 import ShareSheet from "@/components/ShareSheet";
+import { useInvoiceManagerDateFilterOptional } from "@/context/InvoiceManagerDateFilterContext";
 
 // Define schema for purchase order form (without items - handled separately)
 const purchaseOrderSchema = z.object({
@@ -35,14 +38,26 @@ type LineItem = {
   quantity: number;
   unitPrice: number;
   subtotal: number;
+  currency?: string;
+  accountCode?: string;
 };
 
 const PurchaseOrders = () => {
-  const { user, suppliers, products, createPurchaseOrder, previewPurchaseOrder, sendPurchaseOrder, exportPurchaseOrderAsPdf, purchaseOrders, logout, checkLimit } = useAppContext();
+  const { user, suppliers, products, createPurchaseOrder, updatePurchaseOrder, previewPurchaseOrder, sendPurchaseOrder, exportPurchaseOrderAsPdf, purchaseOrders, logout, checkLimit } = useAppContext();
   const { toast } = useToast();
   const navigate = useNavigate();
+  const dateFilter = useInvoiceManagerDateFilterOptional();
+  const visiblePurchaseOrders = useMemo(
+    () =>
+      (purchaseOrders || []).filter(
+        (po) => !dateFilter || dateFilter.matchesDate(po.date ?? po.createdAt),
+      ),
+    [purchaseOrders, dateFilter],
+  );
   const [activeTab, setActiveTab] = useState<string>("list");
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [lineItems, setLineItems] = useState<LineItem[]>([]);
+  const [paymentStatus, setPaymentStatus] = useState<'paid' | 'partial' | 'unpaid'>('unpaid');
   const [selectedPurchaseOrderId, setSelectedPurchaseOrderId] = useState<string | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isShareSheetOpen, setIsShareSheetOpen] = useState(false);
@@ -50,6 +65,8 @@ const PurchaseOrders = () => {
   const [shareRecipientPhone, setShareRecipientPhone] = useState("");
   const [shareClientName, setShareClientName] = useState("");
   const [previewPurchaseOrderData, setPreviewPurchaseOrderData] = useState<any>(null);
+  const { codes: storeCurrencies, main: storeCurrency } = useStoreDocumentCurrencies();
+  const { usdToLbp } = useReportExchangeRate();
 
   const form = useForm<z.infer<typeof purchaseOrderSchema>>({
     resolver: zodResolver(purchaseOrderSchema),
@@ -60,6 +77,23 @@ const PurchaseOrders = () => {
       notes: "",
     },
   });
+  const supplierId = form.watch("supplierId");
+  const { accountFor } = usePartyCurrencyAccounts("supplier", supplierId);
+
+  const stampLines = (items: LineItem[], docCurrency: string) => {
+    const currency = clampStoreCurrency(docCurrency, storeCurrencies, storeCurrency);
+    return items.map((item) => ({
+      ...item,
+      currency,
+      accountCode: accountFor(currency)?.code || "",
+    }));
+  };
+
+  useEffect(() => {
+    if (editingId) return;
+    const current = String(form.getValues("currency") || "").toUpperCase();
+    if (!storeCurrencies.includes(current)) form.setValue("currency", storeCurrency);
+  }, [editingId, form, storeCurrency, storeCurrencies]);
 
   // lineItems are managed separately from form
 
@@ -69,7 +103,8 @@ const PurchaseOrders = () => {
       description: "",
       quantity: 1,
       unitPrice: 0,
-      subtotal: 0
+      subtotal: 0,
+      currency: clampStoreCurrency(form.getValues("currency"), storeCurrencies, storeCurrency),
     };
     setLineItems([...lineItems, newItem]);
   };
@@ -124,8 +159,8 @@ const PurchaseOrders = () => {
   const productOptions = useMemo(
     () => products.map((product) => ({
       value: product.id,
-      label: `${product.name} — $${product.salePrice.toFixed(2)}`,
-      keywords: product.sku || product.category || '',
+      label: product.name,
+      keywords: [product.sku, product.category].filter(Boolean).join(' '),
     })),
     [products],
   );
@@ -180,7 +215,29 @@ const PurchaseOrders = () => {
       return;
     }
 
-    const totals = calculateTotals();
+    const stamped = stampLines(lineItems, values.currency);
+    const headerCurrency = stamped[0]?.currency || storeCurrency;
+    const headerAmount = stamped.reduce((sum, item) => sum + item.subtotal, 0);
+
+    if (editingId) {
+      updatePurchaseOrder(editingId, {
+        supplierName: values.supplierName,
+        supplierId: values.supplierId || undefined,
+        currency: headerCurrency,
+        notes: values.notes,
+        items: stamped,
+        amount: headerAmount,
+        paymentStatus,
+        paidAmount: paymentStatus === 'paid' ? headerAmount : paymentStatus === 'unpaid' ? 0 : undefined,
+      });
+      toast({ title: "Purchase order updated", description: values.supplierName });
+      setEditingId(null);
+      setPaymentStatus('unpaid');
+      form.reset({ supplierName: "", supplierId: "", currency: storeCurrency, notes: "" });
+      setLineItems([]);
+      setActiveTab("list");
+      return;
+    }
     console.log("Calculated totals:", totals);
 
     // Check limit before attempting to create
@@ -195,21 +252,15 @@ const PurchaseOrders = () => {
     }
 
     try {
-      console.log("Creating purchase order with data:", {
-        supplierName: values.supplierName,
-        amount: totals.total,
-        currency: values.currency,
-        items: lineItems,
-        notes: values.notes,
-      });
-      
       const purchaseOrderId = await createPurchaseOrder({
         supplierName: values.supplierName,
-        amount: totals.total,
-        currency: values.currency,
-        items: lineItems,
+        amount: headerAmount,
+        currency: headerCurrency,
+        items: stamped,
         supplierId: values.supplierId,
         notes: values.notes,
+        paymentStatus,
+        paidAmount: paymentStatus === 'paid' ? headerAmount : 0,
       });
       
       console.log("Purchase Order creation result:", purchaseOrderId);
@@ -221,6 +272,7 @@ const PurchaseOrders = () => {
         });
         form.reset();
         setLineItems([]);
+        setPaymentStatus('unpaid');
         setActiveTab("list");
       } else {
         toast({
@@ -306,7 +358,7 @@ const PurchaseOrders = () => {
             <h1 className="text-2xl font-bold tracking-tight">Purchase Orders</h1>
             <p className="text-muted-foreground">Create and manage your purchase orders</p>
           </div>
-          <Button className="mt-4 sm:mt-0" onClick={() => setActiveTab("create")}>
+          <Button className="mt-4 sm:mt-0" onClick={() => { setEditingId(null); form.reset({ supplierName: "", supplierId: "", currency: storeCurrency, notes: "" }); setLineItems([]); setActiveTab("create"); }}>
             <Plus className="mr-2 h-4 w-4" />
             New Purchase Order
           </Button>
@@ -317,14 +369,14 @@ const PurchaseOrders = () => {
             <CardHeader>
               <TabsList>
                 <TabsTrigger value="list">Purchase Order List</TabsTrigger>
-                <TabsTrigger value="create">Create Purchase Order</TabsTrigger>
+                <TabsTrigger value="create">{editingId ? "Edit Purchase Order" : "Create Purchase Order"}</TabsTrigger>
               </TabsList>
             </CardHeader>
             <CardContent>
               <TabsContent value="list">
               <div className="space-y-3">
-                {purchaseOrders && purchaseOrders.length > 0 ? (
-                  purchaseOrders.map((purchaseOrder) => (
+                {visiblePurchaseOrders.length > 0 ? (
+                  visiblePurchaseOrders.map((purchaseOrder) => (
                     <div
                       key={purchaseOrder.id}
                       className="flex flex-col gap-3 rounded-lg border p-4 sm:flex-row sm:items-center sm:justify-between"
@@ -332,8 +384,54 @@ const PurchaseOrders = () => {
                       <div>
                         <h3 className="font-medium">{purchaseOrder.supplierName}</h3>
                         <p className="text-sm text-muted-foreground">
-                          {purchaseOrder.date} · {formatCurrency(purchaseOrder.amount, purchaseOrder.currency)} · {purchaseOrder.status}
+                          {purchaseOrder.date} · {formatDualCurrency(Number(purchaseOrder.amount) || 0, purchaseOrder.currency, usdToLbp)} · {purchaseOrder.status}
                         </p>
+                        <select
+                          className="mt-2 h-9 rounded-md border bg-background px-2 text-sm"
+                          value={purchaseOrder.paymentStatus === 'paid' || purchaseOrder.paymentStatus === 'partial' ? purchaseOrder.paymentStatus : 'unpaid'}
+                          onChange={(e) => {
+                            const next = e.target.value as 'paid' | 'partial' | 'unpaid';
+                            const total = Number(purchaseOrder.amount) || 0;
+                            updatePurchaseOrder(purchaseOrder.id, {
+                              paymentStatus: next,
+                              paidAmount: next === 'paid' ? total : next === 'unpaid' ? 0 : purchaseOrder.paidAmount || 0,
+                            });
+                          }}
+                        >
+                          <option value="unpaid">Unpaid</option>
+                          <option value="partial">Partial</option>
+                          <option value="paid">Paid</option>
+                        </select>
+                        <button
+                          type="button"
+                          style={{ marginTop: 8, background: "#0f766e", color: "#ffffff", border: 0, borderRadius: 6, padding: "6px 12px", fontWeight: 700 }}
+                          onClick={() => {
+                            setEditingId(purchaseOrder.id);
+                            form.reset({
+                              supplierName: purchaseOrder.supplierName || "",
+                              supplierId: purchaseOrder.supplierId || "",
+                              currency: purchaseOrder.currency || "USD",
+                              notes: purchaseOrder.notes || "",
+                            });
+                            setLineItems((purchaseOrder.items || []).map((item, index) => ({
+                              id: item.id || `item-${index}`,
+                              description: item.description || "",
+                              quantity: Number(item.quantity) || 0,
+                              unitPrice: Number(item.unitPrice) || 0,
+                              subtotal: Number(item.subtotal) || (Number(item.quantity) || 0) * (Number(item.unitPrice) || 0),
+                              currency: item.currency || purchaseOrder.currency || storeCurrency,
+                              accountCode: item.accountCode || "",
+                            })));
+                            setPaymentStatus(
+                              purchaseOrder.paymentStatus === 'paid' || purchaseOrder.paymentStatus === 'partial'
+                                ? purchaseOrder.paymentStatus
+                                : 'unpaid',
+                            );
+                            setActiveTab("create");
+                          }}
+                        >
+                          Edit purchase
+                        </button>
                       </div>
                       <div className="flex flex-wrap gap-2">
                         <Button variant="outline" size="sm" onClick={() => handlePreviewPurchaseOrder(purchaseOrder)}>
@@ -459,7 +557,7 @@ const PurchaseOrders = () => {
                       <div className="space-y-4">
                         {lineItems.map((item, index) => (
                           <div key={item.id} className="grid grid-cols-12 gap-2 items-end border p-3 rounded-md">
-                            <div className="col-span-12 md:col-span-6">
+                            <div className="col-span-12 md:col-span-5">
                               <label className="text-sm font-medium mb-1 block">Description</label>
                               <div className="flex flex-col space-y-2">
                                 {products.length > 0 && (
@@ -493,10 +591,10 @@ const PurchaseOrders = () => {
                                 placeholder="0.00"
                               />
                             </div>
-                            <div className="col-span-3 md:col-span-1 text-right">
+                            <div className="col-span-3 md:col-span-2 text-right">
                               <label className="text-sm font-medium mb-1 block">Subtotal</label>
                               <div className="py-2 px-1 text-right">
-                                ${(item.quantity * item.unitPrice).toFixed(2)}
+                                {formatCurrency(item.quantity * item.unitPrice, form.watch("currency") || storeCurrency)}
                               </div>
                             </div>
                             <div className="col-span-2 md:col-span-1 flex justify-end">
@@ -518,15 +616,33 @@ const PurchaseOrders = () => {
 
                   <div className="space-y-4 md:pl-[50%]">
                     <div className="grid grid-cols-2 gap-4">
-                      <div className="text-right">Subtotal:</div>
-                      <div className="text-right font-medium">${totals.subtotal.toFixed(2)}</div>
-                      
                       <div className="text-right text-lg">Total:</div>
-                      <div className="text-right text-lg font-bold">${totals.total.toFixed(2)}</div>
+                      <div className="text-right text-lg font-bold">
+                        {formatDualCurrency(lineItems.reduce((sum, item) => sum + item.subtotal, 0), form.watch("currency") || storeCurrency, usdToLbp)}
+                      </div>
                     </div>
                   </div>
                   
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <FormField
+                      control={form.control}
+                      name="currency"
+                      render={({ field }) => (
+                        <StoreCurrencyField value={field.value} onChange={field.onChange} />
+                      )}
+                    />
+                    <div>
+                      <label className="text-sm font-medium mb-1 block">Payment</label>
+                      <select
+                        className="flex h-9 w-full rounded-md border bg-background px-3 text-sm"
+                        value={paymentStatus}
+                        onChange={(e) => setPaymentStatus(e.target.value as 'paid' | 'partial' | 'unpaid')}
+                      >
+                        <option value="unpaid">Unpaid</option>
+                        <option value="partial">Partial</option>
+                        <option value="paid">Paid</option>
+                      </select>
+                    </div>
                     <FormField
                       control={form.control}
                       name="notes"
@@ -541,30 +657,6 @@ const PurchaseOrders = () => {
                       )}
                     />
                     
-                    <FormField
-                      control={form.control}
-                      name="currency"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Currency</FormLabel>
-                          <Select onValueChange={field.onChange} defaultValue={field.value}>
-                            <FormControl>
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select currency" />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              {CURRENCIES.map(currency => (
-                                <SelectItem key={currency.code} value={currency.code}>
-                                  {currency.code} - {currency.name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
                   </div>
 
                   <div className="pt-4 flex flex-wrap gap-3">
@@ -572,7 +664,7 @@ const PurchaseOrders = () => {
                       type="submit" 
                       className="mt-4"
                     >
-                      Create Purchase Order
+                      {editingId ? "Save changes" : "Create Purchase Order"}
                     </Button>
 
                     <Button 
@@ -682,7 +774,7 @@ const PurchaseOrders = () => {
                   <div className="flex justify-between py-2">
                     <span>Total:</span>
                     <span className="font-bold">
-                      ${previewPurchaseOrderData.amount.toFixed(2)} {previewPurchaseOrderData.currency}
+                      {formatDualCurrency(Number(previewPurchaseOrderData.amount) || 0, previewPurchaseOrderData.currency, usdToLbp)}
                     </span>
                   </div>
                 </div>

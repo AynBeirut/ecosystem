@@ -5,9 +5,11 @@ import {
   isBuilderEntitled,
   isCrmEntitled,
   isFinanceEntitled,
+  isHrEntitled,
   isInventoryEntitled,
   isPosEntitled,
   isSeoEntitled,
+  isVenueOpsHubEntitled,
 } from '@/lib/featureAccessGate';
 import {
   getVenueRoleCapabilities,
@@ -44,6 +46,9 @@ export type EffectiveModuleSurfaceFlags = {
   reservations: boolean;
   storefrontBuilder: boolean;
   seoOps: boolean;
+  hr: boolean;
+  venueOps: boolean;
+  payroll: boolean;
 };
 
 export type EffectiveStoreContextInput = {
@@ -95,6 +100,9 @@ export function resolveEffectiveModuleCapabilities(
     reservations: isAdminFeatureAllowed('reservations', profile, entitlements, user),
     storefrontBuilder: isAdminFeatureAllowed('builder', profile, entitlements, user),
     seoOps: isAdminFeatureAllowed('seo', profile, entitlements, user),
+    hr: isAdminFeatureAllowed('hr', profile, entitlements, user),
+    venueOps: isAdminFeatureAllowed('venue_ops', profile, entitlements, user),
+    payroll: isAdminFeatureAllowed('payroll', profile, entitlements, user),
   };
 
   return { entitled: modulesEntitled, visible };
@@ -177,7 +185,7 @@ export function canShowAdminBuilderNav(ctx: EffectiveStoreContext): boolean {
 
 /** Readiness / ops panels (no user): entitlement ∧ toggle only. */
 export function isStoreFeatureConfigured(
-  feature: 'finance' | 'inventory' | 'crm' | 'seo' | 'builder' | 'reservations' | 'pos',
+  feature: 'finance' | 'inventory' | 'crm' | 'seo' | 'builder' | 'reservations' | 'pos' | 'hr' | 'venue_ops' | 'payroll',
   profile: StoreProfile | null | undefined,
   entitlements: StoreEntitlements | null,
 ): boolean {
@@ -191,4 +199,6 @@ export {
   isPosEntitled,
   isBuilderEntitled,
   isSeoEntitled,
+  isHrEntitled,
+  isVenueOpsHubEntitled,
 };

@@ -56,6 +56,7 @@ export function firstCleanText(...values: unknown[]): string {
 export function resolveInvoiceNumber(doc: AnyRecord): string {
   const direct = firstCleanText(
     doc.invoiceNumber,
+    doc.estimateNumber,
     doc.orderNumber,
     doc.voucherNumber,
     doc.receiptNumber,
@@ -92,6 +93,8 @@ export function normalizeLineItems(items: unknown): LineItem[] {
       unitPrice,
       rawPrice: Number(item.rawPrice ?? item.costPrice ?? unitPrice) || unitPrice,
       subtotal,
+      currency: firstCleanText(item.currency) || undefined,
+      accountCode: firstCleanText(item.accountCode, item.account_code) || undefined,
     };
   });
 }

@@ -4,6 +4,28 @@
 > Open items: `~/Documents/grabio-platform-docs/Backlog/Open.md`  
 > This file is a **legacy archive** — do not add new work here.
 
+## Current active governance pointer
+
+Do not add new backlog items to this legacy file. For current Grabio platform health work, use the canonical backlog:
+
+- `~/Documents/grabio-platform-docs/Backlog/Open.md`
+- Architecture rule: `architecture.md` → Tenant settings and capability architecture
+- Decision rule: `decision-log.md` → 2026-09-10 client requests become tenant options by default
+- Workspace rule: `~/Documents/grabio-platform-docs/Architecture/Workspace-Organization-Policy.md`
+- Role rule: `~/Documents/grabio-platform-docs/Architecture/Role-Permission-Environment-Policy.md`
+- Developer map: `~/Documents/grabio-platform-docs/Architecture/Developer-Landing-Map.md`
+- No-risk runbook: `~/Documents/grabio-platform-docs/Runbooks/Client-Accounting-Setup-No-Risk.md`
+
+Future agents working on client requests must first classify the work as global platform fix, tenant option, account data setup, or temporary exception before editing code.
+
+### Session pointer 2026-09-10 (evening) — Demo OS shipped
+
+**Done (prod):** Internal Demo OS `/demo-os/*` (12 modules), vertical tours `/demo/:slug/os/*`, mock previews `/demo/*/app` + `/features/*/app`, Firestore marketing stores (`scripts/seedMarketingDemoStores.cjs`). **Live:** `https://grabio.space/demo-os`, `https://grabio.space/demo/shop/os/dashboard`.
+
+**Open (canonical backlog):** `~/Documents/grabio-platform-docs/Backlog/Open.md` → *Demo OS Phase 2*; GSC re-check after sitemap crawl.
+
+**Refs:** `README.md` session 2026-09-10 evening; `decision-log.md` Internal Demo OS; `architecture.md` marketing SEO table.
+
 ---
 
 ## Workstream B — Invoice Manager native embed (2026-06-23 — **awaiting file-list approval**)
@@ -1094,3 +1116,26 @@ suba eco sys/grabio-platform/
 suba eco sys/.credentials.md   # gitignored credentials index
 suba eco sys/scripts/migrate-images-to-r2.ts
 ```
+
+---
+
+## Grabio SEO Phase 2 — technical baseline (2026-09-10)
+
+### Done
+- [x] GSC baseline captured: `reporting/data/grabio-gsc-indexing-baseline-2026-09-10.json`
+- [x] `/sitemap.xml` submitted in GSC and read successfully with 48 discovered pages
+- [x] Static sitemap index + `sitemap-static.xml` generated
+- [x] Dynamic child sitemaps added for programmatic, store, and product URLs
+- [x] Store/product sitemap filtering added to avoid raw Firestore indexing
+- [x] `/login` and `/signup` removed from sitemap; `/search` replaces redirecting `/marketplace`
+- [x] Protected/utility route noindex and 404 noindex added
+- [x] Top-10 priority pages selected and prerender metadata added
+- [x] Programmatic SEO quality gate added before publish/sitemap inclusion
+- [x] Authority checklist saved: `reporting/data/grabio-seo-authority-sprint-2026-09-10.json`
+- [x] Verify: `npm run build --prefix functions`, focused SEO lint, and `npm run build` passed
+
+### Next
+- [x] Deploy hosting/functions (`firebase deploy --only hosting,functions:api` — 2026-09-10)
+- [x] Verify `/sitemap.xml`, `/sitemap-static.xml`, `/sitemap-programmatic.xml`, `/sitemap-stores.xml`, `/sitemap-products.xml` in production (all HTTP 200)
+- [ ] Confirm whether GSC has Domain property coverage for `*.grabio.space`
+- [ ] Run weekly GSC evidence exports before claiming SEO movement

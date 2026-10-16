@@ -1,0 +1,756 @@
+{
+  "storeId": "8WgfKtgaE8aAXdqFhIfweEo5WFq2",
+  "pulledAt": "2026-09-20T09:50:49.784Z",
+  "counts": {
+    "suppliersCollection": 478,
+    "staff": 41,
+    "visibleSupplierLedgerAccounts": 81,
+    "visiblePcgSupplierRows": 431,
+    "employeeNamesInSupplierList": 4,
+    "invoiceLikeSupplierNames": 255,
+    "likelyRealSupplierNames": 219
+  },
+  "evaStaff": [
+    {
+      "id": "U0Lhm2nlggMX0xLLOeNN",
+      "name": "Eva Maalouly",
+      "role": "Extra Employee"
+    },
+    {
+      "id": "pos-8WgfKtgaE8aAXdqFhIfweEo5WFq2-1",
+      "name": "Marleine Sayegh Maalouly",
+      "position": "Cashier"
+    }
+  ],
+  "evaSuppliers": [
+    {
+      "id": "lh-sup-02b15ef87562676a",
+      "name": "Eva",
+      "archived": true
+    },
+    {
+      "id": "lh-sup-d977fd0a3f304e96",
+      "name": "Eva Maalouly",
+      "archived": true
+    }
+  ],
+  "evaAccounts": [
+    {
+      "id": "acct-1030",
+      "code": "1030",
+      "name": "Revaluation Variances",
+      "isActive": false
+    },
+    {
+      "id": "acct-1031",
+      "code": "1031",
+      "name": "Non-Amortizable Assets Reval. Variances",
+      "isActive": true
+    },
+    {
+      "id": "acct-1035",
+      "code": "1035",
+      "name": "Amortizable Assets Reval. Variances",
+      "isActive": true
+    },
+    {
+      "id": "acct-2700",
+      "code": "2700",
+      "name": "Fixed Assets Non-Amort. Reval. Variances",
+      "isActive": false
+    },
+    {
+      "id": "acct-2701",
+      "code": "2701",
+      "name": "Intang. Fixed Assets Non-Amort. Reval. Variances",
+      "isActive": true
+    },
+    {
+      "id": "acct-2702",
+      "code": "2702",
+      "name": "Tangib. Fixed Assets Non-Amort. Reval. Variances",
+      "isActive": true
+    },
+    {
+      "id": "acct-2705",
+      "code": "2705",
+      "name": "Financ. Fixed Assets Non-Amort. Reval. Variances",
+      "isActive": true
+    },
+    {
+      "id": "acct-2900",
+      "code": "2900",
+      "name": "Devaluation Prov. Of Business Concern",
+      "isActive": true
+    },
+    {
+      "id": "acct-2910",
+      "code": "2910",
+      "name": "Devaluation Prov. Of Intangible Fixed Assets",
+      "isActive": false
+    },
+    {
+      "id": "acct-2911",
+      "code": "2911",
+      "name": "Deval. Prov. For Patents, Trade Marks & Alike",
+      "isActive": true
+    },
+    {
+      "id": "acct-2919",
+      "code": "2919",
+      "name": "Deval. Prov. For Other Intang. Fixed Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-2920",
+      "code": "2920",
+      "name": "Devaluation Prov. Of Tangible Fixed Assets",
+      "isActive": false
+    },
+    {
+      "id": "acct-2921",
+      "code": "2921",
+      "name": "Virgin Land Devaluation Provision",
+      "isActive": true
+    },
+    {
+      "id": "acct-2923",
+      "code": "2923",
+      "name": "Buildings Devaluation Provision",
+      "isActive": true
+    },
+    {
+      "id": "acct-2926",
+      "code": "2926",
+      "name": "Deval. Prov. For Other Tangib. F. Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-2950",
+      "code": "2950",
+      "name": "Devaluation Prov. Of Financial Fixed Assets",
+      "isActive": false
+    },
+    {
+      "id": "acct-2951",
+      "code": "2951",
+      "name": "Deval. Prov. For Equity Participations",
+      "isActive": true
+    },
+    {
+      "id": "acct-2952",
+      "code": "2952",
+      "name": "Deval. Prov. For  Participations' Receiv.",
+      "isActive": true
+    },
+    {
+      "id": "acct-2953",
+      "code": "2953",
+      "name": "Deval. Prov. For Other Securities & Fin. Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-2955",
+      "code": "2955",
+      "name": "Deval. Prov. For Long & Medium Term Loan",
+      "isActive": true
+    },
+    {
+      "id": "acct-2959",
+      "code": "2959",
+      "name": "Deval. Prov. For Other Blocked Fin. Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-3910",
+      "code": "3910",
+      "name": "Deval.Prov. For Raw & Other Mat. Stock",
+      "isActive": true
+    },
+    {
+      "id": "acct-3930",
+      "code": "3930",
+      "name": "Deval.Prov. For Products In Process",
+      "isActive": true
+    },
+    {
+      "id": "acct-3950",
+      "code": "3950",
+      "name": "Deval.Prov. For Products Stock",
+      "isActive": true
+    },
+    {
+      "id": "acct-3970",
+      "code": "3970",
+      "name": "Deval.Prov. For Goods For Sale Stock",
+      "isActive": true
+    },
+    {
+      "id": "acct-42811000001",
+      "code": "42811000001",
+      "name": "Eva Maalouly — Pay",
+      "partyType": "employee",
+      "isActive": true
+    },
+    {
+      "id": "acct-42811000018",
+      "code": "42811000018",
+      "name": "Eva Maalouly — Transport",
+      "partyType": "employee",
+      "isActive": true
+    },
+    {
+      "id": "acct-4432",
+      "code": "4432",
+      "name": "Tax On F.Assets Disposal Or Revaluation Profits",
+      "isActive": true
+    },
+    {
+      "id": "acct-4960",
+      "code": "4960",
+      "name": "Sundry Debtors Devaluation Provisions",
+      "isActive": false
+    },
+    {
+      "id": "acct-5900",
+      "code": "5900",
+      "name": "Prov. For Devaluation Of Participation Deeds",
+      "isActive": true
+    },
+    {
+      "id": "acct-61111000075",
+      "code": "61111000075",
+      "name": "Eva Maalouly",
+      "partyType": "supplier",
+      "isActive": false,
+      "archived": true
+    },
+    {
+      "id": "acct-6452",
+      "code": "6452",
+      "name": "Tax On Profits From F. Assets Disposal Or Revaluation",
+      "isActive": true
+    },
+    {
+      "id": "acct-6551",
+      "code": "6551",
+      "name": "Prov.Alloc. For Deval. Of Intangible F.Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-6552",
+      "code": "6552",
+      "name": "Prov.Alloc. For Deval. Of Tangible Fixed Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-6553",
+      "code": "6553",
+      "name": "Prov.Alloc. For Deval. Of Stocks & In-Process",
+      "isActive": true
+    },
+    {
+      "id": "acct-6790",
+      "code": "6790",
+      "name": "Provisions For Deval. Of Financial Assets",
+      "isActive": false
+    },
+    {
+      "id": "acct-6792",
+      "code": "6792",
+      "name": "Prov.Alloc.For Financial Assets Devaluation",
+      "isActive": true
+    },
+    {
+      "id": "acct-6794",
+      "code": "6794",
+      "name": "Prov.Alloc.For Devaluation Of Participations",
+      "isActive": true
+    },
+    {
+      "id": "acct-70101000092",
+      "code": "70101000092",
+      "name": "Eva kraydli",
+      "partyType": "client",
+      "isActive": true
+    },
+    {
+      "id": "acct-70101000135",
+      "code": "70101000135",
+      "name": "Imad Maalouf",
+      "partyType": "client",
+      "isActive": true
+    },
+    {
+      "id": "acct-70101000211",
+      "code": "70101000211",
+      "name": "Lessly Maalouf",
+      "partyType": "client",
+      "isActive": true
+    },
+    {
+      "id": "acct-7520",
+      "code": "7520",
+      "name": "Reversal Of Fixed Assets Devaluation Provisions",
+      "isActive": false
+    },
+    {
+      "id": "acct-7521",
+      "code": "7521",
+      "name": "Reversal Of Deval.Prov. Of Intang.Fixed Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-7522",
+      "code": "7522",
+      "name": "Reversal Of Deval.Prov. Of Tang.Fixed Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-7530",
+      "code": "7530",
+      "name": "Reversal Of Deval.Prov. Of Current Assets",
+      "isActive": false
+    },
+    {
+      "id": "acct-7533",
+      "code": "7533",
+      "name": "Reversal Of Deval.Prov. Of Stocks",
+      "isActive": true
+    },
+    {
+      "id": "acct-7534.1",
+      "code": "7534.1",
+      "name": "Reversal Of Non-Deduct.Deval.Prov. Of Debts",
+      "isActive": true
+    },
+    {
+      "id": "acct-7534.2",
+      "code": "7534.2",
+      "name": "Reversal Of Deval.Prov. Of Losses On Debts Losses",
+      "isActive": true
+    },
+    {
+      "id": "acct-7551",
+      "code": "7551",
+      "name": "Reversal Of Deval.Prov. For Risks (Conflicts & Alike)",
+      "isActive": true
+    },
+    {
+      "id": "acct-7793",
+      "code": "7793",
+      "name": "Reversal Of Deval.Prov. Of Finan. F. Assets",
+      "isActive": true
+    },
+    {
+      "id": "acct-7794",
+      "code": "7794",
+      "name": "Reversal Of Deval.Prov. Of Participations Deeds",
+      "isActive": true
+    }
+  ],
+  "evaPcg": [
+    {
+      "id": "1g35JhRAwEM0poBg5QrY",
+      "code": "70101000135",
+      "name": "Imad Maalouf",
+      "partyType": "client"
+    },
+    {
+      "id": "AruvYhjmlUn2jQm9zjO2",
+      "code": "42811000001",
+      "name": "Eva Maalouly — Pay"
+    },
+    {
+      "id": "M8jOIxlZa2S2Pwx2eeZg",
+      "code": "70101000211",
+      "name": "Lessly Maalouf",
+      "partyType": "client"
+    },
+    {
+      "id": "Nqaeq1XkrqQ6Tt9K0Ybg",
+      "code": "61111000075",
+      "name": "Eva Maalouly",
+      "partyType": "supplier",
+      "archived": true,
+      "isActive": false
+    },
+    {
+      "id": "OwZ6VhRyh2yrjWCry51e",
+      "code": "61111000097",
+      "name": "Eva",
+      "partyType": "supplier",
+      "archived": true,
+      "isActive": false
+    },
+    {
+      "id": "ZufJ2pFDX9c8eqZX0kRA",
+      "code": "42811000018",
+      "name": "Eva Maalouly — Transport"
+    },
+    {
+      "id": "nkMSSJsLpI8F8hq602lC",
+      "code": "61111000075",
+      "name": "Eva Maalouly",
+      "partyType": "supplier",
+      "archived": true,
+      "isActive": false
+    },
+    {
+      "id": "uLphzIZroeko4EMZlrZe",
+      "code": "70101000092",
+      "name": "Eva kraydli",
+      "partyType": "client"
+    }
+  ],
+  "employeeAsSupplier": [
+    {
+      "id": "lh-sup-1b7e15def1c081ae",
+      "name": "Nancy Ghazal",
+      "staffId": "usb-8WgfKtgaE8aAXdqFhIfweEo5WFq2-nancy-ghazal",
+      "staffName": "Nancy Ghazal"
+    },
+    {
+      "id": "lh-sup-709cec48ec9e1ce0",
+      "name": "Thaer",
+      "staffId": "usb-8WgfKtgaE8aAXdqFhIfweEo5WFq2-thaer",
+      "staffName": "Thaer"
+    },
+    {
+      "id": "lh-sup-c0362b339958ee39",
+      "name": "Cynthia Hello",
+      "staffId": "usb-8WgfKtgaE8aAXdqFhIfweEo5WFq2-cynthia-hello",
+      "staffName": "Cynthia Hello"
+    },
+    {
+      "id": "lh-sup-d977fd0a3f304e96",
+      "name": "Eva Maalouly",
+      "staffId": "U0Lhm2nlggMX0xLLOeNN",
+      "staffName": "Eva Maalouly"
+    }
+  ],
+  "invoiceLikeSample": [
+    {
+      "id": "lh-sup-0071e085389fb020",
+      "name": "Le Marchet Selectif ( Chedar Cheese, Tortilla Bread …)"
+    },
+    {
+      "id": "lh-sup-009b356b1911db73",
+      "name": "Librarie Mallah Weekend Workshop"
+    },
+    {
+      "id": "lh-sup-015f9cc19c45f88e",
+      "name": "Chebel Bou Akl Water For Little Hands"
+    },
+    {
+      "id": "lh-sup-0218c5e5844b766a",
+      "name": "Le Marchet Selectif ( Ice, Fahem, F&V)"
+    },
+    {
+      "id": "lh-sup-04f9f793823b1010",
+      "name": "Kyes Ramel For Workshop"
+    },
+    {
+      "id": "lh-sup-057f4f70ce17d7d6",
+      "name": "Spinneys Bar Workshop"
+    },
+    {
+      "id": "lh-sup-06b4fceeae1a1a7b",
+      "name": "Cynthia Hello 8 Working H+Tr"
+    },
+    {
+      "id": "lh-sup-07700e5732f9ef4f",
+      "name": "Le Charcutier Workshop Lycee"
+    },
+    {
+      "id": "lh-sup-08a0c702186476af",
+      "name": "Karam Bake Mou3ajanet For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-08b49db2e1ccc99e",
+      "name": "Spinneys Hygiene"
+    },
+    {
+      "id": "lh-sup-08de0e99445147ae",
+      "name": "Librarie Mallah (Workshop Clay Print Out, Stamp)"
+    },
+    {
+      "id": "lh-sup-0935e88af7c98fee",
+      "name": "Spinneys (Kitchen,Bar Hyg,)"
+    },
+    {
+      "id": "lh-sup-0a17b949bac00341",
+      "name": "Le Marchet selectif (Birthday 5-7-2026 )"
+    },
+    {
+      "id": "lh-sup-0be1bc9e5307659e",
+      "name": "Le Marchet selectif (Birthday & Workshops )"
+    },
+    {
+      "id": "lh-sup-0c70b5faacb92bd6",
+      "name": "Strawberry For Birthday 3-5-2026"
+    },
+    {
+      "id": "lh-sup-0daae98743cc3c10",
+      "name": "Spinneys Food For Birthday 9-5-2026"
+    },
+    {
+      "id": "lh-sup-0e0b7daff781d7e3",
+      "name": "Event Megastore Workshop 10-June"
+    },
+    {
+      "id": "lh-sup-0e80fdbb6bb7746c",
+      "name": "Fairco International Birthday June 13 + Workshop"
+    },
+    {
+      "id": "lh-sup-0ef34f7c918c1a74",
+      "name": "Spinneys Invoice Fruits & Vege"
+    },
+    {
+      "id": "lh-sup-0f0f1ff8523a22eb",
+      "name": "Legume For Birthday 9-5-"
+    },
+    {
+      "id": "lh-sup-1188a1798b049f52",
+      "name": "Le Marchet selectif (water Beer Fruits)"
+    },
+    {
+      "id": "lh-sup-1205dcd013740b6f",
+      "name": "Events Megastore Easter  Workshop"
+    },
+    {
+      "id": "lh-sup-12806bbbd5f47acc",
+      "name": "Karam Bake Old Invoice"
+    },
+    {
+      "id": "lh-sup-12d166b3b2a18fba",
+      "name": "Le Charcutier Little Hands Kitchen"
+    },
+    {
+      "id": "lh-sup-1338b1fcd2abe500",
+      "name": "Mhamad To7fir w Emdedet Water"
+    },
+    {
+      "id": "lh-sup-14ff9f2251d58cd5",
+      "name": "Tanjeed by Fady ( Charachif for Workshop Today)"
+    },
+    {
+      "id": "lh-sup-164e4e54f3fbdeed",
+      "name": "Angelina 5.5 Working H"
+    },
+    {
+      "id": "lh-sup-16c7f96de2bdc940",
+      "name": "Le Marchet selectif (Kiwi)"
+    },
+    {
+      "id": "lh-sup-16f8f7c455a7f75e",
+      "name": "Le Marchet Slectif (Oil, water, Fuits)"
+    },
+    {
+      "id": "lh-sup-1728d3e306849300",
+      "name": "Birthday Invoices"
+    },
+    {
+      "id": "lh-sup-191065bb1a59c4bc",
+      "name": "Nour Malek 6 Working H"
+    },
+    {
+      "id": "lh-sup-1aa5218af1ff9e96",
+      "name": "Le Marche selectif ( Orange )"
+    },
+    {
+      "id": "lh-sup-1b36127f3a779ac0",
+      "name": "Le Marchet Selectif (Lettus Cucumber)"
+    },
+    {
+      "id": "lh-sup-1d07780aa939a68d",
+      "name": "Ashwe (Wissam Mansour)"
+    },
+    {
+      "id": "lh-sup-1d473ede47a2a8e8",
+      "name": "Kitchen Tools"
+    },
+    {
+      "id": "lh-sup-1d6217f1eea934cf",
+      "name": "Spinneys (Birthday Houri 29-6)"
+    },
+    {
+      "id": "lh-sup-1de4efe769f60a3d",
+      "name": "Thaer (invoices)"
+    },
+    {
+      "id": "lh-sup-1eb70f0049c69138",
+      "name": "Fairco (Board Sara)"
+    },
+    {
+      "id": "lh-sup-20d16ae90a57b284",
+      "name": "Chebel Bou akel Water & Vege"
+    },
+    {
+      "id": "lh-sup-216e05b24ac0ca83",
+      "name": "Karam bek Birthday 26"
+    }
+  ],
+  "likelyRealSample": [
+    {
+      "id": "8VmnuwYF1WVpbFyMXsSG",
+      "name": "Mohammad Ismael ttt"
+    },
+    {
+      "id": "KSsrnQrz934QF4MAwpyk",
+      "name": "Mohammad Ismael"
+    },
+    {
+      "id": "lh-sup-00a3d18ae4c39c32",
+      "name": "Manakich Little Hands"
+    },
+    {
+      "id": "lh-sup-01a0eedaf62153cf",
+      "name": "Mariam"
+    },
+    {
+      "id": "lh-sup-023ebfd43f456e78",
+      "name": "Cynthia Helo"
+    },
+    {
+      "id": "lh-sup-024e1db53cd013f2",
+      "name": "Returne To Sara Exchange"
+    },
+    {
+      "id": "lh-sup-02965395209fdfd6",
+      "name": "Tanjid By Fadi Coussins Chaise fabric"
+    },
+    {
+      "id": "lh-sup-02b15ef87562676a",
+      "name": "Eva"
+    },
+    {
+      "id": "lh-sup-041590ea74c3d125",
+      "name": "Luiji Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-05506e15620c3f41",
+      "name": "Ashwe Coffe Payment"
+    },
+    {
+      "id": "lh-sup-05d2bdf5817bbbb1",
+      "name": "Boucherie Ziad Kebbe Burgers"
+    },
+    {
+      "id": "lh-sup-0916b63a03f93291",
+      "name": "Nancy Ghazal 9 workng H + Tr"
+    },
+    {
+      "id": "lh-sup-0a2d6765cd9d91e7",
+      "name": "Insurance Little Hands"
+    },
+    {
+      "id": "lh-sup-0ce63d05efb5ed4b",
+      "name": "Spinneys Food Birtjday Today"
+    },
+    {
+      "id": "lh-sup-0d107959ff303701",
+      "name": "Miro Advance on Salairy June"
+    },
+    {
+      "id": "lh-sup-0d6822c35c8b0aa5",
+      "name": "Panino Mini Birgers"
+    },
+    {
+      "id": "lh-sup-0fb5534415dc5fca",
+      "name": "Zammour"
+    },
+    {
+      "id": "lh-sup-10b41741cf027436",
+      "name": "Librarie Mallah Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-10b63bd66e82b2cd",
+      "name": "Zaatar"
+    },
+    {
+      "id": "lh-sup-117d4a3c92e2aa4c",
+      "name": "Ramel Mgharbal"
+    },
+    {
+      "id": "lh-sup-1377e2060c38fe92",
+      "name": "Brocoli Rec #2183"
+    },
+    {
+      "id": "lh-sup-138e902658903ae0",
+      "name": "Joe Market"
+    },
+    {
+      "id": "lh-sup-16909564a62f1788",
+      "name": "Borgol Basal For Kebbe"
+    },
+    {
+      "id": "lh-sup-16a9cea47f897e45",
+      "name": "Luigi 016 Wood For tables"
+    },
+    {
+      "id": "lh-sup-18952c36b096a12f",
+      "name": "Karam Beik Bakery"
+    },
+    {
+      "id": "lh-sup-1a351f5a4067a732",
+      "name": "Imaco Garbege Collection"
+    },
+    {
+      "id": "lh-sup-1ab127c44789f9b5",
+      "name": "Wooden Bakery Brth 9-3-2026"
+    },
+    {
+      "id": "lh-sup-1b7dc83b7c679381",
+      "name": "La casa Decore Pouff 3 pcs For Garden"
+    },
+    {
+      "id": "lh-sup-1db801932bcf5cc1",
+      "name": "Chebel Bou Akl"
+    },
+    {
+      "id": "lh-sup-1f345b503e3d06bb",
+      "name": "KaraM Biek"
+    },
+    {
+      "id": "lh-sup-20c5d32a3f32a0bd",
+      "name": "Nour Malek 2 Working day"
+    },
+    {
+      "id": "lh-sup-21770dbf355d010a",
+      "name": "Mne2ich zaatar Yesterday"
+    },
+    {
+      "id": "lh-sup-232668bbda9883a2",
+      "name": "Le Charcutier"
+    },
+    {
+      "id": "lh-sup-2432e3e8efc61f2f",
+      "name": "Event Mega Store"
+    },
+    {
+      "id": "lh-sup-24b6e150c846487d",
+      "name": "Nour Malek 5 Workking H"
+    },
+    {
+      "id": "lh-sup-293fd64c288d4fef",
+      "name": "Gaz For Little Hands"
+    },
+    {
+      "id": "lh-sup-296a8bca541e8d37",
+      "name": "Fairco Wood Board For Mother’s Day"
+    },
+    {
+      "id": "lh-sup-297dcc9f5da9a24f",
+      "name": "Toys park"
+    },
+    {
+      "id": "lh-sup-2a67182ef39040bb",
+      "name": "Spinneys Burgers For 31-5-2026"
+    },
+    {
+      "id": "lh-sup-2ae5f5f3bd95ea52",
+      "name": "Chicken For Farm"
+    }
+  ]
+}

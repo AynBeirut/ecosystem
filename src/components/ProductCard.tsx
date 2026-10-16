@@ -10,7 +10,7 @@ import { useFavorites } from '@/context/FavoritesContext';
 import { useCart } from '@/context/CartContext';
 import { Badge } from '@/components/ui/badge';
 import { generateSlug } from '@/lib/slugify';
-import { pixelAddToCart, trackMetaConversionEvent } from '@/lib/metaPixel';
+import { metaCatalogContentId, pixelAddToCart, trackMetaConversionEvent } from '@/lib/metaPixel';
 import ClampedText from '@/components/ClampedText';
 import ProductVisual from '@/components/ProductVisual';
 import { formatDualMoneyLines, formatMoney } from '@/lib/money/format';
@@ -107,8 +107,9 @@ const ProductCard: React.FC<ProductCardProps> = ({
     e.stopPropagation();
     if (!product.inStock) return;
     addToCart(product);
+    const catalogId = metaCatalogContentId(product.id);
     pixelAddToCart({
-      contentId: product.id,
+      contentId: catalogId,
       contentName: product.name,
       value: Number(product.price || 0),
       currency: 'USD',
@@ -116,7 +117,7 @@ const ProductCard: React.FC<ProductCardProps> = ({
     void trackMetaConversionEvent({
       storeId: product.storeId,
       eventName: 'AddToCart',
-      contentIds: [product.id],
+      contentIds: [catalogId],
       contentName: product.name,
       value: Number(product.price || 0),
       currency: 'USD',
