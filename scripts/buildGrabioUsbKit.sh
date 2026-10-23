@@ -57,41 +57,31 @@ SA
 fi
 
 cp "$ROOT/scripts/installGrabioCredentialsOnMac.sh" "$OUT/install-on-mac.sh"
-chmod +x "$OUT/install-on-mac.sh"
+cp "$ROOT/scripts/linkFirebaseAdminKey.sh" "$OUT/linkFirebaseAdminKey.sh"
+chmod +x "$OUT/install-on-mac.sh" "$OUT/linkFirebaseAdminKey.sh"
+cp "$ROOT/docs/deployment/FINISH_FIREBASE_ON_MAC.md" "$OUT/FINISH_FIREBASE_ON_MAC.md"
 
 cat > "$OUT/READ_ME_FIRST.txt" <<'README'
-GRABIO — credentials for your Mac (USB transfer)
-==================================================
+GRABIO USB — START HERE
+=======================
 
-1. Copy this whole folder to your USB drive.
-2. On the Mac, plug in the USB drive.
-3. Open Terminal and run:
+Open:  FINISH_FIREBASE_ON_MAC.md  (full steps for the Mac person)
 
-     bash /Volumes/YOUR_USB/grabio-usb-credentials/install-on-mac.sh
+TL;DR
+-----
+1. bash /Volumes/YOUR_USB/grabio-usb-credentials/install-on-mac.sh
+2. Copy NEWEST firebase admin JSON → repo/serviceAccountKey.json
+   (or: ./scripts/linkFirebaseAdminKey.sh /path/on/usb/firebase-service-account.json)
+3. node scripts/provisionLiveKitchenPackage.cjs EMAIL@gmail.com --write
 
-   (Replace YOUR_USB with your drive name.)
+Empty Firebase CLI login file is NORMAL until: npx firebase-tools login
+That login is ONLY for firebase deploy — NOT for admin scripts.
 
-4. When asked, paste the full path to your Grabio repo on the Mac, e.g.:
+Secret  = serviceAccountKey.json (admin JSON)
+Settings = .env.local, .firebaserc
+Project  = market-flow-7b074
 
-     /Users/you/Documents/ecosystem
-
-5. Firebase CLI login (one time on Mac):
-
-     cd /Users/you/Documents/ecosystem
-     npx firebase-tools login
-     npx firebase-tools use market-flow-7b074
-
-6. Test admin scripts:
-
-     node scripts/provisionLiveKitchenPackage.cjs you@email.com
-
-Files in this kit:
-  dot-env-local       → copied to repo as .env.local
-  dot-env-production  → copied to repo as .env.production
-  serviceAccountKey.json (if included) → repo root
-  firebaserc.json     → copied to repo as .firebaserc
-
-Keep the USB drive safe — treat it like a password.
+Do NOT commit secrets to GitHub.
 README
 
 echo ""
