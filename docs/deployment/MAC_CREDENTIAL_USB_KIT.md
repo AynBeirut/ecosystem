@@ -35,7 +35,39 @@ npx firebase-tools login
 npx firebase-tools use market-flow-7b074
 ```
 
+## grabio-isolated layout (Mac handoff from USB)
+
+After mounting the disk, you may keep keys outside the main repo:
+
+| File | Purpose |
+|------|---------|
+| `.credentials.md` | Master login index (matches USB Grabio login file) |
+| `scripts/firebase-service-account.json` | **Newer** Firebase admin key (prefer this) |
+| Older key beside it | Archive only — do not use for scripts |
+| Firebase CLI login cache | Often **empty** until you run `firebase login` |
+
+Scripts expect the admin key at repo root as `serviceAccountKey.json`. Link or copy:
+
+```bash
+cp /path/to/grabio-isolated/.../scripts/firebase-service-account.json \
+   /path/to/ecosystem/serviceAccountKey.json
+chmod 600 /path/to/ecosystem/serviceAccountKey.json
+```
+
+Empty CLI login is normal until:
+
+```bash
+npx firebase-tools login
+npx firebase-tools use market-flow-7b074
+```
+
+Admin scripts (`provisionLiveKitchenPackage.cjs`, etc.) use **service account JSON**, not CLI login.
+
+## Cloud agent
+
+The cloud agent **cannot read your Mac USB** or local `grabio-isolated/` paths. Paste handoff notes in chat, upload the JSON, or push a non-secret path doc to GitHub.
+
 ## Security
 
-- Do **not** commit `serviceAccountKey.json` or `grabio-usb-credentials/` to GitHub.
+- Do **not** commit `serviceAccountKey.json`, `firebase-service-account.json`, or `grabio-usb-credentials/` to GitHub.
 - Keep the USB drive private; rotate the service account key if it is lost.

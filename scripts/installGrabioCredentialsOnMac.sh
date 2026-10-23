@@ -43,12 +43,23 @@ if [[ -f "$KIT_DIR/firebaserc.json" ]]; then
   echo "✅ Wrote $REPO/.firebaserc"
 fi
 
-if [[ -f "$KIT_DIR/serviceAccountKey.json" ]]; then
-  cp "$KIT_DIR/serviceAccountKey.json" "$REPO/serviceAccountKey.json"
+SA_SRC=""
+for candidate in \
+  "$KIT_DIR/serviceAccountKey.json" \
+  "$KIT_DIR/firebase-service-account.json" \
+  "$KIT_DIR/scripts/firebase-service-account.json"; do
+  if [[ -f "$candidate" ]]; then
+    SA_SRC="$candidate"
+    break
+  fi
+done
+
+if [[ -n "$SA_SRC" ]]; then
+  cp "$SA_SRC" "$REPO/serviceAccountKey.json"
   chmod 600 "$REPO/serviceAccountKey.json"
-  echo "✅ Wrote $REPO/serviceAccountKey.json (mode 600)"
+  echo "✅ Wrote $REPO/serviceAccountKey.json from $(basename "$SA_SRC") (mode 600)"
 else
-  echo "⚠️  No serviceAccountKey.json in kit — add it from Firebase Console, then re-run."
+  echo "⚠️  No serviceAccountKey.json / firebase-service-account.json in kit — add from USB or grabio-isolated/scripts/, then re-run."
 fi
 
 echo ""
