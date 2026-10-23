@@ -60,28 +60,41 @@ cp "$ROOT/scripts/installGrabioCredentialsOnMac.sh" "$OUT/install-on-mac.sh"
 cp "$ROOT/scripts/linkFirebaseAdminKey.sh" "$OUT/linkFirebaseAdminKey.sh"
 chmod +x "$OUT/install-on-mac.sh" "$OUT/linkFirebaseAdminKey.sh"
 cp "$ROOT/docs/deployment/FINISH_FIREBASE_ON_MAC.md" "$OUT/FINISH_FIREBASE_ON_MAC.md"
+cp "$OUT/dot-env-local" "$OUT/FIREBASE_CREDENTIALS.env"
+cat >> "$OUT/FIREBASE_CREDENTIALS.env" <<'ENVFOOTER'
+
+# --- PROJECT (all tools) ---
+# project_id=market-flow-7b074
+# console=https://console.firebase.google.com/project/market-flow-7b074
+# web apiKey=AIzaSyA0jzU0136sQM4QpBz6J0TYEsPn2JDTn1U
+# appId web=1:997465465802:web:3c6789ea41a9458a98e533
+
+# --- SECRET (copy FILE, not these lines) ---
+# USB: grabio-isolated/.../scripts/firebase-service-account.json  (NEWEST, e.g. Jul 2026)
+# Mac repo: ecosystem/serviceAccountKey.json
+#   chmod 600 serviceAccountKey.json
+ENVFOOTER
 
 cat > "$OUT/READ_ME_FIRST.txt" <<'README'
 GRABIO USB — START HERE
 =======================
 
-Open:  FINISH_FIREBASE_ON_MAC.md  (full steps for the Mac person)
+1) OPEN: FINISH_FIREBASE_ON_MAC.md  (ALL Firebase values + secret instructions)
 
-TL;DR
------
-1. bash /Volumes/YOUR_USB/grabio-usb-credentials/install-on-mac.sh
-2. Copy NEWEST firebase admin JSON → repo/serviceAccountKey.json
-   (or: ./scripts/linkFirebaseAdminKey.sh /path/on/usb/firebase-service-account.json)
-3. node scripts/provisionLiveKitchenPackage.cjs EMAIL@gmail.com --write
+2) SETTINGS: copy FIREBASE_CREDENTIALS.env → ecosystem/.env.local
 
-Empty Firebase CLI login file is NORMAL until: npx firebase-tools login
-That login is ONLY for firebase deploy — NOT for admin scripts.
+3) SECRET (required): copy NEWEST firebase-service-account.json from disk to:
+     ecosystem/serviceAccountKey.json
+     chmod 600 serviceAccountKey.json
 
-Secret  = serviceAccountKey.json (admin JSON)
-Settings = .env.local, .firebaserc
-Project  = market-flow-7b074
+4) RUN:
+     bash install-on-mac.sh
+     cd ecosystem && node scripts/provisionLiveKitchenPackage.cjs EMAIL --write
 
-Do NOT commit secrets to GitHub.
+CLI login empty = NORMAL until: npx firebase-tools login (deploy only)
+
+Project: market-flow-7b074
+Do NOT commit serviceAccountKey.json to GitHub.
 README
 
 echo ""
