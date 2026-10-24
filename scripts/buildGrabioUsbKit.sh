@@ -60,6 +60,7 @@ cp "$ROOT/scripts/installGrabioCredentialsOnMac.sh" "$OUT/install-on-mac.sh"
 cp "$ROOT/scripts/linkFirebaseAdminKey.sh" "$OUT/linkFirebaseAdminKey.sh"
 chmod +x "$OUT/install-on-mac.sh" "$OUT/linkFirebaseAdminKey.sh"
 cp "$ROOT/docs/deployment/FINISH_FIREBASE_ON_MAC.md" "$OUT/FINISH_FIREBASE_ON_MAC.md"
+cp "$ROOT/docs/deployment/ADD_FIREBASE_PROJECT_OWNER.md" "$OUT/ADD_FIREBASE_PROJECT_OWNER.md"
 cp "$OUT/dot-env-local" "$OUT/FIREBASE_CREDENTIALS.env"
 cat >> "$OUT/FIREBASE_CREDENTIALS.env" <<'ENVFOOTER'
 
@@ -78,6 +79,8 @@ ENVFOOTER
 cat > "$OUT/READ_ME_FIRST.txt" <<'README'
 GRABIO USB — START HERE
 =======================
+
+0) OWNER: Anwar adds Mac Gmail as Owner — ADD_FIREBASE_PROJECT_OWNER.md
 
 1) OPEN: FINISH_FIREBASE_ON_MAC.md  (ALL Firebase values + secret instructions)
 
