@@ -6,14 +6,13 @@
 
 ## Part 0 — Mac must be **Owner** on Firebase (do this first)
 
-**Anwar (or any current Owner)** adds the Mac user’s **Gmail** to project `market-flow-7b074` as **Owner**.
+If **`anwar.abouhassan@gmail.com`** is not already Owner, a current Owner adds that email to project `market-flow-7b074` as **Owner** (this is the Mac’s Google login for `firebase login` — not `mooveelectro@gmail.com`).
 
 Full steps: **`docs/deployment/ADD_FIREBASE_PROJECT_OWNER.md`**
 
-Quick link (phone): https://console.firebase.google.com/project/market-flow-7b074/settings/iam → **Add member** → Gmail → **Owner**
+Quick link (phone): https://console.firebase.google.com/project/market-flow-7b074/settings/iam → **Add member** → `anwar.abouhassan@gmail.com` → **Owner**
 
-- Use the same Google account they use for `npx firebase-tools login` on the Mac.
-- **Service account JSON is not enough** for `firebase deploy` — they need this invite.
+- **Service account JSON is not enough** for `firebase deploy` — the Mac Google account needs IAM access too.
 
 ---
 

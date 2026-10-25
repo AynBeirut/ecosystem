@@ -8,19 +8,17 @@ Only someone who is **already Owner** on the project can do this (phone or lapto
 
 ## Which email to add?
 
-The **Google account** used on the Mac for:
+**Grabio Mac login (this machine):** `anwar.abouhassan@gmail.com`
+
+That is the Google account used on the Mac for:
 
 ```bash
 npx firebase-tools login
 ```
 
-Examples (use the real one — ask the Mac person):
+Add **this email** as Owner — not other accounts (e.g. `mooveelectro@gmail.com` is a separate Grabio **client/store** login, not the Mac dev Firebase CLI login).
 
-- `mooveelectro@gmail.com`
-- `anwar.abouhassan@gmail.com`
-- Whatever Gmail shows in Firebase after they try to log in
-
-**Not** the `firebase-adminsdk-...@market-flow-7b074.iam.gserviceaccount.com` address — that is the service account file, not a human login.
+**Not** the `firebase-adminsdk-...@market-flow-7b074.iam.gserviceaccount.com` address — that is the service account JSON file, not a human login.
 
 ---
 
@@ -29,7 +27,7 @@ Examples (use the real one — ask the Mac person):
 1. Open: https://console.firebase.google.com/project/market-flow-7b074/settings/iam  
    (Or: Firebase → **market-flow-7b074** → ⚙️ **Project settings** → **Users and permissions**)
 2. Click **Add member**
-3. Paste the Mac user’s **Gmail**
+3. Email: **`anwar.abouhassan@gmail.com`**
 4. Role: **Owner**
 5. **Add member**
 6. They accept the invite email if Google asks them to.
@@ -50,7 +48,7 @@ They should see `market-flow-7b074`.
 
 1. Open: https://console.cloud.google.com/iam-admin/iam?project=market-flow-7b074  
 2. **Grant access** (or **Add**)
-3. **New principals:** `mac-user@gmail.com`
+3. **New principals:** `anwar.abouhassan@gmail.com`
 4. Role: **Owner** (or **Firebase Admin** `roles/firebase.admin` if you want deploy + console but not billing delete)
 5. Save
 
@@ -61,7 +59,7 @@ They should see `market-flow-7b074`.
 ```bash
 gcloud config set project market-flow-7b074
 gcloud projects add-iam-policy-binding market-flow-7b074 \
-  --member="user:MAC_USER@gmail.com" \
+  --member="user:anwar.abouhassan@gmail.com" \
   --role="roles/owner"
 ```
 
@@ -69,7 +67,7 @@ For Firebase-only admin (no full GCP Owner):
 
 ```bash
 gcloud projects add-iam-policy-binding market-flow-7b074 \
-  --member="user:MAC_USER@gmail.com" \
+  --member="user:anwar.abouhassan@gmail.com" \
   --role="roles/firebase.admin"
 ```
 
